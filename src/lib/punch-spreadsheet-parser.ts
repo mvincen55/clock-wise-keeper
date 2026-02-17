@@ -132,32 +132,59 @@ export function parseTimePunchExcel(buffer: ArrayBuffer): PunchSummaryRow[] {
       return s || null;
     });
 
-    // Build pairs and calculate
     const pairs: PunchSummaryRow['pairs'] = [];
-    let allInMins: number[] = [];
-    let allOutMins: number[] = [];
-    let punchCount = 0;
+    const allInMins: number[] = [];
+    const allOutMins: number[] = [];
+
+    // Collect all punches with their times and sort chronologically
+    type Punch = { time: string; minutes: number; type: 'in' | 'out' };
+    const allPunches: Punch[] = [];
+
+    inTimes.forEach(s => {
+      if (s) {
+        const m = parseTimeToMinutes(s);
+        if (m != null) allPunches.push({ time: s, minutes: m, type: 'in' });
+      }
+    });
+    outTimes.forEach(s => {
+      if (s) {
+        const m = parseTimeToMinutes(s);
+        if (m != null) allPunches.push({ time: s, minutes: m, type: 'out' });
+      }
+    });
+
+    // Sort by time
+    allPunches.sort((a, b) => a.minutes - b.minutes);
+
+    // Pair sequentially: find In then next Out
+    let i = 0;
     let oddPunch = false;
-
-    const maxPairs = Math.max(inTimes.length, outTimes.length);
-    for (let p = 0; p < maxPairs; p++) {
-      const inStr = inTimes[p] || null;
-      const outStr = outTimes[p] || null;
-      const inMin = inStr ? parseTimeToMinutes(inStr) : null;
-      const outMin = outStr ? parseTimeToMinutes(outStr) : null;
-
-      if (inMin != null) { allInMins.push(inMin); punchCount++; }
-      if (outMin != null) { allOutMins.push(outMin); punchCount++; }
-
-      if (inMin != null && outMin != null) {
-        const duration = outMin - inMin;
-        pairs.push({
-          inTime: minutesToTimeStr(inMin),
-          outTime: minutesToTimeStr(outMin),
-          minutes: Math.max(0, duration),
-        });
-      } else if (inMin != null && outMin == null) {
+    while (i < allPunches.length) {
+      if (allPunches[i].type === 'in') {
+        // Look for the next 'out' after this 'in'
+        let j = i + 1;
+        while (j < allPunches.length && allPunches[j].type !== 'out') j++;
+        if (j < allPunches.length) {
+          const duration = allPunches[j].minutes - allPunches[i].minutes;
+          pairs.push({
+            inTime: minutesToTimeStr(allPunches[i].minutes),
+            outTime: minutesToTimeStr(allPunches[j].minutes),
+            minutes: Math.max(0, duration),
+          });
+          allInMins.push(allPunches[i].minutes);
+          allOutMins.push(allPunches[j].minutes);
+          i = j + 1;
+        } else {
+          // Unpaired in
+          allInMins.push(allPunches[i].minutes);
+          oddPunch = true;
+          i++;
+        }
+      } else {
+        // Out without a preceding in — unpaired
+        allOutMins.push(allPunches[i].minutes);
         oddPunch = true;
+        i++;
       }
     }
 
