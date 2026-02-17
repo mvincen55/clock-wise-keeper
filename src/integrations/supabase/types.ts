@@ -539,7 +539,11 @@ export type Database = {
       user_owns_time_entry: { Args: { _entry_id: string }; Returns: boolean }
     }
     Enums: {
-      day_off_type: "pto" | "sick" | "holiday" | "unpaid" | "other"
+      day_off_type:
+        | "scheduled_with_notice"
+        | "unscheduled"
+        | "office_closed"
+        | "other"
       import_status: "pending" | "previewing" | "confirmed" | "failed"
       punch_type: "in" | "out"
       source_type: "manual" | "import" | "auto_location" | "system_adjustment"
@@ -670,7 +674,12 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      day_off_type: ["pto", "sick", "holiday", "unpaid", "other"],
+      day_off_type: [
+        "scheduled_with_notice",
+        "unscheduled",
+        "office_closed",
+        "other",
+      ],
       import_status: ["pending", "previewing", "confirmed", "failed"],
       punch_type: ["in", "out"],
       source_type: ["manual", "import", "auto_location", "system_adjustment"],

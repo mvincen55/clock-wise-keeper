@@ -16,18 +16,16 @@ import { CalendarDays, Plus, Trash2, Loader2, AlertTriangle, Clock } from 'lucid
 import { useToast } from '@/hooks/use-toast';
 
 const typeLabels: Record<string, string> = {
-  pto: 'PTO',
-  sick: 'Sick',
-  holiday: 'Holiday',
-  unpaid: 'Unpaid',
+  scheduled_with_notice: 'Scheduled w/ Notice',
+  unscheduled: 'Unscheduled',
+  office_closed: 'Office Closed',
   other: 'Other',
 };
 
 const typeColors: Record<string, string> = {
-  pto: 'bg-primary/20 text-primary',
-  sick: 'bg-destructive/20 text-destructive',
-  holiday: 'bg-success/20 text-success',
-  unpaid: 'bg-muted text-muted-foreground',
+  scheduled_with_notice: 'bg-primary/20 text-primary',
+  unscheduled: 'bg-destructive/20 text-destructive',
+  office_closed: 'bg-success/20 text-success',
   other: 'bg-accent/20 text-accent',
   tardy: 'bg-destructive/20 text-destructive',
 };
@@ -50,7 +48,7 @@ export default function DaysOff() {
   const [form, setForm] = useState({
     date_start: '',
     date_end: '',
-    type: 'pto' as 'pto' | 'sick' | 'holiday' | 'unpaid' | 'other',
+    type: 'scheduled_with_notice' as 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'other',
     hours: '',
     notes: '',
   });
@@ -66,7 +64,7 @@ export default function DaysOff() {
         notes: form.notes || undefined,
       });
       setOpen(false);
-      setForm({ date_start: '', date_end: '', type: 'pto', hours: '', notes: '' });
+      setForm({ date_start: '', date_end: '', type: 'scheduled_with_notice', hours: '', notes: '' });
       toast({ title: 'Day off added' });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
