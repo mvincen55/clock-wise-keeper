@@ -109,21 +109,31 @@ serve(async (req) => {
         const timeStr = punchTimes[i];
         const punchType = i % 2 === 0 ? "in" : "out";
 
-        // Parse time string to full timestamp
+      // Parse time string to full timestamp
         let punchTimestamp: string;
         try {
-          const dateStr = row.entry_date;
-          // Try parsing "HH:MM AM/PM" or "HH:MM"
-          const cleaned = timeStr.trim();
-          const date = new Date(`${dateStr} ${cleaned}`);
-          if (isNaN(date.getTime())) {
-            // Fallback: just use noon
-            punchTimestamp = new Date(`${dateStr}T12:00:00`).toISOString();
+          const dateStr = row.entry_date; // "YYYY-MM-DD"
+          const cleaned = timeStr.replace(/\*/g, '').trim(); // Remove asterisks like "8:24 AM*"
+          
+          // Parse "H:MM AM/PM" format manually
+          const timeMatch = cleaned.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+          if (timeMatch) {
+            let hours = parseInt(timeMatch[1], 10);
+            const minutes = parseInt(timeMatch[2], 10);
+            const ampm = (timeMatch[3] || '').toUpperCase();
+            
+            if (ampm === 'PM' && hours !== 12) hours += 12;
+            if (ampm === 'AM' && hours === 12) hours = 0;
+            
+            const hh = hours.toString().padStart(2, '0');
+            const mm = minutes.toString().padStart(2, '0');
+            punchTimestamp = `${dateStr}T${hh}:${mm}:00`;
           } else {
-            punchTimestamp = date.toISOString();
+            // Fallback: just use noon on the correct date
+            punchTimestamp = `${dateStr}T12:00:00`;
           }
         } catch {
-          punchTimestamp = new Date(`${row.entry_date}T12:00:00`).toISOString();
+          punchTimestamp = `${row.entry_date}T12:00:00`;
         }
 
         if (strategy === "merge" && existing) {
