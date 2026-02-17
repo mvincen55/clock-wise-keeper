@@ -20,13 +20,13 @@ import { Loader2 } from "lucide-react";
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, isAllowed } = useAuth();
   if (loading) return (
     <div className="flex min-h-screen items-center justify-center">
       <Loader2 className="h-8 w-8 animate-spin text-primary" />
     </div>
   );
-  if (!user) return <Navigate to="/auth" replace />;
+  if (!user || !isAllowed) return <Navigate to="/auth" replace />;
   return <AppLayout>{children}</AppLayout>;
 }
 
@@ -47,7 +47,7 @@ const App = () => (
             <Route path="/work-zones" element={<ProtectedRoute><WorkZones /></ProtectedRoute>} />
             <Route path="/punch-summary" element={<ProtectedRoute><TimePunchSummary /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-            <Route path="*" element={<NotFound />} />
+            <Route path="*" element={<Navigate to="/auth" replace />} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>

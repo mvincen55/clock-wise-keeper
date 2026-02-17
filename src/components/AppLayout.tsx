@@ -2,7 +2,7 @@ import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Clock, LayoutDashboard, Table2, CalendarDays, FileText, Upload, LogOut, Menu, X, MapPin, ClipboardList, Settings } from 'lucide-react';
+import { Clock, LayoutDashboard, Table2, CalendarDays, FileText, Upload, LogOut, Menu, X, MapPin, ClipboardList, Settings, ShieldCheck } from 'lucide-react';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -16,7 +16,7 @@ const navItems = [
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
-  const { signOut, user } = useAuth();
+  const { privacyLock, user } = useAuth();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -49,14 +49,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-        <div className="px-3 py-4 border-t border-sidebar-border">
+        <div className="px-3 py-4 border-t border-sidebar-border space-y-1">
           <p className="px-3 mb-2 text-xs text-muted-foreground truncate">{user?.email}</p>
           <button
-            onClick={signOut}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+            onClick={privacyLock}
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 transition-colors font-medium"
           >
-            <LogOut className="h-4 w-4" />
-            Sign Out
+            <ShieldCheck className="h-4 w-4" />
+            Privacy Lock
           </button>
         </div>
       </aside>
@@ -70,9 +70,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </div>
             <span className="font-semibold">TimeVault</span>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => setMobileOpen(!mobileOpen)}>
-            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" onClick={privacyLock} className="text-destructive">
+              <ShieldCheck className="h-5 w-5" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setMobileOpen(!mobileOpen)}>
+              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
+          </div>
         </header>
 
         {mobileOpen && (
@@ -93,13 +98,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 </Link>
               );
             })}
-            <button
-              onClick={signOut}
-              className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-muted-foreground"
-            >
-              <LogOut className="h-4 w-4" />
-              Sign Out
-            </button>
           </div>
         )}
 
