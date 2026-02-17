@@ -92,7 +92,7 @@ Rules:
           },
         ],
         temperature: 0.1,
-        max_tokens: 16000,
+        max_tokens: 65000,
       }),
     });
 
