@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef, Re
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
-const ALLOWED_EMAIL = 'meganvincent43@gmail.com';
+const ALLOWED_EMAILS = ['meganvincent43@gmail.com', 'mvincent@drharelick.com'];
 const DEFAULT_TIMEOUT_MINUTES = 20;
 const TIMEOUT_STORAGE_KEY = 'timevault_session_timeout_minutes';
 
@@ -32,7 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const checkAllowed = (u: User | null): boolean => {
-    return u?.email?.toLowerCase() === ALLOWED_EMAIL;
+    return !!u?.email && ALLOWED_EMAILS.includes(u.email.toLowerCase());
   };
 
   const clearInactivityTimer = useCallback(() => {
@@ -112,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    if (email.toLowerCase() !== ALLOWED_EMAIL) {
+    if (!ALLOWED_EMAILS.includes(email.toLowerCase())) {
       return { error: { message: 'Access denied.' } };
     }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
