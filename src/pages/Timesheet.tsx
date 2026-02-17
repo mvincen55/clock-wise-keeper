@@ -1,16 +1,71 @@
 import { useState } from 'react';
-import { useTimeEntries, TimeEntryRow } from '@/hooks/useTimeEntries';
+import { useTimeEntries, useUpdateEntry, TimeEntryRow } from '@/hooks/useTimeEntries';
 import { minutesToHHMM, formatTime, formatDate } from '@/lib/time-utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Table2, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Table2, ChevronDown, ChevronRight, Loader2, MapPin, Save } from 'lucide-react';
+import { EditAuditDialog } from '@/components/EditAuditDialog';
+import { useToast } from '@/hooks/use-toast';
 
 function EntryRow({ entry }: { entry: TimeEntryRow }) {
   const [expanded, setExpanded] = useState(false);
+  const updateEntry = useUpdateEntry();
+  const { toast } = useToast();
+  const [comment, setComment] = useState(entry.entry_comment || '');
+  const [commentDirty, setCommentDirty] = useState(false);
+  const [auditDialog, setAuditDialog] = useState<{
+    field: string; old: string; new: string; pendingUpdate: any;
+  } | null>(null);
+
   const punches = entry.punches || [];
   const firstIn = punches.find(p => p.punch_type === 'in');
   const lastOut = [...punches].reverse().find(p => p.punch_type === 'out');
+
+  const handleRemoteToggle = () => {
+    setAuditDialog({
+      field: 'is_remote',
+      old: entry.is_remote ? 'Remote' : 'On-site',
+      new: entry.is_remote ? 'On-site' : 'Remote',
+      pendingUpdate: { is_remote: !entry.is_remote },
+    });
+  };
+
+  const handleAuditConfirm = async (reason: string) => {
+    if (!auditDialog) return;
+    try {
+      await updateEntry.mutateAsync({
+        entryId: entry.id,
+        updates: auditDialog.pendingUpdate,
+        audit: {
+          field_changed: auditDialog.field,
+          old_value: auditDialog.old,
+          new_value: auditDialog.new,
+          reason_comment: reason,
+        },
+      });
+      toast({ title: 'Updated with audit' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+    setAuditDialog(null);
+  };
+
+  const handleSaveComment = async () => {
+    try {
+      await updateEntry.mutateAsync({
+        entryId: entry.id,
+        updates: { entry_comment: comment || null },
+      });
+      setCommentDirty(false);
+      toast({ title: 'Comment saved' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
 
   return (
     <>
@@ -28,15 +83,26 @@ function EntryRow({ entry }: { entry: TimeEntryRow }) {
           {entry.total_minutes != null ? minutesToHHMM(entry.total_minutes) : '—'}
         </td>
         <td className="px-4 py-3">
-          <span className={`text-xs px-2 py-0.5 rounded ${entry.source === 'import' ? 'bg-accent/20 text-accent' : 'bg-muted text-muted-foreground'}`}>
-            {entry.source}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className={`text-xs px-2 py-0.5 rounded ${
+              entry.source === 'import' ? 'bg-accent/20 text-accent' :
+              entry.source === 'auto_location' ? 'bg-success/20 text-success' :
+              'bg-muted text-muted-foreground'
+            }`}>
+              {entry.source === 'auto_location' ? 'GPS' : entry.source}
+            </span>
+            {entry.is_remote && (
+              <span className="text-xs px-2 py-0.5 rounded bg-primary/20 text-primary flex items-center gap-1">
+                <MapPin className="h-3 w-3" /> Remote
+              </span>
+            )}
+          </div>
         </td>
       </tr>
       {expanded && (
         <tr>
           <td colSpan={6} className="bg-muted/30 px-8 py-3">
-            <div className="space-y-1">
+            <div className="space-y-3">
               <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Punch Details</p>
               {punches.length === 0 && <p className="text-sm text-muted-foreground">No punches recorded</p>}
               {punches.map(p => (
@@ -45,14 +111,62 @@ function EntryRow({ entry }: { entry: TimeEntryRow }) {
                     {p.punch_type}
                   </span>
                   <span className="time-display">{formatTime(p.punch_time)}</span>
+                  {p.source !== 'manual' && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">
+                      {p.source === 'auto_location' ? 'GPS' : p.source}
+                    </span>
+                  )}
+                  {p.low_confidence && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning">low GPS</span>
+                  )}
                 </div>
               ))}
+
+              {/* Remote toggle */}
+              <div className="flex items-center gap-3 pt-2 border-t border-border">
+                <Label className="text-xs">Remote</Label>
+                <Switch
+                  checked={entry.is_remote}
+                  onCheckedChange={handleRemoteToggle}
+                />
+              </div>
+
+              {/* Daily comment */}
+              <div className="space-y-1 pt-2 border-t border-border">
+                <Label className="text-xs">Daily Comment</Label>
+                <div className="flex gap-2">
+                  <Textarea
+                    value={comment}
+                    onChange={e => { setComment(e.target.value); setCommentDirty(true); }}
+                    rows={2}
+                    placeholder="Optional comment for this day..."
+                    className="text-sm"
+                  />
+                  {commentDirty && (
+                    <Button size="sm" onClick={handleSaveComment} className="self-end">
+                      <Save className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+
               {entry.notes && (
                 <p className="text-sm text-muted-foreground mt-2 italic">{entry.notes}</p>
               )}
             </div>
           </td>
         </tr>
+      )}
+
+      {auditDialog && (
+        <EditAuditDialog
+          open
+          onClose={() => setAuditDialog(null)}
+          onConfirm={handleAuditConfirm}
+          fieldChanged={auditDialog.field}
+          oldValue={auditDialog.old}
+          newValue={auditDialog.new}
+        />
       )}
     </>
   );
@@ -72,7 +186,6 @@ export default function Timesheet() {
         <p className="text-muted-foreground">View and manage your time entries</p>
       </div>
 
-      {/* Filters */}
       <Card className="card-elevated">
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-4">
@@ -94,7 +207,6 @@ export default function Timesheet() {
         </CardContent>
       </Card>
 
-      {/* Table */}
       <Card className="card-elevated overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -105,7 +217,7 @@ export default function Timesheet() {
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">First In</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Last Out</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Total</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Source</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Source / Status</th>
               </tr>
             </thead>
             <tbody className="divide-y">

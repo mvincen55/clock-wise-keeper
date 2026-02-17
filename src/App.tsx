@@ -11,6 +11,7 @@ import Timesheet from "@/pages/Timesheet";
 import DaysOff from "@/pages/DaysOff";
 import Reports from "@/pages/Reports";
 import Import from "@/pages/Import";
+import WorkZones from "@/pages/WorkZones";
 import NotFound from "@/pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -41,6 +42,7 @@ const App = () => (
             <Route path="/days-off" element={<ProtectedRoute><DaysOff /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/import" element={<ProtectedRoute><Import /></ProtectedRoute>} />
+            <Route path="/work-zones" element={<ProtectedRoute><WorkZones /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

@@ -172,6 +172,63 @@ export type Database = {
         }
         Relationships: []
       }
+      location_events: {
+        Row: {
+          accuracy: number | null
+          action_taken: string | null
+          confidence_flag: boolean
+          created_at: string
+          id: string
+          latitude: number
+          longitude: number
+          punch_id: string | null
+          user_id: string
+          zone_id: string | null
+          zone_status: string | null
+        }
+        Insert: {
+          accuracy?: number | null
+          action_taken?: string | null
+          confidence_flag?: boolean
+          created_at?: string
+          id?: string
+          latitude: number
+          longitude: number
+          punch_id?: string | null
+          user_id: string
+          zone_id?: string | null
+          zone_status?: string | null
+        }
+        Update: {
+          accuracy?: number | null
+          action_taken?: string | null
+          confidence_flag?: boolean
+          created_at?: string
+          id?: string
+          latitude?: number
+          longitude?: number
+          punch_id?: string | null
+          user_id?: string
+          zone_id?: string | null
+          zone_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_events_punch_id_fkey"
+            columns: ["punch_id"]
+            isOneToOne: false
+            referencedRelation: "punches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_events_zone_id_fkey"
+            columns: ["zone_id"]
+            isOneToOne: false
+            referencedRelation: "work_zones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payroll_summaries: {
         Row: {
           created_at: string
@@ -233,6 +290,9 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          location_lat: number | null
+          location_lng: number | null
+          low_confidence: boolean
           punch_time: string
           punch_type: Database["public"]["Enums"]["punch_type"]
           raw_text: string | null
@@ -243,6 +303,9 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          location_lat?: number | null
+          location_lng?: number | null
+          low_confidence?: boolean
           punch_time: string
           punch_type: Database["public"]["Enums"]["punch_type"]
           raw_text?: string | null
@@ -253,6 +316,9 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          location_lat?: number | null
+          location_lng?: number | null
+          low_confidence?: boolean
           punch_time?: string
           punch_type?: Database["public"]["Enums"]["punch_type"]
           raw_text?: string | null
@@ -275,8 +341,10 @@ export type Database = {
           created_at: string
           employee_code: string | null
           employee_name: string | null
+          entry_comment: string | null
           entry_date: string
           id: string
+          is_remote: boolean
           notes: string | null
           raw_text: string | null
           raw_total_hhmm: string | null
@@ -289,8 +357,10 @@ export type Database = {
           created_at?: string
           employee_code?: string | null
           employee_name?: string | null
+          entry_comment?: string | null
           entry_date: string
           id?: string
+          is_remote?: boolean
           notes?: string | null
           raw_text?: string | null
           raw_total_hhmm?: string | null
@@ -303,8 +373,10 @@ export type Database = {
           created_at?: string
           employee_code?: string | null
           employee_name?: string | null
+          entry_comment?: string | null
           entry_date?: string
           id?: string
+          is_remote?: boolean
           notes?: string | null
           raw_text?: string | null
           raw_total_hhmm?: string | null
@@ -312,6 +384,48 @@ export type Database = {
           total_minutes?: number | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      work_zones: {
+        Row: {
+          created_at: string
+          enter_delay_minutes: number
+          exit_delay_minutes: number
+          id: string
+          is_active: boolean
+          latitude: number
+          longitude: number
+          radius_meters: number
+          updated_at: string
+          user_id: string
+          zone_name: string
+        }
+        Insert: {
+          created_at?: string
+          enter_delay_minutes?: number
+          exit_delay_minutes?: number
+          id?: string
+          is_active?: boolean
+          latitude: number
+          longitude: number
+          radius_meters?: number
+          updated_at?: string
+          user_id: string
+          zone_name: string
+        }
+        Update: {
+          created_at?: string
+          enter_delay_minutes?: number
+          exit_delay_minutes?: number
+          id?: string
+          is_active?: boolean
+          latitude?: number
+          longitude?: number
+          radius_meters?: number
+          updated_at?: string
+          user_id?: string
+          zone_name?: string
         }
         Relationships: []
       }
@@ -327,7 +441,7 @@ export type Database = {
       day_off_type: "pto" | "sick" | "holiday" | "unpaid" | "other"
       import_status: "pending" | "previewing" | "confirmed" | "failed"
       punch_type: "in" | "out"
-      source_type: "manual" | "import"
+      source_type: "manual" | "import" | "auto_location" | "system_adjustment"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -458,7 +572,7 @@ export const Constants = {
       day_off_type: ["pto", "sick", "holiday", "unpaid", "other"],
       import_status: ["pending", "previewing", "confirmed", "failed"],
       punch_type: ["in", "out"],
-      source_type: ["manual", "import"],
+      source_type: ["manual", "import", "auto_location", "system_adjustment"],
     },
   },
 } as const

@@ -1,1 +1,10 @@
 project_id = "lfiplzmxpmybtbzhmnkp"
+
+[functions.parse-pdf]
+verify_jwt = false
+
+[functions.confirm-import]
+verify_jwt = false
+
+[functions.process-location-event]
+verify_jwt = false
