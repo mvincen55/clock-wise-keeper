@@ -9,9 +9,12 @@ export type PunchRow = {
   seq: number;
   punch_type: 'in' | 'out';
   punch_time: string;
-  source: 'manual' | 'import';
+  source: 'manual' | 'import' | 'auto_location' | 'system_adjustment';
   raw_text: string | null;
   created_at: string;
+  low_confidence: boolean;
+  location_lat: number | null;
+  location_lng: number | null;
 };
 
 export type TimeEntryRow = {
@@ -19,10 +22,12 @@ export type TimeEntryRow = {
   user_id: string;
   entry_date: string;
   total_minutes: number | null;
-  source: 'manual' | 'import';
+  source: 'manual' | 'import' | 'auto_location' | 'system_adjustment';
   notes: string | null;
   created_at: string;
   updated_at: string;
+  is_remote: boolean;
+  entry_comment: string | null;
   punches: PunchRow[];
 };
 
@@ -94,7 +99,6 @@ export function useClockAction() {
       const punchType: 'in' | 'out' = (action === 'clock_in' || action === 'break_end') ? 'in' : 'out';
       const now = new Date().toISOString();
 
-      // Get or create today's entry
       let { data: entry } = await supabase
         .from('time_entries')
         .select('id')
@@ -111,7 +115,6 @@ export function useClockAction() {
         entry = newEntry;
       }
 
-      // Get current max seq
       const { data: maxPunch } = await supabase
         .from('punches')
         .select('seq')
@@ -131,7 +134,6 @@ export function useClockAction() {
       });
       if (punchError) throw punchError;
 
-      // Update total_minutes
       const { data: allPunches } = await supabase
         .from('punches')
         .select('punch_type, punch_time')
@@ -143,7 +145,6 @@ export function useClockAction() {
         await supabase.from('time_entries').update({ total_minutes: totalMin }).eq('id', entry.id);
       }
 
-      // Audit
       await supabase.from('audit_events').insert({
         user_id: user.id,
         event_type: action,
@@ -155,6 +156,48 @@ export function useClockAction() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['time-entry', today] });
       qc.invalidateQueries({ queryKey: ['time-entries'] });
+    },
+  });
+}
+
+export function useUpdateEntry() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ entryId, updates, audit }: {
+      entryId: string;
+      updates: { is_remote?: boolean; entry_comment?: string };
+      audit?: { field_changed: string; old_value: string; new_value: string; reason_comment: string };
+    }) => {
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('time_entries')
+        .update(updates)
+        .eq('id', entryId);
+      if (error) throw error;
+
+      if (audit) {
+        await supabase.from('audit_events').insert({
+          user_id: user.id,
+          event_type: 'manual_edit',
+          event_details: {
+            entity_type: 'time_entry',
+            entity_id: entryId,
+            field_changed: audit.field_changed,
+            old_value: audit.old_value,
+            new_value: audit.new_value,
+            reason_comment: audit.reason_comment,
+            edit_source: 'manual_edit',
+          } as any,
+          related_entry_id: entryId,
+        });
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['time-entries'] });
+      qc.invalidateQueries({ queryKey: ['time-entry'] });
     },
   });
 }

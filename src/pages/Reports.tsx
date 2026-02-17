@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FileText, Printer } from 'lucide-react';
 
@@ -16,6 +17,7 @@ export default function Reports() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [generated, setGenerated] = useState(false);
+  const [showAuditTrail, setShowAuditTrail] = useState(false);
 
   const { data: entries } = useTimeEntries(startDate || undefined, endDate || undefined);
   const { data: daysOff } = useDaysOff();
@@ -30,7 +32,6 @@ export default function Reports() {
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
-      {/* Controls - hidden in print */}
       <div className="no-print">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Reports</h1>
@@ -61,6 +62,10 @@ export default function Reports() {
                 <Input type="date" value={endDate} onChange={e => { setEndDate(e.target.value); setGenerated(false); }} />
               </div>
             </div>
+            <div className="flex items-center gap-3">
+              <Switch checked={showAuditTrail} onCheckedChange={setShowAuditTrail} />
+              <Label className="text-sm">Include audit trail</Label>
+            </div>
             <Button onClick={handleGenerate} disabled={!startDate || !endDate}>
               <FileText className="mr-2 h-4 w-4" />
               Generate Report
@@ -69,7 +74,6 @@ export default function Reports() {
         </Card>
       </div>
 
-      {/* Report output */}
       {generated && (
         <div>
           <div className="no-print flex justify-end mb-2">
@@ -117,18 +121,29 @@ export default function Reports() {
                         <th className="px-4 py-2 text-left">First In</th>
                         <th className="px-4 py-2 text-left">Last Out</th>
                         <th className="px-4 py-2 text-left">Total</th>
+                        <th className="px-4 py-2 text-left">Location</th>
+                        <th className="px-4 py-2 text-left">Source</th>
+                        <th className="px-4 py-2 text-left">Comment</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
                       {(entries || []).map(e => {
                         const firstIn = e.punches.find(p => p.punch_type === 'in');
                         const lastOut = [...e.punches].reverse().find(p => p.punch_type === 'out');
+                        const hasNonManual = e.punches.some(p => p.source !== 'manual');
                         return (
                           <tr key={e.id}>
                             <td className="px-4 py-2">{formatDate(e.entry_date)}</td>
                             <td className="px-4 py-2 time-display">{firstIn ? formatTime(firstIn.punch_time) : '—'}</td>
                             <td className="px-4 py-2 time-display">{lastOut ? formatTime(lastOut.punch_time) : '—'}</td>
                             <td className="px-4 py-2 time-display font-semibold">{e.total_minutes != null ? minutesToHHMM(e.total_minutes) : '—'}</td>
+                            <td className="px-4 py-2 text-xs">{e.is_remote ? 'Remote' : 'On-site'}</td>
+                            <td className="px-4 py-2 text-xs">
+                              {hasNonManual && <span className="text-accent">{e.source === 'auto_location' ? 'GPS' : e.source}</span>}
+                            </td>
+                            <td className="px-4 py-2 text-xs text-muted-foreground max-w-[150px] truncate">
+                              {e.entry_comment || ''}
+                            </td>
                           </tr>
                         );
                       })}
@@ -137,6 +152,7 @@ export default function Reports() {
                       <tr className="border-t-2 font-bold">
                         <td colSpan={3} className="px-4 py-3 text-right">Total Hours:</td>
                         <td className="px-4 py-3 time-display">{minutesToHHMM(totalMinutes)}</td>
+                        <td colSpan={3}></td>
                       </tr>
                     </tfoot>
                   </table>

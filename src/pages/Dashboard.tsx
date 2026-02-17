@@ -2,8 +2,13 @@ import { useTodayEntry, useClockAction, PunchRow } from '@/hooks/useTimeEntries'
 import { minutesToHHMM, formatTime, formatDate } from '@/lib/time-utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Clock, LogIn, LogOut, Coffee, Play, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useGeoTracking } from '@/hooks/useGeoTracking';
+import { LocationStatusPanel } from '@/components/LocationStatusPanel';
+import { useWorkZones } from '@/hooks/useWorkZones';
 
 type ClockStatus = 'clocked_out' | 'clocked_in' | 'on_break';
 
@@ -11,9 +16,6 @@ function getStatus(punches: PunchRow[]): ClockStatus {
   if (!punches.length) return 'clocked_out';
   const last = punches[punches.length - 1];
   if (last.punch_type === 'out') return 'clocked_out';
-  // Check if "on break" - last in after an out that wasn't the first
-  // Simple heuristic: if there are >=2 pairs completed and last is 'in', user is working
-  // For break detection, we use the clock action type stored in audit
   return 'clocked_in';
 }
 
@@ -36,6 +38,9 @@ export default function Dashboard() {
   const { data: todayEntry, isLoading } = useTodayEntry();
   const clockAction = useClockAction();
   const [now, setNow] = useState(new Date());
+  const [autoClockEnabled, setAutoClockEnabled] = useState(false);
+  const { data: zones } = useWorkZones();
+  const geoState = useGeoTracking(autoClockEnabled && (zones?.length ?? 0) > 0);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -57,7 +62,6 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground">{formatDate(now)}</p>
@@ -76,17 +80,16 @@ export default function Dashboard() {
         </div>
 
         <CardContent className="p-6">
-          {/* Running total */}
           <div className="text-center mb-6">
             <p className="text-sm text-muted-foreground mb-1">Today's Total</p>
             <p className="time-display text-3xl font-bold text-foreground">{minutesToHHMM(runningMinutes)}</p>
           </div>
 
-          {/* Action buttons */}
+          {/* Action buttons - large, thumb reachable */}
           <div className="grid grid-cols-2 gap-3">
             {status === 'clocked_out' && (
               <Button
-                className="col-span-2 h-14 text-lg font-semibold punch-glow"
+                className="col-span-2 h-16 text-lg font-semibold punch-glow"
                 onClick={() => clockAction.mutate('clock_in')}
                 disabled={isBusy}
               >
@@ -99,7 +102,7 @@ export default function Dashboard() {
               <>
                 <Button
                   variant="destructive"
-                  className="h-14 text-base font-semibold"
+                  className="h-16 text-base font-semibold"
                   onClick={() => clockAction.mutate('clock_out')}
                   disabled={isBusy}
                 >
@@ -108,7 +111,7 @@ export default function Dashboard() {
                 </Button>
                 <Button
                   variant="secondary"
-                  className="h-14 text-base font-semibold"
+                  className="h-16 text-base font-semibold"
                   onClick={() => clockAction.mutate('break_start')}
                   disabled={isBusy}
                 >
@@ -120,7 +123,7 @@ export default function Dashboard() {
 
             {status === 'on_break' && (
               <Button
-                className="col-span-2 h-14 text-lg font-semibold"
+                className="col-span-2 h-16 text-lg font-semibold"
                 onClick={() => clockAction.mutate('break_end')}
                 disabled={isBusy}
               >
@@ -131,6 +134,26 @@ export default function Dashboard() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Auto Clock Toggle */}
+      <Card className="card-elevated">
+        <CardContent className="p-4 flex items-center justify-between">
+          <div>
+            <p className="font-medium">Auto Clock (GPS)</p>
+            <p className="text-xs text-muted-foreground">
+              {zones?.length ? `${zones.filter(z => z.is_active).length} active zone(s)` : 'No zones configured'}
+            </p>
+          </div>
+          <Switch
+            checked={autoClockEnabled}
+            onCheckedChange={setAutoClockEnabled}
+            disabled={!zones?.length}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Location Status */}
+      {autoClockEnabled && <LocationStatusPanel state={geoState} />}
 
       {/* Today's punches */}
       <Card className="card-elevated">
@@ -149,7 +172,7 @@ export default function Dashboard() {
             <p className="text-center text-muted-foreground py-6">No punches yet today</p>
           ) : (
             <div className="space-y-2">
-              {punches.map((p, i) => (
+              {punches.map((p) => (
                 <div key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-muted/50">
                   <span className={`text-xs font-semibold uppercase px-2 py-0.5 rounded ${
                     p.punch_type === 'in' ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'
@@ -157,6 +180,14 @@ export default function Dashboard() {
                     {p.punch_type}
                   </span>
                   <span className="time-display text-sm">{formatTime(p.punch_time)}</span>
+                  {p.source !== 'manual' && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">
+                      {p.source === 'auto_location' ? 'GPS' : p.source}
+                    </span>
+                  )}
+                  {p.low_confidence && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning">low GPS</span>
+                  )}
                 </div>
               ))}
             </div>
