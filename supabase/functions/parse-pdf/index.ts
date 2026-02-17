@@ -68,6 +68,7 @@ Return a JSON object with this exact structure:
 
 Rules:
 - Parse all dates to YYYY-MM-DD format
+- For report_range_start and report_range_end, use the first and last ACTUAL entry dates (not the header/title date range)
 - Parse all times as "HH:MM AM/PM" strings  
 - Parse total hours as "HH:MM" format
 - Include ALL note lines (audit trail entries like "The punch time X was added/changed/deleted by...")
