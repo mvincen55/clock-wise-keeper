@@ -26,6 +26,7 @@ function SummaryRow({ row }: { row: PunchSummaryRow }) {
         <td className="px-4 py-3 time-display text-sm">{row.firstIn}</td>
         <td className="px-4 py-3 time-display text-sm">{row.lastOut}</td>
         <td className="px-4 py-3 time-display text-sm font-semibold">{row.total}</td>
+        <td className="px-4 py-3 text-xs text-muted-foreground max-w-[200px] truncate" title={row.note}>{row.note}</td>
         <td className="px-4 py-3">
           {row.needsReview && (
             <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">
@@ -37,7 +38,7 @@ function SummaryRow({ row }: { row: PunchSummaryRow }) {
       </tr>
       {expanded && row.pairs.length > 0 && (
         <tr>
-          <td colSpan={7} className="bg-muted/30 px-8 py-2">
+          <td colSpan={8} className="bg-muted/30 px-8 py-2">
             <div className="text-xs space-y-1">
               <p className="font-semibold text-muted-foreground uppercase mb-1">Punch Pairs</p>
               {row.pairs.map((p, i) => (
@@ -120,7 +121,7 @@ export default function TimePunchSummary() {
             total_minutes: totalMins,
             raw_total_hhmm: row.total,
             source: 'auto_location' as const,
-            notes: row.needsReview ? 'Needs review — incomplete punch pair' : null,
+            notes: [row.note, row.needsReview ? 'Needs review — incomplete punch pair' : null].filter(Boolean).join('; ') || null,
           })
           .select('id')
           .single();
@@ -255,9 +256,10 @@ export default function TimePunchSummary() {
                   <th className="px-4 py-3 w-8"></th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Day</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">First In</th>
+                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">First In</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Last Out</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Total</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Note</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Needs Review</th>
                 </tr>
               </thead>
@@ -268,11 +270,11 @@ export default function TimePunchSummary() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 font-bold">
-                  <td colSpan={5} className="px-4 py-3 text-right">Grand Total:</td>
+                  <td colSpan={6} className="px-4 py-3 text-right">Grand Total:</td>
                   <td className="px-4 py-3 time-display">
                     {Math.floor(totalAllMinutes / 60)}:{(totalAllMinutes % 60).toString().padStart(2, '0')}
                   </td>
-                  <td></td>
+                  <td colSpan={2}></td>
                 </tr>
               </tfoot>
             </table>
