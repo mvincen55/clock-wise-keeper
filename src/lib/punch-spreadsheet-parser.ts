@@ -13,6 +13,7 @@ export type PunchSummaryRow = {
   lastOut: string;
   total: string;
   needsReview: boolean;
+  note: string;
   pairs: { inTime: string; outTime: string; minutes: number }[];
 };
 
@@ -122,6 +123,9 @@ export function parseTimePunchExcel(buffer: ArrayBuffer): PunchSummaryRow[] {
 
     const dayStr = dayCol >= 0 ? getCellStr(sheet, r, dayCol) : '';
 
+    // Read note from column I (index 8)
+    const noteStr = getCellStr(sheet, r, 8);
+
     // Collect all punch times
     const inTimes: (string | null)[] = inCols.map(c => {
       const s = getCellStr(sheet, r, c);
@@ -199,6 +203,7 @@ export function parseTimePunchExcel(buffer: ArrayBuffer): PunchSummaryRow[] {
       lastOut: lastOutMin != null ? minutesToTimeStr(lastOutMin) : '—',
       total: minutesToDuration(totalMins),
       needsReview: oddPunch,
+      note: noteStr,
       pairs,
     });
   }
