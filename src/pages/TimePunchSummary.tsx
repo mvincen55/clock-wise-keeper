@@ -112,6 +112,10 @@ export default function TimePunchSummary() {
         const totalMins = row.pairs.reduce((s, p) => s + p.minutes, 0);
         const [h, m] = row.total.split(':').map(Number);
 
+        // Determine if remote based on note content
+        const noteText = [row.note, row.needsReview ? 'Needs review — incomplete punch pair' : null].filter(Boolean).join('; ') || null;
+        const isRemote = row.note?.toLowerCase().includes('remote') || false;
+
         // Create time_entry with source = auto_location (GPS)
         const { data: entry, error: entryErr } = await supabase
           .from('time_entries')
@@ -121,7 +125,8 @@ export default function TimePunchSummary() {
             total_minutes: totalMins,
             raw_total_hhmm: row.total,
             source: 'auto_location' as const,
-            notes: [row.note, row.needsReview ? 'Needs review — incomplete punch pair' : null].filter(Boolean).join('; ') || null,
+            is_remote: isRemote,
+            notes: noteText,
           })
           .select('id')
           .single();
