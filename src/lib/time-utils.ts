@@ -16,12 +16,12 @@ export function formatTime(date: Date | string): string {
 }
 
 export function formatDate(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
+  const d = typeof date === 'string' ? new Date(date + 'T00:00:00') : date;
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 export function formatDateShort(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
+  const d = typeof date === 'string' ? new Date(date + 'T00:00:00') : date;
   return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' });
 }
 
