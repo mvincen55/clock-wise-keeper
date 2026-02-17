@@ -2,16 +2,17 @@ import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Clock, LayoutDashboard, Table2, CalendarDays, FileText, Upload, LogOut, Menu, X, MapPin, ClipboardList } from 'lucide-react';
+import { Clock, LayoutDashboard, Table2, CalendarDays, FileText, Upload, LogOut, Menu, X, MapPin, ClipboardList, Settings } from 'lucide-react';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/timesheet', icon: Table2, label: 'Timesheet' },
-  { to: '/days-off', icon: CalendarDays, label: 'Days Off' },
+  { to: '/days-off', icon: CalendarDays, label: 'Attendance' },
   { to: '/reports', icon: FileText, label: 'Reports' },
   { to: '/import', icon: Upload, label: 'Import' },
   { to: '/punch-summary', icon: ClipboardList, label: 'Punch Summary' },
   { to: '/work-zones', icon: MapPin, label: 'Work Zones' },
+  { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {

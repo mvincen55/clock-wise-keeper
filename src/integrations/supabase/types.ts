@@ -336,6 +336,65 @@ export type Database = {
           },
         ]
       }
+      tardies: {
+        Row: {
+          actual_start_time: string
+          approval_status: string
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          entry_date: string
+          expected_start_time: string
+          id: string
+          minutes_late: number
+          reason_text: string | null
+          resolved: boolean
+          time_entry_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          actual_start_time: string
+          approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          entry_date: string
+          expected_start_time: string
+          id?: string
+          minutes_late?: number
+          reason_text?: string | null
+          resolved?: boolean
+          time_entry_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          actual_start_time?: string
+          approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          entry_date?: string
+          expected_start_time?: string
+          id?: string
+          minutes_late?: number
+          reason_text?: string | null
+          resolved?: boolean
+          time_entry_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tardies_time_entry_id_fkey"
+            columns: ["time_entry_id"]
+            isOneToOne: false
+            referencedRelation: "time_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       time_entries: {
         Row: {
           created_at: string
@@ -384,6 +443,48 @@ export type Database = {
           total_minutes?: number | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      work_schedule: {
+        Row: {
+          apply_to_remote: boolean
+          created_at: string
+          enabled: boolean
+          end_time: string
+          grace_minutes: number
+          id: string
+          start_time: string
+          threshold_minutes: number
+          updated_at: string
+          user_id: string
+          weekday: number
+        }
+        Insert: {
+          apply_to_remote?: boolean
+          created_at?: string
+          enabled?: boolean
+          end_time?: string
+          grace_minutes?: number
+          id?: string
+          start_time?: string
+          threshold_minutes?: number
+          updated_at?: string
+          user_id: string
+          weekday: number
+        }
+        Update: {
+          apply_to_remote?: boolean
+          created_at?: string
+          enabled?: boolean
+          end_time?: string
+          grace_minutes?: number
+          id?: string
+          start_time?: string
+          threshold_minutes?: number
+          updated_at?: string
+          user_id?: string
+          weekday?: number
         }
         Relationships: []
       }
