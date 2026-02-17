@@ -1,0 +1,151 @@
+import { useState } from 'react';
+import { useTimeEntries, TimeEntryRow } from '@/hooks/useTimeEntries';
+import { useDaysOff } from '@/hooks/useDaysOff';
+import { minutesToHHMM, formatTime, formatDate } from '@/lib/time-utils';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FileText, Printer } from 'lucide-react';
+
+type ReportType = 'weekly' | 'pay_period' | 'monthly' | 'pto' | 'audit';
+
+export default function Reports() {
+  const [reportType, setReportType] = useState<ReportType>('weekly');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [generated, setGenerated] = useState(false);
+
+  const { data: entries } = useTimeEntries(startDate || undefined, endDate || undefined);
+  const { data: daysOff } = useDaysOff();
+
+  const totalMinutes = entries?.reduce((sum, e) => sum + (e.total_minutes || 0), 0) || 0;
+
+  const handleGenerate = () => {
+    if (startDate && endDate) setGenerated(true);
+  };
+
+  const handlePrint = () => window.print();
+
+  return (
+    <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
+      {/* Controls - hidden in print */}
+      <div className="no-print">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold">Reports</h1>
+          <p className="text-muted-foreground">Generate printable time reports</p>
+        </div>
+
+        <Card className="card-elevated mt-4">
+          <CardContent className="p-4 space-y-4">
+            <div className="space-y-1">
+              <Label>Report Type</Label>
+              <Select value={reportType} onValueChange={v => { setReportType(v as ReportType); setGenerated(false); }}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weekly">Weekly Timesheet</SelectItem>
+                  <SelectItem value="pay_period">Pay Period Summary</SelectItem>
+                  <SelectItem value="monthly">Monthly Summary</SelectItem>
+                  <SelectItem value="pto">PTO Summary</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Start Date</Label>
+                <Input type="date" value={startDate} onChange={e => { setStartDate(e.target.value); setGenerated(false); }} />
+              </div>
+              <div className="space-y-1">
+                <Label>End Date</Label>
+                <Input type="date" value={endDate} onChange={e => { setEndDate(e.target.value); setGenerated(false); }} />
+              </div>
+            </div>
+            <Button onClick={handleGenerate} disabled={!startDate || !endDate}>
+              <FileText className="mr-2 h-4 w-4" />
+              Generate Report
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Report output */}
+      {generated && (
+        <div>
+          <div className="no-print flex justify-end mb-2">
+            <Button variant="outline" onClick={handlePrint}>
+              <Printer className="mr-2 h-4 w-4" />
+              Print
+            </Button>
+          </div>
+
+          <Card className="card-elevated">
+            <CardHeader className="border-b">
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle className="text-xl">
+                    {reportType === 'weekly' && 'Weekly Timesheet'}
+                    {reportType === 'pay_period' && 'Pay Period Summary'}
+                    {reportType === 'monthly' && 'Monthly Summary'}
+                    {reportType === 'pto' && 'PTO Summary'}
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {formatDate(startDate)} — {formatDate(endDate)}
+                  </p>
+                </div>
+                <p className="text-xs text-muted-foreground">Generated: {new Date().toLocaleString()}</p>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {reportType === 'pto' ? (
+                <div className="divide-y">
+                  {(daysOff || [])
+                    .filter(d => d.date_start >= startDate && d.date_start <= endDate)
+                    .map(d => (
+                      <div key={d.id} className="px-4 py-3 flex justify-between text-sm">
+                        <span>{formatDate(d.date_start)}{d.date_start !== d.date_end ? ` — ${formatDate(d.date_end)}` : ''}</span>
+                        <span className="font-medium capitalize">{d.type}</span>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="px-4 py-2 text-left">Date</th>
+                        <th className="px-4 py-2 text-left">First In</th>
+                        <th className="px-4 py-2 text-left">Last Out</th>
+                        <th className="px-4 py-2 text-left">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {(entries || []).map(e => {
+                        const firstIn = e.punches.find(p => p.punch_type === 'in');
+                        const lastOut = [...e.punches].reverse().find(p => p.punch_type === 'out');
+                        return (
+                          <tr key={e.id}>
+                            <td className="px-4 py-2">{formatDate(e.entry_date)}</td>
+                            <td className="px-4 py-2 time-display">{firstIn ? formatTime(firstIn.punch_time) : '—'}</td>
+                            <td className="px-4 py-2 time-display">{lastOut ? formatTime(lastOut.punch_time) : '—'}</td>
+                            <td className="px-4 py-2 time-display font-semibold">{e.total_minutes != null ? minutesToHHMM(e.total_minutes) : '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 font-bold">
+                        <td colSpan={3} className="px-4 py-3 text-right">Total Hours:</td>
+                        <td className="px-4 py-3 time-display">{minutesToHHMM(totalMinutes)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
