@@ -7,7 +7,7 @@ export type DayOffRow = {
   user_id: string;
   date_start: string;
   date_end: string;
-  type: 'pto' | 'sick' | 'holiday' | 'unpaid' | 'other';
+  type: 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'other';
   hours: number | null;
   notes: string | null;
   created_at: string;
@@ -38,7 +38,7 @@ export function useAddDayOff() {
     mutationFn: async (input: {
       date_start: string;
       date_end: string;
-      type: 'pto' | 'sick' | 'holiday' | 'unpaid' | 'other';
+      type: 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'other';
       hours?: number;
       notes?: string;
     }) => {
