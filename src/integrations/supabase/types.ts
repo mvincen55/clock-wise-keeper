@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      allowed_users: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+        }
+        Relationships: []
+      }
       audit_events: {
         Row: {
           created_at: string
@@ -535,6 +553,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      is_allowed_user: { Args: never; Returns: boolean }
       user_owns_import: { Args: { _import_id: string }; Returns: boolean }
       user_owns_time_entry: { Args: { _entry_id: string }; Returns: boolean }
     }

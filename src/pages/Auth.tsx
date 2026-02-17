@@ -5,16 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Clock, Loader2 } from 'lucide-react';
+import { Clock, Loader2, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function Auth() {
-  const { user, loading, signIn, signUp } = useAuth();
-  const [isSignUp, setIsSignUp] = useState(false);
+  const { user, loading, isAllowed, signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [denied, setDenied] = useState(false);
   const { toast } = useToast();
 
   if (loading) {
@@ -25,22 +24,18 @@ export default function Auth() {
     );
   }
 
-  if (user) return <Navigate to="/" replace />;
+  if (user && isAllowed) return <Navigate to="/" replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    setDenied(false);
 
-    if (isSignUp) {
-      const { error } = await signUp(email, password, fullName);
-      if (error) {
-        toast({ title: 'Sign up failed', description: error.message, variant: 'destructive' });
+    const { error } = await signIn(email, password);
+    if (error) {
+      if (error.message === 'Access denied.') {
+        setDenied(true);
       } else {
-        toast({ title: 'Check your email', description: 'We sent you a confirmation link.' });
-      }
-    } else {
-      const { error } = await signIn(email, password);
-      if (error) {
         toast({ title: 'Sign in failed', description: error.message, variant: 'destructive' });
       }
     }
@@ -55,18 +50,16 @@ export default function Auth() {
             <Clock className="h-7 w-7 text-primary-foreground" />
           </div>
           <CardTitle className="text-2xl">TimeVault</CardTitle>
-          <CardDescription>
-            {isSignUp ? 'Create your account' : 'Sign in to your account'}
-          </CardDescription>
+          <CardDescription>Sign in to your account</CardDescription>
         </CardHeader>
         <CardContent>
+          {denied && (
+            <div className="mb-4 flex items-center gap-3 rounded-lg bg-destructive/10 border border-destructive/30 p-3">
+              <ShieldAlert className="h-5 w-5 text-destructive shrink-0" />
+              <p className="text-sm text-destructive font-medium">Access denied. This app is restricted.</p>
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {isSignUp && (
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input id="name" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Jane Doe" required />
-              </div>
-            )}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" required />
@@ -77,15 +70,9 @@ export default function Auth() {
             </div>
             <Button type="submit" className="w-full" disabled={submitting}>
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isSignUp ? 'Create Account' : 'Sign In'}
+              Sign In
             </Button>
           </form>
-          <div className="mt-4 text-center text-sm text-muted-foreground">
-            {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
-            <button onClick={() => setIsSignUp(!isSignUp)} className="text-primary hover:underline font-medium">
-              {isSignUp ? 'Sign in' : 'Sign up'}
-            </button>
-          </div>
         </CardContent>
       </Card>
     </div>

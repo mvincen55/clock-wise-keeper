@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useWorkSchedule, useInitSchedule, useUpdateScheduleDay, WEEKDAY_NAMES, WorkScheduleRow } from '@/hooks/useWorkSchedule';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
-import { Loader2, Settings as SettingsIcon } from 'lucide-react';
+import { Loader2, Settings as SettingsIcon, Shield, Timer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 function ScheduleDayRow({ row, onUpdate }: { row: WorkScheduleRow; onUpdate: (id: string, updates: Partial<WorkScheduleRow>) => void }) {
@@ -66,6 +67,7 @@ export default function Settings() {
   const initSchedule = useInitSchedule();
   const updateDay = useUpdateScheduleDay();
   const { toast } = useToast();
+  const { sessionTimeoutMinutes, setSessionTimeoutMinutes } = useAuth();
   const [applyToRemote, setApplyToRemote] = useState(false);
 
   useEffect(() => {
@@ -148,6 +150,33 @@ export default function Settings() {
           </CardContent>
         </Card>
       )}
+
+      {/* Security & Privacy */}
+      <Card className="card-elevated">
+        <CardHeader className="border-b">
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Security &amp; Privacy
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 space-y-4">
+          <div className="flex items-center gap-4">
+            <Timer className="h-5 w-5 text-muted-foreground shrink-0" />
+            <div className="flex-1">
+              <Label className="text-sm font-medium">Auto-Logout Timeout</Label>
+              <p className="text-xs text-muted-foreground">Minutes of inactivity before automatic sign out (0 = disabled)</p>
+            </div>
+            <Input
+              type="number"
+              min={0}
+              max={480}
+              value={sessionTimeoutMinutes}
+              onChange={e => setSessionTimeoutMinutes(parseInt(e.target.value) || 0)}
+              className="w-24 text-sm"
+            />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
