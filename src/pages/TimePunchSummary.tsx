@@ -1,8 +1,11 @@
 import { useState } from 'react';
-import { parseTimePunchExcel, PunchSummaryRow } from '@/lib/punch-spreadsheet-parser';
+import { parseTimePunchExcel, PunchSummaryRow, parseTimeToMinutes } from '@/lib/punch-spreadsheet-parser';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Upload, FileSpreadsheet, Loader2, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
+import { Upload, FileSpreadsheet, Loader2, AlertTriangle, ChevronDown, ChevronRight, Save, CheckCircle } from 'lucide-react';
 
 function SummaryRow({ row }: { row: PunchSummaryRow }) {
   const [expanded, setExpanded] = useState(false);
@@ -55,8 +58,12 @@ function SummaryRow({ row }: { row: PunchSummaryRow }) {
 }
 
 export default function TimePunchSummary() {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [rows, setRows] = useState<PunchSummaryRow[]>([]);
   const [parsing, setParsing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
 
@@ -72,11 +79,99 @@ export default function TimePunchSummary() {
       const buffer = await file.arrayBuffer();
       const result = parseTimePunchExcel(buffer);
       setRows(result);
+      setSaved(false);
     } catch (err: any) {
       setError(err.message);
       setRows([]);
     } finally {
       setParsing(false);
+    }
+  };
+
+  /** Parse "1/6/2025" or "01/06/2025" → "2025-01-06" */
+  const parseDate = (dateStr: string): string | null => {
+    const parts = dateStr.split('/');
+    if (parts.length !== 3) return null;
+    const [m, d, y] = parts.map(Number);
+    if (!m || !d || !y) return null;
+    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  };
+
+  const handleSave = async () => {
+    if (!user || rows.length === 0) return;
+    setSaving(true);
+
+    try {
+      let savedCount = 0;
+
+      for (const row of rows) {
+        const entryDate = parseDate(row.date);
+        if (!entryDate) continue;
+
+        const totalMins = row.pairs.reduce((s, p) => s + p.minutes, 0);
+        const [h, m] = row.total.split(':').map(Number);
+
+        // Create time_entry with source = auto_location (GPS)
+        const { data: entry, error: entryErr } = await supabase
+          .from('time_entries')
+          .insert({
+            user_id: user.id,
+            entry_date: entryDate,
+            total_minutes: totalMins,
+            raw_total_hhmm: row.total,
+            source: 'auto_location' as const,
+            notes: row.needsReview ? 'Needs review — incomplete punch pair' : null,
+          })
+          .select('id')
+          .single();
+
+        if (entryErr) {
+          console.error('Entry insert error:', entryErr);
+          continue;
+        }
+
+        // Create punches for each pair
+        const punchInserts: any[] = [];
+        let seq = 0;
+        for (const pair of row.pairs) {
+          const inMin = parseTimeToMinutes(pair.inTime);
+          const outMin = parseTimeToMinutes(pair.outTime);
+          if (inMin == null || outMin == null) continue;
+
+          const inHour = Math.floor(inMin / 60);
+          const inMinute = inMin % 60;
+          const outHour = Math.floor(outMin / 60);
+          const outMinute = outMin % 60;
+
+          punchInserts.push({
+            time_entry_id: entry.id,
+            punch_type: 'in' as const,
+            punch_time: `${entryDate}T${String(inHour).padStart(2, '0')}:${String(inMinute).padStart(2, '0')}:00`,
+            seq: seq++,
+            source: 'auto_location' as const,
+          });
+          punchInserts.push({
+            time_entry_id: entry.id,
+            punch_type: 'out' as const,
+            punch_time: `${entryDate}T${String(outHour).padStart(2, '0')}:${String(outMinute).padStart(2, '0')}:00`,
+            seq: seq++,
+            source: 'auto_location' as const,
+          });
+        }
+
+        if (punchInserts.length > 0) {
+          await supabase.from('punches').insert(punchInserts);
+        }
+
+        savedCount++;
+      }
+
+      setSaved(true);
+      toast({ title: `Saved ${savedCount} days to database` });
+    } catch (err: any) {
+      toast({ title: 'Save failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -181,6 +276,28 @@ export default function TimePunchSummary() {
                 </tr>
               </tfoot>
             </table>
+          </div>
+          
+          {/* Save button */}
+          <div className="border-t p-4">
+            <Button onClick={handleSave} disabled={saving || saved || !user} className="w-full sm:w-auto">
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : saved ? (
+                <>
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Saved
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save to Database ({rows.length} days)
+                </>
+              )}
+            </Button>
           </div>
         </Card>
       )}
