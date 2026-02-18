@@ -14,6 +14,8 @@ import { MissingShiftBanner } from '@/components/MissingShiftBanner';
 import { PunchEditorModal } from '@/components/PunchEditorModal';
 import { useCurrentPtoBalance } from '@/hooks/usePtoEngine';
 import { Link } from 'react-router-dom';
+import { useOrgContext } from '@/hooks/useOrgContext';
+import { OrgSnapshotPanel } from '@/components/OrgSnapshotPanel';
 
 type ClockStatus = 'clocked_out' | 'clocked_in' | 'on_break';
 
@@ -52,6 +54,8 @@ export default function Dashboard() {
   const missingDays = useMissingShifts(fourteenDaysAgo.toISOString().split('T')[0]);
 
   const ptoState = useCurrentPtoBalance();
+  const { data: ctx } = useOrgContext();
+  const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -85,6 +89,8 @@ export default function Dashboard() {
           <Button variant="outline" size="sm"><CalendarDays className="mr-2 h-4 w-4" />PTO</Button>
         </Link>
       </div>
+
+      {isManager && <OrgSnapshotPanel />}
 
       {missingDays.length > 0 && <MissingShiftBanner missingDays={missingDays} />}
 
