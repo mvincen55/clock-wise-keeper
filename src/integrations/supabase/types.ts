@@ -412,6 +412,8 @@ export type Database = {
           id: string
           notes: string | null
           org_id: string
+          request_id: string | null
+          source: string | null
           type: Database["public"]["Enums"]["day_off_type"]
           updated_at: string
           user_id: string
@@ -426,6 +428,8 @@ export type Database = {
           id?: string
           notes?: string | null
           org_id: string
+          request_id?: string | null
+          source?: string | null
           type?: Database["public"]["Enums"]["day_off_type"]
           updated_at?: string
           user_id: string
@@ -440,6 +444,8 @@ export type Database = {
           id?: string
           notes?: string | null
           org_id?: string
+          request_id?: string | null
+          source?: string | null
           type?: Database["public"]["Enums"]["day_off_type"]
           updated_at?: string
           user_id?: string
@@ -457,6 +463,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "days_off_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "pto_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -1036,6 +1049,75 @@ export type Database = {
           },
         ]
       }
+      pto_requests: {
+        Row: {
+          created_at: string
+          created_by: string
+          employee_id: string
+          end_date: string
+          hours_requested: number | null
+          id: string
+          manager_note: string | null
+          note: string
+          org_id: string
+          pto_type: Database["public"]["Enums"]["pto_request_type"]
+          reviewed_at: string | null
+          reviewed_by: string | null
+          start_date: string
+          status: Database["public"]["Enums"]["pto_request_status"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          employee_id: string
+          end_date: string
+          hours_requested?: number | null
+          id?: string
+          manager_note?: string | null
+          note: string
+          org_id: string
+          pto_type?: Database["public"]["Enums"]["pto_request_type"]
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          start_date: string
+          status?: Database["public"]["Enums"]["pto_request_status"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          employee_id?: string
+          end_date?: string
+          hours_requested?: number | null
+          id?: string
+          manager_note?: string | null
+          note?: string
+          org_id?: string
+          pto_type?: Database["public"]["Enums"]["pto_request_type"]
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          start_date?: string
+          status?: Database["public"]["Enums"]["pto_request_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pto_requests_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pto_requests_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pto_settings: {
         Row: {
           allow_negative: boolean
@@ -1131,6 +1213,63 @@ export type Database = {
           },
           {
             foreignKeyName: "pto_snapshots_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pto_transactions: {
+        Row: {
+          created_at: string
+          created_by: string
+          employee_id: string
+          hours: number
+          id: string
+          org_id: string
+          reason: string | null
+          source: Database["public"]["Enums"]["pto_transaction_source"]
+          source_id: string | null
+          transaction_date: string
+          transaction_type: Database["public"]["Enums"]["pto_transaction_type"]
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          employee_id: string
+          hours: number
+          id?: string
+          org_id: string
+          reason?: string | null
+          source?: Database["public"]["Enums"]["pto_transaction_source"]
+          source_id?: string | null
+          transaction_date: string
+          transaction_type: Database["public"]["Enums"]["pto_transaction_type"]
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          employee_id?: string
+          hours?: number
+          id?: string
+          org_id?: string
+          reason?: string | null
+          source?: Database["public"]["Enums"]["pto_transaction_source"]
+          source_id?: string | null
+          transaction_date?: string
+          transaction_type?: Database["public"]["Enums"]["pto_transaction_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pto_transactions_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pto_transactions_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
@@ -1869,6 +2008,10 @@ export type Database = {
       import_status: "pending" | "previewing" | "confirmed" | "failed"
       modification_source: "employee_request" | "manager_edit" | "system"
       org_member_status: "active" | "invited" | "disabled"
+      pto_request_status: "pending" | "approved" | "denied" | "cancelled"
+      pto_request_type: "pto" | "sick" | "unpaid" | "other"
+      pto_transaction_source: "system" | "manager" | "request"
+      pto_transaction_type: "accrual" | "taken" | "adjustment"
       punch_type: "in" | "out"
       report_run_status: "pending" | "processing" | "completed" | "failed"
       source_type: "manual" | "import" | "auto_location" | "system_adjustment"
@@ -2021,6 +2164,10 @@ export const Constants = {
       import_status: ["pending", "previewing", "confirmed", "failed"],
       modification_source: ["employee_request", "manager_edit", "system"],
       org_member_status: ["active", "invited", "disabled"],
+      pto_request_status: ["pending", "approved", "denied", "cancelled"],
+      pto_request_type: ["pto", "sick", "unpaid", "other"],
+      pto_transaction_source: ["system", "manager", "request"],
+      pto_transaction_type: ["accrual", "taken", "adjustment"],
       punch_type: ["in", "out"],
       report_run_status: ["pending", "processing", "completed", "failed"],
       source_type: ["manual", "import", "auto_location", "system_adjustment"],

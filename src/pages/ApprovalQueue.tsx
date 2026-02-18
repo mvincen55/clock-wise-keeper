@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/time-utils';
 import { Loader2, CheckCircle, XCircle, Clock, Inbox } from 'lucide-react';
 import { CorrectionQueuePanel } from '@/components/CorrectionQueuePanel';
+import { PtoRequestQueue } from '@/components/PtoRequestQueue';
 
 const statusBadge: Record<string, { label: string; className: string }> = {
   pending: { label: 'Pending', className: 'bg-warning/20 text-warning' },
@@ -119,6 +120,7 @@ export default function ApprovalQueue() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="change-requests">Change Requests</TabsTrigger>
+          <TabsTrigger value="pto-requests">PTO Requests</TabsTrigger>
           <TabsTrigger value="corrections">Corrections</TabsTrigger>
         </TabsList>
 
@@ -155,6 +157,10 @@ export default function ApprovalQueue() {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="pto-requests" className="mt-4">
+          <PtoRequestQueue />
         </TabsContent>
 
         <TabsContent value="corrections" className="mt-4">

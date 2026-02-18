@@ -7,20 +7,29 @@ import {
   PtoLedgerWeek,
 } from '@/hooks/usePtoEngine';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrgContext } from '@/hooks/useOrgContext';
 import { useDaysOff } from '@/hooks/useDaysOff';
+import { useMyPtoRequests, useCancelPtoRequest, PtoRequest } from '@/hooks/usePtoRequests';
+import { PtoRequestModal } from '@/components/PtoRequestModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { CalendarDays, TrendingUp, Clock, Settings as SettingsIcon, Printer, RefreshCw, AlertTriangle, Loader2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { CalendarDays, TrendingUp, Clock, Settings as SettingsIcon, Printer, RefreshCw, AlertTriangle, Loader2, Plus, XCircle } from 'lucide-react';
 import { formatDate } from '@/lib/time-utils';
 import { useToast } from '@/hooks/use-toast';
 
 export default function PTO() {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   const { toast } = useToast();
+  const [requestModalOpen, setRequestModalOpen] = useState(false);
+  const { data: myPtoRequests } = useMyPtoRequests();
+  const cancelRequest = useCancelPtoRequest();
+  const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
   const [tab, setTab] = useState('overview');
 
   const { data: settings, isLoading: settingsLoading } = usePtoSettings();
@@ -106,6 +115,9 @@ export default function PTO() {
           {recalc.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
           Recalculate
         </Button>
+        <Button onClick={() => setRequestModalOpen(true)} size="sm">
+          <Plus className="mr-2 h-4 w-4" /> Request PTO
+        </Button>
       </div>
 
       {/* Negative balance warning */}
@@ -155,9 +167,10 @@ export default function PTO() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="requests">My Requests</TabsTrigger>
           <TabsTrigger value="ledger">Weekly Ledger</TabsTrigger>
           <TabsTrigger value="usage">PTO Usage</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
+          {isAdmin && <TabsTrigger value="settings">Settings</TabsTrigger>}
         </TabsList>
 
         {/* Overview */}
@@ -216,6 +229,76 @@ export default function PTO() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* My Requests */}
+        <TabsContent value="requests">
+          <Card className="card-elevated">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <CalendarDays className="h-5 w-5" />
+                  My PTO Requests
+                </CardTitle>
+                <Button size="sm" onClick={() => setRequestModalOpen(true)}>
+                  <Plus className="h-4 w-4 mr-1" /> New Request
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {!myPtoRequests?.length ? (
+                <p className="text-center text-muted-foreground py-12">No PTO requests yet.</p>
+              ) : (
+                <div className="divide-y">
+                  {myPtoRequests.map(r => {
+                    const statusColors: Record<string, string> = {
+                      pending: 'bg-warning/20 text-warning',
+                      approved: 'bg-success/20 text-success',
+                      denied: 'bg-destructive/20 text-destructive',
+                      cancelled: 'bg-muted text-muted-foreground',
+                    };
+                    return (
+                      <div key={r.id} className="px-4 py-3 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs capitalize">{r.pto_type}</Badge>
+                            <span className={`text-xs px-2 py-0.5 rounded font-medium ${statusColors[r.status]}`}>
+                              {r.status}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">{formatDate(r.created_at)}</span>
+                            {r.status === 'pending' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 text-xs text-destructive"
+                                onClick={() => cancelRequest.mutate(r.id)}
+                                disabled={cancelRequest.isPending}
+                              >
+                                <XCircle className="h-3 w-3 mr-1" /> Cancel
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-sm">
+                          {formatDate(r.start_date)}
+                          {r.start_date !== r.end_date && ` — ${formatDate(r.end_date)}`}
+                          {r.hours_requested && ` (${r.hours_requested}h)`}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{r.note}</p>
+                        {r.manager_note && (
+                          <p className="text-xs text-muted-foreground border-t pt-1 mt-1">
+                            <span className="font-medium">Manager:</span> {r.manager_note}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -409,6 +492,8 @@ export default function PTO() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <PtoRequestModal open={requestModalOpen} onClose={() => setRequestModalOpen(false)} />
     </div>
   );
 }
