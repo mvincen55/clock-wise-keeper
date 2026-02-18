@@ -445,7 +445,7 @@ export default function DaysOff() {
                             {row.is_incomplete && <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">Incomplete</span>}
                             {row.is_late && <span className="text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive font-medium">{row.minutes_late}m late</span>}
                             {row.has_edits && <span className="text-xs px-2 py-0.5 rounded bg-accent/20 text-accent font-medium">Edited</span>}
-                            {row.timezone_suspect && <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium" title="Timestamp appears mis-zoned">⚠ TZ Suspect</span>}
+                            {row.timezone_suspect && <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">⚠ Needs Time Fix</span>}
                             {row.office_closed && <span className="text-xs px-2 py-0.5 rounded bg-success/20 text-success font-medium">Closed</span>}
                             {row.has_day_off && <span className="text-xs px-2 py-0.5 rounded bg-primary/20 text-primary font-medium">Day Off</span>}
                             {!row.is_absent && !row.is_incomplete && !row.is_late && !row.office_closed && !row.has_day_off && row.has_punches && (
@@ -565,13 +565,13 @@ export default function DaysOff() {
                         <td className="px-4 py-3 font-medium">
                           {formatDate(t.entry_date)}
                           {t.timezone_suspect && (
-                            <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning font-medium" title="Timestamp appears mis-zoned. Check punches.">⚠ TZ</span>
+                            <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning font-medium" title="Timestamp appears mis-zoned. Check punches.">⚠ Needs Time Fix</span>
                           )}
                         </td>
                         <td className="px-4 py-3 time-display text-sm">{t.expected_start_time?.slice(0, 5)}</td>
                         <td className="px-4 py-3 time-display text-sm">
                           {t.timezone_suspect ? (
-                            <span className="text-warning italic">Suspect</span>
+                            <span className="text-warning italic">⚠ Needs Time Fix</span>
                           ) : (
                             new Date(t.actual_start_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
                           )}
