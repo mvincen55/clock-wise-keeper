@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrgContext } from '@/hooks/useOrgContext';
 
 export type ScheduleVersionRow = {
   id: string;
@@ -129,6 +130,7 @@ export function getWeekdayRule(version: ScheduleVersionWithDays, date: string): 
 /** Create a new schedule version with weekday rules */
 export function useCreateScheduleVersion() {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
 
   return useMutation({
@@ -142,7 +144,7 @@ export function useCreateScheduleVersion() {
       weekdays: Omit<ScheduleWeekdayRow, 'id' | 'schedule_version_id'>[];
       auto_adjust_previous?: boolean;
     }) => {
-      if (!user) throw new Error('Not authenticated');
+      if (!user || !ctx) throw new Error('Not authenticated');
 
       // If auto_adjust, shorten previous version
       if (input.auto_adjust_previous !== false) {
@@ -180,6 +182,8 @@ export function useCreateScheduleVersion() {
         .from('schedule_versions')
         .insert({
           user_id: user.id,
+          org_id: ctx.org_id,
+          employee_id: ctx.employee_id,
           name: input.name || null,
           effective_start_date: input.effective_start_date,
           effective_end_date: input.effective_end_date || null,

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrgContext } from '@/hooks/useOrgContext';
 
 export type OfficeClosureRow = {
   id: string;
@@ -118,14 +119,18 @@ export function useOfficeClosures(year?: number) {
 
 export function useGenerateClosures() {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
 
   return useMutation({
     mutationFn: async (year: number) => {
-      if (!user) throw new Error('Not authenticated');
+      if (!user || !ctx) throw new Error('Not authenticated');
       const closures = generateClosuresForYear(year);
       const rows = closures.map(c => ({
         user_id: user.id,
+        org_id: ctx.org_id,
+        employee_id: ctx.employee_id,
+        created_by: user.id,
         closure_date: c.closure_date,
         name: c.name,
         is_full_day: true,
@@ -143,13 +148,17 @@ export function useGenerateClosures() {
 
 export function useAddClosure() {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
 
   return useMutation({
     mutationFn: async (input: { closure_date: string; name: string; is_full_day?: boolean; hours?: number }) => {
-      if (!user) throw new Error('Not authenticated');
+      if (!user || !ctx) throw new Error('Not authenticated');
       const { error } = await supabase.from('office_closures').insert({
         user_id: user.id,
+        org_id: ctx.org_id,
+        employee_id: ctx.employee_id,
+        created_by: user.id,
         ...input,
       });
       if (error) throw error;

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrgContext } from '@/hooks/useOrgContext';
 import { getToday, calculatePunchMinutes } from '@/lib/time-utils';
 
 export type PunchRow = {
@@ -48,15 +49,12 @@ export function useTodayEntry() {
         .select('*')
         .eq('entry_date', today)
         .maybeSingle();
-
       if (!entry) return null;
-
       const { data: punches } = await supabase
         .from('punches')
         .select('*')
         .eq('time_entry_id', entry.id)
         .order('seq', { ascending: true });
-
       return { ...entry, punches: punches || [] } as TimeEntryRow;
     },
   });
@@ -72,17 +70,14 @@ export function useTimeEntries(startDate?: string, endDate?: string) {
       let q = supabase.from('time_entries').select('*').order('entry_date', { ascending: false });
       if (startDate) q = q.gte('entry_date', startDate);
       if (endDate) q = q.lte('entry_date', endDate);
-
       const { data: entries } = await q;
       if (!entries?.length) return [];
-
       const ids = entries.map(e => e.id);
       const { data: allPunches } = await supabase
         .from('punches')
         .select('*')
         .in('time_entry_id', ids)
         .order('seq', { ascending: true });
-
       return entries.map(e => ({
         ...e,
         punches: (allPunches || []).filter(p => p.time_entry_id === e.id),
@@ -93,12 +88,13 @@ export function useTimeEntries(startDate?: string, endDate?: string) {
 
 export function useClockAction() {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
   const today = getToday();
 
   return useMutation({
     mutationFn: async (action: 'clock_in' | 'clock_out' | 'break_start' | 'break_end') => {
-      if (!user) throw new Error('Not authenticated');
+      if (!user || !ctx) throw new Error('Not authenticated or no org context');
 
       const punchType: 'in' | 'out' = (action === 'clock_in' || action === 'break_end') ? 'in' : 'out';
       const now = (() => { const d = new Date(); d.setSeconds(0, 0); return d.toISOString(); })();
@@ -112,7 +108,7 @@ export function useClockAction() {
       if (!entry) {
         const { data: newEntry, error } = await supabase
           .from('time_entries')
-          .insert({ user_id: user.id, entry_date: today, source: 'manual' as const })
+          .insert({ user_id: user.id, org_id: ctx.org_id, employee_id: ctx.employee_id, entry_date: today, source: 'manual' as const })
           .select('id')
           .single();
         if (error) throw error;
@@ -131,6 +127,8 @@ export function useClockAction() {
 
       const { error: punchError } = await supabase.from('punches').insert({
         time_entry_id: entry.id,
+        org_id: ctx.org_id,
+        employee_id: ctx.employee_id,
         seq: nextSeq,
         punch_type: punchType,
         punch_time: now,
@@ -151,6 +149,9 @@ export function useClockAction() {
 
       await supabase.from('audit_events').insert({
         user_id: user.id,
+        org_id: ctx.org_id,
+        employee_id: ctx.employee_id,
+        actor_id: user.id,
         event_type: action,
         event_details: { punch_time: now } as any,
         related_date: today,
@@ -166,6 +167,7 @@ export function useClockAction() {
 
 export function useUpdateEntry() {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
 
   return useMutation({
@@ -174,7 +176,7 @@ export function useUpdateEntry() {
       updates: { is_remote?: boolean; entry_comment?: string };
       audit?: { field_changed: string; old_value: string; new_value: string; reason_comment: string };
     }) => {
-      if (!user) throw new Error('Not authenticated');
+      if (!user || !ctx) throw new Error('Not authenticated');
 
       const { error } = await supabase
         .from('time_entries')
@@ -185,6 +187,9 @@ export function useUpdateEntry() {
       if (audit) {
         await supabase.from('audit_events').insert({
           user_id: user.id,
+          org_id: ctx.org_id,
+          employee_id: ctx.employee_id,
+          actor_id: user.id,
           event_type: 'manual_edit',
           event_details: {
             entity_type: 'time_entry',

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrgContext } from '@/hooks/useOrgContext';
 
 export type AttendanceExceptionRow = {
   id: string;
@@ -17,7 +18,6 @@ export type AttendanceExceptionRow = {
 
 export function useAttendanceExceptions(startDate?: string, endDate?: string) {
   const { user } = useAuth();
-
   return useQuery({
     queryKey: ['attendance-exceptions', startDate, endDate],
     enabled: !!user,
@@ -33,20 +33,20 @@ export function useAttendanceExceptions(startDate?: string, endDate?: string) {
 
 export function useCreateException() {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: {
-      exception_date: string;
-      type?: 'missing_shift' | 'other';
-    }) => {
-      if (!user) throw new Error('Not authenticated');
+    mutationFn: async (input: { exception_date: string; type?: 'missing_shift' | 'other' }) => {
+      if (!user || !ctx) throw new Error('Not authenticated');
       const { error } = await supabase.from('attendance_exceptions').upsert(
         {
           user_id: user.id,
+          org_id: ctx.org_id,
+          employee_id: ctx.employee_id,
           exception_date: input.exception_date,
           type: input.type || 'missing_shift',
-          status: 'open',
+          status: 'open' as const,
         },
         { onConflict: 'user_id,exception_date,type' }
       );
@@ -58,18 +58,13 @@ export function useCreateException() {
 
 export function useResolveException() {
   const qc = useQueryClient();
-
   return useMutation({
     mutationFn: async ({ id, reason_text, resolution_action, status }: {
-      id: string;
-      reason_text: string;
-      resolution_action: string;
-      status?: 'resolved' | 'ignored';
+      id: string; reason_text: string; resolution_action: string; status?: 'resolved' | 'ignored';
     }) => {
       const { error } = await supabase.from('attendance_exceptions').update({
         status: status || 'resolved',
-        reason_text,
-        resolution_action,
+        reason_text, resolution_action,
         resolved_at: new Date().toISOString(),
       }).eq('id', id);
       if (error) throw error;

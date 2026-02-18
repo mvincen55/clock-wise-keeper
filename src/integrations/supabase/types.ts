@@ -35,6 +35,7 @@ export type Database = {
       attendance_day_status: {
         Row: {
           computed_at: string
+          employee_id: string
           entry_date: string
           has_day_comment: boolean
           has_day_off: boolean
@@ -48,6 +49,7 @@ export type Database = {
           is_scheduled_day: boolean
           minutes_late: number | null
           office_closed: boolean
+          org_id: string
           recompute_version: number
           schedule_expected_end: string | null
           schedule_expected_start: string | null
@@ -59,6 +61,7 @@ export type Database = {
         }
         Insert: {
           computed_at?: string
+          employee_id: string
           entry_date: string
           has_day_comment?: boolean
           has_day_off?: boolean
@@ -72,6 +75,7 @@ export type Database = {
           is_scheduled_day?: boolean
           minutes_late?: number | null
           office_closed?: boolean
+          org_id: string
           recompute_version?: number
           schedule_expected_end?: string | null
           schedule_expected_start?: string | null
@@ -83,6 +87,7 @@ export type Database = {
         }
         Update: {
           computed_at?: string
+          employee_id?: string
           entry_date?: string
           has_day_comment?: boolean
           has_day_off?: boolean
@@ -96,6 +101,7 @@ export type Database = {
           is_scheduled_day?: boolean
           minutes_late?: number | null
           office_closed?: boolean
+          org_id?: string
           recompute_version?: number
           schedule_expected_end?: string | null
           schedule_expected_start?: string | null
@@ -105,13 +111,30 @@ export type Database = {
           timezone_suspect?: boolean
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "attendance_day_status_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_day_status_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       attendance_exceptions: {
         Row: {
           created_at: string
+          employee_id: string
           exception_date: string
           id: string
+          org_id: string
           reason_text: string | null
           resolution_action: string | null
           resolved_at: string | null
@@ -122,8 +145,10 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          employee_id: string
           exception_date: string
           id?: string
+          org_id: string
           reason_text?: string | null
           resolution_action?: string | null
           resolved_at?: string | null
@@ -134,8 +159,10 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          employee_id?: string
           exception_date?: string
           id?: string
+          org_id?: string
           reason_text?: string | null
           resolution_action?: string | null
           resolved_at?: string | null
@@ -144,73 +171,243 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "attendance_exceptions_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_exceptions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       audit_events: {
         Row: {
+          actor_id: string | null
           created_at: string
+          employee_id: string | null
           event_details: Json | null
           event_type: string
           id: string
+          org_id: string
           related_date: string | null
           related_entry_id: string | null
           user_id: string
         }
         Insert: {
+          actor_id?: string | null
           created_at?: string
+          employee_id?: string | null
           event_details?: Json | null
           event_type: string
           id?: string
+          org_id: string
           related_date?: string | null
           related_entry_id?: string | null
           user_id: string
         }
         Update: {
+          actor_id?: string | null
           created_at?: string
+          employee_id?: string | null
           event_details?: Json | null
           event_type?: string
           id?: string
+          org_id?: string
           related_date?: string | null
           related_entry_id?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "audit_events_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      change_requests: {
+        Row: {
+          created_at: string
+          employee_id: string
+          id: string
+          org_id: string
+          payload: Json
+          request_type: Database["public"]["Enums"]["change_request_type"]
+          requested_by: string
+          review_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["change_request_status"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          id?: string
+          org_id: string
+          payload?: Json
+          request_type: Database["public"]["Enums"]["change_request_type"]
+          requested_by: string
+          review_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["change_request_status"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          id?: string
+          org_id?: string
+          payload?: Json
+          request_type?: Database["public"]["Enums"]["change_request_type"]
+          requested_by?: string
+          review_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["change_request_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "change_requests_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "change_requests_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       days_off: {
         Row: {
           created_at: string
+          created_by: string | null
           date_end: string
           date_start: string
+          employee_id: string
           hours: number | null
           id: string
           notes: string | null
+          org_id: string
           type: Database["public"]["Enums"]["day_off_type"]
           updated_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
           date_end: string
           date_start: string
+          employee_id: string
           hours?: number | null
           id?: string
           notes?: string | null
+          org_id: string
           type?: Database["public"]["Enums"]["day_off_type"]
           updated_at?: string
           user_id: string
         }
         Update: {
           created_at?: string
+          created_by?: string | null
           date_end?: string
           date_start?: string
+          employee_id?: string
           hours?: number | null
           id?: string
           notes?: string | null
+          org_id?: string
           type?: Database["public"]["Enums"]["day_off_type"]
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "days_off_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "days_off_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employees: {
+        Row: {
+          created_at: string
+          display_name: string
+          email: string | null
+          employment_status: Database["public"]["Enums"]["employment_status"]
+          hire_date: string | null
+          id: string
+          org_id: string
+          timezone: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          email?: string | null
+          employment_status?: Database["public"]["Enums"]["employment_status"]
+          hire_date?: string | null
+          id?: string
+          org_id: string
+          timezone?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          email?: string | null
+          employment_status?: Database["public"]["Enums"]["employment_status"]
+          hire_date?: string | null
+          id?: string
+          org_id?: string
+          timezone?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employees_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       import_rows: {
         Row: {
@@ -268,6 +465,7 @@ export type Database = {
           created_at: string
           filename: string
           id: string
+          org_id: string
           raw_text: string | null
           report_range_end: string | null
           report_range_start: string | null
@@ -281,6 +479,7 @@ export type Database = {
           created_at?: string
           filename: string
           id?: string
+          org_id: string
           raw_text?: string | null
           report_range_end?: string | null
           report_range_start?: string | null
@@ -294,6 +493,7 @@ export type Database = {
           created_at?: string
           filename?: string
           id?: string
+          org_id?: string
           raw_text?: string | null
           report_range_end?: string | null
           report_range_start?: string | null
@@ -302,7 +502,15 @@ export type Database = {
           uploaded_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "imports_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       location_events: {
         Row: {
@@ -310,9 +518,11 @@ export type Database = {
           action_taken: string | null
           confidence_flag: boolean
           created_at: string
+          employee_id: string | null
           id: string
           latitude: number
           longitude: number
+          org_id: string
           punch_id: string | null
           user_id: string
           zone_id: string | null
@@ -323,9 +533,11 @@ export type Database = {
           action_taken?: string | null
           confidence_flag?: boolean
           created_at?: string
+          employee_id?: string | null
           id?: string
           latitude: number
           longitude: number
+          org_id: string
           punch_id?: string | null
           user_id: string
           zone_id?: string | null
@@ -336,15 +548,31 @@ export type Database = {
           action_taken?: string | null
           confidence_flag?: boolean
           created_at?: string
+          employee_id?: string | null
           id?: string
           latitude?: number
           longitude?: number
+          org_id?: string
           punch_id?: string | null
           user_id?: string
           zone_id?: string | null
           zone_status?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "location_events_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "location_events_punch_id_fkey"
             columns: ["punch_id"]
@@ -365,29 +593,156 @@ export type Database = {
         Row: {
           closure_date: string
           created_at: string
+          created_by: string | null
+          employee_id: string
           hours: number
           id: string
           is_full_day: boolean
           name: string
+          org_id: string
           user_id: string
         }
         Insert: {
           closure_date: string
           created_at?: string
+          created_by?: string | null
+          employee_id: string
           hours?: number
           id?: string
           is_full_day?: boolean
           name: string
+          org_id: string
           user_id: string
         }
         Update: {
           closure_date?: string
           created_at?: string
+          created_by?: string | null
+          employee_id?: string
           hours?: number
           id?: string
           is_full_day?: boolean
           name?: string
+          org_id?: string
           user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "office_closures_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "office_closures_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_invites: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          org_id: string
+          role: Database["public"]["Enums"]["app_org_role"]
+          token: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          org_id: string
+          role?: Database["public"]["Enums"]["app_org_role"]
+          token?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          org_id?: string
+          role?: Database["public"]["Enums"]["app_org_role"]
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_invites_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_members: {
+        Row: {
+          created_at: string
+          id: string
+          org_id: string
+          role: Database["public"]["Enums"]["app_org_role"]
+          status: Database["public"]["Enums"]["org_member_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          org_id: string
+          role?: Database["public"]["Enums"]["app_org_role"]
+          status?: Database["public"]["Enums"]["org_member_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          org_id?: string
+          role?: Database["public"]["Enums"]["app_org_role"]
+          status?: Database["public"]["Enums"]["org_member_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_members_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orgs: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -396,6 +751,7 @@ export type Database = {
           created_at: string
           id: string
           missing_shift_buffer_minutes: number
+          org_id: string
           pay_period_type: string
           timezone: string
           updated_at: string
@@ -406,6 +762,7 @@ export type Database = {
           created_at?: string
           id?: string
           missing_shift_buffer_minutes?: number
+          org_id: string
           pay_period_type?: string
           timezone?: string
           updated_at?: string
@@ -416,18 +773,29 @@ export type Database = {
           created_at?: string
           id?: string
           missing_shift_buffer_minutes?: number
+          org_id?: string
           pay_period_type?: string
           timezone?: string
           updated_at?: string
           user_id?: string
           week_start_day?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "payroll_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       payroll_summaries: {
         Row: {
           created_at: string
+          employee_id: string | null
           id: string
+          org_id: string
           range_end: string
           range_start: string
           raw_text: string | null
@@ -437,7 +805,9 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          employee_id?: string | null
           id?: string
+          org_id: string
           range_end: string
           range_start: string
           raw_text?: string | null
@@ -447,7 +817,9 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          employee_id?: string | null
           id?: string
+          org_id?: string
           range_end?: string
           range_start?: string
           raw_text?: string | null
@@ -455,7 +827,22 @@ export type Database = {
           total_minutes?: number | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "payroll_summaries_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_summaries_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -486,7 +873,9 @@ export type Database = {
           accrual_credited: number
           calculated_accrual: number
           created_at: string
+          employee_id: string
           id: string
+          org_id: string
           period_end: string
           period_start: string
           pto_taken_hours: number
@@ -501,7 +890,9 @@ export type Database = {
           accrual_credited?: number
           calculated_accrual?: number
           created_at?: string
+          employee_id: string
           id?: string
+          org_id: string
           period_end: string
           period_start: string
           pto_taken_hours?: number
@@ -516,7 +907,9 @@ export type Database = {
           accrual_credited?: number
           calculated_accrual?: number
           created_at?: string
+          employee_id?: string
           id?: string
+          org_id?: string
           period_end?: string
           period_start?: string
           pto_taken_hours?: number
@@ -527,15 +920,32 @@ export type Database = {
           worked_hours_capped?: number
           worked_hours_raw?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pto_ledger_weeks_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pto_ledger_weeks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pto_settings: {
         Row: {
           allow_negative: boolean
           created_at: string
+          employee_id: string
           hire_date: string
           id: string
           max_balance: number
+          org_id: string
           timezone: string
           updated_at: string
           user_id: string
@@ -544,9 +954,11 @@ export type Database = {
         Insert: {
           allow_negative?: boolean
           created_at?: string
+          employee_id: string
           hire_date?: string
           id?: string
           max_balance?: number
+          org_id: string
           timezone?: string
           updated_at?: string
           user_id: string
@@ -555,50 +967,91 @@ export type Database = {
         Update: {
           allow_negative?: boolean
           created_at?: string
+          employee_id?: string
           hire_date?: string
           id?: string
           max_balance?: number
+          org_id?: string
           timezone?: string
           updated_at?: string
           user_id?: string
           worked_hours_cap_weekly?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pto_settings_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pto_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pto_snapshots: {
         Row: {
           created_at: string
+          employee_id: string
           id: string
+          org_id: string
           snapshot_balance_hours: number
           snapshot_date: string
           user_id: string
         }
         Insert: {
           created_at?: string
+          employee_id: string
           id?: string
+          org_id: string
           snapshot_balance_hours?: number
           snapshot_date: string
           user_id: string
         }
         Update: {
           created_at?: string
+          employee_id?: string
           id?: string
+          org_id?: string
           snapshot_balance_hours?: number
           snapshot_date?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pto_snapshots_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pto_snapshots_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       punches: {
         Row: {
           created_at: string
+          created_by: string | null
           edited_at: string | null
           edited_by: string | null
+          employee_id: string
           id: string
           is_edited: boolean
           location_lat: number | null
           location_lng: number | null
           low_confidence: boolean
+          org_id: string
           original_punch_time: string | null
           punch_time: string
           punch_type: Database["public"]["Enums"]["punch_type"]
@@ -610,13 +1063,16 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
           edited_at?: string | null
           edited_by?: string | null
+          employee_id: string
           id?: string
           is_edited?: boolean
           location_lat?: number | null
           location_lng?: number | null
           low_confidence?: boolean
+          org_id: string
           original_punch_time?: string | null
           punch_time: string
           punch_type: Database["public"]["Enums"]["punch_type"]
@@ -628,13 +1084,16 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          created_by?: string | null
           edited_at?: string | null
           edited_by?: string | null
+          employee_id?: string
           id?: string
           is_edited?: boolean
           location_lat?: number | null
           location_lng?: number | null
           low_confidence?: boolean
+          org_id?: string
           original_punch_time?: string | null
           punch_time?: string
           punch_type?: Database["public"]["Enums"]["punch_type"]
@@ -646,10 +1105,123 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "punches_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "punches_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "punches_time_entry_id_fkey"
             columns: ["time_entry_id"]
             isOneToOne: false
             referencedRelation: "time_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      report_runs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          org_id: string
+          params: Json
+          report_type: string
+          requested_by: string
+          row_count: number | null
+          status: Database["public"]["Enums"]["report_run_status"]
+          storage_path: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          org_id: string
+          params?: Json
+          report_type: string
+          requested_by: string
+          row_count?: number | null
+          status?: Database["public"]["Enums"]["report_run_status"]
+          storage_path?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          org_id?: string
+          params?: Json
+          report_type?: string
+          requested_by?: string
+          row_count?: number | null
+          status?: Database["public"]["Enums"]["report_run_status"]
+          storage_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_runs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_assignments: {
+        Row: {
+          created_at: string
+          effective_end: string | null
+          effective_start: string
+          employee_id: string
+          id: string
+          org_id: string
+          schedule_version_id: string
+        }
+        Insert: {
+          created_at?: string
+          effective_end?: string | null
+          effective_start: string
+          employee_id: string
+          id?: string
+          org_id: string
+          schedule_version_id: string
+        }
+        Update: {
+          created_at?: string
+          effective_end?: string | null
+          effective_start?: string
+          employee_id?: string
+          id?: string
+          org_id?: string
+          schedule_version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_assignments_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_assignments_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_assignments_schedule_version_id_fkey"
+            columns: ["schedule_version_id"]
+            isOneToOne: false
+            referencedRelation: "schedule_versions"
             referencedColumns: ["id"]
           },
         ]
@@ -660,8 +1232,10 @@ export type Database = {
           created_at: string
           effective_end_date: string | null
           effective_start_date: string
+          employee_id: string | null
           id: string
           name: string | null
+          org_id: string
           timezone: string
           updated_at: string
           user_id: string
@@ -672,8 +1246,10 @@ export type Database = {
           created_at?: string
           effective_end_date?: string | null
           effective_start_date: string
+          employee_id?: string | null
           id?: string
           name?: string | null
+          org_id: string
           timezone?: string
           updated_at?: string
           user_id: string
@@ -684,14 +1260,31 @@ export type Database = {
           created_at?: string
           effective_end_date?: string | null
           effective_start_date?: string
+          employee_id?: string | null
           id?: string
           name?: string | null
+          org_id?: string
           timezone?: string
           updated_at?: string
           user_id?: string
           week_start_day?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "schedule_versions_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_versions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       schedule_weekdays: {
         Row: {
@@ -741,10 +1334,12 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           created_at: string
+          employee_id: string
           entry_date: string
           expected_start_time: string
           id: string
           minutes_late: number
+          org_id: string
           reason_text: string | null
           resolved: boolean
           time_entry_id: string | null
@@ -758,10 +1353,12 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           created_at?: string
+          employee_id: string
           entry_date: string
           expected_start_time: string
           id?: string
           minutes_late?: number
+          org_id: string
           reason_text?: string | null
           resolved?: boolean
           time_entry_id?: string | null
@@ -775,10 +1372,12 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           created_at?: string
+          employee_id?: string
           entry_date?: string
           expected_start_time?: string
           id?: string
           minutes_late?: number
+          org_id?: string
           reason_text?: string | null
           resolved?: boolean
           time_entry_id?: string | null
@@ -787,6 +1386,20 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "tardies_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tardies_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tardies_time_entry_id_fkey"
             columns: ["time_entry_id"]
@@ -799,13 +1412,16 @@ export type Database = {
       time_entries: {
         Row: {
           created_at: string
+          created_by: string | null
           employee_code: string | null
+          employee_id: string
           employee_name: string | null
           entry_comment: string | null
           entry_date: string
           id: string
           is_remote: boolean
           notes: string | null
+          org_id: string
           raw_text: string | null
           raw_total_hhmm: string | null
           source: Database["public"]["Enums"]["source_type"]
@@ -815,13 +1431,16 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
           employee_code?: string | null
+          employee_id: string
           employee_name?: string | null
           entry_comment?: string | null
           entry_date: string
           id?: string
           is_remote?: boolean
           notes?: string | null
+          org_id: string
           raw_text?: string | null
           raw_total_hhmm?: string | null
           source?: Database["public"]["Enums"]["source_type"]
@@ -831,13 +1450,16 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          created_by?: string | null
           employee_code?: string | null
+          employee_id?: string
           employee_name?: string | null
           entry_comment?: string | null
           entry_date?: string
           id?: string
           is_remote?: boolean
           notes?: string | null
+          org_id?: string
           raw_text?: string | null
           raw_total_hhmm?: string | null
           source?: Database["public"]["Enums"]["source_type"]
@@ -845,7 +1467,22 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "time_entries_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_entries_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       work_schedule: {
         Row: {
@@ -898,6 +1535,7 @@ export type Database = {
           is_active: boolean
           latitude: number
           longitude: number
+          org_id: string | null
           radius_meters: number
           updated_at: string
           user_id: string
@@ -911,6 +1549,7 @@ export type Database = {
           is_active?: boolean
           latitude: number
           longitude: number
+          org_id?: string | null
           radius_meters?: number
           updated_at?: string
           user_id: string
@@ -924,12 +1563,21 @@ export type Database = {
           is_active?: boolean
           latitude?: number
           longitude?: number
+          org_id?: string | null
           radius_meters?: number
           updated_at?: string
           user_id?: string
           zone_name?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "work_zones_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -1095,16 +1743,26 @@ export type Database = {
       user_owns_time_entry: { Args: { _entry_id: string }; Returns: boolean }
     }
     Enums: {
+      app_org_role: "owner" | "manager" | "employee"
+      change_request_status: "pending" | "approved" | "denied"
+      change_request_type:
+        | "punch_edit"
+        | "day_off"
+        | "schedule_change"
+        | "other"
       day_off_type:
         | "scheduled_with_notice"
         | "unscheduled"
         | "office_closed"
         | "other"
         | "medical_leave"
+      employment_status: "active" | "inactive" | "terminated"
       exception_status: "open" | "resolved" | "ignored"
       exception_type: "missing_shift" | "other"
       import_status: "pending" | "previewing" | "confirmed" | "failed"
+      org_member_status: "active" | "invited" | "disabled"
       punch_type: "in" | "out"
+      report_run_status: "pending" | "processing" | "completed" | "failed"
       source_type: "manual" | "import" | "auto_location" | "system_adjustment"
     }
     CompositeTypes: {
@@ -1233,6 +1891,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_org_role: ["owner", "manager", "employee"],
+      change_request_status: ["pending", "approved", "denied"],
+      change_request_type: [
+        "punch_edit",
+        "day_off",
+        "schedule_change",
+        "other",
+      ],
       day_off_type: [
         "scheduled_with_notice",
         "unscheduled",
@@ -1240,10 +1906,13 @@ export const Constants = {
         "other",
         "medical_leave",
       ],
+      employment_status: ["active", "inactive", "terminated"],
       exception_status: ["open", "resolved", "ignored"],
       exception_type: ["missing_shift", "other"],
       import_status: ["pending", "previewing", "confirmed", "failed"],
+      org_member_status: ["active", "invited", "disabled"],
       punch_type: ["in", "out"],
+      report_run_status: ["pending", "processing", "completed", "failed"],
       source_type: ["manual", "import", "auto_location", "system_adjustment"],
     },
   },
