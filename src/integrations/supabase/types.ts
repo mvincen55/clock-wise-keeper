@@ -37,6 +37,7 @@ export type Database = {
           computed_at: string
           entry_date: string
           has_day_comment: boolean
+          has_day_off: boolean
           has_edits: boolean
           has_punches: boolean
           id: string
@@ -56,6 +57,7 @@ export type Database = {
           computed_at?: string
           entry_date: string
           has_day_comment?: boolean
+          has_day_off?: boolean
           has_edits?: boolean
           has_punches?: boolean
           id?: string
@@ -75,6 +77,7 @@ export type Database = {
           computed_at?: string
           entry_date?: string
           has_day_comment?: boolean
+          has_day_off?: boolean
           has_edits?: boolean
           has_punches?: boolean
           id?: string
@@ -930,6 +933,10 @@ export type Database = {
         }[]
       }
       is_allowed_user: { Args: never; Returns: boolean }
+      recompute_attendance_range: {
+        Args: { p_end_date: string; p_start_date: string; p_user_id: string }
+        Returns: number
+      }
       user_owns_import: { Args: { _import_id: string }; Returns: boolean }
       user_owns_schedule_version: {
         Args: { _version_id: string }
