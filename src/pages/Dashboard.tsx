@@ -4,13 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Clock, LogIn, LogOut, Coffee, Play, Loader2, Settings as SettingsIcon } from 'lucide-react';
+import { Clock, LogIn, LogOut, Coffee, Play, Loader2, Settings as SettingsIcon, Pencil } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useGeoTracking } from '@/hooks/useGeoTracking';
 import { LocationStatusPanel } from '@/components/LocationStatusPanel';
 import { useWorkZones } from '@/hooks/useWorkZones';
 import { useMissingShifts } from '@/hooks/useMissingShifts';
 import { MissingShiftBanner } from '@/components/MissingShiftBanner';
+import { PunchEditorModal } from '@/components/PunchEditorModal';
 import { Link } from 'react-router-dom';
 
 type ClockStatus = 'clocked_out' | 'clocked_in' | 'on_break';
@@ -41,6 +42,7 @@ export default function Dashboard() {
   const clockAction = useClockAction();
   const [now, setNow] = useState(new Date());
   const [autoClockEnabled, setAutoClockEnabled] = useState(false);
+  const [punchEditorOpen, setPunchEditorOpen] = useState(false);
   const { data: zones } = useWorkZones();
   const geoState = useGeoTracking(autoClockEnabled && (zones?.length ?? 0) > 0);
 
@@ -148,11 +150,20 @@ export default function Dashboard() {
 
       {/* Today's punches */}
       <Card className="card-elevated">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
             <Clock className="h-4 w-4 text-primary" />
             Today's Punches
           </CardTitle>
+          {todayEntry && punches.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPunchEditorOpen(true)}
+            >
+              <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -163,26 +174,42 @@ export default function Dashboard() {
             <p className="text-center text-muted-foreground py-6">No punches yet today</p>
           ) : (
             <div className="space-y-2">
-              {punches.map((p) => (
-                <div key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-muted/50">
-                  <span className={`text-xs font-semibold uppercase px-2 py-0.5 rounded ${p.punch_type === 'in' ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'}`}>
-                    {p.punch_type}
-                  </span>
-                  <span className="time-display text-sm">{formatTime(p.punch_time)}</span>
-                  {p.source !== 'manual' && (
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">
-                      {p.source === 'auto_location' ? 'GPS' : p.source}
+              {punches.map((p) => {
+                const isEdited = (p as any).is_edited;
+                return (
+                  <div key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-muted/50">
+                    <span className={`text-xs font-semibold uppercase px-2 py-0.5 rounded ${p.punch_type === 'in' ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'}`}>
+                      {p.punch_type}
                     </span>
-                  )}
-                  {p.low_confidence && (
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning">low GPS</span>
-                  )}
-                </div>
-              ))}
+                    <span className={`time-display text-sm ${isEdited ? 'text-destructive font-semibold' : ''}`}>{formatTime(p.punch_time)}</span>
+                    {isEdited && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/20 text-destructive font-medium">edited</span>
+                    )}
+                    {p.source !== 'manual' && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">
+                        {p.source === 'auto_location' ? 'GPS' : p.source}
+                      </span>
+                    )}
+                    {p.low_confidence && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning">low GPS</span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {todayEntry && (
+        <PunchEditorModal
+          open={punchEditorOpen}
+          onClose={() => setPunchEditorOpen(false)}
+          entryId={todayEntry.id}
+          entryDate={todayEntry.entry_date}
+          punches={punches}
+        />
+      )}
     </div>
   );
 }
