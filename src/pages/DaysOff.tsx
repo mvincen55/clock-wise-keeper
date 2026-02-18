@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useDaysOff, useAddDayOff, useDeleteDayOff, DayOffRow } from '@/hooks/useDaysOff';
 import { useTardies, useUpdateTardy, TardyRow } from '@/hooks/useTardies';
 import { TardyReviewModal } from '@/components/TardyReviewModal';
+import { TimeFixModal } from '@/components/TimeFixModal';
 import { useAttendanceExceptions, AttendanceExceptionRow } from '@/hooks/useAttendanceExceptions';
 import { useAttendanceDayStatus, useRecomputeAttendance, AttendanceDayStatusRow } from '@/hooks/useAttendanceDayStatus';
 import { useOfficeClosures } from '@/hooks/useOfficeClosures';
@@ -120,11 +121,10 @@ export default function DaysOff() {
   const [startDate, setStartDate] = useState(defaultStart.toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(defaultEnd.toISOString().split('T')[0]);
 
-  const currentYear = new Date().getFullYear();
-  const { data: daysOff, isLoading: daysOffLoading } = useDaysOff(currentYear);
+  const { data: daysOff, isLoading: daysOffLoading } = useDaysOff();
   const { data: tardies, isLoading: tardiesLoading } = useTardies(startDate, endDate);
   const { data: exceptions } = useAttendanceExceptions(startDate, endDate);
-  const { data: closures } = useOfficeClosures(currentYear);
+  const { data: closures } = useOfficeClosures(new Date().getFullYear());
   const { data: statusRows, isLoading: statusLoading } = useAttendanceDayStatus(startDate, endDate);
   const recompute = useRecomputeAttendance();
   const addDayOff = useAddDayOff();
@@ -138,6 +138,10 @@ export default function DaysOff() {
   const [showOnlyTracked, setShowOnlyTracked] = useState(false);
   const [debugRow, setDebugRow] = useState<AttendanceDayStatusRow | null>(null);
   const [reviewTardy, setReviewTardy] = useState<TardyRow | null>(null);
+  const [fixRow, setFixRow] = useState<AttendanceDayStatusRow | null>(null);
+
+  // Resolve user timezone for the fix modal
+  const userTimezone = payrollSettings?.timezone || 'America/New_York';
 
   const [form, setForm] = useState({
     date_start: '',
@@ -445,7 +449,7 @@ export default function DaysOff() {
                             {row.is_incomplete && <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">Incomplete</span>}
                             {row.is_late && <span className="text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive font-medium">{row.minutes_late}m late</span>}
                             {row.has_edits && <span className="text-xs px-2 py-0.5 rounded bg-accent/20 text-accent font-medium">Edited</span>}
-                            {row.timezone_suspect && <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">⚠ Needs Time Fix</span>}
+                            {row.timezone_suspect && <button onClick={() => setFixRow(row)} className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium hover:bg-warning/30 cursor-pointer transition-colors">⚠ Needs Time Fix</button>}
                             {row.office_closed && <span className="text-xs px-2 py-0.5 rounded bg-success/20 text-success font-medium">Closed</span>}
                             {row.has_day_off && <span className="text-xs px-2 py-0.5 rounded bg-primary/20 text-primary font-medium">Day Off</span>}
                             {!row.is_absent && !row.is_incomplete && !row.is_late && !row.office_closed && !row.has_day_off && row.has_punches && (
@@ -565,13 +569,17 @@ export default function DaysOff() {
                         <td className="px-4 py-3 font-medium">
                           {formatDate(t.entry_date)}
                           {t.timezone_suspect && (
-                            <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning font-medium" title="Timestamp appears mis-zoned. Check punches.">⚠ Needs Time Fix</span>
+                            <button onClick={() => {
+                              // Find matching status row for schedule info
+                              const statusRow = (statusRows || []).find(r => r.entry_date === t.entry_date);
+                              setFixRow(statusRow || { entry_date: t.entry_date, schedule_expected_start: t.expected_start_time, timezone_suspect: true } as any);
+                            }} className="ml-1.5 text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning font-medium hover:bg-warning/30 cursor-pointer transition-colors" title="Click to fix">⚠ Needs Time Fix</button>
                           )}
                         </td>
                         <td className="px-4 py-3 time-display text-sm">{t.expected_start_time?.slice(0, 5)}</td>
                         <td className="px-4 py-3 time-display text-sm">
                           {t.timezone_suspect ? (
-                            <span className="text-warning italic">⚠ Needs Time Fix</span>
+                            <span className="text-warning italic">—</span>
                           ) : (
                             new Date(t.actual_start_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
                           )}
@@ -685,6 +693,15 @@ export default function DaysOff() {
       </Tabs>
 
       <DebugDrawer row={debugRow} open={!!debugRow} onClose={() => setDebugRow(null)} />
+
+      <TimeFixModal
+        open={!!fixRow}
+        entryDate={fixRow?.entry_date || ''}
+        timeEntryId={null}
+        scheduleStart={fixRow?.schedule_expected_start || null}
+        timezone={userTimezone}
+        onClose={() => setFixRow(null)}
+      />
     </div>
   );
 }

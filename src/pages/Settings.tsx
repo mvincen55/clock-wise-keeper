@@ -14,6 +14,7 @@ import { formatDate } from '@/lib/time-utils';
 import ScheduleManager from '@/components/ScheduleManager';
 import WipeDataTool from '@/components/WipeDataTool';
 import TimezoneRepairTool from '@/components/TimezoneRepairTool';
+import BulkRepairTool from '@/components/BulkRepairTool';
 
 const WEEKDAY_OPTIONS = [
   { value: '0', label: 'Sunday' },
@@ -243,6 +244,9 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Bulk Auto-Repair Tool */}
+      <BulkRepairTool />
 
       {/* Timezone Repair Tool */}
       <TimezoneRepairTool />
