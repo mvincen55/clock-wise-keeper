@@ -125,31 +125,33 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
           {expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
         </td>
         <td className="px-4 py-3 font-medium">{formatDate(entry.entry_date)}</td>
-        <td className="px-4 py-3 time-display text-sm">{firstIn ? formatTime(firstIn.punch_time) : '—'}</td>
-        <td className="px-4 py-3 time-display text-sm">{lastOut ? formatTime(lastOut.punch_time) : '—'}</td>
         <td className="px-4 py-3 time-display text-sm font-semibold">
-          {entry.total_minutes != null ? minutesToHHMM(entry.total_minutes) : '—'}
+          {entry.total_minutes != null ? (
+            <>
+              {minutesToHHMM(entry.total_minutes)}
+              <span className="text-muted-foreground font-normal ml-1 text-xs">
+                ({(entry.total_minutes / 60).toFixed(2)}h)
+              </span>
+            </>
+          ) : '—'}
         </td>
         <td className="px-4 py-3">
-          {isLate && (
-            <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive font-medium">
-              <AlertTriangle className="h-3 w-3" />
-              {lateInfo.minutesLate}m late
-            </span>
-          )}
+          <span className={`text-xs px-2 py-0.5 rounded ${entry.is_remote ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+            {entry.is_remote ? 'Remote' : 'On-site'}
+          </span>
         </td>
         <td className="px-4 py-3">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className={`text-xs px-2 py-0.5 rounded ${
-              entry.source === 'import' ? 'bg-accent/20 text-accent' :
-              entry.source === 'auto_location' ? 'bg-success/20 text-success' :
-              'bg-muted text-muted-foreground'
-            }`}>
-              {entry.source === 'auto_location' ? 'GPS' : entry.source}
-            </span>
-            {entry.is_remote && (
-              <span className="text-xs px-2 py-0.5 rounded bg-primary/20 text-primary flex items-center gap-1">
-                <MapPin className="h-3 w-3" /> Remote
+            {punches.length === 0 && (
+              <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">Absent</span>
+            )}
+            {punches.length > 0 && punches[punches.length - 1].punch_type === 'in' && (
+              <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">Incomplete</span>
+            )}
+            {isLate && (
+              <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive font-medium">
+                <AlertTriangle className="h-3 w-3" />
+                {lateInfo.minutesLate}m late
               </span>
             )}
             {hasEditedPunches && (
@@ -157,12 +159,15 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
                 <Pencil className="h-3 w-3" /> Edited
               </span>
             )}
+            {entry.entry_comment && (
+              <span className="text-xs text-muted-foreground" title={entry.entry_comment}>💬</span>
+            )}
           </div>
         </td>
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={7} className="bg-muted/30 px-8 py-3">
+          <td colSpan={5} className="bg-muted/30 px-8 py-3">
             <div className="space-y-3">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase">Punch Details</p>
@@ -446,23 +451,21 @@ export default function Timesheet() {
               <tr className="border-b bg-muted/50">
                 <th className="px-4 py-3 w-8"></th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">First In</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Last Out</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Total</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Late</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Source / Status</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Location</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center">
+                  <td colSpan={5} className="py-12 text-center">
                     <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                   </td>
                 </tr>
               ) : !filteredEntries.length ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-muted-foreground">No entries found</td>
+                  <td colSpan={5} className="py-12 text-center text-muted-foreground">No entries found</td>
                 </tr>
               ) : (
                 filteredEntries.map(entry => (

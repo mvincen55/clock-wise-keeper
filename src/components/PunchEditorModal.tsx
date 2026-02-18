@@ -18,7 +18,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Trash2, Plus, ArrowDownUp, Zap, AlertTriangle, Pencil } from 'lucide-react';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { Trash2, Plus, ArrowDownUp, Zap, AlertTriangle, Pencil, MapPin, ChevronDown } from 'lucide-react';
 import { PunchRow } from '@/hooks/useTimeEntries';
 import { EditablePunch, useSavePunchEdits } from '@/hooks/usePunchEditor';
 import { useWorkSchedule, getScheduleForWeekday } from '@/hooks/useWorkSchedule';
@@ -43,6 +48,8 @@ function punchToEditable(p: PunchRow): EditablePunch {
     is_new: false,
     is_edited: false,
     source: p.source,
+    location_lat: p.location_lat,
+    location_lng: p.location_lng,
   };
 }
 
@@ -69,6 +76,10 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
   const { data: schedule } = useWorkSchedule();
   const { toast } = useToast();
 
+  const gpsBackfillMode = typeof window !== 'undefined'
+    ? localStorage.getItem('gps_backfill_mode') === 'true'
+    : false;
+
   useEffect(() => {
     if (open) {
       setEditedPunches(punches.map(punchToEditable));
@@ -83,7 +94,12 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
     const active = editedPunches.filter(p => !p.is_deleted);
     const origActive = originalPunches.filter(p => !p.is_deleted);
     if (active.length !== origActive.length) return true;
-    return editedPunches.some(ep => ep.is_new || ep.is_deleted || ep.is_edited);
+    return editedPunches.some((ep, i) => {
+      if (ep.is_new || ep.is_deleted || ep.is_edited) return true;
+      const orig = originalPunches.find(o => o.id === ep.id);
+      if (!orig) return false;
+      return ep.location_lat !== orig.location_lat || ep.location_lng !== orig.location_lng;
+    });
   }, [editedPunches, originalPunches, quickFixUsed]);
 
   const warnings = useMemo(() => {
@@ -92,13 +108,10 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
     const times = active.map(p => new Date(p.punch_time).getTime());
     const uniqueTimes = new Set(times);
     if (uniqueTimes.size < times.length) w.push('Duplicate timestamps detected');
-
-    // Check for missing OUT
     if (active.length > 0) {
       const last = active[active.length - 1];
       if (last.punch_type === 'in') w.push('Last punch is IN — missing clock out');
     }
-
     return w;
   }, [editedPunches]);
 
@@ -122,7 +135,6 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
   const deletePunch = (index: number) => {
     setEditedPunches(prev => prev.map((p, i) => {
       if (i !== index) return p;
-      if (p.is_new) return { ...p, is_deleted: true };
       return { ...p, is_deleted: true };
     }));
   };
@@ -140,6 +152,8 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
         is_new: true,
         is_edited: false,
         source: 'manual',
+        location_lat: null,
+        location_lng: null,
       },
     ]);
   };
@@ -167,7 +181,6 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
       toast({ title: 'No clock-in found to pair with', variant: 'destructive' });
       return;
     }
-    // Add or update last OUT
     const lastOutIdx = editedPunches.findIndex(
       (p, i) => !p.is_deleted && p.punch_type === 'out' && i === editedPunches.length - 1
     );
@@ -188,6 +201,8 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
           is_new: true,
           is_edited: false,
           source: 'manual',
+          location_lat: null,
+          location_lng: null,
         },
       ]);
     }
@@ -207,6 +222,8 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
         is_new: true,
         is_edited: false,
         source: 'manual',
+        location_lat: null,
+        location_lng: null,
       },
     ]);
     setQuickFixUsed(true);
@@ -224,17 +241,16 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
       const endIso = fromLocalTimeInput(entryDate, sched.end_time);
       setEditedPunches(prev => [
         ...prev,
-        { id: null, punch_type: 'in' as const, punch_time: startIso, original_punch_time: null, is_deleted: false, is_new: true, is_edited: false, source: 'manual' },
-        { id: null, punch_type: 'out' as const, punch_time: endIso, original_punch_time: null, is_deleted: false, is_new: true, is_edited: false, source: 'manual' },
+        { id: null, punch_type: 'in' as const, punch_time: startIso, original_punch_time: null, is_deleted: false, is_new: true, is_edited: false, source: 'manual', location_lat: null, location_lng: null },
+        { id: null, punch_type: 'out' as const, punch_time: endIso, original_punch_time: null, is_deleted: false, is_new: true, is_edited: false, source: 'manual', location_lat: null, location_lng: null },
       ]);
     } else {
-      // Add missing out at end if last is IN
       const last = active[active.length - 1];
       if (last.punch_type === 'in') {
         const endIso = fromLocalTimeInput(entryDate, sched.end_time);
         setEditedPunches(prev => [
           ...prev,
-          { id: null, punch_type: 'out' as const, punch_time: endIso, original_punch_time: null, is_deleted: false, is_new: true, is_edited: false, source: 'manual' },
+          { id: null, punch_type: 'out' as const, punch_time: endIso, original_punch_time: null, is_deleted: false, is_new: true, is_edited: false, source: 'manual', location_lat: null, location_lng: null },
         ]);
       }
     }
@@ -278,44 +294,94 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
           {editedPunches.map((p, i) => {
             if (p.is_deleted) return null;
             const wasEdited = p.is_edited || p.is_new;
+            const orig = originalPunches.find(o => o.id === p.id);
+            const gpsChanged = orig && (p.location_lat !== orig.location_lat || p.location_lng !== orig.location_lng);
+            const showEdited = wasEdited || gpsChanged;
             return (
-              <div key={p.id || `new-${i}`} className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
-                <Select
-                  value={p.punch_type}
-                  onValueChange={v => updatePunch(i, 'punch_type', v)}
-                >
-                  <SelectTrigger className="w-20 h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="in">IN</SelectItem>
-                    <SelectItem value="out">OUT</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Input
-                  type="time"
-                  value={toLocalTimeInput(p.punch_time)}
-                  onChange={e => updatePunchTime(i, e.target.value)}
-                  className={`w-32 h-8 text-sm time-display ${wasEdited ? 'text-destructive font-semibold' : ''}`}
-                />
-                {wasEdited && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/20 text-destructive font-medium">
-                    {p.is_new ? 'new' : 'edited'}
-                  </span>
+              <div key={p.id || `new-${i}`} className="rounded-lg bg-muted/50">
+                <div className="flex items-center gap-2 p-2">
+                  <Select
+                    value={p.punch_type}
+                    onValueChange={v => updatePunch(i, 'punch_type', v)}
+                  >
+                    <SelectTrigger className="w-20 h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="in">IN</SelectItem>
+                      <SelectItem value="out">OUT</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="time"
+                    value={toLocalTimeInput(p.punch_time)}
+                    onChange={e => updatePunchTime(i, e.target.value)}
+                    className={`w-32 h-8 text-sm time-display ${showEdited ? 'text-destructive font-semibold' : ''}`}
+                  />
+                  {showEdited && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/20 text-destructive font-medium">
+                      {p.is_new ? 'new' : 'edited'}
+                    </span>
+                  )}
+                  {p.original_punch_time && p.is_edited && !p.is_new && (
+                    <span className="text-[10px] text-muted-foreground">
+                      was {formatTime(p.original_punch_time)}
+                    </span>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 ml-auto text-muted-foreground hover:text-destructive"
+                    onClick={() => deletePunch(i)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+
+                {/* GPS Details collapsible */}
+                {gpsBackfillMode && (
+                  <Collapsible>
+                    <CollapsibleTrigger asChild>
+                      <button className="flex items-center gap-1.5 px-2 pb-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full">
+                        <MapPin className="h-3 w-3" />
+                        <span>GPS Details</span>
+                        <ChevronDown className="h-3 w-3 ml-auto" />
+                      </button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="px-2 pb-2 grid grid-cols-2 gap-2">
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px]">Latitude</Label>
+                          <Input
+                            type="number"
+                            step="any"
+                            placeholder="e.g. 40.7128"
+                            value={p.location_lat ?? ''}
+                            onChange={e => {
+                              const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                              updatePunch(i, 'location_lat', val);
+                            }}
+                            className="h-7 text-xs"
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px]">Longitude</Label>
+                          <Input
+                            type="number"
+                            step="any"
+                            placeholder="e.g. -74.0060"
+                            value={p.location_lng ?? ''}
+                            onChange={e => {
+                              const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                              updatePunch(i, 'location_lng', val);
+                            }}
+                            className="h-7 text-xs"
+                          />
+                        </div>
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 )}
-                {p.original_punch_time && p.is_edited && !p.is_new && (
-                  <span className="text-[10px] text-muted-foreground">
-                    was {formatTime(p.original_punch_time)}
-                  </span>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 ml-auto text-muted-foreground hover:text-destructive"
-                  onClick={() => deletePunch(i)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
               </div>
             );
           })}
