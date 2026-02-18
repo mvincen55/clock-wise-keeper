@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrgContext } from '@/hooks/useOrgContext';
 import { useAddDayOff } from '@/hooks/useDaysOff';
 import { useAddClosure } from '@/hooks/useOfficeClosures';
 import { useResolveException, useCreateException } from '@/hooks/useAttendanceExceptions';
@@ -29,6 +30,7 @@ interface AttendanceActionsProps {
 
 export function AttendanceActions({ row, alwaysShow = false }: AttendanceActionsProps) {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [action, setAction] = useState<ActionType>(null);
@@ -98,9 +100,12 @@ export function AttendanceActions({ row, alwaysShow = false }: AttendanceActions
         is_full_day: closureForm.is_full_day,
         hours: parseFloat(closureForm.hours) || 8,
       });
-      if (user) {
+      if (user && ctx) {
         await supabase.from('audit_events').insert({
           user_id: user.id,
+          org_id: ctx.org_id,
+          employee_id: ctx.employee_id,
+          actor_id: user.id,
           event_type: 'mark_office_closed',
           event_details: { date: row.entry_date, name: closureForm.name, reason: closureForm.reason },
           related_date: row.entry_date,

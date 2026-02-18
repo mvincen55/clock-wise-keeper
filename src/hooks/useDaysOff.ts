@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrgContext } from '@/hooks/useOrgContext';
 
 export type DayOffRow = {
   id: string;
@@ -15,7 +16,6 @@ export type DayOffRow = {
 
 export function useDaysOff(year?: number) {
   const { user } = useAuth();
-
   return useQuery({
     queryKey: ['days-off', year],
     enabled: !!user,
@@ -32,19 +32,21 @@ export function useDaysOff(year?: number) {
 
 export function useAddDayOff() {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
 
   return useMutation({
     mutationFn: async (input: {
-      date_start: string;
-      date_end: string;
+      date_start: string; date_end: string;
       type: 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'medical_leave' | 'other';
-      hours?: number;
-      notes?: string;
+      hours?: number; notes?: string;
     }) => {
-      if (!user) throw new Error('Not authenticated');
+      if (!user || !ctx) throw new Error('Not authenticated');
       const { error } = await supabase.from('days_off').insert({
         user_id: user.id,
+        org_id: ctx.org_id,
+        employee_id: ctx.employee_id,
+        created_by: user.id,
         ...input,
       });
       if (error) throw error;
@@ -55,7 +57,6 @@ export function useAddDayOff() {
 
 export function useDeleteDayOff() {
   const qc = useQueryClient();
-
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('days_off').delete().eq('id', id);
