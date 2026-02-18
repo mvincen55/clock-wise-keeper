@@ -18,6 +18,7 @@ import ApprovalQueue from "@/pages/ApprovalQueue";
 import Team from "@/pages/Team";
 import EmployeeDetail from "@/pages/EmployeeDetail";
 import OrgSetup from "@/pages/OrgSetup";
+import AcceptInvite from "@/pages/AcceptInvite";
 import NotFound from "@/pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -55,6 +56,7 @@ const App = () => (
             <Route path="/team" element={<ProtectedRoute><Team /></ProtectedRoute>} />
             <Route path="/team/:employeeId" element={<ProtectedRoute><EmployeeDetail /></ProtectedRoute>} />
             <Route path="/org-setup" element={<ProtectedRoute><OrgSetup /></ProtectedRoute>} />
+            <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="*" element={<Navigate to="/auth" replace />} />
           </Routes>
         </BrowserRouter>

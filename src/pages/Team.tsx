@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAddEmployee } from '@/hooks/useEmployees';
+import InviteEmployeeModal from '@/components/InviteEmployeeModal';
 import { Users, Plus, Loader2, UserCheck, UserX, AlertTriangle, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -84,7 +85,7 @@ export default function Team() {
         </div>
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" />Add Employee</Button>
+            <Button><Plus className="mr-2 h-4 w-4" />Add</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>Add Employee</DialogTitle></DialogHeader>
@@ -104,6 +105,7 @@ export default function Team() {
             </div>
           </DialogContent>
         </Dialog>
+        <InviteEmployeeModal />
       </div>
 
       {/* Summary Cards */}
