@@ -224,6 +224,7 @@ export function useSavePunchEdits() {
       qc.invalidateQueries({ queryKey: ['time-entries'] });
       qc.invalidateQueries({ queryKey: ['time-entry'] });
       qc.invalidateQueries({ queryKey: ['tardies'] });
+      qc.invalidateQueries({ queryKey: ['attendance-day-status'] });
     },
   });
 }

@@ -203,6 +203,7 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
 
 type SortMode = 'attention' | 'chronological';
 type FilterMode = 'all' | 'absent' | 'late' | 'incomplete' | 'edited' | 'unapproved';
+type RemoteFilter = 'all' | 'onsite' | 'remote';
 
 async function exportToExcel(
   sortedEntries: { entry: TimeEntryRow; isAbsent: boolean; isIncomplete: boolean; isLate: boolean; minutesLate: number; hasEdits: boolean; tardyApproval: string }[],
@@ -275,6 +276,7 @@ export default function Timesheet() {
   const [sortMode, setSortMode] = useState<SortMode>('attention');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [approvalFilter, setApprovalFilter] = useState<string>('all');
+  const [remoteFilter, setRemoteFilter] = useState<RemoteFilter>('all');
 
   const { data: entries, isLoading } = useTimeEntries(startDate || undefined, endDate || undefined);
   const { data: schedule } = useWorkSchedule();
@@ -330,6 +332,10 @@ export default function Timesheet() {
   // Filter
   const filteredEntries = useMemo(() => {
     let list = entriesWithStatus;
+    // Remote filter
+    if (remoteFilter === 'remote') list = list.filter(e => e.entry.is_remote);
+    else if (remoteFilter === 'onsite') list = list.filter(e => !e.entry.is_remote);
+    
     switch (filterMode) {
       case 'absent': list = list.filter(e => e.isAbsent); break;
       case 'late': list = list.filter(e => e.isLate); break;
@@ -341,7 +347,7 @@ export default function Timesheet() {
       list = list.filter(e => e.tardyApproval === approvalFilter);
     }
     return list;
-  }, [entriesWithStatus, filterMode, approvalFilter]);
+  }, [entriesWithStatus, filterMode, approvalFilter, remoteFilter]);
 
   // Sort
   const sortedEntries = useMemo(() => {
@@ -440,6 +446,17 @@ export default function Timesheet() {
                   <SelectItem value="incomplete">Incomplete ({incompleteCount})</SelectItem>
                   <SelectItem value="edited">Edited ({editedCount})</SelectItem>
                   <SelectItem value="unapproved">Unapproved Tardies</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Location</Label>
+              <Select value={remoteFilter} onValueChange={v => setRemoteFilter(v as RemoteFilter)}>
+                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="onsite">On-site only</SelectItem>
+                  <SelectItem value="remote">Remote only</SelectItem>
                 </SelectContent>
               </Select>
             </div>

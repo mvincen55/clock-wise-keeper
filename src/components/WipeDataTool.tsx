@@ -170,6 +170,7 @@ export default function WipeDataTool() {
       qc.invalidateQueries({ queryKey: ['tardies'] });
       qc.invalidateQueries({ queryKey: ['days-off'] });
       qc.invalidateQueries({ queryKey: ['attendance-exceptions'] });
+      qc.invalidateQueries({ queryKey: ['attendance-day-status'] });
 
       toast({ title: 'Data wiped successfully' });
     } catch (err: any) {
