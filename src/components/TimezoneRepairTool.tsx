@@ -24,7 +24,7 @@ export default function TimezoneRepairTool() {
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [mode, setMode] = useState<'reinterpret' | 'shift'>('shift');
+  const [mode, setMode] = useState<'reinterpret' | 'shift' | 'trust'>('shift');
   const [shiftHours, setShiftHours] = useState(5); // common UTC→ET offset
   const [shiftDirection, setShiftDirection] = useState<'subtract' | 'add'>('subtract');
   const [preview, setPreview] = useState<PreviewRow[] | null>(null);
@@ -69,13 +69,13 @@ export default function TimezoneRepairTool() {
         const original = new Date(p.punch_time);
         let corrected: Date;
 
-        if (mode === 'shift') {
+        if (mode === 'trust') {
+          corrected = original; // No change, just recompute
+        } else if (mode === 'shift') {
           const offsetMs = shiftHours * 60 * 60 * 1000;
           corrected = new Date(original.getTime() + (shiftDirection === 'subtract' ? -offsetMs : offsetMs));
         } else {
-          // Reinterpret: treat stored UTC value as if it were local (America/New_York)
-          // e.g. stored as 2024-01-15T13:00:00Z → should be 2024-01-15T13:00:00-05:00
-          // So we shift by adding the offset that was missing
+          // Reinterpret: same shift logic, different label
           const offsetMs = shiftHours * 60 * 60 * 1000;
           corrected = new Date(original.getTime() + (shiftDirection === 'subtract' ? -offsetMs : offsetMs));
         }
@@ -100,22 +100,26 @@ export default function TimezoneRepairTool() {
     if (!preview?.length || !user) return;
     setLoading(true);
     try {
-      // Update each punch
-      for (const row of preview) {
-        const { error } = await supabase
-          .from('punches')
-          .update({
-            punch_time: row.corrected_time,
-            is_edited: true,
-            edited_at: new Date().toISOString(),
-            edited_by: user.id,
-            original_punch_time: row.punch_time,
-          })
-          .eq('id', row.id);
-        if (error) throw error;
+      if (mode !== 'trust') {
+        // Update each punch (skip for trust mode — just recompute)
+        for (const row of preview) {
+          if (row.punch_time !== row.corrected_time) {
+            const { error } = await supabase
+              .from('punches')
+              .update({
+                punch_time: row.corrected_time,
+                is_edited: true,
+                edited_at: new Date().toISOString(),
+                edited_by: user.id,
+                original_punch_time: row.punch_time,
+              })
+              .eq('id', row.id);
+            if (error) throw error;
+          }
+        }
       }
 
-      // Trigger recompute for the date range
+      // Always recompute after repair
       await supabase.rpc('recompute_attendance_range', {
         p_user_id: user.id,
         p_start_date: startDate,
@@ -123,7 +127,8 @@ export default function TimezoneRepairTool() {
       });
 
       setCommitted(true);
-      toast({ title: `Fixed ${preview.length} punch timestamps and recomputed attendance` });
+      const action = mode === 'trust' ? 'Recomputed attendance' : `Fixed ${preview.length} punch timestamps and recomputed attendance`;
+      toast({ title: action });
     } catch (err: any) {
       toast({ title: 'Commit failed', description: err.message, variant: 'destructive' });
     }
@@ -168,6 +173,7 @@ export default function TimezoneRepairTool() {
               <SelectContent>
                 <SelectItem value="shift">Shift by offset</SelectItem>
                 <SelectItem value="reinterpret">Reinterpret as local</SelectItem>
+                <SelectItem value="trust">Trust stored values (recompute only)</SelectItem>
               </SelectContent>
             </Select>
           </div>

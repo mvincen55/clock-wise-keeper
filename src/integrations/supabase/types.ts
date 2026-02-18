@@ -924,6 +924,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_local_punch_time: {
+        Args: { p_punch_time: string; p_user_id: string }
+        Returns: string
+      }
       get_schedule_for_date: {
         Args: { p_date: string; p_user_id: string }
         Returns: {
@@ -941,6 +945,7 @@ export type Database = {
           weekday: number
         }[]
       }
+      get_user_timezone: { Args: { p_user_id: string }; Returns: string }
       is_allowed_user: { Args: never; Returns: boolean }
       recompute_attendance_range: {
         Args: { p_end_date: string; p_start_date: string; p_user_id: string }
