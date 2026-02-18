@@ -9,10 +9,11 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Loader2, Shield, Timer, CalendarDays, Plus, Trash2, DollarSign, RefreshCw, Clock } from 'lucide-react';
+import { Loader2, Shield, Timer, CalendarDays, Plus, Trash2, DollarSign, RefreshCw, Clock, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/time-utils';
 import ScheduleManager from '@/components/ScheduleManager';
+import WipeDataTool from '@/components/WipeDataTool';
 
 const WEEKDAY_OPTIONS = [
   { value: '0', label: 'Sunday' },
@@ -27,6 +28,16 @@ const WEEKDAY_OPTIONS = [
 export default function Settings() {
   const { toast } = useToast();
   const { sessionTimeoutMinutes, setSessionTimeoutMinutes } = useAuth();
+
+  // GPS Backfill Mode
+  const [gpsBackfill, setGpsBackfill] = useState(() =>
+    typeof window !== 'undefined' ? localStorage.getItem('gps_backfill_mode') === 'true' : false
+  );
+
+  const toggleGpsBackfill = (val: boolean) => {
+    setGpsBackfill(val);
+    localStorage.setItem('gps_backfill_mode', String(val));
+  };
 
   // Closures
   const currentYear = new Date().getFullYear();
@@ -126,6 +137,25 @@ export default function Settings() {
         <ScheduleManager />
       </div>
 
+      {/* GPS Backfill Mode */}
+      <Card className="card-elevated">
+        <CardHeader className="border-b">
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5" />
+            GPS Backfill Mode
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Enable GPS editing per punch</p>
+              <p className="text-xs text-muted-foreground">When ON, latitude/longitude fields appear in the Punch Editor for manual GPS correction.</p>
+            </div>
+            <Switch checked={gpsBackfill} onCheckedChange={toggleGpsBackfill} />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Office Closures */}
       <Card className="card-elevated">
         <CardHeader className="border-b">
@@ -224,6 +254,9 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Wipe Data Tool */}
+      <WipeDataTool />
     </div>
   );
 }
