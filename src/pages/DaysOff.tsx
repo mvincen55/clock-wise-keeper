@@ -142,7 +142,7 @@ export default function DaysOff() {
   const [form, setForm] = useState({
     date_start: '',
     date_end: '',
-    type: 'scheduled_with_notice' as 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'other',
+    type: 'scheduled_with_notice' as 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'medical_leave' | 'other',
     hours: '',
     notes: '',
   });
