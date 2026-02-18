@@ -208,7 +208,10 @@ function exportCsv(
   sortedEntries: { entry: TimeEntryRow; isAbsent: boolean; isIncomplete: boolean; isLate: boolean; minutesLate: number; hasEdits: boolean; tardyApproval: string }[],
   tardyMap: Map<string, TardyRow>,
 ) {
-  const headers = ['Date', 'Day', 'Total HH:MM', 'Total Hours', 'Location', 'Status', 'Minutes Late', 'Tardy Status', 'Comment', 'Punch In', 'Punch Out', 'Punch In 2', 'Punch Out 2', 'Punch In 3', 'Punch Out 3'];
+  const headers = ['Date', 'Day', 'Total HH:MM', 'Total Hours', 'Location', 'Status', 'Minutes Late', 'Tardy Status', 'Comment', 'Punch In 1', 'Punch Out 1', 'Punch In 2', 'Punch Out 2', 'Punch In 3', 'Punch Out 3'];
+
+  const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+
   const rows = sortedEntries
     .sort((a, b) => a.entry.entry_date.localeCompare(b.entry.entry_date))
     .map(({ entry, isAbsent, isIncomplete, isLate, minutesLate }) => {
@@ -220,7 +223,7 @@ function exportCsv(
       const status = isAbsent ? 'Absent' : isIncomplete ? 'Incomplete' : isLate ? 'Late' : 'OK';
       const tardy = tardyMap.get(entry.entry_date);
       const tardyStatus = tardy ? tardy.approval_status : '';
-      const comment = (entry.entry_comment || '').replace(/"/g, '""');
+      const comment = entry.entry_comment || '';
 
       const punches = (entry.punches || []).sort((a, b) => new Date(a.punch_time).getTime() - new Date(b.punch_time).getTime());
       const punchCols: string[] = [];
@@ -228,10 +231,11 @@ function exportCsv(
         punchCols.push(punches[i] ? formatTime(punches[i].punch_time) : '');
       }
 
-      return [entry.entry_date, day, totalHHMM, totalHrs, location, status, isLate ? String(minutesLate) : '', tardyStatus, `"${comment}"`, ...punchCols];
+      return [entry.entry_date, day, totalHHMM, totalHrs, location, status, isLate ? String(minutesLate) : '', tardyStatus, comment, ...punchCols].map(esc).join(',');
     });
 
-  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const bom = '\uFEFF';
+  const csv = bom + [headers.map(esc).join(','), ...rows].join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
