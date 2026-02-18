@@ -204,7 +204,7 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
 type SortMode = 'attention' | 'chronological';
 type FilterMode = 'all' | 'absent' | 'late' | 'incomplete' | 'edited' | 'unapproved';
 
-function exportToExcel(
+async function exportToExcel(
   sortedEntries: { entry: TimeEntryRow; isAbsent: boolean; isIncomplete: boolean; isLate: boolean; minutesLate: number; hasEdits: boolean; tardyApproval: string }[],
   tardyMap: Map<string, TardyRow>,
 ) {
@@ -467,8 +467,8 @@ export default function Timesheet() {
               <span className="text-xs text-muted-foreground">Total: </span>
               <span className="time-display font-semibold text-primary">{minutesToHHMM(totalMinutes)}</span>
             </div>
-            <Button variant="outline" size="sm" onClick={() => exportCsv(sortedEntries, tardyMap)}>
-              <Download className="h-3.5 w-3.5 mr-1" /> Export CSV
+            <Button variant="outline" size="sm" onClick={() => exportToExcel(sortedEntries, tardyMap)}>
+              <Download className="h-3.5 w-3.5 mr-1" /> Export Excel
             </Button>
           </div>
         </CardContent>
