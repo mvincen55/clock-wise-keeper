@@ -4,6 +4,7 @@ import { useDaysOff, useAddDayOff, useDeleteDayOff, DayOffRow } from '@/hooks/us
 import { useTardies, useUpdateTardy, TardyRow } from '@/hooks/useTardies';
 import { TardyReviewModal } from '@/components/TardyReviewModal';
 import { TimeFixModal } from '@/components/TimeFixModal';
+import { AttendanceActions } from '@/components/AttendanceActions';
 import { useAttendanceExceptions, AttendanceExceptionRow } from '@/hooks/useAttendanceExceptions';
 import { useAttendanceDayStatus, useRecomputeAttendance, AttendanceDayStatusRow } from '@/hooks/useAttendanceDayStatus';
 import { useOfficeClosures } from '@/hooks/useOfficeClosures';
@@ -216,8 +217,11 @@ export default function DaysOff() {
       closures: rows.filter(r => r.office_closed).length,
       remote: rows.filter(r => r.is_remote).length,
       edited: rows.filter(r => r.has_edits).length,
+      unreviewedTardies: (tardies || []).filter(t => t.approval_status === 'unreviewed' && !t.resolved).length,
+      needsTimeFix: rows.filter(r => r.timezone_suspect).length,
+      missingShifts: (exceptions || []).filter(e => e.status === 'open').length,
     };
-  }, [statusRows]);
+  }, [statusRows, tardies, exceptions]);
 
   // Filtered + sorted status rows
   const filteredStatus = useMemo(() => {
@@ -381,6 +385,37 @@ export default function DaysOff() {
         </Card>
       </div>
 
+      {/* Unreviewed Queue */}
+      {(summary.unreviewedTardies > 0 || summary.missingShifts > 0 || summary.incomplete > 0 || summary.needsTimeFix > 0) && (
+        <Card className="card-elevated border-warning/40">
+          <CardContent className="p-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Unreviewed Items</p>
+            <div className="flex flex-wrap gap-2">
+              {summary.unreviewedTardies > 0 && (
+                <button onClick={() => { setTab('tardies'); setApprovalFilter('unreviewed'); }} className="text-xs px-3 py-1.5 rounded-full bg-destructive/10 text-destructive font-medium hover:bg-destructive/20 transition-colors">
+                  {summary.unreviewedTardies} Unreviewed Tardies
+                </button>
+              )}
+              {summary.missingShifts > 0 && (
+                <button onClick={() => setTab('missing')} className="text-xs px-3 py-1.5 rounded-full bg-warning/10 text-warning font-medium hover:bg-warning/20 transition-colors">
+                  {summary.missingShifts} Missing Shifts
+                </button>
+              )}
+              {summary.incomplete > 0 && (
+                <button onClick={() => { setTab('status'); setAttendanceFilter('incomplete'); }} className="text-xs px-3 py-1.5 rounded-full bg-warning/10 text-warning font-medium hover:bg-warning/20 transition-colors">
+                  {summary.incomplete} Incomplete Punches
+                </button>
+              )}
+              {summary.needsTimeFix > 0 && (
+                <button onClick={() => { setTab('status'); setAttendanceFilter('all'); }} className="text-xs px-3 py-1.5 rounded-full bg-warning/10 text-warning font-medium hover:bg-warning/20 transition-colors">
+                  {summary.needsTimeFix} Needs Time Fix
+                </button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Tabs */}
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
@@ -471,8 +506,9 @@ export default function DaysOff() {
                         <td className="px-4 py-3 text-xs capitalize">{row.tardy_approval_status !== 'unreviewed' ? row.tardy_approval_status : '—'}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1">
+                            <AttendanceActions row={row} />
                             {row.has_punches && (
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(`/timesheet?date=${row.entry_date}`)} title="Edit in Timesheet">
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(`/timesheet?date=${row.entry_date}`)} title="View in Timesheet">
                                 <Pencil className="h-3.5 w-3.5" />
                               </Button>
                             )}
