@@ -1,0 +1,1 @@
+ALTER TYPE public.day_off_type ADD VALUE 'medical_leave';

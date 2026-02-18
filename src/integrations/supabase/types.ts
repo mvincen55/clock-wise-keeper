@@ -950,6 +950,7 @@ export type Database = {
         | "unscheduled"
         | "office_closed"
         | "other"
+        | "medical_leave"
       exception_status: "open" | "resolved" | "ignored"
       exception_type: "missing_shift" | "other"
       import_status: "pending" | "previewing" | "confirmed" | "failed"
@@ -1087,6 +1088,7 @@ export const Constants = {
         "unscheduled",
         "office_closed",
         "other",
+        "medical_leave",
       ],
       exception_status: ["open", "resolved", "ignored"],
       exception_type: ["missing_shift", "other"],

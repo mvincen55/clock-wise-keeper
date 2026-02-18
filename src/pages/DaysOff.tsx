@@ -25,6 +25,7 @@ const typeLabels: Record<string, string> = {
   scheduled_with_notice: 'Scheduled w/ Notice',
   unscheduled: 'Unscheduled',
   office_closed: 'Office Closed',
+  medical_leave: 'Medical Leave',
   other: 'Other',
 };
 
@@ -32,6 +33,7 @@ const typeColors: Record<string, string> = {
   scheduled_with_notice: 'bg-primary/20 text-primary',
   unscheduled: 'bg-destructive/20 text-destructive',
   office_closed: 'bg-success/20 text-success',
+  medical_leave: 'bg-warning/20 text-warning',
   other: 'bg-accent/20 text-accent',
 };
 
