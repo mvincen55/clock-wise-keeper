@@ -101,7 +101,7 @@ export function useClockAction() {
       if (!user) throw new Error('Not authenticated');
 
       const punchType: 'in' | 'out' = (action === 'clock_in' || action === 'break_end') ? 'in' : 'out';
-      const now = new Date().toISOString();
+      const now = (() => { const d = new Date(); d.setSeconds(0, 0); return d.toISOString(); })();
 
       let { data: entry } = await supabase
         .from('time_entries')

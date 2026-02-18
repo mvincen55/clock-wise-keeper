@@ -85,8 +85,8 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
         if (entryErr) throw entryErr;
 
         await supabase.from('punches').insert([
-          { time_entry_id: entry.id, seq: 0, punch_type: 'in' as const, punch_time: inTime.toISOString(), source: 'manual' as const },
-          { time_entry_id: entry.id, seq: 1, punch_type: 'out' as const, punch_time: outTime.toISOString(), source: 'manual' as const },
+          { time_entry_id: entry.id, seq: 0, punch_type: 'in' as const, punch_time: (() => { inTime.setSeconds(0, 0); return inTime.toISOString(); })(), source: 'manual' as const },
+          { time_entry_id: entry.id, seq: 1, punch_type: 'out' as const, punch_time: (() => { outTime.setSeconds(0, 0); return outTime.toISOString(); })(), source: 'manual' as const },
         ]);
 
         // Audit
