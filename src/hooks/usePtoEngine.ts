@@ -147,23 +147,48 @@ export function useRecalculatePto() {
     mutationFn: async () => {
       if (!user) throw new Error('Not authenticated');
 
-      // 1. Load settings
-      const { data: settings } = await supabase
+      // 1. Load or auto-create settings
+      let { data: settings } = await supabase
         .from('pto_settings')
         .select('*')
         .maybeSingle();
 
-      if (!settings) throw new Error('PTO settings not configured');
+      if (!settings) {
+        const defaults = {
+          user_id: user.id,
+          hire_date: '2022-02-07',
+          worked_hours_cap_weekly: 40,
+          max_balance: 100,
+          allow_negative: false,
+          timezone: 'America/New_York',
+        };
+        const { error } = await supabase.from('pto_settings').upsert(defaults as any, { onConflict: 'user_id' });
+        if (error) throw error;
+        const { data: reloaded } = await supabase.from('pto_settings').select('*').maybeSingle();
+        settings = reloaded;
+      }
+      if (!settings) throw new Error('Failed to create PTO settings');
       const s = settings as PtoSettings;
 
-      // 2. Load most recent snapshot
-      const { data: snapshots } = await supabase
+      // 2. Load or auto-create snapshot
+      let { data: snapshots } = await supabase
         .from('pto_snapshots')
         .select('*')
         .order('snapshot_date', { ascending: false })
         .limit(1);
 
-      if (!snapshots?.length) throw new Error('No PTO snapshot configured');
+      if (!snapshots?.length) {
+        const defaultSnap = {
+          user_id: user.id,
+          snapshot_date: '2026-02-14',
+          snapshot_balance_hours: -1.63,
+        };
+        const { error } = await supabase.from('pto_snapshots').upsert(defaultSnap as any, { onConflict: 'user_id,snapshot_date' });
+        if (error) throw error;
+        const { data: reloaded } = await supabase.from('pto_snapshots').select('*').order('snapshot_date', { ascending: false }).limit(1);
+        snapshots = reloaded;
+      }
+      if (!snapshots?.length) throw new Error('Failed to create PTO snapshot');
       const snap = snapshots[0] as PtoSnapshot;
 
       // 3. Load time entries from snapshot_date forward
