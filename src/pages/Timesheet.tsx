@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTimeEntries, useUpdateEntry, TimeEntryRow } from '@/hooks/useTimeEntries';
+import { useNavigate } from 'react-router-dom';
 import { useWorkSchedule, getScheduleForWeekday } from '@/hooks/useWorkSchedule';
 import { useTardies, useUpsertTardy, useUpdateTardy, TardyRow } from '@/hooks/useTardies';
 import { useAuth } from '@/hooks/useAuth';
@@ -56,6 +57,7 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
   const [punchEditorOpen, setPunchEditorOpen] = useState(false);
   const hasEditedPunches = (entry.punches || []).some((p: any) => p.is_edited);
   const updateEntry = useUpdateEntry();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [comment, setComment] = useState(entry.entry_comment || '');
   const [commentDirty, setCommentDirty] = useState(false);
@@ -141,6 +143,17 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
         <tr>
           <td colSpan={5} className="bg-muted/30 px-8 py-3">
             <div className="space-y-3">
+              {/* Resolve in Attendance banner */}
+              {(isAbsent || isIncomplete || (isLate && needsReason)) && (
+                <div className="flex items-center justify-between p-2 rounded bg-warning/10 border border-warning/20">
+                  <span className="text-xs text-warning font-medium">
+                    {isAbsent ? 'Missing punches' : isIncomplete ? 'Incomplete punches' : 'Unreviewed tardy'} — resolve in Attendance
+                  </span>
+                  <Button size="sm" variant="outline" className="h-6 text-xs" onClick={e => { e.stopPropagation(); navigate(`/days-off?date=${entry.entry_date}`); }}>
+                    Resolve in Attendance
+                  </Button>
+                </div>
+              )}
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase">Punch Details</p>
                 <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setPunchEditorOpen(true); }}>
