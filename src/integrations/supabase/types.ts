@@ -1708,6 +1708,7 @@ export type Database = {
       }
     }
     Functions: {
+      can_access_employee: { Args: { _employee_id: string }; Returns: boolean }
       get_local_punch_time: {
         Args: { p_punch_time: string; p_user_id: string }
         Returns: string
@@ -1731,6 +1732,8 @@ export type Database = {
       }
       get_user_timezone: { Args: { p_user_id: string }; Returns: string }
       is_allowed_user: { Args: never; Returns: boolean }
+      is_org_admin: { Args: { _org_id: string }; Returns: boolean }
+      is_org_member: { Args: { _org_id: string }; Returns: boolean }
       recompute_attendance_range: {
         Args: { p_end_date: string; p_start_date: string; p_user_id: string }
         Returns: number
