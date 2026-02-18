@@ -48,8 +48,11 @@ export type Database = {
           is_scheduled_day: boolean
           minutes_late: number | null
           office_closed: boolean
+          recompute_version: number
           schedule_expected_end: string | null
           schedule_expected_start: string | null
+          status_code: string
+          status_reasons: Json
           tardy_approval_status: string | null
           timezone_suspect: boolean
           user_id: string
@@ -69,8 +72,11 @@ export type Database = {
           is_scheduled_day?: boolean
           minutes_late?: number | null
           office_closed?: boolean
+          recompute_version?: number
           schedule_expected_end?: string | null
           schedule_expected_start?: string | null
+          status_code?: string
+          status_reasons?: Json
           tardy_approval_status?: string | null
           timezone_suspect?: boolean
           user_id: string
@@ -90,8 +96,11 @@ export type Database = {
           is_scheduled_day?: boolean
           minutes_late?: number | null
           office_closed?: boolean
+          recompute_version?: number
           schedule_expected_end?: string | null
           schedule_expected_start?: string | null
+          status_code?: string
+          status_reasons?: Json
           tardy_approval_status?: string | null
           timezone_suspect?: boolean
           user_id?: string
@@ -924,7 +933,131 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_audit_trail: {
+        Row: {
+          after_value: string | null
+          before_value: string | null
+          event_details: Json | null
+          event_timestamp: string | null
+          event_type: string | null
+          reason_comment: string | null
+          related_date: string | null
+          related_entry_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          after_value?: never
+          before_value?: never
+          event_details?: Json | null
+          event_timestamp?: string | null
+          event_type?: string | null
+          reason_comment?: never
+          related_date?: string | null
+          related_entry_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          after_value?: never
+          before_value?: never
+          event_details?: Json | null
+          event_timestamp?: string | null
+          event_type?: string | null
+          reason_comment?: never
+          related_date?: string | null
+          related_entry_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      v_exceptions: {
+        Row: {
+          entry_date: string | null
+          minutes_late: number | null
+          status_code: string | null
+          status_reasons: Json | null
+          suggested_action: string | null
+          tardy_approval_status: string | null
+          tardy_reason: string | null
+          timezone_suspect: boolean | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
+      v_pto_ledger: {
+        Row: {
+          accrual_credited: number | null
+          calculated_accrual: number | null
+          cap_applied: boolean | null
+          period_end: string | null
+          period_start: string | null
+          pto_taken_hours: number | null
+          running_balance: number | null
+          tier_rate: number | null
+          user_id: string | null
+          weekly_cap: number | null
+          worked_hours_capped: number | null
+          worked_hours_raw: number | null
+        }
+        Insert: {
+          accrual_credited?: number | null
+          calculated_accrual?: number | null
+          cap_applied?: never
+          period_end?: string | null
+          period_start?: string | null
+          pto_taken_hours?: number | null
+          running_balance?: number | null
+          tier_rate?: number | null
+          user_id?: string | null
+          weekly_cap?: number | null
+          worked_hours_capped?: number | null
+          worked_hours_raw?: number | null
+        }
+        Update: {
+          accrual_credited?: number | null
+          calculated_accrual?: number | null
+          cap_applied?: never
+          period_end?: string | null
+          period_start?: string | null
+          pto_taken_hours?: number | null
+          running_balance?: number | null
+          tier_rate?: number | null
+          user_id?: string | null
+          weekly_cap?: number | null
+          worked_hours_capped?: number | null
+          worked_hours_raw?: number | null
+        }
+        Relationships: []
+      }
+      v_timesheet_day: {
+        Row: {
+          day_off_notes: string | null
+          day_off_type: Database["public"]["Enums"]["day_off_type"] | null
+          edit_count: number | null
+          entry_comment: string | null
+          entry_date: string | null
+          entry_is_remote: boolean | null
+          first_in: string | null
+          has_day_off: boolean | null
+          has_edits: boolean | null
+          is_absent: boolean | null
+          is_incomplete: boolean | null
+          is_late: boolean | null
+          is_remote: boolean | null
+          is_scheduled_day: boolean | null
+          last_out: string | null
+          minutes_late: number | null
+          office_closed: boolean | null
+          schedule_expected_end: string | null
+          schedule_expected_start: string | null
+          status_code: string | null
+          status_reasons: Json | null
+          tardy_approval_status: string | null
+          timezone_suspect: boolean | null
+          total_minutes: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_local_punch_time: {

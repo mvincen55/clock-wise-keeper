@@ -21,6 +21,9 @@ export type AttendanceDayStatusRow = {
   has_day_comment: boolean;
   has_day_off: boolean;
   timezone_suspect: boolean;
+  status_code: string;
+  status_reasons: Record<string, unknown>;
+  recompute_version: number;
   computed_at: string;
 };
 
