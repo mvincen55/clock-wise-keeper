@@ -3,6 +3,9 @@ import { useTimeEntries, useUpdateEntry, TimeEntryRow } from '@/hooks/useTimeEnt
 import { useWorkSchedule, getScheduleForWeekday } from '@/hooks/useWorkSchedule';
 import { useTardies, useUpsertTardy, useUpdateTardy, TardyRow } from '@/hooks/useTardies';
 import { useAuth } from '@/hooks/useAuth';
+import { useOfficeClosures } from '@/hooks/useOfficeClosures';
+import { useMissingShifts } from '@/hooks/useMissingShifts';
+import { MissingShiftBanner } from '@/components/MissingShiftBanner';
 import { minutesToHHMM, formatTime, formatDate } from '@/lib/time-utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -133,7 +136,7 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
           )}
         </td>
         <td className="px-4 py-3">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <span className={`text-xs px-2 py-0.5 rounded ${
               entry.source === 'import' ? 'bg-accent/20 text-accent' :
               entry.source === 'auto_location' ? 'bg-success/20 text-success' :
@@ -257,6 +260,10 @@ export default function Timesheet() {
   const { data: entries, isLoading } = useTimeEntries(startDate || undefined, endDate || undefined);
   const { data: schedule } = useWorkSchedule();
   const { data: tardies } = useTardies(startDate || undefined, endDate || undefined);
+  const currentYear = new Date().getFullYear();
+  const { data: closures } = useOfficeClosures(currentYear);
+  const closureDateSet = useMemo(() => new Set((closures || []).map(c => c.closure_date)), [closures]);
+  const missingDays = useMissingShifts(startDate || undefined, endDate || undefined);
   const upsertTardy = useUpsertTardy();
   const updateTardy = useUpdateTardy();
   const { toast } = useToast();
@@ -340,6 +347,9 @@ export default function Timesheet() {
         <h1 className="text-2xl md:text-3xl font-bold">Timesheet</h1>
         <p className="text-muted-foreground">View and manage your time entries</p>
       </div>
+
+      {/* Missing shift banner */}
+      {missingDays.length > 0 && <MissingShiftBanner missingDays={missingDays} />}
 
       {/* Tardy summary cards */}
       {(tardies?.length ?? 0) > 0 && (
