@@ -1709,6 +1709,10 @@ export type Database = {
     }
     Functions: {
       can_access_employee: { Args: { _employee_id: string }; Returns: boolean }
+      get_employee_timezone: {
+        Args: { p_employee_id: string }
+        Returns: string
+      }
       get_local_punch_time: {
         Args: { p_punch_time: string; p_user_id: string }
         Returns: string
