@@ -204,21 +204,19 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
 type SortMode = 'attention' | 'chronological';
 type FilterMode = 'all' | 'absent' | 'late' | 'incomplete' | 'edited' | 'unapproved';
 
-function exportCsv(
+function exportToExcel(
   sortedEntries: { entry: TimeEntryRow; isAbsent: boolean; isIncomplete: boolean; isLate: boolean; minutesLate: number; hasEdits: boolean; tardyApproval: string }[],
   tardyMap: Map<string, TardyRow>,
 ) {
-  const headers = ['Date', 'Day', 'Total HH:MM', 'Total Hours', 'Location', 'Status', 'Minutes Late', 'Tardy Status', 'Comment', 'Punch In 1', 'Punch Out 1', 'Punch In 2', 'Punch Out 2', 'Punch In 3', 'Punch Out 3'];
+  const XLSX = await import('xlsx');
 
-  const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
-
-  const rows = sortedEntries
+  const data = sortedEntries
     .sort((a, b) => a.entry.entry_date.localeCompare(b.entry.entry_date))
     .map(({ entry, isAbsent, isIncomplete, isLate, minutesLate }) => {
       const d = new Date(entry.entry_date + 'T00:00:00');
       const day = d.toLocaleDateString('en-US', { weekday: 'short' });
       const totalHHMM = entry.total_minutes != null ? minutesToHHMM(entry.total_minutes) : '';
-      const totalHrs = entry.total_minutes != null ? (entry.total_minutes / 60).toFixed(2) : '';
+      const totalHrs = entry.total_minutes != null ? Number((entry.total_minutes / 60).toFixed(2)) : '';
       const location = entry.is_remote ? 'Remote' : 'On-site';
       const status = isAbsent ? 'Absent' : isIncomplete ? 'Incomplete' : isLate ? 'Late' : 'OK';
       const tardy = tardyMap.get(entry.entry_date);
@@ -226,23 +224,36 @@ function exportCsv(
       const comment = entry.entry_comment || '';
 
       const punches = (entry.punches || []).sort((a, b) => new Date(a.punch_time).getTime() - new Date(b.punch_time).getTime());
-      const punchCols: string[] = [];
+      const punchCols: Record<string, string> = {};
       for (let i = 0; i < 6; i++) {
-        punchCols.push(punches[i] ? formatTime(punches[i].punch_time) : '');
+        const label = i % 2 === 0 ? `Punch In ${Math.floor(i / 2) + 1}` : `Punch Out ${Math.floor(i / 2) + 1}`;
+        punchCols[label] = punches[i] ? formatTime(punches[i].punch_time) : '';
       }
 
-      return [entry.entry_date, day, totalHHMM, totalHrs, location, status, isLate ? String(minutesLate) : '', tardyStatus, comment, ...punchCols].map(esc).join(',');
+      return {
+        Date: entry.entry_date,
+        Day: day,
+        'Total HH:MM': totalHHMM,
+        'Total Hours': totalHrs,
+        Location: location,
+        Status: status,
+        'Minutes Late': isLate ? minutesLate : '',
+        'Tardy Status': tardyStatus,
+        Comment: comment,
+        ...punchCols,
+      };
     });
 
-  const bom = '\uFEFF';
-  const csv = bom + [headers.map(esc).join(','), ...rows].join('\r\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `timesheet-export.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const ws = XLSX.utils.json_to_sheet(data);
+  // Auto-size columns
+  const colWidths = Object.keys(data[0] || {}).map(key => ({
+    wch: Math.max(key.length, ...data.map(r => String((r as any)[key] || '').length)) + 2,
+  }));
+  ws['!cols'] = colWidths;
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Timesheet');
+  XLSX.writeFile(wb, 'timesheet-export.xlsx');
 }
 
 export default function Timesheet() {
