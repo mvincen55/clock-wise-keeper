@@ -115,12 +115,10 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
           ) : '—'}
         </td>
         <td className="px-4 py-3">
-          <span className={`text-xs px-2 py-0.5 rounded ${entry.is_remote ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
-            {entry.is_remote ? 'Remote' : 'On-site'}
-          </span>
-        </td>
-        <td className="px-4 py-3">
           <div className="flex items-center gap-1.5 flex-wrap">
+            <span className={`text-xs px-2 py-0.5 rounded ${entry.is_remote ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+              {entry.is_remote ? 'Remote' : 'On-site'}
+            </span>
             {isAbsent && <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">Absent</span>}
             {isIncomplete && <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">Incomplete</span>}
             {isLate && (
@@ -133,8 +131,10 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
                 <Pencil className="h-3 w-3" /> Edited
               </span>
             )}
-            {entry.entry_comment && <span className="text-xs text-muted-foreground" title={entry.entry_comment}>💬</span>}
           </div>
+        </td>
+        <td className="px-4 py-3 text-xs text-muted-foreground truncate max-w-[200px]" title={entry.entry_comment || ''}>
+          {entry.entry_comment || ''}
         </td>
       </tr>
       {expanded && (
@@ -428,7 +428,7 @@ export default function Timesheet() {
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Total</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Location</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Comment</th>
               </tr>
             </thead>
             <tbody className="divide-y">
