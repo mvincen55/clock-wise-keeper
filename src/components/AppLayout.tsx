@@ -2,7 +2,7 @@ import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Clock, LayoutDashboard, Table2, CalendarDays, FileText, LogOut, Menu, X, MapPin, Settings, ShieldCheck, Send, CheckSquare } from 'lucide-react';
+import { Clock, LayoutDashboard, Table2, CalendarDays, FileText, LogOut, Menu, X, MapPin, Settings, ShieldCheck, Send, CheckSquare, Users } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 
 const coreNavItems = [
@@ -25,7 +25,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
   const navItems = [
     ...coreNavItems,
-    ...(isManager ? [{ to: '/approvals', icon: CheckSquare, label: 'Approvals' }] : []),
+    ...(isManager ? [
+      { to: '/team', icon: Users, label: 'Team' },
+      { to: '/approvals', icon: CheckSquare, label: 'Approvals' },
+    ] : []),
   ];
 
   return (
