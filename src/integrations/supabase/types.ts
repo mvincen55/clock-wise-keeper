@@ -453,6 +453,86 @@ export type Database = {
           },
         ]
       }
+      schedule_versions: {
+        Row: {
+          apply_to_remote: boolean
+          created_at: string
+          effective_end_date: string | null
+          effective_start_date: string
+          id: string
+          name: string | null
+          timezone: string
+          updated_at: string
+          user_id: string
+          week_start_day: number
+        }
+        Insert: {
+          apply_to_remote?: boolean
+          created_at?: string
+          effective_end_date?: string | null
+          effective_start_date: string
+          id?: string
+          name?: string | null
+          timezone?: string
+          updated_at?: string
+          user_id: string
+          week_start_day?: number
+        }
+        Update: {
+          apply_to_remote?: boolean
+          created_at?: string
+          effective_end_date?: string | null
+          effective_start_date?: string
+          id?: string
+          name?: string | null
+          timezone?: string
+          updated_at?: string
+          user_id?: string
+          week_start_day?: number
+        }
+        Relationships: []
+      }
+      schedule_weekdays: {
+        Row: {
+          enabled: boolean
+          end_time: string
+          grace_minutes: number
+          id: string
+          schedule_version_id: string
+          start_time: string
+          threshold_minutes: number
+          weekday: number
+        }
+        Insert: {
+          enabled?: boolean
+          end_time?: string
+          grace_minutes?: number
+          id?: string
+          schedule_version_id: string
+          start_time?: string
+          threshold_minutes?: number
+          weekday: number
+        }
+        Update: {
+          enabled?: boolean
+          end_time?: string
+          grace_minutes?: number
+          id?: string
+          schedule_version_id?: string
+          start_time?: string
+          threshold_minutes?: number
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_weekdays_schedule_version_id_fkey"
+            columns: ["schedule_version_id"]
+            isOneToOne: false
+            referencedRelation: "schedule_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tardies: {
         Row: {
           actual_start_time: string
@@ -652,8 +732,29 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_schedule_for_date: {
+        Args: { p_date: string; p_user_id: string }
+        Returns: {
+          apply_to_remote: boolean
+          effective_end_date: string
+          effective_start_date: string
+          enabled: boolean
+          end_time: string
+          grace_minutes: number
+          start_time: string
+          threshold_minutes: number
+          timezone: string
+          version_id: string
+          version_name: string
+          weekday: number
+        }[]
+      }
       is_allowed_user: { Args: never; Returns: boolean }
       user_owns_import: { Args: { _import_id: string }; Returns: boolean }
+      user_owns_schedule_version: {
+        Args: { _version_id: string }
+        Returns: boolean
+      }
       user_owns_time_entry: { Args: { _entry_id: string }; Returns: boolean }
     }
     Enums: {

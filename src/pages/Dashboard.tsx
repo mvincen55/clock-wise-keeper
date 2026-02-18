@@ -4,13 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Clock, LogIn, LogOut, Coffee, Play, Loader2 } from 'lucide-react';
+import { Clock, LogIn, LogOut, Coffee, Play, Loader2, Settings as SettingsIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useGeoTracking } from '@/hooks/useGeoTracking';
 import { LocationStatusPanel } from '@/components/LocationStatusPanel';
 import { useWorkZones } from '@/hooks/useWorkZones';
 import { useMissingShifts } from '@/hooks/useMissingShifts';
 import { MissingShiftBanner } from '@/components/MissingShiftBanner';
+import { Link } from 'react-router-dom';
 
 type ClockStatus = 'clocked_out' | 'clocked_in' | 'on_break';
 
@@ -70,6 +71,16 @@ export default function Dashboard() {
       <div>
         <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground">{formatDate(now)}</p>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="flex gap-2">
+        <Link to="/settings#work-schedule">
+          <Button variant="outline" size="sm">
+            <SettingsIcon className="mr-2 h-4 w-4" />
+            Edit Schedule
+          </Button>
+        </Link>
       </div>
 
       {/* Missing Shift Banner */}
