@@ -51,6 +51,7 @@ export type Database = {
           schedule_expected_end: string | null
           schedule_expected_start: string | null
           tardy_approval_status: string | null
+          timezone_suspect: boolean
           user_id: string
         }
         Insert: {
@@ -71,6 +72,7 @@ export type Database = {
           schedule_expected_end?: string | null
           schedule_expected_start?: string | null
           tardy_approval_status?: string | null
+          timezone_suspect?: boolean
           user_id: string
         }
         Update: {
@@ -91,6 +93,7 @@ export type Database = {
           schedule_expected_end?: string | null
           schedule_expected_start?: string | null
           tardy_approval_status?: string | null
+          timezone_suspect?: boolean
           user_id?: string
         }
         Relationships: []
@@ -385,6 +388,7 @@ export type Database = {
           id: string
           missing_shift_buffer_minutes: number
           pay_period_type: string
+          timezone: string
           updated_at: string
           user_id: string
           week_start_day: number
@@ -394,6 +398,7 @@ export type Database = {
           id?: string
           missing_shift_buffer_minutes?: number
           pay_period_type?: string
+          timezone?: string
           updated_at?: string
           user_id: string
           week_start_day?: number
@@ -403,6 +408,7 @@ export type Database = {
           id?: string
           missing_shift_buffer_minutes?: number
           pay_period_type?: string
+          timezone?: string
           updated_at?: string
           user_id?: string
           week_start_day?: number
@@ -730,6 +736,7 @@ export type Database = {
           reason_text: string | null
           resolved: boolean
           time_entry_id: string | null
+          timezone_suspect: boolean
           updated_at: string
           user_id: string
         }
@@ -746,6 +753,7 @@ export type Database = {
           reason_text?: string | null
           resolved?: boolean
           time_entry_id?: string | null
+          timezone_suspect?: boolean
           updated_at?: string
           user_id: string
         }
@@ -762,6 +770,7 @@ export type Database = {
           reason_text?: string | null
           resolved?: boolean
           time_entry_id?: string | null
+          timezone_suspect?: boolean
           updated_at?: string
           user_id?: string
         }
