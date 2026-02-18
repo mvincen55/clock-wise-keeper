@@ -81,6 +81,15 @@ serve(async (req) => {
 
     const lowConfidence = accuracy != null && accuracy > 100;
 
+    // Resolve user's timezone for local date calculation
+    const { data: tzData } = await supabase.rpc('get_user_timezone', { p_user_id: user.id });
+    const userTz = tzData || 'America/New_York';
+
+    // Compute today's date in the user's local timezone (not UTC!)
+    const nowMs = new Date(now).getTime();
+    const localDateStr = new Date(now).toLocaleString('en-CA', { timeZone: userTz }).split(',')[0]; // YYYY-MM-DD format
+    const today = localDateStr;
+
     // Get active work zones for user (RLS enforces ownership)
     const { data: zones } = await supabase
       .from("work_zones")
@@ -139,7 +148,7 @@ serve(async (req) => {
     let reason = "no_status_change";
     let punchId: string | null = null;
 
-    const today = now.split("T")[0];
+    // today is already computed above using user's local timezone
 
     if (zoneStatus === "entered" && matchedZone) {
       const delayMs = (matchedZone.enter_delay_minutes || 2) * 60000;
