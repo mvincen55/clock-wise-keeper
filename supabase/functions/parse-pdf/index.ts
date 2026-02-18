@@ -7,10 +7,43 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const MAX_PDF_BASE64_LENGTH = 10 * 1024 * 1024; // ~10MB base64
+const MAX_FILENAME_LENGTH = 255;
+
+function validateParsePdfInput(body: any): { pdfBase64: string; filename: string } {
+  if (!body || typeof body !== "object") throw new Error("Invalid request body");
+
+  const { pdfBase64, filename } = body;
+
+  if (typeof pdfBase64 !== "string" || pdfBase64.length < 100) {
+    throw new Error("Invalid or missing PDF data");
+  }
+  if (pdfBase64.length > MAX_PDF_BASE64_LENGTH) {
+    throw new Error("PDF file too large (max ~7.5MB)");
+  }
+  if (!/^[A-Za-z0-9+/=\s]+$/.test(pdfBase64)) {
+    throw new Error("Invalid base64 encoding");
+  }
+
+  const sanitizedFilename = typeof filename === "string"
+    ? filename.replace(/[^a-zA-Z0-9._\- ]/g, "_").substring(0, MAX_FILENAME_LENGTH)
+    : "uploaded.pdf";
+
+  return { pdfBase64, filename: sanitizedFilename };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    // Size limit check
+    const contentLength = req.headers.get("content-length");
+    if (contentLength && parseInt(contentLength) > 15 * 1024 * 1024) {
+      return new Response(JSON.stringify({ error: "Request too large" }), {
+        status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("Missing authorization");
 
@@ -23,11 +56,11 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) throw new Error("Unauthorized");
 
-    const { pdfBase64, filename } = await req.json();
-    if (!pdfBase64) throw new Error("No PDF data provided");
+    const rawBody = await req.json();
+    const { pdfBase64, filename } = validateParsePdfInput(rawBody);
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    if (!LOVABLE_API_KEY) throw new Error("Server configuration error");
 
     // Use Gemini with vision to extract data from the PDF
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -112,7 +145,7 @@ Rules:
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      throw new Error(`AI request failed: ${aiResponse.status}`);
+      throw new Error("AI processing failed");
     }
 
     const aiData = await aiResponse.json();
@@ -124,7 +157,6 @@ Rules:
       const jsonStr = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
       parsed = JSON.parse(jsonStr);
     } catch {
-      // Store raw text as fallback
       return new Response(
         JSON.stringify({
           success: false,
@@ -140,7 +172,7 @@ Rules:
       .from("imports")
       .insert({
         user_id: user.id,
-        filename: filename || "uploaded.pdf",
+        filename: filename,
         status: "previewing",
         report_range_start: parsed.report_range_start || null,
         report_range_end: parsed.report_range_end || null,
@@ -170,7 +202,6 @@ Rules:
         });
       }
 
-      // If payroll total exists, add a summary row
       if (emp.payroll_total_hhmm) {
         rows.push({
           import_id: importRecord.id,
@@ -205,7 +236,7 @@ Rules:
   } catch (err) {
     console.error("parse-pdf error:", err);
     return new Response(
-      JSON.stringify({ error: err.message || "Internal error" }),
+      JSON.stringify({ error: "An error occurred processing your PDF. Please try again." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

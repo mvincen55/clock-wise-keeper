@@ -21,6 +21,42 @@ function haversineDistance(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function validateLocationInput(body: any): { lat: number; lng: number; accuracy: number | null; timestamp: string } {
+  if (!body || typeof body !== "object") throw new Error("Invalid request body");
+
+  const { lat, lng, accuracy, timestamp } = body;
+
+  if (typeof lat !== "number" || lat < -90 || lat > 90) {
+    throw new Error("Invalid latitude (must be -90 to 90)");
+  }
+  if (typeof lng !== "number" || lng < -180 || lng > 180) {
+    throw new Error("Invalid longitude (must be -180 to 180)");
+  }
+
+  let validatedAccuracy: number | null = null;
+  if (accuracy != null) {
+    if (typeof accuracy !== "number" || accuracy < 0 || accuracy > 10000) {
+      throw new Error("Invalid accuracy (must be 0-10000)");
+    }
+    validatedAccuracy = accuracy;
+  }
+
+  let validatedTimestamp = new Date().toISOString();
+  if (timestamp) {
+    const ts = new Date(timestamp);
+    if (isNaN(ts.getTime())) throw new Error("Invalid timestamp format");
+    const now = Date.now();
+    const dayAgo = now - 86400000;
+    const hourAhead = now + 3600000;
+    if (ts.getTime() < dayAgo || ts.getTime() > hourAhead) {
+      throw new Error("Timestamp out of acceptable range");
+    }
+    validatedTimestamp = ts.toISOString();
+  }
+
+  return { lat, lng, accuracy: validatedAccuracy, timestamp: validatedTimestamp };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -29,21 +65,22 @@ serve(async (req) => {
     if (!authHeader) throw new Error("Missing authorization");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Get user from JWT
-    const anonClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!);
-    const { data: { user }, error: authError } = await anonClient.auth.getUser(authHeader.replace("Bearer ", ""));
+    // Use anon key with user's auth context - respects RLS
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) throw new Error("Unauthorized");
 
-    const { lat, lng, accuracy, timestamp } = await req.json();
-    if (lat == null || lng == null) throw new Error("lat and lng required");
+    const rawBody = await req.json();
+    const { lat, lng, accuracy, timestamp: now } = validateLocationInput(rawBody);
 
     const lowConfidence = accuracy != null && accuracy > 100;
-    const now = timestamp || new Date().toISOString();
 
-    // Get active work zones for user
+    // Get active work zones for user (RLS enforces ownership)
     const { data: zones } = await supabase
       .from("work_zones")
       .select("*")
@@ -104,18 +141,16 @@ serve(async (req) => {
     const today = now.split("T")[0];
 
     if (zoneStatus === "entered" && matchedZone) {
-      // Check delay: was the last event recent enough to ignore?
       const delayMs = (matchedZone.enter_delay_minutes || 2) * 60000;
       if (lastEvent) {
         const timeSinceLast = new Date(now).getTime() - new Date(lastEvent.created_at).getTime();
         if (timeSinceLast < delayMs) {
           reason = "enter_delay_not_met";
-          zoneStatus = "inside"; // Don't trigger yet
+          zoneStatus = "inside";
         }
       }
 
       if (zoneStatus === "entered") {
-        // Check if already clocked in today
         const { data: todayEntry } = await supabase
           .from("time_entries")
           .select("id")
@@ -124,7 +159,6 @@ serve(async (req) => {
           .maybeSingle();
 
         if (todayEntry) {
-          // Check last punch
           const { data: lastPunch } = await supabase
             .from("punches")
             .select("punch_type")
@@ -137,14 +171,12 @@ serve(async (req) => {
             actionTaken = "none";
             reason = "already_clocked_in";
           } else {
-            // Clock in
             const result = await createAutoPunch(supabase, user.id, today, "in", now, lowConfidence, lat, lng, todayEntry.id);
             actionTaken = "auto_clock_in";
             reason = "entered_zone";
             punchId = result.punchId;
           }
         } else {
-          // Create entry + clock in
           const result = await createAutoPunch(supabase, user.id, today, "in", now, lowConfidence, lat, lng, null);
           actionTaken = "auto_clock_in";
           reason = "entered_zone";
@@ -152,8 +184,7 @@ serve(async (req) => {
         }
       }
     } else if (zoneStatus === "exited") {
-      // Check exit delay
-      const exitZone = matchedZone || zones[0]; // Use last known zone
+      const exitZone = matchedZone || zones[0];
       const delayMs = (exitZone?.exit_delay_minutes || 5) * 60000;
       if (lastEvent) {
         const timeSinceLast = new Date(now).getTime() - new Date(lastEvent.created_at).getTime();
@@ -164,7 +195,6 @@ serve(async (req) => {
       }
 
       if (zoneStatus === "exited") {
-        // Check if clocked in today
         const { data: todayEntry } = await supabase
           .from("time_entries")
           .select("id")
@@ -219,7 +249,7 @@ serve(async (req) => {
 
   } catch (e) {
     console.error("process-location-event error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+    return new Response(JSON.stringify({ error: "An error occurred processing your location. Please try again." }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
