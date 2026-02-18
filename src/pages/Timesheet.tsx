@@ -16,7 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table2, ChevronDown, ChevronRight, Loader2, MapPin, Save, AlertTriangle, Filter, Pencil, ArrowUpDown } from 'lucide-react';
+import { Table2, ChevronDown, ChevronRight, Loader2, MapPin, Save, AlertTriangle, Filter, Pencil, ArrowUpDown, Download } from 'lucide-react';
 import { EditAuditDialog } from '@/components/EditAuditDialog';
 import { TardyReasonModal } from '@/components/TardyReasonModal';
 import { PunchEditorModal } from '@/components/PunchEditorModal';
@@ -203,6 +203,43 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
 
 type SortMode = 'attention' | 'chronological';
 type FilterMode = 'all' | 'absent' | 'late' | 'incomplete' | 'edited' | 'unapproved';
+
+function exportCsv(
+  sortedEntries: { entry: TimeEntryRow; isAbsent: boolean; isIncomplete: boolean; isLate: boolean; minutesLate: number; hasEdits: boolean; tardyApproval: string }[],
+  tardyMap: Map<string, TardyRow>,
+) {
+  const headers = ['Date', 'Day', 'Total HH:MM', 'Total Hours', 'Location', 'Status', 'Minutes Late', 'Tardy Status', 'Comment', 'Punch In', 'Punch Out', 'Punch In 2', 'Punch Out 2', 'Punch In 3', 'Punch Out 3'];
+  const rows = sortedEntries
+    .sort((a, b) => a.entry.entry_date.localeCompare(b.entry.entry_date))
+    .map(({ entry, isAbsent, isIncomplete, isLate, minutesLate }) => {
+      const d = new Date(entry.entry_date + 'T00:00:00');
+      const day = d.toLocaleDateString('en-US', { weekday: 'short' });
+      const totalHHMM = entry.total_minutes != null ? minutesToHHMM(entry.total_minutes) : '';
+      const totalHrs = entry.total_minutes != null ? (entry.total_minutes / 60).toFixed(2) : '';
+      const location = entry.is_remote ? 'Remote' : 'On-site';
+      const status = isAbsent ? 'Absent' : isIncomplete ? 'Incomplete' : isLate ? 'Late' : 'OK';
+      const tardy = tardyMap.get(entry.entry_date);
+      const tardyStatus = tardy ? tardy.approval_status : '';
+      const comment = (entry.entry_comment || '').replace(/"/g, '""');
+
+      const punches = (entry.punches || []).sort((a, b) => new Date(a.punch_time).getTime() - new Date(b.punch_time).getTime());
+      const punchCols: string[] = [];
+      for (let i = 0; i < 6; i++) {
+        punchCols.push(punches[i] ? formatTime(punches[i].punch_time) : '');
+      }
+
+      return [entry.entry_date, day, totalHHMM, totalHrs, location, status, isLate ? String(minutesLate) : '', tardyStatus, `"${comment}"`, ...punchCols];
+    });
+
+  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `timesheet-export.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function Timesheet() {
   const { user } = useAuth();
@@ -415,6 +452,9 @@ export default function Timesheet() {
               <span className="text-xs text-muted-foreground">Total: </span>
               <span className="time-display font-semibold text-primary">{minutesToHHMM(totalMinutes)}</span>
             </div>
+            <Button variant="outline" size="sm" onClick={() => exportCsv(sortedEntries, tardyMap)}>
+              <Download className="h-3.5 w-3.5 mr-1" /> Export CSV
+            </Button>
           </div>
         </CardContent>
       </Card>
