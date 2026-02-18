@@ -3,6 +3,7 @@ import { MissingShiftDay } from '@/hooks/useMissingShifts';
 import { useCreateException, useResolveException } from '@/hooks/useAttendanceExceptions';
 import { useAddDayOff } from '@/hooks/useDaysOff';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrgContext } from '@/hooks/useOrgContext';
 import { supabase } from '@/integrations/supabase/client';
 import { formatDate } from '@/lib/time-utils';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,6 +28,7 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
   const resolveException = useResolveException();
   const addDayOff = useAddDayOff();
   const { user } = useAuth();
+  const { data: org } = useOrgContext();
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -35,7 +37,7 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
   if (!openDays.length) return null;
 
   const handleAction = async () => {
-    if (!actionDay || !action || !user) return;
+    if (!actionDay || !action || !user || !org) return;
 
     // Ensure exception record exists
     if (!actionDay.exception) {
@@ -76,6 +78,8 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
 
         const { data: entry, error: entryErr } = await supabase.from('time_entries').insert({
           user_id: user.id,
+          org_id: org.org_id,
+          employee_id: org.employee_id,
           entry_date: actionDay.date,
           source: 'manual' as const,
           is_remote: action === 'remote',
@@ -85,13 +89,15 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
         if (entryErr) throw entryErr;
 
         await supabase.from('punches').insert([
-          { time_entry_id: entry.id, seq: 0, punch_type: 'in' as const, punch_time: (() => { inTime.setSeconds(0, 0); return inTime.toISOString(); })(), source: 'manual' as const },
-          { time_entry_id: entry.id, seq: 1, punch_type: 'out' as const, punch_time: (() => { outTime.setSeconds(0, 0); return outTime.toISOString(); })(), source: 'manual' as const },
+          { time_entry_id: entry.id, seq: 0, punch_type: 'in' as const, punch_time: (() => { inTime.setSeconds(0, 0); return inTime.toISOString(); })(), source: 'manual' as const, employee_id: org.employee_id, org_id: org.org_id },
+          { time_entry_id: entry.id, seq: 1, punch_type: 'out' as const, punch_time: (() => { outTime.setSeconds(0, 0); return outTime.toISOString(); })(), source: 'manual' as const, employee_id: org.employee_id, org_id: org.org_id },
         ]);
 
         // Audit
         await supabase.from('audit_events').insert({
           user_id: user.id,
+          org_id: org.org_id,
+          employee_id: org.employee_id,
           event_type: 'missing_shift_resolved',
           event_details: { action, reason, date: actionDay.date } as any,
           related_date: actionDay.date,
@@ -125,6 +131,8 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
         // Also add audit
         await supabase.from('audit_events').insert({
           user_id: user.id,
+          org_id: org.org_id,
+          employee_id: org.employee_id,
           event_type: 'missing_shift_' + action,
           event_details: { reason, date: actionDay.date } as any,
           related_date: actionDay.date,
