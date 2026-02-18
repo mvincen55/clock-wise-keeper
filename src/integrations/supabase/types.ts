@@ -463,6 +463,114 @@ export type Database = {
         }
         Relationships: []
       }
+      pto_ledger_weeks: {
+        Row: {
+          accrual_credited: number
+          calculated_accrual: number
+          created_at: string
+          id: string
+          period_end: string
+          period_start: string
+          pto_taken_hours: number
+          running_balance: number
+          tier_rate: number
+          user_id: string
+          weekly_cap: number
+          worked_hours_capped: number
+          worked_hours_raw: number
+        }
+        Insert: {
+          accrual_credited?: number
+          calculated_accrual?: number
+          created_at?: string
+          id?: string
+          period_end: string
+          period_start: string
+          pto_taken_hours?: number
+          running_balance?: number
+          tier_rate?: number
+          user_id: string
+          weekly_cap?: number
+          worked_hours_capped?: number
+          worked_hours_raw?: number
+        }
+        Update: {
+          accrual_credited?: number
+          calculated_accrual?: number
+          created_at?: string
+          id?: string
+          period_end?: string
+          period_start?: string
+          pto_taken_hours?: number
+          running_balance?: number
+          tier_rate?: number
+          user_id?: string
+          weekly_cap?: number
+          worked_hours_capped?: number
+          worked_hours_raw?: number
+        }
+        Relationships: []
+      }
+      pto_settings: {
+        Row: {
+          allow_negative: boolean
+          created_at: string
+          hire_date: string
+          id: string
+          max_balance: number
+          timezone: string
+          updated_at: string
+          user_id: string
+          worked_hours_cap_weekly: number
+        }
+        Insert: {
+          allow_negative?: boolean
+          created_at?: string
+          hire_date?: string
+          id?: string
+          max_balance?: number
+          timezone?: string
+          updated_at?: string
+          user_id: string
+          worked_hours_cap_weekly?: number
+        }
+        Update: {
+          allow_negative?: boolean
+          created_at?: string
+          hire_date?: string
+          id?: string
+          max_balance?: number
+          timezone?: string
+          updated_at?: string
+          user_id?: string
+          worked_hours_cap_weekly?: number
+        }
+        Relationships: []
+      }
+      pto_snapshots: {
+        Row: {
+          created_at: string
+          id: string
+          snapshot_balance_hours: number
+          snapshot_date: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          snapshot_balance_hours?: number
+          snapshot_date: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          snapshot_balance_hours?: number
+          snapshot_date?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       punches: {
         Row: {
           created_at: string
