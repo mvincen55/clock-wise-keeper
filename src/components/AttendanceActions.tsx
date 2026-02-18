@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useAddDayOff } from '@/hooks/useDaysOff';
@@ -14,14 +14,20 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Plus, CalendarOff, Building2, EyeOff, Pencil, Loader2 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { MoreHorizontal, Plus, CalendarOff, Building2, EyeOff, Pencil, Loader2, CalendarPlus, Stethoscope, CalendarMinus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
 type ActionType = 'add_punches' | 'mark_day_off' | 'mark_closed' | 'ignore' | null;
 
-export function AttendanceActions({ row }: { row: AttendanceDayStatusRow }) {
+interface AttendanceActionsProps {
+  row: AttendanceDayStatusRow;
+  /** If true, show actions even on rows without issues (for quick-add from any row) */
+  alwaysShow?: boolean;
+}
+
+export function AttendanceActions({ row, alwaysShow = false }: AttendanceActionsProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -53,10 +59,20 @@ export function AttendanceActions({ row }: { row: AttendanceDayStatusRow }) {
   const [ignoreReason, setIgnoreReason] = useState('');
 
   const hasIssue = row.is_absent || row.is_incomplete || (row.is_late && row.tardy_approval_status === 'unreviewed') || row.timezone_suspect;
-  if (!hasIssue) return null;
+  
+  // If alwaysShow is false, only render when there's an issue
+  if (!alwaysShow && !hasIssue) return null;
+
+  const openDayOffWithType = (type: string) => {
+    setDayOffForm({ type, hours: '0', notes: '', reason: '' });
+    setAction('mark_day_off');
+  };
+
+  const requiresNotes = dayOffForm.type === 'medical_leave' || dayOffForm.type === 'unscheduled';
 
   const handleMarkDayOff = async () => {
     if (!dayOffForm.reason.trim()) return;
+    if (requiresNotes && !dayOffForm.notes.trim()) return;
     try {
       await addDayOff.mutateAsync({
         date_start: row.entry_date,
@@ -82,7 +98,6 @@ export function AttendanceActions({ row }: { row: AttendanceDayStatusRow }) {
         is_full_day: closureForm.is_full_day,
         hours: parseFloat(closureForm.hours) || 8,
       });
-      // Log audit
       if (user) {
         await supabase.from('audit_events').insert({
           user_id: user.id,
@@ -102,9 +117,7 @@ export function AttendanceActions({ row }: { row: AttendanceDayStatusRow }) {
   const handleIgnore = async () => {
     if (!ignoreReason.trim()) return;
     try {
-      // Create exception if not exists, then ignore it
       await createException.mutateAsync({ exception_date: row.entry_date, type: 'other' });
-      // Get the exception we just created
       const { data: exceptions } = await supabase
         .from('attendance_exceptions')
         .select('id')
@@ -127,6 +140,13 @@ export function AttendanceActions({ row }: { row: AttendanceDayStatusRow }) {
     }
   };
 
+  const dayOffTypeLabel: Record<string, string> = {
+    scheduled_with_notice: 'Scheduled w/ Notice',
+    unscheduled: 'Unscheduled',
+    medical_leave: 'Medical Leave',
+    other: 'Other',
+  };
+
   return (
     <>
       <DropdownMenu>
@@ -136,28 +156,37 @@ export function AttendanceActions({ row }: { row: AttendanceDayStatusRow }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          {(row.is_absent || row.is_incomplete) && (
-            <DropdownMenuItem onClick={() => {
-              if (row.is_absent) {
-                navigate(`/timesheet?date=${row.entry_date}`);
-              } else {
-                setPunchEditorOpen(true);
-              }
-            }}>
-              <Pencil className="h-3.5 w-3.5 mr-2" />
-              {row.is_absent ? 'Add Punches' : 'Edit Punches'}
-            </DropdownMenuItem>
-          )}
+          {/* Quick-add day off options */}
+          <DropdownMenuItem onClick={() => openDayOffWithType('scheduled_with_notice')}>
+            <CalendarPlus className="h-3.5 w-3.5 mr-2" />
+            Add Scheduled Day Off
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => openDayOffWithType('unscheduled')}>
+            <CalendarMinus className="h-3.5 w-3.5 mr-2" />
+            Add Unscheduled Day Off
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => openDayOffWithType('medical_leave')}>
+            <Stethoscope className="h-3.5 w-3.5 mr-2" />
+            Add Medical Leave
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setAction('mark_closed')}>
+            <Building2 className="h-3.5 w-3.5 mr-2" />
+            Add Closure
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => {
+            if (row.is_absent) {
+              navigate(`/timesheet?date=${row.entry_date}`);
+            } else {
+              setPunchEditorOpen(true);
+            }
+          }}>
+            <Pencil className="h-3.5 w-3.5 mr-2" />
+            {row.is_absent ? 'Add Punches' : 'Add/Edit Punches'}
+          </DropdownMenuItem>
           {row.is_absent && (
             <>
-              <DropdownMenuItem onClick={() => setAction('mark_day_off')}>
-                <CalendarOff className="h-3.5 w-3.5 mr-2" />
-                Mark as Day Off
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setAction('mark_closed')}>
-                <Building2 className="h-3.5 w-3.5 mr-2" />
-                Mark Office Closed
-              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setAction('ignore')}>
                 <EyeOff className="h-3.5 w-3.5 mr-2" />
                 Ignore (with reason)
@@ -167,7 +196,7 @@ export function AttendanceActions({ row }: { row: AttendanceDayStatusRow }) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Punch Editor - only available when entry exists (incomplete rows) */}
+      {/* Punch Editor */}
       {!row.is_absent && (
         <PunchEditorModal
           open={punchEditorOpen}
@@ -197,17 +226,21 @@ export function AttendanceActions({ row }: { row: AttendanceDayStatusRow }) {
             </div>
             <div className="space-y-1">
               <Label>Hours (optional)</Label>
-              <Input type="number" value={dayOffForm.hours} onChange={e => setDayOffForm({ ...dayOffForm, hours: e.target.value })} placeholder="8" />
+              <Input type="number" value={dayOffForm.hours} onChange={e => setDayOffForm({ ...dayOffForm, hours: e.target.value })} placeholder="0" />
             </div>
             <div className="space-y-1">
-              <Label>Notes</Label>
-              <Textarea value={dayOffForm.notes} onChange={e => setDayOffForm({ ...dayOffForm, notes: e.target.value })} placeholder="Optional notes" />
+              <Label>Notes{requiresNotes ? <span className="text-destructive"> *</span> : ' (optional)'}</Label>
+              <Textarea value={dayOffForm.notes} onChange={e => setDayOffForm({ ...dayOffForm, notes: e.target.value })} placeholder={requiresNotes ? 'Required: describe the reason' : 'Optional notes'} />
             </div>
             <div className="space-y-1">
               <Label>Reason <span className="text-destructive">*</span></Label>
               <Textarea value={dayOffForm.reason} onChange={e => setDayOffForm({ ...dayOffForm, reason: e.target.value })} placeholder="Required: why this day is off" />
             </div>
-            <Button onClick={handleMarkDayOff} disabled={!dayOffForm.reason.trim() || addDayOff.isPending} className="w-full">
+            <Button
+              onClick={handleMarkDayOff}
+              disabled={!dayOffForm.reason.trim() || (requiresNotes && !dayOffForm.notes.trim()) || addDayOff.isPending}
+              className="w-full"
+            >
               {addDayOff.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save Day Off
             </Button>
