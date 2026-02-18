@@ -11,9 +11,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileText, Printer } from 'lucide-react';
+import { FileText, Printer, Download } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 type ReportType = 'weekly' | 'pay_period' | 'monthly' | 'pto' | 'tardy' | 'attendance_exceptions';
+
+// Map UI report type to export-report edge function report_type
+const exportTypeMap: Record<ReportType, string | null> = {
+  weekly: 'timesheet',
+  pay_period: 'timesheet',
+  monthly: 'timesheet',
+  pto: 'pto',
+  tardy: 'exceptions',
+  attendance_exceptions: 'exceptions',
+};
 
 export default function Reports() {
   const { data: payrollSettings } = usePayrollSettings();
@@ -37,6 +49,7 @@ export default function Reports() {
   const [showAuditTrail, setShowAuditTrail] = useState(false);
   const [showLateFlags, setShowLateFlags] = useState(true);
   const [showTardyReasons, setShowTardyReasons] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const { data: entries } = useTimeEntries(startDate || undefined, endDate || undefined);
   const { data: daysOff } = useDaysOff();
@@ -57,12 +70,56 @@ export default function Reports() {
 
   const handlePrint = () => window.print();
 
+  const handleDownloadCsv = async (overrideType?: string) => {
+    const exportType = overrideType || exportTypeMap[reportType];
+    if (!exportType || !startDate || !endDate) return;
+
+    setDownloading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('Not authenticated');
+        return;
+      }
+
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const url = `https://${projectId}.supabase.co/functions/v1/export-report?report_type=${exportType}&start_date=${startDate}&end_date=${endDate}`;
+
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Download failed' }));
+        throw new Error(err.error || 'Download failed');
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `${exportType}_${startDate}_${endDate}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(downloadUrl);
+      toast.success('CSV downloaded');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Download failed');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
       <div className="no-print">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Reports</h1>
-          <p className="text-muted-foreground">Generate printable time reports</p>
+          <p className="text-muted-foreground">Generate printable time reports & export CSV</p>
         </div>
 
         <Card className="card-elevated mt-4">
@@ -109,10 +166,31 @@ export default function Reports() {
                 </>
               )}
             </div>
-            <Button onClick={handleGenerate} disabled={!startDate || !endDate}>
-              <FileText className="mr-2 h-4 w-4" />
-              Generate Report
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={handleGenerate} disabled={!startDate || !endDate}>
+                <FileText className="mr-2 h-4 w-4" />
+                Generate Report
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleDownloadCsv()}
+                disabled={!startDate || !endDate || downloading}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                {downloading ? 'Downloading…' : 'Download CSV'}
+              </Button>
+              {showAuditTrail && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDownloadCsv('audit')}
+                  disabled={!startDate || !endDate || downloading}
+                >
+                  <Download className="mr-2 h-3 w-3" />
+                  Audit Trail CSV
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

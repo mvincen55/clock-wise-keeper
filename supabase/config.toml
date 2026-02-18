@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.process-location-event]
 verify_jwt = false
+
+[functions.export-report]
+verify_jwt = false
