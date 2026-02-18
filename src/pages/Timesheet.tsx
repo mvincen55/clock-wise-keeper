@@ -150,12 +150,14 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
               {punches.length === 0 && <p className="text-sm text-muted-foreground">No punches recorded</p>}
               {punches.map(p => {
                 const isEdited = (p as any).is_edited;
+                const hasGps = p.location_lat != null && p.location_lng != null;
                 return (
                   <div key={p.id} className="flex items-center gap-3 text-sm">
                     <span className={`text-xs font-semibold uppercase w-8 ${p.punch_type === 'in' ? 'text-success' : 'text-destructive'}`}>{p.punch_type}</span>
                     <span className={`time-display ${isEdited ? 'text-destructive font-semibold' : ''}`}>{formatTime(p.punch_time)}</span>
                     {isEdited && <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/20 text-destructive font-medium">edited</span>}
                     {p.source !== 'manual' && <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">{p.source === 'auto_location' ? 'GPS' : p.source}</span>}
+                    {hasGps && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary flex items-center gap-0.5"><MapPin className="h-2.5 w-2.5" /> GPS recorded</span>}
                     {p.low_confidence && <span className="text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning">low GPS</span>}
                   </div>
                 );

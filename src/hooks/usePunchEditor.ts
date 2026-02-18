@@ -65,7 +65,17 @@ export function useSavePunchEdits() {
       const updatedPunches = editedPunches.filter(
         ep => ep.id && !ep.is_new && !ep.is_deleted && ep.is_edited
       );
-      for (const ep of updatedPunches) {
+
+      // Also include source-only changes (not flagged is_edited by time/type but source changed)
+      const sourceOnlyChanges = editedPunches.filter(ep => {
+        if (!ep.id || ep.is_new || ep.is_deleted || ep.is_edited) return false;
+        const orig = originalPunches.find(o => o.id === ep.id);
+        return orig && orig.source !== ep.source;
+      });
+
+      const allUpdates = [...updatedPunches, ...sourceOnlyChanges];
+
+      for (const ep of allUpdates) {
         const orig = originalPunches.find(p => p.id === ep.id);
 
         // Log time change
@@ -104,40 +114,22 @@ export function useSavePunchEdits() {
           });
         }
 
-        // Log GPS changes
-        if (orig) {
-          if (orig.location_lat !== ep.location_lat) {
-            await supabase.from('audit_events').insert({
-              user_id: user.id,
-              event_type: 'punch_edited',
-              event_details: {
-                entity_type: 'punch',
-                entity_id: ep.id,
-                field_changed: 'latitude',
-                old_value: String(orig.location_lat ?? ''),
-                new_value: String(ep.location_lat ?? ''),
-                reason_comment: reason,
-              } as any,
-              related_entry_id: entryId,
-              related_date: entryDate,
-            });
-          }
-          if (orig.location_lng !== ep.location_lng) {
-            await supabase.from('audit_events').insert({
-              user_id: user.id,
-              event_type: 'punch_edited',
-              event_details: {
-                entity_type: 'punch',
-                entity_id: ep.id,
-                field_changed: 'longitude',
-                old_value: String(orig.location_lng ?? ''),
-                new_value: String(ep.location_lng ?? ''),
-                reason_comment: reason,
-              } as any,
-              related_entry_id: entryId,
-              related_date: entryDate,
-            });
-          }
+        // Log source change
+        if (orig && orig.source !== ep.source) {
+          await supabase.from('audit_events').insert({
+            user_id: user.id,
+            event_type: 'punch_edited',
+            event_details: {
+              entity_type: 'punch',
+              entity_id: ep.id,
+              field_changed: 'source',
+              old_value: orig.source,
+              new_value: ep.source,
+              reason_comment: reason,
+            } as any,
+            related_entry_id: entryId,
+            related_date: entryDate,
+          });
         }
 
         await supabase
@@ -145,66 +137,11 @@ export function useSavePunchEdits() {
           .update({
             punch_time: ep.punch_time,
             punch_type: ep.punch_type,
+            source: ep.source as any,
             is_edited: true,
             original_punch_time: orig?.punch_time || ep.punch_time,
             edited_at: new Date().toISOString(),
             edited_by: user.id,
-            location_lat: ep.location_lat,
-            location_lng: ep.location_lng,
-          })
-          .eq('id', ep.id!);
-      }
-
-      // Also update GPS-only changes (punches where only lat/lng changed but not time/type)
-      const gpsOnlyUpdates = editedPunches.filter(ep => {
-        if (!ep.id || ep.is_new || ep.is_deleted || ep.is_edited) return false;
-        const orig = originalPunches.find(o => o.id === ep.id);
-        if (!orig) return false;
-        return orig.location_lat !== ep.location_lat || orig.location_lng !== ep.location_lng;
-      });
-      for (const ep of gpsOnlyUpdates) {
-        const orig = originalPunches.find(p => p.id === ep.id)!;
-        if (orig.location_lat !== ep.location_lat) {
-          await supabase.from('audit_events').insert({
-            user_id: user.id,
-            event_type: 'punch_edited',
-            event_details: {
-              entity_type: 'punch',
-              entity_id: ep.id,
-              field_changed: 'latitude',
-              old_value: String(orig.location_lat ?? ''),
-              new_value: String(ep.location_lat ?? ''),
-              reason_comment: reason,
-            } as any,
-            related_entry_id: entryId,
-            related_date: entryDate,
-          });
-        }
-        if (orig.location_lng !== ep.location_lng) {
-          await supabase.from('audit_events').insert({
-            user_id: user.id,
-            event_type: 'punch_edited',
-            event_details: {
-              entity_type: 'punch',
-              entity_id: ep.id,
-              field_changed: 'longitude',
-              old_value: String(orig.location_lng ?? ''),
-              new_value: String(ep.location_lng ?? ''),
-              reason_comment: reason,
-            } as any,
-            related_entry_id: entryId,
-            related_date: entryDate,
-          });
-        }
-        await supabase
-          .from('punches')
-          .update({
-            is_edited: true,
-            original_punch_time: orig.punch_time,
-            edited_at: new Date().toISOString(),
-            edited_by: user.id,
-            location_lat: ep.location_lat,
-            location_lng: ep.location_lng,
           })
           .eq('id', ep.id!);
       }
