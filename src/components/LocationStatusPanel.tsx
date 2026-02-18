@@ -32,7 +32,7 @@ export function LocationStatusPanel({ state }: { state: LocationState }) {
 
         {state.lastTimestamp && (
           <div className="text-xs text-muted-foreground space-y-1">
-            <p>Last update: {new Date(state.lastTimestamp).toLocaleTimeString()}</p>
+            <p>Last update: {new Date(state.lastTimestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</p>
             {state.lastAccuracy != null && (
               <p>GPS accuracy: {Math.round(state.lastAccuracy)}m {state.lastAccuracy > 100 && <span className="text-warning">(low)</span>}</p>
             )}
