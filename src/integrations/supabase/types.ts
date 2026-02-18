@@ -406,10 +406,14 @@ export type Database = {
       punches: {
         Row: {
           created_at: string
+          edited_at: string | null
+          edited_by: string | null
           id: string
+          is_edited: boolean
           location_lat: number | null
           location_lng: number | null
           low_confidence: boolean
+          original_punch_time: string | null
           punch_time: string
           punch_type: Database["public"]["Enums"]["punch_type"]
           raw_text: string | null
@@ -419,10 +423,14 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          edited_at?: string | null
+          edited_by?: string | null
           id?: string
+          is_edited?: boolean
           location_lat?: number | null
           location_lng?: number | null
           low_confidence?: boolean
+          original_punch_time?: string | null
           punch_time: string
           punch_type: Database["public"]["Enums"]["punch_type"]
           raw_text?: string | null
@@ -432,10 +440,14 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          edited_at?: string | null
+          edited_by?: string | null
           id?: string
+          is_edited?: boolean
           location_lat?: number | null
           location_lng?: number | null
           low_confidence?: boolean
+          original_punch_time?: string | null
           punch_time?: string
           punch_type?: Database["public"]["Enums"]["punch_type"]
           raw_text?: string | null

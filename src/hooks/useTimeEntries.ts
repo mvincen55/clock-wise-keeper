@@ -15,6 +15,10 @@ export type PunchRow = {
   low_confidence: boolean;
   location_lat: number | null;
   location_lng: number | null;
+  is_edited: boolean;
+  original_punch_time: string | null;
+  edited_at: string | null;
+  edited_by: string | null;
 };
 
 export type TimeEntryRow = {

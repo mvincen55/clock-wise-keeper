@@ -14,9 +14,10 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table2, ChevronDown, ChevronRight, Loader2, MapPin, Save, AlertTriangle, Filter } from 'lucide-react';
+import { Table2, ChevronDown, ChevronRight, Loader2, MapPin, Save, AlertTriangle, Filter, Pencil } from 'lucide-react';
 import { EditAuditDialog } from '@/components/EditAuditDialog';
 import { TardyReasonModal } from '@/components/TardyReasonModal';
+import { PunchEditorModal } from '@/components/PunchEditorModal';
 import { useToast } from '@/hooks/use-toast';
 
 function computeLateInfo(entry: TimeEntryRow, schedule: ReturnType<typeof useWorkSchedule>['data']) {
@@ -54,6 +55,8 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
   onTardyPrompt: (entry: TimeEntryRow, info: { minutesLate: number; expectedStart: string; actualStart: string }) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [punchEditorOpen, setPunchEditorOpen] = useState(false);
+  const hasEditedPunches = (entry.punches || []).some((p: any) => p.is_edited);
   const updateEntry = useUpdateEntry();
   const { toast } = useToast();
   const [comment, setComment] = useState(entry.entry_comment || '');
@@ -149,6 +152,11 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
                 <MapPin className="h-3 w-3" /> Remote
               </span>
             )}
+            {hasEditedPunches && (
+              <span className="text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive flex items-center gap-1">
+                <Pencil className="h-3 w-3" /> Edited
+              </span>
+            )}
           </div>
         </td>
       </tr>
@@ -156,24 +164,43 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
         <tr>
           <td colSpan={7} className="bg-muted/30 px-8 py-3">
             <div className="space-y-3">
-              <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Punch Details</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase">Punch Details</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={e => { e.stopPropagation(); setPunchEditorOpen(true); }}
+                >
+                  <Pencil className="h-3.5 w-3.5 mr-1" /> Edit Punches
+                </Button>
+              </div>
               {punches.length === 0 && <p className="text-sm text-muted-foreground">No punches recorded</p>}
-              {punches.map(p => (
-                <div key={p.id} className="flex items-center gap-3 text-sm">
-                  <span className={`text-xs font-semibold uppercase w-8 ${p.punch_type === 'in' ? 'text-success' : 'text-destructive'}`}>
-                    {p.punch_type}
-                  </span>
-                  <span className="time-display">{formatTime(p.punch_time)}</span>
-                  {p.source !== 'manual' && (
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">
-                      {p.source === 'auto_location' ? 'GPS' : p.source}
+              {punches.map(p => {
+                const isEdited = (p as any).is_edited;
+                return (
+                  <div key={p.id} className="flex items-center gap-3 text-sm">
+                    <span className={`text-xs font-semibold uppercase w-8 ${p.punch_type === 'in' ? 'text-success' : 'text-destructive'}`}>
+                      {p.punch_type}
                     </span>
-                  )}
-                  {p.low_confidence && (
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning">low GPS</span>
-                  )}
-                </div>
-              ))}
+                    <span className={`time-display ${isEdited ? 'text-destructive font-semibold' : ''}`}>
+                      {formatTime(p.punch_time)}
+                    </span>
+                    {isEdited && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/20 text-destructive font-medium">
+                        edited
+                      </span>
+                    )}
+                    {p.source !== 'manual' && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">
+                        {p.source === 'auto_location' ? 'GPS' : p.source}
+                      </span>
+                    )}
+                    {p.low_confidence && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning">low GPS</span>
+                    )}
+                  </div>
+                );
+              })}
 
               {/* Tardy info */}
               {isLate && tardy && (
@@ -247,6 +274,14 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
           newValue={auditDialog.new}
         />
       )}
+
+      <PunchEditorModal
+        open={punchEditorOpen}
+        onClose={() => setPunchEditorOpen(false)}
+        entryId={entry.id}
+        entryDate={entry.entry_date}
+        punches={punches}
+      />
     </>
   );
 }
