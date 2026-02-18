@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useTimeEntries, TimeEntryRow } from '@/hooks/useTimeEntries';
 import { useDaysOff } from '@/hooks/useDaysOff';
 import { useTardies, TardyRow } from '@/hooks/useTardies';
 import { useAttendanceExceptions, AttendanceExceptionRow } from '@/hooks/useAttendanceExceptions';
+import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { minutesToHHMM, formatTime, formatDate } from '@/lib/time-utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,9 +16,23 @@ import { FileText, Printer } from 'lucide-react';
 type ReportType = 'weekly' | 'pay_period' | 'monthly' | 'pto' | 'tardy' | 'attendance_exceptions';
 
 export default function Reports() {
+  const { data: payrollSettings } = usePayrollSettings();
+
+  // Default to PRIOR pay period
+  const weekStartDay = payrollSettings?.week_start_day ?? 1;
+  const nowDate = new Date();
+  const dayOfWeek = nowDate.getDay();
+  const daysBack = (dayOfWeek - weekStartDay + 7) % 7;
+  const currentPeriodStart = new Date(nowDate);
+  currentPeriodStart.setDate(nowDate.getDate() - daysBack);
+  const priorStart = new Date(currentPeriodStart);
+  priorStart.setDate(currentPeriodStart.getDate() - 7);
+  const priorEnd = new Date(priorStart);
+  priorEnd.setDate(priorStart.getDate() + 6);
+
   const [reportType, setReportType] = useState<ReportType>('weekly');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(priorStart.toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(priorEnd.toISOString().split('T')[0]);
   const [generated, setGenerated] = useState(false);
   const [showAuditTrail, setShowAuditTrail] = useState(false);
   const [showLateFlags, setShowLateFlags] = useState(true);

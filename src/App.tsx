@@ -10,9 +10,7 @@ import Dashboard from "@/pages/Dashboard";
 import Timesheet from "@/pages/Timesheet";
 import DaysOff from "@/pages/DaysOff";
 import Reports from "@/pages/Reports";
-import Import from "@/pages/Import";
 import WorkZones from "@/pages/WorkZones";
-import TimePunchSummary from "@/pages/TimePunchSummary";
 import Settings from "@/pages/Settings";
 import PTO from "@/pages/PTO";
 import NotFound from "@/pages/NotFound";
@@ -44,9 +42,7 @@ const App = () => (
             <Route path="/timesheet" element={<ProtectedRoute><Timesheet /></ProtectedRoute>} />
             <Route path="/days-off" element={<ProtectedRoute><DaysOff /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-            <Route path="/import" element={<ProtectedRoute><Import /></ProtectedRoute>} />
             <Route path="/work-zones" element={<ProtectedRoute><WorkZones /></ProtectedRoute>} />
-            <Route path="/punch-summary" element={<ProtectedRoute><TimePunchSummary /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/pto" element={<ProtectedRoute><PTO /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/auth" replace />} />
