@@ -8,6 +8,7 @@ export type PayrollSettingsRow = {
   pay_period_type: string;
   week_start_day: number;
   missing_shift_buffer_minutes: number;
+  timezone: string;
   created_at: string;
   updated_at: string;
 };
@@ -33,7 +34,7 @@ export function useUpsertPayrollSettings() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (updates: Partial<Pick<PayrollSettingsRow, 'pay_period_type' | 'week_start_day' | 'missing_shift_buffer_minutes'>>) => {
+    mutationFn: async (updates: Partial<Pick<PayrollSettingsRow, 'pay_period_type' | 'week_start_day' | 'missing_shift_buffer_minutes' | 'timezone'>>) => {
       if (!user) throw new Error('Not authenticated');
       const { error } = await supabase.from('payroll_settings').upsert(
         { user_id: user.id, ...updates },

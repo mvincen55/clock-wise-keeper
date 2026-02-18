@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDaysOff, useAddDayOff, useDeleteDayOff, DayOffRow } from '@/hooks/useDaysOff';
 import { useTardies, useUpdateTardy, TardyRow } from '@/hooks/useTardies';
+import { TardyReviewModal } from '@/components/TardyReviewModal';
 import { useAttendanceExceptions, AttendanceExceptionRow } from '@/hooks/useAttendanceExceptions';
 import { useAttendanceDayStatus, useRecomputeAttendance, AttendanceDayStatusRow } from '@/hooks/useAttendanceDayStatus';
 import { useOfficeClosures } from '@/hooks/useOfficeClosures';
@@ -136,6 +137,7 @@ export default function DaysOff() {
   const [approvalFilter, setApprovalFilter] = useState('all');
   const [showOnlyTracked, setShowOnlyTracked] = useState(false);
   const [debugRow, setDebugRow] = useState<AttendanceDayStatusRow | null>(null);
+  const [reviewTardy, setReviewTardy] = useState<TardyRow | null>(null);
 
   const [form, setForm] = useState({
     date_start: '',
@@ -172,12 +174,13 @@ export default function DaysOff() {
     }
   };
 
-  const handleApproval = async (tardy: TardyRow, status: 'approved' | 'unapproved' | 'unreviewed') => {
+  const handleTardyReview = async (id: string, status: 'approved' | 'unapproved', reason: string) => {
     try {
       await updateTardy.mutateAsync({
-        id: tardy.id,
+        id,
         updates: {
           approval_status: status,
+          reason_text: reason,
           approved_by: status === 'approved' ? user?.id : null,
           approved_at: status === 'approved' ? new Date().toISOString() : null,
         },
@@ -442,6 +445,7 @@ export default function DaysOff() {
                             {row.is_incomplete && <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">Incomplete</span>}
                             {row.is_late && <span className="text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive font-medium">{row.minutes_late}m late</span>}
                             {row.has_edits && <span className="text-xs px-2 py-0.5 rounded bg-accent/20 text-accent font-medium">Edited</span>}
+                            {row.timezone_suspect && <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium" title="Timestamp appears mis-zoned">⚠ TZ Suspect</span>}
                             {row.office_closed && <span className="text-xs px-2 py-0.5 rounded bg-success/20 text-success font-medium">Closed</span>}
                             {row.has_day_off && <span className="text-xs px-2 py-0.5 rounded bg-primary/20 text-primary font-medium">Day Off</span>}
                             {!row.is_absent && !row.is_incomplete && !row.is_late && !row.office_closed && !row.has_day_off && row.has_punches && (
@@ -557,13 +561,24 @@ export default function DaysOff() {
                     <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">No tardies recorded</td></tr>
                   ) : (
                     filteredTardies.map(t => (
-                      <tr key={t.id}>
-                        <td className="px-4 py-3 font-medium">{formatDate(t.entry_date)}</td>
+                      <tr key={t.id} className={t.timezone_suspect ? 'bg-warning/5' : ''}>
+                        <td className="px-4 py-3 font-medium">
+                          {formatDate(t.entry_date)}
+                          {t.timezone_suspect && (
+                            <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning font-medium" title="Timestamp appears mis-zoned. Check punches.">⚠ TZ</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 time-display text-sm">{t.expected_start_time?.slice(0, 5)}</td>
                         <td className="px-4 py-3 time-display text-sm">
-                          {new Date(t.actual_start_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                          {t.timezone_suspect ? (
+                            <span className="text-warning italic">Suspect</span>
+                          ) : (
+                            new Date(t.actual_start_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+                          )}
                         </td>
-                        <td className="px-4 py-3 font-semibold text-destructive">{t.minutes_late}</td>
+                        <td className="px-4 py-3 font-semibold text-destructive">
+                          {t.timezone_suspect ? '—' : t.minutes_late}
+                        </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground max-w-[200px] truncate">{t.reason_text || '—'}</td>
                         <td className="px-4 py-3">
                           <span className={`text-xs px-2 py-0.5 rounded font-medium ${
@@ -573,14 +588,9 @@ export default function DaysOff() {
                           }`}>{t.approval_status}</span>
                         </td>
                         <td className="px-4 py-3">
-                          <Select value={t.approval_status} onValueChange={v => handleApproval(t, v as any)}>
-                            <SelectTrigger className="w-28 h-8 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="unreviewed">Unreviewed</SelectItem>
-                              <SelectItem value="approved">Approved</SelectItem>
-                              <SelectItem value="unapproved">Unapproved</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setReviewTardy(t)}>
+                            {t.approval_status === 'unreviewed' ? 'Review' : 'Edit'}
+                          </Button>
                         </td>
                       </tr>
                     ))
@@ -590,7 +600,7 @@ export default function DaysOff() {
                   <tfoot>
                     <tr className="border-t-2 font-bold">
                       <td colSpan={3} className="px-4 py-3 text-right">Totals:</td>
-                      <td className="px-4 py-3 text-destructive">{filteredTardies.reduce((s, t) => s + t.minutes_late, 0)} min</td>
+                      <td className="px-4 py-3 text-destructive">{filteredTardies.filter(t => !t.timezone_suspect).reduce((s, t) => s + t.minutes_late, 0)} min</td>
                       <td colSpan={3}></td>
                     </tr>
                   </tfoot>
@@ -598,6 +608,13 @@ export default function DaysOff() {
               </table>
             </div>
           </Card>
+
+          <TardyReviewModal
+            open={!!reviewTardy}
+            tardy={reviewTardy}
+            onSubmit={handleTardyReview}
+            onClose={() => setReviewTardy(null)}
+          />
         </TabsContent>
 
         <TabsContent value="missing">

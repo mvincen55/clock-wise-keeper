@@ -20,6 +20,7 @@ export type AttendanceDayStatusRow = {
   has_edits: boolean;
   has_day_comment: boolean;
   has_day_off: boolean;
+  timezone_suspect: boolean;
   computed_at: string;
 };
 

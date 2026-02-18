@@ -15,6 +15,7 @@ export type TardyRow = {
   approved_by: string | null;
   approved_at: string | null;
   resolved: boolean;
+  timezone_suspect: boolean;
   created_at: string;
   updated_at: string;
 };

@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/time-utils';
 import ScheduleManager from '@/components/ScheduleManager';
 import WipeDataTool from '@/components/WipeDataTool';
+import TimezoneRepairTool from '@/components/TimezoneRepairTool';
 
 const WEEKDAY_OPTIONS = [
   { value: '0', label: 'Sunday' },
@@ -116,6 +117,24 @@ export default function Settings() {
                 onChange={e => upsertPayroll.mutate({ missing_shift_buffer_minutes: parseInt(e.target.value) || 60 })}
                 className="w-24 text-sm"
               />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Timezone</Label>
+              <Select
+                value={payrollSettings?.timezone || 'America/New_York'}
+                onValueChange={v => upsertPayroll.mutate({ timezone: v })}
+              >
+                <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="America/New_York">Eastern (ET)</SelectItem>
+                  <SelectItem value="America/Chicago">Central (CT)</SelectItem>
+                  <SelectItem value="America/Denver">Mountain (MT)</SelectItem>
+                  <SelectItem value="America/Los_Angeles">Pacific (PT)</SelectItem>
+                  <SelectItem value="America/Anchorage">Alaska (AKT)</SelectItem>
+                  <SelectItem value="Pacific/Honolulu">Hawaii (HT)</SelectItem>
+                  <SelectItem value="UTC">UTC</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>
@@ -224,6 +243,9 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Timezone Repair Tool */}
+      <TimezoneRepairTool />
 
       {/* Wipe Data Tool */}
       <WipeDataTool />
