@@ -18,12 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-import { Trash2, Plus, ArrowDownUp, Zap, AlertTriangle, Pencil, MapPin, ChevronDown } from 'lucide-react';
+import { Trash2, Plus, ArrowDownUp, Zap, AlertTriangle, Pencil, MapPin, RefreshCw } from 'lucide-react';
 import { PunchRow } from '@/hooks/useTimeEntries';
 import { EditablePunch, useSavePunchEdits } from '@/hooks/usePunchEditor';
 import { useWorkSchedule, getScheduleForWeekday } from '@/hooks/useWorkSchedule';
@@ -67,6 +62,13 @@ function fromLocalTimeInput(dateStr: string, timeStr: string): string {
   return base.toISOString();
 }
 
+const SOURCE_LABELS: Record<string, string> = {
+  manual: 'Manual',
+  auto_location: 'GPS',
+  import: 'Import',
+  system_adjustment: 'System',
+};
+
 export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }: Props) {
   const originalPunches = useMemo(() => punches.map(punchToEditable), [punches]);
   const [editedPunches, setEditedPunches] = useState<EditablePunch[]>([]);
@@ -75,10 +77,6 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
   const saveMutation = useSavePunchEdits();
   const { data: schedule } = useWorkSchedule();
   const { toast } = useToast();
-
-  const gpsBackfillMode = typeof window !== 'undefined'
-    ? localStorage.getItem('gps_backfill_mode') === 'true'
-    : false;
 
   useEffect(() => {
     if (open) {
@@ -94,11 +92,11 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
     const active = editedPunches.filter(p => !p.is_deleted);
     const origActive = originalPunches.filter(p => !p.is_deleted);
     if (active.length !== origActive.length) return true;
-    return editedPunches.some((ep, i) => {
+    return editedPunches.some((ep) => {
       if (ep.is_new || ep.is_deleted || ep.is_edited) return true;
       const orig = originalPunches.find(o => o.id === ep.id);
       if (!orig) return false;
-      return ep.location_lat !== orig.location_lat || ep.location_lng !== orig.location_lng;
+      return ep.source !== orig.source;
     });
   }, [editedPunches, originalPunches, quickFixUsed]);
 
@@ -167,6 +165,18 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
     });
   };
 
+  const convertAllGpsToManual = () => {
+    setEditedPunches(prev => prev.map(p => {
+      if (p.source === 'auto_location' && !p.is_deleted) {
+        return { ...p, source: 'manual', is_edited: !p.is_new ? true : p.is_edited };
+      }
+      return p;
+    }));
+    setQuickFixUsed(true);
+  };
+
+  const hasGpsPunches = editedPunches.some(p => p.source === 'auto_location' && !p.is_deleted);
+
   // Quick fixes
   const setClockOutToScheduledEnd = () => {
     const sched = schedule ? getScheduleForWeekday(schedule, entryDate) : null;
@@ -193,16 +203,9 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
       setEditedPunches(prev => [
         ...prev,
         {
-          id: null,
-          punch_type: 'out' as const,
-          punch_time: endIso,
-          original_punch_time: null,
-          is_deleted: false,
-          is_new: true,
-          is_edited: false,
-          source: 'manual',
-          location_lat: null,
-          location_lng: null,
+          id: null, punch_type: 'out' as const, punch_time: endIso,
+          original_punch_time: null, is_deleted: false, is_new: true, is_edited: false,
+          source: 'manual', location_lat: null, location_lng: null,
         },
       ]);
     }
@@ -214,16 +217,9 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
     setEditedPunches(prev => [
       ...prev,
       {
-        id: null,
-        punch_type: 'out' as const,
-        punch_time: nowIso,
-        original_punch_time: null,
-        is_deleted: false,
-        is_new: true,
-        is_edited: false,
-        source: 'manual',
-        location_lat: null,
-        location_lng: null,
+        id: null, punch_type: 'out' as const, punch_time: nowIso,
+        original_punch_time: null, is_deleted: false, is_new: true, is_edited: false,
+        source: 'manual', location_lat: null, location_lng: null,
       },
     ]);
     setQuickFixUsed(true);
@@ -293,13 +289,13 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
         <div className="space-y-2">
           {editedPunches.map((p, i) => {
             if (p.is_deleted) return null;
-            const wasEdited = p.is_edited || p.is_new;
             const orig = originalPunches.find(o => o.id === p.id);
-            const gpsChanged = orig && (p.location_lat !== orig.location_lat || p.location_lng !== orig.location_lng);
-            const showEdited = wasEdited || gpsChanged;
+            const sourceChanged = orig && p.source !== orig.source;
+            const wasEdited = p.is_edited || p.is_new || sourceChanged;
+            const hasGps = p.location_lat != null && p.location_lng != null;
             return (
-              <div key={p.id || `new-${i}`} className="rounded-lg bg-muted/50">
-                <div className="flex items-center gap-2 p-2">
+              <div key={p.id || `new-${i}`} className="rounded-lg bg-muted/50 p-2 space-y-1.5">
+                <div className="flex items-center gap-2">
                   <Select
                     value={p.punch_type}
                     onValueChange={v => updatePunch(i, 'punch_type', v)}
@@ -316,9 +312,9 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
                     type="time"
                     value={toLocalTimeInput(p.punch_time)}
                     onChange={e => updatePunchTime(i, e.target.value)}
-                    className={`w-32 h-8 text-sm time-display ${showEdited ? 'text-destructive font-semibold' : ''}`}
+                    className={`w-32 h-8 text-sm time-display ${wasEdited ? 'text-destructive font-semibold' : ''}`}
                   />
-                  {showEdited && (
+                  {wasEdited && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/20 text-destructive font-medium">
                       {p.is_new ? 'new' : 'edited'}
                     </span>
@@ -338,50 +334,34 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
                   </Button>
                 </div>
 
-                {/* GPS Details collapsible */}
-                {gpsBackfillMode && (
-                  <Collapsible>
-                    <CollapsibleTrigger asChild>
-                      <button className="flex items-center gap-1.5 px-2 pb-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full">
-                        <MapPin className="h-3 w-3" />
-                        <span>GPS Details</span>
-                        <ChevronDown className="h-3 w-3 ml-auto" />
-                      </button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <div className="px-2 pb-2 grid grid-cols-2 gap-2">
-                        <div className="space-y-0.5">
-                          <Label className="text-[10px]">Latitude</Label>
-                          <Input
-                            type="number"
-                            step="any"
-                            placeholder="e.g. 40.7128"
-                            value={p.location_lat ?? ''}
-                            onChange={e => {
-                              const val = e.target.value === '' ? null : parseFloat(e.target.value);
-                              updatePunch(i, 'location_lat', val);
-                            }}
-                            className="h-7 text-xs"
-                          />
-                        </div>
-                        <div className="space-y-0.5">
-                          <Label className="text-[10px]">Longitude</Label>
-                          <Input
-                            type="number"
-                            step="any"
-                            placeholder="e.g. -74.0060"
-                            value={p.location_lng ?? ''}
-                            onChange={e => {
-                              const val = e.target.value === '' ? null : parseFloat(e.target.value);
-                              updatePunch(i, 'location_lng', val);
-                            }}
-                            className="h-7 text-xs"
-                          />
-                        </div>
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                )}
+                {/* Source selector + GPS indicator row */}
+                <div className="flex items-center gap-2 pl-1">
+                  <Label className="text-[10px] text-muted-foreground">Source:</Label>
+                  <Select
+                    value={p.source}
+                    onValueChange={v => updatePunch(i, 'source', v)}
+                  >
+                    <SelectTrigger className="w-24 h-6 text-[10px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="manual">Manual</SelectItem>
+                      <SelectItem value="auto_location">GPS</SelectItem>
+                      <SelectItem value="import">Import</SelectItem>
+                      <SelectItem value="system_adjustment">System</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {sourceChanged && (
+                    <span className="text-[10px] text-muted-foreground">
+                      was {SOURCE_LABELS[orig!.source] || orig!.source}
+                    </span>
+                  )}
+                  {hasGps && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary flex items-center gap-0.5 ml-auto">
+                      <MapPin className="h-2.5 w-2.5" /> GPS recorded
+                    </span>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -398,6 +378,11 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
           <Button variant="outline" size="sm" onClick={autoSort}>
             <ArrowDownUp className="h-3.5 w-3.5 mr-1" /> Auto Sort
           </Button>
+          {hasGpsPunches && (
+            <Button variant="outline" size="sm" onClick={convertAllGpsToManual}>
+              <RefreshCw className="h-3.5 w-3.5 mr-1" /> Convert All GPS → Manual
+            </Button>
+          )}
         </div>
 
         {/* Quick Fix section */}
