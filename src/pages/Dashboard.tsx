@@ -4,16 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Clock, LogIn, LogOut, Coffee, Play, Loader2, Settings as SettingsIcon, Pencil, CalendarDays } from 'lucide-react';
-import { useEffect, useState, useMemo } from 'react';
+import { Clock, LogIn, LogOut, Coffee, Play, Loader2, Settings as SettingsIcon, Pencil, CalendarDays, MapPin } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useGeoTracking } from '@/hooks/useGeoTracking';
 import { LocationStatusPanel } from '@/components/LocationStatusPanel';
 import { useWorkZones } from '@/hooks/useWorkZones';
 import { useMissingShifts } from '@/hooks/useMissingShifts';
 import { MissingShiftBanner } from '@/components/MissingShiftBanner';
 import { PunchEditorModal } from '@/components/PunchEditorModal';
-import { useDaysOff } from '@/hooks/useDaysOff';
-import { usePayrollSettings } from '@/hooks/usePayrollSettings';
+import { useCurrentPtoBalance } from '@/hooks/usePtoEngine';
 import { Link } from 'react-router-dom';
 
 type ClockStatus = 'clocked_out' | 'clocked_in' | 'on_break';
@@ -39,24 +38,6 @@ function getRunningMinutes(punches: PunchRow[]): number {
   return Math.round(total);
 }
 
-// PTO helpers (same as PTO page)
-const ACCRUAL_TIERS = [
-  { minYears: 0, maxYears: 3, hoursPerWeek: 1.0 },
-  { minYears: 3, maxYears: 5, hoursPerWeek: 1.5 },
-  { minYears: 5, maxYears: 10, hoursPerWeek: 2.0 },
-  { minYears: 10, maxYears: 999, hoursPerWeek: 2.5 },
-];
-
-function getAccrualTier(hireDate: string) {
-  const years = (Date.now() - new Date(hireDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000);
-  return ACCRUAL_TIERS.find(t => years >= t.minYears && years < t.maxYears) || ACCRUAL_TIERS[0];
-}
-
-function getWeeksBetween(start: string, end: string) {
-  const ms = new Date(end).getTime() - new Date(start).getTime();
-  return Math.max(0, Math.floor(ms / (7 * 24 * 60 * 60 * 1000)));
-}
-
 export default function Dashboard() {
   const { data: todayEntry, isLoading } = useTodayEntry();
   const clockAction = useClockAction();
@@ -65,11 +46,12 @@ export default function Dashboard() {
   const [punchEditorOpen, setPunchEditorOpen] = useState(false);
   const { data: zones } = useWorkZones();
   const geoState = useGeoTracking(autoClockEnabled && (zones?.length ?? 0) > 0);
-  const { data: daysOff } = useDaysOff();
 
   const fourteenDaysAgo = new Date();
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
   const missingDays = useMissingShifts(fourteenDaysAgo.toISOString().split('T')[0]);
+
+  const ptoState = useCurrentPtoBalance();
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -80,25 +62,6 @@ export default function Dashboard() {
   const status = getStatus(punches);
   const runningMinutes = getRunningMinutes(punches);
   const isBusy = clockAction.isPending;
-
-  // PTO widget
-  const hireDate = typeof window !== 'undefined' ? localStorage.getItem('pto_hire_date') || '2024-01-01' : '2024-01-01';
-  const snapshotDate = typeof window !== 'undefined' ? localStorage.getItem('pto_snapshot_date') || '2026-02-14' : '2026-02-14';
-  const snapshotBalance = typeof window !== 'undefined' ? parseFloat(localStorage.getItem('pto_snapshot_balance') || '-1.63') : -1.63;
-
-  const tier = getAccrualTier(hireDate);
-  const today = new Date().toISOString().split('T')[0];
-  const weeksSinceSnapshot = getWeeksBetween(snapshotDate, today);
-  const accruedSinceSnapshot = weeksSinceSnapshot * tier.hoursPerWeek;
-
-  const ptoUsed = useMemo(() => {
-    if (!daysOff) return 0;
-    return daysOff
-      .filter(d => d.date_start >= snapshotDate && d.type !== 'office_closed')
-      .reduce((sum, d) => sum + (d.hours || 8), 0);
-  }, [daysOff, snapshotDate]);
-
-  const currentPtoBalance = snapshotBalance + accruedSinceSnapshot - ptoUsed;
 
   const statusConfig = {
     clocked_out: { label: 'Clocked Out', color: 'text-muted-foreground', bg: 'bg-muted' },
@@ -133,16 +96,26 @@ export default function Dashboard() {
               <CalendarDays className="h-5 w-5 text-primary" />
               <div>
                 <p className="text-sm font-medium">PTO Balance</p>
-                <p className="text-xs text-muted-foreground">Accrual: {tier.hoursPerWeek}h/week</p>
+                <p className="text-xs text-muted-foreground">
+                  {ptoState.tier.label} — {(ptoState.tier.rate * 100).toFixed(2)}%
+                </p>
               </div>
             </div>
             <div className="text-right">
-              <p className={`text-xl font-bold time-display ${currentPtoBalance < 0 ? 'text-destructive' : 'text-success'}`}>
-                {currentPtoBalance.toFixed(2)}h
+              <p className={`text-xl font-bold time-display ${ptoState.balance < 0 ? 'text-destructive' : 'text-success'}`}>
+                {ptoState.balance.toFixed(2)}h
               </p>
               <Link to="/pto" className="text-xs text-primary hover:underline">View Details →</Link>
             </div>
           </div>
+          {ptoState.currentWeek && (
+            <div className="flex gap-4 mt-2 pt-2 border-t text-xs text-muted-foreground">
+              <span>This week accrual: <span className="font-semibold text-success">+{ptoState.currentWeek.accrual_credited.toFixed(2)}h</span></span>
+              {ptoState.currentWeek.pto_taken_hours > 0 && (
+                <span>PTO used: <span className="font-semibold text-destructive">-{ptoState.currentWeek.pto_taken_hours.toFixed(2)}h</span></span>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -215,12 +188,14 @@ export default function Dashboard() {
             <div className="space-y-2">
               {punches.map((p) => {
                 const isEdited = (p as any).is_edited;
+                const hasGps = p.location_lat != null && p.location_lng != null;
                 return (
                   <div key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-muted/50">
                     <span className={`text-xs font-semibold uppercase px-2 py-0.5 rounded ${p.punch_type === 'in' ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'}`}>{p.punch_type}</span>
                     <span className={`time-display text-sm ${isEdited ? 'text-destructive font-semibold' : ''}`}>{formatTime(p.punch_time)}</span>
                     {isEdited && <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/20 text-destructive font-medium">edited</span>}
                     {p.source !== 'manual' && <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">{p.source === 'auto_location' ? 'GPS' : p.source}</span>}
+                    {hasGps && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary flex items-center gap-0.5"><MapPin className="h-2.5 w-2.5" /> GPS recorded</span>}
                     {p.low_confidence && <span className="text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning">low GPS</span>}
                   </div>
                 );
