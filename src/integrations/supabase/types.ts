@@ -32,6 +32,66 @@ export type Database = {
         }
         Relationships: []
       }
+      attendance_day_status: {
+        Row: {
+          computed_at: string
+          entry_date: string
+          has_day_comment: boolean
+          has_edits: boolean
+          has_punches: boolean
+          id: string
+          is_absent: boolean
+          is_incomplete: boolean
+          is_late: boolean
+          is_remote: boolean
+          is_scheduled_day: boolean
+          minutes_late: number | null
+          office_closed: boolean
+          schedule_expected_end: string | null
+          schedule_expected_start: string | null
+          tardy_approval_status: string | null
+          user_id: string
+        }
+        Insert: {
+          computed_at?: string
+          entry_date: string
+          has_day_comment?: boolean
+          has_edits?: boolean
+          has_punches?: boolean
+          id?: string
+          is_absent?: boolean
+          is_incomplete?: boolean
+          is_late?: boolean
+          is_remote?: boolean
+          is_scheduled_day?: boolean
+          minutes_late?: number | null
+          office_closed?: boolean
+          schedule_expected_end?: string | null
+          schedule_expected_start?: string | null
+          tardy_approval_status?: string | null
+          user_id: string
+        }
+        Update: {
+          computed_at?: string
+          entry_date?: string
+          has_day_comment?: boolean
+          has_edits?: boolean
+          has_punches?: boolean
+          id?: string
+          is_absent?: boolean
+          is_incomplete?: boolean
+          is_late?: boolean
+          is_remote?: boolean
+          is_scheduled_day?: boolean
+          minutes_late?: number | null
+          office_closed?: boolean
+          schedule_expected_end?: string | null
+          schedule_expected_start?: string | null
+          tardy_approval_status?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       attendance_exceptions: {
         Row: {
           created_at: string

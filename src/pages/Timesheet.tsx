@@ -5,6 +5,8 @@ import { useTardies, useUpsertTardy, useUpdateTardy, TardyRow } from '@/hooks/us
 import { useAuth } from '@/hooks/useAuth';
 import { useOfficeClosures } from '@/hooks/useOfficeClosures';
 import { useMissingShifts } from '@/hooks/useMissingShifts';
+import { useAttendanceDayStatus, useRecomputeAttendance } from '@/hooks/useAttendanceDayStatus';
+import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { MissingShiftBanner } from '@/components/MissingShiftBanner';
 import { minutesToHHMM, formatTime, formatDate } from '@/lib/time-utils';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,7 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table2, ChevronDown, ChevronRight, Loader2, MapPin, Save, AlertTriangle, Filter, Pencil } from 'lucide-react';
+import { Table2, ChevronDown, ChevronRight, Loader2, MapPin, Save, AlertTriangle, Filter, Pencil, ArrowUpDown } from 'lucide-react';
 import { EditAuditDialog } from '@/components/EditAuditDialog';
 import { TardyReasonModal } from '@/components/TardyReasonModal';
 import { PunchEditorModal } from '@/components/PunchEditorModal';
@@ -39,11 +41,7 @@ function computeLateInfo(entry: TimeEntryRow, schedule: ReturnType<typeof useWor
   const diffMin = Math.ceil(diffMs / 60000);
 
   if (diffMin >= sched.threshold_minutes) {
-    return {
-      minutesLate: diffMin,
-      expectedStart: sched.start_time,
-      actualStart: firstIn.punch_time,
-    };
+    return { minutesLate: diffMin, expectedStart: sched.start_time, actualStart: firstIn.punch_time };
   }
   return null;
 }
@@ -61,24 +59,19 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
   const { toast } = useToast();
   const [comment, setComment] = useState(entry.entry_comment || '');
   const [commentDirty, setCommentDirty] = useState(false);
-  const [auditDialog, setAuditDialog] = useState<{
-    field: string; old: string; new: string; pendingUpdate: any;
-  } | null>(null);
+  const [auditDialog, setAuditDialog] = useState<{ field: string; old: string; new: string; pendingUpdate: any } | null>(null);
 
   const punches = entry.punches || [];
-  const firstIn = punches.find(p => p.punch_type === 'in');
-  const lastOut = [...punches].reverse().find(p => p.punch_type === 'out');
-
   const lateInfo = computeLateInfo(entry, schedule);
   const isLate = !!lateInfo;
   const needsReason = isLate && tardy && !tardy.reason_text && !tardy.resolved;
+  const isIncomplete = punches.length > 0 && punches[punches.length - 1].punch_type === 'in';
+  const isAbsent = punches.length === 0;
 
   const handleRemoteToggle = () => {
     setAuditDialog({
-      field: 'is_remote',
-      old: entry.is_remote ? 'Remote' : 'On-site',
-      new: entry.is_remote ? 'On-site' : 'Remote',
-      pendingUpdate: { is_remote: !entry.is_remote },
+      field: 'is_remote', old: entry.is_remote ? 'Remote' : 'On-site',
+      new: entry.is_remote ? 'On-site' : 'Remote', pendingUpdate: { is_remote: !entry.is_remote },
     });
   };
 
@@ -86,14 +79,8 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
     if (!auditDialog) return;
     try {
       await updateEntry.mutateAsync({
-        entryId: entry.id,
-        updates: auditDialog.pendingUpdate,
-        audit: {
-          field_changed: auditDialog.field,
-          old_value: auditDialog.old,
-          new_value: auditDialog.new,
-          reason_comment: reason,
-        },
+        entryId: entry.id, updates: auditDialog.pendingUpdate,
+        audit: { field_changed: auditDialog.field, old_value: auditDialog.old, new_value: auditDialog.new, reason_comment: reason },
       });
       toast({ title: 'Updated with audit' });
     } catch (err: any) {
@@ -104,10 +91,7 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
 
   const handleSaveComment = async () => {
     try {
-      await updateEntry.mutateAsync({
-        entryId: entry.id,
-        updates: { entry_comment: comment || null },
-      });
+      await updateEntry.mutateAsync({ entryId: entry.id, updates: { entry_comment: comment || null } });
       setCommentDirty(false);
       toast({ title: 'Comment saved' });
     } catch (err: any) {
@@ -117,10 +101,7 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
 
   return (
     <>
-      <tr
-        className={`cursor-pointer hover:bg-muted/50 transition-colors ${isLate ? 'border-l-4 border-l-destructive' : ''}`}
-        onClick={() => setExpanded(!expanded)}
-      >
+      <tr className={`cursor-pointer hover:bg-muted/50 transition-colors ${isLate ? 'border-l-4 border-l-destructive' : ''}`} onClick={() => setExpanded(!expanded)}>
         <td className="px-4 py-3">
           {expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
         </td>
@@ -129,9 +110,7 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
           {entry.total_minutes != null ? (
             <>
               {minutesToHHMM(entry.total_minutes)}
-              <span className="text-muted-foreground font-normal ml-1 text-xs">
-                ({(entry.total_minutes / 60).toFixed(2)}h)
-              </span>
+              <span className="text-muted-foreground font-normal ml-1 text-xs">({(entry.total_minutes / 60).toFixed(2)}h)</span>
             </>
           ) : '—'}
         </td>
@@ -142,16 +121,11 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
         </td>
         <td className="px-4 py-3">
           <div className="flex items-center gap-1.5 flex-wrap">
-            {punches.length === 0 && (
-              <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">Absent</span>
-            )}
-            {punches.length > 0 && punches[punches.length - 1].punch_type === 'in' && (
-              <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">Incomplete</span>
-            )}
+            {isAbsent && <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">Absent</span>}
+            {isIncomplete && <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">Incomplete</span>}
             {isLate && (
               <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive font-medium">
-                <AlertTriangle className="h-3 w-3" />
-                {lateInfo.minutesLate}m late
+                <AlertTriangle className="h-3 w-3" />{lateInfo.minutesLate}m late
               </span>
             )}
             {hasEditedPunches && (
@@ -159,9 +133,7 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
                 <Pencil className="h-3 w-3" /> Edited
               </span>
             )}
-            {entry.entry_comment && (
-              <span className="text-xs text-muted-foreground" title={entry.entry_comment}>💬</span>
-            )}
+            {entry.entry_comment && <span className="text-xs text-muted-foreground" title={entry.entry_comment}>💬</span>}
           </div>
         </td>
       </tr>
@@ -171,11 +143,7 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
             <div className="space-y-3">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase">Punch Details</p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={e => { e.stopPropagation(); setPunchEditorOpen(true); }}
-                >
+                <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setPunchEditorOpen(true); }}>
                   <Pencil className="h-3.5 w-3.5 mr-1" /> Edit Punches
                 </Button>
               </div>
@@ -184,119 +152,76 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
                 const isEdited = (p as any).is_edited;
                 return (
                   <div key={p.id} className="flex items-center gap-3 text-sm">
-                    <span className={`text-xs font-semibold uppercase w-8 ${p.punch_type === 'in' ? 'text-success' : 'text-destructive'}`}>
-                      {p.punch_type}
-                    </span>
-                    <span className={`time-display ${isEdited ? 'text-destructive font-semibold' : ''}`}>
-                      {formatTime(p.punch_time)}
-                    </span>
-                    {isEdited && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/20 text-destructive font-medium">
-                        edited
-                      </span>
-                    )}
-                    {p.source !== 'manual' && (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">
-                        {p.source === 'auto_location' ? 'GPS' : p.source}
-                      </span>
-                    )}
-                    {p.low_confidence && (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning">low GPS</span>
-                    )}
+                    <span className={`text-xs font-semibold uppercase w-8 ${p.punch_type === 'in' ? 'text-success' : 'text-destructive'}`}>{p.punch_type}</span>
+                    <span className={`time-display ${isEdited ? 'text-destructive font-semibold' : ''}`}>{formatTime(p.punch_time)}</span>
+                    {isEdited && <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/20 text-destructive font-medium">edited</span>}
+                    {p.source !== 'manual' && <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">{p.source === 'auto_location' ? 'GPS' : p.source}</span>}
+                    {p.low_confidence && <span className="text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning">low GPS</span>}
                   </div>
                 );
               })}
-
-              {/* Tardy info */}
               {isLate && tardy && (
                 <div className="pt-2 border-t border-border space-y-2">
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4 text-destructive" />
-                    <span className="text-sm font-medium text-destructive">{lateInfo.minutesLate} minutes late</span>
-                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${
-                      tardy.approval_status === 'approved' ? 'bg-success/20 text-success' :
-                      tardy.approval_status === 'unapproved' ? 'bg-destructive/20 text-destructive' :
-                      'bg-warning/20 text-warning'
-                    }`}>
+                    <span className="text-sm font-medium text-destructive">{lateInfo!.minutesLate} minutes late</span>
+                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${tardy.approval_status === 'approved' ? 'bg-success/20 text-success' : tardy.approval_status === 'unapproved' ? 'bg-destructive/20 text-destructive' : 'bg-warning/20 text-warning'}`}>
                       {tardy.approval_status}
                     </span>
                   </div>
-                  {tardy.reason_text && (
-                    <p className="text-sm text-muted-foreground italic">Reason: {tardy.reason_text}</p>
-                  )}
+                  {tardy.reason_text && <p className="text-sm text-muted-foreground italic">Reason: {tardy.reason_text}</p>}
                   {needsReason && (
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={e => { e.stopPropagation(); onTardyPrompt(entry, lateInfo); }}
-                    >
-                      Add Reason
-                    </Button>
+                    <Button size="sm" variant="destructive" onClick={e => { e.stopPropagation(); onTardyPrompt(entry, lateInfo!); }}>Add Reason</Button>
                   )}
                 </div>
               )}
-
-              {/* Remote toggle */}
               <div className="flex items-center gap-3 pt-2 border-t border-border">
                 <Label className="text-xs">Remote</Label>
                 <Switch checked={entry.is_remote} onCheckedChange={handleRemoteToggle} />
               </div>
-
-              {/* Daily comment */}
               <div className="space-y-1 pt-2 border-t border-border">
                 <Label className="text-xs">Daily Comment</Label>
                 <div className="flex gap-2">
-                  <Textarea
-                    value={comment}
-                    onChange={e => { setComment(e.target.value); setCommentDirty(true); }}
-                    rows={2}
-                    placeholder="Optional comment for this day..."
-                    className="text-sm"
-                  />
-                  {commentDirty && (
-                    <Button size="sm" onClick={handleSaveComment} className="self-end">
-                      <Save className="h-4 w-4" />
-                    </Button>
-                  )}
+                  <Textarea value={comment} onChange={e => { setComment(e.target.value); setCommentDirty(true); }} rows={2} placeholder="Optional comment for this day..." className="text-sm" />
+                  {commentDirty && <Button size="sm" onClick={handleSaveComment} className="self-end"><Save className="h-4 w-4" /></Button>}
                 </div>
               </div>
-
-              {entry.notes && (
-                <p className="text-sm text-muted-foreground mt-2 italic">{entry.notes}</p>
-              )}
+              {entry.notes && <p className="text-sm text-muted-foreground mt-2 italic">{entry.notes}</p>}
             </div>
           </td>
         </tr>
       )}
-
       {auditDialog && (
-        <EditAuditDialog
-          open
-          onClose={() => setAuditDialog(null)}
-          onConfirm={handleAuditConfirm}
-          fieldChanged={auditDialog.field}
-          oldValue={auditDialog.old}
-          newValue={auditDialog.new}
-        />
+        <EditAuditDialog open onClose={() => setAuditDialog(null)} onConfirm={handleAuditConfirm} fieldChanged={auditDialog.field} oldValue={auditDialog.old} newValue={auditDialog.new} />
       )}
-
-      <PunchEditorModal
-        open={punchEditorOpen}
-        onClose={() => setPunchEditorOpen(false)}
-        entryId={entry.id}
-        entryDate={entry.entry_date}
-        punches={punches}
-      />
+      <PunchEditorModal open={punchEditorOpen} onClose={() => setPunchEditorOpen(false)} entryId={entry.id} entryDate={entry.entry_date} punches={punches} />
     </>
   );
 }
 
+type SortMode = 'attention' | 'chronological';
+type FilterMode = 'all' | 'absent' | 'late' | 'incomplete' | 'edited' | 'unapproved';
+
 export default function Timesheet() {
   const { user } = useAuth();
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [showOnlyLate, setShowOnlyLate] = useState(false);
+  const { data: payrollSettings } = usePayrollSettings();
+  
+  // Default date range to current pay period
+  const weekStartDay = payrollSettings?.week_start_day ?? 1;
+  const nowDate = new Date();
+  const dayOfWeek = nowDate.getDay();
+  const daysBack = (dayOfWeek - weekStartDay + 7) % 7;
+  const defaultStart = new Date(nowDate);
+  defaultStart.setDate(nowDate.getDate() - daysBack);
+  const defaultEnd = new Date(defaultStart);
+  defaultEnd.setDate(defaultStart.getDate() + 6);
+
+  const [startDate, setStartDate] = useState(defaultStart.toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(defaultEnd.toISOString().split('T')[0]);
+  const [sortMode, setSortMode] = useState<SortMode>('attention');
+  const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [approvalFilter, setApprovalFilter] = useState<string>('all');
+
   const { data: entries, isLoading } = useTimeEntries(startDate || undefined, endDate || undefined);
   const { data: schedule } = useWorkSchedule();
   const { data: tardies } = useTardies(startDate || undefined, endDate || undefined);
@@ -308,27 +233,17 @@ export default function Timesheet() {
   const updateTardy = useUpdateTardy();
   const { toast } = useToast();
 
-  const [tardyModal, setTardyModal] = useState<{
-    entry: TimeEntryRow;
-    minutesLate: number;
-    expectedStart: string;
-    actualStart: string;
-  } | null>(null);
+  const [tardyModal, setTardyModal] = useState<{ entry: TimeEntryRow; minutesLate: number; expectedStart: string; actualStart: string } | null>(null);
 
-  // Auto-detect tardies when entries or schedule changes
+  // Auto-detect tardies
   useEffect(() => {
     if (!entries?.length || !schedule?.length || !user) return;
-
     entries.forEach(entry => {
       const info = computeLateInfo(entry, schedule);
       if (info) {
-        // Upsert tardy record
         upsertTardy.mutate({
-          time_entry_id: entry.id,
-          entry_date: entry.entry_date,
-          expected_start_time: info.expectedStart,
-          actual_start_time: info.actualStart,
-          minutes_late: info.minutesLate,
+          time_entry_id: entry.id, entry_date: entry.entry_date,
+          expected_start_time: info.expectedStart, actual_start_time: info.actualStart, minutes_late: info.minutesLate,
         });
       }
     });
@@ -340,24 +255,63 @@ export default function Timesheet() {
     return map;
   }, [tardies]);
 
-  // Filter entries
+  // Compute status flags for each entry
+  const entriesWithStatus = useMemo(() => {
+    return (entries || []).map(entry => {
+      const punches = entry.punches || [];
+      const lateInfo = computeLateInfo(entry, schedule);
+      const tardy = tardyMap.get(entry.entry_date);
+      return {
+        entry,
+        isAbsent: punches.length === 0,
+        isIncomplete: punches.length > 0 && punches[punches.length - 1].punch_type === 'in',
+        isLate: !!lateInfo,
+        minutesLate: lateInfo?.minutesLate || 0,
+        hasEdits: punches.some((p: any) => p.is_edited),
+        tardyApproval: tardy?.approval_status || 'none',
+      };
+    });
+  }, [entries, schedule, tardyMap]);
+
+  // Filter
   const filteredEntries = useMemo(() => {
-    let list = entries || [];
-    if (showOnlyLate) {
-      list = list.filter(e => tardyMap.has(e.entry_date) && !tardyMap.get(e.entry_date)!.resolved);
+    let list = entriesWithStatus;
+    switch (filterMode) {
+      case 'absent': list = list.filter(e => e.isAbsent); break;
+      case 'late': list = list.filter(e => e.isLate); break;
+      case 'incomplete': list = list.filter(e => e.isIncomplete); break;
+      case 'edited': list = list.filter(e => e.hasEdits); break;
+      case 'unapproved': list = list.filter(e => e.tardyApproval === 'unreviewed' || e.tardyApproval === 'unapproved'); break;
     }
     if (approvalFilter !== 'all') {
-      list = list.filter(e => {
-        const t = tardyMap.get(e.entry_date);
-        return t && t.approval_status === approvalFilter;
-      });
+      list = list.filter(e => e.tardyApproval === approvalFilter);
     }
     return list;
-  }, [entries, showOnlyLate, approvalFilter, tardyMap]);
+  }, [entriesWithStatus, filterMode, approvalFilter]);
 
-  const totalMinutes = filteredEntries.reduce((sum, e) => sum + (e.total_minutes || 0), 0);
+  // Sort
+  const sortedEntries = useMemo(() => {
+    if (sortMode === 'chronological') {
+      return [...filteredEntries].sort((a, b) => b.entry.entry_date.localeCompare(a.entry.entry_date));
+    }
+    // Attention first
+    const priority = (e: typeof filteredEntries[0]) => {
+      if (e.isAbsent) return 0;
+      if (e.isIncomplete) return 1;
+      if (e.isLate) return 2;
+      if (e.hasEdits) return 3;
+      return 4;
+    };
+    return [...filteredEntries].sort((a, b) => {
+      const pa = priority(a);
+      const pb = priority(b);
+      if (pa !== pb) return pa - pb;
+      return b.entry.entry_date.localeCompare(a.entry.entry_date);
+    });
+  }, [filteredEntries, sortMode]);
 
-  // Summary stats
+  const totalMinutes = sortedEntries.reduce((sum, e) => sum + (e.entry.total_minutes || 0), 0);
+
   const lateDays = (tardies || []).filter(t => !t.resolved).length;
   const trackedTardies = (tardies || []).filter(t => t.approval_status !== 'approved' && !t.resolved).length;
   const totalMinutesLate = (tardies || []).filter(t => !t.resolved).reduce((s, t) => s + t.minutes_late, 0);
@@ -369,17 +323,20 @@ export default function Timesheet() {
       await updateTardy.mutateAsync({ id: existing.id, updates: { reason_text: reason } });
     } else {
       await upsertTardy.mutateAsync({
-        time_entry_id: tardyModal.entry.id,
-        entry_date: tardyModal.entry.entry_date,
-        expected_start_time: tardyModal.expectedStart,
-        actual_start_time: tardyModal.actualStart,
-        minutes_late: tardyModal.minutesLate,
-        reason_text: reason,
+        time_entry_id: tardyModal.entry.id, entry_date: tardyModal.entry.entry_date,
+        expected_start_time: tardyModal.expectedStart, actual_start_time: tardyModal.actualStart,
+        minutes_late: tardyModal.minutesLate, reason_text: reason,
       });
     }
     toast({ title: 'Tardy reason saved' });
     setTardyModal(null);
   };
+
+  // Count badges for filters
+  const absentCount = entriesWithStatus.filter(e => e.isAbsent).length + missingDays.length;
+  const lateCount = entriesWithStatus.filter(e => e.isLate).length;
+  const incompleteCount = entriesWithStatus.filter(e => e.isIncomplete).length;
+  const editedCount = entriesWithStatus.filter(e => e.hasEdits).length;
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
@@ -388,10 +345,8 @@ export default function Timesheet() {
         <p className="text-muted-foreground">View and manage your time entries</p>
       </div>
 
-      {/* Missing shift banner */}
       {missingDays.length > 0 && <MissingShiftBanner missingDays={missingDays} />}
 
-      {/* Tardy summary cards */}
       {(tardies?.length ?? 0) > 0 && (
         <div className="flex flex-wrap gap-3">
           <div className="px-4 py-2 bg-destructive/10 rounded-lg">
@@ -420,9 +375,19 @@ export default function Timesheet() {
               <Label className="text-xs">End Date</Label>
               <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-40" />
             </div>
-            <div className="flex items-center gap-2">
-              <Switch checked={showOnlyLate} onCheckedChange={setShowOnlyLate} />
-              <Label className="text-xs">Late only</Label>
+            <div className="space-y-1">
+              <Label className="text-xs">Filter</Label>
+              <Select value={filterMode} onValueChange={v => setFilterMode(v as FilterMode)}>
+                <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="absent">Absent ({absentCount})</SelectItem>
+                  <SelectItem value="late">Late ({lateCount})</SelectItem>
+                  <SelectItem value="incomplete">Incomplete ({incompleteCount})</SelectItem>
+                  <SelectItem value="edited">Edited ({editedCount})</SelectItem>
+                  <SelectItem value="unapproved">Unapproved Tardies</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Approval</Label>
@@ -436,6 +401,14 @@ export default function Timesheet() {
                 </SelectContent>
               </Select>
             </div>
+            <Button
+              variant={sortMode === 'attention' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setSortMode(s => s === 'attention' ? 'chronological' : 'attention')}
+            >
+              <ArrowUpDown className="h-3.5 w-3.5 mr-1" />
+              {sortMode === 'attention' ? 'Attention First' : 'Chronological'}
+            </Button>
             <div className="px-3 py-2 bg-primary/10 rounded-lg">
               <span className="text-xs text-muted-foreground">Total: </span>
               <span className="time-display font-semibold text-primary">{minutesToHHMM(totalMinutes)}</span>
@@ -458,24 +431,12 @@ export default function Timesheet() {
             </thead>
             <tbody className="divide-y">
               {isLoading ? (
-                <tr>
-                  <td colSpan={5} className="py-12 text-center">
-                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
-                  </td>
-                </tr>
-              ) : !filteredEntries.length ? (
-                <tr>
-                  <td colSpan={5} className="py-12 text-center text-muted-foreground">No entries found</td>
-                </tr>
+                <tr><td colSpan={5} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></td></tr>
+              ) : !sortedEntries.length ? (
+                <tr><td colSpan={5} className="py-12 text-center text-muted-foreground">No entries found</td></tr>
               ) : (
-                filteredEntries.map(entry => (
-                  <EntryRow
-                    key={entry.id}
-                    entry={entry}
-                    schedule={schedule}
-                    tardy={tardyMap.get(entry.entry_date)}
-                    onTardyPrompt={(e, info) => setTardyModal({ entry: e, ...info })}
-                  />
+                sortedEntries.map(({ entry }) => (
+                  <EntryRow key={entry.id} entry={entry} schedule={schedule} tardy={tardyMap.get(entry.entry_date)} onTardyPrompt={(e, info) => setTardyModal({ entry: e, ...info })} />
                 ))
               )}
             </tbody>
@@ -484,13 +445,7 @@ export default function Timesheet() {
       </Card>
 
       {tardyModal && (
-        <TardyReasonModal
-          open
-          minutesLate={tardyModal.minutesLate}
-          entryDate={formatDate(tardyModal.entry.entry_date)}
-          onSubmit={handleTardyReason}
-          onDismiss={() => setTardyModal(null)}
-        />
+        <TardyReasonModal open minutesLate={tardyModal.minutesLate} entryDate={formatDate(tardyModal.entry.entry_date)} onSubmit={handleTardyReason} onDismiss={() => setTardyModal(null)} />
       )}
     </div>
   );

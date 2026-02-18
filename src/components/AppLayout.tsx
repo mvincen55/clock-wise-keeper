@@ -8,6 +8,7 @@ const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/timesheet', icon: Table2, label: 'Timesheet' },
   { to: '/days-off', icon: CalendarDays, label: 'Attendance' },
+  { to: '/pto', icon: Clock, label: 'PTO' },
   { to: '/reports', icon: FileText, label: 'Reports' },
   { to: '/import', icon: Upload, label: 'Import' },
   { to: '/punch-summary', icon: ClipboardList, label: 'Punch Summary' },
