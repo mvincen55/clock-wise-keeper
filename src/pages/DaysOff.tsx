@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDaysOff, useAddDayOff, useDeleteDayOff, DayOffRow } from '@/hooks/useDaysOff';
 import { useTardies, useUpdateTardy, TardyRow } from '@/hooks/useTardies';
 import { useAttendanceExceptions, AttendanceExceptionRow } from '@/hooks/useAttendanceExceptions';
@@ -17,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { CalendarDays, Plus, Trash2, Loader2, AlertTriangle, Clock, Building2, Bug, RefreshCw } from 'lucide-react';
+import { CalendarDays, Plus, Trash2, Loader2, AlertTriangle, Clock, Building2, Bug, RefreshCw, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const typeLabels: Record<string, string> = {
@@ -99,6 +100,7 @@ function DebugDrawer({ row, open, onClose }: { row: AttendanceDayStatusRow | nul
 
 export default function DaysOff() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { data: payrollSettings } = usePayrollSettings();
   const { toast } = useToast();
 
@@ -211,6 +213,10 @@ export default function DaysOff() {
   // Filtered + sorted status rows
   const filteredStatus = useMemo(() => {
     let list = statusRows || [];
+    // By default, hide non-scheduled days with no activity
+    if (attendanceFilter === 'all') {
+      list = list.filter(r => r.is_scheduled_day || r.has_punches || r.office_closed || r.has_day_off);
+    }
     switch (attendanceFilter) {
       case 'absent': list = list.filter(r => r.is_absent); break;
       case 'late': list = list.filter(r => r.is_late); break;
@@ -454,9 +460,16 @@ export default function DaysOff() {
                         </td>
                         <td className="px-4 py-3 text-xs capitalize">{row.tardy_approval_status !== 'unreviewed' ? row.tardy_approval_status : '—'}</td>
                         <td className="px-4 py-3">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDebugRow(row)} title="Debug">
-                            <Bug className="h-3.5 w-3.5" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            {row.has_punches && (
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(`/timesheet?date=${row.entry_date}`)} title="Edit in Timesheet">
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDebugRow(row)} title="Debug">
+                              <Bug className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))
