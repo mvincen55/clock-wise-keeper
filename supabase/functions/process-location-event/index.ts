@@ -35,10 +35,11 @@ function validateLocationInput(body: any): { lat: number; lng: number; accuracy:
 
   let validatedAccuracy: number | null = null;
   if (accuracy != null) {
-    if (typeof accuracy !== "number" || accuracy < 0 || accuracy > 10000) {
-      throw new Error("Invalid accuracy (must be 0-10000)");
+    if (typeof accuracy !== "number" || accuracy < 0) {
+      throw new Error("Invalid accuracy (must be >= 0)");
     }
-    validatedAccuracy = accuracy;
+    // Cap at 100km but don't reject - GPS can report very high values
+    validatedAccuracy = Math.min(accuracy, 100000);
   }
 
   let validatedTimestamp = new Date().toISOString();
