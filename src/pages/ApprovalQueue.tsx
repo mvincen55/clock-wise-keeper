@@ -8,9 +8,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/time-utils';
 import { Loader2, CheckCircle, XCircle, Clock, Inbox } from 'lucide-react';
+import { CorrectionQueuePanel } from '@/components/CorrectionQueuePanel';
 
 const statusBadge: Record<string, { label: string; className: string }> = {
   pending: { label: 'Pending', className: 'bg-warning/20 text-warning' },
@@ -78,6 +80,7 @@ export default function ApprovalQueue() {
   const [reviewTarget, setReviewTarget] = useState<ChangeRequestRow | null>(null);
   const [reviewDecision, setReviewDecision] = useState<'approved' | 'denied'>('approved');
   const [reviewReason, setReviewReason] = useState('');
+  const [activeTab, setActiveTab] = useState('change-requests');
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
@@ -108,42 +111,56 @@ export default function ApprovalQueue() {
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Approval Queue</h1>
-          <p className="text-muted-foreground text-sm">{ctx?.org_name}</p>
-        </div>
-        <Select value={filter} onValueChange={setFilter}>
-          <SelectTrigger className="w-36">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="approved">Approved</SelectItem>
-            <SelectItem value="denied">Denied</SelectItem>
-            <SelectItem value="all">All</SelectItem>
-          </SelectContent>
-        </Select>
+      <div>
+        <h1 className="text-2xl md:text-3xl font-bold">Approval Queue</h1>
+        <p className="text-muted-foreground text-sm">{ctx?.org_name}</p>
       </div>
 
-      {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : !requests?.length ? (
-        <Card className="card-elevated">
-          <CardContent className="p-8 text-center">
-            <Inbox className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground">No {filter !== 'all' ? filter : ''} requests</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {requests.map(r => (
-            <RequestCard key={r.id} request={r} onReview={setReviewTarget} />
-          ))}
-        </div>
-      )}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="change-requests">Change Requests</TabsTrigger>
+          <TabsTrigger value="corrections">Corrections</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="change-requests" className="mt-4 space-y-4">
+          <div className="flex justify-end">
+            <Select value={filter} onValueChange={setFilter}>
+              <SelectTrigger className="w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="denied">Denied</SelectItem>
+                <SelectItem value="all">All</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {isLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : !requests?.length ? (
+            <Card className="card-elevated">
+              <CardContent className="p-8 text-center">
+                <Inbox className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                <p className="text-muted-foreground">No {filter !== 'all' ? filter : ''} requests</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {requests.map(r => (
+                <RequestCard key={r.id} request={r} onReview={setReviewTarget} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="corrections" className="mt-4">
+          <CorrectionQueuePanel />
+        </TabsContent>
+      </Tabs>
 
       {/* Review Dialog */}
       <Dialog open={!!reviewTarget} onOpenChange={v => !v && setReviewTarget(null)}>

@@ -21,6 +21,9 @@ import { Table2, ChevronDown, ChevronRight, Loader2, MapPin, Save, AlertTriangle
 import { EditAuditDialog } from '@/components/EditAuditDialog';
 import { TardyReasonModal } from '@/components/TardyReasonModal';
 import { PunchEditorModal } from '@/components/PunchEditorModal';
+import { AuditHistoryModal } from '@/components/AuditHistoryModal';
+import { CorrectionRequestModal } from '@/components/CorrectionRequestModal';
+import { useOrgContext } from '@/hooks/useOrgContext';
 import { useToast } from '@/hooks/use-toast';
 
 function computeLateInfo(entry: TimeEntryRow, schedule: ReturnType<typeof useWorkSchedule>['data']) {
@@ -55,10 +58,14 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
 }) {
   const [expanded, setExpanded] = useState(false);
   const [punchEditorOpen, setPunchEditorOpen] = useState(false);
+  const [auditHistoryOpen, setAuditHistoryOpen] = useState(false);
+  const [correctionOpen, setCorrectionOpen] = useState(false);
   const hasEditedPunches = (entry.punches || []).some((p: any) => p.is_edited);
   const updateEntry = useUpdateEntry();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { data: ctx } = useOrgContext();
+  const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
   const [comment, setComment] = useState(entry.entry_comment || '');
   const [commentDirty, setCommentDirty] = useState(false);
   const [auditDialog, setAuditDialog] = useState<{ field: string; old: string; new: string; pendingUpdate: any } | null>(null);
@@ -201,6 +208,17 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
                   {commentDirty && <Button size="sm" onClick={handleSaveComment} className="self-end"><Save className="h-4 w-4" /></Button>}
                 </div>
               </div>
+              {/* Governance actions */}
+              <div className="flex items-center gap-2 pt-2 border-t border-border">
+                <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setAuditHistoryOpen(true); }}>
+                  <ArrowUpDown className="h-3.5 w-3.5 mr-1" /> Audit History
+                </Button>
+                {!isManager && (
+                  <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setCorrectionOpen(true); }}>
+                    <Pencil className="h-3.5 w-3.5 mr-1" /> Request Correction
+                  </Button>
+                )}
+              </div>
               {entry.notes && <p className="text-sm text-muted-foreground mt-2 italic">{entry.notes}</p>}
             </div>
           </td>
@@ -210,6 +228,17 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
         <EditAuditDialog open onClose={() => setAuditDialog(null)} onConfirm={handleAuditConfirm} fieldChanged={auditDialog.field} oldValue={auditDialog.old} newValue={auditDialog.new} />
       )}
       <PunchEditorModal open={punchEditorOpen} onClose={() => setPunchEditorOpen(false)} entryId={entry.id} entryDate={entry.entry_date} punches={punches} />
+      <AuditHistoryModal
+        open={auditHistoryOpen}
+        onClose={() => setAuditHistoryOpen(false)}
+        employeeId={ctx?.employee_id || ''}
+        entryDate={entry.entry_date}
+      />
+      <CorrectionRequestModal
+        open={correctionOpen}
+        onClose={() => setCorrectionOpen(false)}
+        prefill={{ target_table: 'time_entries', target_id: entry.id, entry_date: entry.entry_date }}
+      />
     </>
   );
 }
