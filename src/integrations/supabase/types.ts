@@ -40,6 +40,7 @@ export type Database = {
           has_day_comment: boolean
           has_day_off: boolean
           has_edits: boolean
+          has_modification: boolean
           has_punches: boolean
           id: string
           is_absent: boolean
@@ -47,7 +48,12 @@ export type Database = {
           is_late: boolean
           is_remote: boolean
           is_scheduled_day: boolean
+          last_modified_at: string | null
+          last_modified_by: string | null
           minutes_late: number | null
+          modification_source:
+            | Database["public"]["Enums"]["modification_source"]
+            | null
           office_closed: boolean
           org_id: string
           recompute_version: number
@@ -66,6 +72,7 @@ export type Database = {
           has_day_comment?: boolean
           has_day_off?: boolean
           has_edits?: boolean
+          has_modification?: boolean
           has_punches?: boolean
           id?: string
           is_absent?: boolean
@@ -73,7 +80,12 @@ export type Database = {
           is_late?: boolean
           is_remote?: boolean
           is_scheduled_day?: boolean
+          last_modified_at?: string | null
+          last_modified_by?: string | null
           minutes_late?: number | null
+          modification_source?:
+            | Database["public"]["Enums"]["modification_source"]
+            | null
           office_closed?: boolean
           org_id: string
           recompute_version?: number
@@ -92,6 +104,7 @@ export type Database = {
           has_day_comment?: boolean
           has_day_off?: boolean
           has_edits?: boolean
+          has_modification?: boolean
           has_punches?: boolean
           id?: string
           is_absent?: boolean
@@ -99,7 +112,12 @@ export type Database = {
           is_late?: boolean
           is_remote?: boolean
           is_scheduled_day?: boolean
+          last_modified_at?: string | null
+          last_modified_by?: string | null
           minutes_late?: number | null
+          modification_source?:
+            | Database["public"]["Enums"]["modification_source"]
+            | null
           office_closed?: boolean
           org_id?: string
           recompute_version?: number
@@ -190,39 +208,57 @@ export type Database = {
       }
       audit_events: {
         Row: {
+          action_type: string | null
           actor_id: string | null
+          after_json: Json | null
+          before_json: Json | null
           created_at: string
           employee_id: string | null
           event_details: Json | null
           event_type: string
           id: string
           org_id: string
+          reason: string | null
           related_date: string | null
           related_entry_id: string | null
+          target_id: string | null
+          target_table: string | null
           user_id: string
         }
         Insert: {
+          action_type?: string | null
           actor_id?: string | null
+          after_json?: Json | null
+          before_json?: Json | null
           created_at?: string
           employee_id?: string | null
           event_details?: Json | null
           event_type: string
           id?: string
           org_id: string
+          reason?: string | null
           related_date?: string | null
           related_entry_id?: string | null
+          target_id?: string | null
+          target_table?: string | null
           user_id: string
         }
         Update: {
+          action_type?: string | null
           actor_id?: string | null
+          after_json?: Json | null
+          before_json?: Json | null
           created_at?: string
           employee_id?: string | null
           event_details?: Json | null
           event_type?: string
           id?: string
           org_id?: string
+          reason?: string | null
           related_date?: string | null
           related_entry_id?: string | null
+          target_id?: string | null
+          target_table?: string | null
           user_id?: string
         }
         Relationships: [
@@ -295,6 +331,69 @@ export type Database = {
           },
           {
             foreignKeyName: "change_requests_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      correction_requests: {
+        Row: {
+          created_at: string
+          created_by: string
+          employee_id: string
+          id: string
+          org_id: string
+          proposed_change: Json
+          reason: string
+          resolution_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["correction_request_status"]
+          target_id: string
+          target_table: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          employee_id: string
+          id?: string
+          org_id: string
+          proposed_change?: Json
+          reason: string
+          resolution_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["correction_request_status"]
+          target_id: string
+          target_table: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          employee_id?: string
+          id?: string
+          org_id?: string
+          proposed_change?: Json
+          reason?: string
+          resolution_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["correction_request_status"]
+          target_id?: string
+          target_table?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "correction_requests_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "correction_requests_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
@@ -1757,6 +1856,7 @@ export type Database = {
         | "day_off"
         | "schedule_change"
         | "other"
+      correction_request_status: "pending" | "approved" | "denied" | "applied"
       day_off_type:
         | "scheduled_with_notice"
         | "unscheduled"
@@ -1767,6 +1867,7 @@ export type Database = {
       exception_status: "open" | "resolved" | "ignored"
       exception_type: "missing_shift" | "other"
       import_status: "pending" | "previewing" | "confirmed" | "failed"
+      modification_source: "employee_request" | "manager_edit" | "system"
       org_member_status: "active" | "invited" | "disabled"
       punch_type: "in" | "out"
       report_run_status: "pending" | "processing" | "completed" | "failed"
@@ -1906,6 +2007,7 @@ export const Constants = {
         "schedule_change",
         "other",
       ],
+      correction_request_status: ["pending", "approved", "denied", "applied"],
       day_off_type: [
         "scheduled_with_notice",
         "unscheduled",
@@ -1917,6 +2019,7 @@ export const Constants = {
       exception_status: ["open", "resolved", "ignored"],
       exception_type: ["missing_shift", "other"],
       import_status: ["pending", "previewing", "confirmed", "failed"],
+      modification_source: ["employee_request", "manager_edit", "system"],
       org_member_status: ["active", "invited", "disabled"],
       punch_type: ["in", "out"],
       report_run_status: ["pending", "processing", "completed", "failed"],
