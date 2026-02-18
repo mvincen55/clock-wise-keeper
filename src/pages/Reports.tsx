@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTimeEntries, TimeEntryRow } from '@/hooks/useTimeEntries';
 import { useDaysOff } from '@/hooks/useDaysOff';
 import { useTardies, TardyRow } from '@/hooks/useTardies';
+import { useAttendanceExceptions, AttendanceExceptionRow } from '@/hooks/useAttendanceExceptions';
 import { minutesToHHMM, formatTime, formatDate } from '@/lib/time-utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FileText, Printer } from 'lucide-react';
 
-type ReportType = 'weekly' | 'pay_period' | 'monthly' | 'pto' | 'tardy';
+type ReportType = 'weekly' | 'pay_period' | 'monthly' | 'pto' | 'tardy' | 'attendance_exceptions';
 
 export default function Reports() {
   const [reportType, setReportType] = useState<ReportType>('weekly');
@@ -25,6 +26,7 @@ export default function Reports() {
   const { data: entries } = useTimeEntries(startDate || undefined, endDate || undefined);
   const { data: daysOff } = useDaysOff();
   const { data: tardies } = useTardies(startDate || undefined, endDate || undefined);
+  const { data: exceptions } = useAttendanceExceptions(startDate || undefined, endDate || undefined);
 
   const totalMinutes = entries?.reduce((sum, e) => sum + (e.total_minutes || 0), 0) || 0;
   const tardyMap = new Map<string, TardyRow>();
@@ -60,6 +62,7 @@ export default function Reports() {
                   <SelectItem value="monthly">Monthly Summary</SelectItem>
                   <SelectItem value="pto">PTO Summary</SelectItem>
                   <SelectItem value="tardy">Tardy Report</SelectItem>
+                  <SelectItem value="attendance_exceptions">Attendance Exceptions</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -78,7 +81,7 @@ export default function Reports() {
                 <Switch checked={showAuditTrail} onCheckedChange={setShowAuditTrail} />
                 <Label className="text-sm">Include audit trail</Label>
               </div>
-              {reportType !== 'tardy' && reportType !== 'pto' && (
+              {reportType !== 'tardy' && reportType !== 'pto' && reportType !== 'attendance_exceptions' && (
                 <>
                   <div className="flex items-center gap-3">
                     <Switch checked={showLateFlags} onCheckedChange={setShowLateFlags} />
@@ -118,6 +121,7 @@ export default function Reports() {
                     {reportType === 'monthly' && 'Monthly Summary'}
                     {reportType === 'pto' && 'PTO Summary'}
                     {reportType === 'tardy' && 'Tardy Report'}
+                    {reportType === 'attendance_exceptions' && 'Attendance Exceptions Report'}
                   </CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">
                     {formatDate(startDate)} — {formatDate(endDate)}
@@ -127,9 +131,87 @@ export default function Reports() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              {reportType === 'tardy' ? (
+              {reportType === 'attendance_exceptions' ? (
                 <>
-                  {/* Tardy summary header */}
+                  {/* Summary */}
+                  <div className="grid grid-cols-3 gap-4 p-4 border-b bg-muted/30">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-warning">{(exceptions || []).filter(e => e.type === 'missing_shift').length}</p>
+                      <p className="text-xs text-muted-foreground">Missing Shifts</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-destructive">{activeTardies.length}</p>
+                      <p className="text-xs text-muted-foreground">Tardies</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-destructive">{totalMinutesLate}</p>
+                      <p className="text-xs text-muted-foreground">Total Min Late</p>
+                    </div>
+                  </div>
+
+                  {/* Missing shifts */}
+                  <div className="p-4 border-b">
+                    <h3 className="font-semibold text-sm mb-3">Missing Shifts</h3>
+                    {!(exceptions || []).filter(e => e.type === 'missing_shift').length ? (
+                      <p className="text-sm text-muted-foreground">None</p>
+                    ) : (
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/50">
+                            <th className="px-4 py-2 text-left">Date</th>
+                            <th className="px-4 py-2 text-left">Status</th>
+                            <th className="px-4 py-2 text-left">Reason</th>
+                            <th className="px-4 py-2 text-left">Resolution</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {(exceptions || []).filter(e => e.type === 'missing_shift').map(e => (
+                            <tr key={e.id}>
+                              <td className="px-4 py-2">{formatDate(e.exception_date)}</td>
+                              <td className="px-4 py-2 text-xs capitalize">{e.status}</td>
+                              <td className="px-4 py-2 text-xs">{e.reason_text || '—'}</td>
+                              <td className="px-4 py-2 text-xs capitalize">{e.resolution_action?.replace('_', ' ') || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+
+                  {/* Tardies section */}
+                  <div className="p-4">
+                    <h3 className="font-semibold text-sm mb-3">Tardies</h3>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="px-4 py-2 text-left">Date</th>
+                          <th className="px-4 py-2 text-left">Min Late</th>
+                          <th className="px-4 py-2 text-left">Reason</th>
+                          <th className="px-4 py-2 text-left">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {activeTardies.map(t => (
+                          <tr key={t.id}>
+                            <td className="px-4 py-2">{formatDate(t.entry_date)}</td>
+                            <td className="px-4 py-2 font-semibold">{t.minutes_late}</td>
+                            <td className="px-4 py-2 text-xs">{t.reason_text || '—'}</td>
+                            <td className="px-4 py-2 text-xs capitalize">{t.approval_status}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 font-bold">
+                          <td className="px-4 py-3 text-right">Total:</td>
+                          <td className="px-4 py-3">{totalMinutesLate} min</td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </>
+              ) : reportType === 'tardy' ? (
+                <>
                   <div className="grid grid-cols-3 gap-4 p-4 border-b bg-muted/30">
                     <div className="text-center">
                       <p className="text-2xl font-bold text-destructive">{activeTardies.length}</p>

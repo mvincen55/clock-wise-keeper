@@ -32,6 +32,45 @@ export type Database = {
         }
         Relationships: []
       }
+      attendance_exceptions: {
+        Row: {
+          created_at: string
+          exception_date: string
+          id: string
+          reason_text: string | null
+          resolution_action: string | null
+          resolved_at: string | null
+          status: Database["public"]["Enums"]["exception_status"]
+          type: Database["public"]["Enums"]["exception_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          exception_date: string
+          id?: string
+          reason_text?: string | null
+          resolution_action?: string | null
+          resolved_at?: string | null
+          status?: Database["public"]["Enums"]["exception_status"]
+          type?: Database["public"]["Enums"]["exception_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          exception_date?: string
+          id?: string
+          reason_text?: string | null
+          resolution_action?: string | null
+          resolved_at?: string | null
+          status?: Database["public"]["Enums"]["exception_status"]
+          type?: Database["public"]["Enums"]["exception_type"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       audit_events: {
         Row: {
           created_at: string
@@ -246,6 +285,66 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      office_closures: {
+        Row: {
+          closure_date: string
+          created_at: string
+          hours: number
+          id: string
+          is_full_day: boolean
+          name: string
+          user_id: string
+        }
+        Insert: {
+          closure_date: string
+          created_at?: string
+          hours?: number
+          id?: string
+          is_full_day?: boolean
+          name: string
+          user_id: string
+        }
+        Update: {
+          closure_date?: string
+          created_at?: string
+          hours?: number
+          id?: string
+          is_full_day?: boolean
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      payroll_settings: {
+        Row: {
+          created_at: string
+          id: string
+          missing_shift_buffer_minutes: number
+          pay_period_type: string
+          updated_at: string
+          user_id: string
+          week_start_day: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          missing_shift_buffer_minutes?: number
+          pay_period_type?: string
+          updated_at?: string
+          user_id: string
+          week_start_day?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          missing_shift_buffer_minutes?: number
+          pay_period_type?: string
+          updated_at?: string
+          user_id?: string
+          week_start_day?: number
+        }
+        Relationships: []
       }
       payroll_summaries: {
         Row: {
@@ -563,6 +662,8 @@ export type Database = {
         | "unscheduled"
         | "office_closed"
         | "other"
+      exception_status: "open" | "resolved" | "ignored"
+      exception_type: "missing_shift" | "other"
       import_status: "pending" | "previewing" | "confirmed" | "failed"
       punch_type: "in" | "out"
       source_type: "manual" | "import" | "auto_location" | "system_adjustment"
@@ -699,6 +800,8 @@ export const Constants = {
         "office_closed",
         "other",
       ],
+      exception_status: ["open", "resolved", "ignored"],
+      exception_type: ["missing_shift", "other"],
       import_status: ["pending", "previewing", "confirmed", "failed"],
       punch_type: ["in", "out"],
       source_type: ["manual", "import", "auto_location", "system_adjustment"],
