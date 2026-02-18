@@ -7,6 +7,25 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const VALID_STRATEGIES = ["skip", "overwrite", "merge"] as const;
+
+function validateConfirmImportInput(body: any): { import_id: string; strategy: string } {
+  if (!body || typeof body !== "object") throw new Error("Invalid request body");
+
+  const { import_id, strategy } = body;
+
+  if (typeof import_id !== "string" || !UUID_REGEX.test(import_id)) {
+    throw new Error("Invalid import_id format");
+  }
+
+  if (strategy && !VALID_STRATEGIES.includes(strategy)) {
+    throw new Error("Invalid strategy. Must be one of: skip, overwrite, merge");
+  }
+
+  return { import_id, strategy: strategy || "skip" };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -23,9 +42,22 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) throw new Error("Unauthorized");
 
-    const { import_id, strategy } = await req.json();
-    // strategy: "skip" | "overwrite" | "merge"
-    if (!import_id) throw new Error("Missing import_id");
+    const rawBody = await req.json();
+    const { import_id, strategy } = validateConfirmImportInput(rawBody);
+
+    // Verify ownership via RLS - if user doesn't own it, this returns null
+    const { data: importCheck, error: importCheckError } = await supabase
+      .from("imports")
+      .select("id, user_id")
+      .eq("id", import_id)
+      .single();
+
+    if (importCheckError || !importCheck) {
+      return new Response(
+        JSON.stringify({ error: "Import not found or access denied" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Get import rows
     const { data: rows, error: rowsError } = await supabase
@@ -54,10 +86,8 @@ serve(async (req) => {
       let entryId: string;
 
       if (existing && strategy === "overwrite") {
-        // Delete old punches then re-insert
         await supabase.from("punches").delete().eq("time_entry_id", existing.id);
         
-        // Parse total
         let totalMin: number | null = null;
         if (row.total_hhmm) {
           const [h, m] = row.total_hhmm.split(":").map(Number);
@@ -77,7 +107,6 @@ serve(async (req) => {
       } else if (existing && strategy === "merge") {
         entryId = existing.id;
       } else {
-        // Create new entry
         let totalMin: number | null = null;
         if (row.total_hhmm) {
           const [h, m] = row.total_hhmm.split(":").map(Number);
@@ -109,13 +138,11 @@ serve(async (req) => {
         const timeStr = punchTimes[i];
         const punchType = i % 2 === 0 ? "in" : "out";
 
-      // Parse time string to full timestamp
         let punchTimestamp: string;
         try {
-          const dateStr = row.entry_date; // "YYYY-MM-DD"
-          const cleaned = timeStr.replace(/\*/g, '').trim(); // Remove asterisks like "8:24 AM*"
+          const dateStr = row.entry_date;
+          const cleaned = timeStr.replace(/\*/g, '').trim();
           
-          // Parse "H:MM AM/PM" format manually
           const timeMatch = cleaned.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
           if (timeMatch) {
             let hours = parseInt(timeMatch[1], 10);
@@ -129,7 +156,6 @@ serve(async (req) => {
             const mm = minutes.toString().padStart(2, '0');
             punchTimestamp = `${dateStr}T${hh}:${mm}:00`;
           } else {
-            // Fallback: just use noon on the correct date
             punchTimestamp = `${dateStr}T12:00:00`;
           }
         } catch {
@@ -137,7 +163,6 @@ serve(async (req) => {
         }
 
         if (strategy === "merge" && existing) {
-          // Check for duplicate
           const { data: dup } = await supabase
             .from("punches")
             .select("id")
@@ -179,7 +204,6 @@ serve(async (req) => {
 
     // Handle payroll summary rows
     const payrollRows = (rows || []).filter(r => r.entry_date === null && r.note_lines?.includes("PAYROLL TOTAL"));
-    // Get import record for range dates
     const { data: importRecord } = await supabase
       .from("imports")
       .select("report_range_start, report_range_end")
@@ -210,7 +234,7 @@ serve(async (req) => {
   } catch (err) {
     console.error("confirm-import error:", err);
     return new Response(
-      JSON.stringify({ error: err.message || "Internal error" }),
+      JSON.stringify({ error: "An error occurred confirming your import. Please try again." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
