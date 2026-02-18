@@ -597,6 +597,7 @@ export type Database = {
           seq: number
           source: Database["public"]["Enums"]["source_type"]
           time_entry_id: string
+          time_verified: boolean
         }
         Insert: {
           created_at?: string
@@ -614,6 +615,7 @@ export type Database = {
           seq?: number
           source?: Database["public"]["Enums"]["source_type"]
           time_entry_id: string
+          time_verified?: boolean
         }
         Update: {
           created_at?: string
@@ -631,6 +633,7 @@ export type Database = {
           seq?: number
           source?: Database["public"]["Enums"]["source_type"]
           time_entry_id?: string
+          time_verified?: boolean
         }
         Relationships: [
           {
