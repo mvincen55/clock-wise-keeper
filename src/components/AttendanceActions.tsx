@@ -36,7 +36,7 @@ export function AttendanceActions({ row }: { row: AttendanceDayStatusRow }) {
   // Day off form
   const [dayOffForm, setDayOffForm] = useState({
     type: 'scheduled_with_notice' as string,
-    hours: '',
+    hours: '0',
     notes: '',
     reason: '',
   });

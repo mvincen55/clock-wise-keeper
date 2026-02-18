@@ -148,7 +148,7 @@ export default function DaysOff() {
     date_start: '',
     date_end: '',
     type: 'scheduled_with_notice' as 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'medical_leave' | 'other',
-    hours: '',
+    hours: '0',
     notes: '',
   });
 
@@ -163,7 +163,7 @@ export default function DaysOff() {
         notes: form.notes || undefined,
       });
       setOpen(false);
-      setForm({ date_start: '', date_end: '', type: 'scheduled_with_notice', hours: '', notes: '' });
+      setForm({ date_start: '', date_end: '', type: 'scheduled_with_notice', hours: '0', notes: '' });
       toast({ title: 'Day off added' });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
