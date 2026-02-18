@@ -29,6 +29,13 @@ export function getToday(): string {
   return new Date().toISOString().split('T')[0];
 }
 
+/** Strip seconds/ms from an ISO timestamp, keeping only HH:MM:00 */
+export function stripSeconds(iso: string): string {
+  const d = new Date(iso);
+  d.setSeconds(0, 0);
+  return d.toISOString();
+}
+
 export function calculatePunchMinutes(punches: { punch_type: string; punch_time: string }[]): number {
   let total = 0;
   const sorted = [...punches].sort((a, b) => new Date(a.punch_time).getTime() - new Date(b.punch_time).getTime());
