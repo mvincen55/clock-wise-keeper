@@ -32,7 +32,7 @@ export default function Team() {
   const { data: attendance } = useEmployeeAttendanceSummary(weekRange);
   const addEmployee = useAddEmployee();
   const [addOpen, setAddOpen] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', timezone: 'America/New_York' });
+  const [form, setForm] = useState({ name: '', email: '' });
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
@@ -55,9 +55,9 @@ export default function Team() {
 
   const handleAdd = async () => {
     if (!form.name.trim()) return;
-    await addEmployee.mutateAsync({ display_name: form.name, email: form.email || undefined, timezone: form.timezone });
+    await addEmployee.mutateAsync({ display_name: form.name, email: form.email || undefined });
     setAddOpen(false);
-    setForm({ name: '', email: '', timezone: 'America/New_York' });
+    setForm({ name: '', email: '' });
   };
 
   if (ctxLoading || empLoading) {

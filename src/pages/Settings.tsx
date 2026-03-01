@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/time-utils';
 import ScheduleManager from '@/components/ScheduleManager';
 import WipeDataTool from '@/components/WipeDataTool';
-import TimezoneRepairTool from '@/components/TimezoneRepairTool';
+
 import BulkRepairTool from '@/components/BulkRepairTool';
 
 const WEEKDAY_OPTIONS = [
@@ -121,21 +121,7 @@ export default function Settings() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Timezone</Label>
-              <Select
-                value={payrollSettings?.timezone || 'America/New_York'}
-                onValueChange={v => upsertPayroll.mutate({ timezone: v })}
-              >
-                <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="America/New_York">Eastern (ET)</SelectItem>
-                  <SelectItem value="America/Chicago">Central (CT)</SelectItem>
-                  <SelectItem value="America/Denver">Mountain (MT)</SelectItem>
-                  <SelectItem value="America/Los_Angeles">Pacific (PT)</SelectItem>
-                  <SelectItem value="America/Anchorage">Alaska (AKT)</SelectItem>
-                  <SelectItem value="Pacific/Honolulu">Hawaii (HT)</SelectItem>
-                  <SelectItem value="UTC">UTC</SelectItem>
-                </SelectContent>
-              </Select>
+              <p className="text-sm font-medium px-3 py-2 rounded-md border bg-muted">Eastern (ET)</p>
             </div>
           </div>
         </CardContent>
@@ -248,8 +234,6 @@ export default function Settings() {
       {/* Bulk Auto-Repair Tool */}
       <BulkRepairTool />
 
-      {/* Timezone Repair Tool */}
-      <TimezoneRepairTool />
 
       {/* Wipe Data Tool */}
       <WipeDataTool />

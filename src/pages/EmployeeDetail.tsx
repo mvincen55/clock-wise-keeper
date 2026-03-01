@@ -77,7 +77,7 @@ export default function EmployeeDetail() {
         </Link>
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">{employee.display_name}</h1>
-          <p className="text-muted-foreground">{employee.email || 'No email'} · {employee.timezone}</p>
+          <p className="text-muted-foreground">{employee.email || 'No email'} · Eastern (ET)</p>
         </div>
       </div>
 
