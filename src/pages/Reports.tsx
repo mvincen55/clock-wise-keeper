@@ -222,7 +222,7 @@ export default function Reports() {
   const [generated, setGenerated] = useState(false);
   const [showAuditTrail, setShowAuditTrail] = useState(false);
   const [showLateFlags, setShowLateFlags] = useState(true);
-  const [downloading, setDownloading] = useState(false);
+  
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [expandedAudit, setExpandedAudit] = useState<Set<string>>(new Set());
   const [actorNames, setActorNames] = useState<Map<string, string>>(new Map());
@@ -303,40 +303,128 @@ export default function Reports() {
 
   const handlePrint = () => window.print();
 
-  const handleDownloadCsv = async (overrideType?: string) => {
-    const exportType = overrideType || exportTypeMap[reportType];
-    if (!exportType || !startDate || !endDate) return;
-    setDownloading(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { toast.error('Not authenticated'); return; }
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const url = `https://${projectId}.supabase.co/functions/v1/export-report?report_type=${exportType}&start_date=${startDate}&end_date=${endDate}`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-      });
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ error: 'Download failed' }));
-        throw new Error(err.error || 'Download failed');
-      }
-      const blob = await response.blob();
-      const downloadUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = downloadUrl;
-      a.download = `${exportType}_${startDate}_${endDate}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(downloadUrl);
-      toast.success('CSV downloaded');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Download failed');
-    } finally {
-      setDownloading(false);
+  const escapeCsv = (val: unknown): string => {
+    if (val === null || val === undefined) return '';
+    const str = String(val);
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
     }
+    return str;
+  };
+
+  const handleDownloadCsv = (overrideType?: string) => {
+    const isAudit = overrideType === 'audit';
+
+    if (isAudit) {
+      // Audit trail CSV — built from already-loaded auditEvents
+      const header = ['Date', 'Time', 'Event', 'Field', 'Before', 'After', 'Actor', 'Reason'];
+      const rows = auditEvents.map(a => {
+        const ts = new Date(a.created_at);
+        const dateStr = ts.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+        const timeStr = ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'UTC' });
+        const details = a.event_details || {};
+        const fieldLabel = details.field_changed ? String(details.field_changed).replace(/_/g, ' ') : '';
+        const oldVal = formatAuditValue(details.old_value ?? a.before_json);
+        const newVal = formatAuditValue(details.new_value ?? a.after_json);
+        const actor = actorNames.get(a.actor_id || '') || 'System';
+        const reason = a.reason || details.reason_comment || '';
+        return [dateStr, timeStr, eventTypeLabel(a.event_type), fieldLabel, oldVal, newVal, actor, reason].map(escapeCsv).join(',');
+      });
+      const csv = [header.join(','), ...rows].join('\n');
+      downloadCsvBlob(csv, `audit_${startDate}_${endDate}.csv`);
+      return;
+    }
+
+    // Timesheet CSV — built from already-loaded entries (same data shown on screen)
+    const isTimesheet = ['weekly', 'pay_period', 'monthly'].includes(reportType);
+    if (isTimesheet) {
+      const header = ['Date', 'First In', 'First In Source', 'Last Out', 'Last Out Source', 'Total', 'Minutes Late', 'Status', 'Remote', 'Edited', 'Comment'];
+      const rows = (entries || []).map(e => {
+        const firstIn = e.punches.find(p => p.punch_type === 'in');
+        const lastOut = [...e.punches].reverse().find(p => p.punch_type === 'out');
+        const tardy = tardyMap.get(e.entry_date);
+        const hasEdits = e.punches.some(p => p.is_edited);
+        const sourceLabel = (s: string) => s === 'auto_location' ? 'GPS' : s === 'system_adjustment' ? 'System' : s === 'import' ? 'Import' : 'Manual';
+        return [
+          formatDate(e.entry_date),
+          firstIn ? formatTime(firstIn.punch_time) : '',
+          firstIn ? sourceLabel(firstIn.source) : '',
+          lastOut ? formatTime(lastOut.punch_time) : '',
+          lastOut ? sourceLabel(lastOut.source) : '',
+          e.total_minutes != null ? minutesToHHMM(e.total_minutes) : '',
+          tardy && !tardy.resolved ? String(tardy.minutes_late) : '',
+          tardy && !tardy.resolved ? `${tardy.minutes_late}m late` : '',
+          e.is_remote ? 'Yes' : '',
+          hasEdits ? 'Yes' : '',
+          e.entry_comment || '',
+        ].map(escapeCsv).join(',');
+      });
+      const totalRow = ['Total', '', '', '', '', minutesToHHMM(totalMinutes), '', '', '', '', ''].join(',');
+      const csv = [header.join(','), ...rows, totalRow].join('\n');
+      downloadCsvBlob(csv, `timesheet_${startDate}_${endDate}.csv`);
+      return;
+    }
+
+    // Tardy CSV
+    if (reportType === 'tardy') {
+      const header = ['Date', 'Expected Start', 'Actual Start', 'Minutes Late', 'Reason', 'Status'];
+      const rows = activeTardies.map(t => [
+        formatDate(t.entry_date),
+        t.expected_start_time?.slice(0, 5) || '',
+        formatTime(t.actual_start_time),
+        String(t.minutes_late),
+        t.reason_text || '',
+        t.approval_status,
+      ].map(escapeCsv).join(','));
+      const csv = [header.join(','), ...rows].join('\n');
+      downloadCsvBlob(csv, `tardy_${startDate}_${endDate}.csv`);
+      return;
+    }
+
+    // PTO CSV
+    if (reportType === 'pto') {
+      const header = ['Start Date', 'End Date', 'Type', 'Notes'];
+      const filtered = (daysOff || []).filter(d => d.date_start >= startDate && d.date_start <= endDate);
+      const rows = filtered.map(d => [
+        formatDate(d.date_start),
+        d.date_start !== d.date_end ? formatDate(d.date_end) : '',
+        d.type?.replace(/_/g, ' ') || '',
+        d.notes || '',
+      ].map(escapeCsv).join(','));
+      const csv = [header.join(','), ...rows].join('\n');
+      downloadCsvBlob(csv, `pto_${startDate}_${endDate}.csv`);
+      return;
+    }
+
+    // Attendance exceptions CSV
+    if (reportType === 'attendance_exceptions') {
+      const header = ['Date', 'Type', 'Status', 'Reason', 'Resolution'];
+      const rows = (exceptions || []).map(e => [
+        formatDate(e.exception_date),
+        e.type?.replace(/_/g, ' ') || '',
+        e.status || '',
+        e.reason_text || '',
+        e.resolution_action?.replace(/_/g, ' ') || '',
+      ].map(escapeCsv).join(','));
+      const csv = [header.join(','), ...rows].join('\n');
+      downloadCsvBlob(csv, `exceptions_${startDate}_${endDate}.csv`);
+      return;
+    }
+
+    toast.error('Unknown report type');
+  };
+
+  const downloadCsvBlob = (csv: string, filename: string) => {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('CSV downloaded');
   };
 
   const renderTimesheetRow = (e: TimeEntryRow) => {
@@ -486,12 +574,12 @@ export default function Reports() {
                 <FileText className="mr-2 h-4 w-4" />
                 Generate
               </Button>
-              <Button variant="outline" size="sm" onClick={() => handleDownloadCsv()} disabled={!startDate || !endDate || downloading}>
+              <Button variant="outline" size="sm" onClick={() => handleDownloadCsv()} disabled={!startDate || !endDate}>
                 <Download className="mr-2 h-4 w-4" />
-                {downloading ? 'Downloading…' : 'CSV'}
+                CSV
               </Button>
               {showAuditTrail && (
-                <Button variant="outline" size="sm" onClick={() => handleDownloadCsv('audit')} disabled={!startDate || !endDate || downloading}>
+                <Button variant="outline" size="sm" onClick={() => handleDownloadCsv('audit')} disabled={!startDate || !endDate}>
                   <Download className="mr-2 h-3.5 w-3.5" />
                   Audit CSV
                 </Button>
