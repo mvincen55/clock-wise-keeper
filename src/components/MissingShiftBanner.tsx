@@ -11,19 +11,21 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertTriangle, CalendarDays, Clock, MapPin, X } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertTriangle, CalendarDays, Clock, MapPin, Plus, Trash2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 
 type ResolveAction = 'pto' | 'remote' | 'manual' | 'excused' | 'ignore';
 
+type PunchPair = { clockIn: string; clockOut: string };
+const emptyPair = (): PunchPair => ({ clockIn: '', clockOut: '' });
+
 export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftDay[] }) {
   const [actionDay, setActionDay] = useState<MissingShiftDay | null>(null);
   const [action, setAction] = useState<ResolveAction | null>(null);
   const [reason, setReason] = useState('');
-  const [clockIn, setClockIn] = useState('');
-  const [clockOut, setClockOut] = useState('');
+  const [punchPairs, setPunchPairs] = useState<PunchPair[]>([emptyPair()]);
   const createException = useCreateException();
   const resolveException = useResolveException();
   const addDayOff = useAddDayOff();
@@ -35,6 +37,18 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
   const openDays = missingDays.filter(d => !d.exception || d.exception.status === 'open');
 
   if (!openDays.length) return null;
+
+  const updatePair = (idx: number, field: keyof PunchPair, value: string) => {
+    setPunchPairs(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
+  };
+
+  const addPair = () => {
+    if (punchPairs.length < 4) setPunchPairs(prev => [...prev, emptyPair()]);
+  };
+
+  const removePair = (idx: number) => {
+    if (punchPairs.length > 1) setPunchPairs(prev => prev.filter((_, i) => i !== idx));
+  };
 
   const handleAction = async () => {
     if (!actionDay || !action || !user || !org) return;
@@ -52,7 +66,6 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
           type: 'scheduled_with_notice',
           notes: reason || 'Added from missing shift prompt',
         });
-        // Resolve exception
         const { data: exc } = await supabase.from('attendance_exceptions')
           .select('id').eq('exception_date', actionDay.date).maybeSingle();
         if (exc) {
@@ -63,18 +76,24 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
           });
         }
       } else if (action === 'remote' || action === 'manual') {
-        if (!clockIn || !clockOut) {
-          toast({ title: 'Please enter clock in and out times', variant: 'destructive' });
+        // Validate all pairs have both times
+        const validPairs = punchPairs.filter(p => p.clockIn && p.clockOut);
+        if (validPairs.length === 0) {
+          toast({ title: 'Please enter at least one clock in and out time', variant: 'destructive' });
           return;
         }
         if (!reason && action === 'manual') {
           toast({ title: 'Reason required for manual punch entry', variant: 'destructive' });
           return;
         }
-        // Create time entry + punches
-        const inTime = new Date(actionDay.date + 'T' + clockIn + ':00');
-        const outTime = new Date(actionDay.date + 'T' + clockOut + ':00');
-        const totalMin = Math.round((outTime.getTime() - inTime.getTime()) / 60000);
+
+        // Calculate total minutes from all pairs
+        let totalMin = 0;
+        for (const pair of validPairs) {
+          const inMs = new Date(`${actionDay.date}T${pair.clockIn}:00Z`).getTime();
+          const outMs = new Date(`${actionDay.date}T${pair.clockOut}:00Z`).getTime();
+          totalMin += Math.round((outMs - inMs) / 60000);
+        }
 
         const { data: entry, error: entryErr } = await supabase.from('time_entries').insert({
           user_id: user.id,
@@ -88,18 +107,28 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
         }).select('id').single();
         if (entryErr) throw entryErr;
 
-        await supabase.from('punches').insert([
-          { time_entry_id: entry.id, seq: 0, punch_type: 'in' as const, punch_time: (() => { inTime.setSeconds(0, 0); return inTime.toISOString(); })(), source: 'manual' as const, employee_id: org.employee_id, org_id: org.org_id },
-          { time_entry_id: entry.id, seq: 1, punch_type: 'out' as const, punch_time: (() => { outTime.setSeconds(0, 0); return outTime.toISOString(); })(), source: 'manual' as const, employee_id: org.employee_id, org_id: org.org_id },
+        // Insert all punch pairs
+        const punchInserts = validPairs.flatMap((pair, i) => [
+          {
+            time_entry_id: entry.id, seq: i * 2, punch_type: 'in' as const,
+            punch_time: `${actionDay.date}T${pair.clockIn}:00.000Z`,
+            source: 'manual' as const, employee_id: org.employee_id, org_id: org.org_id,
+          },
+          {
+            time_entry_id: entry.id, seq: i * 2 + 1, punch_type: 'out' as const,
+            punch_time: `${actionDay.date}T${pair.clockOut}:00.000Z`,
+            source: 'manual' as const, employee_id: org.employee_id, org_id: org.org_id,
+          },
         ]);
 
-        // Audit
+        await supabase.from('punches').insert(punchInserts);
+
         await supabase.from('audit_events').insert({
           user_id: user.id,
           org_id: org.org_id,
           employee_id: org.employee_id,
           event_type: 'missing_shift_resolved',
-          event_details: { action, reason, date: actionDay.date } as any,
+          event_details: { action, reason, date: actionDay.date, punch_pairs: validPairs.length } as any,
           related_date: actionDay.date,
           related_entry_id: entry.id,
         });
@@ -128,7 +157,6 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
             status: action === 'ignore' ? 'ignored' : 'resolved',
           });
         }
-        // Also add audit
         await supabase.from('audit_events').insert({
           user_id: user.id,
           org_id: org.org_id,
@@ -146,8 +174,7 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
       setActionDay(null);
       setAction(null);
       setReason('');
-      setClockIn('');
-      setClockOut('');
+      setPunchPairs([emptyPair()]);
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     }
@@ -165,7 +192,7 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
             <div key={day.date} className="flex flex-wrap items-center gap-3 bg-background rounded-lg px-3 py-2">
               <span className="text-sm font-medium">{formatDate(day.date)}</span>
               <span className="text-xs text-muted-foreground">No work recorded for your scheduled shift.</span>
-              <Button size="sm" variant="outline" onClick={() => { setActionDay(day); setAction(null); }}>
+              <Button size="sm" variant="outline" onClick={() => { setActionDay(day); setAction(null); setPunchPairs([emptyPair()]); }}>
                 Respond
               </Button>
             </div>
@@ -180,10 +207,10 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Missing Shift — {actionDay ? formatDate(actionDay.date) : ''}</DialogTitle>
+            <DialogDescription>
+              No work recorded for your scheduled shift. What happened?
+            </DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground mb-4">
-            No work recorded for your scheduled shift. What happened?
-          </p>
 
           {!action && (
             <div className="grid grid-cols-1 gap-2">
@@ -208,15 +235,29 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
           {action && (
             <div className="space-y-4">
               {(action === 'remote' || action === 'manual') && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Clock In</Label>
-                    <Input type="time" value={clockIn} onChange={e => setClockIn(e.target.value)} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Clock Out</Label>
-                    <Input type="time" value={clockOut} onChange={e => setClockOut(e.target.value)} />
-                  </div>
+                <div className="space-y-3">
+                  {punchPairs.map((pair, idx) => (
+                    <div key={idx} className="flex items-end gap-2">
+                      <div className="space-y-1 flex-1">
+                        <Label className="text-xs">In {idx + 1}</Label>
+                        <Input type="time" value={pair.clockIn} onChange={e => updatePair(idx, 'clockIn', e.target.value)} />
+                      </div>
+                      <div className="space-y-1 flex-1">
+                        <Label className="text-xs">Out {idx + 1}</Label>
+                        <Input type="time" value={pair.clockOut} onChange={e => updatePair(idx, 'clockOut', e.target.value)} />
+                      </div>
+                      {punchPairs.length > 1 && (
+                        <Button size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground hover:text-destructive" onClick={() => removePair(idx)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  {punchPairs.length < 4 && (
+                    <Button variant="outline" size="sm" onClick={addPair}>
+                      <Plus className="h-3.5 w-3.5 mr-1" /> Add Another Pair
+                    </Button>
+                  )}
                 </div>
               )}
               <div className="space-y-1">
