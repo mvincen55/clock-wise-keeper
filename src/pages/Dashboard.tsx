@@ -44,7 +44,9 @@ export default function Dashboard() {
   const { data: todayEntry, isLoading } = useTodayEntry();
   const clockAction = useClockAction();
   const [now, setNow] = useState(new Date());
-  const [autoClockEnabled, setAutoClockEnabled] = useState(false);
+  const [autoClockEnabled, setAutoClockEnabled] = useState(() => {
+    return localStorage.getItem('timevault_auto_clock') === 'true';
+  });
   const [punchEditorOpen, setPunchEditorOpen] = useState(false);
   const { data: zones } = useWorkZones();
   const geoState = useGeoTracking(autoClockEnabled && (zones?.length ?? 0) > 0);
@@ -172,7 +174,7 @@ export default function Dashboard() {
             <p className="font-medium">Auto Clock (GPS)</p>
             <p className="text-xs text-muted-foreground">{zones?.length ? `${zones.filter(z => z.is_active).length} active zone(s)` : 'No zones configured'}</p>
           </div>
-          <Switch checked={autoClockEnabled} onCheckedChange={setAutoClockEnabled} disabled={!zones?.length} />
+          <Switch checked={autoClockEnabled} onCheckedChange={v => { setAutoClockEnabled(v); localStorage.setItem('timevault_auto_clock', String(v)); }} disabled={!zones?.length} />
         </CardContent>
       </Card>
 
