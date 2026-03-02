@@ -147,6 +147,27 @@ export function useRecalculatePto() {
     mutationFn: async () => {
       if (!user) throw new Error('Not authenticated');
 
+      // Resolve org context
+      const { data: membership } = await supabase
+        .from('org_members')
+        .select('org_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+      if (!membership) throw new Error('No org membership found');
+      const orgId = membership.org_id;
+
+      const { data: empRecord } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('org_id', orgId)
+        .eq('user_id', user.id)
+        .limit(1)
+        .maybeSingle();
+      if (!empRecord) throw new Error('No employee record found');
+      const employeeId = empRecord.id;
+
       // 1. Load or auto-create settings
       let { data: settings } = await supabase
         .from('pto_settings')
@@ -156,6 +177,8 @@ export function useRecalculatePto() {
       if (!settings) {
         const defaults = {
           user_id: user.id,
+          org_id: orgId,
+          employee_id: employeeId,
           hire_date: '2022-02-07',
           worked_hours_cap_weekly: 40,
           max_balance: 100,
@@ -180,6 +203,8 @@ export function useRecalculatePto() {
       if (!snapshots?.length) {
         const defaultSnap = {
           user_id: user.id,
+          org_id: orgId,
+          employee_id: employeeId,
           snapshot_date: '2026-02-14',
           snapshot_balance_hours: -1.63,
         };
@@ -262,6 +287,8 @@ export function useRecalculatePto() {
 
         ledgerRows.push({
           user_id: user.id,
+          org_id: orgId,
+          employee_id: employeeId,
           period_start: week.start,
           period_end: week.end,
           worked_hours_raw: parseFloat(workedHoursRaw.toFixed(2)),
