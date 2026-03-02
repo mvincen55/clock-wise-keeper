@@ -50,16 +50,14 @@ function punchToEditable(p: PunchRow): EditablePunch {
 
 function toLocalTimeInput(iso: string): string {
   const d = new Date(iso);
-  const h = d.getHours().toString().padStart(2, '0');
-  const m = d.getMinutes().toString().padStart(2, '0');
+  const h = d.getUTCHours().toString().padStart(2, '0');
+  const m = d.getUTCMinutes().toString().padStart(2, '0');
   return `${h}:${m}`;
 }
 
 function fromLocalTimeInput(dateStr: string, timeStr: string): string {
-  const base = new Date(dateStr + 'T00:00:00');
-  const [h, m] = timeStr.split(':').map(Number);
-  base.setHours(h, m, 0, 0);
-  return base.toISOString();
+  // Build as UTC so the stored value stays Eastern-in-UTC
+  return `${dateStr}T${timeStr}:00.000Z`;
 }
 
 const SOURCE_LABELS: Record<string, string> = {
