@@ -493,7 +493,7 @@ export default function PTO() {
 /* ── Inline-editable PTO usage row ── */
 function PtoUsageRow({ entry, onUpdateHours }: { entry: any; onUpdateHours: (id: string, hours: number) => void }) {
   const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(String(entry.hours || 8));
+  const [value, setValue] = useState(String(entry.hours ?? 8));
 
   const save = () => {
     const h = parseFloat(value);
@@ -538,9 +538,9 @@ function PtoUsageRow({ entry, onUpdateHours }: { entry: any; onUpdateHours: (id:
         ) : (
           <button
             className="flex items-center gap-1 text-sm font-semibold hover:text-primary transition-colors group"
-            onClick={() => { setValue(String(entry.hours || 8)); setEditing(true); }}
+            onClick={() => { setValue(String(entry.hours ?? 8)); setEditing(true); }}
           >
-            {entry.hours || 8}h
+            {entry.hours ?? 8}h
             <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 text-muted-foreground transition-opacity" />
           </button>
         )}
