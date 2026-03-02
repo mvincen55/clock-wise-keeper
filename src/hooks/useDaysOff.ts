@@ -32,16 +32,17 @@ export function useDaysOff(year?: number) {
 
 export function useAddDayOff() {
   const { user } = useAuth();
-  const { data: ctx } = useOrgContext();
+  const { data: ctx, isLoading: ctxLoading } = useOrgContext();
   const qc = useQueryClient();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: async (input: {
       date_start: string; date_end: string;
       type: 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'medical_leave' | 'other';
       hours?: number; notes?: string;
     }) => {
-      if (!user || !ctx) throw new Error('Not authenticated');
+      if (!user) throw new Error('Not authenticated — please log in');
+      if (!ctx) throw new Error('Organization not found — make sure you have an org set up');
       const { error } = await supabase.from('days_off').insert({
         user_id: user.id,
         org_id: ctx.org_id,
@@ -53,6 +54,8 @@ export function useAddDayOff() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['days-off'] }),
   });
+
+  return { ...mutation, isReady: !!user && !!ctx && !ctxLoading };
 }
 
 export function useDeleteDayOff() {

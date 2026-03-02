@@ -406,9 +406,9 @@ export default function DaysOff() {
                   <Label>Notes{formNotesRequired ? <span className="text-destructive"> *</span> : ' (optional)'}</Label>
                   <Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder={formNotesRequired ? 'Required: describe the reason' : 'Vacation, doctor appointment, etc.'} />
                 </div>
-                <Button onClick={handleAdd} disabled={addDayOff.isPending || (formNotesRequired && !form.notes.trim())} className="w-full">
+                <Button onClick={handleAdd} disabled={addDayOff.isPending || !addDayOff.isReady || (formNotesRequired && !form.notes.trim())} className="w-full">
                   {addDayOff.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save
+                  {!addDayOff.isReady ? 'Loading org…' : 'Save'}
                 </Button>
               </div>
             </DialogContent>
