@@ -3,7 +3,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
 const ALLOWED_EMAILS = ['meganvincent43@gmail.com', 'mvincent@drharelick.com'];
-const DEFAULT_TIMEOUT_MINUTES = 20;
+const DEFAULT_TIMEOUT_MINUTES = 0; // 0 = never auto-logout
 const TIMEOUT_STORAGE_KEY = 'timevault_session_timeout_minutes';
 
 interface AuthContextType {
