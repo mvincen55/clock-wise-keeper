@@ -58,6 +58,17 @@ export function useAddDayOff() {
   return { ...mutation, isReady: !!user && !!ctx && !ctxLoading };
 }
 
+export function useUpdateDayOffHours() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, hours }: { id: string; hours: number }) => {
+      const { error } = await supabase.from('days_off').update({ hours }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['days-off'] }),
+  });
+}
+
 export function useDeleteDayOff() {
   const qc = useQueryClient();
   return useMutation({

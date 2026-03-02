@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   usePtoSettings, useUpsertPtoSettings,
   usePtoSnapshots, useUpsertPtoSnapshot,
@@ -8,7 +8,7 @@ import {
 } from '@/hooks/usePtoEngine';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import { useDaysOff } from '@/hooks/useDaysOff';
+import { useDaysOff, useUpdateDayOffHours } from '@/hooks/useDaysOff';
 import { useMyPtoRequests, useCancelPtoRequest, PtoRequest } from '@/hooks/usePtoRequests';
 import { PtoRequestModal } from '@/components/PtoRequestModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, TrendingUp, Clock, Settings as SettingsIcon, Printer, RefreshCw, AlertTriangle, Loader2, Plus, XCircle } from 'lucide-react';
+import { CalendarDays, TrendingUp, Clock, Settings as SettingsIcon, Printer, RefreshCw, AlertTriangle, Loader2, Plus, XCircle, Pencil, Check, X } from 'lucide-react';
 import { formatDate } from '@/lib/time-utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -36,6 +36,7 @@ export default function PTO() {
   const { data: snapshots } = usePtoSnapshots();
   const { data: ledger } = usePtoLedger();
   const { data: daysOff } = useDaysOff();
+  const updateHours = useUpdateDayOffHours();
   const upsertSettings = useUpsertPtoSettings();
   const upsertSnapshot = useUpsertPtoSnapshot();
   const recalc = useRecalculatePto();
@@ -391,21 +392,12 @@ export default function PTO() {
               ) : (
                 <div className="divide-y">
                   {ptoEntries.map(d => (
-                    <div key={d.id} className="flex items-center justify-between px-4 py-3">
-                      <div>
-                        <p className="text-sm font-medium">
-                          {formatDate(d.date_start)}
-                          {d.date_start !== d.date_end && ` — ${formatDate(d.date_end)}`}
-                        </p>
-                        {d.notes && <p className="text-xs text-muted-foreground">{d.notes}</p>}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs px-2 py-0.5 rounded font-medium bg-primary/20 text-primary capitalize">
-                          {d.type.replace(/_/g, ' ')}
-                        </span>
-                        <span className="text-sm font-semibold">{d.hours || 8}h</span>
-                      </div>
-                    </div>
+                    <PtoUsageRow key={d.id} entry={d} onUpdateHours={(id, hours) => {
+                      updateHours.mutate({ id, hours }, {
+                        onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
+                        onSuccess: () => toast({ title: 'Hours updated' }),
+                      });
+                    }} />
                   ))}
                 </div>
               )}
@@ -494,6 +486,65 @@ export default function PTO() {
       </Tabs>
 
       <PtoRequestModal open={requestModalOpen} onClose={() => setRequestModalOpen(false)} />
+    </div>
+  );
+}
+
+/* ── Inline-editable PTO usage row ── */
+function PtoUsageRow({ entry, onUpdateHours }: { entry: any; onUpdateHours: (id: string, hours: number) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(entry.hours || 8));
+
+  const save = () => {
+    const h = parseFloat(value);
+    if (!isNaN(h) && h >= 0) {
+      onUpdateHours(entry.id, h);
+    }
+    setEditing(false);
+  };
+
+  return (
+    <div className="flex items-center justify-between px-4 py-3">
+      <div>
+        <p className="text-sm font-medium">
+          {formatDate(entry.date_start)}
+          {entry.date_start !== entry.date_end && ` — ${formatDate(entry.date_end)}`}
+        </p>
+        {entry.notes && <p className="text-xs text-muted-foreground">{entry.notes}</p>}
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-xs px-2 py-0.5 rounded font-medium bg-primary/20 text-primary capitalize">
+          {entry.type.replace(/_/g, ' ')}
+        </span>
+        {editing ? (
+          <div className="flex items-center gap-1">
+            <Input
+              type="number"
+              min={0}
+              step={0.5}
+              value={value}
+              onChange={e => setValue(e.target.value)}
+              className="w-16 h-7 text-sm"
+              autoFocus
+              onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+            />
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={save}>
+              <Check className="h-3 w-3 text-success" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditing(false)}>
+              <X className="h-3 w-3 text-muted-foreground" />
+            </Button>
+          </div>
+        ) : (
+          <button
+            className="flex items-center gap-1 text-sm font-semibold hover:text-primary transition-colors group"
+            onClick={() => { setValue(String(entry.hours || 8)); setEditing(true); }}
+          >
+            {entry.hours || 8}h
+            <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 text-muted-foreground transition-opacity" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
