@@ -38,8 +38,9 @@ function computeLateInfo(entry: TimeEntryRow, schedule: ReturnType<typeof useWor
 
   const arrivalDate = new Date(firstIn.punch_time);
   const [sh, sm] = sched.start_time.split(':').map(Number);
-  const expectedDate = new Date(entry.entry_date + 'T00:00:00');
-  expectedDate.setHours(sh, sm + sched.grace_minutes, 0, 0);
+  // punch_time is Eastern-in-UTC, so compare using UTC methods
+  const expectedDate = new Date(entry.entry_date + 'T00:00:00Z');
+  expectedDate.setUTCHours(sh, sm + sched.grace_minutes, 0, 0);
 
   const diffMs = arrivalDate.getTime() - expectedDate.getTime();
   const diffMin = Math.ceil(diffMs / 60000);
