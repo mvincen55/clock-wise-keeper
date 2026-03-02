@@ -80,47 +80,122 @@ function PunchSourceList({ punches }: { punches: PunchRow[] }) {
   );
 }
 
-function AuditTrailRow({ event }: { event: AuditEvent }) {
+/** Try to format a value as a human-readable time if it looks like an ISO timestamp */
+function formatAuditValue(val: unknown): string {
+  if (val == null) return '—';
+  if (typeof val === 'string') {
+    // ISO timestamp
+    if (/^\d{4}-\d{2}-\d{2}T/.test(val)) {
+      return formatTime(val);
+    }
+    // HH:MM:SS time
+    if (/^\d{2}:\d{2}(:\d{2})?$/.test(val)) {
+      const [h, m] = val.split(':').map(Number);
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const h12 = h % 12 || 12;
+      return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+    }
+    return val;
+  }
+  if (typeof val === 'object') {
+    // For JSON objects, extract meaningful fields
+    const obj = val as Record<string, unknown>;
+    if (obj.punch_time) return formatTime(String(obj.punch_time));
+    // Show a compact summary of changed fields
+    const keys = Object.keys(obj);
+    if (keys.length <= 3) {
+      return keys.map(k => `${k}: ${formatAuditValue(obj[k])}`).join(', ');
+    }
+    return keys.length + ' fields changed';
+  }
+  return String(val);
+}
+
+/** Human-readable event type labels */
+function eventTypeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    clock_in: 'Clock In',
+    clock_out: 'Clock Out',
+    break_start: 'Break Start',
+    break_end: 'Break End',
+    manual_edit: 'Manual Edit',
+    punch_edit: 'Punch Edit',
+    punch_added: 'Punch Added',
+    punch_deleted: 'Punch Deleted',
+    time_fix: 'Time Fix',
+    system_adjustment: 'System Adjustment',
+    day_off_added: 'Day Off Added',
+    day_off_removed: 'Day Off Removed',
+    comment_edit: 'Comment Edit',
+    remote_toggle: 'Remote Toggle',
+    request_create: 'Request Created',
+    request_approved: 'Request Approved',
+    request_denied: 'Request Denied',
+  };
+  return labels[type] || type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function AuditTrailRow({ event, actorName }: { event: AuditEvent; actorName?: string }) {
   const details = event.event_details || {};
   const ts = new Date(event.created_at);
   const timeStr = ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'UTC' });
-  const dateStr = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const dateStr = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  const oldVal = details.old_value ?? event.before_json;
+  const newVal = details.new_value ?? event.after_json;
+  const hasChange = oldVal != null || newVal != null;
+  const reason = event.reason || details.reason_comment;
+  const fieldLabel = details.field_changed
+    ? String(details.field_changed).replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+    : null;
 
   return (
-    <div className="flex items-start gap-3 py-2 px-3 text-xs border-l-2 border-accent/30 ml-2 bg-muted/20 rounded-r">
-      <div className="shrink-0 text-muted-foreground min-w-[90px]">
-        <span className="font-medium">{dateStr}</span> {timeStr}
+    <div className="flex items-start gap-4 py-2.5 px-4 text-xs">
+      {/* Timestamp */}
+      <div className="shrink-0 w-[130px] text-muted-foreground">
+        <div className="font-medium text-foreground/70">{dateStr}</div>
+        <div>{timeStr}</div>
       </div>
-      <div className="flex-1 space-y-0.5">
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-medium capitalize">
-            {event.event_type?.replace(/_/g, ' ')}
+
+      {/* Action */}
+      <div className="flex-1 space-y-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-semibold">
+            {eventTypeLabel(event.event_type)}
           </Badge>
-          {details.field_changed && (
-            <span className="text-muted-foreground">
-              {details.field_changed}
-            </span>
+          {fieldLabel && (
+            <span className="text-muted-foreground font-medium">{fieldLabel}</span>
           )}
         </div>
-        {(details.old_value || details.new_value || event.before_json || event.after_json) && (
-          <div className="flex items-center gap-1.5 text-[11px]">
-            {(details.old_value || event.before_json) && (
-              <span className="line-through text-destructive/70">
-                {details.old_value || (typeof event.before_json === 'string' ? event.before_json : JSON.stringify(event.before_json))}
+
+        {hasChange && (
+          <div className="flex items-center gap-2 text-[12px] mt-0.5">
+            {oldVal != null && (
+              <span className="bg-destructive/10 text-destructive px-1.5 py-0.5 rounded line-through">
+                {formatAuditValue(oldVal)}
               </span>
             )}
-            <span className="text-muted-foreground">→</span>
-            <span className="text-foreground font-medium">
-              {details.new_value || (typeof event.after_json === 'string' ? event.after_json : JSON.stringify(event.after_json))}
-            </span>
+            {oldVal != null && newVal != null && (
+              <span className="text-muted-foreground">→</span>
+            )}
+            {newVal != null && (
+              <span className="bg-accent/10 text-accent-foreground px-1.5 py-0.5 rounded font-medium">
+                {formatAuditValue(newVal)}
+              </span>
+            )}
           </div>
         )}
-        {(event.reason || details.reason_comment) && (
-          <p className="text-muted-foreground italic">"{event.reason || details.reason_comment}"</p>
+
+        {reason && (
+          <p className="text-muted-foreground mt-0.5">
+            <span className="italic">"{reason}"</span>
+          </p>
         )}
       </div>
-      <div className="shrink-0 text-muted-foreground text-[10px]">
-        {event.actor_id?.slice(0, 8)}…
+
+      {/* Actor */}
+      <div className="shrink-0 text-right text-muted-foreground min-w-[80px]">
+        <span className="font-medium text-foreground/70">{actorName || 'System'}</span>
       </div>
     </div>
   );
@@ -150,6 +225,7 @@ export default function Reports() {
   const [downloading, setDownloading] = useState(false);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [expandedAudit, setExpandedAudit] = useState<Set<string>>(new Set());
+  const [actorNames, setActorNames] = useState<Map<string, string>>(new Map());
 
   const { data: entries } = useTimeEntries(startDate || undefined, endDate || undefined);
   const { data: daysOff } = useDaysOff();
@@ -166,7 +242,7 @@ export default function Reports() {
   const totalDays = entries?.length || 0;
   const editedDays = entries?.filter(e => e.punches.some(p => p.is_edited)).length || 0;
 
-  // Fetch audit events when generating report with audit trail
+  // Fetch audit events and resolve actor names
   useEffect(() => {
     if (!generated || !showAuditTrail || !user) return;
     (async () => {
@@ -177,7 +253,22 @@ export default function Reports() {
         .lte('related_date', endDate)
         .order('created_at', { ascending: false })
         .limit(500);
-      setAuditEvents((data as AuditEvent[]) || []);
+      const events = (data as AuditEvent[]) || [];
+      setAuditEvents(events);
+
+      // Resolve actor names from profiles
+      const actorIds = [...new Set(events.map(e => e.actor_id).filter(Boolean))] as string[];
+      if (actorIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', actorIds);
+        const nameMap = new Map<string, string>();
+        (profiles || []).forEach((p: any) => {
+          nameMap.set(p.id, p.full_name || p.email || p.id.slice(0, 8));
+        });
+        setActorNames(nameMap);
+      }
     })();
   }, [generated, showAuditTrail, startDate, endDate, user]);
 
@@ -336,7 +427,7 @@ export default function Reports() {
         {/* Expanded audit trail */}
         {showAuditTrail && isExpanded && entryAudit.length > 0 && (
           <div className="bg-muted/10 border-b space-y-1 py-2 px-2">
-            {entryAudit.map(a => <AuditTrailRow key={a.id} event={a} />)}
+            {entryAudit.map(a => <AuditTrailRow key={a.id} event={a} actorName={actorNames.get(a.actor_id || '')} />)}
           </div>
         )}
       </div>
@@ -628,8 +719,8 @@ export default function Reports() {
               <CardContent className="p-0 max-h-[400px] overflow-y-auto">
                 <div className="divide-y">
                   {auditEvents.map(e => (
-                    <div key={e.id} className="px-4 py-2">
-                      <AuditTrailRow event={e} />
+                    <div key={e.id}>
+                      <AuditTrailRow event={e} actorName={actorNames.get(e.actor_id || '')} />
                     </div>
                   ))}
                 </div>
