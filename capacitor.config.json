@@ -1,0 +1,9 @@
+{
+  "appId": "app.lovable.1fc9eedc91d94d4fa24daba0b1c277e1",
+  "appName": "TimeVault",
+  "webDir": "dist",
+  "server": {
+    "url": "https://1fc9eedc-91d9-4d4f-a24d-aba0b1c277e1.lovableproject.com?forceHideBadge=true",
+    "cleartext": true
+  }
+}
