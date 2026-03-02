@@ -266,7 +266,7 @@ export function useRecalculatePto() {
         // PTO taken from days_off in this week
         const ptoTaken = (daysOff || [])
           .filter(d => d.date_start >= week.start && d.date_start <= week.end && d.type !== 'office_closed')
-          .reduce((sum, d) => sum + (Number(d.hours) || 8), 0);
+          .reduce((sum, d) => sum + (d.hours != null ? Number(d.hours) : 8), 0);
 
         // Determine tier for this week
         const tier = getTierForDate(s.hire_date, week.start);
