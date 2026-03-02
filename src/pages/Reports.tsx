@@ -336,7 +336,7 @@ export default function Reports() {
                           <td className="px-4 py-2">{formatDate(t.entry_date)}</td>
                           <td className="px-4 py-2 time-display">{t.expected_start_time?.slice(0, 5)}</td>
                           <td className="px-4 py-2 time-display">
-                            {new Date(t.actual_start_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                            {formatTime(t.actual_start_time)}
                           </td>
                           <td className="px-4 py-2 font-semibold">{t.minutes_late}</td>
                           <td className="px-4 py-2 text-xs max-w-[200px]">{t.reason_text || '—'}</td>
