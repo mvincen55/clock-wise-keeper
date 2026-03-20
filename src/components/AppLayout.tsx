@@ -13,11 +13,10 @@ const coreNavItems = [
   { to: '/my-requests', icon: Send, label: 'My Requests' },
   { to: '/reports', icon: FileText, label: 'Reports' },
   { to: '/work-zones', icon: MapPin, label: 'Work Zones' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
-  const { privacyLock, user } = useAuth();
+  const { privacyLock, signOut, user } = useAuth();
   const { data: ctx } = useOrgContext();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -62,12 +61,30 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </nav>
         <div className="px-3 py-4 border-t border-sidebar-border space-y-1">
           <p className="px-3 mb-2 text-xs text-muted-foreground truncate">{user?.email}</p>
+          <Link
+            to="/settings"
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              location.pathname === '/settings'
+                ? 'bg-sidebar-accent text-sidebar-primary'
+                : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+            }`}
+          >
+            <Settings className="h-4 w-4" />
+            Settings
+          </Link>
           <button
             onClick={privacyLock}
             className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 transition-colors font-medium"
           >
             <ShieldCheck className="h-4 w-4" />
             Privacy Lock
+          </button>
+          <button
+            onClick={signOut}
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 transition-colors font-medium"
+          >
+            <LogOut className="h-4 w-4" />
+            Log Out
           </button>
         </div>
       </aside>
