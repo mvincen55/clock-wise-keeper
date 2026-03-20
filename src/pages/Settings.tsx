@@ -228,12 +228,6 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      {/* Bulk Auto-Repair Tool */}
-      <BulkRepairTool />
-
-
-      {/* Wipe Data Tool */}
-      <WipeDataTool />
     </div>
   );
 }
