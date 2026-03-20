@@ -45,7 +45,7 @@ export default function Dashboard() {
   const clockAction = useClockAction();
   const [now, setNow] = useState(new Date());
   const [autoClockEnabled, setAutoClockEnabled] = useState(() => {
-    return localStorage.getItem('timevault_auto_clock') === 'true';
+    return localStorage.getItem('timevault_auto_clock') !== 'false';
   });
   const [punchEditorOpen, setPunchEditorOpen] = useState(false);
   const { data: zones } = useWorkZones();
