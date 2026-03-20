@@ -145,7 +145,7 @@ export default function DaysOff() {
 
   const userTimezone = payrollSettings?.timezone || 'America/New_York';
 
-  const requiresNotes = (type: string) => type === 'medical_leave' || type === 'unscheduled';
+  const requiresNotes = (type: string) => type === 'medical_leave';
 
   const [form, setForm] = useState({
     date_start: '',
