@@ -38,7 +38,6 @@ function validateLocationInput(body: any): { lat: number; lng: number; accuracy:
     if (typeof accuracy !== "number" || accuracy < 0) {
       throw new Error("Invalid accuracy (must be >= 0)");
     }
-    // Cap at 100km but don't reject - GPS can report very high values
     validatedAccuracy = Math.min(accuracy, 100000);
   }
 
@@ -63,38 +62,69 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("Missing authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Use anon key with user's auth context - respects RLS
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) throw new Error("Unauthorized");
+    // Use getClaims for fast JWT validation
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const userId = claimsData.claims.sub as string;
 
     const rawBody = await req.json();
     const { lat, lng, accuracy, timestamp: now } = validateLocationInput(rawBody);
 
     const lowConfidence = accuracy != null && accuracy > 100;
 
+    // Resolve employee record for org_id and employee_id
+    const { data: empData, error: empError } = await supabase
+      .from("employees")
+      .select("id, org_id")
+      .eq("user_id", userId)
+      .limit(1)
+      .maybeSingle();
+
+    if (empError || !empData) {
+      return new Response(JSON.stringify({
+        action_taken: "none",
+        zone: null,
+        reason: "no_employee_record",
+        confidence_flag: !lowConfidence,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const employeeId = empData.id;
+    const orgId = empData.org_id;
+
     // Resolve user's timezone for local date calculation
-    const { data: tzData } = await supabase.rpc('get_user_timezone', { p_user_id: user.id });
+    const { data: tzData } = await supabase.rpc('get_user_timezone', { p_user_id: userId });
     const userTz = tzData || 'America/New_York';
 
-    // Compute today's date in the user's local timezone (not UTC!)
-    const nowMs = new Date(now).getTime();
-    const localDateStr = new Date(now).toLocaleString('en-CA', { timeZone: userTz }).split(',')[0]; // YYYY-MM-DD format
+    const localDateStr = new Date(now).toLocaleString('en-CA', { timeZone: userTz }).split(',')[0];
     const today = localDateStr;
 
     // Get active work zones for user (RLS enforces ownership)
     const { data: zones } = await supabase
       .from("work_zones")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .eq("is_active", true);
 
     if (!zones?.length) {
@@ -123,7 +153,7 @@ serve(async (req) => {
     const { data: lastEvents } = await supabase
       .from("location_events")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(1);
 
@@ -148,8 +178,6 @@ serve(async (req) => {
     let reason = "no_status_change";
     let punchId: string | null = null;
 
-    // today is already computed above using user's local timezone
-
     if (zoneStatus === "entered" && matchedZone) {
       const delayMs = (matchedZone.enter_delay_minutes || 2) * 60000;
       if (lastEvent) {
@@ -164,7 +192,7 @@ serve(async (req) => {
         const { data: todayEntry } = await supabase
           .from("time_entries")
           .select("id")
-          .eq("user_id", user.id)
+          .eq("user_id", userId)
           .eq("entry_date", today)
           .maybeSingle();
 
@@ -181,13 +209,13 @@ serve(async (req) => {
             actionTaken = "none";
             reason = "already_clocked_in";
           } else {
-            const result = await createAutoPunch(supabase, user.id, today, "in", now, lowConfidence, lat, lng, todayEntry.id);
+            const result = await createAutoPunch(supabase, userId, orgId, employeeId, today, "in", now, lowConfidence, lat, lng, todayEntry.id);
             actionTaken = "auto_clock_in";
             reason = "entered_zone";
             punchId = result.punchId;
           }
         } else {
-          const result = await createAutoPunch(supabase, user.id, today, "in", now, lowConfidence, lat, lng, null);
+          const result = await createAutoPunch(supabase, userId, orgId, employeeId, today, "in", now, lowConfidence, lat, lng, null);
           actionTaken = "auto_clock_in";
           reason = "entered_zone";
           punchId = result.punchId;
@@ -208,7 +236,7 @@ serve(async (req) => {
         const { data: todayEntry } = await supabase
           .from("time_entries")
           .select("id")
-          .eq("user_id", user.id)
+          .eq("user_id", userId)
           .eq("entry_date", today)
           .maybeSingle();
 
@@ -225,7 +253,7 @@ serve(async (req) => {
             actionTaken = "none";
             reason = "already_clocked_out";
           } else {
-            const result = await createAutoPunch(supabase, user.id, today, "out", now, lowConfidence, lat, lng, todayEntry.id);
+            const result = await createAutoPunch(supabase, userId, orgId, employeeId, today, "out", now, lowConfidence, lat, lng, todayEntry.id);
             actionTaken = "auto_clock_out";
             reason = "exited_zone";
             punchId = result.punchId;
@@ -239,7 +267,9 @@ serve(async (req) => {
 
     // Log location event
     await supabase.from("location_events").insert({
-      user_id: user.id,
+      user_id: userId,
+      org_id: orgId,
+      employee_id: employeeId,
       latitude: lat,
       longitude: lng,
       accuracy,
@@ -269,6 +299,8 @@ serve(async (req) => {
 async function createAutoPunch(
   supabase: any,
   userId: string,
+  orgId: string,
+  employeeId: string,
   date: string,
   punchType: "in" | "out",
   punchTime: string,
@@ -282,7 +314,13 @@ async function createAutoPunch(
   if (!entryId) {
     const { data: newEntry, error } = await supabase
       .from("time_entries")
-      .insert({ user_id: userId, entry_date: date, source: "auto_location" })
+      .insert({
+        user_id: userId,
+        org_id: orgId,
+        employee_id: employeeId,
+        entry_date: date,
+        source: "auto_location",
+      })
       .select("id")
       .single();
     if (error) throw error;
@@ -304,6 +342,8 @@ async function createAutoPunch(
     .from("punches")
     .insert({
       time_entry_id: entryId,
+      org_id: orgId,
+      employee_id: employeeId,
       seq: nextSeq,
       punch_type: punchType,
       punch_time: punchTime,
@@ -339,6 +379,8 @@ async function createAutoPunch(
   // Audit
   await supabase.from("audit_events").insert({
     user_id: userId,
+    org_id: orgId,
+    employee_id: employeeId,
     event_type: `auto_${punchType}`,
     event_details: {
       punch_time: punchTime,
