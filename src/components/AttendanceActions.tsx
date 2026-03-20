@@ -70,7 +70,7 @@ export function AttendanceActions({ row, alwaysShow = false }: AttendanceActions
     setAction('mark_day_off');
   };
 
-  const requiresNotes = dayOffForm.type === 'medical_leave' || dayOffForm.type === 'unscheduled';
+  const requiresNotes = dayOffForm.type === 'medical_leave';
 
   const handleMarkDayOff = async () => {
     if (!dayOffForm.reason.trim()) return;
