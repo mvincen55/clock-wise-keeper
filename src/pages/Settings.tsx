@@ -12,9 +12,6 @@ import { Loader2, Shield, Timer, CalendarDays, Plus, Trash2, DollarSign, Refresh
 import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/time-utils';
 import ScheduleManager from '@/components/ScheduleManager';
-import WipeDataTool from '@/components/WipeDataTool';
-
-import BulkRepairTool from '@/components/BulkRepairTool';
 
 const WEEKDAY_OPTIONS = [
   { value: '0', label: 'Sunday' },
@@ -231,12 +228,6 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      {/* Bulk Auto-Repair Tool */}
-      <BulkRepairTool />
-
-
-      {/* Wipe Data Tool */}
-      <WipeDataTool />
     </div>
   );
 }
