@@ -16,7 +16,7 @@ const coreNavItems = [
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
-  const { privacyLock, user } = useAuth();
+  const { privacyLock, signOut, user } = useAuth();
   const { data: ctx } = useOrgContext();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
