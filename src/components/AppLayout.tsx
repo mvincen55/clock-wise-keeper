@@ -13,7 +13,6 @@ const coreNavItems = [
   { to: '/my-requests', icon: Send, label: 'My Requests' },
   { to: '/reports', icon: FileText, label: 'Reports' },
   { to: '/work-zones', icon: MapPin, label: 'Work Zones' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
