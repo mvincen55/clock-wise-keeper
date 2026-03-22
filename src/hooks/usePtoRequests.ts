@@ -318,6 +318,22 @@ export function useReviewPtoRequest() {
         after_json: { status: input.status, manager_note: input.manager_note },
         reason: input.manager_note || request.note,
       });
+      // Notify the employee about the decision
+      const reqCreatedBy = request.created_by;
+      if (reqCreatedBy && reqCreatedBy !== user.id) {
+        await createNotification({
+          org_id: ctx.org_id,
+          recipient_user_id: reqCreatedBy,
+          actor_user_id: user.id,
+          notification_type: input.status === 'approved' ? 'pto_request_approved' : 'pto_request_denied',
+          title: input.status === 'approved' ? 'PTO Request Approved' : 'PTO Request Denied',
+          message: input.status === 'approved'
+            ? `Your ${request.pto_type.toUpperCase()} request for ${request.start_date} to ${request.end_date} has been approved`
+            : `Your ${request.pto_type.toUpperCase()} request for ${request.start_date} to ${request.end_date} has been denied${input.manager_note ? ': ' + input.manager_note : ''}`,
+          related_table: 'pto_requests',
+          related_id: input.id,
+        });
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['org-pto-requests'] });
