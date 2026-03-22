@@ -542,11 +542,11 @@ function TardiesTab({ employeeId, range }: { employeeId: string; range: { start:
   );
 }
 
-/* ─── Callouts Tab ─── */
-function CalloutsTab({ employeeId }: { employeeId: string }) {
-  const { data: daysOff, isLoading } = useEmployeeDaysOff(employeeId);
+/* ─── Callouts Tab (unscheduled only) ─── */
+function CalloutsTab({ employeeId, range }: { employeeId: string; range: { start: string; end: string } }) {
+  const { data: daysOff, isLoading } = useEmployeeDaysOff(employeeId, range.start, range.end, 'unscheduled');
   if (isLoading) return <LoadingSpinner />;
-  if (!daysOff?.length) return <EmptyState text="No callouts or days off recorded." />;
+  if (!daysOff?.length) return <EmptyState text="No callouts in this date range. 🎉" />;
 
   return (
     <div className="divide-y rounded-lg border max-h-80 overflow-y-auto">
