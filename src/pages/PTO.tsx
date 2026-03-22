@@ -28,6 +28,7 @@ export default function PTO() {
   const { data: ctx } = useOrgContext();
   const { toast } = useToast();
   const [requestModalOpen, setRequestModalOpen] = useState(false);
+  const [correctionTarget, setCorrectionTarget] = useState<{ request: PtoRequest; mode: 'cancel' | 'correct' } | null>(null);
   const { data: myPtoRequests } = useMyPtoRequests();
   const cancelRequest = useCancelPtoRequest();
   const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
