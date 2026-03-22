@@ -103,6 +103,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <span className="font-semibold">TimeVault</span>
           </div>
           <div className="flex items-center gap-1">
+            <NotificationBell />
             <Button variant="ghost" size="icon" onClick={privacyLock} className="text-destructive">
               <ShieldCheck className="h-5 w-5" />
             </Button>
