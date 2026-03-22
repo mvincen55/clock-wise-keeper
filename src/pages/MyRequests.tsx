@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMyChangeRequests, ChangeRequestRow } from '@/hooks/useChangeRequests';
 import { ChangeRequestModal } from '@/components/ChangeRequestModal';
 import { Card, CardContent } from '@/components/ui/card';
@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/time-utils';
 import { Loader2, Plus, Inbox } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useQueryClient } from '@tanstack/react-query';
 
 const statusBadge: Record<string, { label: string; className: string }> = {
   pending: { label: 'Pending', className: 'bg-warning/20 text-warning' },
