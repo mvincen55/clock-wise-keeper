@@ -99,6 +99,35 @@ export function useSubmitCorrectionRequest() {
         reason: params.reason.trim(),
       });
       if (error) throw error;
+
+      // Notify managers about the new correction request
+      const { data: managers } = await supabase
+        .from('org_members')
+        .select('user_id')
+        .eq('org_id', ctx.org_id)
+        .in('role', ['owner', 'manager'])
+        .eq('status', 'active');
+
+      const { data: emp } = await supabase
+        .from('employees')
+        .select('display_name')
+        .eq('id', ctx.employee_id)
+        .single();
+
+      if (managers) {
+        for (const m of managers) {
+          if (m.user_id === user.id) continue;
+          await createNotification({
+            org_id: ctx.org_id,
+            recipient_user_id: m.user_id,
+            actor_user_id: user.id,
+            notification_type: 'correction_request_new',
+            title: 'New Correction Request',
+            message: `${emp?.display_name || 'An employee'} submitted a correction request: ${params.reason.trim()}`,
+            related_table: 'correction_requests',
+          });
+        }
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['correction-requests'] });
