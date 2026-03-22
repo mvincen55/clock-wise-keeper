@@ -874,14 +874,12 @@ export default function DaysOff() {
           </Card>
         </TabsContent>
 
-        {/* CALENDAR TAB */}
+        {/* PERSONAL CALENDAR TAB */}
         <TabsContent value="calendar">
-          <AttendanceCalendar
+          <PersonalCalendar
             daysOff={daysOff || []}
             closures={closures || []}
-            isManager={isManager}
-            onAddDayOff={handleCalendarAddDayOff}
-            onAddClosure={handleCalendarAddClosure}
+            statusRows={statusRows || []}
           />
         </TabsContent>
       </Tabs>
