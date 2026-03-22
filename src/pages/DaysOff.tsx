@@ -110,7 +110,10 @@ export default function DaysOff() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: payrollSettings } = usePayrollSettings();
+  const { data: ctx } = useOrgContext();
   const { toast } = useToast();
+
+  const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
   // Default date range to current pay period
   const weekStartDay = payrollSettings?.week_start_day ?? 1;
@@ -133,6 +136,7 @@ export default function DaysOff() {
   const recompute = useRecomputeAttendance();
   const addDayOff = useAddDayOff();
   const deleteDayOff = useDeleteDayOff();
+  const addClosure = useAddClosure();
   const updateTardy = useUpdateTardy();
 
   const [open, setOpen] = useState(false);
