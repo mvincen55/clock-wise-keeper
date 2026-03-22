@@ -83,6 +83,7 @@ export default function ApprovalQueue() {
   const [reviewDecision, setReviewDecision] = useState<'approved' | 'denied'>('approved');
   const [reviewReason, setReviewReason] = useState('');
   const [activeTab, setActiveTab] = useState('change-requests');
+  const { data: counts } = useApprovalCounts();
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
