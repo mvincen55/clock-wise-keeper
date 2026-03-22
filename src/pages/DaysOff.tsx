@@ -9,7 +9,7 @@ import { useAttendanceExceptions, AttendanceExceptionRow } from '@/hooks/useAtte
 import { useAttendanceDayStatus, useRecomputeAttendance, AttendanceDayStatusRow } from '@/hooks/useAttendanceDayStatus';
 import { useOfficeClosures, useAddClosure } from '@/hooks/useOfficeClosures';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import AttendanceCalendar from '@/components/AttendanceCalendar';
+import PersonalCalendar from '@/components/PersonalCalendar';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { useAuth } from '@/hooks/useAuth';
 import { formatDate } from '@/lib/time-utils';
