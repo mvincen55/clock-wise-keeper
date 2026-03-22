@@ -16,8 +16,12 @@ export function formatTime(date: Date | string): string {
 }
 
 export function formatDate(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date + 'T00:00:00') : date;
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  if (typeof date === 'string') {
+    // If it's a date-only string (YYYY-MM-DD), append time to avoid timezone shift
+    const d = date.includes('T') ? new Date(date) : new Date(date + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 export function formatDateShort(date: Date | string): string {
