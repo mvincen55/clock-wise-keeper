@@ -156,6 +156,22 @@ function ScheduleTab({ employee }: { employee: Employee }) {
   const [formRemote, setFormRemote] = useState(false);
   const [formWeekdays, setFormWeekdays] = useState<WeekdayDraft[]>([...DEFAULT_WEEKDAYS]);
 
+  const dayBefore = (date: string) => {
+    const d = new Date(`${date}T00:00:00`);
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  };
+
+  const hasOverlap = (startA: string, endA: string | null, startB: string, endB: string | null) => {
+    const safeEndA = endA ?? '9999-12-31';
+    const safeEndB = endB ?? '9999-12-31';
+    return startA <= safeEndB && startB <= safeEndA;
+  };
+
+  const ensureNoError = (error: { message?: string } | null) => {
+    if (error) throw new Error(error.message || 'Something went wrong while saving the schedule.');
+  };
+
   const openCreate = () => {
     setEditingAssignment(null);
     setFormName('');
@@ -202,50 +218,96 @@ function ScheduleTab({ employee }: { employee: Employee }) {
     setSaving(true);
     try {
       if (editingAssignment) {
+        const { data: existingVersions, error: existingVersionsError } = await supabase
+          .from('schedule_versions')
+          .select('id, effective_start_date, effective_end_date')
+          .eq('org_id', ctx.org_id)
+          .eq('employee_id', employee.id);
+        ensureNoError(existingVersionsError);
+
+        const overlappingVersion = (existingVersions || []).find((version: any) =>
+          version.id !== editingAssignment.schedule_version?.id &&
+          hasOverlap(version.effective_start_date, version.effective_end_date, formStart, formEnd || null)
+        );
+
+        if (overlappingVersion) {
+          throw new Error('This date range overlaps existing schedule history. Edit or remove the overlapping schedule first.');
+        }
+
         // Update existing schedule version + assignment
         const sv = editingAssignment.schedule_version;
-        await supabase.from('schedule_versions').update({
+        const { error: versionUpdateError } = await supabase.from('schedule_versions').update({
           name: formName || null,
           effective_start_date: formStart,
           effective_end_date: formEnd || null,
           apply_to_remote: formRemote,
         }).eq('id', sv.id);
+        ensureNoError(versionUpdateError);
 
         for (const wd of sv.weekdays) {
           const draft = formWeekdays.find((d: any) => d.weekday === wd.weekday);
           if (draft) {
-            await supabase.from('schedule_weekdays').update({
+            const { error: weekdayUpdateError } = await supabase.from('schedule_weekdays').update({
               enabled: draft.enabled, start_time: draft.start_time, end_time: draft.end_time,
               grace_minutes: draft.grace_minutes, threshold_minutes: draft.threshold_minutes,
             }).eq('id', wd.id);
+            ensureNoError(weekdayUpdateError);
           }
         }
 
-        await supabase.from('schedule_assignments').update({
+        const { error: assignmentUpdateError } = await supabase.from('schedule_assignments').update({
           effective_start: formStart,
           effective_end: formEnd || null,
         }).eq('id', editingAssignment.id);
+        ensureNoError(assignmentUpdateError);
 
         toast({ title: 'Schedule updated' });
       } else {
-        // Auto-end previous active assignments AND their schedule versions
-        if (assignments?.length) {
-          const newEndDate = new Date(formStart + 'T00:00:00');
-          newEndDate.setDate(newEndDate.getDate() - 1);
-          const newEndStr = newEndDate.toISOString().split('T')[0];
-          for (const a of assignments as any[]) {
-            if (!a.effective_end || a.effective_end >= formStart) {
-              await supabase.from('schedule_assignments').update({
-                effective_end: newEndStr,
-              }).eq('id', a.id);
-              // Also end-date the schedule version to avoid GiST exclusion conflict
-              if (a.schedule_version?.id) {
-                await supabase.from('schedule_versions').update({
-                  effective_end_date: newEndStr,
-                }).eq('id', a.schedule_version.id);
-              }
-            }
-          }
+        const newEndStr = dayBefore(formStart);
+        const [{ data: existingAssignments, error: existingAssignmentsError }, { data: existingVersions, error: existingVersionsError }] = await Promise.all([
+          supabase
+            .from('schedule_assignments')
+            .select('id, effective_start, effective_end, schedule_version_id')
+            .eq('org_id', ctx.org_id)
+            .eq('employee_id', employee.id),
+          supabase
+            .from('schedule_versions')
+            .select('id, effective_start_date, effective_end_date')
+            .eq('org_id', ctx.org_id)
+            .eq('employee_id', employee.id),
+        ]);
+
+        ensureNoError(existingAssignmentsError);
+        ensureNoError(existingVersionsError);
+
+        const overlappingAssignments = (existingAssignments || []).filter((assignment: any) =>
+          hasOverlap(assignment.effective_start, assignment.effective_end, formStart, formEnd || null)
+        );
+        const overlappingVersions = (existingVersions || []).filter((version: any) =>
+          hasOverlap(version.effective_start_date, version.effective_end_date, formStart, formEnd || null)
+        );
+
+        const futureConflict = overlappingAssignments.find((assignment: any) => assignment.effective_start >= formStart)
+          || overlappingVersions.find((version: any) => version.effective_start_date >= formStart);
+
+        if (futureConflict) {
+          throw new Error('This date range overlaps existing schedule history. Edit or remove the overlapping future schedule first.');
+        }
+
+        for (const assignment of overlappingAssignments) {
+          const { error: closeAssignmentError } = await supabase
+            .from('schedule_assignments')
+            .update({ effective_end: newEndStr })
+            .eq('id', assignment.id);
+          ensureNoError(closeAssignmentError);
+        }
+
+        for (const version of overlappingVersions) {
+          const { error: closeVersionError } = await supabase
+            .from('schedule_versions')
+            .update({ effective_end_date: newEndStr })
+            .eq('id', version.id);
+          ensureNoError(closeVersionError);
         }
 
         // Create schedule version
