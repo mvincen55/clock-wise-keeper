@@ -123,11 +123,6 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      {/* Work Schedule (Versioned) */}
-      <div id="work-schedule">
-        <ScheduleManager />
-      </div>
-
       {/* Office Closures */}
       <Card className="card-elevated">
         <CardHeader className="border-b">
