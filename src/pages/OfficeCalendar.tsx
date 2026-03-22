@@ -6,16 +6,15 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useOrgEmployees } from '@/hooks/useEmployees';
 import { useOfficeClosures, useAddClosure } from '@/hooks/useOfficeClosures';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAddDayOff } from '@/hooks/useDaysOff';
-import { OfficeClosureRow } from '@/hooks/useOfficeClosures';
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -37,6 +36,8 @@ type CalendarEvent = {
   label: string;
   colorKey: string;
   employeeName?: string;
+  createdBy?: string | null;
+  source: 'days_off' | 'office_closures';
 };
 
 // Open Saturdays stored in localStorage per org
@@ -55,6 +56,7 @@ export default function OfficeCalendar() {
   const { data: ctx } = useOrgContext();
   const { data: employees } = useOrgEmployees();
   const { toast } = useToast();
+  const qc = useQueryClient();
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -73,6 +75,11 @@ export default function OfficeCalendar() {
     closure_name: '',
   });
 
+  // Edit state for own events
+  const [editOpen, setEditOpen] = useState(false);
+  const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
+  const [editForm, setEditForm] = useState({ notes: '', hours: '0' });
+
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
@@ -80,7 +87,6 @@ export default function OfficeCalendar() {
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
   const today = () => setCurrentDate(new Date());
 
-  // Fetch all org days_off for this month range (across all employees)
   const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
   const monthEnd = `${year}-${String(month + 1).padStart(2, '0')}-${new Date(year, month + 1, 0).getDate()}`;
   
@@ -102,17 +108,15 @@ export default function OfficeCalendar() {
   const addClosure = useAddClosure();
   const addDayOff = useAddDayOff();
 
-  // Build employee lookup
   const employeeMap = useMemo(() => {
     const map = new Map<string, string>();
     (employees || []).forEach(e => map.set(e.id, e.display_name));
     return map;
   }, [employees]);
 
-  // Open Saturdays
   const openSaturdays = useMemo(() => ctx ? getOpenSaturdays(ctx.org_id) : [], [ctx, saturdayDialogOpen]);
 
-  // Build events map
+  // Build events map - include created_by and source
   const eventsMap = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
     const addEvent = (date: string, event: CalendarEvent) => {
@@ -121,7 +125,7 @@ export default function OfficeCalendar() {
     };
 
     (allDaysOff || []).forEach(d => {
-      if (d.type === 'office_closed') return; // handled by closures
+      if (d.type === 'office_closed') return;
       const empName = employeeMap.get(d.employee_id) || 'Unknown';
       const initials = getInitials(empName);
       const isScheduled = ['scheduled_with_notice', 'medical_leave', 'other'].includes(d.type);
@@ -134,12 +138,12 @@ export default function OfficeCalendar() {
       const end = new Date(d.date_end + 'T00:00:00');
       for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
         const dateStr = cur.toISOString().split('T')[0];
-        addEvent(dateStr, { id: d.id, label, colorKey, employeeName: empName });
+        addEvent(dateStr, { id: d.id, label, colorKey, employeeName: empName, createdBy: d.created_by, source: 'days_off' });
       }
     });
 
     (closures || []).forEach(c => {
-      addEvent(c.closure_date, { id: c.id, label: c.name, colorKey: 'closure' });
+      addEvent(c.closure_date, { id: c.id, label: c.name, colorKey: 'closure', createdBy: c.created_by, source: 'office_closures' });
     });
 
     return map;
@@ -162,16 +166,6 @@ export default function OfficeCalendar() {
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  const handleDayClick = (day: number) => {
-    if (!isManager) return;
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    setSelectedDate(dateStr);
-    setForm({ ...form, date_start: dateStr, date_end: dateStr, closure_name: '' });
-    setEventType('day_off');
-    setSelectedEmployee('');
-    setAddOpen(true);
-  };
-
   const handleSave = async () => {
     if (eventType === 'closure') {
       if (!form.closure_name.trim() || !form.date_start) return;
@@ -193,7 +187,6 @@ export default function OfficeCalendar() {
       const emp = (employees || []).find(e => e.id === selectedEmployee);
       if (!emp) return;
       try {
-        // Insert day off for selected employee
         const { error } = await supabase.from('days_off').insert({
           user_id: emp.user_id || user!.id,
           org_id: ctx!.org_id,
@@ -207,6 +200,7 @@ export default function OfficeCalendar() {
         });
         if (error) throw error;
         toast({ title: 'Day off added' });
+        qc.invalidateQueries({ queryKey: ['org-days-off'] });
       } catch (err: any) {
         toast({ title: 'Error', description: err.message, variant: 'destructive' });
       }
@@ -238,14 +232,41 @@ export default function OfficeCalendar() {
   };
 
   const isClosedDay = (dateStr: string, dayOfWeek: number): { closed: boolean; closureName?: string } => {
-    // Sunday always closed
     if (dayOfWeek === 0) return { closed: true, closureName: 'Closed' };
-    // Saturday closed unless in openSaturdays
     if (dayOfWeek === 6 && !openSaturdays.includes(dateStr)) return { closed: true, closureName: 'Closed' };
-    // Check office closures
     const closureEvents = (eventsMap.get(dateStr) || []).filter(e => e.colorKey === 'closure');
     if (closureEvents.length > 0) return { closed: true, closureName: closureEvents[0].label };
     return { closed: false };
+  };
+
+  // Handle clicking on own event to edit
+  const handleEventClick = (e: React.MouseEvent, evt: CalendarEvent) => {
+    e.stopPropagation();
+    if (evt.createdBy !== user?.id) return; // only creator can interact
+    setEditEvent(evt);
+    setEditForm({ notes: '', hours: '0' });
+    setEditOpen(true);
+  };
+
+  const handleDeleteEvent = async () => {
+    if (!editEvent) return;
+    try {
+      if (editEvent.source === 'days_off') {
+        const { error } = await supabase.from('days_off').delete().eq('id', editEvent.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('office_closures').delete().eq('id', editEvent.id);
+        if (error) throw error;
+      }
+      toast({ title: 'Event deleted' });
+      qc.invalidateQueries({ queryKey: ['org-days-off'] });
+      qc.invalidateQueries({ queryKey: ['office-closures'] });
+      qc.invalidateQueries({ queryKey: ['days-off'] });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+    setEditOpen(false);
+    setEditEvent(null);
   };
 
   return (
@@ -261,7 +282,13 @@ export default function OfficeCalendar() {
               <Button variant="outline" size="sm" onClick={() => setSaturdayDialogOpen(true)}>
                 Open Saturdays
               </Button>
-              <Button size="sm" onClick={() => { setSelectedDate(null); setAddOpen(true); }}>
+              <Button size="sm" onClick={() => {
+                setSelectedDate(null);
+                setForm({ type: 'scheduled_with_notice', date_start: '', date_end: '', hours: '0', notes: '', closure_name: '' });
+                setEventType('day_off');
+                setSelectedEmployee('');
+                setAddOpen(true);
+              }}>
                 <Plus className="mr-1 h-4 w-4" />
                 Add Event
               </Button>
@@ -311,10 +338,9 @@ export default function OfficeCalendar() {
                 return (
                   <div
                     key={di}
-                    className={`min-h-[100px] border-r last:border-r-0 p-1 transition-colors ${
-                      closed ? 'bg-muted/40' : isManager ? 'cursor-pointer hover:bg-muted/30' : ''
+                    className={`min-h-[100px] border-r last:border-r-0 p-1 ${
+                      closed ? 'bg-muted/40' : ''
                     }`}
-                    onClick={() => !closed && handleDayClick(day)}
                   >
                     <div className="flex items-center justify-between mb-0.5">
                       <div className={`text-xs font-medium flex items-center justify-center w-6 h-6 rounded-full ${
@@ -329,17 +355,21 @@ export default function OfficeCalendar() {
                       </div>
                     )}
                     <div className="space-y-0.5">
-                      {events.slice(0, 4).map((evt, ei) => (
-                        <div
-                          key={ei}
-                          className={`text-[10px] leading-tight px-1 py-0.5 rounded border truncate ${
-                            eventColors[evt.colorKey] || eventColors.off
-                          }`}
-                          title={evt.employeeName || evt.label}
-                        >
-                          {evt.label}
-                        </div>
-                      ))}
+                      {events.slice(0, 4).map((evt, ei) => {
+                        const isOwn = evt.createdBy === user?.id;
+                        return (
+                          <div
+                            key={ei}
+                            className={`text-[10px] leading-tight px-1 py-0.5 rounded border truncate ${
+                              eventColors[evt.colorKey] || eventColors.off
+                            } ${isOwn ? 'cursor-pointer hover:ring-1 hover:ring-primary/50' : ''}`}
+                            title={evt.employeeName || evt.label}
+                            onClick={isOwn ? (e) => handleEventClick(e, evt) : undefined}
+                          >
+                            {evt.label}
+                          </div>
+                        );
+                      })}
                       {events.length > 4 && (
                         <div className="text-[10px] text-muted-foreground px-1">
                           +{events.length - 4} more
@@ -467,6 +497,29 @@ export default function OfficeCalendar() {
             }>
               Save
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Own Event Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Your Event: {editEvent?.label}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {editEvent?.employeeName ? `Employee: ${editEvent.employeeName}` : editEvent?.label}
+            </p>
+            <div className="flex gap-2">
+              <Button variant="destructive" className="flex-1" onClick={handleDeleteEvent}>
+                <Trash2 className="mr-1 h-4 w-4" />
+                Delete Event
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setEditOpen(false)}>
+                Cancel
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

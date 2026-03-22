@@ -11,6 +11,7 @@ export type OfficeClosureRow = {
   is_full_day: boolean;
   hours: number;
   created_at: string;
+  created_by: string | null;
 };
 
 // Standard holidays with computed dates
