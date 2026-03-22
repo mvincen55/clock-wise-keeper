@@ -75,7 +75,7 @@ export function useSubmitCorrectionRequest() {
       reason: string;
     }) => {
       if (!user || !ctx) throw new Error('Not authenticated');
-      if (params.reason.trim().length < 10) throw new Error('Reason must be at least 10 characters');
+      if (!params.reason.trim()) throw new Error('Reason is required');
       
       const { error } = await supabase.from('correction_requests').insert({
         org_id: ctx.org_id,
