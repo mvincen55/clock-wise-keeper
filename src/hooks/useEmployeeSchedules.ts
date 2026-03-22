@@ -39,17 +39,21 @@ export function useEmployeeTardies(employeeId: string | undefined, startDate?: s
   });
 }
 
-export function useEmployeeDaysOff(employeeId: string | undefined) {
+export function useEmployeeDaysOff(employeeId: string | undefined, startDate?: string, endDate?: string, typeFilter?: string) {
   return useQuery({
-    queryKey: ['employee-days-off', employeeId],
+    queryKey: ['employee-days-off', employeeId, startDate, endDate, typeFilter],
     enabled: !!employeeId,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('days_off')
         .select('*')
         .eq('employee_id', employeeId!)
-        .order('date_start', { ascending: false })
-        .limit(50);
+        .order('date_start', { ascending: false });
+      if (startDate) q = q.gte('date_start', startDate);
+      if (endDate) q = q.lte('date_start', endDate);
+      if (typeFilter) q = q.eq('type', typeFilter);
+      q = q.limit(50);
+      const { data, error } = await q;
       if (error) throw error;
       return data || [];
     },
