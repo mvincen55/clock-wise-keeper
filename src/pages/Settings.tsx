@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Loader2, Shield, Timer, CalendarDays, Plus, Trash2, DollarSign, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/time-utils';
-import ScheduleManager from '@/components/ScheduleManager';
 
 const WEEKDAY_OPTIONS = [
   { value: '0', label: 'Sunday' },
@@ -66,7 +65,7 @@ export default function Settings() {
     <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">Configure your work schedule, closures, and payroll</p>
+        <p className="text-muted-foreground">Configure payroll, closures, and security</p>
       </div>
 
       {/* Payroll Settings */}
@@ -123,11 +122,6 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Work Schedule (Versioned) */}
-      <div id="work-schedule">
-        <ScheduleManager />
-      </div>
 
       {/* Office Closures */}
       <Card className="card-elevated">
