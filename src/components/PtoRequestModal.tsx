@@ -81,11 +81,11 @@ export function PtoRequestModal({ open, onClose }: Props) {
           </div>
 
           <div className="space-y-1">
-            <Label>Reason <span className="text-destructive">*</span></Label>
+            <Label>Comment</Label>
             <Textarea
               value={note}
               onChange={e => setNote(e.target.value)}
-              placeholder="Why are you requesting time off?"
+              placeholder=""
               rows={3}
             />
           </div>
