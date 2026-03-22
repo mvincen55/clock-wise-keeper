@@ -340,6 +340,7 @@ export function useReviewPtoRequest() {
       qc.invalidateQueries({ queryKey: ['my-pto-requests'] });
       qc.invalidateQueries({ queryKey: ['days-off'] });
       qc.invalidateQueries({ queryKey: ['pto-ledger'] });
+      qc.invalidateQueries({ queryKey: ['approval-counts'] });
       toast({ title: 'PTO request reviewed' });
     },
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
