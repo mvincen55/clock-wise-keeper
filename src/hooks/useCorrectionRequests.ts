@@ -208,6 +208,22 @@ export function useReviewCorrectionRequest() {
           reason: params.resolution_note.trim(),
           event_details: { correction_request_id: req.id } as any,
         });
+
+        // Notify the employee about the decision
+        if (req.created_by !== user.id) {
+          await createNotification({
+            org_id: req.org_id,
+            recipient_user_id: req.created_by,
+            actor_user_id: user.id,
+            notification_type: params.status === 'approved' ? 'correction_approved' : 'correction_denied',
+            title: params.status === 'approved' ? 'Correction Request Approved' : 'Correction Request Denied',
+            message: params.status === 'approved'
+              ? 'Your correction request has been approved and applied'
+              : `Your correction request has been denied: ${params.resolution_note.trim()}`,
+            related_table: 'correction_requests',
+            related_id: req.id,
+          });
+        }
       }
     },
     onSuccess: () => {
