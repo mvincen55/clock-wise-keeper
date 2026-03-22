@@ -14,7 +14,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
-import { useAddDayOff, DayOffRow } from '@/hooks/useDaysOff';
+import { useAddDayOff } from '@/hooks/useDaysOff';
 import { OfficeClosureRow } from '@/hooks/useOfficeClosures';
 
 function getInitials(name: string): string {
