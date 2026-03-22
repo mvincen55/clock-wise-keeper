@@ -94,7 +94,7 @@ export default function OfficeCalendar() {
         .eq('org_id', ctx!.org_id)
         .lte('date_start', monthEnd)
         .gte('date_end', monthStart);
-      return (data || []) as DayOffRow[];
+      return (data || []) as any[];
     },
   });
 
