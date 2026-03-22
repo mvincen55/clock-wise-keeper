@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useOrgEmployees, useEmployeeAttendanceSummary } from '@/hooks/useEmployees';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,26 +8,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useAddEmployee } from '@/hooks/useEmployees';
 import InviteEmployeeModal from '@/components/InviteEmployeeModal';
 import TeamEmployeeCard from '@/components/TeamEmployeeCard';
-import { Users, Plus, Loader2, UserCheck, UserX, AlertTriangle } from 'lucide-react';
+import { Users, Plus, Loader2, CalendarDays } from 'lucide-react';
 
-function getWeekRange() {
+function getDefaultRange() {
   const now = new Date();
-  const day = now.getDay();
   const start = new Date(now);
-  start.setDate(now.getDate() - day + 1);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
+  start.setDate(now.getDate() - 29);
   return {
     start: start.toISOString().split('T')[0],
-    end: end.toISOString().split('T')[0],
+    end: now.toISOString().split('T')[0],
   };
 }
 
 export default function Team() {
   const { data: ctx, isLoading: ctxLoading } = useOrgContext();
   const { data: employees, isLoading: empLoading } = useOrgEmployees();
-  const weekRange = useMemo(() => getWeekRange(), []);
-  const { data: attendance } = useEmployeeAttendanceSummary(weekRange);
+  const [dateRange, setDateRange] = useState(() => getDefaultRange());
+  const { data: attendance } = useEmployeeAttendanceSummary(dateRange);
   const addEmployee = useAddEmployee();
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({ name: '', email: '' });
@@ -85,10 +81,6 @@ export default function Team() {
     );
   }
 
-  const totalPresent = Object.values(employeeStats).reduce((s, e) => s + e.present, 0);
-  const totalLate = Object.values(employeeStats).reduce((s, e) => s + e.late, 0);
-  const totalAbsent = Object.values(employeeStats).reduce((s, e) => s + e.absent, 0);
-
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
       {/* Header */}
@@ -124,41 +116,23 @@ export default function Team() {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="card-elevated">
-          <CardContent className="p-3 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-success/10 flex items-center justify-center">
-              <UserCheck className="h-4 w-4 text-success" />
-            </div>
-            <div>
-              <p className="text-xl font-bold">{totalPresent}</p>
-              <p className="text-xs text-muted-foreground">Present</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="card-elevated">
-          <CardContent className="p-3 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-warning/10 flex items-center justify-center">
-              <AlertTriangle className="h-4 w-4 text-warning" />
-            </div>
-            <div>
-              <p className="text-xl font-bold">{totalLate}</p>
-              <p className="text-xs text-muted-foreground">Late</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="card-elevated">
-          <CardContent className="p-3 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-destructive/10 flex items-center justify-center">
-              <UserX className="h-4 w-4 text-destructive" />
-            </div>
-            <div>
-              <p className="text-xl font-bold">{totalAbsent}</p>
-              <p className="text-xs text-muted-foreground">Absent</p>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Date Range */}
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 px-4 py-2.5">
+        <CalendarDays className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm font-medium text-muted-foreground">Range:</span>
+        <Input
+          type="date"
+          value={dateRange.start}
+          onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+          className="w-[10rem] h-8 text-xs"
+        />
+        <span className="text-xs text-muted-foreground">to</span>
+        <Input
+          type="date"
+          value={dateRange.end}
+          onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+          className="w-[10rem] h-8 text-xs"
+        />
       </div>
 
       {/* Search */}
@@ -184,6 +158,7 @@ export default function Team() {
               key={emp.id}
               employee={emp}
               stats={employeeStats[emp.id] || { present: 0, late: 0, absent: 0 }}
+              dateRange={dateRange}
             />
           ))}
         </div>
