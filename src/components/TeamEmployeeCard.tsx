@@ -228,15 +228,22 @@ function ScheduleTab({ employee }: { employee: Employee }) {
 
         toast({ title: 'Schedule updated' });
       } else {
-        // Auto-end previous active assignment
+        // Auto-end previous active assignments AND their schedule versions
         if (assignments?.length) {
+          const newEndDate = new Date(formStart + 'T00:00:00');
+          newEndDate.setDate(newEndDate.getDate() - 1);
+          const newEndStr = newEndDate.toISOString().split('T')[0];
           for (const a of assignments as any[]) {
             if (!a.effective_end || a.effective_end >= formStart) {
-              const newEnd = new Date(formStart + 'T00:00:00');
-              newEnd.setDate(newEnd.getDate() - 1);
               await supabase.from('schedule_assignments').update({
-                effective_end: newEnd.toISOString().split('T')[0],
+                effective_end: newEndStr,
               }).eq('id', a.id);
+              // Also end-date the schedule version to avoid GiST exclusion conflict
+              if (a.schedule_version?.id) {
+                await supabase.from('schedule_versions').update({
+                  effective_end_date: newEndStr,
+                }).eq('id', a.schedule_version.id);
+              }
             }
           }
         }
