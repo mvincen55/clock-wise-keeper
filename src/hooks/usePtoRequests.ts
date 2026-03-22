@@ -107,6 +107,36 @@ export function useSubmitPtoRequest() {
         after_json: data,
       });
 
+      // Notify managers/owners about new request
+      const { data: managers } = await supabase
+        .from('org_members')
+        .select('user_id')
+        .eq('org_id', ctx.org_id)
+        .in('role', ['owner', 'manager'])
+        .eq('status', 'active');
+
+      const { data: emp } = await supabase
+        .from('employees')
+        .select('display_name')
+        .eq('id', ctx.employee_id)
+        .single();
+
+      if (managers) {
+        for (const m of managers) {
+          if (m.user_id === user.id) continue;
+          await createNotification({
+            org_id: ctx.org_id,
+            recipient_user_id: m.user_id,
+            actor_user_id: user.id,
+            notification_type: 'pto_request_new',
+            title: 'New PTO Request',
+            message: `${emp?.display_name || 'An employee'} submitted a ${input.pto_type.toUpperCase()} request for ${input.start_date} to ${input.end_date}`,
+            related_table: 'pto_requests',
+            related_id: data.id,
+          });
+        }
+      }
+
       return data;
     },
     onSuccess: () => {
