@@ -117,13 +117,12 @@ export function PtoCorrectionModal({ open, onClose, request, mode }: Props) {
             <Textarea
               value={reason}
               onChange={e => setReason(e.target.value)}
-              placeholder={isCancel ? 'Why do you need to cancel this request? (min 10 chars)' : 'What needs to be changed and why? (min 10 chars)'}
+              placeholder={isCancel ? 'Why do you need to cancel this request?' : 'What needs to be changed and why?'}
               rows={3}
             />
-            <p className="text-xs text-muted-foreground">{reason.trim().length}/10 characters minimum</p>
           </div>
 
-          <Button onClick={handleSubmit} disabled={reason.trim().length < 10 || submit.isPending} className="w-full">
+          <Button onClick={handleSubmit} disabled={!reason.trim() || submit.isPending} className="w-full">
             {submit.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Submit {isCancel ? 'Cancellation' : 'Correction'} Request
           </Button>
