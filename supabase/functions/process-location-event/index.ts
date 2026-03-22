@@ -76,17 +76,18 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    // Validate user via getUser
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      console.error("Auth error:", userError?.message);
+    // Validate user via getClaims
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      console.error("Auth error:", claimsError?.message);
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const userId = user.id;
+    const userId = claimsData.claims.sub as string;
 
     const rawBody = await req.json();
     const { lat, lng, accuracy, timestamp: now } = validateLocationInput(rawBody);
