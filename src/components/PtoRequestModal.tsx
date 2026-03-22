@@ -22,7 +22,7 @@ export function PtoRequestModal({ open, onClose }: Props) {
   const submit = useSubmitPtoRequest();
 
   const handleSubmit = async () => {
-    if (!startDate || !endDate || !note.trim()) return;
+    if (!startDate || !endDate) return;
     await submit.mutateAsync({
       start_date: startDate,
       end_date: endDate,
