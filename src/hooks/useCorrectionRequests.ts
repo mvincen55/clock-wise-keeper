@@ -68,6 +68,7 @@ export function useSubmitCorrectionRequest() {
   const qc = useQueryClient();
 
   return useMutation({
+    retry: 2,
     mutationFn: async (params: {
       target_table: string;
       target_id: string;
@@ -76,6 +77,16 @@ export function useSubmitCorrectionRequest() {
     }) => {
       if (!user || !ctx) throw new Error('Not authenticated');
       if (!params.reason.trim()) throw new Error('Reason is required');
+
+      // Check for duplicate pending request
+      const { data: existing } = await supabase
+        .from('correction_requests')
+        .select('id')
+        .eq('target_id', params.target_id)
+        .eq('created_by', user.id)
+        .eq('status', 'pending')
+        .maybeSingle();
+      if (existing) throw new Error('You already have a pending request for this item');
       
       const { error } = await supabase.from('correction_requests').insert({
         org_id: ctx.org_id,
