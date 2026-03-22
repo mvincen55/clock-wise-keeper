@@ -59,10 +59,9 @@ function getLast30Days() {
   return { start: start.toISOString().split('T')[0], end: end.toISOString().split('T')[0] };
 }
 
-export default function TeamEmployeeCard({ employee, stats }: { employee: Employee; stats: WeekStats }) {
+export default function TeamEmployeeCard({ employee, stats, dateRange }: { employee: Employee; stats: WeekStats; dateRange: { start: string; end: string } }) {
   const [expanded, setExpanded] = useState(false);
   const [tab, setTab] = useState('attendance');
-  const range = useMemo(() => getLast30Days(), []);
 
   return (
     <Card className="card-elevated overflow-hidden">
@@ -80,15 +79,19 @@ export default function TeamEmployeeCard({ employee, stats }: { employee: Employ
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {stats.late > 0 && <Badge variant="outline" className="text-warning border-warning/30 text-xs">{stats.late} late</Badge>}
-          {stats.absent > 0 && <Badge variant="outline" className="text-destructive border-destructive/30 text-xs">{stats.absent} absent</Badge>}
-          {stats.present > 0 && <Badge variant="outline" className="text-success border-success/30 text-xs">{stats.present} present</Badge>}
           {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
         </div>
       </button>
 
       {expanded && (
         <CardContent className="border-t pt-3 pb-4 px-4">
+          {/* Per-employee stats */}
+          <div className="flex items-center gap-3 mb-3">
+            {stats.present > 0 && <Badge variant="outline" className="text-success border-success/30 text-xs">{stats.present} present</Badge>}
+            {stats.late > 0 && <Badge variant="outline" className="text-warning border-warning/30 text-xs">{stats.late} late</Badge>}
+            {stats.absent > 0 && <Badge variant="outline" className="text-destructive border-destructive/30 text-xs">{stats.absent} absent</Badge>}
+          </div>
+
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="w-full grid grid-cols-4 mb-3">
               <TabsTrigger value="attendance" className="text-xs"><Calendar className="h-3 w-3 mr-1" />Attendance</TabsTrigger>
@@ -96,10 +99,10 @@ export default function TeamEmployeeCard({ employee, stats }: { employee: Employ
               <TabsTrigger value="tardies" className="text-xs"><AlertTriangle className="h-3 w-3 mr-1" />Tardies</TabsTrigger>
               <TabsTrigger value="callouts" className="text-xs"><CalendarOff className="h-3 w-3 mr-1" />Callouts</TabsTrigger>
             </TabsList>
-            <TabsContent value="attendance"><AttendanceTab employeeId={employee.id} range={range} /></TabsContent>
+            <TabsContent value="attendance"><AttendanceTab employeeId={employee.id} range={dateRange} /></TabsContent>
             <TabsContent value="schedule"><ScheduleTab employee={employee} /></TabsContent>
-            <TabsContent value="tardies"><TardiesTab employeeId={employee.id} range={range} /></TabsContent>
-            <TabsContent value="callouts"><CalloutsTab employeeId={employee.id} /></TabsContent>
+            <TabsContent value="tardies"><TardiesTab employeeId={employee.id} range={dateRange} /></TabsContent>
+            <TabsContent value="callouts"><CalloutsTab employeeId={employee.id} range={dateRange} /></TabsContent>
           </Tabs>
           <div className="mt-3 flex justify-end">
             <Link to={`/team/${employee.id}`}>
