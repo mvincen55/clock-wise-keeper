@@ -30,8 +30,8 @@ export function PtoCorrectionModal({ open, onClose, request, mode }: Props) {
   const title = isCancel ? 'Request Cancellation' : 'Request Correction';
 
   const handleSubmit = async () => {
-    if (reason.trim().length < 10) {
-      toast({ title: 'Reason must be at least 10 characters', variant: 'destructive' });
+    if (!reason.trim()) {
+      toast({ title: 'Reason is required', variant: 'destructive' });
       return;
     }
 
