@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Loader2, Shield, Timer, CalendarDays, Plus, Trash2, DollarSign, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/time-utils';
-import ScheduleManager from '@/components/ScheduleManager';
 
 const WEEKDAY_OPTIONS = [
   { value: '0', label: 'Sunday' },
