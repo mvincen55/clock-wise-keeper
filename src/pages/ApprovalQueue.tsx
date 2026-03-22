@@ -14,6 +14,7 @@ import { formatDate } from '@/lib/time-utils';
 import { Loader2, CheckCircle, XCircle, Clock, Inbox } from 'lucide-react';
 import { CorrectionQueuePanel } from '@/components/CorrectionQueuePanel';
 import { PtoRequestQueue } from '@/components/PtoRequestQueue';
+import { useApprovalCounts } from '@/hooks/useApprovalCounts';
 
 const statusBadge: Record<string, { label: string; className: string }> = {
   pending: { label: 'Pending', className: 'bg-warning/20 text-warning' },
