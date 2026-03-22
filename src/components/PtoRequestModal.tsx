@@ -28,7 +28,7 @@ export function PtoRequestModal({ open, onClose }: Props) {
       end_date: endDate,
       hours_requested: hours ? parseFloat(hours) : undefined,
       pto_type: ptoType,
-      note: note.trim(),
+      note: note.trim() || '',
     });
     setStartDate('');
     setEndDate('');
