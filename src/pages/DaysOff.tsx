@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDaysOff, useAddDayOff, useDeleteDayOff, DayOffRow } from '@/hooks/useDaysOff';
 import { useTardies, useUpdateTardy, TardyRow } from '@/hooks/useTardies';
@@ -7,7 +7,9 @@ import { TimeFixModal } from '@/components/TimeFixModal';
 import { AttendanceActions } from '@/components/AttendanceActions';
 import { useAttendanceExceptions, AttendanceExceptionRow } from '@/hooks/useAttendanceExceptions';
 import { useAttendanceDayStatus, useRecomputeAttendance, AttendanceDayStatusRow } from '@/hooks/useAttendanceDayStatus';
-import { useOfficeClosures } from '@/hooks/useOfficeClosures';
+import { useOfficeClosures, useAddClosure } from '@/hooks/useOfficeClosures';
+import { useOrgContext } from '@/hooks/useOrgContext';
+import AttendanceCalendar from '@/components/AttendanceCalendar';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { useAuth } from '@/hooks/useAuth';
 import { formatDate } from '@/lib/time-utils';
@@ -108,7 +110,10 @@ export default function DaysOff() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: payrollSettings } = usePayrollSettings();
+  const { data: ctx } = useOrgContext();
   const { toast } = useToast();
+
+  const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
   // Default date range to current pay period
   const weekStartDay = payrollSettings?.week_start_day ?? 1;
@@ -131,6 +136,7 @@ export default function DaysOff() {
   const recompute = useRecomputeAttendance();
   const addDayOff = useAddDayOff();
   const deleteDayOff = useDeleteDayOff();
+  const addClosure = useAddClosure();
   const updateTardy = useUpdateTardy();
 
   const [open, setOpen] = useState(false);
@@ -211,6 +217,28 @@ export default function DaysOff() {
       toast({ title: 'Recompute failed', description: err.message, variant: 'destructive' });
     }
   };
+
+  const handleCalendarAddDayOff = useCallback(async (input: {
+    date_start: string; date_end: string;
+    type: 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'medical_leave' | 'other';
+    hours?: number; notes?: string;
+  }) => {
+    try {
+      await addDayOff.mutateAsync(input);
+      toast({ title: 'Day off added' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  }, [addDayOff, toast]);
+
+  const handleCalendarAddClosure = useCallback(async (input: { closure_date: string; name: string }) => {
+    try {
+      await addClosure.mutateAsync(input);
+      toast({ title: 'Office closure added' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  }, [addClosure, toast]);
 
   // Build a lookup of days_off by date for counter classification
   const daysOffByDate = useMemo(() => {
@@ -527,6 +555,7 @@ export default function DaysOff() {
             )}
           </TabsTrigger>
           <TabsTrigger value="closures">Closures</TabsTrigger>
+          <TabsTrigger value="calendar">Calendar</TabsTrigger>
         </TabsList>
 
         {/* ATTENDANCE STATUS TAB */}
@@ -843,6 +872,17 @@ export default function DaysOff() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* CALENDAR TAB */}
+        <TabsContent value="calendar">
+          <AttendanceCalendar
+            daysOff={daysOff || []}
+            closures={closures || []}
+            isManager={isManager}
+            onAddDayOff={handleCalendarAddDayOff}
+            onAddClosure={handleCalendarAddClosure}
+          />
         </TabsContent>
       </Tabs>
 
