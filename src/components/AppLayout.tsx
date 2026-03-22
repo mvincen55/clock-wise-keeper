@@ -23,6 +23,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { data: ctx } = useOrgContext();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { data: approvalCounts } = useApprovalCounts();
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
   const navItems = [
