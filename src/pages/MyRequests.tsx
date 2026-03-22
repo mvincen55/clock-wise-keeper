@@ -26,6 +26,34 @@ const typeLabels: Record<string, string> = {
 export default function MyRequests() {
   const { data: requests, isLoading } = useMyChangeRequests();
   const [modalOpen, setModalOpen] = useState(false);
+  const { user } = useAuth();
+  const qc = useQueryClient();
+
+  // Auto-mark request-related notifications as read when visiting this page
+  useEffect(() => {
+    if (!user) return;
+    const markRead = async () => {
+      const requestTypes = [
+        'change_request_approved', 'change_request_denied',
+        'pto_request_approved', 'pto_request_denied',
+        'correction_approved', 'correction_denied',
+      ];
+      const { data: unread } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('recipient_user_id', user.id)
+        .eq('is_read', false)
+        .in('notification_type', requestTypes);
+      if (unread && unread.length > 0) {
+        await supabase
+          .from('notifications')
+          .update({ is_read: true })
+          .in('id', unread.map(n => n.id));
+        qc.invalidateQueries({ queryKey: ['notifications'] });
+      }
+    };
+    markRead();
+  }, [user?.id, qc]);
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto space-y-6">
