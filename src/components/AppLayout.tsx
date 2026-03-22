@@ -54,7 +54,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <Link
                 key={item.to}
                 to={item.to}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors relative ${
                   active
                     ? 'bg-sidebar-accent text-sidebar-primary'
                     : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
@@ -62,6 +62,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               >
                 <item.icon className="h-4 w-4" />
                 {item.label}
+                {item.to === '/approvals' && approvalCounts && approvalCounts.total > 0 && (
+                  <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">
+                    {approvalCounts.total}
+                  </span>
+                )}
               </Link>
             );
           })}
