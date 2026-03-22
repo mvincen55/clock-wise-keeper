@@ -123,7 +123,7 @@ export function useReviewCorrectionRequest() {
         .eq('id', params.id);
       if (error) throw error;
 
-      // Fetch the request to get details for audit
+      // Fetch the request to get details for audit and apply changes
       const { data: req } = await supabase
         .from('correction_requests')
         .select('*')
@@ -131,6 +131,29 @@ export function useReviewCorrectionRequest() {
         .single();
 
       if (req) {
+        // Apply the proposed change to the target record when approved
+        if (params.status === 'approved' && req.target_table === 'pto_requests') {
+          const proposed = req.proposed_change as Record<string, any>;
+          if (proposed.action === 'cancel') {
+            await supabase
+              .from('pto_requests')
+              .update({ status: 'cancelled' })
+              .eq('id', req.target_id);
+          } else if (proposed.action === 'correct') {
+            const updates: Record<string, any> = {};
+            if (proposed.start_date) updates.start_date = proposed.start_date;
+            if (proposed.end_date) updates.end_date = proposed.end_date;
+            if (proposed.hours_requested !== undefined) updates.hours_requested = proposed.hours_requested;
+            if (proposed.pto_type) updates.pto_type = proposed.pto_type;
+            if (Object.keys(updates).length > 0) {
+              await supabase
+                .from('pto_requests')
+                .update(updates)
+                .eq('id', req.target_id);
+            }
+          }
+        }
+
         await supabase.from('audit_events').insert({
           org_id: req.org_id,
           employee_id: req.employee_id,
@@ -149,6 +172,7 @@ export function useReviewCorrectionRequest() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['correction-requests'] });
       qc.invalidateQueries({ queryKey: ['audit-history'] });
+      qc.invalidateQueries({ queryKey: ['pto-requests'] });
     },
   });
 }
