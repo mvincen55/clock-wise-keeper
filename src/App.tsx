@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import AppLayout from "@/components/AppLayout";
 import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
+import OfficeCalendar from "@/pages/OfficeCalendar";
 import Timesheet from "@/pages/Timesheet";
 import DaysOff from "@/pages/DaysOff";
 import Reports from "@/pages/Reports";
