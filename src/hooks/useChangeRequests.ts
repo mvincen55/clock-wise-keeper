@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import { createNotification } from '@/hooks/useNotifications';
 
 export type ChangeRequestRow = {
   id: string;
@@ -90,6 +91,7 @@ export function useSubmitChangeRequest() {
 /** Manager: review (approve/deny) a change request */
 export function useReviewChangeRequest() {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
 
   return useMutation({
@@ -109,9 +111,32 @@ export function useReviewChangeRequest() {
         })
         .eq('id', params.id);
       if (error) throw error;
+
+      // Notify the employee who submitted the request
+      const { data: req } = await supabase
+        .from('change_requests')
+        .select('requested_by, org_id, request_type')
+        .eq('id', params.id)
+        .single();
+
+      if (req && req.requested_by !== user.id) {
+        await createNotification({
+          org_id: req.org_id,
+          recipient_user_id: req.requested_by,
+          actor_user_id: user.id,
+          notification_type: params.status === 'approved' ? 'change_request_approved' : 'change_request_denied',
+          title: params.status === 'approved' ? 'Change Request Approved' : 'Change Request Denied',
+          message: params.status === 'approved'
+            ? `Your change request has been approved`
+            : `Your change request has been denied: ${params.review_reason}`,
+          related_table: 'change_requests',
+          related_id: params.id,
+        });
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['change-requests'] });
+      qc.invalidateQueries({ queryKey: ['approval-counts'] });
     },
   });
 }

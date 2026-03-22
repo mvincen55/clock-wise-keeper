@@ -230,6 +230,7 @@ export function useReviewCorrectionRequest() {
       qc.invalidateQueries({ queryKey: ['correction-requests'] });
       qc.invalidateQueries({ queryKey: ['audit-history'] });
       qc.invalidateQueries({ queryKey: ['pto-requests'] });
+      qc.invalidateQueries({ queryKey: ['approval-counts'] });
     },
   });
 }
