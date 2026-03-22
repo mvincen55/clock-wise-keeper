@@ -508,6 +508,14 @@ export default function PTO() {
       </Tabs>
 
       <PtoRequestModal open={requestModalOpen} onClose={() => setRequestModalOpen(false)} />
+      {correctionTarget && (
+        <PtoCorrectionModal
+          open={!!correctionTarget}
+          onClose={() => setCorrectionTarget(null)}
+          request={correctionTarget.request}
+          mode={correctionTarget.mode}
+        />
+      )}
     </div>
   );
 }
