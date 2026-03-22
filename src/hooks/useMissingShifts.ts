@@ -49,6 +49,8 @@ export function useMissingShifts(startDate?: string, endDate?: string) {
 
     const dayOffDates = new Set<string>();
     (daysOff || []).forEach(d => {
+      // Unscheduled days off are absences — they should NOT exclude the day from missing shifts
+      if (d.type === 'unscheduled') return;
       const s = new Date(d.date_start + 'T00:00:00');
       const e = new Date(d.date_end + 'T00:00:00');
       for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
