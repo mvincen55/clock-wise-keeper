@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Clock, LayoutDashboard, Table2, CalendarDays, FileText, LogOut, Menu, X, MapPin, Settings, ShieldCheck, Send, CheckSquare, Users, Calendar } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import NotificationBell from '@/components/NotificationBell';
+import { useApprovalCounts } from '@/hooks/useApprovalCounts';
 
 const coreNavItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
