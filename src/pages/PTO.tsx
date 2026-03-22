@@ -11,6 +11,7 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import { useDaysOff, useUpdateDayOffHours } from '@/hooks/useDaysOff';
 import { useMyPtoRequests, useCancelPtoRequest, PtoRequest } from '@/hooks/usePtoRequests';
 import { PtoRequestModal } from '@/components/PtoRequestModal';
+import { PtoCorrectionModal } from '@/components/PtoCorrectionModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
@@ -27,6 +28,7 @@ export default function PTO() {
   const { data: ctx } = useOrgContext();
   const { toast } = useToast();
   const [requestModalOpen, setRequestModalOpen] = useState(false);
+  const [correctionTarget, setCorrectionTarget] = useState<{ request: PtoRequest; mode: 'cancel' | 'correct' } | null>(null);
   const { data: myPtoRequests } = useMyPtoRequests();
   const cancelRequest = useCancelPtoRequest();
   const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
@@ -284,6 +286,26 @@ export default function PTO() {
                                 <XCircle className="h-3 w-3 mr-1" /> Cancel
                               </Button>
                             )}
+                            {r.status !== 'pending' && r.status !== 'cancelled' && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-xs"
+                                  onClick={() => setCorrectionTarget({ request: r, mode: 'correct' })}
+                                >
+                                  <Pencil className="h-3 w-3 mr-1" /> Correct
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-xs text-destructive"
+                                  onClick={() => setCorrectionTarget({ request: r, mode: 'cancel' })}
+                                >
+                                  <XCircle className="h-3 w-3 mr-1" /> Request Cancel
+                                </Button>
+                              </>
+                            )}
                           </div>
                         </div>
                         <p className="text-sm">
@@ -486,6 +508,14 @@ export default function PTO() {
       </Tabs>
 
       <PtoRequestModal open={requestModalOpen} onClose={() => setRequestModalOpen(false)} />
+      {correctionTarget && (
+        <PtoCorrectionModal
+          open={!!correctionTarget}
+          onClose={() => setCorrectionTarget(null)}
+          request={correctionTarget.request}
+          mode={correctionTarget.mode}
+        />
+      )}
     </div>
   );
 }
