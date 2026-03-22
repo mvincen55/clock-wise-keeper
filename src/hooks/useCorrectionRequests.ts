@@ -145,29 +145,6 @@ export function useReviewCorrectionRequest() {
           event_details: { correction_request_id: req.id } as any,
         });
       }
-      } else {
-        // Denied — write audit
-        const { data: req } = await supabase
-          .from('correction_requests')
-          .select('*')
-          .eq('id', params.id)
-          .single();
-
-        if (req) {
-          await supabase.from('audit_events').insert({
-            org_id: req.org_id,
-            employee_id: req.employee_id,
-            user_id: req.created_by,
-            actor_id: user.id,
-            event_type: 'correction_denied',
-            action_type: 'request_deny',
-            target_table: req.target_table,
-            target_id: req.target_id,
-            reason: params.resolution_note.trim(),
-            event_details: { correction_request_id: req.id } as any,
-          });
-        }
-      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['correction-requests'] });
