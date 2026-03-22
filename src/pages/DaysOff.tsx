@@ -873,6 +873,17 @@ export default function DaysOff() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* CALENDAR TAB */}
+        <TabsContent value="calendar">
+          <AttendanceCalendar
+            daysOff={daysOff || []}
+            closures={closures || []}
+            isManager={isManager}
+            onAddDayOff={handleCalendarAddDayOff}
+            onAddClosure={handleCalendarAddClosure}
+          />
+        </TabsContent>
       </Tabs>
 
       <DebugDrawer row={debugRow} open={!!debugRow} onClose={() => setDebugRow(null)} />
