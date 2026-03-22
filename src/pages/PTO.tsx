@@ -286,6 +286,26 @@ export default function PTO() {
                                 <XCircle className="h-3 w-3 mr-1" /> Cancel
                               </Button>
                             )}
+                            {r.status !== 'pending' && r.status !== 'cancelled' && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-xs"
+                                  onClick={() => setCorrectionTarget({ request: r, mode: 'correct' })}
+                                >
+                                  <Pencil className="h-3 w-3 mr-1" /> Correct
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-xs text-destructive"
+                                  onClick={() => setCorrectionTarget({ request: r, mode: 'cancel' })}
+                                >
+                                  <XCircle className="h-3 w-3 mr-1" /> Request Cancel
+                                </Button>
+                              </>
+                            )}
                           </div>
                         </div>
                         <p className="text-sm">
