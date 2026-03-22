@@ -1,0 +1,1 @@
+ALTER TABLE public.correction_requests DROP CONSTRAINT correction_requests_reason_check;
