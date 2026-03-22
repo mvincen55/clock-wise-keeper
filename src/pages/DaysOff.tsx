@@ -534,7 +534,7 @@ export default function DaysOff() {
             )}
           </TabsTrigger>
           <TabsTrigger value="closures">Closures</TabsTrigger>
-          <TabsTrigger value="calendar">Calendar</TabsTrigger>
+          <TabsTrigger value="calendar">My Calendar</TabsTrigger>
         </TabsList>
 
         {/* ATTENDANCE STATUS TAB */}
