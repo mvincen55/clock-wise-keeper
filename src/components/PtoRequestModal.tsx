@@ -22,13 +22,13 @@ export function PtoRequestModal({ open, onClose }: Props) {
   const submit = useSubmitPtoRequest();
 
   const handleSubmit = async () => {
-    if (!startDate || !endDate || !note.trim()) return;
+    if (!startDate || !endDate) return;
     await submit.mutateAsync({
       start_date: startDate,
       end_date: endDate,
       hours_requested: hours ? parseFloat(hours) : undefined,
       pto_type: ptoType,
-      note: note.trim(),
+      note: note.trim() || '',
     });
     setStartDate('');
     setEndDate('');
@@ -38,7 +38,7 @@ export function PtoRequestModal({ open, onClose }: Props) {
     onClose();
   };
 
-  const isValid = startDate && endDate && note.trim().length >= 1 && endDate >= startDate;
+  const isValid = startDate && endDate && endDate >= startDate;
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
@@ -81,11 +81,11 @@ export function PtoRequestModal({ open, onClose }: Props) {
           </div>
 
           <div className="space-y-1">
-            <Label>Reason <span className="text-destructive">*</span></Label>
+            <Label>Comment</Label>
             <Textarea
               value={note}
               onChange={e => setNote(e.target.value)}
-              placeholder="Why are you requesting time off?"
+              placeholder=""
               rows={3}
             />
           </div>
