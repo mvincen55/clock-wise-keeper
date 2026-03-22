@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDaysOff, useAddDayOff, useDeleteDayOff, DayOffRow } from '@/hooks/useDaysOff';
 import { useTardies, useUpdateTardy, TardyRow } from '@/hooks/useTardies';
@@ -9,7 +9,7 @@ import { useAttendanceExceptions, AttendanceExceptionRow } from '@/hooks/useAtte
 import { useAttendanceDayStatus, useRecomputeAttendance, AttendanceDayStatusRow } from '@/hooks/useAttendanceDayStatus';
 import { useOfficeClosures, useAddClosure } from '@/hooks/useOfficeClosures';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import AttendanceCalendar from '@/components/AttendanceCalendar';
+import PersonalCalendar from '@/components/PersonalCalendar';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { useAuth } from '@/hooks/useAuth';
 import { formatDate } from '@/lib/time-utils';
@@ -218,27 +218,6 @@ export default function DaysOff() {
     }
   };
 
-  const handleCalendarAddDayOff = useCallback(async (input: {
-    date_start: string; date_end: string;
-    type: 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'medical_leave' | 'other';
-    hours?: number; notes?: string;
-  }) => {
-    try {
-      await addDayOff.mutateAsync(input);
-      toast({ title: 'Day off added' });
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    }
-  }, [addDayOff, toast]);
-
-  const handleCalendarAddClosure = useCallback(async (input: { closure_date: string; name: string }) => {
-    try {
-      await addClosure.mutateAsync(input);
-      toast({ title: 'Office closure added' });
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    }
-  }, [addClosure, toast]);
 
   // Build a lookup of days_off by date for counter classification
   const daysOffByDate = useMemo(() => {
@@ -555,7 +534,7 @@ export default function DaysOff() {
             )}
           </TabsTrigger>
           <TabsTrigger value="closures">Closures</TabsTrigger>
-          <TabsTrigger value="calendar">Calendar</TabsTrigger>
+          <TabsTrigger value="calendar">My Calendar</TabsTrigger>
         </TabsList>
 
         {/* ATTENDANCE STATUS TAB */}
@@ -874,14 +853,12 @@ export default function DaysOff() {
           </Card>
         </TabsContent>
 
-        {/* CALENDAR TAB */}
+        {/* PERSONAL CALENDAR TAB */}
         <TabsContent value="calendar">
-          <AttendanceCalendar
+          <PersonalCalendar
             daysOff={daysOff || []}
             closures={closures || []}
-            isManager={isManager}
-            onAddDayOff={handleCalendarAddDayOff}
-            onAddClosure={handleCalendarAddClosure}
+            statusRows={statusRows || []}
           />
         </TabsContent>
       </Tabs>

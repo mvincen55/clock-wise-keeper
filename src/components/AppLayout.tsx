@@ -2,7 +2,7 @@ import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Clock, LayoutDashboard, Table2, CalendarDays, FileText, LogOut, Menu, X, MapPin, Settings, ShieldCheck, Send, CheckSquare, Users } from 'lucide-react';
+import { Clock, LayoutDashboard, Table2, CalendarDays, FileText, LogOut, Menu, X, MapPin, Settings, ShieldCheck, Send, CheckSquare, Users, Calendar } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import NotificationBell from '@/components/NotificationBell';
 
@@ -10,6 +10,7 @@ const coreNavItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/timesheet', icon: Table2, label: 'Timesheet' },
   { to: '/days-off', icon: CalendarDays, label: 'Attendance' },
+  { to: '/office-calendar', icon: Calendar, label: 'Office Calendar' },
   { to: '/pto', icon: Clock, label: 'PTO' },
   { to: '/my-requests', icon: Send, label: 'My Requests' },
   { to: '/reports', icon: FileText, label: 'Reports' },
