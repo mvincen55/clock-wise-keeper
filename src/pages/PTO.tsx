@@ -11,6 +11,7 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import { useDaysOff, useUpdateDayOffHours } from '@/hooks/useDaysOff';
 import { useMyPtoRequests, useCancelPtoRequest, PtoRequest } from '@/hooks/usePtoRequests';
 import { PtoRequestModal } from '@/components/PtoRequestModal';
+import { PtoCorrectionModal } from '@/components/PtoCorrectionModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
