@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Trash2, Printer, FileText, Loader2, ShieldCheck } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useOrgEmployees } from '@/hooks/useEmployees';
 import { useOfficeClosures, useAddClosure } from '@/hooks/useOfficeClosures';
@@ -38,9 +38,11 @@ type CalendarEvent = {
   employeeName?: string;
   createdBy?: string | null;
   source: 'days_off' | 'office_closures';
+  dateStart?: string;
+  dateEnd?: string;
+  type?: string;
 };
 
-// Open Saturdays stored in localStorage per org
 function getOpenSaturdays(orgId: string): string[] {
   try {
     return JSON.parse(localStorage.getItem(`open-saturdays-${orgId}`) || '[]');
@@ -50,6 +52,13 @@ function getOpenSaturdays(orgId: string): string[] {
 function setOpenSaturdays(orgId: string, dates: string[]) {
   localStorage.setItem(`open-saturdays-${orgId}`, JSON.stringify(dates));
 }
+
+const actionLabels: Record<string, string> = {
+  calendar_add_day_off: 'Added Day Off',
+  calendar_add_closure: 'Added Closure',
+  calendar_delete_day_off: 'Deleted Day Off',
+  calendar_delete_closure: 'Deleted Closure',
+};
 
 export default function OfficeCalendar() {
   const { user } = useAuth();
@@ -75,10 +84,16 @@ export default function OfficeCalendar() {
     closure_name: '',
   });
 
-  // Edit state for own events
+  // Edit/delete state
   const [editOpen, setEditOpen] = useState(false);
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
-  const [editForm, setEditForm] = useState({ notes: '', hours: '0' });
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [verified, setVerified] = useState(false);
+
+  // Audit report state
+  const [reportOpen, setReportOpen] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -108,6 +123,44 @@ export default function OfficeCalendar() {
   const addClosure = useAddClosure();
   const addDayOff = useAddDayOff();
 
+  // Fetch audit log for calendar events
+  const { data: auditLog } = useQuery({
+    queryKey: ['calendar-audit', ctx?.org_id],
+    enabled: !!ctx?.org_id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('audit_events')
+        .select('*')
+        .eq('org_id', ctx!.org_id)
+        .in('event_type', ['calendar_add_day_off', 'calendar_add_closure', 'calendar_delete_day_off', 'calendar_delete_closure'])
+        .order('created_at', { ascending: false })
+        .limit(200);
+      return (data || []) as any[];
+    },
+  });
+
+  // Fetch profiles for actor names in audit
+  const actorIds = useMemo(() => {
+    const ids = new Set<string>();
+    (auditLog || []).forEach((e: any) => ids.add(e.user_id));
+    return Array.from(ids);
+  }, [auditLog]);
+
+  const { data: profiles } = useQuery({
+    queryKey: ['profiles-for-audit', actorIds],
+    enabled: actorIds.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase.from('profiles').select('id, full_name, email').in('id', actorIds);
+      return (data || []) as { id: string; full_name: string | null; email: string | null }[];
+    },
+  });
+
+  const profileMap = useMemo(() => {
+    const map = new Map<string, string>();
+    (profiles || []).forEach(p => map.set(p.id, p.full_name || p.email || p.id));
+    return map;
+  }, [profiles]);
+
   const employeeMap = useMemo(() => {
     const map = new Map<string, string>();
     (employees || []).forEach(e => map.set(e.id, e.display_name));
@@ -116,7 +169,6 @@ export default function OfficeCalendar() {
 
   const openSaturdays = useMemo(() => ctx ? getOpenSaturdays(ctx.org_id) : [], [ctx, saturdayDialogOpen]);
 
-  // Build events map - include created_by and source
   const eventsMap = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
     const addEvent = (date: string, event: CalendarEvent) => {
@@ -138,18 +190,25 @@ export default function OfficeCalendar() {
       const end = new Date(d.date_end + 'T00:00:00');
       for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
         const dateStr = cur.toISOString().split('T')[0];
-        addEvent(dateStr, { id: d.id, label, colorKey, employeeName: empName, createdBy: d.created_by, source: 'days_off' });
+        addEvent(dateStr, {
+          id: d.id, label, colorKey, employeeName: empName,
+          createdBy: d.created_by, source: 'days_off',
+          dateStart: d.date_start, dateEnd: d.date_end, type: d.type,
+        });
       }
     });
 
     (closures || []).forEach(c => {
-      addEvent(c.closure_date, { id: c.id, label: c.name, colorKey: 'closure', createdBy: c.created_by, source: 'office_closures' });
+      addEvent(c.closure_date, {
+        id: c.id, label: c.name, colorKey: 'closure',
+        createdBy: c.created_by, source: 'office_closures',
+        dateStart: c.closure_date,
+      });
     });
 
     return map;
   }, [allDaysOff, closures, employeeMap]);
 
-  // Calendar grid
   const firstDayOfMonth = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const todayStr = new Date().toISOString().split('T')[0];
@@ -166,12 +225,35 @@ export default function OfficeCalendar() {
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+  // Audit helper
+  const logAudit = async (eventType: string, details: Record<string, any>) => {
+    if (!ctx || !user) return;
+    try {
+      await supabase.from('audit_events').insert({
+        org_id: ctx.org_id,
+        user_id: user.id,
+        actor_id: user.id,
+        event_type: eventType,
+        event_details: details,
+        target_table: details.source || 'days_off',
+        target_id: details.target_id || null,
+        action_type: eventType,
+      });
+    } catch { /* non-critical */ }
+  };
+
   const handleSave = async () => {
     if (eventType === 'closure') {
       if (!form.closure_name.trim() || !form.date_start) return;
       try {
         await addClosure.mutateAsync({ closure_date: form.date_start, name: form.closure_name.trim() });
+        await logAudit('calendar_add_closure', {
+          source: 'office_closures',
+          closure_date: form.date_start,
+          name: form.closure_name.trim(),
+        });
         toast({ title: 'Office closure added' });
+        qc.invalidateQueries({ queryKey: ['calendar-audit'] });
       } catch (err: any) {
         toast({ title: 'Error', description: err.message, variant: 'destructive' });
       }
@@ -187,7 +269,7 @@ export default function OfficeCalendar() {
       const emp = (employees || []).find(e => e.id === selectedEmployee);
       if (!emp) return;
       try {
-        const { error } = await supabase.from('days_off').insert({
+        const { data: inserted, error } = await supabase.from('days_off').insert({
           user_id: emp.user_id || user!.id,
           org_id: ctx!.org_id,
           employee_id: emp.id,
@@ -197,10 +279,20 @@ export default function OfficeCalendar() {
           type: form.type,
           hours: form.hours ? parseFloat(form.hours) : null,
           notes: form.notes || null,
-        });
+        }).select('id').single();
         if (error) throw error;
+        await logAudit('calendar_add_day_off', {
+          source: 'days_off',
+          target_id: inserted?.id,
+          employee: emp.display_name,
+          date_start: form.date_start,
+          date_end: form.date_end,
+          type: form.type,
+          notes: form.notes || null,
+        });
         toast({ title: 'Day off added' });
         qc.invalidateQueries({ queryKey: ['org-days-off'] });
+        qc.invalidateQueries({ queryKey: ['calendar-audit'] });
       } catch (err: any) {
         toast({ title: 'Error', description: err.message, variant: 'destructive' });
       }
@@ -239,34 +331,91 @@ export default function OfficeCalendar() {
     return { closed: false };
   };
 
-  // Handle clicking on own event to edit
   const handleEventClick = (e: React.MouseEvent, evt: CalendarEvent) => {
     e.stopPropagation();
-    if (evt.createdBy !== user?.id) return; // only creator can interact
+    if (evt.createdBy !== user?.id) return;
     setEditEvent(evt);
-    setEditForm({ notes: '', hours: '0' });
+    setConfirmPassword('');
+    setVerified(false);
     setEditOpen(true);
   };
 
-  const handleDeleteEvent = async () => {
-    if (!editEvent) return;
+  // Re-authenticate with password
+  const handleVerify = async () => {
+    if (!user?.email || !confirmPassword) return;
+    setVerifying(true);
     try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: confirmPassword,
+      });
+      if (error) throw error;
+      setVerified(true);
+      toast({ title: 'Identity verified', description: 'You can now delete this event.' });
+    } catch (err: any) {
+      toast({ title: 'Verification failed', description: 'Incorrect password. Please try again.', variant: 'destructive' });
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleDeleteEvent = async () => {
+    if (!editEvent || !verified) return;
+    try {
+      const auditDetails: Record<string, any> = {
+        source: editEvent.source,
+        target_id: editEvent.id,
+        label: editEvent.label,
+        employee: editEvent.employeeName || null,
+        date_start: editEvent.dateStart,
+        date_end: editEvent.dateEnd,
+        type: editEvent.type,
+      };
+
       if (editEvent.source === 'days_off') {
         const { error } = await supabase.from('days_off').delete().eq('id', editEvent.id);
         if (error) throw error;
+        await logAudit('calendar_delete_day_off', auditDetails);
       } else {
         const { error } = await supabase.from('office_closures').delete().eq('id', editEvent.id);
         if (error) throw error;
+        await logAudit('calendar_delete_closure', auditDetails);
       }
       toast({ title: 'Event deleted' });
       qc.invalidateQueries({ queryKey: ['org-days-off'] });
       qc.invalidateQueries({ queryKey: ['office-closures'] });
       qc.invalidateQueries({ queryKey: ['days-off'] });
+      qc.invalidateQueries({ queryKey: ['calendar-audit'] });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     }
     setEditOpen(false);
     setEditEvent(null);
+    setVerified(false);
+    setConfirmPassword('');
+  };
+
+  const handlePrintReport = () => {
+    if (!reportRef.current) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <html><head><title>Calendar Change Log</title>
+      <style>
+        body { font-family: system-ui, sans-serif; padding: 24px; color: #1a1a1a; }
+        h1 { font-size: 20px; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 13px; margin-bottom: 16px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; }
+        th { background: #f5f5f5; font-weight: 600; }
+        .action-add { color: #16a34a; }
+        .action-delete { color: #dc2626; }
+      </style></head><body>
+      ${reportRef.current.innerHTML}
+      <script>window.onload = function() { window.print(); }</script>
+      </body></html>
+    `);
+    printWindow.document.close();
   };
 
   return (
@@ -279,6 +428,10 @@ export default function OfficeCalendar() {
         <div className="flex gap-2">
           {isManager && (
             <>
+              <Button variant="outline" size="sm" onClick={() => setReportOpen(true)}>
+                <FileText className="mr-1 h-4 w-4" />
+                Change Log
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setSaturdayDialogOpen(true)}>
                 Open Saturdays
               </Button>
@@ -324,9 +477,9 @@ export default function OfficeCalendar() {
             ))}
           </div>
 
-          {weeks.map((week, wi) => (
+          {weeks.map((weekRow, wi) => (
             <div key={wi} className="grid grid-cols-7 border-b last:border-b-0">
-              {week.map((day, di) => {
+              {weekRow.map((day, di) => {
                 if (day === null) {
                   return <div key={di} className="min-h-[100px] bg-muted/20 border-r last:border-r-0" />;
                 }
@@ -501,8 +654,10 @@ export default function OfficeCalendar() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Own Event Dialog */}
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+      {/* Delete Event Dialog with Re-Auth */}
+      <Dialog open={editOpen} onOpenChange={(v) => {
+        if (!v) { setEditOpen(false); setVerified(false); setConfirmPassword(''); }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Your Event: {editEvent?.label}</DialogTitle>
@@ -510,16 +665,124 @@ export default function OfficeCalendar() {
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
               {editEvent?.employeeName ? `Employee: ${editEvent.employeeName}` : editEvent?.label}
+              {editEvent?.dateStart && (
+                <span className="ml-2">• {new Date(editEvent.dateStart + 'T00:00:00').toLocaleDateString()}</span>
+              )}
             </p>
-            <div className="flex gap-2">
-              <Button variant="destructive" className="flex-1" onClick={handleDeleteEvent}>
-                <Trash2 className="mr-1 h-4 w-4" />
-                Delete Event
+
+            {!verified ? (
+              <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <ShieldCheck className="h-4 w-4 text-primary" />
+                  Verify your identity to delete
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Enter your password to confirm this action. This is logged for audit purposes.
+                </p>
+                <div className="space-y-1">
+                  <Label>Password</Label>
+                  <Input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    onKeyDown={e => e.key === 'Enter' && handleVerify()}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleVerify} disabled={!confirmPassword || verifying} className="flex-1">
+                    {verifying ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-1 h-4 w-4" />}
+                    Verify
+                  </Button>
+                  <Button variant="outline" className="flex-1" onClick={() => { setEditOpen(false); setConfirmPassword(''); }}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm text-success font-medium">
+                  <ShieldCheck className="h-4 w-4" />
+                  Identity verified
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="destructive" className="flex-1" onClick={handleDeleteEvent}>
+                    <Trash2 className="mr-1 h-4 w-4" />
+                    Delete Event
+                  </Button>
+                  <Button variant="outline" className="flex-1" onClick={() => { setEditOpen(false); setVerified(false); setConfirmPassword(''); }}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Log Report Dialog */}
+      <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span>Calendar Change Log</span>
+              <Button variant="outline" size="sm" onClick={handlePrintReport}>
+                <Printer className="mr-1 h-4 w-4" />
+                Print
               </Button>
-              <Button variant="outline" className="flex-1" onClick={() => setEditOpen(false)}>
-                Cancel
-              </Button>
-            </div>
+            </DialogTitle>
+          </DialogHeader>
+          <div ref={reportRef}>
+            <h1 style={{ fontSize: '18px', fontWeight: 700 }}>Calendar Change Log</h1>
+            <p className="subtitle" style={{ color: '#666', fontSize: '13px', marginBottom: '16px' }}>
+              {ctx?.org_name || 'Organization'} • Generated {new Date().toLocaleDateString()}
+            </p>
+            {(auditLog || []).length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">No changes recorded yet.</p>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr>
+                    <th style={{ border: '1px solid #ddd', padding: '6px 10px', textAlign: 'left', background: '#f5f5f5', fontWeight: 600 }}>Date & Time</th>
+                    <th style={{ border: '1px solid #ddd', padding: '6px 10px', textAlign: 'left', background: '#f5f5f5', fontWeight: 600 }}>Action</th>
+                    <th style={{ border: '1px solid #ddd', padding: '6px 10px', textAlign: 'left', background: '#f5f5f5', fontWeight: 600 }}>By</th>
+                    <th style={{ border: '1px solid #ddd', padding: '6px 10px', textAlign: 'left', background: '#f5f5f5', fontWeight: 600 }}>Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(auditLog || []).map((entry: any) => {
+                    const details = entry.event_details || {};
+                    const isDelete = entry.event_type.includes('delete');
+                    const detailParts: string[] = [];
+                    if (details.employee) detailParts.push(`Employee: ${details.employee}`);
+                    if (details.name) detailParts.push(`Name: ${details.name}`);
+                    if (details.date_start) detailParts.push(`Date: ${details.date_start}${details.date_end && details.date_end !== details.date_start ? ` → ${details.date_end}` : ''}`);
+                    if (details.closure_date) detailParts.push(`Date: ${details.closure_date}`);
+                    if (details.type) detailParts.push(`Type: ${details.type}`);
+                    if (details.label) detailParts.push(`Label: ${details.label}`);
+
+                    return (
+                      <tr key={entry.id}>
+                        <td style={{ border: '1px solid #ddd', padding: '6px 10px', whiteSpace: 'nowrap' }}>
+                          {new Date(entry.created_at).toLocaleString()}
+                        </td>
+                        <td style={{ border: '1px solid #ddd', padding: '6px 10px' }}>
+                          <span style={{ color: isDelete ? '#dc2626' : '#16a34a', fontWeight: 500 }}>
+                            {actionLabels[entry.event_type] || entry.event_type}
+                          </span>
+                        </td>
+                        <td style={{ border: '1px solid #ddd', padding: '6px 10px' }}>
+                          {profileMap.get(entry.user_id) || 'Unknown'}
+                        </td>
+                        <td style={{ border: '1px solid #ddd', padding: '6px 10px', fontSize: '12px' }}>
+                          {detailParts.join(' • ') || '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         </DialogContent>
       </Dialog>
