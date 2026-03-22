@@ -45,12 +45,12 @@ export function useOrgContext() {
 
       if (!employee) return null;
 
-      // Get org name
+      // Get org name (may fail for non-owners due to RLS, that's ok)
       const { data: org } = await supabase
         .from('orgs')
         .select('name')
         .eq('id', membership.org_id)
-        .single();
+        .maybeSingle();
 
       return {
         org_id: membership.org_id,
