@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Clock, LayoutDashboard, Table2, CalendarDays, FileText, LogOut, Menu, X, MapPin, Settings, ShieldCheck, Send, CheckSquare, Users, Calendar } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import NotificationBell from '@/components/NotificationBell';
+import { useApprovalCounts } from '@/hooks/useApprovalCounts';
 
 const coreNavItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -22,6 +23,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { data: ctx } = useOrgContext();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { data: approvalCounts } = useApprovalCounts();
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
   const navItems = [
@@ -52,7 +54,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <Link
                 key={item.to}
                 to={item.to}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors relative ${
                   active
                     ? 'bg-sidebar-accent text-sidebar-primary'
                     : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
@@ -60,6 +62,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               >
                 <item.icon className="h-4 w-4" />
                 {item.label}
+                {item.to === '/approvals' && approvalCounts && approvalCounts.total > 0 && (
+                  <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">
+                    {approvalCounts.total}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -123,12 +130,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   key={item.to}
                   to={item.to}
                   onClick={() => setMobileOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm relative ${
                     active ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground'
                   }`}
                 >
                   <item.icon className="h-4 w-4" />
                   {item.label}
+                  {item.to === '/approvals' && approvalCounts && approvalCounts.total > 0 && (
+                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">
+                      {approvalCounts.total}
+                    </span>
+                  )}
                 </Link>
               );
             })}

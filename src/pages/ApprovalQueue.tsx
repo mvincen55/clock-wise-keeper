@@ -14,6 +14,7 @@ import { formatDate } from '@/lib/time-utils';
 import { Loader2, CheckCircle, XCircle, Clock, Inbox } from 'lucide-react';
 import { CorrectionQueuePanel } from '@/components/CorrectionQueuePanel';
 import { PtoRequestQueue } from '@/components/PtoRequestQueue';
+import { useApprovalCounts } from '@/hooks/useApprovalCounts';
 
 const statusBadge: Record<string, { label: string; className: string }> = {
   pending: { label: 'Pending', className: 'bg-warning/20 text-warning' },
@@ -82,6 +83,7 @@ export default function ApprovalQueue() {
   const [reviewDecision, setReviewDecision] = useState<'approved' | 'denied'>('approved');
   const [reviewReason, setReviewReason] = useState('');
   const [activeTab, setActiveTab] = useState('change-requests');
+  const { data: counts } = useApprovalCounts();
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
@@ -119,9 +121,30 @@ export default function ApprovalQueue() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="change-requests">Change Requests</TabsTrigger>
-          <TabsTrigger value="pto-requests">PTO Requests</TabsTrigger>
-          <TabsTrigger value="corrections">Corrections</TabsTrigger>
+          <TabsTrigger value="change-requests" className="relative">
+            Change Requests
+            {counts && counts.changeRequests > 0 && (
+              <span className="ml-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">
+                {counts.changeRequests}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="pto-requests" className="relative">
+            PTO Requests
+            {counts && counts.ptoRequests > 0 && (
+              <span className="ml-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">
+                {counts.ptoRequests}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="corrections" className="relative">
+            Corrections
+            {counts && counts.corrections > 0 && (
+              <span className="ml-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">
+                {counts.corrections}
+              </span>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="change-requests" className="mt-4 space-y-4">
