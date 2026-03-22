@@ -110,10 +110,12 @@ export function useReviewCorrectionRequest() {
         throw new Error('Denial reason must be at least 10 characters');
       }
 
+      const updateStatus = params.status === 'approved' ? 'applied' : params.status;
+      
       const { error } = await supabase
         .from('correction_requests')
         .update({
-          status: params.status,
+          status: updateStatus,
           reviewed_by: user.id,
           reviewed_at: new Date().toISOString(),
           resolution_note: params.resolution_note.trim(),
@@ -121,36 +123,28 @@ export function useReviewCorrectionRequest() {
         .eq('id', params.id);
       if (error) throw error;
 
-      // If approved, write an audit event
-      if (params.status === 'approved') {
-        // Fetch the request to get details
-        const { data: req } = await supabase
-          .from('correction_requests')
-          .select('*')
-          .eq('id', params.id)
-          .single();
-        
-        if (req) {
-          await supabase.from('audit_events').insert({
-            org_id: req.org_id,
-            employee_id: req.employee_id,
-            user_id: req.created_by,
-            actor_id: user.id,
-            event_type: 'correction_approved',
-            action_type: 'request_approve',
-            target_table: req.target_table,
-            target_id: req.target_id,
-            after_json: req.proposed_change as any,
-            reason: params.resolution_note.trim(),
-            event_details: { correction_request_id: req.id } as any,
-          });
+      // Fetch the request to get details for audit
+      const { data: req } = await supabase
+        .from('correction_requests')
+        .select('*')
+        .eq('id', params.id)
+        .single();
 
-          // Mark as applied
-          await supabase
-            .from('correction_requests')
-            .update({ status: 'applied' as any })
-            .eq('id', params.id);
-        }
+      if (req) {
+        await supabase.from('audit_events').insert({
+          org_id: req.org_id,
+          employee_id: req.employee_id,
+          user_id: req.created_by,
+          actor_id: user.id,
+          event_type: params.status === 'approved' ? 'correction_approved' : 'correction_denied',
+          action_type: params.status === 'approved' ? 'request_approve' : 'request_deny',
+          target_table: req.target_table,
+          target_id: req.target_id,
+          after_json: params.status === 'approved' ? (req.proposed_change as any) : undefined,
+          reason: params.resolution_note.trim(),
+          event_details: { correction_request_id: req.id } as any,
+        });
+      }
       } else {
         // Denied — write audit
         const { data: req } = await supabase
