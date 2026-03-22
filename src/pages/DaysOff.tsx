@@ -218,27 +218,6 @@ export default function DaysOff() {
     }
   };
 
-  const handleCalendarAddDayOff = useCallback(async (input: {
-    date_start: string; date_end: string;
-    type: 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'medical_leave' | 'other';
-    hours?: number; notes?: string;
-  }) => {
-    try {
-      await addDayOff.mutateAsync(input);
-      toast({ title: 'Day off added' });
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    }
-  }, [addDayOff, toast]);
-
-  const handleCalendarAddClosure = useCallback(async (input: { closure_date: string; name: string }) => {
-    try {
-      await addClosure.mutateAsync(input);
-      toast({ title: 'Office closure added' });
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    }
-  }, [addClosure, toast]);
 
   // Build a lookup of days_off by date for counter classification
   const daysOffByDate = useMemo(() => {
