@@ -52,12 +52,7 @@ const DAY_OFF_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
-function getLast30Days() {
-  const end = new Date();
-  const start = new Date();
-  start.setDate(end.getDate() - 29);
-  return { start: start.toISOString().split('T')[0], end: end.toISOString().split('T')[0] };
-}
+
 
 export default function TeamEmployeeCard({ employee, stats, dateRange }: { employee: Employee; stats: WeekStats; dateRange: { start: string; end: string } }) {
   const [expanded, setExpanded] = useState(false);
