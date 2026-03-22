@@ -109,7 +109,7 @@ export async function createNotification(params: {
   related_table?: string;
   related_id?: string;
 }) {
-  await supabase.from('notifications').insert({
+  const { error } = await supabase.from('notifications').insert({
     org_id: params.org_id,
     recipient_user_id: params.recipient_user_id,
     actor_user_id: params.actor_user_id || null,
@@ -119,4 +119,7 @@ export async function createNotification(params: {
     related_table: params.related_table || null,
     related_id: params.related_id || null,
   });
+  if (error) {
+    console.error('Failed to create notification:', error.message, params);
+  }
 }
