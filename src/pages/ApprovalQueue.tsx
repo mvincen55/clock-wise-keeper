@@ -121,9 +121,30 @@ export default function ApprovalQueue() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="change-requests">Change Requests</TabsTrigger>
-          <TabsTrigger value="pto-requests">PTO Requests</TabsTrigger>
-          <TabsTrigger value="corrections">Corrections</TabsTrigger>
+          <TabsTrigger value="change-requests" className="relative">
+            Change Requests
+            {counts && counts.changeRequests > 0 && (
+              <span className="ml-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">
+                {counts.changeRequests}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="pto-requests" className="relative">
+            PTO Requests
+            {counts && counts.ptoRequests > 0 && (
+              <span className="ml-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">
+                {counts.ptoRequests}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="corrections" className="relative">
+            Corrections
+            {counts && counts.corrections > 0 && (
+              <span className="ml-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">
+                {counts.corrections}
+              </span>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="change-requests" className="mt-4 space-y-4">

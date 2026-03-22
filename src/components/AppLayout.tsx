@@ -130,12 +130,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   key={item.to}
                   to={item.to}
                   onClick={() => setMobileOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm relative ${
                     active ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground'
                   }`}
                 >
                   <item.icon className="h-4 w-4" />
                   {item.label}
+                  {item.to === '/approvals' && approvalCounts && approvalCounts.total > 0 && (
+                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">
+                      {approvalCounts.total}
+                    </span>
+                  )}
                 </Link>
               );
             })}
