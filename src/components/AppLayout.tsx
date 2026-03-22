@@ -10,6 +10,7 @@ const coreNavItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/timesheet', icon: Table2, label: 'Timesheet' },
   { to: '/days-off', icon: CalendarDays, label: 'Attendance' },
+  { to: '/office-calendar', icon: Calendar, label: 'Office Calendar' },
   { to: '/pto', icon: Clock, label: 'PTO' },
   { to: '/my-requests', icon: Send, label: 'My Requests' },
   { to: '/reports', icon: FileText, label: 'Reports' },
