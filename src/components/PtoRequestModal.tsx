@@ -38,7 +38,7 @@ export function PtoRequestModal({ open, onClose }: Props) {
     onClose();
   };
 
-  const isValid = startDate && endDate && note.trim().length >= 1 && endDate >= startDate;
+  const isValid = startDate && endDate && endDate >= startDate;
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
