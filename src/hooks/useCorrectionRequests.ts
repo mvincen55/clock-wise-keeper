@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import { createNotification } from '@/hooks/useNotifications';
 
 export type CorrectionRequestRow = {
   id: string;
@@ -98,6 +99,35 @@ export function useSubmitCorrectionRequest() {
         reason: params.reason.trim(),
       });
       if (error) throw error;
+
+      // Notify managers about the new correction request
+      const { data: managers } = await supabase
+        .from('org_members')
+        .select('user_id')
+        .eq('org_id', ctx.org_id)
+        .in('role', ['owner', 'manager'])
+        .eq('status', 'active');
+
+      const { data: emp } = await supabase
+        .from('employees')
+        .select('display_name')
+        .eq('id', ctx.employee_id)
+        .single();
+
+      if (managers) {
+        for (const m of managers) {
+          if (m.user_id === user.id) continue;
+          await createNotification({
+            org_id: ctx.org_id,
+            recipient_user_id: m.user_id,
+            actor_user_id: user.id,
+            notification_type: 'correction_request_new',
+            title: 'New Correction Request',
+            message: `${emp?.display_name || 'An employee'} submitted a correction request: ${params.reason.trim()}`,
+            related_table: 'correction_requests',
+          });
+        }
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['correction-requests'] });
@@ -178,6 +208,22 @@ export function useReviewCorrectionRequest() {
           reason: params.resolution_note.trim(),
           event_details: { correction_request_id: req.id } as any,
         });
+
+        // Notify the employee about the decision
+        if (req.created_by !== user.id) {
+          await createNotification({
+            org_id: req.org_id,
+            recipient_user_id: req.created_by,
+            actor_user_id: user.id,
+            notification_type: params.status === 'approved' ? 'correction_approved' : 'correction_denied',
+            title: params.status === 'approved' ? 'Correction Request Approved' : 'Correction Request Denied',
+            message: params.status === 'approved'
+              ? 'Your correction request has been approved and applied'
+              : `Your correction request has been denied: ${params.resolution_note.trim()}`,
+            related_table: 'correction_requests',
+            related_id: req.id,
+          });
+        }
       }
     },
     onSuccess: () => {

@@ -701,6 +701,56 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          is_read: boolean
+          message: string
+          notification_type: string
+          org_id: string
+          recipient_user_id: string
+          related_id: string | null
+          related_table: string | null
+          title: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message: string
+          notification_type: string
+          org_id: string
+          recipient_user_id: string
+          related_id?: string | null
+          related_table?: string | null
+          title: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message?: string
+          notification_type?: string
+          org_id?: string
+          recipient_user_id?: string
+          related_id?: string | null
+          related_table?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       office_closures: {
         Row: {
           closure_date: string

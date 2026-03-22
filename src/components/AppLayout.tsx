@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Clock, LayoutDashboard, Table2, CalendarDays, FileText, LogOut, Menu, X, MapPin, Settings, ShieldCheck, Send, CheckSquare, Users } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import NotificationBell from '@/components/NotificationBell';
 
 const coreNavItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -34,11 +35,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen">
       {/* Sidebar desktop */}
       <aside className="hidden md:flex w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
-        <div className="flex items-center gap-3 px-6 py-5 border-b border-sidebar-border">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary">
-            <Clock className="h-5 w-5 text-sidebar-primary-foreground" />
+        <div className="flex items-center justify-between px-6 py-5 border-b border-sidebar-border">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary">
+              <Clock className="h-5 w-5 text-sidebar-primary-foreground" />
+            </div>
+            <span className="text-lg font-semibold text-sidebar-primary-foreground">TimeVault</span>
           </div>
-          <span className="text-lg font-semibold text-sidebar-primary-foreground">TimeVault</span>
+          <NotificationBell />
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
           {navItems.map(item => {
@@ -99,6 +103,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <span className="font-semibold">TimeVault</span>
           </div>
           <div className="flex items-center gap-1">
+            <NotificationBell />
             <Button variant="ghost" size="icon" onClick={privacyLock} className="text-destructive">
               <ShieldCheck className="h-5 w-5" />
             </Button>
