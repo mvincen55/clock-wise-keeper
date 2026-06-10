@@ -1,0 +1,1 @@
+INSERT INTO public.allowed_users (email) VALUES ('mvincent@drharelick.com') ON CONFLICT DO NOTHING;
