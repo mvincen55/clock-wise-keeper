@@ -5,12 +5,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Plus, Calendar, Clock, Pencil, Trash2, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/time-utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useOrgContext } from '@/hooks/useOrgContext';
 
 type WeekdayDraft = Omit<ScheduleWeekdayRow, 'id' | 'schedule_version_id'>;
 
