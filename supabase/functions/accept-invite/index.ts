@@ -12,7 +12,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { token } = await req.json();
+    const body = await req.json();
+    const { token, lookup } = body ?? {};
     if (!token || typeof token !== "string" || token.length < 10) {
       return new Response(JSON.stringify({ error: "Invalid token" }), {
         status: 400,
@@ -25,6 +26,24 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    // Lookup mode: minimal invite info for the AcceptInvite page (no auth required, token acts as the secret)
+    if (lookup === true) {
+      const { data: inv } = await supabaseAdmin
+        .from("org_invites")
+        .select("email, role, expires_at, accepted_at, org_id, orgs:org_id(name)")
+        .eq("token", token)
+        .maybeSingle();
+      if (!inv) {
+        return new Response(JSON.stringify({ error: "Invite not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ invite: inv }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Get the caller's auth
     const authHeader = req.headers.get("Authorization");
