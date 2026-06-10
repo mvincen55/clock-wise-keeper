@@ -64,10 +64,19 @@ export default function ScheduleManager() {
   const updateVersion = useUpdateScheduleVersion();
   const deleteVersion = useDeleteScheduleVersion();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const { data: orgCtx } = useOrgContext();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingVersion, setEditingVersion] = useState<ScheduleVersionWithDays | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Choice/confirm dialog state for in-place vs. versioned edits
+  const [choiceOpen, setChoiceOpen] = useState(false);
+  const [choiceMode, setChoiceMode] = useState<'versioned' | 'inplace'>('versioned');
+  const [versionedStartDate, setVersionedStartDate] = useState<string>('');
+  const [forceInPlaceOnly, setForceInPlaceOnly] = useState(false);
+  const [savingChoice, setSavingChoice] = useState(false);
 
   // Form state
   const [formName, setFormName] = useState('');
