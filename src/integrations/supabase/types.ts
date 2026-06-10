@@ -1640,6 +1640,39 @@ export type Database = {
           },
         ]
       }
+      schedule_correction_log: {
+        Row: {
+          edited_at: string
+          edited_by: string
+          employee_id: string | null
+          id: string
+          new_values: Json
+          old_values: Json
+          org_id: string | null
+          version_id: string
+        }
+        Insert: {
+          edited_at?: string
+          edited_by: string
+          employee_id?: string | null
+          id?: string
+          new_values: Json
+          old_values: Json
+          org_id?: string | null
+          version_id: string
+        }
+        Update: {
+          edited_at?: string
+          edited_by?: string
+          employee_id?: string | null
+          id?: string
+          new_values?: Json
+          old_values?: Json
+          org_id?: string | null
+          version_id?: string
+        }
+        Relationships: []
+      }
       schedule_versions: {
         Row: {
           apply_to_remote: boolean
