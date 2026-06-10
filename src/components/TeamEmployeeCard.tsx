@@ -346,19 +346,26 @@ function ScheduleTab({ employee }: { employee: Employee }) {
     if (!user || !ctx || !editingAssignment) return;
     const sv = editingAssignment.schedule_version;
 
-    const { data: existingVersions, error: existingVersionsError } = await supabase
-      .from('schedule_versions')
-      .select('id, effective_start_date, effective_end_date')
-      .eq('org_id', ctx.org_id)
-      .eq('employee_id', employee.id);
-    ensureNoError(existingVersionsError);
+    const editingVersionId = sv?.id ?? editingAssignment.schedule_version_id;
+    const datesChanged =
+      (editingAssignment.effective_start || '') !== (formStart || '') ||
+      (editingAssignment.effective_end || '') !== (formEnd || '');
 
-    const overlappingVersion = (existingVersions || []).find((version: any) =>
-      version.id !== sv?.id &&
-      hasOverlap(version.effective_start_date, version.effective_end_date, formStart, formEnd || null)
-    );
-    if (overlappingVersion) {
-      throw new Error('This date range overlaps existing schedule history. Edit or remove the overlapping schedule first.');
+    if (datesChanged) {
+      const { data: existingVersions, error: existingVersionsError } = await supabase
+        .from('schedule_versions')
+        .select('id, effective_start_date, effective_end_date')
+        .eq('org_id', ctx.org_id)
+        .eq('employee_id', employee.id);
+      ensureNoError(existingVersionsError);
+
+      const overlappingVersion = (existingVersions || []).find((version: any) =>
+        version.id !== editingVersionId &&
+        hasOverlap(version.effective_start_date, version.effective_end_date, formStart, formEnd || null)
+      );
+      if (overlappingVersion) {
+        throw new Error('This date range overlaps existing schedule history. Edit or remove the overlapping schedule first.');
+      }
     }
 
     const oldValues = {
