@@ -161,21 +161,6 @@ export default function ScheduleManager() {
     }
   };
 
-  const handleSave = async () => {
-    if (!formStart) {
-      toast({ title: 'Start date is required', variant: 'destructive' });
-      return;
-    }
-
-    if (formEnd && formEnd < formStart) {
-      toast({ title: 'End date must be after start date', variant: 'destructive' });
-      return;
-    }
-
-    if (!formWeekdays.some(w => w.enabled)) {
-      toast({ title: 'At least one weekday must be enabled', variant: 'destructive' });
-      return;
-    }
 
   // ---- Intercept logic helpers ----
   const todayStr = () => new Date().toISOString().split('T')[0];
