@@ -146,6 +146,105 @@ export type Database = {
           },
         ]
       }
+      attendance_day_status_backup_pre_schedule_fix: {
+        Row: {
+          computed_at: string | null
+          employee_id: string | null
+          entry_date: string | null
+          has_day_comment: boolean | null
+          has_day_off: boolean | null
+          has_edits: boolean | null
+          has_modification: boolean | null
+          has_punches: boolean | null
+          id: string | null
+          is_absent: boolean | null
+          is_incomplete: boolean | null
+          is_late: boolean | null
+          is_remote: boolean | null
+          is_scheduled_day: boolean | null
+          last_modified_at: string | null
+          last_modified_by: string | null
+          minutes_late: number | null
+          modification_source:
+            | Database["public"]["Enums"]["modification_source"]
+            | null
+          office_closed: boolean | null
+          org_id: string | null
+          recompute_version: number | null
+          schedule_expected_end: string | null
+          schedule_expected_start: string | null
+          status_code: string | null
+          status_reasons: Json | null
+          tardy_approval_status: string | null
+          timezone_suspect: boolean | null
+          user_id: string | null
+        }
+        Insert: {
+          computed_at?: string | null
+          employee_id?: string | null
+          entry_date?: string | null
+          has_day_comment?: boolean | null
+          has_day_off?: boolean | null
+          has_edits?: boolean | null
+          has_modification?: boolean | null
+          has_punches?: boolean | null
+          id?: string | null
+          is_absent?: boolean | null
+          is_incomplete?: boolean | null
+          is_late?: boolean | null
+          is_remote?: boolean | null
+          is_scheduled_day?: boolean | null
+          last_modified_at?: string | null
+          last_modified_by?: string | null
+          minutes_late?: number | null
+          modification_source?:
+            | Database["public"]["Enums"]["modification_source"]
+            | null
+          office_closed?: boolean | null
+          org_id?: string | null
+          recompute_version?: number | null
+          schedule_expected_end?: string | null
+          schedule_expected_start?: string | null
+          status_code?: string | null
+          status_reasons?: Json | null
+          tardy_approval_status?: string | null
+          timezone_suspect?: boolean | null
+          user_id?: string | null
+        }
+        Update: {
+          computed_at?: string | null
+          employee_id?: string | null
+          entry_date?: string | null
+          has_day_comment?: boolean | null
+          has_day_off?: boolean | null
+          has_edits?: boolean | null
+          has_modification?: boolean | null
+          has_punches?: boolean | null
+          id?: string | null
+          is_absent?: boolean | null
+          is_incomplete?: boolean | null
+          is_late?: boolean | null
+          is_remote?: boolean | null
+          is_scheduled_day?: boolean | null
+          last_modified_at?: string | null
+          last_modified_by?: string | null
+          minutes_late?: number | null
+          modification_source?:
+            | Database["public"]["Enums"]["modification_source"]
+            | null
+          office_closed?: boolean | null
+          org_id?: string | null
+          recompute_version?: number | null
+          schedule_expected_end?: string | null
+          schedule_expected_start?: string | null
+          status_code?: string | null
+          status_reasons?: Json | null
+          tardy_approval_status?: string | null
+          timezone_suspect?: boolean | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       attendance_exceptions: {
         Row: {
           created_at: string
@@ -1996,6 +2095,10 @@ export type Database = {
       }
     }
     Functions: {
+      _recompute_schedule_window: {
+        Args: { p_end: string; p_start: string; p_user_id: string }
+        Returns: undefined
+      }
       can_access_employee: { Args: { _employee_id: string }; Returns: boolean }
       get_employee_timezone: {
         Args: { p_employee_id: string }
