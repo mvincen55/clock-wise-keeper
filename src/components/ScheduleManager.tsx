@@ -5,12 +5,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Plus, Calendar, Clock, Pencil, Trash2, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/time-utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useOrgContext } from '@/hooks/useOrgContext';
 
 type WeekdayDraft = Omit<ScheduleWeekdayRow, 'id' | 'schedule_version_id'>;
 
@@ -60,10 +64,19 @@ export default function ScheduleManager() {
   const updateVersion = useUpdateScheduleVersion();
   const deleteVersion = useDeleteScheduleVersion();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const { data: orgCtx } = useOrgContext();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingVersion, setEditingVersion] = useState<ScheduleVersionWithDays | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Choice/confirm dialog state for in-place vs. versioned edits
+  const [choiceOpen, setChoiceOpen] = useState(false);
+  const [choiceMode, setChoiceMode] = useState<'versioned' | 'inplace'>('versioned');
+  const [versionedStartDate, setVersionedStartDate] = useState<string>('');
+  const [forceInPlaceOnly, setForceInPlaceOnly] = useState(false);
+  const [savingChoice, setSavingChoice] = useState(false);
 
   // Form state
   const [formName, setFormName] = useState('');
@@ -148,6 +161,119 @@ export default function ScheduleManager() {
     }
   };
 
+
+  // ---- Intercept logic helpers ----
+  const todayStr = () => new Date().toISOString().split('T')[0];
+
+  const weekdaysAttendanceChanged = (): boolean => {
+    if (!editingVersion) return false;
+    const byWd = new Map(editingVersion.weekdays.map(w => [w.weekday, w]));
+    for (const fw of formWeekdays) {
+      const orig = byWd.get(fw.weekday);
+      if (!orig) return true;
+      if (
+        orig.enabled !== fw.enabled ||
+        (orig.start_time || '').slice(0, 5) !== (fw.start_time || '').slice(0, 5) ||
+        (orig.end_time || '').slice(0, 5) !== (fw.end_time || '').slice(0, 5) ||
+        orig.grace_minutes !== fw.grace_minutes ||
+        orig.threshold_minutes !== fw.threshold_minutes
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const attendanceAffectingChanged = (): boolean => {
+    if (!editingVersion) return false;
+    if (editingVersion.apply_to_remote !== formRemote) return true;
+    if (editingVersion.effective_start_date !== formStart) return true;
+    if ((editingVersion.effective_end_date || '') !== (formEnd || '')) return true;
+    return weekdaysAttendanceChanged();
+  };
+
+  const isHistoricalVersion = (v: ScheduleVersionWithDays): boolean => {
+    return !!v.effective_end_date && v.effective_end_date < todayStr();
+  };
+
+  const affectedRange = (): { start: string; end: string; days: number } => {
+    const start = editingVersion?.effective_start_date || todayStr();
+    const end = editingVersion?.effective_end_date || todayStr();
+    const s = new Date(start + 'T00:00:00').getTime();
+    const e = new Date(end + 'T00:00:00').getTime();
+    const days = Math.max(1, Math.round((e - s) / 86400000) + 1);
+    return { start, end, days };
+  };
+
+  const performInPlaceUpdate = async () => {
+    if (!editingVersion) return;
+    const oldValues = {
+      name: editingVersion.name,
+      effective_start_date: editingVersion.effective_start_date,
+      effective_end_date: editingVersion.effective_end_date,
+      apply_to_remote: editingVersion.apply_to_remote,
+      weekdays: editingVersion.weekdays.map(w => ({
+        weekday: w.weekday,
+        enabled: w.enabled,
+        start_time: w.start_time,
+        end_time: w.end_time,
+        grace_minutes: w.grace_minutes,
+        threshold_minutes: w.threshold_minutes,
+      })),
+    };
+    const newValues = {
+      name: formName || null,
+      effective_start_date: formStart,
+      effective_end_date: formEnd || null,
+      apply_to_remote: formRemote,
+      weekdays: formWeekdays,
+    };
+
+    await updateVersion.mutateAsync({
+      versionId: editingVersion.id,
+      updates: {
+        name: formName || null,
+        effective_start_date: formStart,
+        effective_end_date: formEnd || null,
+        apply_to_remote: formRemote,
+      },
+      weekdays: editingVersion.weekdays.map((w, i) => ({
+        id: w.id,
+        updates: {
+          enabled: formWeekdays[i]?.enabled ?? w.enabled,
+          start_time: formWeekdays[i]?.start_time ?? w.start_time,
+          end_time: formWeekdays[i]?.end_time ?? w.end_time,
+          grace_minutes: formWeekdays[i]?.grace_minutes ?? w.grace_minutes,
+          threshold_minutes: formWeekdays[i]?.threshold_minutes ?? w.threshold_minutes,
+        },
+      })),
+    });
+
+    // Audit row — best-effort; never block the save
+    if (user) {
+      const { error: logErr } = await supabase.from('schedule_correction_log').insert({
+        version_id: editingVersion.id,
+        org_id: orgCtx?.org_id || null,
+        employee_id: orgCtx?.employee_id || null,
+        edited_by: user.id,
+        old_values: oldValues as any,
+        new_values: newValues as any,
+      });
+      if (logErr) console.warn('schedule_correction_log insert failed:', logErr);
+    }
+  };
+
+  const performVersionedCreate = async (startDate: string) => {
+    await createVersion.mutateAsync({
+      name: formName || undefined,
+      effective_start_date: startDate,
+      effective_end_date: formEnd || null,
+      apply_to_remote: formRemote,
+      weekdays: formWeekdays,
+      auto_adjust_previous: true,
+    });
+  };
+
   const handleSave = async () => {
     if (!formStart) {
       toast({ title: 'Start date is required', variant: 'destructive' });
@@ -166,40 +292,56 @@ export default function ScheduleManager() {
 
     try {
       if (editingVersion) {
-        await updateVersion.mutateAsync({
-          versionId: editingVersion.id,
-          updates: {
-            name: formName || null,
-            effective_start_date: formStart,
-            effective_end_date: formEnd || null,
-            apply_to_remote: formRemote,
-          },
-          weekdays: editingVersion.weekdays.map((w, i) => ({
-            id: w.id,
-            updates: {
-              enabled: formWeekdays[i]?.enabled ?? w.enabled,
-              start_time: formWeekdays[i]?.start_time ?? w.start_time,
-              end_time: formWeekdays[i]?.end_time ?? w.end_time,
-              grace_minutes: formWeekdays[i]?.grace_minutes ?? w.grace_minutes,
-              threshold_minutes: formWeekdays[i]?.threshold_minutes ?? w.threshold_minutes,
-            },
-          })),
-        });
-        toast({ title: 'Schedule updated' });
-      } else {
-        await createVersion.mutateAsync({
-          name: formName || undefined,
-          effective_start_date: formStart,
-          effective_end_date: formEnd || null,
-          apply_to_remote: formRemote,
-          weekdays: formWeekdays,
-          auto_adjust_previous: true,
-        });
-        toast({ title: 'Schedule version created' });
+        // Name-only / non-attendance change: save in place silently.
+        if (!attendanceAffectingChanged()) {
+          await updateVersion.mutateAsync({
+            versionId: editingVersion.id,
+            updates: { name: formName || null },
+          });
+          toast({ title: 'Schedule updated' });
+          setModalOpen(false);
+          return;
+        }
+
+        // Attendance-affecting edit — open choice dialog.
+        const historical = isHistoricalVersion(editingVersion);
+        setForceInPlaceOnly(historical);
+        setChoiceMode(historical ? 'inplace' : 'versioned');
+        setVersionedStartDate(todayStr());
+        setChoiceOpen(true);
+        return;
       }
+
+      await performVersionedCreate(formStart);
+      toast({ title: 'Schedule version created' });
       setModalOpen(false);
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const handleConfirmChoice = async () => {
+    if (!editingVersion) return;
+    setSavingChoice(true);
+    try {
+      if (choiceMode === 'versioned') {
+        if (!versionedStartDate) {
+          toast({ title: 'Effective start date is required', variant: 'destructive' });
+          setSavingChoice(false);
+          return;
+        }
+        await performVersionedCreate(versionedStartDate);
+        toast({ title: 'New schedule version created' });
+      } else {
+        await performInPlaceUpdate();
+        toast({ title: 'Schedule corrected', description: 'Attendance is being recalculated for affected days.' });
+      }
+      setChoiceOpen(false);
+      setModalOpen(false);
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setSavingChoice(false);
     }
   };
 
@@ -405,6 +547,85 @@ export default function ScheduleManager() {
               {editingVersion ? 'Save Changes' : 'Create Schedule Version'}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Choice / Correction Confirmation Dialog */}
+      <Dialog open={choiceOpen} onOpenChange={(open) => { if (!savingChoice) setChoiceOpen(open); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {forceInPlaceOnly ? 'Correct historical schedule?' : 'How should this change apply?'}
+            </DialogTitle>
+            <DialogDescription>
+              {forceInPlaceOnly
+                ? 'This schedule version has already ended. Saving will overwrite it as a correction.'
+                : 'Most schedule changes start on a date going forward. Pick what fits.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {!forceInPlaceOnly && (
+            <RadioGroup value={choiceMode} onValueChange={(v) => setChoiceMode(v as 'versioned' | 'inplace')} className="space-y-3">
+              <label className={`flex gap-3 rounded-lg border p-3 cursor-pointer ${choiceMode === 'versioned' ? 'border-primary bg-primary/5' : ''}`}>
+                <RadioGroupItem value="versioned" className="mt-1" />
+                <div className="flex-1 space-y-2">
+                  <div className="font-medium text-sm">Schedule is changing</div>
+                  <p className="text-xs text-muted-foreground">
+                    Their hours are different starting on a new date. A new schedule version is created; past attendance is not touched.
+                  </p>
+                  {choiceMode === 'versioned' && (
+                    <div className="pt-1">
+                      <Label className="text-xs">Effective start date</Label>
+                      <Input
+                        type="date"
+                        value={versionedStartDate}
+                        onChange={(e) => setVersionedStartDate(e.target.value)}
+                        className="h-8 mt-1"
+                      />
+                    </div>
+                  )}
+                </div>
+              </label>
+
+              <label className={`flex gap-3 rounded-lg border p-3 cursor-pointer ${choiceMode === 'inplace' ? 'border-warning bg-warning/5' : ''}`}>
+                <RadioGroupItem value="inplace" className="mt-1" />
+                <div className="flex-1 space-y-1">
+                  <div className="font-medium text-sm">Fixing an error in this schedule</div>
+                  <p className="text-xs text-muted-foreground">
+                    The schedule record was entered wrong and was always wrong. Edits the existing version in place.
+                  </p>
+                </div>
+              </label>
+            </RadioGroup>
+          )}
+
+          {choiceMode === 'inplace' && (() => {
+            const r = affectedRange();
+            return (
+              <Alert variant="default" className="border-warning/50 bg-warning/10">
+                <AlertTriangle className="h-4 w-4 text-warning" />
+                <AlertDescription className="text-sm">
+                  This will recalculate attendance for all days this schedule covers
+                  ({formatDate(r.start)} to {editingVersion?.effective_end_date ? formatDate(r.end) : 'today'}, {r.days} day{r.days === 1 ? '' : 's'}).
+                  Past late/absent statuses may change.
+                </AlertDescription>
+              </Alert>
+            );
+          })()}
+
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setChoiceOpen(false)} disabled={savingChoice}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmChoice}
+              disabled={savingChoice}
+              variant={choiceMode === 'inplace' ? 'destructive' : 'default'}
+            >
+              {savingChoice && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {choiceMode === 'inplace' ? 'Confirm correction' : 'Create new version'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
