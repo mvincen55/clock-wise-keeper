@@ -599,6 +599,14 @@ function ScheduleTab({ employee }: { employee: Employee }) {
                 <Input type="date" value={formEnd} onChange={e => setFormEnd(e.target.value)} />
               </div>
             </div>
+            {!editingAssignment && formStart && formStart >= todayStr() && (
+              <Alert variant="default" className="border-warning/50 bg-warning/10">
+                <AlertTriangle className="h-4 w-4 text-warning" />
+                <AlertDescription className="text-xs">
+                  This won't change past days. To correct historical attendance, edit the schedule version that covers those dates.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="flex items-center gap-3">
               <Switch checked={formRemote} onCheckedChange={setFormRemote} />
               <Label className="text-sm">Apply to remote days</Label>
@@ -614,6 +622,88 @@ function ScheduleTab({ employee }: { employee: Employee }) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Intercept / Correction Confirmation Dialog */}
+      <Dialog open={choiceOpen} onOpenChange={(open) => { if (!savingChoice) setChoiceOpen(open); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {forceInPlaceOnly ? 'Correct historical schedule?' : 'How should this change apply?'}
+            </DialogTitle>
+            <DialogDescription>
+              {forceInPlaceOnly
+                ? 'This schedule version has already ended. Saving will overwrite it as a correction.'
+                : 'Most schedule changes start on a date going forward. Pick what fits.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {!forceInPlaceOnly && (
+            <RadioGroup value={choiceMode} onValueChange={(v) => setChoiceMode(v as 'versioned' | 'inplace')} className="space-y-3">
+              <label className={`flex gap-3 rounded-lg border p-3 cursor-pointer ${choiceMode === 'versioned' ? 'border-primary bg-primary/5' : ''}`}>
+                <RadioGroupItem value="versioned" className="mt-1" />
+                <div className="flex-1 space-y-2">
+                  <div className="font-medium text-sm">Schedule is changing</div>
+                  <p className="text-xs text-muted-foreground">
+                    Their hours are different starting on a new date. A new schedule version is created; past attendance is not touched.
+                  </p>
+                  {choiceMode === 'versioned' && (
+                    <div className="pt-1">
+                      <Label className="text-xs">Effective start date</Label>
+                      <Input
+                        type="date"
+                        value={versionedStartDate}
+                        onChange={(e) => setVersionedStartDate(e.target.value)}
+                        className="h-8 mt-1"
+                      />
+                    </div>
+                  )}
+                </div>
+              </label>
+
+              <label className={`flex gap-3 rounded-lg border p-3 cursor-pointer ${choiceMode === 'inplace' ? 'border-warning bg-warning/5' : ''}`}>
+                <RadioGroupItem value="inplace" className="mt-1" />
+                <div className="flex-1 space-y-1">
+                  <div className="font-medium text-sm">Fixing an error in this schedule</div>
+                  <p className="text-xs text-muted-foreground">
+                    The schedule record was entered wrong and was always wrong. Edits the existing version in place.
+                  </p>
+                </div>
+              </label>
+            </RadioGroup>
+          )}
+
+          {choiceMode === 'inplace' && (() => {
+            const r = affectedRange();
+            return (
+              <Alert variant="default" className="border-warning/50 bg-warning/10">
+                <AlertTriangle className="h-4 w-4 text-warning" />
+                <AlertDescription className="text-sm">
+                  This will recalculate attendance for all days this schedule covers
+                  ({formatDate(r.start)} to {editingAssignment?.effective_end ? formatDate(r.end) : 'today'}, {r.days} day{r.days === 1 ? '' : 's'}).
+                  Past late/absent statuses may change.
+                </AlertDescription>
+              </Alert>
+            );
+          })()}
+
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setChoiceOpen(false)} disabled={savingChoice}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmChoice}
+              disabled={savingChoice}
+              variant={choiceMode === 'inplace' ? 'destructive' : 'default'}
+            >
+              {savingChoice && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {choiceMode === 'inplace' ? 'Confirm correction' : 'Create new version'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
     </div>
   );
 }
