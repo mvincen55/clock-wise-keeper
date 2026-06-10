@@ -549,8 +549,6 @@ export default function ScheduleManager() {
           </div>
         </DialogContent>
       </Dialog>
-        </DialogContent>
-      </Dialog>
 
       {/* Choice / Correction Confirmation Dialog */}
       <Dialog open={choiceOpen} onOpenChange={(open) => { if (!savingChoice) setChoiceOpen(open); }}>
