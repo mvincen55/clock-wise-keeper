@@ -305,6 +305,33 @@ export type Database = {
           },
         ]
       }
+      attendance_sweep_log: {
+        Row: {
+          employees_failed: number
+          employees_processed: number
+          error_details: Json | null
+          finished_at: string | null
+          id: string
+          started_at: string
+        }
+        Insert: {
+          employees_failed?: number
+          employees_processed?: number
+          error_details?: Json | null
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+        }
+        Update: {
+          employees_failed?: number
+          employees_processed?: number
+          error_details?: Json | null
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+        }
+        Relationships: []
+      }
       audit_events: {
         Row: {
           action_type: string | null
@@ -2133,6 +2160,7 @@ export type Database = {
         Args: { p_end_date: string; p_start_date: string; p_user_id: string }
         Returns: number
       }
+      sweep_attendance: { Args: { p_days?: number }; Returns: string }
       user_owns_import: { Args: { _import_id: string }; Returns: boolean }
       user_owns_schedule_version: {
         Args: { _version_id: string }
