@@ -177,42 +177,186 @@ export default function ScheduleManager() {
       return;
     }
 
+  // ---- Intercept logic helpers ----
+  const todayStr = () => new Date().toISOString().split('T')[0];
+
+  const weekdaysAttendanceChanged = (): boolean => {
+    if (!editingVersion) return false;
+    const byWd = new Map(editingVersion.weekdays.map(w => [w.weekday, w]));
+    for (const fw of formWeekdays) {
+      const orig = byWd.get(fw.weekday);
+      if (!orig) return true;
+      if (
+        orig.enabled !== fw.enabled ||
+        (orig.start_time || '').slice(0, 5) !== (fw.start_time || '').slice(0, 5) ||
+        (orig.end_time || '').slice(0, 5) !== (fw.end_time || '').slice(0, 5) ||
+        orig.grace_minutes !== fw.grace_minutes ||
+        orig.threshold_minutes !== fw.threshold_minutes
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const attendanceAffectingChanged = (): boolean => {
+    if (!editingVersion) return false;
+    if (editingVersion.apply_to_remote !== formRemote) return true;
+    if (editingVersion.effective_start_date !== formStart) return true;
+    if ((editingVersion.effective_end_date || '') !== (formEnd || '')) return true;
+    return weekdaysAttendanceChanged();
+  };
+
+  const isHistoricalVersion = (v: ScheduleVersionWithDays): boolean => {
+    return !!v.effective_end_date && v.effective_end_date < todayStr();
+  };
+
+  const affectedRange = (): { start: string; end: string; days: number } => {
+    const start = editingVersion?.effective_start_date || todayStr();
+    const end = editingVersion?.effective_end_date || todayStr();
+    const s = new Date(start + 'T00:00:00').getTime();
+    const e = new Date(end + 'T00:00:00').getTime();
+    const days = Math.max(1, Math.round((e - s) / 86400000) + 1);
+    return { start, end, days };
+  };
+
+  const performInPlaceUpdate = async () => {
+    if (!editingVersion) return;
+    const oldValues = {
+      name: editingVersion.name,
+      effective_start_date: editingVersion.effective_start_date,
+      effective_end_date: editingVersion.effective_end_date,
+      apply_to_remote: editingVersion.apply_to_remote,
+      weekdays: editingVersion.weekdays.map(w => ({
+        weekday: w.weekday,
+        enabled: w.enabled,
+        start_time: w.start_time,
+        end_time: w.end_time,
+        grace_minutes: w.grace_minutes,
+        threshold_minutes: w.threshold_minutes,
+      })),
+    };
+    const newValues = {
+      name: formName || null,
+      effective_start_date: formStart,
+      effective_end_date: formEnd || null,
+      apply_to_remote: formRemote,
+      weekdays: formWeekdays,
+    };
+
+    await updateVersion.mutateAsync({
+      versionId: editingVersion.id,
+      updates: {
+        name: formName || null,
+        effective_start_date: formStart,
+        effective_end_date: formEnd || null,
+        apply_to_remote: formRemote,
+      },
+      weekdays: editingVersion.weekdays.map((w, i) => ({
+        id: w.id,
+        updates: {
+          enabled: formWeekdays[i]?.enabled ?? w.enabled,
+          start_time: formWeekdays[i]?.start_time ?? w.start_time,
+          end_time: formWeekdays[i]?.end_time ?? w.end_time,
+          grace_minutes: formWeekdays[i]?.grace_minutes ?? w.grace_minutes,
+          threshold_minutes: formWeekdays[i]?.threshold_minutes ?? w.threshold_minutes,
+        },
+      })),
+    });
+
+    // Audit row — best-effort; never block the save
+    if (user) {
+      const { error: logErr } = await supabase.from('schedule_correction_log').insert({
+        version_id: editingVersion.id,
+        org_id: orgCtx?.org_id || null,
+        employee_id: orgCtx?.employee_id || null,
+        edited_by: user.id,
+        old_values: oldValues as any,
+        new_values: newValues as any,
+      });
+      if (logErr) console.warn('schedule_correction_log insert failed:', logErr);
+    }
+  };
+
+  const performVersionedCreate = async (startDate: string) => {
+    await createVersion.mutateAsync({
+      name: formName || undefined,
+      effective_start_date: startDate,
+      effective_end_date: formEnd || null,
+      apply_to_remote: formRemote,
+      weekdays: formWeekdays,
+      auto_adjust_previous: true,
+    });
+  };
+
+  const handleSave = async () => {
+    if (!formStart) {
+      toast({ title: 'Start date is required', variant: 'destructive' });
+      return;
+    }
+
+    if (formEnd && formEnd < formStart) {
+      toast({ title: 'End date must be after start date', variant: 'destructive' });
+      return;
+    }
+
+    if (!formWeekdays.some(w => w.enabled)) {
+      toast({ title: 'At least one weekday must be enabled', variant: 'destructive' });
+      return;
+    }
+
     try {
       if (editingVersion) {
-        await updateVersion.mutateAsync({
-          versionId: editingVersion.id,
-          updates: {
-            name: formName || null,
-            effective_start_date: formStart,
-            effective_end_date: formEnd || null,
-            apply_to_remote: formRemote,
-          },
-          weekdays: editingVersion.weekdays.map((w, i) => ({
-            id: w.id,
-            updates: {
-              enabled: formWeekdays[i]?.enabled ?? w.enabled,
-              start_time: formWeekdays[i]?.start_time ?? w.start_time,
-              end_time: formWeekdays[i]?.end_time ?? w.end_time,
-              grace_minutes: formWeekdays[i]?.grace_minutes ?? w.grace_minutes,
-              threshold_minutes: formWeekdays[i]?.threshold_minutes ?? w.threshold_minutes,
-            },
-          })),
-        });
-        toast({ title: 'Schedule updated' });
-      } else {
-        await createVersion.mutateAsync({
-          name: formName || undefined,
-          effective_start_date: formStart,
-          effective_end_date: formEnd || null,
-          apply_to_remote: formRemote,
-          weekdays: formWeekdays,
-          auto_adjust_previous: true,
-        });
-        toast({ title: 'Schedule version created' });
+        // Name-only / non-attendance change: save in place silently.
+        if (!attendanceAffectingChanged()) {
+          await updateVersion.mutateAsync({
+            versionId: editingVersion.id,
+            updates: { name: formName || null },
+          });
+          toast({ title: 'Schedule updated' });
+          setModalOpen(false);
+          return;
+        }
+
+        // Attendance-affecting edit — open choice dialog.
+        const historical = isHistoricalVersion(editingVersion);
+        setForceInPlaceOnly(historical);
+        setChoiceMode(historical ? 'inplace' : 'versioned');
+        setVersionedStartDate(todayStr());
+        setChoiceOpen(true);
+        return;
       }
+
+      await performVersionedCreate(formStart);
+      toast({ title: 'Schedule version created' });
       setModalOpen(false);
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const handleConfirmChoice = async () => {
+    if (!editingVersion) return;
+    setSavingChoice(true);
+    try {
+      if (choiceMode === 'versioned') {
+        if (!versionedStartDate) {
+          toast({ title: 'Effective start date is required', variant: 'destructive' });
+          setSavingChoice(false);
+          return;
+        }
+        await performVersionedCreate(versionedStartDate);
+        toast({ title: 'New schedule version created' });
+      } else {
+        await performInPlaceUpdate();
+        toast({ title: 'Schedule corrected', description: 'Attendance is being recalculated for affected days.' });
+      }
+      setChoiceOpen(false);
+      setModalOpen(false);
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setSavingChoice(false);
     }
   };
 
