@@ -704,9 +704,6 @@ function ScheduleTab({ employee }: { employee: Employee }) {
     </div>
   );
 }
-    </div>
-  );
-}
 
 /* ─── Weekday Editor ─── */
 function WeekdayEditor({ weekdays, onChange }: { weekdays: WeekdayDraft[]; onChange: (w: WeekdayDraft[]) => void }) {
