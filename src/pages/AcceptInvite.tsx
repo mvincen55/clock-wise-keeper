@@ -35,13 +35,12 @@ export default function AcceptInvite() {
       return;
     }
     (async () => {
-      const { data: inv } = await supabase
-        .from('org_invites')
-        .select('*, orgs:org_id(name)')
-        .eq('token', token)
-        .maybeSingle();
+      const { data, error } = await supabase.functions.invoke('accept-invite', {
+        body: { token, lookup: true },
+      });
+      const inv = data?.invite;
 
-      if (!inv) {
+      if (error || !inv) {
         setErrorMsg('Invite not found or already used.');
         setStep('error');
         return;
