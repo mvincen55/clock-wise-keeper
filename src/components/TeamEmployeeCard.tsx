@@ -149,6 +149,13 @@ function ScheduleTab({ employee }: { employee: Employee }) {
   const [editingAssignment, setEditingAssignment] = useState<any>(null);
   const [saving, setSaving] = useState(false);
 
+  // Intercept dialog state
+  const [choiceOpen, setChoiceOpen] = useState(false);
+  const [choiceMode, setChoiceMode] = useState<'versioned' | 'inplace'>('versioned');
+  const [versionedStartDate, setVersionedStartDate] = useState<string>('');
+  const [forceInPlaceOnly, setForceInPlaceOnly] = useState(false);
+  const [savingChoice, setSavingChoice] = useState(false);
+
   // Form state
   const [formName, setFormName] = useState('');
   const [formStart, setFormStart] = useState('');
