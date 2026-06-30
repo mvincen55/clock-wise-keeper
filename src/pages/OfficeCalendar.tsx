@@ -821,12 +821,8 @@ export default function OfficeCalendar() {
           <span className="text-muted-foreground">Office Closed</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded bg-muted/40 border border-muted-foreground/20" />
-          <span className="text-muted-foreground">Weekend / Closed</span>
-        </div>
-        <div className="flex items-center gap-1.5">
           <div className={`w-3 h-3 rounded border ${eventColors.gcal}`} />
-          <span className="text-muted-foreground">📅 Google (HDA - Fairhaven)</span>
+          <span className="text-muted-foreground">📅 Office Calendar (Google)</span>
         </div>
       </div>
 
@@ -837,7 +833,7 @@ export default function OfficeCalendar() {
             <DialogTitle>{gcalDetail?.summary}</DialogTitle>
           </DialogHeader>
           {gcalDetail && (
-            <div className="space-y-2 text-sm">
+            <div className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">When</span>
                 <span className="font-medium">
@@ -857,18 +853,79 @@ export default function OfficeCalendar() {
                   {gcalDetail.description}
                 </div>
               )}
+              {isManager && (
+                <div className="flex gap-2 pt-2 border-t">
+                  <Button size="sm" variant="outline" onClick={() => openEditGcal(gcalDetail)} className="flex-1">
+                    <Pencil className="w-3.5 h-3.5 mr-1" /> Edit
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={deleteGcalEvent}>
+                    <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
+                  </Button>
+                </div>
+              )}
               {gcalDetail.htmlLink && (
                 <a
                   href={gcalDetail.htmlLink}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-block text-xs text-primary underline pt-2"
+                  className="inline-block text-xs text-primary underline"
                 >
                   Open in Google Calendar →
                 </a>
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Create / Edit Google Calendar event (managers only) */}
+      <Dialog open={gcalFormOpen} onOpenChange={setGcalFormOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{gcalForm.id ? 'Edit Office Event' : 'Add Office Event'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Title</Label>
+              <Input value={gcalForm.summary} onChange={(e) => setGcalForm({ ...gcalForm, summary: e.target.value })} placeholder="e.g. Staff meeting" />
+            </div>
+            <div className="space-y-1">
+              <Label>Date</Label>
+              <Input type="date" value={gcalForm.date} onChange={(e) => setGcalForm({ ...gcalForm, date: e.target.value })} />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={gcalForm.allDay}
+                onChange={(e) => setGcalForm({ ...gcalForm, allDay: e.target.checked })}
+              />
+              All day
+            </label>
+            {!gcalForm.allDay && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Start</Label>
+                  <Input type="time" value={gcalForm.startTime} onChange={(e) => setGcalForm({ ...gcalForm, startTime: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <Label>End</Label>
+                  <Input type="time" value={gcalForm.endTime} onChange={(e) => setGcalForm({ ...gcalForm, endTime: e.target.value })} />
+                </div>
+              </div>
+            )}
+            <div className="space-y-1">
+              <Label>Location (optional)</Label>
+              <Input value={gcalForm.location} onChange={(e) => setGcalForm({ ...gcalForm, location: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>Notes (optional)</Label>
+              <Textarea value={gcalForm.description} onChange={(e) => setGcalForm({ ...gcalForm, description: e.target.value })} />
+            </div>
+            <Button onClick={saveGcalEvent} className="w-full" disabled={gcalSaving}>
+              {gcalSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              {gcalForm.id ? 'Save changes' : 'Add to Google Calendar'}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
