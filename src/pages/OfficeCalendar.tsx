@@ -152,6 +152,39 @@ export default function OfficeCalendar() {
   const addClosure = useAddClosure();
   const addDayOff = useAddDayOff();
 
+  // Pull Google "HDA - Fairhaven" calendar events for the visible month
+  const { data: gcalEvents } = useQuery({
+    queryKey: ['gcal-office', year, month],
+    queryFn: async () => {
+      const timeMin = new Date(year, month, 1).toISOString();
+      const timeMax = new Date(year, month + 1, 1).toISOString();
+      const { data, error } = await supabase.functions.invoke('google-calendar-events', {
+        body: null,
+        method: 'GET',
+        // supabase-js doesn't accept query params directly; use URL via fetch fallback
+      } as any).catch(() => ({ data: null, error: new Error('invoke failed') }));
+      // Fallback: call via fetch with query string (functions.invoke can't pass GET params)
+      try {
+        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-calendar-events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`;
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+        });
+        if (!res.ok) return [] as GCalEvent[];
+        const json = await res.json();
+        return (json.events || []) as GCalEvent[];
+      } catch {
+        return [] as GCalEvent[];
+      }
+    },
+    staleTime: 60_000,
+  });
+
+  const [gcalDetail, setGcalDetail] = useState<GCalEvent | null>(null);
+
   // Fetch audit log for calendar events
   const { data: auditLog } = useQuery({
     queryKey: ['calendar-audit', ctx?.org_id],
