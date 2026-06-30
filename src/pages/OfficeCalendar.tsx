@@ -656,6 +656,21 @@ export default function OfficeCalendar() {
                           +{events.length - 4} more
                         </div>
                       )}
+                      {(gcalByDay.get(dateStr) || []).slice(0, 3).map((g) => (
+                        <div
+                          key={g.id}
+                          className={`text-[10px] leading-tight px-1 py-0.5 rounded border truncate cursor-pointer hover:ring-1 hover:ring-primary/50 ${eventColors.gcal}`}
+                          title={g.summary}
+                          onClick={(e) => { e.stopPropagation(); setGcalDetail(g); }}
+                        >
+                          📅 {g.summary}
+                        </div>
+                      ))}
+                      {(gcalByDay.get(dateStr) || []).length > 3 && (
+                        <div className="text-[10px] text-muted-foreground px-1">
+                          +{(gcalByDay.get(dateStr) || []).length - 3} more
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
