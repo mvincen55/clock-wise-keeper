@@ -185,6 +185,25 @@ export default function OfficeCalendar() {
 
   const [gcalDetail, setGcalDetail] = useState<GCalEvent | null>(null);
 
+  const gcalByDay = useMemo(() => {
+    const map = new Map<string, GCalEvent[]>();
+    (gcalEvents || []).forEach((g) => {
+      // Day-key in local time. allDay events have YYYY-MM-DD already.
+      const startStr = g.start;
+      if (!startStr) return;
+      let dateKey: string;
+      if (g.allDay) {
+        dateKey = startStr.slice(0, 10);
+      } else {
+        const d = new Date(startStr);
+        dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
+      if (!map.has(dateKey)) map.set(dateKey, []);
+      map.get(dateKey)!.push(g);
+    });
+    return map;
+  }, [gcalEvents]);
+
   // Fetch audit log for calendar events
   const { data: auditLog } = useQuery({
     queryKey: ['calendar-audit', ctx?.org_id],
