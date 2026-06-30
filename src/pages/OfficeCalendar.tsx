@@ -178,6 +178,121 @@ export default function OfficeCalendar() {
   });
 
   const [gcalDetail, setGcalDetail] = useState<GCalEvent | null>(null);
+  const [gcalFormOpen, setGcalFormOpen] = useState(false);
+  const [gcalSaving, setGcalSaving] = useState(false);
+  const [gcalForm, setGcalForm] = useState({
+    id: '' as string | '',
+    summary: '',
+    description: '',
+    location: '',
+    date: '',
+    allDay: true,
+    startTime: '09:00',
+    endTime: '10:00',
+  });
+
+  const openCreateGcal = (dateStr: string) => {
+    if (!isManager) return;
+    setGcalForm({
+      id: '', summary: '', description: '', location: '',
+      date: dateStr, allDay: true, startTime: '09:00', endTime: '10:00',
+    });
+    setGcalFormOpen(true);
+  };
+
+  const openEditGcal = (g: GCalEvent) => {
+    const dateKey = g.allDay
+      ? g.start.slice(0, 10)
+      : (() => { const d = new Date(g.start); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
+    const fmt = (iso: string) => {
+      const d = new Date(iso);
+      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    };
+    setGcalForm({
+      id: g.id,
+      summary: g.summary || '',
+      description: g.description || '',
+      location: g.location || '',
+      date: dateKey,
+      allDay: g.allDay,
+      startTime: g.allDay ? '09:00' : fmt(g.start),
+      endTime: g.allDay ? '10:00' : fmt(g.end),
+    });
+    setGcalDetail(null);
+    setGcalFormOpen(true);
+  };
+
+  const callGcalFn = async (init: RequestInit & { qs?: Record<string, string> }) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const qs = init.qs ? '?' + new URLSearchParams(init.qs).toString() : '';
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-calendar-events${qs}`,
+      {
+        ...init,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          ...(init.headers || {}),
+        },
+      },
+    );
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || `Request failed (${res.status})`);
+    return json;
+  };
+
+  const saveGcalEvent = async () => {
+    if (!gcalForm.summary.trim() || !gcalForm.date) {
+      toast({ title: 'Title and date required', variant: 'destructive' });
+      return;
+    }
+    setGcalSaving(true);
+    try {
+      const body = gcalForm.allDay
+        ? {
+            summary: gcalForm.summary,
+            description: gcalForm.description || undefined,
+            location: gcalForm.location || undefined,
+            start: gcalForm.date,
+            allDay: true,
+          }
+        : {
+            summary: gcalForm.summary,
+            description: gcalForm.description || undefined,
+            location: gcalForm.location || undefined,
+            start: `${gcalForm.date}T${gcalForm.startTime}:00`,
+            end: `${gcalForm.date}T${gcalForm.endTime}:00`,
+            allDay: false,
+          };
+      if (gcalForm.id) {
+        await callGcalFn({ method: 'PATCH', qs: { eventId: gcalForm.id }, body: JSON.stringify(body) });
+        toast({ title: 'Office calendar event updated' });
+      } else {
+        await callGcalFn({ method: 'POST', body: JSON.stringify(body) });
+        toast({ title: 'Added to office calendar' });
+      }
+      setGcalFormOpen(false);
+      qc.invalidateQueries({ queryKey: ['gcal-office'] });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setGcalSaving(false);
+    }
+  };
+
+  const deleteGcalEvent = async () => {
+    if (!gcalDetail) return;
+    if (!confirm(`Delete "${gcalDetail.summary}" from the office calendar?`)) return;
+    try {
+      await callGcalFn({ method: 'DELETE', qs: { eventId: gcalDetail.id } });
+      toast({ title: 'Event deleted' });
+      setGcalDetail(null);
+      qc.invalidateQueries({ queryKey: ['gcal-office'] });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
 
   const gcalByDay = useMemo(() => {
     const map = new Map<string, GCalEvent[]>();
