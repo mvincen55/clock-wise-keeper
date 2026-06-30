@@ -26,11 +26,11 @@ function getInitials(name: string): string {
 }
 
 const eventColors: Record<string, string> = {
-  off: 'bg-primary/20 text-primary border-primary/30',
-  out: 'bg-destructive/20 text-destructive border-destructive/30',
-  medical: 'bg-warning/20 text-warning border-warning/30',
-  closure: 'bg-muted text-muted-foreground border-muted-foreground/30',
-  gcal: 'bg-accent/30 text-accent-foreground border-accent/50',
+  off: 'bg-primary text-primary-foreground border-primary',
+  out: 'bg-destructive text-destructive-foreground border-destructive',
+  medical: 'bg-warning text-warning-foreground border-warning',
+  closure: 'bg-secondary text-secondary-foreground border-secondary-foreground/40',
+  gcal: 'bg-accent text-accent-foreground border-accent-foreground/40',
 };
 
 type GCalEvent = {
@@ -178,6 +178,121 @@ export default function OfficeCalendar() {
   });
 
   const [gcalDetail, setGcalDetail] = useState<GCalEvent | null>(null);
+  const [gcalFormOpen, setGcalFormOpen] = useState(false);
+  const [gcalSaving, setGcalSaving] = useState(false);
+  const [gcalForm, setGcalForm] = useState({
+    id: '' as string | '',
+    summary: '',
+    description: '',
+    location: '',
+    date: '',
+    allDay: true,
+    startTime: '09:00',
+    endTime: '10:00',
+  });
+
+  const openCreateGcal = (dateStr: string) => {
+    if (!isManager) return;
+    setGcalForm({
+      id: '', summary: '', description: '', location: '',
+      date: dateStr, allDay: true, startTime: '09:00', endTime: '10:00',
+    });
+    setGcalFormOpen(true);
+  };
+
+  const openEditGcal = (g: GCalEvent) => {
+    const dateKey = g.allDay
+      ? g.start.slice(0, 10)
+      : (() => { const d = new Date(g.start); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
+    const fmt = (iso: string) => {
+      const d = new Date(iso);
+      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    };
+    setGcalForm({
+      id: g.id,
+      summary: g.summary || '',
+      description: g.description || '',
+      location: g.location || '',
+      date: dateKey,
+      allDay: g.allDay,
+      startTime: g.allDay ? '09:00' : fmt(g.start),
+      endTime: g.allDay ? '10:00' : fmt(g.end),
+    });
+    setGcalDetail(null);
+    setGcalFormOpen(true);
+  };
+
+  const callGcalFn = async (init: RequestInit & { qs?: Record<string, string> }) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const qs = init.qs ? '?' + new URLSearchParams(init.qs).toString() : '';
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-calendar-events${qs}`,
+      {
+        ...init,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          ...(init.headers || {}),
+        },
+      },
+    );
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || `Request failed (${res.status})`);
+    return json;
+  };
+
+  const saveGcalEvent = async () => {
+    if (!gcalForm.summary.trim() || !gcalForm.date) {
+      toast({ title: 'Title and date required', variant: 'destructive' });
+      return;
+    }
+    setGcalSaving(true);
+    try {
+      const body = gcalForm.allDay
+        ? {
+            summary: gcalForm.summary,
+            description: gcalForm.description || undefined,
+            location: gcalForm.location || undefined,
+            start: gcalForm.date,
+            allDay: true,
+          }
+        : {
+            summary: gcalForm.summary,
+            description: gcalForm.description || undefined,
+            location: gcalForm.location || undefined,
+            start: `${gcalForm.date}T${gcalForm.startTime}:00`,
+            end: `${gcalForm.date}T${gcalForm.endTime}:00`,
+            allDay: false,
+          };
+      if (gcalForm.id) {
+        await callGcalFn({ method: 'PATCH', qs: { eventId: gcalForm.id }, body: JSON.stringify(body) });
+        toast({ title: 'Office calendar event updated' });
+      } else {
+        await callGcalFn({ method: 'POST', body: JSON.stringify(body) });
+        toast({ title: 'Added to office calendar' });
+      }
+      setGcalFormOpen(false);
+      qc.invalidateQueries({ queryKey: ['gcal-office'] });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setGcalSaving(false);
+    }
+  };
+
+  const deleteGcalEvent = async () => {
+    if (!gcalDetail) return;
+    if (!confirm(`Delete "${gcalDetail.summary}" from the office calendar?`)) return;
+    try {
+      await callGcalFn({ method: 'DELETE', qs: { eventId: gcalDetail.id } });
+      toast({ title: 'Event deleted' });
+      setGcalDetail(null);
+      qc.invalidateQueries({ queryKey: ['gcal-office'] });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
 
   const gcalByDay = useMemo(() => {
     const map = new Map<string, GCalEvent[]>();
@@ -615,47 +730,41 @@ export default function OfficeCalendar() {
             <div key={wi} className="grid grid-cols-7 border-b last:border-b-0">
               {weekRow.map((day, di) => {
                 if (day === null) {
-                  return <div key={di} className="min-h-[100px] bg-muted/20 border-r last:border-r-0" />;
+                  return <div key={di} className="min-h-[100px] bg-muted/10 border-r last:border-r-0" />;
                 }
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const events = (eventsMap.get(dateStr) || []).filter(e => e.colorKey !== 'closure');
+                const namedClosures = (eventsMap.get(dateStr) || []).filter(e => e.colorKey === 'closure');
                 const isToday = dateStr === todayStr;
-                const { closed, closureName } = isClosedDay(dateStr, di);
 
                 return (
                   <div
                     key={di}
-                    className={`min-h-[100px] border-r last:border-r-0 p-1 ${
-                      closed ? 'bg-muted/40' : ''
-                    }`}
+                    className={`min-h-[100px] border-r last:border-r-0 p-1 ${isManager ? 'cursor-pointer hover:bg-muted/20' : ''}`}
+                    onClick={isManager ? () => openCreateGcal(dateStr) : undefined}
                   >
                     <div className="flex items-center justify-between mb-0.5">
-                      <div className={`text-xs font-medium flex items-center justify-center w-6 h-6 rounded-full ${
-                        isToday ? 'bg-primary text-primary-foreground' : closed ? 'text-muted-foreground' : 'text-foreground'
+                      <div className={`text-xs font-semibold flex items-center justify-center w-6 h-6 rounded-full ${
+                        isToday ? 'bg-primary text-primary-foreground' : 'text-foreground'
                       }`}>
                         {day}
                       </div>
                     </div>
-                    {closed && closureName && (
-                      <div
-                        className={`text-[10px] leading-tight px-1 py-0.5 rounded bg-muted text-muted-foreground truncate mb-0.5 border border-muted-foreground/20 ${
-                          isManager && closureName !== 'Closed' ? 'cursor-pointer hover:ring-1 hover:ring-primary/50' : ''
-                        }`}
-                        onClick={() => {
-                          if (!isManager || closureName === 'Closed') return;
-                          // Find the closure event
-                          const closureEvt = (eventsMap.get(dateStr) || []).find(e => e.colorKey === 'closure');
-                          if (closureEvt) handleEventClick({ stopPropagation: () => {} } as any, closureEvt);
-                        }}
-                      >
-                        {closureName}
-                      </div>
-                    )}
                     <div className="space-y-0.5">
+                      {namedClosures.map((evt, ei) => (
+                        <div
+                          key={`c-${ei}`}
+                          className={`text-[10px] font-medium leading-tight px-1 py-0.5 rounded border truncate ${eventColors.closure} ${isManager ? 'cursor-pointer hover:ring-1 hover:ring-primary/50' : ''}`}
+                          title={evt.label}
+                          onClick={isManager ? (e) => handleEventClick(e, evt) : undefined}
+                        >
+                          {evt.label}
+                        </div>
+                      ))}
                       {events.slice(0, 4).map((evt, ei) => (
                         <div
                           key={ei}
-                          className={`text-[10px] leading-tight px-1 py-0.5 rounded border truncate ${
+                          className={`text-[10px] font-medium leading-tight px-1 py-0.5 rounded border truncate ${
                             eventColors[evt.colorKey] || eventColors.off
                           } ${isManager ? 'cursor-pointer hover:ring-1 hover:ring-primary/50' : ''}`}
                           title={evt.employeeName || evt.label}
@@ -672,7 +781,7 @@ export default function OfficeCalendar() {
                       {(gcalByDay.get(dateStr) || []).slice(0, 3).map((g) => (
                         <div
                           key={g.id}
-                          className={`text-[10px] leading-tight px-1 py-0.5 rounded border truncate cursor-pointer hover:ring-1 hover:ring-primary/50 ${eventColors.gcal}`}
+                          className={`text-[10px] font-medium leading-tight px-1 py-0.5 rounded border truncate cursor-pointer hover:ring-1 hover:ring-primary/50 ${eventColors.gcal}`}
                           title={g.summary}
                           onClick={(e) => { e.stopPropagation(); setGcalDetail(g); }}
                         >
@@ -712,12 +821,8 @@ export default function OfficeCalendar() {
           <span className="text-muted-foreground">Office Closed</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded bg-muted/40 border border-muted-foreground/20" />
-          <span className="text-muted-foreground">Weekend / Closed</span>
-        </div>
-        <div className="flex items-center gap-1.5">
           <div className={`w-3 h-3 rounded border ${eventColors.gcal}`} />
-          <span className="text-muted-foreground">📅 Google (HDA - Fairhaven)</span>
+          <span className="text-muted-foreground">📅 Office Calendar (Google)</span>
         </div>
       </div>
 
@@ -728,7 +833,7 @@ export default function OfficeCalendar() {
             <DialogTitle>{gcalDetail?.summary}</DialogTitle>
           </DialogHeader>
           {gcalDetail && (
-            <div className="space-y-2 text-sm">
+            <div className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">When</span>
                 <span className="font-medium">
@@ -748,18 +853,79 @@ export default function OfficeCalendar() {
                   {gcalDetail.description}
                 </div>
               )}
+              {isManager && (
+                <div className="flex gap-2 pt-2 border-t">
+                  <Button size="sm" variant="outline" onClick={() => openEditGcal(gcalDetail)} className="flex-1">
+                    <Pencil className="w-3.5 h-3.5 mr-1" /> Edit
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={deleteGcalEvent}>
+                    <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
+                  </Button>
+                </div>
+              )}
               {gcalDetail.htmlLink && (
                 <a
                   href={gcalDetail.htmlLink}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-block text-xs text-primary underline pt-2"
+                  className="inline-block text-xs text-primary underline"
                 >
                   Open in Google Calendar →
                 </a>
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Create / Edit Google Calendar event (managers only) */}
+      <Dialog open={gcalFormOpen} onOpenChange={setGcalFormOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{gcalForm.id ? 'Edit Office Event' : 'Add Office Event'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Title</Label>
+              <Input value={gcalForm.summary} onChange={(e) => setGcalForm({ ...gcalForm, summary: e.target.value })} placeholder="e.g. Staff meeting" />
+            </div>
+            <div className="space-y-1">
+              <Label>Date</Label>
+              <Input type="date" value={gcalForm.date} onChange={(e) => setGcalForm({ ...gcalForm, date: e.target.value })} />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={gcalForm.allDay}
+                onChange={(e) => setGcalForm({ ...gcalForm, allDay: e.target.checked })}
+              />
+              All day
+            </label>
+            {!gcalForm.allDay && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Start</Label>
+                  <Input type="time" value={gcalForm.startTime} onChange={(e) => setGcalForm({ ...gcalForm, startTime: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <Label>End</Label>
+                  <Input type="time" value={gcalForm.endTime} onChange={(e) => setGcalForm({ ...gcalForm, endTime: e.target.value })} />
+                </div>
+              </div>
+            )}
+            <div className="space-y-1">
+              <Label>Location (optional)</Label>
+              <Input value={gcalForm.location} onChange={(e) => setGcalForm({ ...gcalForm, location: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>Notes (optional)</Label>
+              <Textarea value={gcalForm.description} onChange={(e) => setGcalForm({ ...gcalForm, description: e.target.value })} />
+            </div>
+            <Button onClick={saveGcalEvent} className="w-full" disabled={gcalSaving}>
+              {gcalSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              {gcalForm.id ? 'Save changes' : 'Add to Google Calendar'}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
