@@ -26,11 +26,11 @@ function getInitials(name: string): string {
 }
 
 const eventColors: Record<string, string> = {
-  off: 'bg-primary/20 text-primary border-primary/30',
-  out: 'bg-destructive/20 text-destructive border-destructive/30',
-  medical: 'bg-warning/20 text-warning border-warning/30',
-  closure: 'bg-muted text-muted-foreground border-muted-foreground/30',
-  gcal: 'bg-accent/30 text-accent-foreground border-accent/50',
+  off: 'bg-primary text-primary-foreground border-primary',
+  out: 'bg-destructive text-destructive-foreground border-destructive',
+  medical: 'bg-warning text-warning-foreground border-warning',
+  closure: 'bg-secondary text-secondary-foreground border-secondary-foreground/40',
+  gcal: 'bg-accent text-accent-foreground border-accent-foreground/40',
 };
 
 type GCalEvent = {
