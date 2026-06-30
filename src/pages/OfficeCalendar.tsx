@@ -721,7 +721,53 @@ export default function OfficeCalendar() {
           <div className="w-3 h-3 rounded bg-muted/40 border border-muted-foreground/20" />
           <span className="text-muted-foreground">Weekend / Closed</span>
         </div>
+        <div className="flex items-center gap-1.5">
+          <div className={`w-3 h-3 rounded border ${eventColors.gcal}`} />
+          <span className="text-muted-foreground">📅 Google (HDA - Fairhaven)</span>
+        </div>
       </div>
+
+      {/* Google Calendar event detail */}
+      <Dialog open={!!gcalDetail} onOpenChange={(v) => !v && setGcalDetail(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{gcalDetail?.summary}</DialogTitle>
+          </DialogHeader>
+          {gcalDetail && (
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">When</span>
+                <span className="font-medium">
+                  {gcalDetail.allDay
+                    ? `${gcalDetail.start} (all day)`
+                    : `${new Date(gcalDetail.start).toLocaleString()} – ${new Date(gcalDetail.end).toLocaleTimeString()}`}
+                </span>
+              </div>
+              {gcalDetail.location && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Location</span>
+                  <span className="font-medium text-right max-w-[220px]">{gcalDetail.location}</span>
+                </div>
+              )}
+              {gcalDetail.description && (
+                <div className="text-muted-foreground whitespace-pre-wrap border-t pt-2">
+                  {gcalDetail.description}
+                </div>
+              )}
+              {gcalDetail.htmlLink && (
+                <a
+                  href={gcalDetail.htmlLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-block text-xs text-primary underline pt-2"
+                >
+                  Open in Google Calendar →
+                </a>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Add Event Dialog (managers only) */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
