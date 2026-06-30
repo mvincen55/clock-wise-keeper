@@ -158,12 +158,6 @@ export default function OfficeCalendar() {
     queryFn: async () => {
       const timeMin = new Date(year, month, 1).toISOString();
       const timeMax = new Date(year, month + 1, 1).toISOString();
-      const { data, error } = await supabase.functions.invoke('google-calendar-events', {
-        body: null,
-        method: 'GET',
-        // supabase-js doesn't accept query params directly; use URL via fetch fallback
-      } as any).catch(() => ({ data: null, error: new Error('invoke failed') }));
-      // Fallback: call via fetch with query string (functions.invoke can't pass GET params)
       try {
         const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-calendar-events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`;
         const { data: { session } } = await supabase.auth.getSession();
