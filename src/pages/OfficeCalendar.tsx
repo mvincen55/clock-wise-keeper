@@ -30,6 +30,18 @@ const eventColors: Record<string, string> = {
   out: 'bg-destructive/20 text-destructive border-destructive/30',
   medical: 'bg-warning/20 text-warning border-warning/30',
   closure: 'bg-muted text-muted-foreground border-muted-foreground/30',
+  gcal: 'bg-accent/30 text-accent-foreground border-accent/50',
+};
+
+type GCalEvent = {
+  id: string;
+  summary: string;
+  description: string | null;
+  location: string | null;
+  start: string;
+  end: string;
+  allDay: boolean;
+  htmlLink?: string;
 };
 
 type CalendarEvent = {
@@ -139,6 +151,52 @@ export default function OfficeCalendar() {
   const { data: closures } = useOfficeClosures(year);
   const addClosure = useAddClosure();
   const addDayOff = useAddDayOff();
+
+  // Pull Google "HDA - Fairhaven" calendar events for the visible month
+  const { data: gcalEvents } = useQuery({
+    queryKey: ['gcal-office', year, month],
+    queryFn: async () => {
+      const timeMin = new Date(year, month, 1).toISOString();
+      const timeMax = new Date(year, month + 1, 1).toISOString();
+      try {
+        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-calendar-events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`;
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+        });
+        if (!res.ok) return [] as GCalEvent[];
+        const json = await res.json();
+        return (json.events || []) as GCalEvent[];
+      } catch {
+        return [] as GCalEvent[];
+      }
+    },
+    staleTime: 60_000,
+  });
+
+  const [gcalDetail, setGcalDetail] = useState<GCalEvent | null>(null);
+
+  const gcalByDay = useMemo(() => {
+    const map = new Map<string, GCalEvent[]>();
+    (gcalEvents || []).forEach((g) => {
+      // Day-key in local time. allDay events have YYYY-MM-DD already.
+      const startStr = g.start;
+      if (!startStr) return;
+      let dateKey: string;
+      if (g.allDay) {
+        dateKey = startStr.slice(0, 10);
+      } else {
+        const d = new Date(startStr);
+        dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
+      if (!map.has(dateKey)) map.set(dateKey, []);
+      map.get(dateKey)!.push(g);
+    });
+    return map;
+  }, [gcalEvents]);
 
   // Fetch audit log for calendar events
   const { data: auditLog } = useQuery({
@@ -611,6 +669,21 @@ export default function OfficeCalendar() {
                           +{events.length - 4} more
                         </div>
                       )}
+                      {(gcalByDay.get(dateStr) || []).slice(0, 3).map((g) => (
+                        <div
+                          key={g.id}
+                          className={`text-[10px] leading-tight px-1 py-0.5 rounded border truncate cursor-pointer hover:ring-1 hover:ring-primary/50 ${eventColors.gcal}`}
+                          title={g.summary}
+                          onClick={(e) => { e.stopPropagation(); setGcalDetail(g); }}
+                        >
+                          📅 {g.summary}
+                        </div>
+                      ))}
+                      {(gcalByDay.get(dateStr) || []).length > 3 && (
+                        <div className="text-[10px] text-muted-foreground px-1">
+                          +{(gcalByDay.get(dateStr) || []).length - 3} more
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -642,7 +715,53 @@ export default function OfficeCalendar() {
           <div className="w-3 h-3 rounded bg-muted/40 border border-muted-foreground/20" />
           <span className="text-muted-foreground">Weekend / Closed</span>
         </div>
+        <div className="flex items-center gap-1.5">
+          <div className={`w-3 h-3 rounded border ${eventColors.gcal}`} />
+          <span className="text-muted-foreground">📅 Google (HDA - Fairhaven)</span>
+        </div>
       </div>
+
+      {/* Google Calendar event detail */}
+      <Dialog open={!!gcalDetail} onOpenChange={(v) => !v && setGcalDetail(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{gcalDetail?.summary}</DialogTitle>
+          </DialogHeader>
+          {gcalDetail && (
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">When</span>
+                <span className="font-medium">
+                  {gcalDetail.allDay
+                    ? `${gcalDetail.start} (all day)`
+                    : `${new Date(gcalDetail.start).toLocaleString()} – ${new Date(gcalDetail.end).toLocaleTimeString()}`}
+                </span>
+              </div>
+              {gcalDetail.location && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Location</span>
+                  <span className="font-medium text-right max-w-[220px]">{gcalDetail.location}</span>
+                </div>
+              )}
+              {gcalDetail.description && (
+                <div className="text-muted-foreground whitespace-pre-wrap border-t pt-2">
+                  {gcalDetail.description}
+                </div>
+              )}
+              {gcalDetail.htmlLink && (
+                <a
+                  href={gcalDetail.htmlLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-block text-xs text-primary underline pt-2"
+                >
+                  Open in Google Calendar →
+                </a>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Add Event Dialog (managers only) */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
