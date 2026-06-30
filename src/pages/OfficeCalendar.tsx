@@ -30,6 +30,18 @@ const eventColors: Record<string, string> = {
   out: 'bg-destructive/20 text-destructive border-destructive/30',
   medical: 'bg-warning/20 text-warning border-warning/30',
   closure: 'bg-muted text-muted-foreground border-muted-foreground/30',
+  gcal: 'bg-accent/30 text-accent-foreground border-accent/50',
+};
+
+type GCalEvent = {
+  id: string;
+  summary: string;
+  description: string | null;
+  location: string | null;
+  start: string;
+  end: string;
+  allDay: boolean;
+  htmlLink?: string;
 };
 
 type CalendarEvent = {
