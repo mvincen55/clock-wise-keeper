@@ -615,47 +615,41 @@ export default function OfficeCalendar() {
             <div key={wi} className="grid grid-cols-7 border-b last:border-b-0">
               {weekRow.map((day, di) => {
                 if (day === null) {
-                  return <div key={di} className="min-h-[100px] bg-muted/20 border-r last:border-r-0" />;
+                  return <div key={di} className="min-h-[100px] bg-muted/10 border-r last:border-r-0" />;
                 }
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const events = (eventsMap.get(dateStr) || []).filter(e => e.colorKey !== 'closure');
+                const namedClosures = (eventsMap.get(dateStr) || []).filter(e => e.colorKey === 'closure');
                 const isToday = dateStr === todayStr;
-                const { closed, closureName } = isClosedDay(dateStr, di);
 
                 return (
                   <div
                     key={di}
-                    className={`min-h-[100px] border-r last:border-r-0 p-1 ${
-                      closed ? 'bg-muted/40' : ''
-                    }`}
+                    className={`min-h-[100px] border-r last:border-r-0 p-1 ${isManager ? 'cursor-pointer hover:bg-muted/20' : ''}`}
+                    onClick={isManager ? () => openCreateGcal(dateStr) : undefined}
                   >
                     <div className="flex items-center justify-between mb-0.5">
-                      <div className={`text-xs font-medium flex items-center justify-center w-6 h-6 rounded-full ${
-                        isToday ? 'bg-primary text-primary-foreground' : closed ? 'text-muted-foreground' : 'text-foreground'
+                      <div className={`text-xs font-semibold flex items-center justify-center w-6 h-6 rounded-full ${
+                        isToday ? 'bg-primary text-primary-foreground' : 'text-foreground'
                       }`}>
                         {day}
                       </div>
                     </div>
-                    {closed && closureName && (
-                      <div
-                        className={`text-[10px] leading-tight px-1 py-0.5 rounded bg-muted text-muted-foreground truncate mb-0.5 border border-muted-foreground/20 ${
-                          isManager && closureName !== 'Closed' ? 'cursor-pointer hover:ring-1 hover:ring-primary/50' : ''
-                        }`}
-                        onClick={() => {
-                          if (!isManager || closureName === 'Closed') return;
-                          // Find the closure event
-                          const closureEvt = (eventsMap.get(dateStr) || []).find(e => e.colorKey === 'closure');
-                          if (closureEvt) handleEventClick({ stopPropagation: () => {} } as any, closureEvt);
-                        }}
-                      >
-                        {closureName}
-                      </div>
-                    )}
                     <div className="space-y-0.5">
+                      {namedClosures.map((evt, ei) => (
+                        <div
+                          key={`c-${ei}`}
+                          className={`text-[10px] font-medium leading-tight px-1 py-0.5 rounded border truncate ${eventColors.closure} ${isManager ? 'cursor-pointer hover:ring-1 hover:ring-primary/50' : ''}`}
+                          title={evt.label}
+                          onClick={isManager ? (e) => handleEventClick(e, evt) : undefined}
+                        >
+                          {evt.label}
+                        </div>
+                      ))}
                       {events.slice(0, 4).map((evt, ei) => (
                         <div
                           key={ei}
-                          className={`text-[10px] leading-tight px-1 py-0.5 rounded border truncate ${
+                          className={`text-[10px] font-medium leading-tight px-1 py-0.5 rounded border truncate ${
                             eventColors[evt.colorKey] || eventColors.off
                           } ${isManager ? 'cursor-pointer hover:ring-1 hover:ring-primary/50' : ''}`}
                           title={evt.employeeName || evt.label}
@@ -672,7 +666,7 @@ export default function OfficeCalendar() {
                       {(gcalByDay.get(dateStr) || []).slice(0, 3).map((g) => (
                         <div
                           key={g.id}
-                          className={`text-[10px] leading-tight px-1 py-0.5 rounded border truncate cursor-pointer hover:ring-1 hover:ring-primary/50 ${eventColors.gcal}`}
+                          className={`text-[10px] font-medium leading-tight px-1 py-0.5 rounded border truncate cursor-pointer hover:ring-1 hover:ring-primary/50 ${eventColors.gcal}`}
                           title={g.summary}
                           onClick={(e) => { e.stopPropagation(); setGcalDetail(g); }}
                         >
