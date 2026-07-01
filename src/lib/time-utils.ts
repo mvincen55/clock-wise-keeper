@@ -33,6 +33,23 @@ export function getToday(): string {
   return new Date().toISOString().split('T')[0];
 }
 
+/**
+ * Returns "now" as an ISO string whose HH:MM matches the current Eastern (America/New_York)
+ * wall clock, with a Z suffix. Matches the app-wide convention of storing punch_time as
+ * Eastern-time-labeled-as-UTC. Seconds/ms are zeroed.
+ */
+export function nowEasternIso(): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find(p => p.type === t)?.value ?? '00';
+  let hour = get('hour');
+  if (hour === '24') hour = '00';
+  return `${get('year')}-${get('month')}-${get('day')}T${hour}:${get('minute')}:00.000Z`;
+}
+
 /** Strip seconds/ms from an ISO timestamp, keeping only HH:MM:00 */
 export function stripSeconds(iso: string): string {
   const d = new Date(iso);
