@@ -136,13 +136,13 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
   };
 
   const addPunch = () => {
-    const now = new Date();
+    const nowIso = nowEasternIso();
     setEditedPunches(prev => [
       ...prev,
       {
         id: null,
         punch_type: 'in' as const,
-        punch_time: now.toISOString(),
+        punch_time: nowIso,
         original_punch_time: null,
         is_deleted: false,
         is_new: true,
