@@ -59,6 +59,28 @@ const DAY_OFF_LABELS: Record<string, string> = {
 export default function TeamEmployeeCard({ employee, stats, dateRange }: { employee: Employee; stats: WeekStats; dateRange: { start: string; end: string } }) {
   const [expanded, setExpanded] = useState(false);
   const [tab, setTab] = useState('attendance');
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const { role } = useOrgContext();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const canArchive = role === 'owner' || role === 'manager';
+
+  const handleArchive = async () => {
+    setArchiving(true);
+    const { error } = await supabase
+      .from('employees')
+      .update({ employment_status: 'archived' })
+      .eq('id', employee.id);
+    setArchiving(false);
+    if (error) {
+      toast({ title: 'Archive failed', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Archived', description: `${employee.display_name} has been archived.` });
+    setConfirmArchive(false);
+    qc.invalidateQueries({ queryKey: ['employees'] });
+  };
 
   return (
     <Card className="card-elevated overflow-hidden">
@@ -101,13 +123,44 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
             <TabsContent value="tardies"><TardiesTab employeeId={employee.id} range={dateRange} /></TabsContent>
             <TabsContent value="callouts"><CalloutsTab employeeId={employee.id} range={dateRange} /></TabsContent>
           </Tabs>
-          <div className="mt-3 flex justify-end">
+          <div className="mt-3 flex justify-end gap-2">
+            {canArchive && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs text-destructive hover:text-destructive"
+                onClick={() => setConfirmArchive(true)}
+              >
+                <Archive className="h-3 w-3 mr-1" />Archive
+              </Button>
+            )}
             <Link to={`/team/${employee.id}`}>
               <Button variant="outline" size="sm" className="text-xs"><Pencil className="h-3 w-3 mr-1" />Full Detail</Button>
             </Link>
           </div>
         </CardContent>
       )}
+
+      <AlertDialog open={confirmArchive} onOpenChange={setConfirmArchive}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive {employee.display_name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              They'll be hidden from the team list. All history (punches, schedules, tardies) is preserved.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={archiving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={archiving}
+              onClick={(e) => { e.preventDefault(); handleArchive(); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {archiving ? 'Archiving…' : 'Archive'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
