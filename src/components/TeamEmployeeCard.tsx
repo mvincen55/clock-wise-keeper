@@ -62,16 +62,16 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
   const [tab, setTab] = useState('attendance');
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [archiving, setArchiving] = useState(false);
-  const { role } = useOrgContext();
+  const { data: orgCtx } = useOrgContext();
   const qc = useQueryClient();
   const { toast } = useToast();
-  const canArchive = role === 'owner' || role === 'manager';
+  const canArchive = orgCtx?.role === 'owner' || orgCtx?.role === 'manager';
 
   const handleArchive = async () => {
     setArchiving(true);
     const { error } = await supabase
       .from('employees')
-      .update({ employment_status: 'archived' })
+      .update({ employment_status: 'inactive' })
       .eq('id', employee.id);
     setArchiving(false);
     if (error) {
