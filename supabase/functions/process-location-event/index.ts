@@ -21,6 +21,20 @@ function haversineDistance(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Returns "now" as ISO with HH:MM matching Eastern wall clock and a Z suffix.
+// Matches app-wide punch_time convention (Eastern-time-labeled-as-UTC).
+function nowEasternIso(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+  let hour = get("hour");
+  if (hour === "24") hour = "00";
+  return `${get("year")}-${get("month")}-${get("day")}T${hour}:${get("minute")}:00.000Z`;
+}
+
 function validateLocationInput(body: any): { lat: number; lng: number; accuracy: number | null; timestamp: string } {
   if (!body || typeof body !== "object") throw new Error("Invalid request body");
 
@@ -41,7 +55,7 @@ function validateLocationInput(body: any): { lat: number; lng: number; accuracy:
     validatedAccuracy = Math.min(accuracy, 100000);
   }
 
-  let validatedTimestamp = new Date().toISOString();
+  let validatedTimestamp = nowEasternIso();
   if (timestamp) {
     const ts = new Date(timestamp);
     if (isNaN(ts.getTime())) throw new Error("Invalid timestamp format");

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import { getToday, calculatePunchMinutes } from '@/lib/time-utils';
+import { getToday, calculatePunchMinutes, nowEasternIso } from '@/lib/time-utils';
 
 export type PunchRow = {
   id: string;
@@ -97,7 +97,7 @@ export function useClockAction() {
       if (!user || !ctx) throw new Error('Not authenticated or no org context');
 
       const punchType: 'in' | 'out' = (action === 'clock_in' || action === 'break_end') ? 'in' : 'out';
-      const now = (() => { const d = new Date(); d.setSeconds(0, 0); return d.toISOString(); })();
+      const now = nowEasternIso();
 
       let { data: entry } = await supabase
         .from('time_entries')

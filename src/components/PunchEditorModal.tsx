@@ -23,7 +23,7 @@ import { PunchRow } from '@/hooks/useTimeEntries';
 import { EditablePunch, useSavePunchEdits } from '@/hooks/usePunchEditor';
 import { useWorkSchedule, getScheduleForWeekday } from '@/hooks/useWorkSchedule';
 import { useToast } from '@/hooks/use-toast';
-import { formatTime } from '@/lib/time-utils';
+import { formatTime, nowEasternIso } from '@/lib/time-utils';
 
 type Props = {
   open: boolean;
@@ -136,13 +136,13 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
   };
 
   const addPunch = () => {
-    const now = new Date();
+    const nowIso = nowEasternIso();
     setEditedPunches(prev => [
       ...prev,
       {
         id: null,
         punch_type: 'in' as const,
-        punch_time: now.toISOString(),
+        punch_time: nowIso,
         original_punch_time: null,
         is_deleted: false,
         is_new: true,
@@ -211,7 +211,7 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
   };
 
   const setClockOutToNow = () => {
-    const nowIso = new Date().toISOString();
+    const nowIso = nowEasternIso();
     setEditedPunches(prev => [
       ...prev,
       {
