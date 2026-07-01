@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useQueryClient } from '@tanstack/react-query';
-import { getToday } from '@/lib/time-utils';
+import { getToday, nowEasternIso } from '@/lib/time-utils';
 
 export type GeoStatus = 'active' | 'permission_missing' | 'inactive' | 'unavailable';
 
