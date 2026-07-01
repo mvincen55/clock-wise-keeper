@@ -23,7 +23,7 @@ import { PunchRow } from '@/hooks/useTimeEntries';
 import { EditablePunch, useSavePunchEdits } from '@/hooks/usePunchEditor';
 import { useWorkSchedule, getScheduleForWeekday } from '@/hooks/useWorkSchedule';
 import { useToast } from '@/hooks/use-toast';
-import { formatTime } from '@/lib/time-utils';
+import { formatTime, nowEasternIso } from '@/lib/time-utils';
 
 type Props = {
   open: boolean;
