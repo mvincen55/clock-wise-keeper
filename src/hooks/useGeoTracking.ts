@@ -40,7 +40,7 @@ export function useGeoTracking(enabled: boolean) {
     const lat = position.coords.latitude;
     const lng = position.coords.longitude;
     const accuracy = position.coords.accuracy;
-    const timestamp = new Date().toISOString();
+    const timestamp = nowEasternIso();
 
     setState(s => ({
       ...s,
