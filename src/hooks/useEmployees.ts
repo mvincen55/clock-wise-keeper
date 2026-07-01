@@ -21,6 +21,44 @@ export function useOrgEmployees() {
   });
 }
 
+export function useArchivedEmployees() {
+  const { data: ctx } = useOrgContext();
+  return useQuery({
+    queryKey: ['org-employees-archived', ctx?.org_id],
+    enabled: !!ctx?.org_id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('*')
+        .eq('org_id', ctx!.org_id)
+        .neq('employment_status', 'active')
+        .order('display_name');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useRestoreEmployee() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('employees')
+        .update({ employment_status: 'active' })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['org-employees'] });
+      qc.invalidateQueries({ queryKey: ['org-employees-archived'] });
+      toast({ title: 'Team member restored' });
+    },
+    onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+}
+
 export function useAddEmployee() {
   const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
