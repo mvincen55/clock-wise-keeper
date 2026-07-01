@@ -211,7 +211,7 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
   };
 
   const setClockOutToNow = () => {
-    const nowIso = new Date().toISOString();
+    const nowIso = nowEasternIso();
     setEditedPunches(prev => [
       ...prev,
       {
