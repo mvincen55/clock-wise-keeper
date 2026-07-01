@@ -114,6 +114,7 @@ export default function Team() {
             </DialogContent>
           </Dialog>
           <InviteEmployeeModal />
+          <ArchivedMembersDialog />
         </div>
       </div>
 
