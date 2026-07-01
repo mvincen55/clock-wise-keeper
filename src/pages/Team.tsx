@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useAddEmployee } from '@/hooks/useEmployees';
 import InviteEmployeeModal from '@/components/InviteEmployeeModal';
 import TeamEmployeeCard from '@/components/TeamEmployeeCard';
+import ArchivedMembersDialog from '@/components/ArchivedMembersDialog';
 import { Users, Plus, Loader2, CalendarDays } from 'lucide-react';
 
 function getDefaultRange() {
@@ -113,6 +114,7 @@ export default function Team() {
             </DialogContent>
           </Dialog>
           <InviteEmployeeModal />
+          <ArchivedMembersDialog />
         </div>
       </div>
 
