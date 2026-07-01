@@ -55,7 +55,7 @@ function validateLocationInput(body: any): { lat: number; lng: number; accuracy:
     validatedAccuracy = Math.min(accuracy, 100000);
   }
 
-  let validatedTimestamp = new Date().toISOString();
+  let validatedTimestamp = nowEasternIso();
   if (timestamp) {
     const ts = new Date(timestamp);
     if (isNaN(ts.getTime())) throw new Error("Invalid timestamp format");
