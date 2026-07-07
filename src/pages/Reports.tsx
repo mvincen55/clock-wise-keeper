@@ -138,7 +138,7 @@ function eventTypeLabel(type: string): string {
 function AuditTrailRow({ event, actorName }: { event: AuditEvent; actorName?: string }) {
   const details = event.event_details || {};
   const ts = new Date(event.created_at);
-  const timeStr = ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'UTC' });
+  const timeStr = ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/New_York' });
   const dateStr = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   const oldVal = details.old_value ?? event.before_json;
@@ -321,7 +321,7 @@ export default function Reports() {
       const rows = auditEvents.map(a => {
         const ts = new Date(a.created_at);
         const dateStr = ts.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
-        const timeStr = ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'UTC' });
+        const timeStr = ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/New_York' });
         const details = a.event_details || {};
         const fieldLabel = details.field_changed ? String(details.field_changed).replace(/_/g, ' ') : '';
         const oldVal = formatAuditValue(details.old_value ?? a.before_json);
