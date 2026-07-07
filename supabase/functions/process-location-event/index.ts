@@ -21,18 +21,11 @@ function haversineDistance(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// Returns "now" as ISO with HH:MM matching Eastern wall clock and a Z suffix.
-// Matches app-wide punch_time convention (Eastern-time-labeled-as-UTC).
-function nowEasternIso(): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", hour12: false,
-  }).formatToParts(new Date());
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
-  let hour = get("hour");
-  if (hour === "24") hour = "00";
-  return `${get("year")}-${get("month")}-${get("day")}T${hour}:${get("minute")}:00.000Z`;
+// Current instant in real UTC (seconds/ms zeroed).
+function nowUtcIso(): string {
+  const d = new Date();
+  d.setSeconds(0, 0);
+  return d.toISOString();
 }
 
 function validateLocationInput(body: any): { lat: number; lng: number; accuracy: number | null; timestamp: string } {
@@ -55,7 +48,7 @@ function validateLocationInput(body: any): { lat: number; lng: number; accuracy:
     validatedAccuracy = Math.min(accuracy, 100000);
   }
 
-  let validatedTimestamp = nowEasternIso();
+  let validatedTimestamp = nowUtcIso();
   if (timestamp) {
     const ts = new Date(timestamp);
     if (isNaN(ts.getTime())) throw new Error("Invalid timestamp format");
@@ -338,8 +331,24 @@ async function createAutoPunch(
       })
       .select("id")
       .single();
-    if (error) throw error;
-    entryId = newEntry.id;
+
+    if (error) {
+      // 23505 = unique_violation on (employee_id, entry_date) — someone else already created it.
+      if ((error as any).code === "23505") {
+        const { data: existing } = await supabase
+          .from("time_entries")
+          .select("id")
+          .eq("employee_id", employeeId)
+          .eq("entry_date", date)
+          .maybeSingle();
+        if (!existing) throw error;
+        entryId = existing.id;
+      } else {
+        throw error;
+      }
+    } else {
+      entryId = newEntry.id;
+    }
   }
 
   // Get next seq
@@ -372,30 +381,14 @@ async function createAutoPunch(
 
   if (punchError) throw punchError;
 
-  // Update total_minutes
-  const { data: allPunches } = await supabase
-    .from("punches")
-    .select("punch_type, punch_time")
-    .eq("time_entry_id", entryId)
-    .order("seq");
-
-  if (allPunches) {
-    let total = 0;
-    for (let i = 0; i < allPunches.length - 1; i += 2) {
-      if (allPunches[i].punch_type === "in" && allPunches[i + 1]?.punch_type === "out") {
-        const inT = new Date(allPunches[i].punch_time).getTime();
-        const outT = new Date(allPunches[i + 1].punch_time).getTime();
-        total += (outT - inT) / 60000;
-      }
-    }
-    await supabase.from("time_entries").update({ total_minutes: Math.round(total) }).eq("id", entryId);
-  }
+  // NOTE: total_minutes is recomputed automatically by trg_recompute_punch.
 
   // Audit
   await supabase.from("audit_events").insert({
     user_id: userId,
     org_id: orgId,
     employee_id: employeeId,
+    actor_id: userId,
     event_type: `auto_${punchType}`,
     event_details: {
       punch_time: punchTime,

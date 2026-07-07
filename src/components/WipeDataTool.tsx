@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrgContext } from '@/hooks/useOrgContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { AlertTriangle, Download, Trash2, Loader2, CheckCircle } from 'lucide-react';
+import { AlertTriangle, Download, Trash2, Loader2, CheckCircle, ShieldOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function WipeDataTool() {
   const { user } = useAuth();
+  const { data: orgCtx } = useOrgContext();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [startDate, setStartDate] = useState('');
@@ -24,7 +26,18 @@ export default function WipeDataTool() {
   const [wiping, setWiping] = useState(false);
   const [wipeSummary, setWipeSummary] = useState<{ punches: number; entries: number; tardies: number; exceptions: number; daysOff: number; audits: number } | null>(null);
 
-  const canWipe = startDate && endDate && confirmDelete && confirmNoUndo && typeConfirm === 'DELETE' && backupDone && !wiping;
+  const isAdmin = orgCtx?.role === 'owner' || orgCtx?.role === 'manager';
+  const canWipe = isAdmin && startDate && endDate && confirmDelete && confirmNoUndo && typeConfirm === 'DELETE' && backupDone && !wiping;
+
+  if (!isAdmin) {
+    return (
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><ShieldOff className="h-4 w-4" /> Wipe Data</CardTitle></CardHeader>
+        <CardContent><p className="text-sm text-muted-foreground">Admin only. Contact an owner or manager if you need data removed.</p></CardContent>
+      </Card>
+    );
+  }
+
 
   const handleExportBackup = async () => {
     if (!user || !startDate || !endDate) return;

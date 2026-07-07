@@ -9,7 +9,7 @@ import { useMissingShifts } from '@/hooks/useMissingShifts';
 import { useAttendanceDayStatus, useRecomputeAttendance } from '@/hooks/useAttendanceDayStatus';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { MissingShiftBanner } from '@/components/MissingShiftBanner';
-import { minutesToHHMM, formatTime, formatDate } from '@/lib/time-utils';
+import { minutesToHHMM, formatTime, formatDate, easternWallMinutes } from '@/lib/time-utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,14 +36,11 @@ function computeLateInfo(entry: TimeEntryRow, schedule: ReturnType<typeof useWor
   const firstIn = punches.find(p => p.punch_type === 'in');
   if (!firstIn) return null;
 
-  const arrivalDate = new Date(firstIn.punch_time);
+  // Compare in Eastern wall-clock minutes-since-midnight.
+  const arrivalMin = easternWallMinutes(firstIn.punch_time);
   const [sh, sm] = sched.start_time.split(':').map(Number);
-  // punch_time is Eastern-in-UTC, so compare using UTC methods
-  const expectedDate = new Date(entry.entry_date + 'T00:00:00Z');
-  expectedDate.setUTCHours(sh, sm + sched.grace_minutes, 0, 0);
-
-  const diffMs = arrivalDate.getTime() - expectedDate.getTime();
-  const diffMin = Math.ceil(diffMs / 60000);
+  const expectedMin = sh * 60 + sm + sched.grace_minutes;
+  const diffMin = arrivalMin - expectedMin;
 
   if (diffMin >= sched.threshold_minutes) {
     return { minutesLate: diffMin, expectedStart: sched.start_time, actualStart: firstIn.punch_time };
