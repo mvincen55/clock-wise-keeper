@@ -14,6 +14,189 @@ export type Database = {
   }
   public: {
     Tables: {
+      _backup_audit_events_20260707: {
+        Row: {
+          action_type: string | null
+          actor_id: string | null
+          after_json: Json | null
+          before_json: Json | null
+          created_at: string | null
+          employee_id: string | null
+          event_details: Json | null
+          event_type: string | null
+          id: string | null
+          org_id: string | null
+          reason: string | null
+          related_date: string | null
+          related_entry_id: string | null
+          target_id: string | null
+          target_table: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action_type?: string | null
+          actor_id?: string | null
+          after_json?: Json | null
+          before_json?: Json | null
+          created_at?: string | null
+          employee_id?: string | null
+          event_details?: Json | null
+          event_type?: string | null
+          id?: string | null
+          org_id?: string | null
+          reason?: string | null
+          related_date?: string | null
+          related_entry_id?: string | null
+          target_id?: string | null
+          target_table?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action_type?: string | null
+          actor_id?: string | null
+          after_json?: Json | null
+          before_json?: Json | null
+          created_at?: string | null
+          employee_id?: string | null
+          event_details?: Json | null
+          event_type?: string | null
+          id?: string | null
+          org_id?: string | null
+          reason?: string | null
+          related_date?: string | null
+          related_entry_id?: string | null
+          target_id?: string | null
+          target_table?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      _backup_punches_20260707: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          edited_at: string | null
+          edited_by: string | null
+          employee_id: string | null
+          id: string | null
+          is_edited: boolean | null
+          location_lat: number | null
+          location_lng: number | null
+          low_confidence: boolean | null
+          org_id: string | null
+          original_punch_time: string | null
+          punch_time: string | null
+          punch_type: Database["public"]["Enums"]["punch_type"] | null
+          raw_text: string | null
+          seq: number | null
+          source: Database["public"]["Enums"]["source_type"] | null
+          time_entry_id: string | null
+          time_verified: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          edited_at?: string | null
+          edited_by?: string | null
+          employee_id?: string | null
+          id?: string | null
+          is_edited?: boolean | null
+          location_lat?: number | null
+          location_lng?: number | null
+          low_confidence?: boolean | null
+          org_id?: string | null
+          original_punch_time?: string | null
+          punch_time?: string | null
+          punch_type?: Database["public"]["Enums"]["punch_type"] | null
+          raw_text?: string | null
+          seq?: number | null
+          source?: Database["public"]["Enums"]["source_type"] | null
+          time_entry_id?: string | null
+          time_verified?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          edited_at?: string | null
+          edited_by?: string | null
+          employee_id?: string | null
+          id?: string | null
+          is_edited?: boolean | null
+          location_lat?: number | null
+          location_lng?: number | null
+          low_confidence?: boolean | null
+          org_id?: string | null
+          original_punch_time?: string | null
+          punch_time?: string | null
+          punch_type?: Database["public"]["Enums"]["punch_type"] | null
+          raw_text?: string | null
+          seq?: number | null
+          source?: Database["public"]["Enums"]["source_type"] | null
+          time_entry_id?: string | null
+          time_verified?: boolean | null
+        }
+        Relationships: []
+      }
+      _backup_time_entries_20260707: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          employee_code: string | null
+          employee_id: string | null
+          employee_name: string | null
+          entry_comment: string | null
+          entry_date: string | null
+          id: string | null
+          is_remote: boolean | null
+          notes: string | null
+          org_id: string | null
+          raw_text: string | null
+          raw_total_hhmm: string | null
+          source: Database["public"]["Enums"]["source_type"] | null
+          total_minutes: number | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          employee_code?: string | null
+          employee_id?: string | null
+          employee_name?: string | null
+          entry_comment?: string | null
+          entry_date?: string | null
+          id?: string | null
+          is_remote?: boolean | null
+          notes?: string | null
+          org_id?: string | null
+          raw_text?: string | null
+          raw_total_hhmm?: string | null
+          source?: Database["public"]["Enums"]["source_type"] | null
+          total_minutes?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          employee_code?: string | null
+          employee_id?: string | null
+          employee_name?: string | null
+          entry_comment?: string | null
+          entry_date?: string | null
+          id?: string | null
+          is_remote?: boolean | null
+          notes?: string | null
+          org_id?: string | null
+          raw_text?: string | null
+          raw_total_hhmm?: string | null
+          source?: Database["public"]["Enums"]["source_type"] | null
+          total_minutes?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       allowed_users: {
         Row: {
           created_at: string
