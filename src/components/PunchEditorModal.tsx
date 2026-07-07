@@ -23,7 +23,7 @@ import { PunchRow } from '@/hooks/useTimeEntries';
 import { EditablePunch, useSavePunchEdits } from '@/hooks/usePunchEditor';
 import { useWorkSchedule, getScheduleForWeekday } from '@/hooks/useWorkSchedule';
 import { useToast } from '@/hooks/use-toast';
-import { formatTime, nowEasternIso } from '@/lib/time-utils';
+import { formatTime, nowEasternIso, easternTimeInputValue, easternWallToUtcIso } from '@/lib/time-utils';
 
 type Props = {
   open: boolean;
@@ -49,15 +49,14 @@ function punchToEditable(p: PunchRow): EditablePunch {
 }
 
 function toLocalTimeInput(iso: string): string {
-  const d = new Date(iso);
-  const h = d.getUTCHours().toString().padStart(2, '0');
-  const m = d.getUTCMinutes().toString().padStart(2, '0');
-  return `${h}:${m}`;
+  // punch_time is real UTC; the time input shows Eastern wall-clock.
+  return easternTimeInputValue(iso);
 }
 
 function fromLocalTimeInput(dateStr: string, timeStr: string): string {
-  // Build as UTC so the stored value stays Eastern-in-UTC
-  return `${dateStr}T${timeStr}:00.000Z`;
+  // The time input is Eastern wall-clock; store real UTC (DST-correct).
+  const [h, m] = timeStr.split(':').map(Number);
+  return easternWallToUtcIso(dateStr, h, m || 0);
 }
 
 const SOURCE_LABELS: Record<string, string> = {
