@@ -102,6 +102,7 @@ export function useClockAction() {
       let { data: entry } = await supabase
         .from('time_entries')
         .select('id')
+        .eq('employee_id', ctx.employee_id)
         .eq('entry_date', today)
         .maybeSingle();
 
@@ -111,8 +112,23 @@ export function useClockAction() {
           .insert({ user_id: user.id, org_id: ctx.org_id, employee_id: ctx.employee_id, entry_date: today, source: 'manual' as const })
           .select('id')
           .single();
-        if (error) throw error;
-        entry = newEntry;
+        if (error) {
+          // Concurrent insert — fetch the existing row
+          if ((error as any).code === '23505') {
+            const { data: existing } = await supabase
+              .from('time_entries')
+              .select('id')
+              .eq('employee_id', ctx.employee_id)
+              .eq('entry_date', today)
+              .maybeSingle();
+            if (!existing) throw error;
+            entry = existing;
+          } else {
+            throw error;
+          }
+        } else {
+          entry = newEntry;
+        }
       }
 
       const { data: maxPunch } = await supabase
@@ -136,16 +152,7 @@ export function useClockAction() {
       });
       if (punchError) throw punchError;
 
-      const { data: allPunches } = await supabase
-        .from('punches')
-        .select('punch_type, punch_time')
-        .eq('time_entry_id', entry.id)
-        .order('seq');
-
-      if (allPunches) {
-        const totalMin = calculatePunchMinutes(allPunches);
-        await supabase.from('time_entries').update({ total_minutes: totalMin }).eq('id', entry.id);
-      }
+      // total_minutes is now recomputed by trg_recompute_punch trigger.
 
       await supabase.from('audit_events').insert({
         user_id: user.id,
