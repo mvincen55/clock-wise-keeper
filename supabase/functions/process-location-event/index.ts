@@ -331,8 +331,24 @@ async function createAutoPunch(
       })
       .select("id")
       .single();
-    if (error) throw error;
-    entryId = newEntry.id;
+
+    if (error) {
+      // 23505 = unique_violation on (employee_id, entry_date) — someone else already created it.
+      if ((error as any).code === "23505") {
+        const { data: existing } = await supabase
+          .from("time_entries")
+          .select("id")
+          .eq("employee_id", employeeId)
+          .eq("entry_date", date)
+          .maybeSingle();
+        if (!existing) throw error;
+        entryId = existing.id;
+      } else {
+        throw error;
+      }
+    } else {
+      entryId = newEntry.id;
+    }
   }
 
   // Get next seq
@@ -365,30 +381,14 @@ async function createAutoPunch(
 
   if (punchError) throw punchError;
 
-  // Update total_minutes
-  const { data: allPunches } = await supabase
-    .from("punches")
-    .select("punch_type, punch_time")
-    .eq("time_entry_id", entryId)
-    .order("seq");
-
-  if (allPunches) {
-    let total = 0;
-    for (let i = 0; i < allPunches.length - 1; i += 2) {
-      if (allPunches[i].punch_type === "in" && allPunches[i + 1]?.punch_type === "out") {
-        const inT = new Date(allPunches[i].punch_time).getTime();
-        const outT = new Date(allPunches[i + 1].punch_time).getTime();
-        total += (outT - inT) / 60000;
-      }
-    }
-    await supabase.from("time_entries").update({ total_minutes: Math.round(total) }).eq("id", entryId);
-  }
+  // NOTE: total_minutes is recomputed automatically by trg_recompute_punch.
 
   // Audit
   await supabase.from("audit_events").insert({
     user_id: userId,
     org_id: orgId,
     employee_id: employeeId,
+    actor_id: userId,
     event_type: `auto_${punchType}`,
     event_details: {
       punch_time: punchTime,
