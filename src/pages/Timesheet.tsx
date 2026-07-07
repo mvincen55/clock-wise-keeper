@@ -9,7 +9,7 @@ import { useMissingShifts } from '@/hooks/useMissingShifts';
 import { useAttendanceDayStatus, useRecomputeAttendance } from '@/hooks/useAttendanceDayStatus';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { MissingShiftBanner } from '@/components/MissingShiftBanner';
-import { minutesToHHMM, formatTime, formatDate } from '@/lib/time-utils';
+import { minutesToHHMM, formatTime, formatDate, easternWallMinutes } from '@/lib/time-utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
