@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import { getToday, calculatePunchMinutes, nowEasternIso } from '@/lib/time-utils';
+import { getToday, nowEasternIso } from '@/lib/time-utils';
 
 export type PunchRow = {
   id: string;
