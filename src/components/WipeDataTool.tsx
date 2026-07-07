@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrgContext } from '@/hooks/useOrgContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { AlertTriangle, Download, Trash2, Loader2, CheckCircle } from 'lucide-react';
+import { AlertTriangle, Download, Trash2, Loader2, CheckCircle, ShieldOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function WipeDataTool() {
   const { user } = useAuth();
+  const { data: orgCtx } = useOrgContext();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [startDate, setStartDate] = useState('');
