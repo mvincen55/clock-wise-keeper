@@ -26,7 +26,18 @@ export default function WipeDataTool() {
   const [wiping, setWiping] = useState(false);
   const [wipeSummary, setWipeSummary] = useState<{ punches: number; entries: number; tardies: number; exceptions: number; daysOff: number; audits: number } | null>(null);
 
-  const canWipe = startDate && endDate && confirmDelete && confirmNoUndo && typeConfirm === 'DELETE' && backupDone && !wiping;
+  const isAdmin = orgCtx?.role === 'owner' || orgCtx?.role === 'manager';
+  const canWipe = isAdmin && startDate && endDate && confirmDelete && confirmNoUndo && typeConfirm === 'DELETE' && backupDone && !wiping;
+
+  if (!isAdmin) {
+    return (
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><ShieldOff className="h-4 w-4" /> Wipe Data</CardTitle></CardHeader>
+        <CardContent><p className="text-sm text-muted-foreground">Admin only. Contact an owner or manager if you need data removed.</p></CardContent>
+      </Card>
+    );
+  }
+
 
   const handleExportBackup = async () => {
     if (!user || !startDate || !endDate) return;
