@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,8 +8,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Clock, Loader2, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
+function safeNext(raw: string | null): string {
+  if (!raw) return '/';
+  // Only allow same-origin relative paths.
+  if (!raw.startsWith('/') || raw.startsWith('//')) return '/';
+  return raw;
+}
+
 export default function Auth() {
   const { user, loading, isAllowed, signIn } = useAuth();
+  const [params] = useSearchParams();
+  const nextPath = safeNext(params.get('next'));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -24,7 +33,8 @@ export default function Auth() {
     );
   }
 
-  if (user && isAllowed) return <Navigate to="/" replace />;
+  if (user && isAllowed) return <Navigate to={nextPath} replace />;
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
