@@ -147,7 +147,6 @@ export default function DaysOff() {
   const [debugRow, setDebugRow] = useState<AttendanceDayStatusRow | null>(null);
   const [reviewTardy, setReviewTardy] = useState<TardyRow | null>(null);
 
-
   const requiresNotes = (type: string) => type === 'medical_leave';
 
   const [form, setForm] = useState({
