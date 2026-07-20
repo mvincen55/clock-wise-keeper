@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Clock, LogIn, LogOut, Coffee, Play, Loader2, Settings as SettingsIcon, Pencil, CalendarDays, MapPin } from 'lucide-react';
+import { Clock, LogIn, LogOut, Loader2, Settings as SettingsIcon, Pencil, CalendarDays, MapPin } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useGeoTracking } from '@/hooks/useGeoTracking';
 import { LocationStatusPanel } from '@/components/LocationStatusPanel';
@@ -18,7 +18,7 @@ import { Link } from 'react-router-dom';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { OrgSnapshotPanel } from '@/components/OrgSnapshotPanel';
 
-type ClockStatus = 'clocked_out' | 'clocked_in' | 'on_break';
+type ClockStatus = 'clocked_out' | 'clocked_in';
 
 function getStatus(punches: PunchRow[]): ClockStatus {
   if (!punches.length) return 'clocked_out';
@@ -74,7 +74,6 @@ export default function Dashboard() {
   const statusConfig = {
     clocked_out: { label: 'Clocked Out', color: 'text-muted-foreground', bg: 'bg-muted' },
     clocked_in: { label: 'Clocked In', color: 'text-success', bg: 'bg-success/10' },
-    on_break: { label: 'On Break', color: 'text-accent', bg: 'bg-accent/10' },
   };
   const sc = statusConfig[status];
 
@@ -140,7 +139,7 @@ export default function Dashboard() {
             {now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
           </p>
           <div className={`mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${sc.bg} ${sc.color}`}>
-            <span className={`h-2 w-2 rounded-full ${status === 'clocked_in' ? 'bg-success animate-pulse' : status === 'on_break' ? 'bg-accent animate-pulse' : 'bg-muted-foreground'}`} />
+            <span className={`h-2 w-2 rounded-full ${status === 'clocked_in' ? 'bg-success animate-pulse' : 'bg-muted-foreground'}`} />
             {sc.label}
           </div>
         </div>
@@ -156,18 +155,11 @@ export default function Dashboard() {
               </Button>
             )}
             {status === 'clocked_in' && (
-              <>
-                <Button variant="destructive" className="h-16 text-base font-semibold" onClick={() => clockAction.mutate('clock_out')} disabled={isBusy}>
-                  {isBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogOut className="mr-2 h-4 w-4" />}Clock Out
-                </Button>
-                <Button variant="secondary" className="h-16 text-base font-semibold" onClick={() => clockAction.mutate('break_start')} disabled={isBusy}>
-                  {isBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Coffee className="mr-2 h-4 w-4" />}Start Break
-                </Button>
-              </>
-            )}
-            {status === 'on_break' && (
-              <Button className="col-span-2 h-16 text-lg font-semibold" onClick={() => clockAction.mutate('break_end')} disabled={isBusy}>
-                {isBusy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Play className="mr-2 h-5 w-5" />}End Break
+              /* Break tracking was removed: it clocked you out with no way back.
+                 For an unpaid break, clock out and clock back in — the gap is
+                 already excluded from paid time. */
+              <Button variant="destructive" className="col-span-2 h-16 text-lg font-semibold" onClick={() => clockAction.mutate('clock_out')} disabled={isBusy}>
+                {isBusy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <LogOut className="mr-2 h-5 w-5" />}Clock Out
               </Button>
             )}
           </div>
