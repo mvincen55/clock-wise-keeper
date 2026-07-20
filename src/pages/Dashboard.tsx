@@ -12,6 +12,7 @@ import { useWorkZones } from '@/hooks/useWorkZones';
 import { useMissingShifts } from '@/hooks/useMissingShifts';
 import { MissingShiftBanner } from '@/components/MissingShiftBanner';
 import { PunchEditorModal } from '@/components/PunchEditorModal';
+import { CorrectionRequestModal } from '@/components/CorrectionRequestModal';
 import { useCurrentPtoBalance } from '@/hooks/usePtoEngine';
 import { Link } from 'react-router-dom';
 import { useOrgContext } from '@/hooks/useOrgContext';
@@ -48,6 +49,7 @@ export default function Dashboard() {
     return localStorage.getItem('timevault_auto_clock') !== 'false';
   });
   const [punchEditorOpen, setPunchEditorOpen] = useState(false);
+  const [correctionOpen, setCorrectionOpen] = useState(false);
   const { data: zones } = useWorkZones();
   const geoState = useGeoTracking(autoClockEnabled && (zones?.length ?? 0) > 0);
 
@@ -84,9 +86,13 @@ export default function Dashboard() {
       </div>
 
       <div className="flex gap-2">
-        <Link to="/settings#work-schedule">
-          <Button variant="outline" size="sm"><SettingsIcon className="mr-2 h-4 w-4" />Edit Schedule</Button>
-        </Link>
+        {/* Schedules are managed per-employee from Team (the old
+            /settings#work-schedule section no longer exists). */}
+        {isManager && (
+          <Link to="/team">
+            <Button variant="outline" size="sm"><SettingsIcon className="mr-2 h-4 w-4" />Edit Schedule</Button>
+          </Link>
+        )}
         <Link to="/pto">
           <Button variant="outline" size="sm"><CalendarDays className="mr-2 h-4 w-4" />PTO</Button>
         </Link>
@@ -184,7 +190,12 @@ export default function Dashboard() {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2"><Clock className="h-4 w-4 text-primary" />Today's Punches</CardTitle>
           {todayEntry && punches.length > 0 && (
-            <Button variant="outline" size="sm" onClick={() => setPunchEditorOpen(true)}><Pencil className="h-3.5 w-3.5 mr-1" /> Edit</Button>
+            isManager ? (
+              <Button variant="outline" size="sm" onClick={() => setPunchEditorOpen(true)}><Pencil className="h-3.5 w-3.5 mr-1" /> Edit</Button>
+            ) : (
+              /* Employees can't edit punches (append-only) — route to a correction request */
+              <Button variant="outline" size="sm" onClick={() => setCorrectionOpen(true)}><Pencil className="h-3.5 w-3.5 mr-1" /> Request Correction</Button>
+            )
           )}
         </CardHeader>
         <CardContent>
@@ -215,6 +226,13 @@ export default function Dashboard() {
 
       {todayEntry && (
         <PunchEditorModal open={punchEditorOpen} onClose={() => setPunchEditorOpen(false)} entryId={todayEntry.id} entryDate={todayEntry.entry_date} punches={punches} />
+      )}
+      {todayEntry && (
+        <CorrectionRequestModal
+          open={correctionOpen}
+          onClose={() => setCorrectionOpen(false)}
+          prefill={{ target_table: 'time_entries', target_id: todayEntry.id, entry_date: todayEntry.entry_date }}
+        />
       )}
     </div>
   );

@@ -111,3 +111,77 @@ after merge as a smoke test.
 - `src/test/time-utils.test.ts`, `src/test/confirm-import.test.ts` — 28 new unit tests (29 total pass)
 
 Verification: `npx vitest run` (29/29), `npx tsc --noEmit` (clean), `npx vite build` (succeeds).
+
+---
+
+# Employee-Experience Pass — 2026-07-20
+
+After the hardening + integrity fixes above, a second sweep mapped **every employee-facing
+write** against the live RLS policies to find flows that silently fail for a non-admin. The
+lockdown made non-admin data append-only, but the UI still presented mutation controls that the
+database rejected with **0 rows affected and no error** — the app popped "Saved!" while nothing
+was written. For a payroll system of record, that's the most damaging class of bug.
+
+Chosen model (your call): **employees self-serve low-risk workflow fields on their own rows;
+punch times, totals, and approvals stay locked and flow through Request Correction.**
+
+## Silent-failure bugs found & fixed
+
+| Flow | Before | After |
+|---|---|---|
+| Timesheet → Remote toggle | UPDATE `time_entries` → 0 rows, toast lied | Narrow employee UPDATE policy + guard trigger; only `is_remote`/`entry_comment` writable, verified allowed |
+| Timesheet → Daily comment | same | same |
+| Timesheet → tardy "Add Reason" | recompute auto-creates the tardy row, so this was an UPDATE → 0 rows | Employee UPDATE policy limited to `reason_text` by guard trigger; auto-detect effect now only INSERTs when no row exists (no more throwing upserts) |
+| Dashboard / Timesheet → "Edit Punches" | editing/deleting existing punches → 0 rows (only add worked) | Manager-only; employees get a **Request Correction** button instead |
+| Missing Shift banner → resolve | `useResolveException` UPDATE → 0 rows, banner never cleared | Employee UPDATE policy on `attendance_exceptions` (status/reason/resolution only); verified resolves |
+| Attendance → delete day off / review tardy | DELETE / UPDATE → 0 rows | Manager-only controls |
+| Settings → payroll settings, closures | employee upserts silently failed | Manager-only; closures shown read-only to employees |
+
+## Integrity tightening (so self-serve can't become a hole)
+
+- **Guard triggers** on `time_entries`, `tardies`, `attendance_exceptions`: for a non-admin
+  `authenticated` caller, any change to a payroll-relevant column (totals, minutes-late,
+  approval status, dates, identity) raises an exception. Admin and SECURITY-DEFINER recompute
+  bypass via a `current_user <> 'authenticated'` check — verified the recompute trigger still
+  owns `total_minutes` (test #2).
+- **Attendance-computation inputs made read-only for employees**: `work_schedule`,
+  `schedule_versions`, `schedule_weekdays`, `office_closures`, `payroll_settings`,
+  `payroll_summaries` — an employee can no longer alter the schedule/closure/settings their own
+  tardiness and absences are judged against. (Previously these had `Own ... ALL` policies.)
+- **Office closures now apply org-wide** in `recompute_attendance_range` (STEP 2): a closure an
+  admin creates for the practice counts for every employee, so staff no longer need a personal
+  copy of the holiday list — and can't, since writes are now admin-only. Employees get org-wide
+  **read**.
+- **`org_members` admin visibility**: employees can see active owner/manager rows so the
+  correction/PTO/change-request flows can look up who to notify. Without this the notify step
+  found no managers and silently sent nothing.
+
+All schema changes applied live via the Lovable MCP and mirrored in
+`supabase/migrations/20260720144829_*.sql`.
+
+## Live verification (disposable employee account, then removed)
+
+**`scripts/verify-employee-flows.ts` — 20/20 PASS** through the real API:
+clock in/out; trigger-owned `total_minutes`; remote toggle; daily comment; missing-shift
+create+resolve; tardy reason; submit correction request; notify admin; read org-wide closure —
+all allowed. Change `total_minutes` / reduce `minutes_late` / self-approve tardy / write
+schedule / write closure / write payroll settings / forge payroll summary — all blocked.
+
+**`scripts/verify-rls.ts` re-run — 14/14 PASS**: the append-only guarantees from the first pass
+still hold (punch UPDATE/DELETE dead, cross-employee isolation intact); `time_entries` UPDATE now
+returns the guard-trigger error instead of 0 rows, which is the intended tightening.
+
+DB row counts confirmed back to baseline after cleanup; only the real owner's data remains.
+
+## Files changed in this pass
+
+- `supabase/migrations/20260720144829_*.sql` — employee UPDATE policies + guard triggers,
+  read-only attendance inputs, org-wide closures in recompute, org-admin visibility
+- `src/pages/Dashboard.tsx` — employees get Request Correction (not punch edit); schedule link manager-only
+- `src/pages/Timesheet.tsx` — punch editor manager-only; tardy auto-detect only INSERTs
+- `src/pages/DaysOff.tsx` — delete-day-off & tardy-review manager-only; Eastern time display fix
+- `src/pages/Settings.tsx` — payroll settings & closure management manager-only, read-only calendar for employees
+- `scripts/verify-employee-flows.ts` — repeatable employee-experience test
+
+Verification: `npx vitest run` (29/29), `npx tsc -p tsconfig.app.json --noEmit` (clean),
+`npx vite build` (succeeds).

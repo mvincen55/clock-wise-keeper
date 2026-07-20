@@ -12,7 +12,7 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import PersonalCalendar from '@/components/PersonalCalendar';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { useAuth } from '@/hooks/useAuth';
-import { formatDate } from '@/lib/time-utils';
+import { formatDate, formatTime } from '@/lib/time-utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -667,9 +667,12 @@ export default function DaysOff() {
                           {typeLabels[d.type]}
                         </span>
                         {d.hours != null && <span className="text-xs text-muted-foreground">{d.hours}h</span>}
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(d.id)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                        {/* Removing a logged day off is an attendance-record change — manager only */}
+                        {isManager && (
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(d.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -732,7 +735,7 @@ export default function DaysOff() {
                           {t.timezone_suspect ? (
                             <span className="text-warning italic">—</span>
                           ) : (
-                            new Date(t.actual_start_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+                            formatTime(t.actual_start_time)
                           )}
                         </td>
                         <td className="px-4 py-3 font-semibold text-destructive">
@@ -747,9 +750,15 @@ export default function DaysOff() {
                           }`}>{t.approval_status}</span>
                         </td>
                         <td className="px-4 py-3">
-                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setReviewTardy(t)}>
-                            {t.approval_status === 'unreviewed' ? 'Review' : 'Edit'}
-                          </Button>
+                          {/* Approving/editing tardies is manager-only; employees
+                              add their reason from the Timesheet prompt */}
+                          {isManager ? (
+                            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setReviewTardy(t)}>
+                              {t.approval_status === 'unreviewed' ? 'Review' : 'Edit'}
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
                         </td>
                       </tr>
                     ))

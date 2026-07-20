@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useOfficeClosures, useGenerateClosures, useAddClosure, useDeleteClosure } from '@/hooks/useOfficeClosures';
 import { usePayrollSettings, useUpsertPayrollSettings } from '@/hooks/usePayrollSettings';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrgContext } from '@/hooks/useOrgContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,6 +26,10 @@ const WEEKDAY_OPTIONS = [
 export default function Settings() {
   const { toast } = useToast();
   const { sessionTimeoutMinutes, setSessionTimeoutMinutes } = useAuth();
+  const { data: ctx } = useOrgContext();
+  // Payroll settings and closure management write org-level data — manager only.
+  // Employees see the closure calendar read-only.
+  const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
   // Closures
   const currentYear = new Date().getFullYear();
@@ -68,7 +73,8 @@ export default function Settings() {
         <p className="text-muted-foreground">Configure payroll, closures, and security</p>
       </div>
 
-      {/* Payroll Settings */}
+      {/* Payroll Settings (manager only) */}
+      {isManager && (
       <Card className="card-elevated">
         <CardHeader className="border-b">
           <CardTitle className="flex items-center gap-2">
@@ -122,6 +128,7 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Office Closures */}
       <Card className="card-elevated">
@@ -139,6 +146,7 @@ export default function Settings() {
           </div>
         </CardHeader>
         <CardContent className="p-4 space-y-4">
+          {isManager && (
           <div className="flex flex-wrap gap-2">
             <Button onClick={handleGenerate} disabled={generateClosures.isPending} variant="secondary">
               {generateClosures.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
@@ -167,6 +175,7 @@ export default function Settings() {
               </DialogContent>
             </Dialog>
           </div>
+          )}
 
           {closuresLoading ? (
             <div className="flex justify-center py-8">
@@ -185,9 +194,11 @@ export default function Settings() {
                       <p className="text-xs text-muted-foreground">{formatDate(c.closure_date)}</p>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteClosure.mutate(c.id)}>
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+                  {isManager && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteClosure.mutate(c.id)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
