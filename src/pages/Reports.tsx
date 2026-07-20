@@ -227,7 +227,8 @@ export default function Reports() {
   const [expandedAudit, setExpandedAudit] = useState<Set<string>>(new Set());
   const [actorNames, setActorNames] = useState<Map<string, string>>(new Map());
 
-  const { data: entries } = useTimeEntries(startDate || undefined, endDate || undefined);
+  // Reports is org-wide for admins (RLS still limits employees to their own).
+  const { data: entries } = useTimeEntries(startDate || undefined, endDate || undefined, 'all');
   const { data: daysOff } = useDaysOff();
   const { data: tardies } = useTardies(startDate || undefined, endDate || undefined);
   const { data: exceptions } = useAttendanceExceptions(startDate || undefined, endDate || undefined);

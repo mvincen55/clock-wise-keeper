@@ -65,14 +65,27 @@ export function useTodayEntry() {
   });
 }
 
-export function useTimeEntries(startDate?: string, endDate?: string) {
+/**
+ * @param scope 'own' (default) returns only the caller's own employee entries —
+ *   the right scope for a personal timesheet. Necessary because RLS lets an admin
+ *   read the whole org, and imported entries for unlinked employees carry the
+ *   importer's user_id, so an unscoped query pollutes a manager's own views.
+ *   'all' returns everything RLS allows (org-wide for admins) — for reporting.
+ */
+export function useTimeEntries(
+  startDate?: string,
+  endDate?: string,
+  scope: 'own' | 'all' = 'own',
+) {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
 
   return useQuery({
-    queryKey: ['time-entries', startDate, endDate],
-    enabled: !!user,
+    queryKey: ['time-entries', startDate, endDate, scope, ctx?.employee_id],
+    enabled: !!user && (scope === 'all' || !!ctx),
     queryFn: async () => {
       let q = supabase.from('time_entries').select('*').order('entry_date', { ascending: false });
+      if (scope === 'own') q = q.eq('employee_id', ctx!.employee_id);
       if (startDate) q = q.gte('entry_date', startDate);
       if (endDate) q = q.lte('entry_date', endDate);
       const { data: entries } = await q;
