@@ -14,3 +14,7 @@ verify_jwt = false
 
 [functions.accept-invite]
 verify_jwt = false
+
+[functions.mcp]
+verify_jwt = false
+
