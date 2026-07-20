@@ -111,10 +111,10 @@ export function useClockAction() {
   const today = getToday();
 
   return useMutation({
-    mutationFn: async (action: 'clock_in' | 'clock_out' | 'break_start' | 'break_end') => {
+    mutationFn: async (action: 'clock_in' | 'clock_out') => {
       if (!user || !ctx) throw new Error('Not authenticated or no org context');
 
-      const punchType: 'in' | 'out' = (action === 'clock_in' || action === 'break_end') ? 'in' : 'out';
+      const punchType: 'in' | 'out' = action === 'clock_in' ? 'in' : 'out';
       const now = nowEasternIso();
 
       let { data: entry } = await supabase
