@@ -38,16 +38,21 @@ export type TimeEntryRow = {
 
 export function useTodayEntry() {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   const today = getToday();
 
   return useQuery({
     queryKey: ['time-entry', today],
-    enabled: !!user,
+    enabled: !!user && !!ctx,
     queryFn: async () => {
+      // Scope to own employee record: imported entries for unlinked employees
+      // carry the importer's user_id, and admins can see the whole org — an
+      // unscoped maybeSingle() would error once a second entry shares the date.
       const { data: entry } = await supabase
         .from('time_entries')
         .select('*')
         .eq('entry_date', today)
+        .eq('employee_id', ctx!.employee_id)
         .maybeSingle();
       if (!entry) return null;
       const { data: punches } = await supabase

@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import { calculatePunchMinutes } from '@/lib/time-utils';
 
 export type EditablePunch = {
   id: string | null;
@@ -126,13 +125,9 @@ export function useSavePunchEdits() {
         }
       }
 
-      // 4. Recompute total_minutes
-      const { data: allPunches } = await supabase.from('punches')
-        .select('punch_type, punch_time').eq('time_entry_id', entryId).order('seq');
-      if (allPunches) {
-        const totalMin = calculatePunchMinutes(allPunches);
-        await supabase.from('time_entries').update({ total_minutes: totalMin }).eq('id', entryId);
-      }
+      // 4. total_minutes is recomputed by trg_recompute_punch on every
+      // punch INSERT/UPDATE/DELETE above — no client-side write, so the
+      // trigger stays the single owner of that value.
 
       // 5. Re-sort seq numbers
       const { data: sortedPunches } = await supabase.from('punches')

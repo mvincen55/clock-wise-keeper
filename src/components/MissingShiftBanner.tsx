@@ -5,7 +5,7 @@ import { useAddDayOff } from '@/hooks/useDaysOff';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { supabase } from '@/integrations/supabase/client';
-import { formatDate } from '@/lib/time-utils';
+import { formatDate, easternWallToUtcIso } from '@/lib/time-utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -87,12 +87,18 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
           return;
         }
 
-        // Calculate total minutes from all pairs
+        // Convert Eastern wall-clock inputs to real UTC, then total the pairs
+        const toUtc = (hhmm: string) => {
+          const [h, m] = hhmm.split(':').map(Number);
+          return easternWallToUtcIso(actionDay.date, h, m || 0);
+        };
+        const utcPairs = validPairs.map(pair => ({
+          inIso: toUtc(pair.clockIn),
+          outIso: toUtc(pair.clockOut),
+        }));
         let totalMin = 0;
-        for (const pair of validPairs) {
-          const inMs = new Date(`${actionDay.date}T${pair.clockIn}:00Z`).getTime();
-          const outMs = new Date(`${actionDay.date}T${pair.clockOut}:00Z`).getTime();
-          totalMin += Math.round((outMs - inMs) / 60000);
+        for (const pair of utcPairs) {
+          totalMin += Math.round((new Date(pair.outIso).getTime() - new Date(pair.inIso).getTime()) / 60000);
         }
 
         const { data: entry, error: entryErr } = await supabase.from('time_entries').insert({
@@ -107,16 +113,16 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
         }).select('id').single();
         if (entryErr) throw entryErr;
 
-        // Insert all punch pairs
-        const punchInserts = validPairs.flatMap((pair, i) => [
+        // Insert all punch pairs (real UTC)
+        const punchInserts = utcPairs.flatMap((pair, i) => [
           {
             time_entry_id: entry.id, seq: i * 2, punch_type: 'in' as const,
-            punch_time: `${actionDay.date}T${pair.clockIn}:00.000Z`,
+            punch_time: pair.inIso,
             source: 'manual' as const, employee_id: org.employee_id, org_id: org.org_id,
           },
           {
             time_entry_id: entry.id, seq: i * 2 + 1, punch_type: 'out' as const,
-            punch_time: `${actionDay.date}T${pair.clockOut}:00.000Z`,
+            punch_time: pair.outIso,
             source: 'manual' as const, employee_id: org.employee_id, org_id: org.org_id,
           },
         ]);

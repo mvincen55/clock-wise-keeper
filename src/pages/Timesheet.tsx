@@ -161,9 +161,13 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
               )}
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase">Punch Details</p>
-                <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setPunchEditorOpen(true); }}>
-                  <Pencil className="h-3.5 w-3.5 mr-1" /> Edit Punches
-                </Button>
+                {/* Punch editing is manager-only (RLS blocks employee punch
+                    UPDATE/DELETE); employees use Request Correction below. */}
+                {isManager && (
+                  <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setPunchEditorOpen(true); }}>
+                    <Pencil className="h-3.5 w-3.5 mr-1" /> Edit Punches
+                  </Button>
+                )}
               </div>
               {punches.length === 0 && <p className="text-sm text-muted-foreground">No punches recorded</p>}
               {punches.map(p => {
@@ -331,25 +335,27 @@ export default function Timesheet() {
 
   const [tardyModal, setTardyModal] = useState<{ entry: TimeEntryRow; minutesLate: number; expectedStart: string; actualStart: string } | null>(null);
 
-  // Auto-detect tardies
+  const tardyMap = useMemo(() => {
+    const map = new Map<string, TardyRow>();
+    (tardies || []).forEach(t => map.set(t.entry_date, t));
+    return map;
+  }, [tardies]);
+
+  // Auto-detect tardies. Only INSERT when no tardy row exists yet — existing
+  // rows are owned by the server-side recompute (and employees cannot update
+  // them beyond reason_text, so an upsert here would throw for non-admins).
   useEffect(() => {
     if (!entries?.length || !schedule?.length || !user) return;
     entries.forEach(entry => {
       const info = computeLateInfo(entry, schedule);
-      if (info) {
+      if (info && !tardyMap.has(entry.entry_date)) {
         upsertTardy.mutate({
           time_entry_id: entry.id, entry_date: entry.entry_date,
           expected_start_time: info.expectedStart, actual_start_time: info.actualStart, minutes_late: info.minutesLate,
         });
       }
     });
-  }, [entries, schedule]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const tardyMap = useMemo(() => {
-    const map = new Map<string, TardyRow>();
-    (tardies || []).forEach(t => map.set(t.entry_date, t));
-    return map;
-  }, [tardies]);
+  }, [entries, schedule, tardyMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Compute status flags for each entry
   const entriesWithStatus = useMemo(() => {

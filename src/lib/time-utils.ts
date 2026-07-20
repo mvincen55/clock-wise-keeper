@@ -82,6 +82,53 @@ export function stripSeconds(iso: string): string {
   return d.toISOString();
 }
 
+/** UTC offset of America/New_York in minutes at a given instant (-300 EST, -240 EDT). */
+export function getEasternOffsetMinutes(atInstant: Date): number {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: APP_TZ, timeZoneName: 'shortOffset', year: 'numeric',
+  });
+  const tzName = dtf.formatToParts(atInstant).find(p => p.type === 'timeZoneName')?.value || 'GMT-5';
+  const m = tzName.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
+  if (!m) return -300;
+  const sign = m[1] === '+' ? 1 : -1;
+  return sign * (parseInt(m[2], 10) * 60 + (m[3] ? parseInt(m[3], 10) : 0));
+}
+
+/** HH:MM wall-clock in America/New_York for an instant — the value for <input type="time">. */
+export function easternTimeInputValue(iso: string | Date): string {
+  const d = typeof iso === 'string' ? new Date(iso) : iso;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: APP_TZ, hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(d);
+  const get = (t: string) => parts.find(p => p.type === t)?.value || '00';
+  let h = get('hour');
+  if (h === '24') h = '00';
+  return `${h}:${get('minute')}`;
+}
+
+/**
+ * Convert an America/New_York wall-clock date + HH:MM to a real UTC ISO string.
+ * DST-correct via double offset resolution: ambiguous times (fall-back) resolve to
+ * the earlier occurrence (EDT); nonexistent times (spring-forward gap) shift forward.
+ */
+export function easternWallToUtcIso(dateStr: string, hours: number, minutes: number): string {
+  const hh = String(hours).padStart(2, '0');
+  const mm = String(minutes).padStart(2, '0');
+  const wall = `${hh}:${mm}`;
+  const guess = new Date(`${dateStr}T${hh}:${mm}:00Z`);
+
+  const candidate1 = new Date(guess.getTime() - getEasternOffsetMinutes(guess) * 60000);
+  if (easternTimeInputValue(candidate1) === wall && easternDateKey(candidate1) === dateStr) {
+    return candidate1.toISOString();
+  }
+  const candidate2 = new Date(guess.getTime() - getEasternOffsetMinutes(candidate1) * 60000);
+  if (easternTimeInputValue(candidate2) === wall && easternDateKey(candidate2) === dateStr) {
+    return candidate2.toISOString();
+  }
+  // Nonexistent wall time (spring-forward gap): no instant matches; candidate1 shifts forward.
+  return candidate1.toISOString();
+}
+
 /**
  * Local wall-clock minutes-since-midnight for an instant in America/New_York.
  * Used to compare punch times against a schedule's HH:MM.
