@@ -81,10 +81,14 @@ after merge as a smoke test.
 
 ## Open items (non-blocking, flagged)
 
-1. **Legacy repair tools are now dangerous.** `TimezoneRepairTool`, `BulkRepairTool`, and
-   `TimeFixModal` shift punch times by fixed offsets on the assumption the DB holds fake-UTC.
-   The DB is now real UTC — running them would corrupt good data. Remove or disable them before
-   staff onboarding (left untouched here; removing UI was out of scope for this review).
+1. ~~**Legacy repair tools are now dangerous.**~~ **RESOLVED 2026-07-20.** `TimezoneRepairTool`,
+   `BulkRepairTool`, and `TimeFixModal` shifted punch times by fixed offsets assuming the DB held
+   fake-UTC; the DB is now real UTC, so they would corrupt good data. `BulkRepairTool` and
+   `TimezoneRepairTool` were orphaned (no route/import) and deleted. `TimeFixModal` and its two
+   "Needs Time Fix" trigger buttons in Attendance were removed; the `timezone_suspect` signal now
+   shows a static "⚠ Time Looks Off" badge, and correcting a genuinely-wrong punch goes through
+   the punch editor (managers — correct ET↔UTC) or Request Correction (employees). A repo grep
+   confirms no remaining fake-UTC writers.
 2. **Employee edits to `is_remote`/`entry_comment` silently no-op.** The lockdown removed
    employee UPDATE on `time_entries`, but `useUpdateEntry` (and the punch editor for non-admins)
    still issue UPDATEs that affect 0 rows with no error. Either hide those controls from
