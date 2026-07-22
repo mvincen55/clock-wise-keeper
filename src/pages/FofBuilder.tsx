@@ -384,15 +384,15 @@ export default function FofBuilder() {
 
   // Discount rules (membership/senior) key off the portion BEFORE any
   // rule-derived discount: total − manual discounts/credit − insurance.
-  const discounts = useMemo(() => {
-    if (!template) return null;
+  const portionBeforeAutoDiscount = useMemo(() => {
+    if (!template) return 0;
     const insurance = template.showInsuranceEstimate
       ? parseOverride(state.insuranceOverride) ?? estimate.insurancePaysCents
       : 0;
     const writeOff = template.showWriteOff
       ? parseOverride(state.writeOffOverride) ?? estimate.writeOffCents
       : 0;
-    const portionBefore = Math.max(
+    return Math.max(
       0,
       estimate.totalCents -
         (parseCurrencyInput(state.officeDiscountInput) ?? 0) -
@@ -400,8 +400,12 @@ export default function FofBuilder() {
         insurance -
         writeOff
     );
-    return computeFofDiscounts(template, isSenior, portionBefore);
-  }, [template, isSenior, estimate, state.insuranceOverride, state.writeOffOverride, state.officeDiscountInput, state.patientCreditInput]);
+  }, [template, estimate, state.insuranceOverride, state.writeOffOverride, state.officeDiscountInput, state.patientCreditInput]);
+
+  const discounts = useMemo(
+    () => (template ? computeFofDiscounts(template, isSenior, portionBeforeAutoDiscount) : null),
+    [template, isSenior, portionBeforeAutoDiscount]
+  );
 
   // In-network plans get no prepay option at all — the write-off is the
   // negotiated saving, so only the installment agreement is offered.
@@ -436,8 +440,10 @@ export default function FofBuilder() {
       officeDiscountCents: parseCurrencyInput(state.officeDiscountInput),
       patientCreditCents: parseCurrencyInput(state.patientCreditInput),
       autoDiscount: discounts?.autoDiscount ?? null,
+      prepayDiscountBaseCents:
+        discounts?.prepayDiscountBase === 'preDiscountTotal' ? portionBeforeAutoDiscount : null,
     }),
-    [estimate, state.insuranceOverride, state.writeOffOverride, state.officeDiscountInput, state.patientCreditInput, discounts]
+    [estimate, state.insuranceOverride, state.writeOffOverride, state.officeDiscountInput, state.patientCreditInput, discounts, portionBeforeAutoDiscount]
   );
 
   const overrides: FofOverrides = useMemo(

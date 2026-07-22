@@ -68,6 +68,12 @@ export interface FofAmounts {
   patientCreditCents?: Cents | null;
   /** Rule-derived discount (membership/senior); printed only when non-zero. */
   autoDiscount?: { label: string; cents: Cents } | null;
+  /**
+   * Base for the prepay discount percentage. Normally omitted (percent of
+   * the remaining portion); the Illumitrac senior +5% passes the
+   * pre-discount total here so 10% + 5% equals a true 15% of the same base.
+   */
+  prepayDiscountBaseCents?: Cents | null;
 }
 
 /** Manual overrides of computed values. Memory-only — never persisted. */

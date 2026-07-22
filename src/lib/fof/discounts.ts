@@ -30,6 +30,12 @@ export interface FofDiscountDecision {
   /** Percent applied inside the Prepay in Full box (0 = no prepay discount). */
   prepayDiscountPercent: number;
   prepayDiscountLabel: string;
+  /**
+   * What the prepay percent is taken of: the remaining patient portion
+   * (default), or the pre-discount total — the Illumitrac senior +5% comes
+   * off the same base as the membership 10% so the pair equals a true 15%.
+   */
+  prepayDiscountBase: 'portion' | 'preDiscountTotal';
 }
 
 type TemplateRules = Pick<
@@ -57,6 +63,7 @@ export function computeFofDiscounts(
         },
         prepayDiscountPercent: 0,
         prepayDiscountLabel: '',
+        prepayDiscountBase: 'portion',
       };
     }
     const autoDiscount = {
@@ -68,9 +75,10 @@ export function computeFofDiscounts(
         autoDiscount,
         prepayDiscountPercent: SENIOR_RULES.membershipExtraPct,
         prepayDiscountLabel: `Senior Prepay Discount (${SENIOR_RULES.membershipExtraPct}%)`,
+        prepayDiscountBase: 'preDiscountTotal',
       };
     }
-    return { autoDiscount, prepayDiscountPercent: 0, prepayDiscountLabel: '' };
+    return { autoDiscount, prepayDiscountPercent: 0, prepayDiscountLabel: '', prepayDiscountBase: 'portion' };
   }
 
   if (seniorEligible && underThreshold) {
@@ -81,6 +89,7 @@ export function computeFofDiscounts(
       },
       prepayDiscountPercent: 0,
       prepayDiscountLabel: '',
+      prepayDiscountBase: 'portion',
     };
   }
 
@@ -88,5 +97,6 @@ export function computeFofDiscounts(
     autoDiscount: null,
     prepayDiscountPercent: template.discountPercent,
     prepayDiscountLabel: template.discountLabel,
+    prepayDiscountBase: 'portion',
   };
 }
