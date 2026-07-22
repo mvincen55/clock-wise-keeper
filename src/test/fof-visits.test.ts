@@ -107,11 +107,13 @@ describe('computeFof with a visit plan', () => {
 });
 
 describe('friendlyCdtName', () => {
-  it('translates common codes with or without the D', () => {
-    expect(friendlyCdtName('D2740')).toBe('Porcelain crown');
-    expect(friendlyCdtName('2740')).toBe('Porcelain crown');
-    expect(friendlyCdtName('1110')).toBe('Adult cleaning');
-    expect(friendlyCdtName('6111')).toBe('Implant-supported lower denture');
+  it('translates common codes to Title Case with or without the D', () => {
+    expect(friendlyCdtName('D2740')).toBe('Porcelain Crown');
+    expect(friendlyCdtName('2740')).toBe('Porcelain Crown');
+    expect(friendlyCdtName('1110')).toBe('Adult Cleaning');
+    expect(friendlyCdtName('6111')).toBe('Implant-Supported Lower Denture');
+    expect(friendlyCdtName('3310')).toBe('Root Canal (Front Tooth)');
+    expect(friendlyCdtName('2750')).toBe('Porcelain-Fused-to-Metal Crown');
   });
 
   it('returns null for unknown or custom codes', () => {

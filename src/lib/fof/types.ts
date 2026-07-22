@@ -15,6 +15,7 @@ export interface FofPracticeInfo {
   addressLine1: string;
   addressLine2: string;
   phone: string;
+  website: string;
 }
 
 export interface FofTemplate {

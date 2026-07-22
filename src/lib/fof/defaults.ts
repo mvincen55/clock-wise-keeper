@@ -11,6 +11,7 @@ export const DEFAULT_PRACTICE_INFO: FofPracticeInfo = {
   addressLine1: '278 Alden Road',
   addressLine2: 'Fairhaven, MA 02719',
   phone: '(508) 993-0515',
+  website: 'drharelick.com',
 };
 
 export const DEFAULT_SIGNATURE_INTRO =

@@ -210,7 +210,11 @@ export default function FofPrintSheet({
       </div>
 
       <footer className="fof-footer">
-        {practice.practiceName} · {practice.addressLine1}, {practice.addressLine2} · {practice.phone}
+        <span className="fof-footer-name">{practice.practiceName}</span>
+        <span>
+          {practice.addressLine1}, {practice.addressLine2} · {practice.phone}
+          {practice.website.trim() ? ` · ${practice.website}` : ''}
+        </span>
       </footer>
     </div>
   );

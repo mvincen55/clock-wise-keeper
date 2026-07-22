@@ -129,8 +129,23 @@ const NAMES: Record<string, string> = {
   '9946': 'Night guard (hard, partial)',
 };
 
+const SMALL_WORDS = new Set([
+  'a', 'an', 'and', 'at', 'by', 'for', 'in', 'of', 'on', 'or', 'per', 'the', 'to', 'with',
+]);
+
+/** "porcelain crown" → "Porcelain Crown"; connector words stay lowercase. */
+export function titleCase(text: string): string {
+  return text.replace(/[A-Za-z]+(?:'[a-z]+)?/g, (word, offset: number) => {
+    const prev = offset === 0 ? '' : text[offset - 1];
+    const isPhraseStart = offset === 0 || prev === '(' || prev === '-' || prev === '/';
+    if (!isPhraseStart && SMALL_WORDS.has(word.toLowerCase())) return word.toLowerCase();
+    return word.charAt(0).toUpperCase() + word.slice(1);
+  });
+}
+
 export function friendlyCdtName(code: string): string | null {
   const match = /^D?(\d{4})$/i.exec(code.trim());
   if (!match) return null;
-  return NAMES[match[1]] ?? null;
+  const name = NAMES[match[1]];
+  return name ? titleCase(name) : null;
 }

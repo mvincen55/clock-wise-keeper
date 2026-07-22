@@ -82,6 +82,10 @@ function HeaderSettingsCard() {
             <Label htmlFor="hdr-addr2">Address Line 2</Label>
             <Input id="hdr-addr2" value={form.addressLine2} onChange={set('addressLine2')} />
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="hdr-website">Website</Label>
+            <Input id="hdr-website" value={form.website} onChange={set('website')} />
+          </div>
         </div>
         <div className="flex justify-end">
           <Button
