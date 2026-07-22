@@ -920,6 +920,7 @@ export type Database = {
           phone: string
           practice_name: string
           updated_at: string
+          website: string
         }
         Insert: {
           address_line1?: string
@@ -930,6 +931,7 @@ export type Database = {
           phone?: string
           practice_name?: string
           updated_at?: string
+          website?: string
         }
         Update: {
           address_line1?: string
@@ -940,6 +942,7 @@ export type Database = {
           phone?: string
           practice_name?: string
           updated_at?: string
+          website?: string
         }
         Relationships: [
           {

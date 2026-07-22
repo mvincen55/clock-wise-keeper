@@ -48,6 +48,7 @@ function mapSettingsRow(row: SettingsRow): FofPracticeInfo {
     addressLine1: row.address_line1,
     addressLine2: row.address_line2,
     phone: row.phone,
+    website: row.website,
   };
 }
 
@@ -149,6 +150,7 @@ export function useUpsertFofSettings() {
           ...(updates.addressLine1 !== undefined && { address_line1: updates.addressLine1 }),
           ...(updates.addressLine2 !== undefined && { address_line2: updates.addressLine2 }),
           ...(updates.phone !== undefined && { phone: updates.phone }),
+          ...(updates.website !== undefined && { website: updates.website }),
         },
         { onConflict: 'org_id' }
       );
