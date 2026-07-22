@@ -1,23 +1,19 @@
 project_id = "lfiplzmxpmybtbzhmnkp"
 
-[functions.parse-pdf]
-verify_jwt = false
-
-[functions.confirm-import]
-verify_jwt = false
-
-[functions.process-location-event]
-verify_jwt = false
-
-[functions.export-report]
-verify_jwt = false
-
-[functions.accept-invite]
-verify_jwt = false
-
-[functions.mcp]
-verify_jwt = false
-
-
-[functions.process-email-queue]
-verify_jwt = true
+[functions]
+  [functions.accept-invite]
+    verify_jwt = false
+  [functions.auth-email-hook]
+    verify_jwt = false
+  [functions.confirm-import]
+    verify_jwt = false
+  [functions.export-report]
+    verify_jwt = false
+  [functions.mcp]
+    verify_jwt = false
+  [functions.parse-pdf]
+    verify_jwt = false
+  [functions.process-email-queue]
+    verify_jwt = true
+  [functions.process-location-event]
+    verify_jwt = false
