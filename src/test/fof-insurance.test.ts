@@ -161,6 +161,45 @@ describe('estimateInsurance', () => {
     expect(result.perLine[1].writeOffCents).toBe(20_000);
   });
 
+  it('benefit-year renewal: fresh max opens and deductible re-applies once year 1 is spent', () => {
+    const result = estimateInsurance(
+      [
+        line({ category: 'major', officeFeeCents: 200_000, allowedCents: 200_000 }),
+        line({ category: 'major', officeFeeCents: 100_000, allowedCents: 100_000 }),
+      ],
+      plan,
+      {
+        remainingDeductibleCents: 0,
+        remainingAnnualMaxCents: 100_000,
+        renewal: { annualMaxCents: 150_000, deductibleCents: 5_000 },
+      }
+    );
+    // Line 1: 50% of 2000 = 1000, fully consumes year-1 max
+    expect(result.perLine[0].insurancePaysCents).toBe(100_000);
+    // Line 2: renewal kicks in — deductible 50 re-applies, then 50% of the rest
+    expect(result.perLine[1].deductibleAppliedCents).toBe(5_000);
+    expect(result.perLine[1].insurancePaysCents).toBe(47_500);
+  });
+
+  it('office-fees-after-max only applies once the renewal is also spent', () => {
+    const afterMaxPlan: PlanRules = { ...plan, officeFeesAfterMax: true };
+    const result = estimateInsurance(
+      [
+        line({ category: 'major', officeFeeCents: 200_000, allowedCents: 150_000 }),
+        line({ category: 'major', officeFeeCents: 100_000, allowedCents: 80_000 }),
+      ],
+      afterMaxPlan,
+      {
+        remainingDeductibleCents: 0,
+        remainingAnnualMaxCents: 75_000,
+        renewal: { annualMaxCents: 100_000, deductibleCents: 0 },
+      }
+    );
+    // Line 1 exhausts year 1; line 2 rolls into year 2 instead of reverting
+    expect(result.perLine[1].insurancePaysCents).toBe(40_000);
+    expect(result.perLine[1].writeOffCents).toBe(20_000);
+  });
+
   it('full-flow sanity: patient portion = total − writeoffs − insurance', () => {
     const lines = [
       line({ category: 'preventive', officeFeeCents: 15_000, allowedCents: 12_000 }),

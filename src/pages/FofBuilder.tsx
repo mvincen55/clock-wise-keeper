@@ -53,7 +53,6 @@ import {
   useDeleteProcedureBundle,
   useFeeScheduleItems,
   useFeeSchedules,
-  useInsurancePlans,
   useProcedureBundles,
   useSaveProcedureBundle,
 } from '@/hooks/useFeeSchedules';
@@ -81,7 +80,7 @@ import {
 import { DEFAULT_PRACTICE_INFO } from '@/lib/fof/defaults';
 import type { Cents, FofAmounts, FofOverrides, FofTemplate } from '@/lib/fof/types';
 
-const NO_PLAN = '__none__';
+const NO_SCHEDULE = '__none__';
 
 const CATEGORY_SHORT: Record<FeeCategory, string> = {
   preventive: 'Prev',
@@ -128,6 +127,13 @@ interface BuilderState {
   patientCreditInput: string;
   deductibleInput: string;
   annualMaxInput: string;
+  pctPrev: string;
+  pctBasic: string;
+  pctMajor: string;
+  spans2Years: string; // '' or 'yes' — treatment crosses a benefit-year renewal
+  nextMaxInput: string;
+  nextDedInput: string;
+  afterMaxState: string; // '' or 'yes' — reverts to office fees once maxed out
   paymentCountOverride: string;
   prepayOptionState: string; // '' = follow template, 'on'/'off' = per-form override
   installmentOptionState: string;
@@ -161,6 +167,13 @@ const initialState = (): BuilderState => ({
   patientCreditInput: '',
   deductibleInput: '',
   annualMaxInput: '',
+  pctPrev: '100',
+  pctBasic: '80',
+  pctMajor: '50',
+  spans2Years: '',
+  nextMaxInput: '$1,500.00',
+  nextDedInput: '$50.00',
+  afterMaxState: '',
   paymentCountOverride: '',
   prepayOptionState: '',
   installmentOptionState: '',
@@ -294,11 +307,10 @@ export default function FofBuilder() {
   const { data: templates, isLoading: templatesLoading } = useFofTemplates();
   const { data: practice } = useFofSettings();
   const { data: schedules } = useFeeSchedules();
-  const { data: plans } = useInsurancePlans();
 
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [templateId, setTemplateId] = useState<string | null>(null);
-  const [planId, setPlanId] = useState<string>(NO_PLAN);
+  const [feeScheduleId, setFeeScheduleId] = useState<string>(NO_SCHEDULE);
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
   const [bundleName, setBundleName] = useState('');
 
@@ -319,10 +331,10 @@ export default function FofBuilder() {
   const { data: officeItems } = useFeeScheduleItems(officeSchedule?.id ?? null);
 
   const insuranceEnabled = !!template?.showInsuranceEstimate;
-  const plan = insuranceEnabled
-    ? (plans ?? []).find(p => p.id === planId && p.isActive) ?? null
-    : null;
-  const { data: planItems } = useFeeScheduleItems(plan?.feeScheduleId ?? null);
+  const insuranceActive = insuranceEnabled && feeScheduleId !== NO_SCHEDULE;
+  const { data: carrierItems } = useFeeScheduleItems(
+    insuranceActive ? feeScheduleId : null
+  );
 
   const officeByCode = useMemo(() => {
     const map = new Map<string, { description: string; feeCents: Cents; category: FeeCategory }>();
@@ -334,9 +346,9 @@ export default function FofBuilder() {
 
   const allowedByCode = useMemo(() => {
     const map = new Map<string, Cents>();
-    for (const item of planItems ?? []) map.set(item.code, item.feeCents);
+    for (const item of carrierItems ?? []) map.set(item.code, item.feeCents);
     return map;
-  }, [planItems]);
+  }, [carrierItems]);
 
   const handleCodeChange = (index: number, rawCode: string) => {
     const code = rawCode.toUpperCase();
@@ -399,11 +411,16 @@ export default function FofBuilder() {
     );
   };
 
-  const handlePlanChange = (nextPlanId: string) => {
-    setPlanId(nextPlanId);
-    const nextPlan = (plans ?? []).find(p => p.id === nextPlanId);
-    dispatch({ type: 'set', field: 'deductibleInput', value: nextPlan ? formatCents(nextPlan.deductibleCents) : '' });
-    dispatch({ type: 'set', field: 'annualMaxInput', value: nextPlan ? formatCents(nextPlan.annualMaxCents) : '' });
+  const handleScheduleChange = (nextId: string) => {
+    setFeeScheduleId(nextId);
+    if (nextId !== NO_SCHEDULE) {
+      if (state.deductibleInput.trim() === '') {
+        dispatch({ type: 'set', field: 'deductibleInput', value: '$50.00' });
+      }
+      if (state.annualMaxInput.trim() === '') {
+        dispatch({ type: 'set', field: 'annualMaxInput', value: '$1,500.00' });
+      }
+    }
   };
 
   const feeLines: FofLine[] = useMemo(
@@ -422,13 +439,21 @@ export default function FofBuilder() {
     [state.lines, allowedByCode]
   );
 
-  const planRules: PlanRules | null = plan
+  const clampPct = (value: string, fallback: number) => {
+    const n = parseInt(value, 10);
+    return isNaN(n) ? fallback : Math.min(100, Math.max(0, n));
+  };
+  // Per-form insurance settings: coverage %s and benefits are typed in
+  // directly (no plan configs); write-offs follow the template type
+  // (In-Network shows them, OON never has them).
+  const planRules: PlanRules | null = insuranceActive
     ? {
-        preventivePct: plan.preventivePct,
-        basicPct: plan.basicPct,
-        majorPct: plan.majorPct,
-        deductibleWaivedPreventive: plan.deductibleWaivedPreventive,
-        writeoffApplies: plan.writeoffApplies,
+        preventivePct: clampPct(state.pctPrev, 100),
+        basicPct: clampPct(state.pctBasic, 80),
+        majorPct: clampPct(state.pctMajor, 50),
+        deductibleWaivedPreventive: true,
+        writeoffApplies: template?.showWriteOff ?? false,
+        officeFeesAfterMax: state.afterMaxState === 'yes',
       }
     : null;
 
@@ -444,11 +469,18 @@ export default function FofBuilder() {
   const estimate = useMemo(
     () =>
       estimateInsurance(feeLines, planRules, {
-        remainingDeductibleCents: parseCurrencyInput(state.deductibleInput) ?? plan?.deductibleCents ?? 0,
-        remainingAnnualMaxCents: parseCurrencyInput(state.annualMaxInput) ?? plan?.annualMaxCents ?? 0,
+        remainingDeductibleCents: parseCurrencyInput(state.deductibleInput) ?? 0,
+        remainingAnnualMaxCents: parseCurrencyInput(state.annualMaxInput) ?? 0,
+        renewal:
+          state.spans2Years === 'yes'
+            ? {
+                annualMaxCents: parseCurrencyInput(state.nextMaxInput) ?? 0,
+                deductibleCents: parseCurrencyInput(state.nextDedInput) ?? 0,
+              }
+            : null,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [feeLines, plan, state.deductibleInput, state.annualMaxInput]
+    [feeLines, planRules, state.deductibleInput, state.annualMaxInput, state.spans2Years, state.nextMaxInput, state.nextDedInput]
   );
 
   const isSenior = state.isSenior === 'yes';
@@ -499,7 +531,7 @@ export default function FofBuilder() {
     const entries: { raw: number; feeCents: number; label: string }[] = [];
     for (const l of active) {
       const fee = parseCurrencyInput(l.feeInput) ?? 0;
-      const lineLabel = friendlyCdtName(l.code) || l.description.trim() || l.code.trim();
+      const lineLabel = friendlyCdtName(l.code) || l.description.trim();
       const typed = parseInt(l.visit, 10);
       if (typed >= 1) {
         entries.push({ raw: typed, feeCents: fee, label: lineLabel });
@@ -592,7 +624,9 @@ export default function FofBuilder() {
     for (const l of state.lines) {
       const code = l.code.trim();
       if (!code && !l.description.trim() && !l.feeInput.trim()) continue;
-      const label = friendlyCdtName(code) || l.description.trim() || code;
+      // No friendly name and no description = intentionally unnamed —
+      // omit from the printed line rather than exposing a raw code.
+      const label = friendlyCdtName(code) || l.description.trim();
       if (!label) continue;
       let group = groups.find(g => g.label === label);
       if (!group) {
@@ -955,21 +989,53 @@ export default function FofBuilder() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="space-y-1.5">
-                    <Label>Plan</Label>
-                    <Select value={planId} onValueChange={handlePlanChange}>
+                    <Label>Carrier Fee Schedule</Label>
+                    <Select value={feeScheduleId} onValueChange={handleScheduleChange}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={NO_PLAN}>No plan — enter amounts manually</SelectItem>
-                        {(plans ?? []).filter(p => p.isActive).map(p => (
-                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        <SelectItem value={NO_SCHEDULE}>None — enter amounts manually</SelectItem>
+                        {(schedules ?? []).filter(sch => sch.kind === 'carrier' && sch.isActive).map(sch => (
+                          <SelectItem key={sch.id} value={sch.id}>{sch.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  {plan && (
+                  {insuranceActive && (
                     <>
+                      <div className="grid gap-3 grid-cols-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="fof-pct-prev">Preventive %</Label>
+                          <Input
+                            id="fof-pct-prev"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            value={state.pctPrev}
+                            onChange={setField('pctPrev')}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="fof-pct-basic">Basic %</Label>
+                          <Input
+                            id="fof-pct-basic"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            value={state.pctBasic}
+                            onChange={setField('pctBasic')}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="fof-pct-major">Major %</Label>
+                          <Input
+                            id="fof-pct-major"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            value={state.pctMajor}
+                            onChange={setField('pctMajor')}
+                          />
+                        </div>
+                      </div>
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
                           <Label htmlFor="fof-ded">Patient's Remaining Deductible</Label>
@@ -992,13 +1058,59 @@ export default function FofBuilder() {
                           />
                         </div>
                       </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="fof-spans2"
+                          checked={state.spans2Years === 'yes'}
+                          onCheckedChange={v =>
+                            dispatch({ type: 'set', field: 'spans2Years', value: v ? 'yes' : '' })
+                          }
+                        />
+                        <Label htmlFor="fof-spans2">
+                          Treatment spans 2 benefit years (plan renews mid-treatment)
+                        </Label>
+                      </div>
+                      {state.spans2Years === 'yes' && (
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="fof-next-max">Next Year's Annual Max</Label>
+                            <Input
+                              id="fof-next-max"
+                              inputMode="decimal"
+                              autoComplete="off"
+                              value={state.nextMaxInput}
+                              onChange={setField('nextMaxInput')}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="fof-next-ded">Next Year's Deductible</Label>
+                            <Input
+                              id="fof-next-ded"
+                              inputMode="decimal"
+                              autoComplete="off"
+                              value={state.nextDedInput}
+                              onChange={setField('nextDedInput')}
+                            />
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="fof-aftermax"
+                          checked={state.afterMaxState === 'yes'}
+                          onCheckedChange={v =>
+                            dispatch({ type: 'set', field: 'afterMaxState', value: v ? 'yes' : '' })
+                          }
+                        />
+                        <Label htmlFor="fof-aftermax">
+                          Reverts to office fees when maxed out (e.g. Altus, some DD plans)
+                        </Label>
+                      </div>
                       <p className="text-xs text-muted-foreground">
-                        Defaults are the plan's full deductible and annual max — adjust to what
-                        this patient actually has left. These numbers are not saved.
-                        Coverage: {plan.preventivePct}/{plan.basicPct}/{plan.majorPct}%.
-                        Allowed fees auto-fill from {
-                          (schedules ?? []).find(s => s.id === plan.feeScheduleId)?.name ?? 'office fees'
-                        }; type in the Allowed column to override a line.
+                        Allowed fees auto-fill from the selected schedule; type in the Allowed
+                        column to override a line. Write-offs follow the form type: In-Network
+                        applies them, Out-of-Network never does. None of these patient numbers
+                        are saved.
                       </p>
                     </>
                   )}

@@ -47,6 +47,12 @@ export interface PlanRules {
 export interface PatientBenefits {
   remainingDeductibleCents: Cents;
   remainingAnnualMaxCents: Cents;
+  /**
+   * When treatment spans two benefit years the plan renews mid-treatment:
+   * once this year's max is exhausted, a fresh annual max becomes
+   * available and the deductible re-applies.
+   */
+  renewal?: { annualMaxCents: Cents; deductibleCents: Cents } | null;
 }
 
 export interface LineEstimate {
@@ -110,9 +116,18 @@ export function estimateInsurance(
 
   let remainingDeductible = Math.max(0, benefits.remainingDeductibleCents);
   let remainingMax = Math.max(0, benefits.remainingAnnualMaxCents);
+  let renewal = benefits.renewal ?? null;
   const perLine: LineEstimate[] = [];
 
   for (const line of lines) {
+    // Benefit-year renewal: once this year's max is gone, the next year's
+    // max opens up and its deductible re-applies (estimate-level model —
+    // renewal happens between procedures).
+    if (remainingMax <= 0 && renewal) {
+      remainingMax = Math.max(0, renewal.annualMaxCents);
+      remainingDeductible = Math.max(0, renewal.deductibleCents);
+      renewal = null;
+    }
     const allowed = line.allowedCents ?? line.officeFeeCents;
     const pct = categoryPct(line.category, plan);
     // Once the max is gone, plans with officeFeesAfterMax stop covering

@@ -18,10 +18,11 @@ const membership = {
 const optedOut = { ...standard, seniorDiscountApplies: false };
 
 describe('computeFofDiscounts — standard (Self-Pay / OON)', () => {
-  it('under 65: prepay discount only', () => {
+  it('under 65: 5% prepay discount only', () => {
     const result = computeFofDiscounts(standard, false, 50_000);
     expect(result.autoDiscount).toBeNull();
-    expect(result.prepayDiscountPercent).toBe(10);
+    expect(result.prepayDiscountPercent).toBe(SENIOR_RULES.under65PrepayPct);
+    expect(result.prepayDiscountLabel).toBe('Prepay Discount (5%)');
   });
 
   it('65+ under $1,000: automatic 10%, no prepay discount', () => {
@@ -30,10 +31,11 @@ describe('computeFofDiscounts — standard (Self-Pay / OON)', () => {
     expect(result.prepayDiscountPercent).toBe(0);
   });
 
-  it('65+ at $1,000 or more: normal prepay rules', () => {
+  it('65+ at $1,000 or more: 10% via prepay in full', () => {
     const result = computeFofDiscounts(standard, true, 100_000);
     expect(result.autoDiscount).toBeNull();
     expect(result.prepayDiscountPercent).toBe(10);
+    expect(result.prepayDiscountLabel).toBe('Prepay Discount (10%)');
   });
 
   it('template opted out of senior rules: nothing changes for seniors', () => {
