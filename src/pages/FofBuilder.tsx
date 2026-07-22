@@ -83,6 +83,10 @@ import { DEFAULT_PRACTICE_INFO } from '@/lib/fof/defaults';
 import type { Cents, FofAmounts, FofOverrides, FofTemplate } from '@/lib/fof/types';
 
 const NO_SCHEDULE = '__none__';
+// OON carriers the office has no fee schedule for: the full insurance
+// estimate still runs, with allowable fees defaulting to office fees and
+// every amount typed/overridable per line.
+const MANUAL_SCHEDULE = '__manual__';
 
 // Alternate-benefit downgrades: plans commonly pay posterior composites
 // at the corresponding amalgam rate (by surface count).
@@ -409,7 +413,7 @@ export default function FofBuilder() {
   const insuranceEnabled = !!template?.showInsuranceEstimate;
   const insuranceActive = insuranceEnabled && feeScheduleId !== NO_SCHEDULE;
   const { data: carrierItems } = useFeeScheduleItems(
-    insuranceActive ? feeScheduleId : null
+    insuranceActive && feeScheduleId !== MANUAL_SCHEDULE ? feeScheduleId : null
   );
   const payActive = insuranceActive && payScheduleId !== NO_SCHEDULE;
   const { data: payItems } = useFeeScheduleItems(payActive ? payScheduleId : null);
@@ -1141,7 +1145,11 @@ export default function FofBuilder() {
                               <Input
                                 inputMode="decimal"
                                 autoComplete="off"
-                                placeholder={line.category === 'other' ? 'office fee' : 'auto'}
+                                placeholder={
+                                  line.category === 'other' || autoAllowed === undefined
+                                    ? 'office fee'
+                                    : 'auto'
+                                }
                                 className="text-right"
                                 value={
                                   line.allowedInput !== ''
@@ -1317,7 +1325,13 @@ export default function FofBuilder() {
                   title="Insurance"
                   open={!collapsed.insurance}
                   onToggle={() => toggleSection('insurance')}
-                  summary={insuranceActive ? selectedSchedule?.name : 'No carrier selected'}
+                  summary={
+                    !insuranceActive
+                      ? 'No carrier selected'
+                      : feeScheduleId === MANUAL_SCHEDULE
+                        ? 'Out of network — manual'
+                        : selectedSchedule?.name
+                  }
                 />
                 <CardContent className={collapsed.insurance ? 'hidden' : 'space-y-3'}>
                   <div className="space-y-1.5">
@@ -1327,7 +1341,10 @@ export default function FofBuilder() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={NO_SCHEDULE}>None — enter amounts manually</SelectItem>
+                        <SelectItem value={NO_SCHEDULE}>None — no insurance on this form</SelectItem>
+                        <SelectItem value={MANUAL_SCHEDULE}>
+                          Out of network — no fee schedule (enter amounts manually)
+                        </SelectItem>
                         {(schedules ?? []).filter(sch => sch.kind === 'carrier' && sch.isActive).map(sch => (
                           <SelectItem key={sch.id} value={sch.id}>{sch.name}</SelectItem>
                         ))}
