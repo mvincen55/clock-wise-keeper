@@ -34,6 +34,14 @@ export interface FofLine {
    * stay based on the actual procedure.
    */
   benefitBasisCents?: Cents | null;
+  /**
+   * Table-of-allowance plans (e.g. some Delta Dental fee-schedule plans):
+   * the plan pays THIS set amount for the code — category percentages
+   * don't apply — and the patient owes the difference up to the allowed
+   * fee. 0 = the plan doesn't cover this code; null/undefined = the plan
+   * is a normal percentage plan for this line.
+   */
+  fixedPayCents?: Cents | null;
 }
 
 export interface PlanRules {
@@ -48,6 +56,12 @@ export interface PlanRules {
    * revert to the office fee with no write-off or insurance payment.
    */
   officeFeesAfterMax?: boolean;
+  /**
+   * Some plans don't count preventive care toward the annual max:
+   * preventive payments neither draw down nor are capped by the
+   * remaining max, and hygiene stays covered after the max is spent.
+   */
+  preventiveExemptFromMax?: boolean;
 }
 
 /** Patient-specific remaining benefits, entered at form time. Memory only. */
@@ -75,6 +89,12 @@ export interface InsuranceEstimate {
   writeOffCents: Cents;
   insurancePaysCents: Cents;
   deductibleUsedCents: Cents;
+  /**
+   * True when this treatment plan exhausts the patient's annual max
+   * (including any second benefit year) — used to warn the patient that
+   * later visits will be out of pocket until benefits renew.
+   */
+  maxedOut: boolean;
   perLine: LineEstimate[];
 }
 
@@ -111,6 +131,7 @@ export function estimateInsurance(
       writeOffCents: 0,
       insurancePaysCents: 0,
       deductibleUsedCents: 0,
+      maxedOut: false,
       perLine: lines.map(line => ({
         officeFeeCents: line.officeFeeCents,
         allowedCents: line.allowedCents ?? line.officeFeeCents,
@@ -137,10 +158,13 @@ export function estimateInsurance(
     }
     const allowed = line.allowedCents ?? line.officeFeeCents;
     const pct = categoryPct(line.category, plan);
+    const exemptFromMax = !!plan.preventiveExemptFromMax && line.category === 'preventive';
     // Once the max is gone, plans with officeFeesAfterMax stop covering
     // remaining lines entirely — office fee applies, no write-off.
-    const revertedToOfficeFee = !!plan.officeFeesAfterMax && remainingMax <= 0;
-    const covered = pct > 0 && !revertedToOfficeFee;
+    // Max-exempt preventive lines are unaffected by an exhausted max.
+    const revertedToOfficeFee = !!plan.officeFeesAfterMax && remainingMax <= 0 && !exemptFromMax;
+    const fixedPay = line.fixedPayCents ?? null;
+    const covered = (fixedPay !== null ? fixedPay > 0 : pct > 0) && !revertedToOfficeFee;
     const writeOff =
       plan.writeoffApplies && covered ? Math.max(0, line.officeFeeCents - allowed) : 0;
 
@@ -156,9 +180,16 @@ export function estimateInsurance(
         deductibleApplied = Math.min(remainingDeductible, benefitBasis);
         remainingDeductible -= deductibleApplied;
       }
-      insurancePays = percentOfCents(benefitBasis - deductibleApplied, pct);
-      insurancePays = Math.min(insurancePays, remainingMax);
-      remainingMax -= insurancePays;
+      // Table-of-allowance plans pay their set amount (never more than
+      // the allowed fee); percentage plans pay category % of the basis.
+      insurancePays =
+        fixedPay !== null
+          ? Math.max(0, Math.min(fixedPay, benefitBasis) - deductibleApplied)
+          : percentOfCents(benefitBasis - deductibleApplied, pct);
+      if (!exemptFromMax) {
+        insurancePays = Math.min(insurancePays, remainingMax);
+        remainingMax -= insurancePays;
+      }
     }
 
     perLine.push({
@@ -177,6 +208,9 @@ export function estimateInsurance(
     writeOffCents: perLine.reduce((sum, l) => sum + l.writeOffCents, 0),
     insurancePaysCents: perLine.reduce((sum, l) => sum + l.insurancePaysCents, 0),
     deductibleUsedCents: perLine.reduce((sum, l) => sum + l.deductibleAppliedCents, 0),
+    // Maxed only once every benefit year in play is spent — an untouched
+    // renewal year means benefits are still available.
+    maxedOut: remainingMax <= 0 && !renewal,
     perLine,
   };
 }

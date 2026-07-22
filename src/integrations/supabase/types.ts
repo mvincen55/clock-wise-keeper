@@ -874,6 +874,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          is_in_network: boolean
           kind: string
           name: string
           org_id: string
@@ -884,6 +885,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_in_network?: boolean
           kind?: string
           name: string
           org_id: string
@@ -894,6 +896,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_in_network?: boolean
           kind?: string
           name?: string
           org_id?: string

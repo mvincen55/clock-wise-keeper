@@ -18,11 +18,18 @@ const membership = {
 const optedOut = { ...standard, seniorDiscountApplies: false };
 
 describe('computeFofDiscounts — standard (Self-Pay / OON)', () => {
-  it('under 65: 5% prepay discount only', () => {
-    const result = computeFofDiscounts(standard, false, 50_000);
+  it('under 65 at $1,000+: 5% prepay discount only', () => {
+    const result = computeFofDiscounts(standard, false, 150_000);
     expect(result.autoDiscount).toBeNull();
     expect(result.prepayDiscountPercent).toBe(SENIOR_RULES.under65PrepayPct);
     expect(result.prepayDiscountLabel).toBe('Prepay Discount (5%)');
+  });
+
+  it('under 65 under $1,000: no courtesy discount at all', () => {
+    const result = computeFofDiscounts(standard, false, 50_000);
+    expect(result.autoDiscount).toBeNull();
+    expect(result.prepayDiscountPercent).toBe(0);
+    expect(result.prepayDiscountLabel).toBe('');
   });
 
   it('65+ under $1,000: automatic 10%, no prepay discount', () => {
@@ -46,11 +53,11 @@ describe('computeFofDiscounts — standard (Self-Pay / OON)', () => {
 });
 
 describe('computeFofDiscounts — membership (Illumitrac)', () => {
-  it('under 65: automatic 10% membership plus 5% prepay extra off the same base', () => {
+  it('under 65: automatic 10% membership, no prepay extra (65+ courtesy only)', () => {
     const result = computeFofDiscounts(membership, false, 200_000);
     expect(result.autoDiscount).toEqual({ label: 'Membership Discount (10%)', cents: 20_000 });
-    expect(result.prepayDiscountPercent).toBe(SENIOR_RULES.membershipExtraPct);
-    expect(result.prepayDiscountBase).toBe('preDiscountTotal');
+    expect(result.prepayDiscountPercent).toBe(0);
+    expect(result.prepayDiscountLabel).toBe('');
   });
 
   it('65+ under $1,000: automatic 15%, no prepay needed', () => {

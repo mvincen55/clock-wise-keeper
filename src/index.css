@@ -189,7 +189,7 @@
 
 .fof-logo {
   display: block;
-  height: 1in;
+  height: 1.15in;
   width: auto;
 }
 
@@ -420,19 +420,38 @@
   padding-top: 8pt;
 }
 
+/* Reads as one sentence: inline write-on blank, then the intro text.
+   The caption hangs below the blank without breaking the text flow. */
 .fof-sig-ack {
-  margin-bottom: 8pt;
-}
-
-.fof-sig-ack-name {
-  flex: 1.1;
-}
-
-.fof-sig-ack-text {
-  flex: 2;
+  margin: 0 0 14pt;
   font-size: 9pt;
-  line-height: 1.35;
-  padding-bottom: 10pt; /* rides beside the write-on line, not the caption */
+  line-height: 1.5;
+}
+
+.fof-sig-ack-blank {
+  display: inline-block;
+  width: 2.4in;
+  margin-right: 3pt;
+  position: relative;
+  vertical-align: baseline;
+}
+
+.fof-sig-ack-line {
+  display: block;
+  height: 0.9em;
+  border-bottom: 0.75pt solid var(--fof-ink);
+}
+
+.fof-sig-ack-caption {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 1pt;
+  font-size: 6.5pt;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fof-muted);
+  white-space: nowrap;
 }
 
 .fof-sig-caption {
@@ -497,7 +516,7 @@
 }
 
 .fof-dense .fof-logo {
-  height: 0.85in;
+  height: 0.95in;
 }
 
 .fof-dense .fof-hero {
@@ -538,7 +557,7 @@
 }
 
 .fof-denser .fof-logo {
-  height: 0.7in;
+  height: 0.8in;
 }
 
 .fof-denser .fof-treatment-text {

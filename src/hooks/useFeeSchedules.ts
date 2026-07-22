@@ -16,6 +16,8 @@ export interface FeeSchedule {
   name: string;
   kind: FeeScheduleKind;
   isActive: boolean;
+  /** Contracted carrier: the FOF applies write-offs automatically. */
+  isInNetwork: boolean;
   sortOrder: number;
   itemCount?: number;
 }
@@ -46,6 +48,7 @@ function mapSchedule(row: Tables<'fee_schedules'> & { fee_schedule_items?: { cou
     name: row.name,
     kind: (row.kind as FeeScheduleKind) ?? 'carrier',
     isActive: row.is_active,
+    isInNetwork: row.is_in_network,
     sortOrder: row.sort_order,
     itemCount: row.fee_schedule_items?.[0]?.count,
   };
@@ -154,6 +157,7 @@ export function useUpsertFeeSchedule() {
         name: schedule.name,
         kind: schedule.kind ?? 'carrier',
         is_active: schedule.isActive ?? true,
+        is_in_network: schedule.isInNetwork ?? false,
         sort_order: schedule.sortOrder ?? 99,
       });
       if (error) throw error;
