@@ -49,6 +49,12 @@ export interface FofLine {
    * instead of when the current year's max happens to run out.
    */
   inRenewalYear?: boolean;
+  /**
+   * Staff wrote the insurance payment for this line: use it verbatim
+   * (no deductible/percentage math), still bounded by the remaining max
+   * so the rest of the estimate stays consistent.
+   */
+  insurancePaysOverrideCents?: Cents | null;
 }
 
 export interface PlanRules {
@@ -181,8 +187,15 @@ export function estimateInsurance(
 
     let deductibleApplied = 0;
     let insurancePays = 0;
+    const payOverride = line.insurancePaysOverrideCents ?? null;
 
-    if (covered) {
+    if (payOverride !== null) {
+      insurancePays = Math.max(0, payOverride);
+      if (!exemptFromMax) {
+        insurancePays = Math.min(insurancePays, remainingMax);
+        remainingMax -= insurancePays;
+      }
+    } else if (covered) {
       // Downgraded lines pay benefits from the alternate (e.g. amalgam)
       // fee even though the patient is charged for the actual procedure.
       const benefitBasis = Math.min(line.benefitBasisCents ?? allowed, allowed);
