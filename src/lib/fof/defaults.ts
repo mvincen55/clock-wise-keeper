@@ -113,11 +113,14 @@ export const DEFAULT_TEMPLATES: FofTemplateSeed[] = [
     sortOrder: 4,
     discountPercent: 0,
     discountLabel: '',
-    showInsuranceEstimate: false,
-    showWriteOff: false,
-    showPrepayOption: true,
+    // Financed patients can still have insurance: estimate/write-off rows
+    // compute (and print only when non-zero); no prepay or senior
+    // discounts, and Prepay in Full defaults off (still toggleable).
+    showInsuranceEstimate: true,
+    showWriteOff: true,
+    showPrepayOption: false,
     prepayNote: '',
-    insuranceNote: '',
+    insuranceNote: DEFAULT_INSURANCE_NOTE,
     membershipDiscountPercent: 0,
     seniorDiscountApplies: false,
     footnotes: ['No prepay discount applies when payment is made through an outside financing company.'],

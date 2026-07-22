@@ -82,6 +82,20 @@ import type { Cents, FofAmounts, FofOverrides, FofTemplate } from '@/lib/fof/typ
 
 const NO_SCHEDULE = '__none__';
 
+// Alternate-benefit downgrades: plans commonly pay posterior composites
+// at the corresponding amalgam rate (by surface count).
+const DOWNGRADE_MAP: Record<string, string> = {
+  D2391: 'D2140',
+  D2392: 'D2150',
+  D2393: 'D2160',
+  D2394: 'D2161',
+};
+
+// Printed on the form only when a filling actually gets downgraded, so the
+// patient sees why the insurance estimate is lower than expected.
+const DOWNGRADE_NOTE =
+  'Your dental plan applies an "alternate benefit" to tooth-colored (composite) fillings on back teeth: insurance pays as if a silver (amalgam) filling were placed. You still receive the tooth-colored filling; the fee difference is included in your portion.';
+
 const CATEGORY_SHORT: Record<FeeCategory, string> = {
   preventive: 'Prev',
   basic: 'Basic',
@@ -134,6 +148,8 @@ interface BuilderState {
   nextMaxInput: string;
   nextDedInput: string;
   afterMaxState: string; // '' or 'yes' — reverts to office fees once maxed out
+  writeoffState: string; // '' = follow template, 'yes'/'no' per-form override
+  downgradeState: string; // '' = downgrades on, 'off' = plan pays composite rates
   paymentCountOverride: string;
   prepayOptionState: string; // '' = follow template, 'on'/'off' = per-form override
   installmentOptionState: string;
@@ -174,6 +190,8 @@ const initialState = (): BuilderState => ({
   nextMaxInput: '$1,500.00',
   nextDedInput: '$50.00',
   afterMaxState: '',
+  writeoffState: '',
+  downgradeState: '',
   paymentCountOverride: '',
   prepayOptionState: '',
   installmentOptionState: '',
@@ -423,20 +441,26 @@ export default function FofBuilder() {
     }
   };
 
+  const downgradesOn = state.downgradeState !== 'off';
   const feeLines: FofLine[] = useMemo(
     () =>
       state.lines
         .filter(l => l.code.trim() !== '' || l.description.trim() !== '' || l.feeInput.trim() !== '')
-        .map(l => ({
-          code: l.code.trim(),
-          description: l.description.trim(),
-          category: l.category,
-          officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
-          allowedCents: l.allowedInput.trim()
-            ? parseCurrencyInput(l.allowedInput)
-            : allowedByCode.get(l.code.trim()) ?? null,
-        })),
-    [state.lines, allowedByCode]
+        .map(l => {
+          const code = l.code.trim().toUpperCase();
+          const downgradeCode = downgradesOn ? DOWNGRADE_MAP[code] : undefined;
+          return {
+            code,
+            description: l.description.trim(),
+            category: l.category,
+            officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
+            allowedCents: l.allowedInput.trim()
+              ? parseCurrencyInput(l.allowedInput)
+              : allowedByCode.get(code) ?? null,
+            benefitBasisCents: downgradeCode ? allowedByCode.get(downgradeCode) ?? null : null,
+          };
+        }),
+    [state.lines, allowedByCode, downgradesOn]
   );
 
   const clampPct = (value: string, fallback: number) => {
@@ -446,13 +470,15 @@ export default function FofBuilder() {
   // Per-form insurance settings: coverage %s and benefits are typed in
   // directly (no plan configs); write-offs follow the template type
   // (In-Network shows them, OON never has them).
+  const writeoffsApplied =
+    state.writeoffState === '' ? template?.showWriteOff ?? false : state.writeoffState === 'yes';
   const planRules: PlanRules | null = insuranceActive
     ? {
         preventivePct: clampPct(state.pctPrev, 100),
         basicPct: clampPct(state.pctBasic, 80),
         majorPct: clampPct(state.pctMajor, 50),
         deductibleWaivedPreventive: true,
-        writeoffApplies: template?.showWriteOff ?? false,
+        writeoffApplies: writeoffsApplied,
         officeFeesAfterMax: state.afterMaxState === 'yes',
       }
     : null;
@@ -574,11 +600,21 @@ export default function FofBuilder() {
     state.installmentOptionState === ''
       ? template?.showInstallmentOption ?? false
       : state.installmentOptionState === 'on';
+  // The downgrade note prints only when it changed the math: an insurance
+  // estimate is active and some line's benefit basis is below its allowed.
+  const downgradeApplied =
+    insuranceActive &&
+    template?.showInsuranceEstimate === true &&
+    feeLines.some(
+      l => l.benefitBasisCents != null && l.benefitBasisCents < (l.allowedCents ?? l.officeFeeCents)
+    );
   const effectiveTemplate: FofTemplate | undefined = template
     ? {
         ...template,
         showPrepayOption: prepayShown,
         showInstallmentOption: installmentShown,
+        showWriteOff: writeoffsApplied && insuranceActive,
+        footnotes: downgradeApplied ? [...template.footnotes, DOWNGRADE_NOTE] : template.footnotes,
         // Discount rules decide the prepay percentage (template default,
         // senior-suppressed, or membership +5%).
         discountPercent: discounts?.prepayDiscountPercent ?? template.discountPercent,
@@ -1096,6 +1132,30 @@ export default function FofBuilder() {
                       )}
                       <div className="flex items-center gap-2">
                         <Switch
+                          id="fof-writeoffs"
+                          checked={writeoffsApplied}
+                          onCheckedChange={v =>
+                            dispatch({ type: 'set', field: 'writeoffState', value: v ? 'yes' : 'no' })
+                          }
+                        />
+                        <Label htmlFor="fof-writeoffs">
+                          In-network — apply write-offs (office fee − allowed)
+                        </Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="fof-downgrade"
+                          checked={downgradesOn}
+                          onCheckedChange={v =>
+                            dispatch({ type: 'set', field: 'downgradeState', value: v ? '' : 'off' })
+                          }
+                        />
+                        <Label htmlFor="fof-downgrade">
+                          Downgrade posterior composites to amalgam benefit (D2391–D2394)
+                        </Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
                           id="fof-aftermax"
                           checked={state.afterMaxState === 'yes'}
                           onCheckedChange={v =>
@@ -1108,9 +1168,9 @@ export default function FofBuilder() {
                       </div>
                       <p className="text-xs text-muted-foreground">
                         Allowed fees auto-fill from the selected schedule; type in the Allowed
-                        column to override a line. Write-offs follow the form type: In-Network
-                        applies them, Out-of-Network never does. None of these patient numbers
-                        are saved.
+                        column to override a line. Downgraded lines pay benefits at the amalgam
+                        rate while the patient is charged for the actual filling. None of these
+                        patient numbers are saved.
                       </p>
                     </>
                   )}

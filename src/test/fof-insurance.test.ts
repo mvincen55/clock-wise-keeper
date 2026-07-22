@@ -200,6 +200,61 @@ describe('estimateInsurance', () => {
     expect(result.perLine[1].writeOffCents).toBe(20_000);
   });
 
+  it('downgrade: pays from the amalgam benefit basis while write-off uses the actual allowed', () => {
+    // D2392 posterior composite downgraded to the D2150 amalgam allowance
+    const result = estimateInsurance(
+      [
+        line({
+          code: 'D2392',
+          officeFeeCents: 30_000, // office composite fee
+          allowedCents: 24_000, // plan's composite allowed
+          benefitBasisCents: 15_000, // plan's amalgam allowed (D2150)
+        }),
+      ],
+      plan,
+      noBenefitsUsed
+    );
+    // Insurance pays 80% of the amalgam basis, not the composite allowed
+    expect(result.perLine[0].insurancePaysCents).toBe(12_000);
+    // Write-off still comes from the actual procedure: office − composite allowed
+    expect(result.perLine[0].writeOffCents).toBe(6_000);
+  });
+
+  it('downgrade: deductible applies against the benefit basis', () => {
+    const result = estimateInsurance(
+      [line({ officeFeeCents: 30_000, allowedCents: 24_000, benefitBasisCents: 15_000 })],
+      plan,
+      { remainingDeductibleCents: 5_000, remainingAnnualMaxCents: 1_000_000 }
+    );
+    expect(result.perLine[0].deductibleAppliedCents).toBe(5_000);
+    // 80% of (15000 − 5000)
+    expect(result.perLine[0].insurancePaysCents).toBe(8_000);
+  });
+
+  it('downgrade basis never exceeds the actual allowed fee', () => {
+    // Guard: a bad/backwards basis can't inflate the payment
+    const result = estimateInsurance(
+      [line({ officeFeeCents: 30_000, allowedCents: 15_000, benefitBasisCents: 24_000 })],
+      plan,
+      noBenefitsUsed
+    );
+    expect(result.perLine[0].insurancePaysCents).toBe(12_000); // 80% of 15000
+  });
+
+  it('null benefit basis behaves exactly like no downgrade', () => {
+    const withNull = estimateInsurance(
+      [line({ officeFeeCents: 30_000, allowedCents: 24_000, benefitBasisCents: null })],
+      plan,
+      noBenefitsUsed
+    );
+    const without = estimateInsurance(
+      [line({ officeFeeCents: 30_000, allowedCents: 24_000 })],
+      plan,
+      noBenefitsUsed
+    );
+    expect(withNull.perLine[0]).toEqual(without.perLine[0]);
+  });
+
   it('full-flow sanity: patient portion = total − writeoffs − insurance', () => {
     const lines = [
       line({ category: 'preventive', officeFeeCents: 15_000, allowedCents: 12_000 }),
