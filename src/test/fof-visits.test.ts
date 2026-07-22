@@ -7,6 +7,7 @@ import {
   splitCentsWeighted,
   suggestVisitStage,
   VISIT_PLANS,
+  visitSegmentsForCode,
 } from '@/lib/fof/visits';
 import { friendlyCdtName } from '@/lib/fof/cdt-names';
 import type { FofTemplate } from '@/lib/fof/types';
@@ -34,7 +35,7 @@ describe('splitCentsWeighted', () => {
 
 describe('decideVisitPlan', () => {
   it('gives implants surgery wording, front-loaded', () => {
-    const plan = decideVisitPlan(['6010']);
+    const plan = decideVisitPlan(['D6010']);
     expect(plan.key).toBe('implant3');
     expect(plan.labels[1]).toBe('At Placement Surgery');
     expect(plan.weights).toEqual([50, 25, 25]);
@@ -47,42 +48,90 @@ describe('decideVisitPlan', () => {
   });
 
   it('gives crowns and bridges prep/delivery thirds', () => {
-    expect(decideVisitPlan(['2740']).key).toBe('crownBridge3');
-    expect(decideVisitPlan(['D6750', '2950']).key).toBe('crownBridge3');
-    expect(decideVisitPlan(['2740']).labels[1]).toBe('At Prep Appointment');
+    expect(decideVisitPlan(['D2740']).key).toBe('crownBridge3');
+    expect(decideVisitPlan(['D6750', 'D2950']).key).toBe('crownBridge3');
+    expect(decideVisitPlan(['D2740']).labels[1]).toBe('At Prep Appointment');
   });
 
   it('gives surgery wording for grafts and extractions', () => {
-    expect(decideVisitPlan(['4273']).key).toBe('surgery2');
-    expect(decideVisitPlan(['7140']).labels[1]).toBe('At Surgery');
+    expect(decideVisitPlan(['D4273']).key).toBe('surgery2');
+    expect(decideVisitPlan(['D7140']).labels[1]).toBe('At Surgery');
   });
 
   it('gives endo treatment wording', () => {
-    expect(decideVisitPlan(['3330']).labels[1]).toBe('At Treatment');
+    expect(decideVisitPlan(['D3330']).labels[1]).toBe('At Treatment');
   });
 
   it('defaults to half at scheduling, half at appointment', () => {
-    expect(decideVisitPlan(['2391']).key).toBe('single2');
+    expect(decideVisitPlan(['D2391']).key).toBe('single2');
     expect(decideVisitPlan([]).key).toBe('single2');
   });
 
   it('heaviest treatment wins', () => {
-    expect(decideVisitPlan(['1110', '2740', '6010']).key).toBe('implant3');
-    expect(decideVisitPlan(['1110', '2740']).key).toBe('crownBridge3');
-    expect(decideVisitPlan(['7140', '5110']).key).toBe('denture3');
+    expect(decideVisitPlan(['D1110', 'D2740', 'D6010']).key).toBe('implant3');
+    expect(decideVisitPlan(['D1110', 'D2740']).key).toBe('crownBridge3');
+    expect(decideVisitPlan(['D7140', 'D5110']).key).toBe('denture3');
   });
 });
 
 describe('suggestVisitStage', () => {
   it('stages surgery first, placement second, restoration last', () => {
-    expect(suggestVisitStage('7210')).toBe(1); // extraction
-    expect(suggestVisitStage('7953')).toBe(1); // bone graft
-    expect(suggestVisitStage('6010')).toBe(2); // implant placement
-    expect(suggestVisitStage('3330')).toBe(2); // root canal
-    expect(suggestVisitStage('2740')).toBe(3); // crown
-    expect(suggestVisitStage('6058')).toBe(3); // implant crown
-    expect(suggestVisitStage('0330')).toBe(1); // pano — first visit
+    expect(suggestVisitStage('D7210')).toBe(1); // extraction
+    expect(suggestVisitStage('D7953')).toBe(1); // bone graft
+    expect(suggestVisitStage('D6010')).toBe(2); // implant placement
+    expect(suggestVisitStage('D3330')).toBe(2); // root canal
+    expect(suggestVisitStage('D2740')).toBe(3); // crown
+    expect(suggestVisitStage('D6058')).toBe(3); // implant crown
+    expect(suggestVisitStage('D0330')).toBe(1); // pano — first visit
     expect(suggestVisitStage('XX232')).toBe(1);
+  });
+});
+
+describe('visitSegmentsForCode', () => {
+  it('splits crowns and bridges across Prep and Delivery visits', () => {
+    const segments = visitSegmentsForCode('D2740');
+    expect(segments).toEqual([
+      { stage: 3, label: 'Prep', share: 0.5 },
+      { stage: 4, label: 'Delivery', share: 0.5 },
+    ]);
+    expect(visitSegmentsForCode('D6750')[1].label).toBe('Delivery');
+  });
+
+  it('keeps build-ups entirely at the Prep visit', () => {
+    expect(visitSegmentsForCode('D2950')).toEqual([{ stage: 3, label: 'Prep', share: 1 }]);
+    expect(visitSegmentsForCode('D2954')).toEqual([{ stage: 3, label: 'Prep', share: 1 }]);
+  });
+
+  it('splits dentures across Impressions and Delivery', () => {
+    const segments = visitSegmentsForCode('D5110');
+    expect(segments[0].label).toBe('Impressions');
+    expect(segments[1].label).toBe('Delivery');
+  });
+
+  it('single-visit work stays one segment at its stage', () => {
+    expect(visitSegmentsForCode('D7210')).toEqual([{ stage: 1, label: '', share: 1 }]);
+    expect(visitSegmentsForCode('D6010')).toEqual([{ stage: 2, label: '', share: 1 }]);
+    expect(visitSegmentsForCode('2003')).toEqual([{ stage: 1, label: '', share: 1 }]);
+  });
+
+  it('crown + buildup produce a Prep-heavy two-visit schedule', () => {
+    // Crown $1,569 splits 784.50/784.50; buildup $429 lands at Prep.
+    // Prep visit ≈ $1,213.50, Delivery ≈ $784.50 of a $1,998 portion.
+    const crown = visitSegmentsForCode('D2740');
+    const buildup = visitSegmentsForCode('D2950');
+    const prepFee =
+      Math.round(156_900 * crown[0].share) + Math.round(42_900 * buildup[0].share);
+    const deliveryFee = 156_900 - Math.round(156_900 * crown[0].share);
+    const plan = buildVisitSchedule(199_800, [
+      { label: 'Prep', feeCents: prepFee },
+      { label: 'Delivery', feeCents: deliveryFee },
+    ])!;
+    expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(199_800);
+    expect(plan.labels).toEqual([
+      'Upon Scheduling',
+      'At Visit 1 · Prep',
+      'At Visit 2 · Delivery',
+    ]);
   });
 });
 
@@ -146,6 +195,18 @@ describe('buildVisitSchedule — half a visit ahead', () => {
     expect(buildVisitSchedule(100, [])).toBeNull();
     expect(buildVisitSchedule(100, [{ label: 'X', feeCents: 0 }])).toBeNull();
   });
+
+  it('skips zero-fee visits (no-charge seat appointment creates no payment)', () => {
+    const plan = buildVisitSchedule(199_800, [
+      { label: 'Porcelain Crown', feeCents: 199_800 },
+      { label: 'CerCr Ins', feeCents: 0 },
+    ]);
+    expect(plan!.weights).toEqual([99_900, 99_900]);
+    expect(plan!.labels).toEqual([
+      'Upon Scheduling',
+      'At Appointment · Porcelain Crown',
+    ]);
+  });
 });
 
 describe('planForCount', () => {
@@ -205,11 +266,11 @@ describe('computeFof with a visit plan', () => {
 describe('friendlyCdtName', () => {
   it('translates common codes to Title Case with or without the D', () => {
     expect(friendlyCdtName('D2740')).toBe('Porcelain Crown');
-    expect(friendlyCdtName('2740')).toBe('Porcelain Crown');
-    expect(friendlyCdtName('1110')).toBe('Adult Cleaning');
-    expect(friendlyCdtName('6111')).toBe('Implant-Supported Lower Denture');
-    expect(friendlyCdtName('3310')).toBe('Root Canal (Front Tooth)');
-    expect(friendlyCdtName('2750')).toBe('Porcelain-Fused-to-Metal Crown');
+    expect(friendlyCdtName('2740')).toBeNull(); // bare = custom code
+    expect(friendlyCdtName('D1110')).toBe('Adult Cleaning');
+    expect(friendlyCdtName('D6111')).toBe('Implant-Supported Lower Denture');
+    expect(friendlyCdtName('D3310')).toBe('Root Canal (Front Tooth)');
+    expect(friendlyCdtName('D2750')).toBe('Porcelain-Fused-to-Metal Crown');
   });
 
   it('returns null for unknown or custom codes', () => {

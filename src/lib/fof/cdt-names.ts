@@ -149,7 +149,8 @@ export function titleCase(text: string): string {
 }
 
 export function friendlyCdtName(code: string): string | null {
-  const match = /^D?(\d{4})$/i.exec(code.trim());
+  // Only D-prefixed codes are real CDT; bare numbers are custom office codes.
+  const match = /^D(\d{4})$/i.exec(code.trim());
   if (!match) return null;
   const name = NAMES[match[1]];
   return name ? titleCase(name) : null;

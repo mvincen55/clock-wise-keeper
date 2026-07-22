@@ -1,6 +1,7 @@
 /**
- * Fees & Plans management for the FOF builder: fee schedules (office UCR +
- * carrier allowed fees), spreadsheet import, and insurance plan rules.
+ * Fee schedule management for the FOF builder: office UCR + carrier
+ * allowed-fee schedules with spreadsheet import. Insurance specifics
+ * (coverage %s, benefits) are entered per form in the builder.
  * De-identified configuration only — no patient data on this page.
  */
 import { useMemo, useState } from 'react';
@@ -35,16 +36,12 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import {
   useDeleteFeeSchedule,
   useDeleteFeeScheduleItem,
-  useDeleteInsurancePlan,
   useFeeScheduleItems,
   useFeeSchedules,
-  useInsurancePlans,
   useUpsertFeeSchedule,
   useUpsertFeeScheduleItem,
-  useUpsertInsurancePlan,
   type FeeSchedule,
   type FeeScheduleItem,
-  type InsurancePlan,
 } from '@/hooks/useFeeSchedules';
 
 const CATEGORY_LABELS: Record<FeeCategory, string> = {
@@ -262,178 +259,16 @@ function ScheduleItemsCard({ schedule, isManager }: { schedule: FeeSchedule; isM
   );
 }
 
-function PlanEditorDialog({
-  open,
-  plan,
-  schedules,
-  onClose,
-}: {
-  open: boolean;
-  plan: InsurancePlan | null;
-  schedules: FeeSchedule[];
-  onClose: () => void;
-}) {
-  const upsert = useUpsertInsurancePlan();
-  const [state, setState] = useState({
-    name: '', feeScheduleId: NONE_SCHEDULE, preventive: '100', basic: '80', major: '50',
-    deductible: '$50.00', annualMax: '$1,500.00', waived: true, network: 'in', afterMax: false, active: true,
-  });
-  const [lastKey, setLastKey] = useState('');
-  const key = `${open}-${plan?.id ?? 'new'}`;
-  if (key !== lastKey) {
-    setLastKey(key);
-    setState({
-      name: plan?.name ?? '',
-      feeScheduleId: plan?.feeScheduleId ?? NONE_SCHEDULE,
-      preventive: String(plan?.preventivePct ?? 100),
-      basic: String(plan?.basicPct ?? 80),
-      major: String(plan?.majorPct ?? 50),
-      deductible: formatCents(plan?.deductibleCents ?? 5000),
-      annualMax: formatCents(plan?.annualMaxCents ?? 150000),
-      waived: plan?.deductibleWaivedPreventive ?? true,
-      network: (plan?.isInNetwork ?? true) ? 'in' : 'oon',
-      afterMax: plan?.officeFeesAfterMax ?? false,
-      active: plan?.isActive ?? true,
-    });
-  }
-
-  const set = (field: keyof typeof state, value: string | boolean) =>
-    setState(s => ({ ...s, [field]: value }));
-
-  const pct = (v: string) => Math.min(100, Math.max(0, parseInt(v, 10) || 0));
-  const canSave = state.name.trim() !== '';
-
-  return (
-    <Dialog open={open} onOpenChange={isOpen => !isOpen && onClose()}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{plan ? `Edit "${plan.name}"` : 'New Insurance Plan'}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="plan-name">Plan Name</Label>
-            <Input
-              id="plan-name"
-              placeholder="Delta Dental MA PPO"
-              value={state.name}
-              onChange={e => set('name', e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Allowed Fee Schedule</Label>
-            <Select value={state.feeScheduleId} onValueChange={v => set('feeScheduleId', v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE_SCHEDULE}>None (use office fees)</SelectItem>
-                {schedules.filter(s => s.kind === 'carrier').map(s => (
-                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-3 grid-cols-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="plan-prev">Preventive %</Label>
-              <Input id="plan-prev" inputMode="numeric" value={state.preventive} onChange={e => set('preventive', e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="plan-basic">Basic %</Label>
-              <Input id="plan-basic" inputMode="numeric" value={state.basic} onChange={e => set('basic', e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="plan-major">Major %</Label>
-              <Input id="plan-major" inputMode="numeric" value={state.major} onChange={e => set('major', e.target.value)} />
-            </div>
-          </div>
-          <div className="grid gap-3 grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="plan-ded">Deductible</Label>
-              <Input id="plan-ded" inputMode="decimal" value={state.deductible} onChange={e => set('deductible', e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="plan-max">Annual Max</Label>
-              <Input id="plan-max" inputMode="decimal" value={state.annualMax} onChange={e => set('annualMax', e.target.value)} />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Network</Label>
-            <Select value={state.network} onValueChange={v => set('network', v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="in">In-network — write-offs apply, no prepay discount</SelectItem>
-                <SelectItem value="oon">Out-of-network — no write-offs, prepay discount allowed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center gap-2">
-            <Switch id="plan-waived" checked={state.waived} onCheckedChange={v => set('waived', v)} />
-            <Label htmlFor="plan-waived">Deductible waived for preventive</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <Switch id="plan-aftermax" checked={state.afterMax} onCheckedChange={v => set('afterMax', v)} />
-            <Label htmlFor="plan-aftermax">
-              After annual max is used up, remaining charges revert to office fees
-              (no write-off) — e.g. Altus, certain Delta Dental plans
-            </Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <Switch id="plan-active" checked={state.active} onCheckedChange={v => set('active', v)} />
-            <Label htmlFor="plan-active">Active</Label>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button
-            disabled={!canSave || upsert.isPending}
-            onClick={() =>
-              upsert.mutate(
-                {
-                  ...(plan ? { id: plan.id } : {}),
-                  name: state.name.trim(),
-                  feeScheduleId: state.feeScheduleId === NONE_SCHEDULE ? null : state.feeScheduleId,
-                  preventivePct: pct(state.preventive),
-                  basicPct: pct(state.basic),
-                  majorPct: pct(state.major),
-                  deductibleCents: parseCurrencyInput(state.deductible) ?? 0,
-                  annualMaxCents: parseCurrencyInput(state.annualMax) ?? 0,
-                  deductibleWaivedPreventive: state.waived,
-                  writeoffApplies: state.network === 'in',
-                  officeFeesAfterMax: state.afterMax,
-                  isInNetwork: state.network === 'in',
-                  isActive: state.active,
-                },
-                {
-                  onSuccess: () => { toast.success('Plan saved'); onClose(); },
-                  onError: err => toast.error(err.message),
-                }
-              )
-            }
-          >
-            {upsert.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Save Plan
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-const NONE_SCHEDULE = '__none__';
-
 export default function FofFees() {
   const { data: schedules, isLoading } = useFeeSchedules();
-  const { data: plans } = useInsurancePlans();
   const { data: ctx } = useOrgContext();
   const upsertSchedule = useUpsertFeeSchedule();
   const deleteSchedule = useDeleteFeeSchedule();
-  const deletePlan = useDeleteInsurancePlan();
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
   const [openScheduleId, setOpenScheduleId] = useState<string | null>(null);
   const [importFor, setImportFor] = useState<FeeSchedule | null>(null);
-  const [planEditorOpen, setPlanEditorOpen] = useState(false);
-  const [editingPlan, setEditingPlan] = useState<InsurancePlan | null>(null);
   const [newScheduleName, setNewScheduleName] = useState('');
 
   return (
@@ -442,7 +277,7 @@ export default function FofFees() {
         <Button variant="ghost" size="icon" asChild>
           <Link to="/fof"><ArrowLeft className="h-4 w-4" /></Link>
         </Button>
-        <h1 className="text-2xl font-bold">Fees & Insurance Plans</h1>
+        <h1 className="text-2xl font-bold">Fee Schedules</h1>
       </div>
 
       {isLoading ? (
@@ -532,54 +367,6 @@ export default function FofFees() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">Insurance Plans</CardTitle>
-              {isManager && (
-                <Button size="sm" onClick={() => { setEditingPlan(null); setPlanEditorOpen(true); }}>
-                  <Plus className="h-4 w-4 mr-1.5" />
-                  New Plan
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {(plans ?? []).length === 0 ? (
-                <p className="text-sm text-muted-foreground py-2">No plans yet.</p>
-              ) : (
-                (plans ?? []).map(plan => (
-                  <div key={plan.id} className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
-                    <div className="flex-1 min-w-48">
-                      <div className="font-medium">{plan.name}{!plan.isActive && <Badge variant="outline" className="ml-2">inactive</Badge>}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {plan.isInNetwork ? 'In-network' : 'Out-of-network'} ·{' '}
-                        {plan.preventivePct}/{plan.basicPct}/{plan.majorPct}% ·{' '}
-                        {formatCents(plan.deductibleCents)} deductible ·{' '}
-                        {formatCents(plan.annualMaxCents)} annual max ·{' '}
-                        {(schedules ?? []).find(s => s.id === plan.feeScheduleId)?.name ?? 'office fees'}
-                      </div>
-                    </div>
-                    {isManager && (
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => { setEditingPlan(plan); setPlanEditorOpen(true); }}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost" size="icon" className="text-destructive"
-                          onClick={() => {
-                            if (confirm(`Delete plan "${plan.name}"?`)) {
-                              deletePlan.mutate(plan.id, { onError: err => toast.error(err.message) });
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
         </>
       )}
 
@@ -588,12 +375,6 @@ export default function FofFees() {
         scheduleId={importFor?.id ?? null}
         scheduleName={importFor?.name ?? ''}
         onClose={() => setImportFor(null)}
-      />
-      <PlanEditorDialog
-        open={planEditorOpen}
-        plan={editingPlan}
-        schedules={schedules ?? []}
-        onClose={() => setPlanEditorOpen(false)}
       />
     </div>
   );

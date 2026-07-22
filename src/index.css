@@ -420,41 +420,19 @@
   padding-top: 8pt;
 }
 
-.fof-blank {
-  display: inline-block;
-  border-bottom: 0.75pt solid var(--fof-ink);
-  padding: 0 5pt 1pt;
-  min-height: 12pt;
-  font-size: 10pt;
+.fof-sig-ack {
+  margin-bottom: 8pt;
 }
 
-.fof-sig-intro {
-  /* Name line left, sentence in its own wrapping column beside it so a
-     wrapped sentence never collides with the caption under the line. */
-  display: flex;
-  align-items: flex-end;
-  gap: 8pt;
-  margin-bottom: 16pt; /* room for the caption hanging under the name line */
+.fof-sig-ack-name {
+  flex: 1.1;
+}
+
+.fof-sig-ack-text {
+  flex: 2;
   font-size: 9pt;
-}
-
-.fof-sig-sentence {
-  flex: 1;
   line-height: 1.35;
-}
-
-.fof-sig-name-block {
-  display: inline-block;
-  position: relative;
-}
-
-.fof-sig-name-block .fof-sig-caption {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 100%;
-  text-align: center;
-  margin: 1.5pt 0 0;
+  padding-bottom: 10pt; /* rides beside the write-on line, not the caption */
 }
 
 .fof-sig-caption {
@@ -506,6 +484,82 @@
 .fof-sig-line {
   border-bottom: 0.75pt solid var(--fof-ink);
   height: 19pt;
+}
+
+/* Content-aware density: tighter spacing/type when the form is full */
+.fof-dense {
+  font-size: 8.5pt;
+}
+
+.fof-dense .fof-head {
+  padding-bottom: 6pt;
+  margin-bottom: 7pt;
+}
+
+.fof-dense .fof-logo {
+  height: 0.85in;
+}
+
+.fof-dense .fof-hero {
+  margin-bottom: 7pt;
+}
+
+.fof-dense .fof-treatment-text {
+  font-size: 10.5pt;
+}
+
+.fof-dense .fof-hero-amount {
+  font-size: 20pt;
+}
+
+.fof-dense .fof-cards {
+  margin-bottom: 7pt;
+}
+
+.fof-dense .fof-agreement {
+  margin-bottom: 6pt;
+}
+
+.fof-dense .fof-band {
+  margin-bottom: 6pt;
+  padding: 4.5pt 8pt;
+}
+
+.fof-dense .fof-footnotes {
+  margin-bottom: 6pt;
+}
+
+.fof-dense .fof-choices {
+  margin: 5pt 0 10pt;
+}
+
+.fof-dense .fof-signatures {
+  padding-top: 6pt;
+}
+
+.fof-denser .fof-logo {
+  height: 0.7in;
+}
+
+.fof-denser .fof-treatment-text {
+  font-size: 9.5pt;
+}
+
+.fof-denser .fof-hero-amount {
+  font-size: 17pt;
+}
+
+.fof-denser .fof-callout p,
+.fof-denser .fof-band {
+  font-size: 6.6pt;
+}
+
+.fof-denser .fof-footnotes {
+  font-size: 6.3pt;
+}
+
+.fof-denser .fof-cell-amount {
+  font-size: 10pt;
 }
 
 /* Footer pinned to the page bottom */

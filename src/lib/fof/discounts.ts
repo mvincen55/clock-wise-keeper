@@ -4,10 +4,10 @@ import { percentOfCents } from './money';
 /**
  * Office discount policy for the FOF:
  *
- * - Standard (Self-Pay / Out-of-Network): the template's prepay discount
- *   (10%) applies only via the Prepay in Full agreement — EXCEPT patients
- *   65+ with a patient portion under $1,000, who get 10% automatically
- *   with no prepay requirement (and nothing extra for prepaying).
+ * - Standard (Self-Pay / Out-of-Network): prepay-in-full earns 5% under
+ *   65 and 10% at 65+ (the better senior rate IS the senior benefit —
+ *   no separate senior discount). Patients 65+ with a portion under
+ *   $1,000 get their 10% automatically with no prepay requirement.
  * - Membership (Illumitrac): members always get the membership % (10%)
  *   automatically, plus a 5% prepay-in-full extra (off the same
  *   pre-discount base). Members 65+ with a portion under $1,000 get the
@@ -21,7 +21,8 @@ import { percentOfCents } from './money';
 
 export const SENIOR_RULES = {
   portionThresholdCents: 100_000 as Cents, // $1,000
-  standardPct: 10,
+  standardPct: 10, // 65+ rate (automatic under the threshold, prepay above)
+  under65PrepayPct: 5,
   membershipExtraPct: 5,
 };
 
@@ -78,14 +79,23 @@ export function computeFofDiscounts(
     };
   }
 
-  if (seniorEligible && underThreshold) {
+  if (template.seniorDiscountApplies) {
+    if (seniorEligible && underThreshold) {
+      return {
+        autoDiscount: {
+          label: `Senior Discount (${SENIOR_RULES.standardPct}%)`,
+          cents: percentOfCents(portion, SENIOR_RULES.standardPct),
+        },
+        prepayDiscountPercent: 0,
+        prepayDiscountLabel: '',
+        prepayDiscountBase: 'portion',
+      };
+    }
+    const pct = isSenior ? SENIOR_RULES.standardPct : SENIOR_RULES.under65PrepayPct;
     return {
-      autoDiscount: {
-        label: `Senior Discount (${SENIOR_RULES.standardPct}%)`,
-        cents: percentOfCents(portion, SENIOR_RULES.standardPct),
-      },
-      prepayDiscountPercent: 0,
-      prepayDiscountLabel: '',
+      autoDiscount: null,
+      prepayDiscountPercent: pct,
+      prepayDiscountLabel: `Prepay Discount (${pct}%)`,
       prepayDiscountBase: 'portion',
     };
   }

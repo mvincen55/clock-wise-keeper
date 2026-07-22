@@ -33,14 +33,6 @@ function formatDateMDY(iso: string): string {
   return `${m}/${d}/${y}`;
 }
 
-function Blank({ value, minWidth }: { value: string; minWidth?: string }) {
-  return (
-    <span className="fof-blank" style={minWidth ? { minWidth } : undefined}>
-      {value || ' '}
-    </span>
-  );
-}
-
 export default function FofPrintSheet({
   practice,
   template,
@@ -82,13 +74,26 @@ export default function FofPrintSheet({
   for (const extra of template.footnotes) footnoteItems.push(extra);
 
   const installmentCells = effective.installmentsCents.map((cents, i) => ({
-    heading: effective.installmentsCents.length > 1 ? `Visit ${i + 1}` : 'Payment',
+    heading: effective.installmentsCents.length > 1 ? `Payment ${i + 1}` : 'Payment',
     label: computation.installmentLabels[i] ?? `Installment ${i + 1}`,
     cents,
   }));
 
+  // Content-aware density: long treatment lines, big footnote blocks, and
+  // double agreement cards tighten spacing/type in steps so the form
+  // always fits one letter page and still looks composed.
+  const contentScore =
+    patient.treatment.length +
+    footnoteItems.join(' ').length / 2 +
+    (callout ? callout.text.length / 4 : 0) +
+    (template.contactNote.trim() ? 80 : 0) +
+    (template.showPrepayOption ? 120 : 0) +
+    (template.showInstallmentOption ? 60 + installmentCells.length * 30 : 0);
+  const densityClass =
+    contentScore > 700 ? ' fof-dense fof-denser' : contentScore > 520 ? ' fof-dense' : '';
+
   return (
-    <div className="fof-sheet">
+    <div className={`fof-sheet${densityClass}`}>
       <header className="fof-head">
         <img className="fof-logo" src={logoUrl} alt={practice.practiceName} />
         <div className="fof-head-meta">
@@ -146,13 +151,13 @@ export default function FofPrintSheet({
               <span>−{formatCents(amounts.autoDiscount.cents)}</span>
             </div>
           )}
-          {template.showInsuranceEstimate && (
+          {template.showInsuranceEstimate && (amounts.insuranceEstimateCents ?? 0) > 0 && (
             <div className="fof-row">
               <span>Estimated Insurance Payment{insuranceMark}</span>
               <span>−{formatCents(amounts.insuranceEstimateCents ?? 0)}</span>
             </div>
           )}
-          {template.showWriteOff && (
+          {template.showWriteOff && (amounts.writeOffCents ?? 0) > 0 && (
             <div className="fof-row">
               <span>Estimated Insurance Write-Off{insuranceMark}</span>
               <span>−{formatCents(amounts.writeOffCents ?? 0)}</span>
@@ -234,12 +239,12 @@ export default function FofPrintSheet({
       <div className="fof-signatures">
         {/* The patient hand-writes their printed name here; only the top
             of the form is auto-filled. */}
-        <div className="fof-sig-intro">
-          <span className="fof-sig-name-block">
-            <Blank value="" minWidth="2.4in" />
-            <span className="fof-sig-caption">Patient's Printed Name</span>
-          </span>
-          <span className="fof-sig-sentence">{template.signatureIntro}</span>
+        <div className="fof-sig-row fof-sig-ack">
+          <div className="fof-sig-field fof-sig-ack-name">
+            <div className="fof-sig-line" />
+            <div className="fof-sig-caption">Patient's Printed Name</div>
+          </div>
+          <div className="fof-sig-ack-text">{template.signatureIntro}</div>
         </div>
 
         <div className="fof-choices">

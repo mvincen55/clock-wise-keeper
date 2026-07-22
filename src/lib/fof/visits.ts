@@ -95,8 +95,47 @@ export function planForCount(count: number): VisitPlan {
 }
 
 function codeNumber(code: string): number | null {
-  const match = /^D?(\d{4})$/i.exec(code.trim());
+  // Only D-prefixed codes are real CDT; bare numbers are custom office codes.
+  const match = /^D(\d{4})$/i.exec(code.trim());
   return match ? parseInt(match[1], 10) : null;
+}
+
+export interface VisitSegment {
+  stage: number;
+  label: string;
+  share: number;
+}
+
+/**
+ * How a procedure's work (and fee) spreads across visits. Lab-made
+ * restorations span two visits — crowns/bridges Prep + Delivery, dentures
+ * Impressions + Delivery, implant restorations Impression + Delivery —
+ * with build-ups/posts counted at the prep visit where they happen.
+ * Everything else is a single visit at its suggested stage.
+ */
+export function visitSegmentsForCode(code: string): VisitSegment[] {
+  const n = codeNumber(code);
+  if (n === null) return [{ stage: 1, label: '', share: 1 }];
+  if (n >= 2950 && n <= 2957) return [{ stage: 3, label: 'Prep', share: 1 }];
+  if ((n >= 2500 && n < 3000) || (n >= 6200 && n < 6800)) {
+    return [
+      { stage: 3, label: 'Prep', share: 0.5 },
+      { stage: 4, label: 'Delivery', share: 0.5 },
+    ];
+  }
+  if (n >= 6055 && n < 6190) {
+    return [
+      { stage: 3, label: 'Impression', share: 0.5 },
+      { stage: 4, label: 'Delivery', share: 0.5 },
+    ];
+  }
+  if (n >= 5000 && n < 5900) {
+    return [
+      { stage: 3, label: 'Impressions', share: 0.5 },
+      { stage: 4, label: 'Delivery', share: 0.5 },
+    ];
+  }
+  return [{ stage: suggestVisitStage(code), label: '', share: 1 }];
 }
 
 /**
@@ -142,11 +181,12 @@ export function suggestVisitStage(code: string): number {
  */
 export function buildVisitSchedule(
   portionCents: Cents,
-  visits: { label: string; feeCents: Cents }[]
+  allVisits: { label: string; feeCents: Cents }[]
 ): VisitPlan | null {
+  // Zero-fee visits (e.g. a no-charge seat appointment) create no payment.
+  const visits = allVisits.filter(v => v.feeCents > 0);
   if (visits.length === 0) return null;
-  const weights = visits.map(v => Math.max(0, v.feeCents));
-  if (weights.every(w => w === 0)) return null;
+  const weights = visits.map(v => v.feeCents);
   const alloc = splitCentsWeighted(portionCents, weights);
   const halves = alloc.map(a => Math.round(a / 2));
   const n = alloc.length;
