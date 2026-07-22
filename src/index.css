@@ -160,9 +160,52 @@
   margin-bottom: 10pt;
 }
 
+.fof-logo {
+  display: block;
+  height: 0.85in;
+  width: auto;
+  margin: 0 auto 4pt;
+}
+
 .fof-practice-name {
   font-size: 13pt;
   font-weight: 700;
+}
+
+.fof-lines {
+  margin: 0 0 8pt;
+}
+
+.fof-line-row {
+  display: flex;
+  gap: 8pt;
+  padding: 1.5pt 0;
+}
+
+.fof-line-head {
+  font-weight: 700;
+  border-bottom: 1px solid black;
+}
+
+.fof-line-code {
+  width: 0.8in;
+  flex-shrink: 0;
+  font-family: inherit;
+}
+
+.fof-line-desc {
+  flex: 1;
+}
+
+.fof-line-fee {
+  width: 1in;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.fof-note {
+  font-size: 9pt;
+  margin-bottom: 8pt;
 }
 
 .fof-title {

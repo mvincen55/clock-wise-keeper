@@ -1,13 +1,15 @@
 /**
- * Financial Options Form builder.
+ * Financial Options Form builder — itemized, plan-aware.
  *
  * HIPAA BOUNDARY — READ BEFORE EDITING:
- * Patient-entered data on this page (name, date, treatment, dollar amounts)
- * exists ONLY in component memory and goes straight to the printer. It must
- * never be sent to Supabase, written to localStorage/sessionStorage, placed
- * in the URL, logged, toasted, or passed to analytics/audit calls. Only
- * de-identified template configuration may touch the network. Keep it that
- * way — the practice has no BAA covering patient data in this app.
+ * Patient-entered data on this page (name, date, procedures chosen, dollar
+ * amounts, remaining deductible/benefits) exists ONLY in component memory
+ * and goes straight to the printer. It must never be sent to Supabase,
+ * written to localStorage/sessionStorage, placed in the URL, logged,
+ * toasted, or passed to analytics/audit calls. Only de-identified
+ * configuration (templates, fee schedules, plan rules) may touch the
+ * network. Keep it that way — the practice has no BAA covering patient
+ * data in this app.
  */
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -26,13 +28,42 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Printer, RotateCcw, Settings2, ShieldCheck } from 'lucide-react';
-import FofPrintSheet from '@/components/fof/FofPrintSheet';
+import {
+  DollarSign,
+  Loader2,
+  Plus,
+  Printer,
+  RotateCcw,
+  Settings2,
+  ShieldCheck,
+  Trash2,
+} from 'lucide-react';
+import FofPrintSheet, { type FofPrintLine } from '@/components/fof/FofPrintSheet';
 import { useFofSettings, useFofTemplates } from '@/hooks/useFofTemplates';
+import {
+  useFeeScheduleItems,
+  useFeeSchedules,
+  useInsurancePlans,
+} from '@/hooks/useFeeSchedules';
 import { computeFof } from '@/lib/fof/compute';
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
+import {
+  estimateInsurance,
+  type FeeCategory,
+  type FofLine,
+  type PlanRules,
+} from '@/lib/fof/insurance';
 import { DEFAULT_PRACTICE_INFO } from '@/lib/fof/defaults';
 import type { Cents, FofAmounts, FofOverrides, FofTemplate } from '@/lib/fof/types';
+
+const NO_PLAN = '__none__';
+
+const CATEGORY_SHORT: Record<FeeCategory, string> = {
+  preventive: 'Prev',
+  basic: 'Basic',
+  major: 'Major',
+  other: 'Other',
+};
 
 function todayISO(): string {
   const now = new Date();
@@ -40,42 +71,81 @@ function todayISO(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
+interface BuilderLine {
+  key: string;
+  code: string;
+  description: string;
+  category: FeeCategory;
+  feeInput: string;
+  allowedInput: string;
+}
+
+let lineCounter = 0;
+const newLine = (): BuilderLine => ({
+  key: `line-${++lineCounter}`,
+  code: '',
+  description: '',
+  category: 'other',
+  feeInput: '',
+  allowedInput: '',
+});
+
 interface BuilderState {
   patientName: string;
   dateISO: string;
-  treatment: string;
-  totalInput: string;
-  insuranceInput: string;
-  writeOffInput: string;
+  note: string;
+  lines: BuilderLine[];
+  deductibleInput: string;
+  annualMaxInput: string;
+  insuranceOverride: string;
+  writeOffOverride: string;
   portionOverride: string;
   discountOverride: string;
   prepayOverride: string;
   installmentOverrides: string[];
 }
 
+type ScalarField = keyof Omit<BuilderState, 'lines' | 'installmentOverrides'>;
+
 type BuilderAction =
-  | { type: 'set'; field: keyof Omit<BuilderState, 'installmentOverrides'>; value: string }
+  | { type: 'set'; field: ScalarField; value: string }
+  | { type: 'setLine'; index: number; patch: Partial<BuilderLine> }
+  | { type: 'addLine' }
+  | { type: 'removeLine'; index: number }
   | { type: 'setInstallment'; index: number; value: string }
   | { type: 'clearOverrides' }
   | { type: 'clearAll' };
 
-const initialState: BuilderState = {
+const initialState = (): BuilderState => ({
   patientName: '',
   dateISO: todayISO(),
-  treatment: '',
-  totalInput: '',
-  insuranceInput: '',
-  writeOffInput: '',
+  note: '',
+  lines: [newLine()],
+  deductibleInput: '',
+  annualMaxInput: '',
+  insuranceOverride: '',
+  writeOffOverride: '',
   portionOverride: '',
   discountOverride: '',
   prepayOverride: '',
   installmentOverrides: [],
-};
+});
 
 function reducer(state: BuilderState, action: BuilderAction): BuilderState {
   switch (action.type) {
     case 'set':
       return { ...state, [action.field]: action.value };
+    case 'setLine': {
+      const lines = [...state.lines];
+      lines[action.index] = { ...lines[action.index], ...action.patch };
+      return { ...state, lines };
+    }
+    case 'addLine':
+      return { ...state, lines: [...state.lines, newLine()] };
+    case 'removeLine': {
+      const lines = state.lines.filter((_, i) => i !== action.index);
+      return { ...state, lines: lines.length ? lines : [newLine()] };
+    }
     case 'setInstallment': {
       const next = [...state.installmentOverrides];
       next[action.index] = action.value;
@@ -84,13 +154,15 @@ function reducer(state: BuilderState, action: BuilderAction): BuilderState {
     case 'clearOverrides':
       return {
         ...state,
+        insuranceOverride: '',
+        writeOffOverride: '',
         portionOverride: '',
         discountOverride: '',
         prepayOverride: '',
         installmentOverrides: [],
       };
     case 'clearAll':
-      return { ...initialState, dateISO: todayISO() };
+      return initialState();
     default:
       return state;
   }
@@ -172,8 +244,12 @@ function OverrideRow({ label, computedCents, value, overridden, onChange }: Over
 export default function FofBuilder() {
   const { data: templates, isLoading: templatesLoading } = useFofTemplates();
   const { data: practice } = useFofSettings();
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const { data: schedules } = useFeeSchedules();
+  const { data: plans } = useInsurancePlans();
+
+  const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [templateId, setTemplateId] = useState<string | null>(null);
+  const [planId, setPlanId] = useState<string>(NO_PLAN);
 
   const activeTemplates = useMemo(
     () => (templates ?? []).filter(t => t.isActive),
@@ -182,13 +258,96 @@ export default function FofBuilder() {
   const template: FofTemplate | undefined =
     activeTemplates.find(t => t.id === templateId) ?? activeTemplates[0];
 
+  const officeSchedule = (schedules ?? []).find(s => s.kind === 'office');
+  const { data: officeItems } = useFeeScheduleItems(officeSchedule?.id ?? null);
+
+  const insuranceEnabled = !!template?.showInsuranceEstimate;
+  const plan = insuranceEnabled
+    ? (plans ?? []).find(p => p.id === planId && p.isActive) ?? null
+    : null;
+  const { data: planItems } = useFeeScheduleItems(plan?.feeScheduleId ?? null);
+
+  const officeByCode = useMemo(() => {
+    const map = new Map<string, { description: string; feeCents: Cents; category: FeeCategory }>();
+    for (const item of officeItems ?? []) {
+      map.set(item.code, { description: item.description, feeCents: item.feeCents, category: item.category });
+    }
+    return map;
+  }, [officeItems]);
+
+  const allowedByCode = useMemo(() => {
+    const map = new Map<string, Cents>();
+    for (const item of planItems ?? []) map.set(item.code, item.feeCents);
+    return map;
+  }, [planItems]);
+
+  const handleCodeChange = (index: number, rawCode: string) => {
+    const code = rawCode.toUpperCase();
+    const match = officeByCode.get(code.trim());
+    dispatch({
+      type: 'setLine',
+      index,
+      patch: match
+        ? {
+            code,
+            description: match.description,
+            feeInput: formatCents(match.feeCents),
+            category: match.category,
+          }
+        : { code },
+    });
+  };
+
+  const handlePlanChange = (nextPlanId: string) => {
+    setPlanId(nextPlanId);
+    const nextPlan = (plans ?? []).find(p => p.id === nextPlanId);
+    dispatch({ type: 'set', field: 'deductibleInput', value: nextPlan ? formatCents(nextPlan.deductibleCents) : '' });
+    dispatch({ type: 'set', field: 'annualMaxInput', value: nextPlan ? formatCents(nextPlan.annualMaxCents) : '' });
+  };
+
+  const feeLines: FofLine[] = useMemo(
+    () =>
+      state.lines
+        .filter(l => l.code.trim() !== '' || l.description.trim() !== '' || l.feeInput.trim() !== '')
+        .map(l => ({
+          code: l.code.trim(),
+          description: l.description.trim(),
+          category: l.category,
+          officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
+          allowedCents: l.allowedInput.trim()
+            ? parseCurrencyInput(l.allowedInput)
+            : allowedByCode.get(l.code.trim()) ?? null,
+        })),
+    [state.lines, allowedByCode]
+  );
+
+  const planRules: PlanRules | null = plan
+    ? {
+        preventivePct: plan.preventivePct,
+        basicPct: plan.basicPct,
+        majorPct: plan.majorPct,
+        deductibleWaivedPreventive: plan.deductibleWaivedPreventive,
+        writeoffApplies: plan.writeoffApplies,
+      }
+    : null;
+
+  const estimate = useMemo(
+    () =>
+      estimateInsurance(feeLines, planRules, {
+        remainingDeductibleCents: parseCurrencyInput(state.deductibleInput) ?? plan?.deductibleCents ?? 0,
+        remainingAnnualMaxCents: parseCurrencyInput(state.annualMaxInput) ?? plan?.annualMaxCents ?? 0,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [feeLines, plan, state.deductibleInput, state.annualMaxInput]
+  );
+
   const amounts: FofAmounts = useMemo(
     () => ({
-      totalCents: parseCurrencyInput(state.totalInput),
-      insuranceEstimateCents: parseCurrencyInput(state.insuranceInput),
-      writeOffCents: parseCurrencyInput(state.writeOffInput),
+      totalCents: estimate.totalCents,
+      insuranceEstimateCents: parseOverride(state.insuranceOverride) ?? estimate.insurancePaysCents,
+      writeOffCents: parseOverride(state.writeOffOverride) ?? estimate.writeOffCents,
     }),
-    [state.totalInput, state.insuranceInput, state.writeOffInput]
+    [estimate, state.insuranceOverride, state.writeOffOverride]
   );
 
   const overrides: FofOverrides = useMemo(
@@ -206,10 +365,16 @@ export default function FofBuilder() {
     [template, amounts, overrides]
   );
 
+  const printLines: FofPrintLine[] = feeLines.map(l => ({
+    code: l.code,
+    description: l.description || l.code,
+    feeCents: l.officeFeeCents,
+  }));
+
   const isDirty =
     state.patientName.trim() !== '' ||
-    state.treatment.trim() !== '' ||
-    state.totalInput.trim() !== '';
+    state.note.trim() !== '' ||
+    feeLines.length > 0;
 
   useEffect(() => {
     if (!isDirty) return;
@@ -221,7 +386,7 @@ export default function FofBuilder() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
 
-  const setField = (field: keyof Omit<BuilderState, 'installmentOverrides'>) =>
+  const setField = (field: ScalarField) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       dispatch({ type: 'set', field, value: e.target.value });
 
@@ -229,9 +394,10 @@ export default function FofBuilder() {
     <FofPrintSheet
       practice={practice ?? DEFAULT_PRACTICE_INFO}
       template={template}
-      patient={{ patientName: state.patientName, dateISO: state.dateISO, treatment: state.treatment }}
+      patient={{ patientName: state.patientName, dateISO: state.dateISO, treatment: state.note }}
       amounts={amounts}
       computation={computation}
+      lines={printLines}
     />
   );
 
@@ -241,9 +407,15 @@ export default function FofBuilder() {
         <h1 className="text-2xl font-bold">Financial Options Form</h1>
         <div className="flex gap-2">
           <Button variant="outline" asChild>
+            <Link to="/fof/fees">
+              <DollarSign className="h-4 w-4 mr-2" />
+              Fees & Plans
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
             <Link to="/fof/templates">
               <Settings2 className="h-4 w-4 mr-2" />
-              Manage Templates
+              Templates
             </Link>
           </Button>
           <Button onClick={() => window.print()} disabled={!template}>
@@ -277,9 +449,9 @@ export default function FofBuilder() {
           <div className="space-y-4">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Template</CardTitle>
+                <CardTitle className="text-base">Template & Patient</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-3">
                 <Select value={template.id} onValueChange={setTemplateId}>
                   <SelectTrigger>
                     <SelectValue />
@@ -290,14 +462,6 @@ export default function FofBuilder() {
                     ))}
                   </SelectContent>
                 </Select>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Patient Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="fof-name">Patient Name</Label>
@@ -319,58 +483,168 @@ export default function FofBuilder() {
                     />
                   </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="fof-treatment">Treatment</Label>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Procedures</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <datalist id="fof-code-list">
+                  {(officeItems ?? []).map(item => (
+                    <option key={item.id} value={item.code}>{item.description}</option>
+                  ))}
+                </datalist>
+                <div className="hidden sm:grid grid-cols-[5.5rem_1fr_5rem_6rem_6rem_2rem] gap-1.5 text-xs text-muted-foreground px-1">
+                  <span>Code</span>
+                  <span>Description</span>
+                  <span>Category</span>
+                  <span className="text-right">Office Fee</span>
+                  {insuranceEnabled ? <span className="text-right">Allowed</span> : <span />}
+                  <span />
+                </div>
+                {state.lines.map((line, i) => {
+                  const autoAllowed = allowedByCode.get(line.code.trim());
+                  return (
+                    <div key={line.key} className="grid sm:grid-cols-[5.5rem_1fr_5rem_6rem_6rem_2rem] grid-cols-2 gap-1.5 items-center">
+                      <Input
+                        list="fof-code-list"
+                        placeholder="D2740"
+                        autoComplete="off"
+                        className="font-mono"
+                        value={line.code}
+                        onChange={e => handleCodeChange(i, e.target.value)}
+                      />
+                      <Input
+                        placeholder="Description"
+                        autoComplete="off"
+                        value={line.description}
+                        onChange={e => dispatch({ type: 'setLine', index: i, patch: { description: e.target.value } })}
+                      />
+                      <Select
+                        value={line.category}
+                        onValueChange={v => dispatch({ type: 'setLine', index: i, patch: { category: v as FeeCategory } })}
+                      >
+                        <SelectTrigger className="h-10">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(Object.keys(CATEGORY_SHORT) as FeeCategory[]).map(c => (
+                            <SelectItem key={c} value={c}>{CATEGORY_SHORT[c]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        inputMode="decimal"
+                        autoComplete="off"
+                        placeholder="$0.00"
+                        className="text-right"
+                        value={line.feeInput}
+                        onChange={e => dispatch({ type: 'setLine', index: i, patch: { feeInput: e.target.value } })}
+                      />
+                      {insuranceEnabled ? (
+                        <Input
+                          inputMode="decimal"
+                          autoComplete="off"
+                          placeholder={autoAllowed !== undefined ? formatCents(autoAllowed) : 'auto'}
+                          className="text-right"
+                          value={line.allowedInput}
+                          onChange={e => dispatch({ type: 'setLine', index: i, patch: { allowedInput: e.target.value } })}
+                        />
+                      ) : (
+                        <span className="hidden sm:block" />
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive"
+                        onClick={() => dispatch({ type: 'removeLine', index: i })}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  );
+                })}
+                <div className="flex items-center justify-between pt-1">
+                  <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'addLine' })}>
+                    <Plus className="h-3.5 w-3.5 mr-1.5" />
+                    Add Procedure
+                  </Button>
+                  <span className="text-sm font-medium">
+                    Total: {formatCents(estimate.totalCents)}
+                  </span>
+                </div>
+                <div className="space-y-1.5 pt-1">
+                  <Label htmlFor="fof-note">Additional Notes (optional)</Label>
                   <Textarea
-                    id="fof-treatment"
+                    id="fof-note"
                     autoComplete="off"
                     rows={2}
-                    placeholder="e.g. Crown/Core Buildup 6,10,11 Bridge 7-9"
-                    value={state.treatment}
-                    onChange={setField('treatment')}
+                    value={state.note}
+                    onChange={setField('note')}
                   />
-                </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="fof-total">Total (Estimated) Cost</Label>
-                    <Input
-                      id="fof-total"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      placeholder="$0.00"
-                      value={state.totalInput}
-                      onChange={setField('totalInput')}
-                    />
-                  </div>
-                  {template.showInsuranceEstimate && (
-                    <div className="space-y-1.5">
-                      <Label htmlFor="fof-ins">Est. Insurance Payment</Label>
-                      <Input
-                        id="fof-ins"
-                        inputMode="decimal"
-                        autoComplete="off"
-                        placeholder="$0.00"
-                        value={state.insuranceInput}
-                        onChange={setField('insuranceInput')}
-                      />
-                    </div>
-                  )}
-                  {template.showWriteOff && (
-                    <div className="space-y-1.5">
-                      <Label htmlFor="fof-writeoff">Est. Insurance Write-Off</Label>
-                      <Input
-                        id="fof-writeoff"
-                        inputMode="decimal"
-                        autoComplete="off"
-                        placeholder="$0.00"
-                        value={state.writeOffInput}
-                        onChange={setField('writeOffInput')}
-                      />
-                    </div>
-                  )}
                 </div>
               </CardContent>
             </Card>
+
+            {insuranceEnabled && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Insurance</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label>Plan</Label>
+                    <Select value={planId} onValueChange={handlePlanChange}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_PLAN}>No plan — enter amounts manually</SelectItem>
+                        {(plans ?? []).filter(p => p.isActive).map(p => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {plan && (
+                    <>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="fof-ded">Patient's Remaining Deductible</Label>
+                          <Input
+                            id="fof-ded"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            value={state.deductibleInput}
+                            onChange={setField('deductibleInput')}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="fof-max">Patient's Remaining Annual Max</Label>
+                          <Input
+                            id="fof-max"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            value={state.annualMaxInput}
+                            onChange={setField('annualMaxInput')}
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Defaults are the plan's full deductible and annual max — adjust to what
+                        this patient actually has left. These numbers are not saved.
+                        Coverage: {plan.preventivePct}/{plan.basicPct}/{plan.majorPct}%.
+                        Allowed fees auto-fill from {
+                          (schedules ?? []).find(s => s.id === plan.feeScheduleId)?.name ?? 'office fees'
+                        }; type in the Allowed column to override a line.
+                      </p>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {computation && (
               <Card>
@@ -386,6 +660,26 @@ export default function FofBuilder() {
                   </Button>
                 </CardHeader>
                 <CardContent className="space-y-2">
+                  {insuranceEnabled && (
+                    <>
+                      <OverrideRow
+                        label="Estimated Insurance Payment"
+                        computedCents={estimate.insurancePaysCents}
+                        value={state.insuranceOverride}
+                        overridden={state.insuranceOverride.trim() !== ''}
+                        onChange={v => dispatch({ type: 'set', field: 'insuranceOverride', value: v })}
+                      />
+                      {template.showWriteOff && (
+                        <OverrideRow
+                          label="Estimated Insurance Write-Off"
+                          computedCents={estimate.writeOffCents}
+                          value={state.writeOffOverride}
+                          overridden={state.writeOffOverride.trim() !== ''}
+                          onChange={v => dispatch({ type: 'set', field: 'writeOffOverride', value: v })}
+                        />
+                      )}
+                    </>
+                  )}
                   <OverrideRow
                     label="Patient's Portion"
                     computedCents={computation.computed.patientPortionCents}

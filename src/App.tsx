@@ -21,6 +21,7 @@ import EmployeeDetail from "@/pages/EmployeeDetail";
 import OrgSetup from "@/pages/OrgSetup";
 import FofBuilder from "@/pages/FofBuilder";
 import FofTemplates from "@/pages/FofTemplates";
+import FofFees from "@/pages/FofFees";
 import Assistant from "@/pages/Assistant";
 import AcceptInvite from "@/pages/AcceptInvite";
 import NotFound from "@/pages/NotFound";
@@ -64,6 +65,7 @@ const App = () => (
             <Route path="/org-setup" element={<ProtectedRoute><OrgSetup /></ProtectedRoute>} />
             <Route path="/fof" element={<ProtectedRoute><FofBuilder /></ProtectedRoute>} />
             <Route path="/fof/templates" element={<ProtectedRoute><FofTemplates /></ProtectedRoute>} />
+            <Route path="/fof/fees" element={<ProtectedRoute><FofFees /></ProtectedRoute>} />
             <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
