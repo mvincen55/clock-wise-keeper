@@ -15,6 +15,9 @@ export interface VisitPlan {
   weights: number[];
 }
 
+/** Portions under this default to a single day-of-service payment. */
+export const DAY_OF_SERVICE_THRESHOLD_CENTS = 100_000;
+
 /** Split by weights; remainder cents go to the EARLIEST payments. */
 export function splitCentsWeighted(total: Cents, weights: number[]): Cents[] {
   if (weights.length === 0) return [];
@@ -33,6 +36,11 @@ export const VISIT_PLANS: Record<string, VisitPlan> = {
   single1: {
     key: 'single1',
     labels: ['Due Upon Scheduling'],
+    weights: [1],
+  },
+  dayOfService: {
+    key: 'dayOfService',
+    labels: ['Due at Time of Service'],
     weights: [1],
   },
   single2: {

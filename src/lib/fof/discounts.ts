@@ -9,8 +9,9 @@ import { percentOfCents } from './money';
  *   65+ with a patient portion under $1,000, who get 10% automatically
  *   with no prepay requirement (and nothing extra for prepaying).
  * - Membership (Illumitrac): members always get the membership % (10%)
- *   automatically. Members 65+ get +5% — automatic when the portion is
- *   under $1,000, prepay-in-full-only at $1,000 and above.
+ *   automatically, plus a 5% prepay-in-full extra (off the same
+ *   pre-discount base). Members 65+ with a portion under $1,000 get the
+ *   combined 15% automatically with no prepay requirement.
  * - In-network insurance and financing templates opt out entirely
  *   (seniorDiscountApplies=false, membershipDiscountPercent=0).
  *
@@ -66,19 +67,15 @@ export function computeFofDiscounts(
         prepayDiscountBase: 'portion',
       };
     }
-    const autoDiscount = {
-      label: `Membership Discount (${membershipPct}%)`,
-      cents: percentOfCents(portion, membershipPct),
+    return {
+      autoDiscount: {
+        label: `Membership Discount (${membershipPct}%)`,
+        cents: percentOfCents(portion, membershipPct),
+      },
+      prepayDiscountPercent: SENIOR_RULES.membershipExtraPct,
+      prepayDiscountLabel: `Prepay Discount (${SENIOR_RULES.membershipExtraPct}%)`,
+      prepayDiscountBase: 'preDiscountTotal',
     };
-    if (seniorEligible) {
-      return {
-        autoDiscount,
-        prepayDiscountPercent: SENIOR_RULES.membershipExtraPct,
-        prepayDiscountLabel: `Senior Prepay Discount (${SENIOR_RULES.membershipExtraPct}%)`,
-        prepayDiscountBase: 'preDiscountTotal',
-      };
-    }
-    return { autoDiscount, prepayDiscountPercent: 0, prepayDiscountLabel: '', prepayDiscountBase: 'portion' };
   }
 
   if (seniorEligible && underThreshold) {

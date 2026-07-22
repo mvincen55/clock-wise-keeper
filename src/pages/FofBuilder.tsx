@@ -57,7 +57,12 @@ import {
 import { categorizeCdtCode } from '@/lib/fof/cdt';
 import { friendlyCdtName } from '@/lib/fof/cdt-names';
 import { computeFofDiscounts } from '@/lib/fof/discounts';
-import { decideVisitPlan, planForCount } from '@/lib/fof/visits';
+import {
+  DAY_OF_SERVICE_THRESHOLD_CENTS,
+  decideVisitPlan,
+  planForCount,
+  VISIT_PLANS,
+} from '@/lib/fof/visits';
 import { DEFAULT_PRACTICE_INFO } from '@/lib/fof/defaults';
 import type { Cents, FofAmounts, FofOverrides, FofTemplate } from '@/lib/fof/types';
 
@@ -363,12 +368,11 @@ export default function FofBuilder() {
   // Payment plan follows the treatment (front-loaded for implants and
   // dentures so the balance never runs behind the work), with visit
   // wording matched to the procedures; staff can force a payment count.
-  const autoVisitPlan = useMemo(
+  const treatmentVisitPlan = useMemo(
     () => decideVisitPlan(feeLines.map(l => l.code)),
     [feeLines]
   );
   const overrideCount = parseInt(state.paymentCountOverride, 10);
-  const visitPlan = overrideCount >= 1 && overrideCount <= 4 ? planForCount(overrideCount) : autoVisitPlan;
 
   const estimate = useMemo(
     () =>
@@ -407,12 +411,25 @@ export default function FofBuilder() {
     [template, isSenior, portionBeforeAutoDiscount]
   );
 
-  // In-network plans get no prepay option at all — the write-off is the
-  // negotiated saving, so only the installment agreement is offered.
-  // Staff can also toggle either agreement per form.
-  const prepayShown = plan?.isInNetwork
-    ? false
-    : state.prepayOptionState === ''
+  // Portions under $1,000 default to a single "Due at Time of Service"
+  // payment — no installment schedule needed. The payment-count selector
+  // overrides for patients who need a real schedule anyway.
+  const projectedPortion = Math.max(
+    0,
+    portionBeforeAutoDiscount - (discounts?.autoDiscount?.cents ?? 0)
+  );
+  const autoVisitPlan =
+    projectedPortion > 0 && projectedPortion < DAY_OF_SERVICE_THRESHOLD_CENTS
+      ? VISIT_PLANS.dayOfService
+      : treatmentVisitPlan;
+  const visitPlan =
+    overrideCount >= 1 && overrideCount <= 4 ? planForCount(overrideCount) : autoVisitPlan;
+
+  // The TEMPLATE decides which agreements are offered (the In-Network
+  // template ships with prepay off); the plan's network flag only affects
+  // write-off math. Staff can toggle either agreement per form.
+  const prepayShown =
+    state.prepayOptionState === ''
       ? template?.showPrepayOption ?? false
       : state.prepayOptionState === 'on';
   const installmentShown =
@@ -425,10 +442,9 @@ export default function FofBuilder() {
         showPrepayOption: prepayShown,
         showInstallmentOption: installmentShown,
         // Discount rules decide the prepay percentage (template default,
-        // senior-suppressed, or membership +5%); in-network zeroes it all.
+        // senior-suppressed, or membership +5%).
         discountPercent: discounts?.prepayDiscountPercent ?? template.discountPercent,
         discountLabel: discounts?.prepayDiscountLabel ?? template.discountLabel,
-        ...(plan?.isInNetwork ? { discountPercent: 0, discountLabel: '', prepayNote: '' } : {}),
       }
     : undefined;
 
@@ -581,7 +597,6 @@ export default function FofBuilder() {
                     <Switch
                       id="opt-prepay"
                       checked={prepayShown}
-                      disabled={!!plan?.isInNetwork}
                       onCheckedChange={v =>
                         dispatch({ type: 'set', field: 'prepayOptionState', value: v ? 'on' : 'off' })
                       }
@@ -614,12 +629,6 @@ export default function FofBuilder() {
                 {discounts?.autoDiscount && (
                   <p className="text-xs text-muted-foreground">
                     {discounts.autoDiscount.label} applies automatically — no prepay required.
-                  </p>
-                )}
-                {plan?.isInNetwork && (
-                  <p className="text-xs text-muted-foreground">
-                    In-network plan — the prepay option is not offered; the form shows the
-                    Payment Installment Agreement only.
                   </p>
                 )}
                 <div className="grid gap-3 sm:grid-cols-2">
