@@ -818,6 +818,98 @@ export type Database = {
           },
         ]
       }
+      fee_schedule_items: {
+        Row: {
+          category: string
+          code: string
+          created_at: string
+          description: string
+          fee_cents: number
+          id: string
+          org_id: string
+          schedule_id: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          code: string
+          created_at?: string
+          description?: string
+          fee_cents?: number
+          id?: string
+          org_id: string
+          schedule_id: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          code?: string
+          created_at?: string
+          description?: string
+          fee_cents?: number
+          id?: string
+          org_id?: string
+          schedule_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fee_schedule_items_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "fee_schedules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fee_schedule_items_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fee_schedules: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          kind: string
+          name: string
+          org_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          name: string
+          org_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          name?: string
+          org_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fee_schedules_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fof_settings: {
         Row: {
           address_line1: string
@@ -1029,6 +1121,75 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      insurance_plans: {
+        Row: {
+          annual_max_cents: number
+          basic_pct: number
+          created_at: string
+          deductible_cents: number
+          deductible_waived_preventive: boolean
+          fee_schedule_id: string | null
+          id: string
+          is_active: boolean
+          major_pct: number
+          name: string
+          org_id: string
+          preventive_pct: number
+          sort_order: number
+          updated_at: string
+          writeoff_applies: boolean
+        }
+        Insert: {
+          annual_max_cents?: number
+          basic_pct?: number
+          created_at?: string
+          deductible_cents?: number
+          deductible_waived_preventive?: boolean
+          fee_schedule_id?: string | null
+          id?: string
+          is_active?: boolean
+          major_pct?: number
+          name: string
+          org_id: string
+          preventive_pct?: number
+          sort_order?: number
+          updated_at?: string
+          writeoff_applies?: boolean
+        }
+        Update: {
+          annual_max_cents?: number
+          basic_pct?: number
+          created_at?: string
+          deductible_cents?: number
+          deductible_waived_preventive?: boolean
+          fee_schedule_id?: string | null
+          id?: string
+          is_active?: boolean
+          major_pct?: number
+          name?: string
+          org_id?: string
+          preventive_pct?: number
+          sort_order?: number
+          updated_at?: string
+          writeoff_applies?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insurance_plans_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insurance_plans_fee_schedule_id_fkey"
+            columns: ["fee_schedule_id"]
+            isOneToOne: false
+            referencedRelation: "fee_schedules"
             referencedColumns: ["id"]
           },
         ]
