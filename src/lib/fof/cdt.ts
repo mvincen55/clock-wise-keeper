@@ -5,12 +5,11 @@ import type { FeeCategory } from './insurance';
  * buckets by its CDT range. The mapping is effectively universal across
  * carriers; individual codes can always be recategorized by hand.
  *
- * Accepts "D2740" or bare "2740" (practice systems often drop the D).
- * Codes that aren't 4-digit CDT (custom office codes, letter suffixes)
- * come back as 'other'.
+ * Only D-prefixed codes are real CDT — bare numbers and lettered codes
+ * are custom office codes, which are never insurance-covered ('other').
  */
 export function categorizeCdtCode(code: string): FeeCategory {
-  const match = /^D?(\d{4})$/i.exec(code.trim());
+  const match = /^D(\d{4})$/i.exec(code.trim());
   if (!match) return 'other';
   const n = parseInt(match[1], 10);
   if (n < 100) return 'other';

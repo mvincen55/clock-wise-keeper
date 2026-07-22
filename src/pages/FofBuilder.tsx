@@ -76,6 +76,7 @@ import {
   planForCount,
   suggestVisitStage,
   VISIT_PLANS,
+  visitSegmentsForCode,
 } from '@/lib/fof/visits';
 import { DEFAULT_PRACTICE_INFO } from '@/lib/fof/defaults';
 import type { Cents, FofAmounts, FofOverrides, FofTemplate } from '@/lib/fof/types';
@@ -492,11 +493,26 @@ export default function FofBuilder() {
       l => l.code.trim() !== '' || l.description.trim() !== '' || l.feeInput.trim() !== ''
     );
     if (active.length === 0) return null;
-    const entries = active.map(l => ({
-      raw: Math.max(1, parseInt(l.visit, 10) || suggestVisitStage(l.code)),
-      feeCents: parseCurrencyInput(l.feeInput) ?? 0,
-      label: friendlyCdtName(l.code) || l.description.trim() || l.code.trim(),
-    }));
+    // A typed Visit # pins the whole line to that visit; otherwise the
+    // code's segments spread the fee across its clinical visits (crowns
+    // split half to Prep, half to Delivery, etc.).
+    const entries: { raw: number; feeCents: number; label: string }[] = [];
+    for (const l of active) {
+      const fee = parseCurrencyInput(l.feeInput) ?? 0;
+      const lineLabel = friendlyCdtName(l.code) || l.description.trim() || l.code.trim();
+      const typed = parseInt(l.visit, 10);
+      if (typed >= 1) {
+        entries.push({ raw: typed, feeCents: fee, label: lineLabel });
+        continue;
+      }
+      const segments = visitSegmentsForCode(l.code);
+      let remaining = fee;
+      segments.forEach((segment, i) => {
+        const part = i === segments.length - 1 ? remaining : Math.round(fee * segment.share);
+        remaining -= part;
+        entries.push({ raw: segment.stage, feeCents: part, label: segment.label || lineLabel });
+      });
+    }
     const distinct = [...new Set(entries.map(e => e.raw))].sort((a, b) => a - b);
     return distinct.map(v => {
       const group = entries.filter(e => e.raw === v);
@@ -794,7 +810,11 @@ export default function FofBuilder() {
                         inputMode="numeric"
                         autoComplete="off"
                         className="text-center"
-                        placeholder={String(suggestVisitStage(line.code))}
+                        placeholder={
+                          visitSegmentsForCode(line.code).length > 1
+                            ? 'auto'
+                            : String(suggestVisitStage(line.code))
+                        }
                         value={line.visit}
                         onChange={e => dispatch({ type: 'setLine', index: i, patch: { visit: e.target.value } })}
                       />
