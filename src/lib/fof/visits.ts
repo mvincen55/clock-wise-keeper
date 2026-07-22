@@ -124,8 +124,11 @@ export function suggestVisitStage(code: string): number {
   const n = codeNumber(code);
   if (n === null) return 1;
   if ((n >= 7000 && n < 8000) || (n >= 4210 && n < 4300)) return 1;
-  if ((n >= 6000 && n < 6200) || (n >= 3000 && n < 4000)) return 2;
-  if ((n >= 2500 && n < 3000) || (n >= 5000 && n < 5900) || (n >= 6200 && n < 6800)) return 3;
+  // Implant placement/second-stage (6010-6054), surgical guides
+  // (6190-6199), and endo happen mid-sequence; implant restorative
+  // components (6055-6189: abutments, implant crowns) are final-stage.
+  if ((n >= 6000 && n < 6055) || (n >= 6190 && n < 6200) || (n >= 3000 && n < 4000)) return 2;
+  if ((n >= 2500 && n < 3000) || (n >= 5000 && n < 5900) || (n >= 6055 && n < 6800)) return 3;
   return 1;
 }
 
