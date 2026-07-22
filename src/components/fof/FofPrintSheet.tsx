@@ -238,8 +238,8 @@ export default function FofPrintSheet({
           <span className="fof-sig-name-block">
             <Blank value="" minWidth="2.4in" />
             <span className="fof-sig-caption">Patient's Printed Name</span>
-          </span>{' '}
-          {template.signatureIntro}
+          </span>
+          <span className="fof-sig-sentence">{template.signatureIntro}</span>
         </div>
 
         <div className="fof-choices">

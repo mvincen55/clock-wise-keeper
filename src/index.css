@@ -429,8 +429,18 @@
 }
 
 .fof-sig-intro {
+  /* Name line left, sentence in its own wrapping column beside it so a
+     wrapped sentence never collides with the caption under the line. */
+  display: flex;
+  align-items: flex-end;
+  gap: 8pt;
   margin-bottom: 16pt; /* room for the caption hanging under the name line */
   font-size: 9pt;
+}
+
+.fof-sig-sentence {
+  flex: 1;
+  line-height: 1.35;
 }
 
 .fof-sig-name-block {

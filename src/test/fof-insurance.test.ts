@@ -108,7 +108,7 @@ describe('estimateInsurance', () => {
     expect(result.insurancePaysCents).toBe(120_000);
   });
 
-  it("pays nothing and takes no write-off for 'other' (non-covered) lines", () => {
+  it("pays nothing and takes no write-off for 'other' (non-covered) lines — office fee applies", () => {
     const result = estimateInsurance(
       [line({ category: 'other', officeFeeCents: 30_000, allowedCents: 20_000 })],
       plan,
@@ -116,6 +116,7 @@ describe('estimateInsurance', () => {
     );
     expect(result.perLine[0].insurancePaysCents).toBe(0);
     expect(result.perLine[0].writeOffCents).toBe(0);
+    expect(result.perLine[0].allowedCents).toBe(30_000); // office fee, not carrier allowed
   });
 
   it('skips write-offs when the plan does not apply them (out of network)', () => {
