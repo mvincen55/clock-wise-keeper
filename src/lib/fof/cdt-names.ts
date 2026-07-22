@@ -75,6 +75,7 @@ const NAMES: Record<string, string> = {
   '4355': 'Full-mouth debridement',
   '4381': 'Antibiotic gum treatment',
   '4910': 'Periodontal maintenance cleaning',
+  '4265': 'Bio material',
   '4273': 'Gum tissue graft',
   '4277': 'Gum tissue graft (first tooth)',
   '4278': 'Gum tissue graft (additional tooth)',

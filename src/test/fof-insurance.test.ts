@@ -129,6 +129,37 @@ describe('estimateInsurance', () => {
     expect(result.insurancePaysCents).toBe(96_000);
   });
 
+  it('reverts to office fees (no write-off) after the max is exhausted when the plan says so', () => {
+    const afterMaxPlan: PlanRules = { ...plan, officeFeesAfterMax: true };
+    const result = estimateInsurance(
+      [
+        line({ category: 'major', officeFeeCents: 200_000, allowedCents: 150_000 }),
+        line({ category: 'major', officeFeeCents: 100_000, allowedCents: 80_000 }),
+      ],
+      afterMaxPlan,
+      { remainingDeductibleCents: 0, remainingAnnualMaxCents: 75_000 }
+    );
+    // Line 1: 50% of 1500.00 = 750.00, exactly exhausts the max; write-off applies
+    expect(result.perLine[0].insurancePaysCents).toBe(75_000);
+    expect(result.perLine[0].writeOffCents).toBe(50_000);
+    // Line 2: max gone → office fee, no write-off, no insurance
+    expect(result.perLine[1].insurancePaysCents).toBe(0);
+    expect(result.perLine[1].writeOffCents).toBe(0);
+  });
+
+  it('keeps write-offs after max when the plan does NOT revert', () => {
+    const result = estimateInsurance(
+      [
+        line({ category: 'major', officeFeeCents: 200_000, allowedCents: 150_000 }),
+        line({ category: 'major', officeFeeCents: 100_000, allowedCents: 80_000 }),
+      ],
+      plan,
+      { remainingDeductibleCents: 0, remainingAnnualMaxCents: 75_000 }
+    );
+    expect(result.perLine[1].insurancePaysCents).toBe(0);
+    expect(result.perLine[1].writeOffCents).toBe(20_000);
+  });
+
   it('full-flow sanity: patient portion = total − writeoffs − insurance', () => {
     const lines = [
       line({ category: 'preventive', officeFeeCents: 15_000, allowedCents: 12_000 }),

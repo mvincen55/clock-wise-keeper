@@ -39,6 +39,8 @@ function mapTemplateRow(row: TemplateRow): FofTemplate {
     contactNote: row.footnote_contact,
     footnotes: Array.isArray(row.footnotes) ? (row.footnotes as string[]) : [],
     signatureIntro: row.signature_intro,
+    membershipDiscountPercent: row.membership_discount_percent,
+    seniorDiscountApplies: row.senior_discount_applies,
   };
 }
 
@@ -72,6 +74,8 @@ function seedToInsert(seed: FofTemplateSeed, orgId: string, userId?: string): Ta
     footnote_contact: seed.contactNote,
     footnotes: seed.footnotes,
     signature_intro: seed.signatureIntro,
+    membership_discount_percent: seed.membershipDiscountPercent,
+    senior_discount_applies: seed.seniorDiscountApplies,
     created_by: userId ?? null,
   };
 }

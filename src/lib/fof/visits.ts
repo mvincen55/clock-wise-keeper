@@ -32,32 +32,42 @@ export function splitCentsWeighted(total: Cents, weights: number[]): Cents[] {
 export const VISIT_PLANS: Record<string, VisitPlan> = {
   single1: {
     key: 'single1',
-    labels: ['Due upon scheduling'],
+    labels: ['Due Upon Scheduling'],
     weights: [1],
   },
   single2: {
     key: 'single2',
-    labels: ['Due upon scheduling', 'Due at appointment'],
+    labels: ['Upon Scheduling', 'At Appointment'],
     weights: [1, 1],
   },
-  even3: {
-    key: 'even3',
-    labels: ['Visit 1 (Upon scheduling)', 'Visit 2 (Prep date)', 'Visit 3 (On delivery)'],
+  endo2: {
+    key: 'endo2',
+    labels: ['Upon Scheduling', 'At Treatment'],
+    weights: [1, 1],
+  },
+  surgery2: {
+    key: 'surgery2',
+    labels: ['Upon Scheduling', 'At Surgery'],
+    weights: [1, 1],
+  },
+  crownBridge3: {
+    key: 'crownBridge3',
+    labels: ['Upon Scheduling', 'At Prep Appointment', 'On Delivery'],
     weights: [1, 1, 1],
   },
-  frontloaded3: {
-    key: 'frontloaded3',
-    labels: ['Visit 1 (Upon scheduling)', 'Visit 2 (Placement/Prep)', 'Visit 3 (On delivery)'],
+  denture3: {
+    key: 'denture3',
+    labels: ['Upon Scheduling', 'At Impressions', 'On Delivery'],
+    weights: [50, 25, 25],
+  },
+  implant3: {
+    key: 'implant3',
+    labels: ['Upon Scheduling', 'At Placement Surgery', 'At Restoration/Delivery'],
     weights: [50, 25, 25],
   },
   frontloaded4: {
     key: 'frontloaded4',
-    labels: [
-      'Visit 1 (Upon scheduling)',
-      'Visit 2 (Placement/Prep)',
-      'Visit 3 (Try-in)',
-      'Visit 4 (On delivery)',
-    ],
+    labels: ['Upon Scheduling', 'At Placement/Prep', 'At Try-In', 'On Delivery'],
     weights: [40, 20, 20, 20],
   },
 };
@@ -70,7 +80,7 @@ export function planForCount(count: number): VisitPlan {
     case 2:
       return VISIT_PLANS.single2;
     case 3:
-      return VISIT_PLANS.even3;
+      return VISIT_PLANS.crownBridge3;
     default:
       return VISIT_PLANS.frontloaded4;
   }
@@ -82,19 +92,36 @@ function codeNumber(code: string): number | null {
 }
 
 /**
- * Pick the payment plan from the procedures on the form:
- * - implants (6000-6199) or dentures/partials (5000-5899): front-loaded 3
- * - crowns/inlays/onlays (2500-2999) or bridges (6200-6799): even thirds
- * - anything else: half at scheduling, half at the appointment
- * The heaviest treatment on the form wins.
+ * Build the payment plan from the procedures on the form: the heaviest
+ * treatment decides the visit structure AND the wording of each payment
+ * line. Lab/implant-heavy work is front-loaded (50/25/25) so the balance
+ * never runs behind the work.
+ *
+ * - implants (6000-6199): Scheduling / Placement Surgery / Restoration
+ * - dentures & partials (5000-5899): Scheduling / Impressions / Delivery
+ * - crowns, inlays/onlays (2500-2999) & bridges (6200-6799): thirds at
+ *   Scheduling / Prep / Delivery
+ * - perio surgery & grafts (4210-4299) and oral surgery (7000-7999):
+ *   half at Scheduling, half At Surgery
+ * - endodontics (3000-3999): half at Scheduling, half At Treatment
+ * - everything else: half at Scheduling, half At Appointment
  */
 export function decideVisitPlan(codes: string[]): VisitPlan {
-  let best = 0; // 0 = single2, 1 = even3, 2 = frontloaded3
+  const RANK: Record<string, number> = {
+    single2: 0, endo2: 1, surgery2: 2, crownBridge3: 3, denture3: 4, implant3: 5,
+  };
+  let best: VisitPlan = VISIT_PLANS.single2;
+  const consider = (plan: VisitPlan) => {
+    if (RANK[plan.key] > RANK[best.key]) best = plan;
+  };
   for (const code of codes) {
     const n = codeNumber(code);
     if (n === null) continue;
-    if ((n >= 6000 && n < 6200) || (n >= 5000 && n < 5900)) best = Math.max(best, 2);
-    else if ((n >= 2500 && n < 3000) || (n >= 6200 && n < 6800)) best = Math.max(best, 1);
+    if (n >= 6000 && n < 6200) consider(VISIT_PLANS.implant3);
+    else if (n >= 5000 && n < 5900) consider(VISIT_PLANS.denture3);
+    else if ((n >= 2500 && n < 3000) || (n >= 6200 && n < 6800)) consider(VISIT_PLANS.crownBridge3);
+    else if ((n >= 4210 && n < 4300) || (n >= 7000 && n < 8000)) consider(VISIT_PLANS.surgery2);
+    else if (n >= 3000 && n < 4000) consider(VISIT_PLANS.endo2);
   }
-  return best === 2 ? VISIT_PLANS.frontloaded3 : best === 1 ? VISIT_PLANS.even3 : VISIT_PLANS.single2;
+  return best;
 }

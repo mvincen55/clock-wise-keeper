@@ -56,6 +56,7 @@ import {
 } from '@/lib/fof/insurance';
 import { categorizeCdtCode } from '@/lib/fof/cdt';
 import { friendlyCdtName } from '@/lib/fof/cdt-names';
+import { computeFofDiscounts } from '@/lib/fof/discounts';
 import { decideVisitPlan, planForCount } from '@/lib/fof/visits';
 import { DEFAULT_PRACTICE_INFO } from '@/lib/fof/defaults';
 import type { Cents, FofAmounts, FofOverrides, FofTemplate } from '@/lib/fof/types';
@@ -66,7 +67,7 @@ const CATEGORY_SHORT: Record<FeeCategory, string> = {
   preventive: 'Prev',
   basic: 'Basic',
   major: 'Major',
-  other: 'Other',
+  other: 'No Cov',
 };
 
 function todayISO(): string {
@@ -108,6 +109,7 @@ interface BuilderState {
   paymentCountOverride: string;
   prepayOptionState: string; // '' = follow template, 'on'/'off' = per-form override
   installmentOptionState: string;
+  isSenior: string; // '' or 'yes' — patient is 65+; memory only
   insuranceOverride: string;
   writeOffOverride: string;
   portionOverride: string;
@@ -139,6 +141,7 @@ const initialState = (): BuilderState => ({
   paymentCountOverride: '',
   prepayOptionState: '',
   installmentOptionState: '',
+  isSenior: '',
   insuranceOverride: '',
   writeOffOverride: '',
   portionOverride: '',
@@ -314,6 +317,16 @@ export default function FofBuilder() {
     });
   };
 
+  // Template choice drives the agreement toggles: switching templates
+  // clears any per-form override so e.g. Out-of-Network and Self-Pay
+  // always come up with Prepay in Full on, In-Network with it off.
+  const handleTemplateChange = (nextTemplateId: string) => {
+    setTemplateId(nextTemplateId);
+    dispatch({ type: 'set', field: 'prepayOptionState', value: '' });
+    dispatch({ type: 'set', field: 'installmentOptionState', value: '' });
+    dispatch({ type: 'set', field: 'paymentCountOverride', value: '' });
+  };
+
   const handlePlanChange = (nextPlanId: string) => {
     setPlanId(nextPlanId);
     const nextPlan = (plans ?? []).find(p => p.id === nextPlanId);
@@ -347,30 +360,9 @@ export default function FofBuilder() {
       }
     : null;
 
-  // In-network plans get no prepay option at all — the write-off is the
-  // negotiated saving, so only the installment agreement is offered.
-  // Staff can also toggle either agreement per form.
-  const prepayShown = plan?.isInNetwork
-    ? false
-    : state.prepayOptionState === ''
-      ? template?.showPrepayOption ?? false
-      : state.prepayOptionState === 'on';
-  const installmentShown =
-    state.installmentOptionState === ''
-      ? template?.showInstallmentOption ?? false
-      : state.installmentOptionState === 'on';
-  const effectiveTemplate: FofTemplate | undefined = template
-    ? {
-        ...template,
-        showPrepayOption: prepayShown,
-        showInstallmentOption: installmentShown,
-        ...(plan?.isInNetwork ? { discountPercent: 0, discountLabel: '', prepayNote: '' } : {}),
-      }
-    : undefined;
-
   // Payment plan follows the treatment (front-loaded for implants and
-  // dentures so the balance never runs behind the work); staff can force
-  // a specific payment count.
+  // dentures so the balance never runs behind the work), with visit
+  // wording matched to the procedures; staff can force a payment count.
   const autoVisitPlan = useMemo(
     () => decideVisitPlan(feeLines.map(l => l.code)),
     [feeLines]
@@ -388,6 +380,54 @@ export default function FofBuilder() {
     [feeLines, plan, state.deductibleInput, state.annualMaxInput]
   );
 
+  const isSenior = state.isSenior === 'yes';
+
+  // Discount rules (membership/senior) key off the portion BEFORE any
+  // rule-derived discount: total − manual discounts/credit − insurance.
+  const discounts = useMemo(() => {
+    if (!template) return null;
+    const insurance = template.showInsuranceEstimate
+      ? parseOverride(state.insuranceOverride) ?? estimate.insurancePaysCents
+      : 0;
+    const writeOff = template.showWriteOff
+      ? parseOverride(state.writeOffOverride) ?? estimate.writeOffCents
+      : 0;
+    const portionBefore = Math.max(
+      0,
+      estimate.totalCents -
+        (parseCurrencyInput(state.officeDiscountInput) ?? 0) -
+        (parseCurrencyInput(state.patientCreditInput) ?? 0) -
+        insurance -
+        writeOff
+    );
+    return computeFofDiscounts(template, isSenior, portionBefore);
+  }, [template, isSenior, estimate, state.insuranceOverride, state.writeOffOverride, state.officeDiscountInput, state.patientCreditInput]);
+
+  // In-network plans get no prepay option at all — the write-off is the
+  // negotiated saving, so only the installment agreement is offered.
+  // Staff can also toggle either agreement per form.
+  const prepayShown = plan?.isInNetwork
+    ? false
+    : state.prepayOptionState === ''
+      ? template?.showPrepayOption ?? false
+      : state.prepayOptionState === 'on';
+  const installmentShown =
+    state.installmentOptionState === ''
+      ? template?.showInstallmentOption ?? false
+      : state.installmentOptionState === 'on';
+  const effectiveTemplate: FofTemplate | undefined = template
+    ? {
+        ...template,
+        showPrepayOption: prepayShown,
+        showInstallmentOption: installmentShown,
+        // Discount rules decide the prepay percentage (template default,
+        // senior-suppressed, or membership +5%); in-network zeroes it all.
+        discountPercent: discounts?.prepayDiscountPercent ?? template.discountPercent,
+        discountLabel: discounts?.prepayDiscountLabel ?? template.discountLabel,
+        ...(plan?.isInNetwork ? { discountPercent: 0, discountLabel: '', prepayNote: '' } : {}),
+      }
+    : undefined;
+
   const amounts: FofAmounts = useMemo(
     () => ({
       totalCents: estimate.totalCents,
@@ -395,8 +435,9 @@ export default function FofBuilder() {
       writeOffCents: parseOverride(state.writeOffOverride) ?? estimate.writeOffCents,
       officeDiscountCents: parseCurrencyInput(state.officeDiscountInput),
       patientCreditCents: parseCurrencyInput(state.patientCreditInput),
+      autoDiscount: discounts?.autoDiscount ?? null,
     }),
-    [estimate, state.insuranceOverride, state.writeOffOverride, state.officeDiscountInput, state.patientCreditInput]
+    [estimate, state.insuranceOverride, state.writeOffOverride, state.officeDiscountInput, state.patientCreditInput, discounts]
   );
 
   const overrides: FofOverrides = useMemo(
@@ -519,7 +560,7 @@ export default function FofBuilder() {
                 <CardTitle className="text-base">Template & Patient</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Select value={template.id} onValueChange={setTemplateId}>
+                <Select value={template.id} onValueChange={handleTemplateChange}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -551,7 +592,24 @@ export default function FofBuilder() {
                     />
                     <Label htmlFor="opt-installment">Payment Installment option</Label>
                   </div>
+                  {template.seniorDiscountApplies && (
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id="opt-senior"
+                        checked={isSenior}
+                        onCheckedChange={v =>
+                          dispatch({ type: 'set', field: 'isSenior', value: v ? 'yes' : '' })
+                        }
+                      />
+                      <Label htmlFor="opt-senior">Patient is 65+</Label>
+                    </div>
+                  )}
                 </div>
+                {discounts?.autoDiscount && (
+                  <p className="text-xs text-muted-foreground">
+                    {discounts.autoDiscount.label} applies automatically — no prepay required.
+                  </p>
+                )}
                 {plan?.isInNetwork && (
                   <p className="text-xs text-muted-foreground">
                     In-network plan — the prepay option is not offered; the form shows the

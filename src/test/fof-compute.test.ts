@@ -22,6 +22,8 @@ function makeTemplate(overrides: Partial<FofTemplate> = {}): FofTemplate {
     contactNote: '',
     footnotes: [],
     signatureIntro: 'agrees to:',
+    membershipDiscountPercent: 0,
+    seniorDiscountApplies: false,
     ...overrides,
   };
 }
