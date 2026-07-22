@@ -44,6 +44,10 @@ export interface FofTemplate {
   /** Additional unmarked footnote paragraphs. */
   footnotes: string[];
   signatureIntro: string;
+  /** >0 = membership template: this % comes off automatically (Illumitrac). */
+  membershipDiscountPercent: number;
+  /** Whether the 65+ discount rules apply to this template. */
+  seniorDiscountApplies: boolean;
 }
 
 /** Patient-entered fields. Memory-only — never persisted. */
@@ -62,6 +66,8 @@ export interface FofAmounts {
   officeDiscountCents?: Cents | null;
   /** Existing credit on the patient's account; printed only when non-zero. */
   patientCreditCents?: Cents | null;
+  /** Rule-derived discount (membership/senior); printed only when non-zero. */
+  autoDiscount?: { label: string; cents: Cents } | null;
 }
 
 /** Manual overrides of computed values. Memory-only — never persisted. */

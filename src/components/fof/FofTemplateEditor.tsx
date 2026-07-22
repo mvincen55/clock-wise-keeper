@@ -47,6 +47,8 @@ interface EditorState {
   contactNote: string;
   extraNotes: string;
   signatureIntro: string;
+  membershipDiscountPercent: string;
+  seniorDiscountApplies: boolean;
   isActive: boolean;
 }
 
@@ -66,6 +68,8 @@ const NEW_TEMPLATE: EditorState = {
   contactNote: DEFAULT_CONTACT_NOTE,
   extraNotes: '',
   signatureIntro: DEFAULT_SIGNATURE_INTRO,
+  membershipDiscountPercent: '0',
+  seniorDiscountApplies: true,
   isActive: true,
 };
 
@@ -86,6 +90,8 @@ function toEditorState(t: FofTemplate): EditorState {
     contactNote: t.contactNote,
     extraNotes: t.footnotes.join('\n\n'),
     signatureIntro: t.signatureIntro,
+    membershipDiscountPercent: String(t.membershipDiscountPercent),
+    seniorDiscountApplies: t.seniorDiscountApplies,
     isActive: t.isActive,
   };
 }
@@ -135,6 +141,11 @@ export default function FofTemplateEditor({
         .map(p => p.replace(/\n/g, ' ').trim())
         .filter(Boolean),
       signatureIntro: state.signatureIntro.trim() || DEFAULT_SIGNATURE_INTRO,
+      membershipDiscountPercent: Math.min(
+        100,
+        Math.max(0, parseInt(state.membershipDiscountPercent, 10) || 0)
+      ),
+      seniorDiscountApplies: state.seniorDiscountApplies,
     });
   };
 
@@ -183,6 +194,26 @@ export default function FofTemplateEditor({
                 value={state.discountLabel}
                 onChange={e => set('discountLabel', e.target.value)}
               />
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="tpl-membership">Membership Discount % (0 = not a membership template)</Label>
+              <Input
+                id="tpl-membership"
+                inputMode="numeric"
+                value={state.membershipDiscountPercent}
+                onChange={e => set('membershipDiscountPercent', e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2 pt-6">
+              <Switch
+                id="tpl-senior"
+                checked={state.seniorDiscountApplies}
+                onCheckedChange={v => set('seniorDiscountApplies', v)}
+              />
+              <Label htmlFor="tpl-senior">65+ discount rules apply</Label>
             </div>
           </div>
 

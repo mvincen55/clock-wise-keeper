@@ -31,26 +31,43 @@ describe('splitCentsWeighted', () => {
 });
 
 describe('decideVisitPlan', () => {
-  it('picks front-loaded 3 for implants and dentures', () => {
-    expect(decideVisitPlan(['6010']).key).toBe('frontloaded3');
-    expect(decideVisitPlan(['D5213']).key).toBe('frontloaded3');
-    expect(decideVisitPlan(['6111', '7140']).key).toBe('frontloaded3');
+  it('gives implants surgery wording, front-loaded', () => {
+    const plan = decideVisitPlan(['6010']);
+    expect(plan.key).toBe('implant3');
+    expect(plan.labels[1]).toBe('At Placement Surgery');
+    expect(plan.weights).toEqual([50, 25, 25]);
   });
 
-  it('picks even thirds for crowns and bridges', () => {
-    expect(decideVisitPlan(['2740']).key).toBe('even3');
-    expect(decideVisitPlan(['D6750', '2950']).key).toBe('even3');
+  it('gives dentures impressions/delivery wording, front-loaded', () => {
+    const plan = decideVisitPlan(['D5213']);
+    expect(plan.key).toBe('denture3');
+    expect(plan.labels).toEqual(['Upon Scheduling', 'At Impressions', 'On Delivery']);
   });
 
-  it('picks half/half for single-visit treatment', () => {
+  it('gives crowns and bridges prep/delivery thirds', () => {
+    expect(decideVisitPlan(['2740']).key).toBe('crownBridge3');
+    expect(decideVisitPlan(['D6750', '2950']).key).toBe('crownBridge3');
+    expect(decideVisitPlan(['2740']).labels[1]).toBe('At Prep Appointment');
+  });
+
+  it('gives surgery wording for grafts and extractions', () => {
+    expect(decideVisitPlan(['4273']).key).toBe('surgery2');
+    expect(decideVisitPlan(['7140']).labels[1]).toBe('At Surgery');
+  });
+
+  it('gives endo treatment wording', () => {
+    expect(decideVisitPlan(['3330']).labels[1]).toBe('At Treatment');
+  });
+
+  it('defaults to half at scheduling, half at appointment', () => {
     expect(decideVisitPlan(['2391']).key).toBe('single2');
-    expect(decideVisitPlan(['7140', '4341']).key).toBe('single2');
     expect(decideVisitPlan([]).key).toBe('single2');
   });
 
   it('heaviest treatment wins', () => {
-    expect(decideVisitPlan(['1110', '2740', '6010']).key).toBe('frontloaded3');
-    expect(decideVisitPlan(['1110', '2740']).key).toBe('even3');
+    expect(decideVisitPlan(['1110', '2740', '6010']).key).toBe('implant3');
+    expect(decideVisitPlan(['1110', '2740']).key).toBe('crownBridge3');
+    expect(decideVisitPlan(['7140', '5110']).key).toBe('denture3');
   });
 });
 
@@ -83,6 +100,8 @@ describe('computeFof with a visit plan', () => {
     contactNote: '',
     footnotes: [],
     signatureIntro: 's',
+    membershipDiscountPercent: 0,
+    seniorDiscountApplies: false,
   };
 
   it('uses the plan weights and labels', () => {
@@ -90,10 +109,10 @@ describe('computeFof with a visit plan', () => {
       template,
       { totalCents: 100_000, insuranceEstimateCents: null, writeOffCents: null },
       {},
-      VISIT_PLANS.frontloaded3
+      VISIT_PLANS.implant3
     );
     expect(result.effective.installmentsCents).toEqual([50_000, 25_000, 25_000]);
-    expect(result.installmentLabels).toEqual(VISIT_PLANS.frontloaded3.labels);
+    expect(result.installmentLabels).toEqual(VISIT_PLANS.implant3.labels);
   });
 
   it('falls back to template labels without a plan', () => {

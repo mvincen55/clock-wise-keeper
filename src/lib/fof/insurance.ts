@@ -35,6 +35,12 @@ export interface PlanRules {
   majorPct: number;
   deductibleWaivedPreventive: boolean;
   writeoffApplies: boolean;
+  /**
+   * Some carriers (Altus, certain Delta Dental plans) stop honoring the
+   * negotiated fee once the annual max is exhausted: remaining lines
+   * revert to the office fee with no write-off or insurance payment.
+   */
+  officeFeesAfterMax?: boolean;
 }
 
 /** Patient-specific remaining benefits, entered at form time. Memory only. */
@@ -109,13 +115,17 @@ export function estimateInsurance(
   for (const line of lines) {
     const allowed = line.allowedCents ?? line.officeFeeCents;
     const pct = categoryPct(line.category, plan);
+    // Once the max is gone, plans with officeFeesAfterMax stop covering
+    // remaining lines entirely — office fee applies, no write-off.
+    const revertedToOfficeFee = !!plan.officeFeesAfterMax && remainingMax <= 0;
+    const covered = pct > 0 && !revertedToOfficeFee;
     const writeOff =
-      plan.writeoffApplies && pct > 0 ? Math.max(0, line.officeFeeCents - allowed) : 0;
+      plan.writeoffApplies && covered ? Math.max(0, line.officeFeeCents - allowed) : 0;
 
     let deductibleApplied = 0;
     let insurancePays = 0;
 
-    if (pct > 0) {
+    if (covered) {
       const deductibleWaived = line.category === 'preventive' && plan.deductibleWaivedPreventive;
       if (!deductibleWaived && remainingDeductible > 0) {
         deductibleApplied = Math.min(remainingDeductible, allowed);

@@ -276,7 +276,7 @@ function PlanEditorDialog({
   const upsert = useUpsertInsurancePlan();
   const [state, setState] = useState({
     name: '', feeScheduleId: NONE_SCHEDULE, preventive: '100', basic: '80', major: '50',
-    deductible: '$50.00', annualMax: '$1,500.00', waived: true, network: 'in', active: true,
+    deductible: '$50.00', annualMax: '$1,500.00', waived: true, network: 'in', afterMax: false, active: true,
   });
   const [lastKey, setLastKey] = useState('');
   const key = `${open}-${plan?.id ?? 'new'}`;
@@ -292,6 +292,7 @@ function PlanEditorDialog({
       annualMax: formatCents(plan?.annualMaxCents ?? 150000),
       waived: plan?.deductibleWaivedPreventive ?? true,
       network: (plan?.isInNetwork ?? true) ? 'in' : 'oon',
+      afterMax: plan?.officeFeesAfterMax ?? false,
       active: plan?.isActive ?? true,
     });
   }
@@ -369,6 +370,13 @@ function PlanEditorDialog({
             <Label htmlFor="plan-waived">Deductible waived for preventive</Label>
           </div>
           <div className="flex items-center gap-2">
+            <Switch id="plan-aftermax" checked={state.afterMax} onCheckedChange={v => set('afterMax', v)} />
+            <Label htmlFor="plan-aftermax">
+              After annual max is used up, remaining charges revert to office fees
+              (no write-off) — e.g. Altus, certain Delta Dental plans
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
             <Switch id="plan-active" checked={state.active} onCheckedChange={v => set('active', v)} />
             <Label htmlFor="plan-active">Active</Label>
           </div>
@@ -390,6 +398,7 @@ function PlanEditorDialog({
                   annualMaxCents: parseCurrencyInput(state.annualMax) ?? 0,
                   deductibleWaivedPreventive: state.waived,
                   writeoffApplies: state.network === 'in',
+                  officeFeesAfterMax: state.afterMax,
                   isInNetwork: state.network === 'in',
                   isActive: state.active,
                 },

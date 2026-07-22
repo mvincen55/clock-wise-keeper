@@ -74,6 +74,7 @@ function mapPlan(row: Tables<'insurance_plans'>): InsurancePlan {
     deductibleWaivedPreventive: row.deductible_waived_preventive,
     annualMaxCents: row.annual_max_cents,
     writeoffApplies: row.writeoff_applies,
+    officeFeesAfterMax: row.office_fees_after_max,
     isInNetwork: row.is_in_network,
     isActive: row.is_active,
   };
@@ -290,6 +291,7 @@ export function useUpsertInsurancePlan() {
         deductible_waived_preventive: plan.deductibleWaivedPreventive ?? true,
         annual_max_cents: plan.annualMaxCents ?? 150000,
         writeoff_applies: plan.writeoffApplies ?? true,
+        office_fees_after_max: plan.officeFeesAfterMax ?? false,
         is_in_network: plan.isInNetwork ?? true,
         is_active: plan.isActive ?? true,
       });

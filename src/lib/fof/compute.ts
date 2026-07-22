@@ -29,8 +29,12 @@ export function computeFof(
   const writeOff = template.showWriteOff ? amounts.writeOffCents ?? 0 : 0;
   const officeDiscount = amounts.officeDiscountCents ?? 0;
   const patientCredit = amounts.patientCreditCents ?? 0;
+  const autoDiscount = amounts.autoDiscount?.cents ?? 0;
 
-  const computedPortion = Math.max(0, total - officeDiscount - patientCredit - insurance - writeOff);
+  const computedPortion = Math.max(
+    0,
+    total - officeDiscount - patientCredit - autoDiscount - insurance - writeOff
+  );
   const effectivePortion = overrides.patientPortionCents ?? computedPortion;
 
   const computedDiscount = percentOfCents(effectivePortion, template.discountPercent);

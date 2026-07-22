@@ -98,6 +98,12 @@ export default function FofPrintSheet({
             <span>−{formatCents(amounts.patientCreditCents!)}</span>
           </div>
         )}
+        {amounts.autoDiscount && amounts.autoDiscount.cents > 0 && (
+          <div className="fof-cost-row">
+            <span>{amounts.autoDiscount.label}:</span>
+            <span>−{formatCents(amounts.autoDiscount.cents)}</span>
+          </div>
+        )}
         {template.showInsuranceEstimate && (
           <div className="fof-cost-row">
             <span>Estimated Insurance Payment{insuranceMark}:</span>

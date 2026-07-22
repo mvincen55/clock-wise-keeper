@@ -969,8 +969,10 @@ export type Database = {
           installment_count: number
           installment_labels: Json
           is_active: boolean
+          membership_discount_percent: number
           name: string
           org_id: string
+          senior_discount_applies: boolean
           show_installment_option: boolean
           show_insurance_estimate: boolean
           show_prepay_option: boolean
@@ -993,8 +995,10 @@ export type Database = {
           installment_count?: number
           installment_labels?: Json
           is_active?: boolean
+          membership_discount_percent?: number
           name: string
           org_id: string
+          senior_discount_applies?: boolean
           show_installment_option?: boolean
           show_insurance_estimate?: boolean
           show_prepay_option?: boolean
@@ -1017,8 +1021,10 @@ export type Database = {
           installment_count?: number
           installment_labels?: Json
           is_active?: boolean
+          membership_discount_percent?: number
           name?: string
           org_id?: string
+          senior_discount_applies?: boolean
           show_installment_option?: boolean
           show_insurance_estimate?: boolean
           show_prepay_option?: boolean
@@ -1152,6 +1158,7 @@ export type Database = {
           is_active: boolean
           is_in_network: boolean
           major_pct: number
+          office_fees_after_max: boolean
           name: string
           org_id: string
           preventive_pct: number
@@ -1171,6 +1178,7 @@ export type Database = {
           is_in_network?: boolean
           major_pct?: number
           name: string
+          office_fees_after_max?: boolean
           org_id: string
           preventive_pct?: number
           sort_order?: number
@@ -1189,6 +1197,7 @@ export type Database = {
           is_in_network?: boolean
           major_pct?: number
           name?: string
+          office_fees_after_max?: boolean
           org_id?: string
           preventive_pct?: number
           sort_order?: number
