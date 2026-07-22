@@ -731,6 +731,118 @@ export type Database = {
           },
         ]
       }
+      fof_settings: {
+        Row: {
+          address_line1: string
+          address_line2: string
+          created_at: string
+          id: string
+          org_id: string
+          phone: string
+          practice_name: string
+          updated_at: string
+        }
+        Insert: {
+          address_line1?: string
+          address_line2?: string
+          created_at?: string
+          id?: string
+          org_id: string
+          phone?: string
+          practice_name?: string
+          updated_at?: string
+        }
+        Update: {
+          address_line1?: string
+          address_line2?: string
+          created_at?: string
+          id?: string
+          org_id?: string
+          phone?: string
+          practice_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fof_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fof_templates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          discount_label: string
+          discount_percent: number
+          footnotes: Json
+          id: string
+          installment_count: number
+          installment_labels: Json
+          is_active: boolean
+          name: string
+          org_id: string
+          show_installment_option: boolean
+          show_insurance_estimate: boolean
+          show_prepay_option: boolean
+          show_write_off: boolean
+          signature_intro: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          discount_label?: string
+          discount_percent?: number
+          footnotes?: Json
+          id?: string
+          installment_count?: number
+          installment_labels?: Json
+          is_active?: boolean
+          name: string
+          org_id: string
+          show_installment_option?: boolean
+          show_insurance_estimate?: boolean
+          show_prepay_option?: boolean
+          show_write_off?: boolean
+          signature_intro?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          discount_label?: string
+          discount_percent?: number
+          footnotes?: Json
+          id?: string
+          installment_count?: number
+          installment_labels?: Json
+          is_active?: boolean
+          name?: string
+          org_id?: string
+          show_installment_option?: boolean
+          show_insurance_estimate?: boolean
+          show_prepay_option?: boolean
+          show_write_off?: boolean
+          signature_intro?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fof_templates_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       import_rows: {
         Row: {
           created_at: string
