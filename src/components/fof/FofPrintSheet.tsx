@@ -164,11 +164,15 @@ export default function FofPrintSheet({
       </div>
 
       <div className="fof-signatures">
+        {/* The patient hand-writes their printed name here; only the top
+            of the form is auto-filled. */}
         <div className="fof-sig-intro">
-          <Blank value={patient.patientName} minWidth="2.4in" />{' '}
+          <span className="fof-sig-name-block">
+            <Blank value="" minWidth="2.4in" />
+            <span className="fof-sig-caption">Patient's Printed Name</span>
+          </span>{' '}
           {template.signatureIntro}
         </div>
-        <div className="fof-sig-caption">Patient's Printed Name</div>
 
         <div className="fof-choices">
           {template.showPrepayOption && (
