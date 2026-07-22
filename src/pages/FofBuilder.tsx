@@ -146,6 +146,7 @@ interface BuilderState {
   patientName: string;
   dateISO: string;
   note: string;
+  noteEdited: string; // '' = treatment text auto-writes from lines, 'yes' = staff took over
   lines: BuilderLine[];
   officeDiscountInput: string;
   patientCreditInput: string;
@@ -187,6 +188,7 @@ const initialState = (): BuilderState => ({
   patientName: '',
   dateISO: todayISO(),
   note: '',
+  noteEdited: '',
   lines: [newLine()],
   officeDiscountInput: '',
   patientCreditInput: '',
@@ -738,7 +740,10 @@ export default function FofBuilder() {
       .map(g => (g.teeth.length ? `${g.label} ${g.teeth.map(t => `#${t}`).join(', ')}` : g.label))
       .join(', ');
   }, [state.lines]);
-  const printedTreatment = state.note.trim() !== '' ? state.note : autoTreatment;
+  // The textarea holds the REAL text: it auto-writes from the procedures
+  // until the staff edits it, then their wording sticks.
+  const noteEdited = state.noteEdited === 'yes';
+  const printedTreatment = noteEdited ? state.note : autoTreatment;
 
   const isDirty =
     state.patientName.trim() !== '' ||
@@ -1096,19 +1101,38 @@ export default function FofBuilder() {
                   the Patient's Portion.
                 </p>
                 <div className="space-y-1.5 pt-1">
-                  <Label htmlFor="fof-note">Treatment description (prints on the form)</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="fof-note">Treatment description (prints on the form)</Label>
+                    {noteEdited && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => {
+                          dispatch({ type: 'set', field: 'note', value: '' });
+                          dispatch({ type: 'set', field: 'noteEdited', value: '' });
+                        }}
+                      >
+                        <RotateCcw className="h-3 w-3 mr-1" />
+                        Back to auto
+                      </Button>
+                    )}
+                  </div>
                   <Textarea
                     id="fof-note"
                     autoComplete="off"
                     rows={2}
-                    placeholder={autoTreatment || 'Auto-fills from the procedures above'}
-                    value={state.note}
-                    onChange={setField('note')}
+                    placeholder="Writes itself from the procedures above"
+                    value={noteEdited ? state.note : autoTreatment}
+                    onChange={e => {
+                      dispatch({ type: 'set', field: 'note', value: e.target.value });
+                      dispatch({ type: 'set', field: 'noteEdited', value: 'yes' });
+                    }}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Leave blank to use the auto-written description; type to reword it
-                    patient-friendly (add tooth numbers, etc.). Individual codes and fees
-                    never print — only this line and the totals.
+                    Writes itself from the procedures and stays editable — once you change
+                    it, your wording sticks ("Back to auto" re-syncs). Individual codes and
+                    fees never print — only this line and the totals.
                   </p>
                 </div>
               </CardContent>
