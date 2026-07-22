@@ -429,15 +429,22 @@
 }
 
 .fof-sig-intro {
-  margin-bottom: 8pt;
+  margin-bottom: 16pt; /* room for the caption hanging under the name line */
   font-size: 9pt;
 }
 
 .fof-sig-name-block {
-  display: inline-flex;
-  flex-direction: column;
-  vertical-align: bottom;
+  display: inline-block;
+  position: relative;
+}
+
+.fof-sig-name-block .fof-sig-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
   text-align: center;
+  margin: 1.5pt 0 0;
 }
 
 .fof-sig-caption {

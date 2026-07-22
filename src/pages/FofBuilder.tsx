@@ -57,7 +57,12 @@ import {
 import { categorizeCdtCode } from '@/lib/fof/cdt';
 import { friendlyCdtName } from '@/lib/fof/cdt-names';
 import { computeFofDiscounts } from '@/lib/fof/discounts';
-import { decideVisitPlan, planForCount } from '@/lib/fof/visits';
+import {
+  DAY_OF_SERVICE_THRESHOLD_CENTS,
+  decideVisitPlan,
+  planForCount,
+  VISIT_PLANS,
+} from '@/lib/fof/visits';
 import { DEFAULT_PRACTICE_INFO } from '@/lib/fof/defaults';
 import type { Cents, FofAmounts, FofOverrides, FofTemplate } from '@/lib/fof/types';
 
@@ -363,12 +368,11 @@ export default function FofBuilder() {
   // Payment plan follows the treatment (front-loaded for implants and
   // dentures so the balance never runs behind the work), with visit
   // wording matched to the procedures; staff can force a payment count.
-  const autoVisitPlan = useMemo(
+  const treatmentVisitPlan = useMemo(
     () => decideVisitPlan(feeLines.map(l => l.code)),
     [feeLines]
   );
   const overrideCount = parseInt(state.paymentCountOverride, 10);
-  const visitPlan = overrideCount >= 1 && overrideCount <= 4 ? planForCount(overrideCount) : autoVisitPlan;
 
   const estimate = useMemo(
     () =>
@@ -406,6 +410,20 @@ export default function FofBuilder() {
     () => (template ? computeFofDiscounts(template, isSenior, portionBeforeAutoDiscount) : null),
     [template, isSenior, portionBeforeAutoDiscount]
   );
+
+  // Portions under $1,000 default to a single "Due at Time of Service"
+  // payment — no installment schedule needed. The payment-count selector
+  // overrides for patients who need a real schedule anyway.
+  const projectedPortion = Math.max(
+    0,
+    portionBeforeAutoDiscount - (discounts?.autoDiscount?.cents ?? 0)
+  );
+  const autoVisitPlan =
+    projectedPortion > 0 && projectedPortion < DAY_OF_SERVICE_THRESHOLD_CENTS
+      ? VISIT_PLANS.dayOfService
+      : treatmentVisitPlan;
+  const visitPlan =
+    overrideCount >= 1 && overrideCount <= 4 ? planForCount(overrideCount) : autoVisitPlan;
 
   // The TEMPLATE decides which agreements are offered (the In-Network
   // template ships with prepay off); the plan's network flag only affects
