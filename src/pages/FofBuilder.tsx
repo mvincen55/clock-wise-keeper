@@ -38,7 +38,7 @@ import {
   ShieldCheck,
   Trash2,
 } from 'lucide-react';
-import FofPrintSheet, { type FofPrintLine } from '@/components/fof/FofPrintSheet';
+import FofPrintSheet from '@/components/fof/FofPrintSheet';
 import { useFofSettings, useFofTemplates } from '@/hooks/useFofTemplates';
 import {
   useFeeScheduleItems,
@@ -366,11 +366,18 @@ export default function FofBuilder() {
     [template, amounts, overrides]
   );
 
-  const printLines: FofPrintLine[] = feeLines.map(l => ({
-    code: l.code,
-    description: l.description || l.code,
-    feeCents: l.officeFeeCents,
-  }));
+  // The printout shows one patient-friendly treatment line (like the
+  // office's existing forms), not the itemized code/fee list. It writes
+  // itself from the procedures; typing in the field takes over.
+  const autoTreatment = useMemo(() => {
+    const parts: string[] = [];
+    for (const l of feeLines) {
+      const label = l.description || l.code;
+      if (label && !parts.includes(label)) parts.push(label);
+    }
+    return parts.join(', ');
+  }, [feeLines]);
+  const printedTreatment = state.note.trim() !== '' ? state.note : autoTreatment;
 
   const isDirty =
     state.patientName.trim() !== '' ||
@@ -395,10 +402,9 @@ export default function FofBuilder() {
     <FofPrintSheet
       practice={practice ?? DEFAULT_PRACTICE_INFO}
       template={template}
-      patient={{ patientName: state.patientName, dateISO: state.dateISO, treatment: state.note }}
+      patient={{ patientName: state.patientName, dateISO: state.dateISO, treatment: printedTreatment }}
       amounts={amounts}
       computation={computation}
-      lines={printLines}
     />
   );
 
@@ -577,14 +583,20 @@ export default function FofBuilder() {
                   </span>
                 </div>
                 <div className="space-y-1.5 pt-1">
-                  <Label htmlFor="fof-note">Additional Notes (optional)</Label>
+                  <Label htmlFor="fof-note">Treatment description (prints on the form)</Label>
                   <Textarea
                     id="fof-note"
                     autoComplete="off"
                     rows={2}
+                    placeholder={autoTreatment || 'Auto-fills from the procedures above'}
                     value={state.note}
                     onChange={setField('note')}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Leave blank to use the auto-written description; type to reword it
+                    patient-friendly (add tooth numbers, etc.). Individual codes and fees
+                    never print — only this line and the totals.
+                  </p>
                 </div>
               </CardContent>
             </Card>

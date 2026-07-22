@@ -15,12 +15,6 @@ import logoUrl from '@/assets/harelick-logo.png';
  * .fof-sheet rules in index.css (pt/in units, one letter page).
  */
 
-export interface FofPrintLine {
-  code: string;
-  description: string;
-  feeCents: number;
-}
-
 interface FofPrintSheetProps {
   practice: FofPracticeInfo;
   template: FofTemplate;
@@ -28,7 +22,6 @@ interface FofPrintSheetProps {
   /** Effective (post-override) totals shown on the form. */
   amounts: FofAmounts;
   computation: FofComputation;
-  lines?: FofPrintLine[];
 }
 
 function formatDateMDY(iso: string): string {
@@ -51,12 +44,10 @@ export default function FofPrintSheet({
   patient,
   amounts,
   computation,
-  lines = [],
 }: FofPrintSheetProps) {
   const { effective } = computation;
   const totalCents = amounts.totalCents ?? 0;
   const showDiscountRow = template.discountPercent > 0 || template.discountLabel.trim() !== '';
-  const hasLines = lines.length > 0;
 
   return (
     <div className="fof-sheet">
@@ -75,30 +66,10 @@ export default function FofPrintSheet({
         </div>
       </div>
 
-      {hasLines ? (
-        <div className="fof-lines">
-          <div className="fof-line-row fof-line-head">
-            <span className="fof-line-code">Code</span>
-            <span className="fof-line-desc">Treatment</span>
-            <span className="fof-line-fee">Fee</span>
-          </div>
-          {lines.map((line, i) => (
-            <div className="fof-line-row" key={i}>
-              <span className="fof-line-code">{line.code}</span>
-              <span className="fof-line-desc">{line.description}</span>
-              <span className="fof-line-fee">{formatCents(line.feeCents)}</span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="fof-meta-field fof-treatment">
-          <span className="fof-label">Treatment:</span>
-          <Blank value={patient.treatment} minWidth="4.5in" />
-        </div>
-      )}
-      {hasLines && patient.treatment.trim() !== '' && (
-        <div className="fof-note">{patient.treatment}</div>
-      )}
+      <div className="fof-meta-field fof-treatment">
+        <span className="fof-label">Treatment:</span>
+        <Blank value={patient.treatment} minWidth="4.5in" />
+      </div>
 
       <div className="fof-costs">
         <div className="fof-cost-row">

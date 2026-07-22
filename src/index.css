@@ -185,42 +185,6 @@
   font-weight: 700;
 }
 
-.fof-lines {
-  margin: 0 0 8pt;
-}
-
-.fof-line-row {
-  display: flex;
-  gap: 8pt;
-  padding: 1.5pt 0;
-}
-
-.fof-line-head {
-  font-weight: 700;
-  border-bottom: 1px solid black;
-}
-
-.fof-line-code {
-  width: 0.8in;
-  flex-shrink: 0;
-  font-family: inherit;
-}
-
-.fof-line-desc {
-  flex: 1;
-}
-
-.fof-line-fee {
-  width: 1in;
-  flex-shrink: 0;
-  text-align: right;
-}
-
-.fof-note {
-  font-size: 9pt;
-  margin-bottom: 8pt;
-}
-
 .fof-meta {
   display: flex;
   justify-content: space-between;
