@@ -11,7 +11,7 @@
  * network. Keep it that way — the practice has no BAA covering patient
  * data in this app.
  */
-import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -38,6 +38,8 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import {
+  ChevronDown,
+  ChevronUp,
   DollarSign,
   Loader2,
   Plus,
@@ -306,6 +308,37 @@ function ScaledPreview({ children }: { children: React.ReactNode }) {
   );
 }
 
+interface SectionHeaderProps {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  /** Shown at the right while the section is closed. */
+  summary?: string;
+  extra?: ReactNode;
+}
+
+/** Clickable card header that opens/closes its section. */
+function SectionHeader({ title, open, onToggle, summary, extra }: SectionHeaderProps) {
+  return (
+    <CardHeader className="pb-3 cursor-pointer select-none" onClick={onToggle}>
+      <div className="flex items-center justify-between gap-2">
+        <CardTitle className="text-base">{title}</CardTitle>
+        <div className="flex items-center gap-2 min-w-0">
+          {extra}
+          {!open && summary && (
+            <span className="text-sm text-muted-foreground truncate">{summary}</span>
+          )}
+          {open ? (
+            <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          )}
+        </div>
+      </div>
+    </CardHeader>
+  );
+}
+
 interface OverrideRowProps {
   label: string;
   computedCents: Cents;
@@ -344,6 +377,10 @@ export default function FofBuilder() {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [feeScheduleId, setFeeScheduleId] = useState<string>(NO_SCHEDULE);
+  // Collapsible builder sections (UI-only; patient data untouched).
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const toggleSection = (key: string) =>
+    setCollapsed(c => ({ ...c, [key]: !c[key] }));
   // Table-of-allowance plans: a second schedule holding the set dollar
   // amounts the plan pays per code (patient owes the difference).
   const [payScheduleId, setPayScheduleId] = useState<string>(NO_SCHEDULE);
@@ -618,6 +655,11 @@ export default function FofBuilder() {
   );
 
   const isSenior = state.isSenior === 'yes';
+
+  // Manual dollars taken off the top (collapsed-section summary).
+  const manualAdjustmentsCents =
+    (parseCurrencyInput(state.officeDiscountInput) ?? 0) +
+    (parseCurrencyInput(state.patientCreditInput) ?? 0);
 
   // Discount rules (membership/senior) key off the portion BEFORE any
   // rule-derived discount: total − manual discounts/credit − insurance.
@@ -953,10 +995,13 @@ export default function FofBuilder() {
             </Card>
 
             <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Procedures</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
+              <SectionHeader
+                title="Procedures"
+                open={!collapsed.procedures}
+                onToggle={() => toggleSection('procedures')}
+                summary={`${feeLines.length} · ${formatCents(estimate.totalCents)}`}
+              />
+              <CardContent className={collapsed.procedures ? 'hidden' : 'space-y-2'}>
                 {state.lines.map((line, i) => {
                   const lineCode = line.code.trim().toUpperCase();
                   const autoAllowed = allowedByCode.get(lineCode);
@@ -1134,34 +1179,6 @@ export default function FofBuilder() {
                     Total: {formatCents(estimate.totalCents)}
                   </span>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2 pt-1">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="fof-office-discount">Office Discount (optional)</Label>
-                    <Input
-                      id="fof-office-discount"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      placeholder="$0.00"
-                      value={state.officeDiscountInput}
-                      onChange={setField('officeDiscountInput')}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="fof-credit">Patient Current Credit (optional)</Label>
-                    <Input
-                      id="fof-credit"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      placeholder="$0.00"
-                      value={state.patientCreditInput}
-                      onChange={setField('patientCreditInput')}
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  These print under the Total only when an amount is entered, and reduce
-                  the Patient's Portion.
-                </p>
                 <div className="space-y-1.5 pt-1">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="fof-note">Treatment description (prints on the form)</Label>
@@ -1200,12 +1217,57 @@ export default function FofBuilder() {
               </CardContent>
             </Card>
 
+            <Card>
+              <SectionHeader
+                title="Discounts & Credits"
+                open={!collapsed.discounts}
+                onToggle={() => toggleSection('discounts')}
+                summary={
+                  manualAdjustmentsCents > 0 ? `−${formatCents(manualAdjustmentsCents)}` : 'None'
+                }
+              />
+              <CardContent className={collapsed.discounts ? 'hidden' : 'space-y-2'}>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fof-office-discount">Office Discount (optional)</Label>
+                    <Input
+                      id="fof-office-discount"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      placeholder="$0.00"
+                      value={state.officeDiscountInput}
+                      onChange={setField('officeDiscountInput')}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fof-credit">Patient Current Credit (optional)</Label>
+                    <Input
+                      id="fof-credit"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      placeholder="$0.00"
+                      value={state.patientCreditInput}
+                      onChange={setField('patientCreditInput')}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  These print under the Total only when an amount is entered, and reduce
+                  the Patient's Portion. Courtesy discounts (senior, membership, prepay)
+                  apply automatically per the template.
+                </p>
+              </CardContent>
+            </Card>
+
             {insuranceEnabled && (
               <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Insurance</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
+                <SectionHeader
+                  title="Insurance"
+                  open={!collapsed.insurance}
+                  onToggle={() => toggleSection('insurance')}
+                  summary={insuranceActive ? selectedSchedule?.name : 'No carrier selected'}
+                />
+                <CardContent className={collapsed.insurance ? 'hidden' : 'space-y-3'}>
                   <div className="space-y-1.5">
                     <Label>Carrier Fee Schedule</Label>
                     <Select value={feeScheduleId} onValueChange={handleScheduleChange}>
@@ -1399,18 +1461,28 @@ export default function FofBuilder() {
 
             {computation && (
               <Card>
-                <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
-                  <CardTitle className="text-base">Computed Amounts</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => dispatch({ type: 'clearOverrides' })}
-                  >
-                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                    Reset all
-                  </Button>
-                </CardHeader>
-                <CardContent className="space-y-2">
+                <SectionHeader
+                  title="Amounts & Payment Plan"
+                  open={!collapsed.amounts}
+                  onToggle={() => toggleSection('amounts')}
+                  summary={`You pay ${formatCents(computation.effective.patientPortionCents)}`}
+                  extra={
+                    !collapsed.amounts && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={e => {
+                          e.stopPropagation();
+                          dispatch({ type: 'clearOverrides' });
+                        }}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                        Reset all
+                      </Button>
+                    )
+                  }
+                />
+                <CardContent className={collapsed.amounts ? 'hidden' : 'space-y-2'}>
                   {insuranceEnabled && (
                     <>
                       <OverrideRow
