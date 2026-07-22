@@ -426,15 +426,17 @@
    under it), so the caption owns the space below the line. */
 .fof-sig-ack {
   margin: 0 0 14pt;
-  padding-left: 2.5in;
-  font-size: 9pt;
+  padding-left: 2in;
+  /* Sized so the blank + full sentence (through "plan:") stay on ONE line
+     of a letter page; the hanging indent is only a wrap fallback. */
+  font-size: 8.5pt;
   line-height: 1.5;
 }
 
 .fof-sig-ack-blank {
   display: inline-block;
-  width: 2.4in;
-  margin-left: -2.5in;
+  width: 1.9in;
+  margin-left: -2in;
   position: relative;
   vertical-align: baseline;
 }

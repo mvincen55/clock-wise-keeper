@@ -390,6 +390,22 @@ describe('estimateInsurance', () => {
     expect(result.perLine[2].insurancePaysCents).toBe(50_000);
   });
 
+  it('per-line payment override: used verbatim, still bounded by the remaining max', () => {
+    const result = estimateInsurance(
+      [
+        line({ officeFeeCents: 100_000, allowedCents: 80_000, insurancePaysOverrideCents: 55_000 }),
+        line({ category: 'major', officeFeeCents: 100_000, allowedCents: 100_000 }),
+      ],
+      plan,
+      { remainingDeductibleCents: 5_000, remainingAnnualMaxCents: 60_000 }
+    );
+    // Override replaces the computed 80% math and skips the deductible
+    expect(result.perLine[0].insurancePaysCents).toBe(55_000);
+    expect(result.perLine[0].deductibleAppliedCents).toBe(0);
+    // …and it drew down the max: only 50.00 left for line 2
+    expect(result.perLine[1].insurancePaysCents).toBe(5_000);
+  });
+
   it('full-flow sanity: patient portion = total − writeoffs − insurance', () => {
     const lines = [
       line({ category: 'preventive', officeFeeCents: 15_000, allowedCents: 12_000 }),

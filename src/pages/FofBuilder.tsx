@@ -83,6 +83,10 @@ import { DEFAULT_PRACTICE_INFO } from '@/lib/fof/defaults';
 import type { Cents, FofAmounts, FofOverrides, FofTemplate } from '@/lib/fof/types';
 
 const NO_SCHEDULE = '__none__';
+// OON carriers the office has no fee schedule for: the full insurance
+// estimate still runs, with allowable fees defaulting to office fees and
+// every amount typed/overridable per line.
+const MANUAL_SCHEDULE = '__manual__';
 
 // Alternate-benefit downgrades: plans commonly pay posterior composites
 // at the corresponding amalgam rate (by surface count).
@@ -127,6 +131,8 @@ interface BuilderLine {
   category: FeeCategory;
   feeInput: string;
   allowedInput: string;
+  /** Per-line insurance payment override; '' = computed automatically. */
+  insPayInput: string;
   /** '' = downgrade applies (default for D2391–D2394), 'off' = plan pays composite rates. */
   downgrade: string;
 }
@@ -141,6 +147,7 @@ const newLine = (): BuilderLine => ({
   category: 'other',
   feeInput: '',
   allowedInput: '',
+  insPayInput: '',
   downgrade: '',
 });
 
@@ -406,7 +413,7 @@ export default function FofBuilder() {
   const insuranceEnabled = !!template?.showInsuranceEstimate;
   const insuranceActive = insuranceEnabled && feeScheduleId !== NO_SCHEDULE;
   const { data: carrierItems } = useFeeScheduleItems(
-    insuranceActive ? feeScheduleId : null
+    insuranceActive && feeScheduleId !== MANUAL_SCHEDULE ? feeScheduleId : null
   );
   const payActive = insuranceActive && payScheduleId !== NO_SCHEDULE;
   const { data: payItems } = useFeeScheduleItems(payActive ? payScheduleId : null);
@@ -449,7 +456,9 @@ export default function FofBuilder() {
       patch: match
         ? {
             code: match.code,
-            description: match.description,
+            // Auto-fill with the patient-friendly wording that prints on
+            // the form (schedule description as fallback).
+            description: friendlyCdtName(match.code) || match.description,
             feeInput: formatCents(match.feeCents),
             category: match.category,
           }
@@ -484,16 +493,18 @@ export default function FofBuilder() {
     }
   };
 
-  // Code box doubles as a search box: match by code prefix or by words in
-  // the description ("crown" → D2740…). Hidden once an exact code is set.
+  // Code box doubles as a search box: match by code prefix, schedule
+  // description, or the patient-friendly name ("crown" → D2740…).
+  // Hidden once an exact code is set.
   const codeSuggestions = (query: string) => {
     const q = query.trim().toLowerCase();
     if (q.length < 2 || officeByCode.has(query.trim().toUpperCase())) return [];
     const items = officeItems ?? [];
+    const matchesText = (it: (typeof items)[number]) =>
+      it.description.toLowerCase().includes(q) ||
+      (friendlyCdtName(it.code) || '').toLowerCase().includes(q);
     const byCode = items.filter(it => it.code.toLowerCase().startsWith(q));
-    const byDesc = items.filter(
-      it => !it.code.toLowerCase().startsWith(q) && it.description.toLowerCase().includes(q)
-    );
+    const byDesc = items.filter(it => !it.code.toLowerCase().startsWith(q) && matchesText(it));
     return [...byCode, ...byDesc].slice(0, 6);
   };
 
@@ -512,7 +523,7 @@ export default function FofBuilder() {
     return {
       ...newLine(),
       code: match?.code ?? rawCode.toUpperCase(),
-      description: match?.description ?? '',
+      description: match ? friendlyCdtName(match.code) || match.description : '',
       feeInput: match ? formatCents(match.feeCents) : '',
       category: match?.category ?? categorizeCdtCode(rawCode.toUpperCase()),
     };
@@ -566,7 +577,7 @@ export default function FofBuilder() {
       ? renewalVisitRaw
       : null;
 
-  const feeLines: FofLine[] = useMemo(
+  const feeLineEntries = useMemo(
     () =>
       state.lines
         .filter(l => l.code.trim() !== '' || l.description.trim() !== '' || l.feeInput.trim() !== '')
@@ -575,6 +586,8 @@ export default function FofBuilder() {
           // Downgrades are decided per line (default on for D2391–D2394).
           const downgradeCode = l.downgrade !== 'off' ? DOWNGRADE_MAP[code] : undefined;
           return {
+            key: l.key,
+            visit: effectiveVisit(l),
             line: {
               code,
               description: l.description.trim(),
@@ -592,16 +605,21 @@ export default function FofBuilder() {
                   0
                 : null,
               inRenewalYear: renewalVisit !== null && effectiveVisit(l) >= renewalVisit,
+              insurancePaysOverrideCents: l.insPayInput.trim()
+                ? parseCurrencyInput(l.insPayInput)
+                : null,
             } satisfies FofLine,
-            visit: effectiveVisit(l),
           };
         })
         // Benefits are consumed chronologically: deductible/max math runs
         // in visit order even if the list hasn't been re-sorted yet.
-        .sort((a, b) => a.visit - b.visit)
-        .map(entry => entry.line),
+        .sort((a, b) => a.visit - b.visit),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [state.lines, allowedByCode, payActive, payByCode, renewalVisit]
+  );
+  const feeLines: FofLine[] = useMemo(
+    () => feeLineEntries.map(entry => entry.line),
+    [feeLineEntries]
   );
 
   const clampPct = (value: string, fallback: number) => {
@@ -653,6 +671,17 @@ export default function FofBuilder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [feeLines, planRules, state.deductibleInput, state.annualMaxInput, state.spans2Years, state.nextMaxInput, state.nextDedInput]
   );
+
+  // Per-row estimates keyed back to builder lines (entries are visit-sorted
+  // in the same order estimateInsurance processed them).
+  const perLineByKey = useMemo(() => {
+    const map = new Map<string, (typeof estimate.perLine)[number]>();
+    feeLineEntries.forEach((entry, i) => {
+      const lineEstimate = estimate.perLine[i];
+      if (lineEstimate) map.set(entry.key, lineEstimate);
+    });
+    return map;
+  }, [feeLineEntries, estimate]);
 
   const isSenior = state.isSenior === 'yes';
 
@@ -812,17 +841,15 @@ export default function FofBuilder() {
   );
 
   // The printout shows one patient-friendly treatment line (like the
-  // office's existing forms), not the itemized code/fee list. It writes
-  // itself from the procedures using plain-English CDT names and tooth
-  // numbers; typing in the field takes over.
+  // office's existing forms), not the itemized code/fee list. Each row's
+  // Description IS what prints (it auto-fills patient-friendly); a
+  // blanked description intentionally omits that procedure from the line.
   const autoTreatment = useMemo(() => {
     const groups: { label: string; teeth: string[] }[] = [];
     for (const l of state.lines) {
       const code = l.code.trim();
       if (!code && !l.description.trim() && !l.feeInput.trim()) continue;
-      // No friendly name and no description = intentionally unnamed —
-      // omit from the printed line rather than exposing a raw code.
-      const label = friendlyCdtName(code) || l.description.trim();
+      const label = l.description.trim();
       if (!label) continue;
       let group = groups.find(g => g.label === label);
       if (!group) {
@@ -1051,7 +1078,13 @@ export default function FofBuilder() {
                           ))}
                         </div>
                       )}
-                      <div className="grid grid-cols-3 sm:grid-cols-[3.5rem_3.5rem_minmax(4.5rem,1fr)_6.5rem_6.5rem] gap-1.5">
+                      <div
+                        className={
+                          insuranceEnabled
+                            ? 'grid grid-cols-3 sm:grid-cols-[3.2rem_3.2rem_minmax(4rem,1fr)_5.8rem_5.8rem_5.8rem] gap-1.5'
+                            : 'grid grid-cols-3 sm:grid-cols-[3.5rem_3.5rem_minmax(4.5rem,1fr)_6.5rem] gap-1.5'
+                        }
+                      >
                         <div className="space-y-0.5">
                           <span className={microLabel}>Tooth</span>
                           <Input
@@ -1106,23 +1139,64 @@ export default function FofBuilder() {
                           />
                         </div>
                         {insuranceEnabled && (
-                          <div className="space-y-0.5">
-                            <span className={microLabel}>Allowed</span>
-                            <Input
-                              inputMode="decimal"
-                              autoComplete="off"
-                              placeholder={
-                                line.category === 'other'
-                                  ? 'office fee'
-                                  : autoAllowed !== undefined
-                                    ? formatCents(autoAllowed)
+                          <>
+                            <div className="space-y-0.5">
+                              <span className={microLabel}>Allowable</span>
+                              <Input
+                                inputMode="decimal"
+                                autoComplete="off"
+                                placeholder={
+                                  line.category === 'other' || autoAllowed === undefined
+                                    ? 'office fee'
                                     : 'auto'
-                              }
-                              className="text-right"
-                              value={line.allowedInput}
-                              onChange={e => dispatch({ type: 'setLine', index: i, patch: { allowedInput: e.target.value } })}
-                            />
-                          </div>
+                                }
+                                className="text-right"
+                                value={
+                                  line.allowedInput !== ''
+                                    ? line.allowedInput
+                                    : autoAllowed !== undefined
+                                      ? formatCents(autoAllowed)
+                                      : ''
+                                }
+                                onChange={e => dispatch({ type: 'setLine', index: i, patch: { allowedInput: e.target.value } })}
+                              />
+                            </div>
+                            <div className="space-y-0.5">
+                              <span className={microLabel}>Ins Pays</span>
+                              <Input
+                                inputMode="decimal"
+                                autoComplete="off"
+                                placeholder="$0.00"
+                                className="text-right"
+                                value={
+                                  line.insPayInput !== ''
+                                    ? line.insPayInput
+                                    : insuranceActive
+                                      ? formatCents(
+                                          perLineByKey.get(line.key)?.insurancePaysCents ?? 0
+                                        )
+                                      : ''
+                                }
+                                onChange={e => dispatch({ type: 'setLine', index: i, patch: { insPayInput: e.target.value } })}
+                                onBlur={() => {
+                                  // Snap to what the plan can actually pay:
+                                  // an override beyond the remaining max (or
+                                  // unparseable) settles to the effective
+                                  // amount so the cell never overstates.
+                                  if (line.insPayInput.trim() === '') return;
+                                  const typed = parseCurrencyInput(line.insPayInput);
+                                  const effective = perLineByKey.get(line.key)?.insurancePaysCents;
+                                  if (effective !== undefined && typed !== effective) {
+                                    dispatch({
+                                      type: 'setLine',
+                                      index: i,
+                                      patch: { insPayInput: formatCents(effective) },
+                                    });
+                                  }
+                                }}
+                              />
+                            </div>
+                          </>
                         )}
                       </div>
                       {insuranceActive && downgradeTo && (
@@ -1180,34 +1254,36 @@ export default function FofBuilder() {
                   </span>
                 </div>
                 <div className="space-y-1.5 pt-1">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="fof-note">Treatment description (prints on the form)</Label>
+                  <Label htmlFor="fof-note">Treatment description (prints on the form)</Label>
+                  <div className="relative">
+                    <Textarea
+                      id="fof-note"
+                      autoComplete="off"
+                      rows={2}
+                      className="pr-16"
+                      placeholder="Writes itself from the procedures above"
+                      value={noteEdited ? state.note : autoTreatment}
+                      onChange={e => {
+                        dispatch({ type: 'set', field: 'note', value: e.target.value });
+                        dispatch({ type: 'set', field: 'noteEdited', value: 'yes' });
+                      }}
+                    />
                     {noteEdited && (
                       <Button
-                        variant="ghost"
+                        variant="secondary"
                         size="sm"
-                        className="h-7 text-xs"
+                        className="absolute bottom-1 right-1 h-5 px-1.5 text-[10px]"
+                        title="Rewrite from the procedures"
                         onClick={() => {
                           dispatch({ type: 'set', field: 'note', value: '' });
                           dispatch({ type: 'set', field: 'noteEdited', value: '' });
                         }}
                       >
-                        <RotateCcw className="h-3 w-3 mr-1" />
-                        Back to auto
+                        <RotateCcw className="h-2.5 w-2.5 mr-0.5" />
+                        auto
                       </Button>
                     )}
                   </div>
-                  <Textarea
-                    id="fof-note"
-                    autoComplete="off"
-                    rows={2}
-                    placeholder="Writes itself from the procedures above"
-                    value={noteEdited ? state.note : autoTreatment}
-                    onChange={e => {
-                      dispatch({ type: 'set', field: 'note', value: e.target.value });
-                      dispatch({ type: 'set', field: 'noteEdited', value: 'yes' });
-                    }}
-                  />
                   <p className="text-xs text-muted-foreground">
                     Writes itself from the procedures and stays editable — once you change
                     it, your wording sticks ("Back to auto" re-syncs). Individual codes and
@@ -1265,7 +1341,13 @@ export default function FofBuilder() {
                   title="Insurance"
                   open={!collapsed.insurance}
                   onToggle={() => toggleSection('insurance')}
-                  summary={insuranceActive ? selectedSchedule?.name : 'No carrier selected'}
+                  summary={
+                    !insuranceActive
+                      ? 'No carrier selected'
+                      : feeScheduleId === MANUAL_SCHEDULE
+                        ? 'Out of network — manual'
+                        : selectedSchedule?.name
+                  }
                 />
                 <CardContent className={collapsed.insurance ? 'hidden' : 'space-y-3'}>
                   <div className="space-y-1.5">
@@ -1275,7 +1357,10 @@ export default function FofBuilder() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={NO_SCHEDULE}>None — enter amounts manually</SelectItem>
+                        <SelectItem value={NO_SCHEDULE}>None — no insurance on this form</SelectItem>
+                        <SelectItem value={MANUAL_SCHEDULE}>
+                          Out of network — no fee schedule (enter amounts manually)
+                        </SelectItem>
                         {(schedules ?? []).filter(sch => sch.kind === 'carrier' && sch.isActive).map(sch => (
                           <SelectItem key={sch.id} value={sch.id}>{sch.name}</SelectItem>
                         ))}
@@ -1445,6 +1530,13 @@ export default function FofBuilder() {
                           Preventive doesn't count toward the annual max
                         </Label>
                       </div>
+                      {state.annualMaxInput.trim() !== '' && (
+                        <p className="text-xs font-medium">
+                          {estimate.maxedOut
+                            ? 'This treatment uses up the patient’s annual max — the form will say so.'
+                            : `${formatCents(estimate.remainingMaxCents)} of the patient’s annual max is left after this treatment.`}
+                        </p>
+                      )}
                       <p className="text-xs text-muted-foreground">
                         Write-offs {writeoffsApplied ? 'apply on this form' : "don't apply on this form"} —
                         they follow the carrier's "In network" marker on the Fee Schedules page.

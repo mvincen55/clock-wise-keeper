@@ -49,6 +49,12 @@ export interface FofLine {
    * instead of when the current year's max happens to run out.
    */
   inRenewalYear?: boolean;
+  /**
+   * Staff wrote the insurance payment for this line: use it verbatim
+   * (no deductible/percentage math), still bounded by the remaining max
+   * so the rest of the estimate stays consistent.
+   */
+  insurancePaysOverrideCents?: Cents | null;
 }
 
 export interface PlanRules {
@@ -102,6 +108,8 @@ export interface InsuranceEstimate {
    * later visits will be out of pocket until benefits renew.
    */
   maxedOut: boolean;
+  /** What's left of the (current) annual max after this treatment. */
+  remainingMaxCents: Cents;
   perLine: LineEstimate[];
 }
 
@@ -139,6 +147,7 @@ export function estimateInsurance(
       insurancePaysCents: 0,
       deductibleUsedCents: 0,
       maxedOut: false,
+      remainingMaxCents: Math.max(0, benefits.remainingAnnualMaxCents),
       perLine: lines.map(line => ({
         officeFeeCents: line.officeFeeCents,
         allowedCents: line.allowedCents ?? line.officeFeeCents,
@@ -181,8 +190,15 @@ export function estimateInsurance(
 
     let deductibleApplied = 0;
     let insurancePays = 0;
+    const payOverride = line.insurancePaysOverrideCents ?? null;
 
-    if (covered) {
+    if (payOverride !== null) {
+      insurancePays = Math.max(0, payOverride);
+      if (!exemptFromMax) {
+        insurancePays = Math.min(insurancePays, remainingMax);
+        remainingMax -= insurancePays;
+      }
+    } else if (covered) {
       // Downgraded lines pay benefits from the alternate (e.g. amalgam)
       // fee even though the patient is charged for the actual procedure.
       const benefitBasis = Math.min(line.benefitBasisCents ?? allowed, allowed);
@@ -222,6 +238,7 @@ export function estimateInsurance(
     // Maxed only once every benefit year in play is spent — an untouched
     // renewal year means benefits are still available.
     maxedOut: remainingMax <= 0 && !renewal,
+    remainingMaxCents: remainingMax,
     perLine,
   };
 }
