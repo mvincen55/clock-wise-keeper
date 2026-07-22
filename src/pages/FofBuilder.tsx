@@ -11,7 +11,7 @@
  * network. Keep it that way — the practice has no BAA covering patient
  * data in this app.
  */
-import { Fragment, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -179,6 +179,7 @@ type BuilderAction =
   | { type: 'setLine'; index: number; patch: Partial<BuilderLine> }
   | { type: 'addLine' }
   | { type: 'addLines'; lines: BuilderLine[] }
+  | { type: 'setLines'; lines: BuilderLine[] }
   | { type: 'removeLine'; index: number }
   | { type: 'setInstallment'; index: number; value: string }
   | { type: 'clearOverrides' }
@@ -225,6 +226,8 @@ function reducer(state: BuilderState, action: BuilderAction): BuilderState {
     }
     case 'addLine':
       return { ...state, lines: [...state.lines, newLine()] };
+    case 'setLines':
+      return { ...state, lines: action.lines.length ? action.lines : [newLine()] };
     case 'addLines': {
       // Drop fully empty rows before appending a bundle's lines.
       const existing = state.lines.filter(
@@ -415,6 +418,28 @@ export default function FofBuilder() {
     });
   };
 
+  // Changing a visit number re-files the line into visit order (on blur,
+  // so rows don't jump mid-keystroke). Untyped lines sort by their
+  // suggested stage; empty lines sink to the bottom; ties keep their order.
+  const visitSortKey = (l: BuilderLine): number => {
+    const typed = parseInt(l.visit, 10);
+    if (!isNaN(typed)) return typed;
+    const code = l.code.trim();
+    if (!code) return 99;
+    const segments = visitSegmentsForCode(code);
+    if (segments.length > 1) return Math.min(...segments.map(s => s.stage));
+    return suggestVisitStage(code);
+  };
+  const sortLinesByVisit = () => {
+    const sorted = state.lines
+      .map((l, i) => [l, i] as const)
+      .sort((a, b) => visitSortKey(a[0]) - visitSortKey(b[0]) || a[1] - b[1])
+      .map(([l]) => l);
+    if (sorted.some((l, i) => l !== state.lines[i])) {
+      dispatch({ type: 'setLines', lines: sorted });
+    }
+  };
+
   // Code box doubles as a search box: match by code prefix or by words in
   // the description ("crown" → D2740…). Hidden once an exact code is set.
   const codeSuggestions = (query: string) => {
@@ -473,7 +498,12 @@ export default function FofBuilder() {
 
   const handleScheduleChange = (nextId: string) => {
     setFeeScheduleId(nextId);
-    if (nextId === NO_SCHEDULE || nextId === payScheduleId) setPayScheduleId(NO_SCHEDULE);
+    setPayScheduleId(NO_SCHEDULE);
+    // A different carrier means a different plan: plan-specific toggles
+    // start from their defaults (all off) rather than carrying over.
+    dispatch({ type: 'set', field: 'afterMaxState', value: '' });
+    dispatch({ type: 'set', field: 'prevExemptState', value: '' });
+    dispatch({ type: 'set', field: 'spans2Years', value: '' });
     if (nextId !== NO_SCHEDULE) {
       if (state.deductibleInput.trim() === '') {
         dispatch({ type: 'set', field: 'deductibleInput', value: '$50.00' });
@@ -903,140 +933,148 @@ export default function FofBuilder() {
                 <CardTitle className="text-base">Procedures</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <div className="hidden sm:grid grid-cols-[4.6rem_1fr_2.9rem_2.9rem_4.5rem_5rem_5rem_2rem] gap-1.5 text-xs text-muted-foreground px-1">
-                  <span>Code</span>
-                  <span>Description</span>
-                  <span>Tooth</span>
-                  <span>Visit</span>
-                  <span>Category</span>
-                  <span className="text-right">Office Fee</span>
-                  {insuranceEnabled ? <span className="text-right">Allowed</span> : <span />}
-                  <span />
-                </div>
                 {state.lines.map((line, i) => {
                   const lineCode = line.code.trim().toUpperCase();
                   const autoAllowed = allowedByCode.get(lineCode);
                   const downgradeTo = DOWNGRADE_MAP[lineCode];
                   const suggestions = codeSuggestions(line.code);
+                  const microLabel = 'text-[10px] uppercase tracking-wide text-muted-foreground';
                   return (
-                    <Fragment key={line.key}>
-                    <div className="grid sm:grid-cols-[4.6rem_1fr_2.9rem_2.9rem_4.5rem_5rem_5rem_2rem] grid-cols-2 gap-1.5 items-center">
-                      <Input
-                        placeholder="D2740 / crown"
-                        autoComplete="off"
-                        className="font-mono"
-                        value={line.code}
-                        onChange={e => handleCodeChange(i, e.target.value)}
-                      />
-                      <Input
-                        placeholder="Description"
-                        autoComplete="off"
-                        value={line.description}
-                        onChange={e => dispatch({ type: 'setLine', index: i, patch: { description: e.target.value } })}
-                      />
-                      <Input
-                        placeholder="#"
-                        autoComplete="off"
-                        className="text-center"
-                        value={line.tooth}
-                        onChange={e => dispatch({ type: 'setLine', index: i, patch: { tooth: e.target.value } })}
-                      />
-                      <Input
-                        inputMode="numeric"
-                        autoComplete="off"
-                        className="text-center"
-                        placeholder={
-                          visitSegmentsForCode(line.code).length > 1
-                            ? 'auto'
-                            : String(suggestVisitStage(line.code))
-                        }
-                        value={line.visit}
-                        onChange={e => dispatch({ type: 'setLine', index: i, patch: { visit: e.target.value } })}
-                      />
-                      <Select
-                        value={line.category}
-                        onValueChange={v => dispatch({ type: 'setLine', index: i, patch: { category: v as FeeCategory } })}
-                      >
-                        <SelectTrigger className="h-10">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(Object.keys(CATEGORY_SHORT) as FeeCategory[]).map(c => (
-                            <SelectItem key={c} value={c}>{CATEGORY_SHORT[c]}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        inputMode="decimal"
-                        autoComplete="off"
-                        placeholder="$0.00"
-                        className="text-right"
-                        value={line.feeInput}
-                        onChange={e => dispatch({ type: 'setLine', index: i, patch: { feeInput: e.target.value } })}
-                      />
-                      {insuranceEnabled ? (
+                    <div key={line.key} className="rounded-md border p-2 space-y-1.5">
+                      <div className="flex gap-1.5 items-center">
                         <Input
-                          inputMode="decimal"
+                          placeholder="D2740 / crown"
                           autoComplete="off"
-                          placeholder={
-                            line.category === 'other'
-                              ? 'office fee'
-                              : autoAllowed !== undefined
-                                ? formatCents(autoAllowed)
-                                : 'auto'
-                          }
-                          className="text-right"
-                          value={line.allowedInput}
-                          onChange={e => dispatch({ type: 'setLine', index: i, patch: { allowedInput: e.target.value } })}
+                          className="font-mono w-28 shrink-0"
+                          value={line.code}
+                          onChange={e => handleCodeChange(i, e.target.value)}
                         />
-                      ) : (
-                        <span className="hidden sm:block" />
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive"
-                        onClick={() => dispatch({ type: 'removeLine', index: i })}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                    {suggestions.length > 0 && (
-                      <div className="flex flex-wrap gap-1 pl-1">
-                        {suggestions.map(it => (
-                          <Button
-                            key={it.id}
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-7 px-2 text-xs font-normal"
-                            onClick={() => handleCodeChange(i, it.code)}
-                          >
-                            <span className="font-mono mr-1.5">{it.code}</span>
-                            <span className="max-w-[16rem] truncate">{it.description}</span>
-                          </Button>
-                        ))}
-                      </div>
-                    )}
-                    {insuranceActive && downgradeTo && (
-                      <div className="flex items-center gap-2 pl-1">
-                        <Switch
-                          id={`fof-dg-${line.key}`}
-                          checked={line.downgrade !== 'off'}
-                          onCheckedChange={v =>
-                            dispatch({ type: 'setLine', index: i, patch: { downgrade: v ? '' : 'off' } })
-                          }
+                        <Input
+                          placeholder="Description"
+                          autoComplete="off"
+                          className="flex-1 min-w-0"
+                          value={line.description}
+                          onChange={e => dispatch({ type: 'setLine', index: i, patch: { description: e.target.value } })}
                         />
-                        <Label
-                          htmlFor={`fof-dg-${line.key}`}
-                          className="text-xs text-muted-foreground font-normal"
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 text-destructive"
+                          onClick={() => dispatch({ type: 'removeLine', index: i })}
                         >
-                          Downgrades to amalgam benefit ({downgradeTo}) — turn off if this plan
-                          pays composite rates
-                        </Label>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
-                    )}
-                    </Fragment>
+                      {suggestions.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {suggestions.map(it => (
+                            <Button
+                              key={it.id}
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2 text-xs font-normal"
+                              onClick={() => handleCodeChange(i, it.code)}
+                            >
+                              <span className="font-mono mr-1.5">{it.code}</span>
+                              <span className="max-w-[16rem] truncate">{it.description}</span>
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="grid grid-cols-3 sm:grid-cols-[3.5rem_3.5rem_minmax(4.5rem,1fr)_6.5rem_6.5rem] gap-1.5">
+                        <div className="space-y-0.5">
+                          <span className={microLabel}>Tooth</span>
+                          <Input
+                            placeholder="#"
+                            autoComplete="off"
+                            className="text-center"
+                            value={line.tooth}
+                            onChange={e => dispatch({ type: 'setLine', index: i, patch: { tooth: e.target.value } })}
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className={microLabel}>Visit</span>
+                          <Input
+                            inputMode="numeric"
+                            autoComplete="off"
+                            className="text-center"
+                            placeholder={
+                              visitSegmentsForCode(line.code).length > 1
+                                ? 'auto'
+                                : String(suggestVisitStage(line.code))
+                            }
+                            value={line.visit}
+                            onChange={e => dispatch({ type: 'setLine', index: i, patch: { visit: e.target.value } })}
+                            onBlur={sortLinesByVisit}
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className={microLabel}>Category</span>
+                          <Select
+                            value={line.category}
+                            onValueChange={v => dispatch({ type: 'setLine', index: i, patch: { category: v as FeeCategory } })}
+                          >
+                            <SelectTrigger className="h-10">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(Object.keys(CATEGORY_SHORT) as FeeCategory[]).map(c => (
+                                <SelectItem key={c} value={c}>{CATEGORY_SHORT[c]}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className={microLabel}>Office Fee</span>
+                          <Input
+                            inputMode="decimal"
+                            autoComplete="off"
+                            placeholder="$0.00"
+                            className="text-right"
+                            value={line.feeInput}
+                            onChange={e => dispatch({ type: 'setLine', index: i, patch: { feeInput: e.target.value } })}
+                          />
+                        </div>
+                        {insuranceEnabled && (
+                          <div className="space-y-0.5">
+                            <span className={microLabel}>Allowed</span>
+                            <Input
+                              inputMode="decimal"
+                              autoComplete="off"
+                              placeholder={
+                                line.category === 'other'
+                                  ? 'office fee'
+                                  : autoAllowed !== undefined
+                                    ? formatCents(autoAllowed)
+                                    : 'auto'
+                              }
+                              className="text-right"
+                              value={line.allowedInput}
+                              onChange={e => dispatch({ type: 'setLine', index: i, patch: { allowedInput: e.target.value } })}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      {insuranceActive && downgradeTo && (
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            id={`fof-dg-${line.key}`}
+                            checked={line.downgrade !== 'off'}
+                            onCheckedChange={v =>
+                              dispatch({ type: 'setLine', index: i, patch: { downgrade: v ? '' : 'off' } })
+                            }
+                          />
+                          <Label
+                            htmlFor={`fof-dg-${line.key}`}
+                            className="text-xs text-muted-foreground font-normal"
+                          >
+                            Downgrades to amalgam benefit ({downgradeTo}) — turn off if this plan
+                            pays composite rates
+                          </Label>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
                 <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -1160,29 +1198,32 @@ export default function FofBuilder() {
                   </div>
                   {insuranceActive && (
                     <>
-                      <div className="space-y-1.5">
-                        <Label>Plan Payment Schedule (fee-schedule plans — optional)</Label>
-                        <Select value={payScheduleId} onValueChange={setPayScheduleId}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value={NO_SCHEDULE}>
-                              None — plan pays category percentages
-                            </SelectItem>
-                            {(schedules ?? [])
-                              .filter(sch => sch.kind === 'carrier' && sch.isActive && sch.id !== feeScheduleId)
-                              .map(sch => (
-                                <SelectItem key={sch.id} value={sch.id}>{sch.name}</SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          For plans that pay a set dollar amount per code (some DD plans):
-                          import the payment amounts as their own fee schedule and pick it
-                          here. The patient owes the difference up to the carrier fee.
-                        </p>
-                      </div>
+                      {(schedules ?? []).some(sch => sch.kind === 'payment' && sch.isActive) && (
+                        <div className="space-y-1.5">
+                          <Label>Plan Payment Table (fee-schedule plans — optional)</Label>
+                          <Select value={payScheduleId} onValueChange={setPayScheduleId}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NO_SCHEDULE}>
+                                None — plan pays category percentages
+                              </SelectItem>
+                              {(schedules ?? [])
+                                .filter(sch => sch.kind === 'payment' && sch.isActive)
+                                .map(sch => (
+                                  <SelectItem key={sch.id} value={sch.id}>{sch.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            For plans that pay a set dollar amount per code: the plan pays
+                            its table amount and the patient owes the difference up to the
+                            {' '}{selectedSchedule?.name ?? 'carrier'} fee. Payment tables
+                            are imported on the Fee Schedules page.
+                          </p>
+                        </div>
+                      )}
                       {!payActive && (
                         <div className="grid gap-3 grid-cols-3">
                           <div className="space-y-1.5">
