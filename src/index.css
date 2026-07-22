@@ -147,11 +147,11 @@
 }
 
 .fof-sheet {
-  --fof-navy: #1f3a5c;
-  --fof-ink: #16202c;
-  --fof-muted: #55606c;
-  --fof-line: #c9d2dc;
-  --fof-tint: #eef3f8;
+  --fof-navy: #53406e; /* office deep purple */
+  --fof-ink: #2b2733;
+  --fof-muted: #6b6577;
+  --fof-line: #d5cfe0;
+  --fof-tint: #f3f0f8; /* office light purple */
   width: 7.5in;
   /* Letter page minus 0.5in margins; flex column pushes the footer to the
      true bottom of the page in both preview and print. */
@@ -189,7 +189,7 @@
 
 .fof-logo {
   display: block;
-  height: 0.78in;
+  height: 1in;
   width: auto;
 }
 
@@ -314,7 +314,7 @@
   margin: 0;
   font-size: 7.5pt;
   line-height: 1.45;
-  color: #33404d;
+  color: #3d3749;
 }
 
 /* Agreement cards: title band + horizontal payment cells */
@@ -383,7 +383,7 @@
 }
 
 .fof-cell-total .fof-cell-head {
-  color: #cdd9e6;
+  color: #d8d0e6;
 }
 
 .fof-cell-total .fof-cell-amount {
@@ -398,7 +398,7 @@
   padding: 6pt 10pt;
   font-size: 7.2pt;
   line-height: 1.45;
-  color: #33404d;
+  color: #3d3749;
   margin-bottom: 8pt;
 }
 

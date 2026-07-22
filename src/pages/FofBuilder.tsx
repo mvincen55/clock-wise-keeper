@@ -407,12 +407,11 @@ export default function FofBuilder() {
     [template, isSenior, portionBeforeAutoDiscount]
   );
 
-  // In-network plans get no prepay option at all — the write-off is the
-  // negotiated saving, so only the installment agreement is offered.
-  // Staff can also toggle either agreement per form.
-  const prepayShown = plan?.isInNetwork
-    ? false
-    : state.prepayOptionState === ''
+  // The TEMPLATE decides which agreements are offered (the In-Network
+  // template ships with prepay off); the plan's network flag only affects
+  // write-off math. Staff can toggle either agreement per form.
+  const prepayShown =
+    state.prepayOptionState === ''
       ? template?.showPrepayOption ?? false
       : state.prepayOptionState === 'on';
   const installmentShown =
@@ -425,10 +424,9 @@ export default function FofBuilder() {
         showPrepayOption: prepayShown,
         showInstallmentOption: installmentShown,
         // Discount rules decide the prepay percentage (template default,
-        // senior-suppressed, or membership +5%); in-network zeroes it all.
+        // senior-suppressed, or membership +5%).
         discountPercent: discounts?.prepayDiscountPercent ?? template.discountPercent,
         discountLabel: discounts?.prepayDiscountLabel ?? template.discountLabel,
-        ...(plan?.isInNetwork ? { discountPercent: 0, discountLabel: '', prepayNote: '' } : {}),
       }
     : undefined;
 
@@ -581,7 +579,6 @@ export default function FofBuilder() {
                     <Switch
                       id="opt-prepay"
                       checked={prepayShown}
-                      disabled={!!plan?.isInNetwork}
                       onCheckedChange={v =>
                         dispatch({ type: 'set', field: 'prepayOptionState', value: v ? 'on' : 'off' })
                       }
@@ -614,12 +611,6 @@ export default function FofBuilder() {
                 {discounts?.autoDiscount && (
                   <p className="text-xs text-muted-foreground">
                     {discounts.autoDiscount.label} applies automatically — no prepay required.
-                  </p>
-                )}
-                {plan?.isInNetwork && (
-                  <p className="text-xs text-muted-foreground">
-                    In-network plan — the prepay option is not offered; the form shows the
-                    Payment Installment Agreement only.
                   </p>
                 )}
                 <div className="grid gap-3 sm:grid-cols-2">
