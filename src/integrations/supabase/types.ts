@@ -854,17 +854,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fee_schedule_items_schedule_id_fkey"
-            columns: ["schedule_id"]
-            isOneToOne: false
-            referencedRelation: "fee_schedules"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "fee_schedule_items_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fee_schedule_items_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "fee_schedules"
             referencedColumns: ["id"]
           },
         ]
@@ -1199,8 +1199,8 @@ export type Database = {
           is_active: boolean
           is_in_network: boolean
           major_pct: number
-          office_fees_after_max: boolean
           name: string
+          office_fees_after_max: boolean
           org_id: string
           preventive_pct: number
           sort_order: number
@@ -1247,17 +1247,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "insurance_plans_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "orgs"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "insurance_plans_fee_schedule_id_fkey"
             columns: ["fee_schedule_id"]
             isOneToOne: false
             referencedRelation: "fee_schedules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insurance_plans_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
         ]
