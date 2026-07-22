@@ -96,11 +96,8 @@ Deno.serve(async (req) => {
       mimeType = String(body.contentType ?? "application/octet-stream");
 
       if (mimeType === "application/pdf") {
-        const pdf = await getDocumentProxy(bytes);
-        const extracted = await extractText(pdf, { mergePages: true });
-        text = normalizeText(
-          Array.isArray(extracted.text) ? extracted.text.join("\n\n") : extracted.text
-        );
+        const raw = await extractPdfTextViaAI(body.base64, String(body.filename ?? "document.pdf"));
+        text = normalizeText(raw);
       } else if (mimeType.startsWith("text/") || mimeType === "application/octet-stream") {
         text = normalizeText(new TextDecoder().decode(bytes));
       } else {
