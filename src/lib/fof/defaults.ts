@@ -84,7 +84,8 @@ export const DEFAULT_TEMPLATES: FofTemplateSeed[] = [
     discountPercent: 10,
     discountLabel: 'Prepay Discount',
     showInsuranceEstimate: true,
-    showWriteOff: true,
+    // Write-offs are an in-network concept — OON forms never show the row.
+    showWriteOff: false,
     showPrepayOption: true,
     prepayNote: DEFAULT_PREPAY_NOTE,
     insuranceNote: DEFAULT_INSURANCE_NOTE,
