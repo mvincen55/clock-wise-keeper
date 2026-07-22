@@ -86,6 +86,18 @@ export default function FofPrintSheet({
           <span>Total (Estimated) Cost{validityMark}:</span>
           <span>{formatCents(totalCents)}</span>
         </div>
+        {(amounts.officeDiscountCents ?? 0) > 0 && (
+          <div className="fof-cost-row">
+            <span>Office Discount:</span>
+            <span>−{formatCents(amounts.officeDiscountCents!)}</span>
+          </div>
+        )}
+        {(amounts.patientCreditCents ?? 0) > 0 && (
+          <div className="fof-cost-row">
+            <span>Patient Current Credit:</span>
+            <span>−{formatCents(amounts.patientCreditCents!)}</span>
+          </div>
+        )}
         {template.showInsuranceEstimate && (
           <div className="fof-cost-row">
             <span>Estimated Insurance Payment{insuranceMark}:</span>
