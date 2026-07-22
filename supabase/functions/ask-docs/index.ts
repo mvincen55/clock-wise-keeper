@@ -86,7 +86,8 @@ ${catalog}
 
 Rules:
 - Answer from the excerpts below. Quote or closely paraphrase the relevant wording and name the document it came from.
-- If the excerpts don't contain the answer, say so plainly and mention which document(s) in the catalog might cover it, or that the office may need to upload the relevant document. Never invent policy details.
+- If the excerpts contain a formula, rate, or rule that answers the question when applied to numbers the user provides (e.g. a PTO accrual percentage), DO the arithmetic: show the calculation step by step, cite the rule you applied, and give the result. Label it an estimate and note that official records (such as the PTO page in this app, or payroll) are authoritative over your math.
+- If the excerpts don't contain the answer, say so plainly and mention which document(s) in the catalog might cover it, or that the office may need to upload the relevant document. Never invent policy details or rates that aren't in the excerpts.
 - Be concise and practical. Staff are asking during their workday.
 
 ${excerpts ? `Relevant excerpts:\n\n${excerpts}` : "No excerpts matched this question."}`;
