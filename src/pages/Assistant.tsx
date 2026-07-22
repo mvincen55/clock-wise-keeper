@@ -48,6 +48,7 @@ import {
   type OfficeDoc,
   type OfficeDocCategory,
 } from '@/hooks/useOfficeDocs';
+import { useOrgContext } from '@/hooks/useOrgContext';
 
 const SUGGESTED_QUESTIONS = [
   'What is our PTO accrual policy?',
@@ -281,8 +282,11 @@ function UploadDialog({ open, onClose }: { open: boolean; onClose: () => void })
 
 function DocsPanel() {
   const { data: docs, isLoading } = useOfficeDocs();
+  const { data: ctx } = useOrgContext();
   const deleteDoc = useDeleteOfficeDoc();
   const [uploadOpen, setUploadOpen] = useState(false);
+
+  const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
   return (
     <div className="space-y-3">
@@ -290,11 +294,18 @@ function DocsPanel() {
         <p className="text-sm text-muted-foreground">
           {docs?.length ?? 0} document{docs?.length === 1 ? '' : 's'} in the knowledge base
         </p>
-        <Button size="sm" onClick={() => setUploadOpen(true)}>
-          <Plus className="h-4 w-4 mr-1.5" />
-          Add Document
-        </Button>
+        {isManager && (
+          <Button size="sm" onClick={() => setUploadOpen(true)}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            Add Document
+          </Button>
+        )}
       </div>
+      {!isManager && (
+        <p className="text-xs text-muted-foreground">
+          Only managers can add or remove documents. Ask a manager if something is missing.
+        </p>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center py-10">
@@ -321,20 +332,22 @@ function DocsPanel() {
                     {Math.max(1, Math.round(doc.char_count / 1000))}k characters
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-destructive shrink-0"
-                  onClick={() => {
-                    if (confirm(`Remove "${doc.title}" from the knowledge base?`)) {
-                      deleteDoc.mutate(doc, {
-                        onError: err => toast.error(`Delete failed: ${err.message}`),
-                      });
-                    }
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {isManager && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive shrink-0"
+                    onClick={() => {
+                      if (confirm(`Remove "${doc.title}" from the knowledge base?`)) {
+                        deleteDoc.mutate(doc, {
+                          onError: err => toast.error(`Delete failed: ${err.message}`),
+                        });
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ))}

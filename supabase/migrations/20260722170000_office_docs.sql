@@ -31,27 +31,28 @@ CREATE INDEX idx_office_doc_chunks_tsv ON public.office_doc_chunks USING GIN(tsv
 ALTER TABLE public.office_docs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.office_doc_chunks ENABLE ROW LEVEL SECURITY;
 
+-- All staff can read/ask; only owners and managers can add or remove docs.
 CREATE POLICY "Members read office_docs"
   ON public.office_docs FOR SELECT
   TO authenticated
   USING (is_org_member(org_id));
 
-CREATE POLICY "Members manage office_docs"
+CREATE POLICY "Admins manage office_docs"
   ON public.office_docs FOR ALL
   TO authenticated
-  USING (is_org_member(org_id))
-  WITH CHECK (is_org_member(org_id));
+  USING (is_org_admin(org_id))
+  WITH CHECK (is_org_admin(org_id));
 
 CREATE POLICY "Members read office_doc_chunks"
   ON public.office_doc_chunks FOR SELECT
   TO authenticated
   USING (is_org_member(org_id));
 
-CREATE POLICY "Members manage office_doc_chunks"
+CREATE POLICY "Admins manage office_doc_chunks"
   ON public.office_doc_chunks FOR ALL
   TO authenticated
-  USING (is_org_member(org_id))
-  WITH CHECK (is_org_member(org_id));
+  USING (is_org_admin(org_id))
+  WITH CHECK (is_org_admin(org_id));
 
 -- Ranked full-text search over the caller's visible chunks (RLS applies:
 -- SECURITY INVOKER). websearch syntax: quoted phrases, OR, minus-exclusions.
@@ -72,10 +73,10 @@ $$;
 -- Private bucket for the original uploaded files, foldered by org id.
 INSERT INTO storage.buckets (id, name, public) VALUES ('office-docs', 'office-docs', false);
 
-CREATE POLICY "Org members upload office docs" ON storage.objects
+CREATE POLICY "Org admins upload office docs" ON storage.objects
 FOR INSERT WITH CHECK (
   bucket_id = 'office-docs'
-  AND is_org_member(((storage.foldername(name))[1])::uuid)
+  AND is_org_admin(((storage.foldername(name))[1])::uuid)
 );
 
 CREATE POLICY "Org members read office docs" ON storage.objects
@@ -84,8 +85,8 @@ FOR SELECT USING (
   AND is_org_member(((storage.foldername(name))[1])::uuid)
 );
 
-CREATE POLICY "Org members delete office docs" ON storage.objects
+CREATE POLICY "Org admins delete office docs" ON storage.objects
 FOR DELETE USING (
   bucket_id = 'office-docs'
-  AND is_org_member(((storage.foldername(name))[1])::uuid)
+  AND is_org_admin(((storage.foldername(name))[1])::uuid)
 );

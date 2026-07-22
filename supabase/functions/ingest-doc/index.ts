@@ -40,12 +40,15 @@ Deno.serve(async (req) => {
 
     const { data: membership } = await supabase
       .from("org_members")
-      .select("org_id")
+      .select("org_id, role")
       .eq("user_id", user.id)
       .eq("status", "active")
       .limit(1)
       .maybeSingle();
     if (!membership) return json({ error: "No active organization membership" }, 403);
+    if (membership.role !== "owner" && membership.role !== "manager") {
+      return json({ error: "Only managers can add documents" }, 403);
+    }
     const orgId = membership.org_id;
 
     const body = await req.json();
