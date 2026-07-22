@@ -47,7 +47,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
           <NotificationBell />
         </div>
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
           {navItems.map(item => {
             const active = location.pathname === item.to;
             return (
