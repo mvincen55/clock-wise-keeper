@@ -27,6 +27,13 @@ export interface FofLine {
   officeFeeCents: Cents;
   /** Plan allowed fee; null = no schedule entry, falls back to office fee. */
   allowedCents: Cents | null;
+  /**
+   * Alternate-benefit basis (downgrade): when set, the insurance payment
+   * is computed from THIS fee (e.g. the amalgam allowed fee for a
+   * posterior composite) while the patient's charge and any write-off
+   * stay based on the actual procedure.
+   */
+  benefitBasisCents?: Cents | null;
 }
 
 export interface PlanRules {
@@ -141,12 +148,15 @@ export function estimateInsurance(
     let insurancePays = 0;
 
     if (covered) {
+      // Downgraded lines pay benefits from the alternate (e.g. amalgam)
+      // fee even though the patient is charged for the actual procedure.
+      const benefitBasis = Math.min(line.benefitBasisCents ?? allowed, allowed);
       const deductibleWaived = line.category === 'preventive' && plan.deductibleWaivedPreventive;
       if (!deductibleWaived && remainingDeductible > 0) {
-        deductibleApplied = Math.min(remainingDeductible, allowed);
+        deductibleApplied = Math.min(remainingDeductible, benefitBasis);
         remainingDeductible -= deductibleApplied;
       }
-      insurancePays = percentOfCents(allowed - deductibleApplied, pct);
+      insurancePays = percentOfCents(benefitBasis - deductibleApplied, pct);
       insurancePays = Math.min(insurancePays, remainingMax);
       remainingMax -= insurancePays;
     }
