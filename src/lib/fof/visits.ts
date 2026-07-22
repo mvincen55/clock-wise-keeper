@@ -114,6 +114,57 @@ function codeNumber(code: string): number | null {
  * - endodontics (3000-3999): half at Scheduling, half At Treatment
  * - everything else: half at Scheduling, half At Appointment
  */
+/**
+ * Suggested treatment stage for a code (staff can override per line):
+ * 1 = surgery/extraction/graft (and anything single-visit),
+ * 2 = implant placement / endo, 3 = restoration & prosthetics.
+ * Stages present on a form compress to consecutive visit numbers.
+ */
+export function suggestVisitStage(code: string): number {
+  const n = codeNumber(code);
+  if (n === null) return 1;
+  if ((n >= 7000 && n < 8000) || (n >= 4210 && n < 4300)) return 1;
+  if ((n >= 6000 && n < 6200) || (n >= 3000 && n < 4000)) return 2;
+  if ((n >= 2500 && n < 3000) || (n >= 5000 && n < 5900) || (n >= 6200 && n < 6800)) return 3;
+  return 1;
+}
+
+/**
+ * Build the payment schedule from actual per-visit work, "half a visit
+ * ahead": Upon Scheduling collects half of Visit 1; each visit start
+ * collects the rest of that visit plus half of the next; the final visit
+ * collects its remaining half. The patient portion is allocated across
+ * visits proportionally to each visit's fees; the schedule always sums
+ * exactly to the portion and the balance never runs behind the work.
+ */
+export function buildVisitSchedule(
+  portionCents: Cents,
+  visits: { label: string; feeCents: Cents }[]
+): VisitPlan | null {
+  if (visits.length === 0) return null;
+  const weights = visits.map(v => Math.max(0, v.feeCents));
+  if (weights.every(w => w === 0)) return null;
+  const alloc = splitCentsWeighted(portionCents, weights);
+  const halves = alloc.map(a => Math.round(a / 2));
+  const n = alloc.length;
+
+  const payments: Cents[] = [halves[0]];
+  for (let i = 0; i < n - 1; i++) {
+    payments.push(alloc[i] - halves[i] + halves[i + 1]);
+  }
+  payments.push(alloc[n - 1] - halves[n - 1]);
+
+  const labels = [
+    'Upon Scheduling',
+    ...visits.map((v, i) =>
+      n === 1
+        ? `At Appointment${v.label ? ` · ${v.label}` : ''}`
+        : `At Visit ${i + 1}${v.label ? ` · ${v.label}` : ''}`
+    ),
+  ];
+  return { key: 'visitSchedule', labels, weights: payments };
+}
+
 export function decideVisitPlan(codes: string[]): VisitPlan {
   const RANK: Record<string, number> = {
     single2: 0, endo2: 1, surgery2: 2, crownBridge3: 3, denture3: 4, implant3: 5,

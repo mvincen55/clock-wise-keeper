@@ -70,9 +70,11 @@ import { categorizeCdtCode } from '@/lib/fof/cdt';
 import { friendlyCdtName } from '@/lib/fof/cdt-names';
 import { computeFofDiscounts } from '@/lib/fof/discounts';
 import {
+  buildVisitSchedule,
   DAY_OF_SERVICE_THRESHOLD_CENTS,
   decideVisitPlan,
   planForCount,
+  suggestVisitStage,
   VISIT_PLANS,
 } from '@/lib/fof/visits';
 import { DEFAULT_PRACTICE_INFO } from '@/lib/fof/defaults';
@@ -98,6 +100,7 @@ interface BuilderLine {
   code: string;
   description: string;
   tooth: string;
+  visit: string;
   category: FeeCategory;
   feeInput: string;
   allowedInput: string;
@@ -109,6 +112,7 @@ const newLine = (): BuilderLine => ({
   code: '',
   description: '',
   tooth: '',
+  visit: '',
   category: 'other',
   feeInput: '',
   allowedInput: '',
@@ -480,10 +484,34 @@ export default function FofBuilder() {
     0,
     portionBeforeAutoDiscount - (discounts?.autoDiscount?.cents ?? 0)
   );
+  // Per-visit schedule from the actual treatment plan: each line's Visit #
+  // (typed, or auto-suggested from the code) groups work into visits; the
+  // portion is allocated by each visit's fees, paid "half a visit ahead".
+  const visitWork = useMemo(() => {
+    const active = state.lines.filter(
+      l => l.code.trim() !== '' || l.description.trim() !== '' || l.feeInput.trim() !== ''
+    );
+    if (active.length === 0) return null;
+    const entries = active.map(l => ({
+      raw: Math.max(1, parseInt(l.visit, 10) || suggestVisitStage(l.code)),
+      feeCents: parseCurrencyInput(l.feeInput) ?? 0,
+      label: friendlyCdtName(l.code) || l.description.trim() || l.code.trim(),
+    }));
+    const distinct = [...new Set(entries.map(e => e.raw))].sort((a, b) => a - b);
+    return distinct.map(v => {
+      const group = entries.filter(e => e.raw === v);
+      const top = group.reduce((best, e) => (e.feeCents > best.feeCents ? e : best), group[0]);
+      return { label: top.label, feeCents: group.reduce((sum, e) => sum + e.feeCents, 0) };
+    });
+  }, [state.lines]);
+
+  const schedulePortion = parseOverride(state.portionOverride) ?? projectedPortion;
+  const scheduleFromVisits = visitWork ? buildVisitSchedule(schedulePortion, visitWork) : null;
+
   const autoVisitPlan =
     projectedPortion > 0 && projectedPortion < DAY_OF_SERVICE_THRESHOLD_CENTS
       ? VISIT_PLANS.dayOfService
-      : treatmentVisitPlan;
+      : scheduleFromVisits ?? treatmentVisitPlan;
   const visitPlan =
     overrideCount >= 1 && overrideCount <= 4 ? planForCount(overrideCount) : autoVisitPlan;
 
@@ -727,10 +755,11 @@ export default function FofBuilder() {
                     <option key={item.id} value={item.code}>{item.description}</option>
                   ))}
                 </datalist>
-                <div className="hidden sm:grid grid-cols-[5rem_1fr_3.5rem_4.75rem_5.5rem_5.5rem_2rem] gap-1.5 text-xs text-muted-foreground px-1">
+                <div className="hidden sm:grid grid-cols-[4.6rem_1fr_2.9rem_2.9rem_4.5rem_5rem_5rem_2rem] gap-1.5 text-xs text-muted-foreground px-1">
                   <span>Code</span>
                   <span>Description</span>
                   <span>Tooth</span>
+                  <span>Visit</span>
                   <span>Category</span>
                   <span className="text-right">Office Fee</span>
                   {insuranceEnabled ? <span className="text-right">Allowed</span> : <span />}
@@ -739,7 +768,7 @@ export default function FofBuilder() {
                 {state.lines.map((line, i) => {
                   const autoAllowed = allowedByCode.get(line.code.trim());
                   return (
-                    <div key={line.key} className="grid sm:grid-cols-[5rem_1fr_3.5rem_4.75rem_5.5rem_5.5rem_2rem] grid-cols-2 gap-1.5 items-center">
+                    <div key={line.key} className="grid sm:grid-cols-[4.6rem_1fr_2.9rem_2.9rem_4.5rem_5rem_5rem_2rem] grid-cols-2 gap-1.5 items-center">
                       <Input
                         list="fof-code-list"
                         placeholder="D2740"
@@ -760,6 +789,14 @@ export default function FofBuilder() {
                         className="text-center"
                         value={line.tooth}
                         onChange={e => dispatch({ type: 'setLine', index: i, patch: { tooth: e.target.value } })}
+                      />
+                      <Input
+                        inputMode="numeric"
+                        autoComplete="off"
+                        className="text-center"
+                        placeholder={String(suggestVisitStage(line.code))}
+                        value={line.visit}
+                        onChange={e => dispatch({ type: 'setLine', index: i, patch: { visit: e.target.value } })}
                       />
                       <Select
                         value={line.category}
