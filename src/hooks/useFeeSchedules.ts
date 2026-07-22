@@ -312,3 +312,67 @@ export function useDeleteInsurancePlan() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['insurance-plans'] }),
   });
 }
+
+// Named procedure bundles ("Implant", "Denture"...) — reusable groups of
+// codes that expand into builder lines with current fees.
+
+export interface ProcedureBundle {
+  id: string;
+  name: string;
+  codes: string[];
+}
+
+export function useProcedureBundles() {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+
+  return useQuery({
+    queryKey: ['fof-bundles', ctx?.org_id],
+    enabled: !!user && !!ctx,
+    queryFn: async (): Promise<ProcedureBundle[]> => {
+      const { data, error } = await supabase
+        .from('fof_procedure_bundles')
+        .select('*')
+        .order('sort_order')
+        .order('name');
+      if (error) throw error;
+      return (data ?? []).map(row => ({
+        id: row.id,
+        name: row.name,
+        codes: Array.isArray(row.codes) ? (row.codes as string[]) : [],
+      }));
+    },
+  });
+}
+
+export function useSaveProcedureBundle() {
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (bundle: { id?: string; name: string; codes: string[] }) => {
+      if (!ctx) throw new Error('Not authenticated');
+      if (bundle.codes.length === 0) throw new Error('Add procedures before saving a bundle');
+      const { error } = await supabase.from('fof_procedure_bundles').upsert({
+        ...(bundle.id ? { id: bundle.id } : {}),
+        org_id: ctx.org_id,
+        name: bundle.name,
+        codes: bundle.codes,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['fof-bundles'] }),
+  });
+}
+
+export function useDeleteProcedureBundle() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('fof_procedure_bundles').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['fof-bundles'] }),
+  });
+}

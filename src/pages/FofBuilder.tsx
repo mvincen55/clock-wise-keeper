@@ -30,6 +30,14 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { toast } from 'sonner';
+import {
   DollarSign,
   Loader2,
   Plus,
@@ -42,10 +50,14 @@ import {
 import FofPrintSheet from '@/components/fof/FofPrintSheet';
 import { useFofSettings, useFofTemplates } from '@/hooks/useFofTemplates';
 import {
+  useDeleteProcedureBundle,
   useFeeScheduleItems,
   useFeeSchedules,
   useInsurancePlans,
+  useProcedureBundles,
+  useSaveProcedureBundle,
 } from '@/hooks/useFeeSchedules';
+import { useOrgContext } from '@/hooks/useOrgContext';
 import { computeFof } from '@/lib/fof/compute';
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
 import {
@@ -129,6 +141,7 @@ type BuilderAction =
   | { type: 'set'; field: ScalarField; value: string }
   | { type: 'setLine'; index: number; patch: Partial<BuilderLine> }
   | { type: 'addLine' }
+  | { type: 'addLines'; lines: BuilderLine[] }
   | { type: 'removeLine'; index: number }
   | { type: 'setInstallment'; index: number; value: string }
   | { type: 'clearOverrides' }
@@ -166,6 +179,13 @@ function reducer(state: BuilderState, action: BuilderAction): BuilderState {
     }
     case 'addLine':
       return { ...state, lines: [...state.lines, newLine()] };
+    case 'addLines': {
+      // Drop fully empty rows before appending a bundle's lines.
+      const existing = state.lines.filter(
+        l => l.code.trim() !== '' || l.description.trim() !== '' || l.feeInput.trim() !== ''
+      );
+      return { ...state, lines: [...existing, ...action.lines] };
+    }
     case 'removeLine': {
       const lines = state.lines.filter((_, i) => i !== action.index);
       return { ...state, lines: lines.length ? lines : [newLine()] };
@@ -274,6 +294,14 @@ export default function FofBuilder() {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [planId, setPlanId] = useState<string>(NO_PLAN);
+  const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
+  const [bundleName, setBundleName] = useState('');
+
+  const { data: bundles } = useProcedureBundles();
+  const saveBundle = useSaveProcedureBundle();
+  const deleteBundle = useDeleteProcedureBundle();
+  const { data: orgCtx } = useOrgContext();
+  const isManager = orgCtx?.role === 'owner' || orgCtx?.role === 'manager';
 
   const activeTemplates = useMemo(
     () => (templates ?? []).filter(t => t.isActive),
@@ -330,6 +358,40 @@ export default function FofBuilder() {
     dispatch({ type: 'set', field: 'prepayOptionState', value: '' });
     dispatch({ type: 'set', field: 'installmentOptionState', value: '' });
     dispatch({ type: 'set', field: 'paymentCountOverride', value: '' });
+  };
+
+  const lineFromCode = (rawCode: string): BuilderLine => {
+    const code = rawCode.toUpperCase();
+    const match = officeByCode.get(code.trim());
+    return {
+      ...newLine(),
+      code,
+      description: match?.description ?? '',
+      feeInput: match ? formatCents(match.feeCents) : '',
+      category: match?.category ?? categorizeCdtCode(code),
+    };
+  };
+
+  const insertBundle = (bundleId: string) => {
+    const bundle = (bundles ?? []).find(b => b.id === bundleId);
+    if (!bundle) return;
+    dispatch({ type: 'addLines', lines: bundle.codes.map(lineFromCode) });
+  };
+
+  const handleSaveBundle = () => {
+    const codes = state.lines.map(l => l.code.trim()).filter(Boolean);
+    saveBundle.mutate(
+      { name: bundleName.trim(), codes },
+      {
+        onSuccess: () => {
+          // De-identified: a bundle stores only the code list and name.
+          toast.success(`Bundle "${bundleName.trim()}" saved (${codes.length} codes)`);
+          setBundleDialogOpen(false);
+          setBundleName('');
+        },
+        onError: err => toast.error(err.message),
+      }
+    );
   };
 
   const handlePlanChange = (nextPlanId: string) => {
@@ -724,7 +786,13 @@ export default function FofBuilder() {
                         <Input
                           inputMode="decimal"
                           autoComplete="off"
-                          placeholder={autoAllowed !== undefined ? formatCents(autoAllowed) : 'auto'}
+                          placeholder={
+                            line.category === 'other'
+                              ? 'office fee'
+                              : autoAllowed !== undefined
+                                ? formatCents(autoAllowed)
+                                : 'auto'
+                          }
                           className="text-right"
                           value={line.allowedInput}
                           onChange={e => dispatch({ type: 'setLine', index: i, patch: { allowedInput: e.target.value } })}
@@ -743,12 +811,36 @@ export default function FofBuilder() {
                     </div>
                   );
                 })}
-                <div className="flex items-center justify-between pt-1">
+                <div className="flex flex-wrap items-center gap-2 pt-1">
                   <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'addLine' })}>
                     <Plus className="h-3.5 w-3.5 mr-1.5" />
                     Add Procedure
                   </Button>
-                  <span className="text-sm font-medium">
+                  {(bundles ?? []).length > 0 && (
+                    <Select value="" onValueChange={insertBundle}>
+                      <SelectTrigger className="h-9 w-44">
+                        <SelectValue placeholder="Insert bundle…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(bundles ?? []).map(b => (
+                          <SelectItem key={b.id} value={b.id}>
+                            {b.name} ({b.codes.length})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {isManager && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={feeLines.length === 0}
+                      onClick={() => setBundleDialogOpen(true)}
+                    >
+                      Save as Bundle
+                    </Button>
+                  )}
+                  <span className="text-sm font-medium ml-auto">
                     Total: {formatCents(estimate.totalCents)}
                   </span>
                 </div>
@@ -981,6 +1073,60 @@ export default function FofBuilder() {
           </Card>
         </div>
       )}
+
+      <Dialog open={bundleDialogOpen} onOpenChange={open => !open && setBundleDialogOpen(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Save Procedure Bundle</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="bundle-name">Bundle Name</Label>
+              <Input
+                id="bundle-name"
+                placeholder="e.g. Implant, Denture, Crown"
+                value={bundleName}
+                onChange={e => setBundleName(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Saves the current procedure codes ({feeLines.length}) — fees always pull
+                current schedule prices when the bundle is inserted later. No patient
+                information is stored.
+              </p>
+            </div>
+            {(bundles ?? []).length > 0 && (
+              <div className="space-y-1">
+                <Label>Existing Bundles</Label>
+                {(bundles ?? []).map(b => (
+                  <div key={b.id} className="flex items-center gap-2 text-sm">
+                    <span className="flex-1">{b.name} ({b.codes.join(', ')})</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive"
+                      onClick={() =>
+                        deleteBundle.mutate(b.id, { onError: err => toast.error(err.message) })
+                      }
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBundleDialogOpen(false)}>Cancel</Button>
+            <Button
+              disabled={bundleName.trim() === '' || saveBundle.isPending}
+              onClick={handleSaveBundle}
+            >
+              {saveBundle.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save Bundle
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Hidden print copy, portaled outside #root so print CSS can show
           only the sheet. Same props as the preview — cannot diverge. */}

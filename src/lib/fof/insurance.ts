@@ -138,7 +138,9 @@ export function estimateInsurance(
 
     perLine.push({
       officeFeeCents: line.officeFeeCents,
-      allowedCents: allowed,
+      // Uncovered lines (and lines reverted after the max) fall back to
+      // the office fee — the negotiated allowed fee doesn't apply.
+      allowedCents: covered ? allowed : line.officeFeeCents,
       writeOffCents: writeOff,
       deductibleAppliedCents: deductibleApplied,
       insurancePaysCents: insurancePays,
