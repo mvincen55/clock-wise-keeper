@@ -30,6 +30,17 @@ export interface FofTemplate {
   showInstallmentOption: boolean;
   installmentCount: number;
   installmentLabels: string[];
+  /**
+   * Footnote slots with fixed asterisk markers on the printed form:
+   * validity ↔ Total Cost (*), prepay ↔ discount rows (**),
+   * insurance ↔ insurance rows (***). contactNote and extraNotes print
+   * unmarked. Empty string = omitted (and its marker disappears).
+   */
+  validityNote: string;
+  prepayNote: string;
+  insuranceNote: string;
+  contactNote: string;
+  /** Additional unmarked footnote paragraphs. */
   footnotes: string[];
   signatureIntro: string;
 }
@@ -66,6 +77,8 @@ export interface FofComputedValues {
 export interface FofComputation {
   computed: FofComputedValues;
   effective: FofComputedValues;
+  /** Labels for the installment rows actually computed (visit plan aware). */
+  installmentLabels: string[];
   overridden: {
     patientPortion: boolean;
     discount: boolean;

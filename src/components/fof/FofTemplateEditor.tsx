@@ -12,7 +12,12 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
-import { DEFAULT_SIGNATURE_INTRO } from '@/lib/fof/defaults';
+import {
+  DEFAULT_CONTACT_NOTE,
+  DEFAULT_PREPAY_NOTE,
+  DEFAULT_SIGNATURE_INTRO,
+  DEFAULT_VALIDITY_NOTE,
+} from '@/lib/fof/defaults';
 import type { FofTemplate } from '@/lib/fof/types';
 import type { FofTemplateUpsert } from '@/hooks/useFofTemplates';
 
@@ -36,7 +41,11 @@ interface EditorState {
   showInstallmentOption: boolean;
   installmentCount: string;
   installmentLabels: string;
-  footnotes: string;
+  validityNote: string;
+  prepayNote: string;
+  insuranceNote: string;
+  contactNote: string;
+  extraNotes: string;
   signatureIntro: string;
   isActive: boolean;
 }
@@ -44,14 +53,18 @@ interface EditorState {
 const NEW_TEMPLATE: EditorState = {
   name: '',
   discountPercent: '10',
-  discountLabel: 'Prepay Discount**',
+  discountLabel: 'Prepay Discount',
   showInsuranceEstimate: false,
   showWriteOff: false,
   showPrepayOption: true,
   showInstallmentOption: true,
   installmentCount: '3',
   installmentLabels: 'Visit 1 (Upon scheduling)\nVisit 2 (Prep date)\nVisit 3 (On delivery)',
-  footnotes: '',
+  validityNote: DEFAULT_VALIDITY_NOTE,
+  prepayNote: DEFAULT_PREPAY_NOTE,
+  insuranceNote: '',
+  contactNote: DEFAULT_CONTACT_NOTE,
+  extraNotes: '',
   signatureIntro: DEFAULT_SIGNATURE_INTRO,
   isActive: true,
 };
@@ -67,7 +80,11 @@ function toEditorState(t: FofTemplate): EditorState {
     showInstallmentOption: t.showInstallmentOption,
     installmentCount: String(t.installmentCount),
     installmentLabels: t.installmentLabels.join('\n'),
-    footnotes: t.footnotes.join('\n\n'),
+    validityNote: t.validityNote,
+    prepayNote: t.prepayNote,
+    insuranceNote: t.insuranceNote,
+    contactNote: t.contactNote,
+    extraNotes: t.footnotes.join('\n\n'),
     signatureIntro: t.signatureIntro,
     isActive: t.isActive,
   };
@@ -109,7 +126,11 @@ export default function FofTemplateEditor({
         .split('\n')
         .map(l => l.trim())
         .filter(Boolean),
-      footnotes: state.footnotes
+      validityNote: state.validityNote.trim(),
+      prepayNote: state.prepayNote.trim(),
+      insuranceNote: state.insuranceNote.trim(),
+      contactNote: state.contactNote.trim(),
+      footnotes: state.extraNotes
         .split(/\n{2,}/)
         .map(p => p.replace(/\n/g, ' ').trim())
         .filter(Boolean),
@@ -223,16 +244,55 @@ export default function FofTemplateEditor({
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <Label htmlFor="tpl-footnotes">
-              Footnotes (separate paragraphs with a blank line)
-            </Label>
-            <Textarea
-              id="tpl-footnotes"
-              rows={8}
-              value={state.footnotes}
-              onChange={e => set('footnotes', e.target.value)}
-            />
+          <div className="space-y-3 rounded-md border p-3">
+            <p className="text-sm font-medium">
+              Footnotes — markers print automatically next to the matching amounts
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="tpl-note-validity">* Price validity (marks Total Cost)</Label>
+              <Textarea
+                id="tpl-note-validity"
+                rows={2}
+                value={state.validityNote}
+                onChange={e => set('validityNote', e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="tpl-note-prepay">** Prepay discount terms (marks the discount)</Label>
+              <Textarea
+                id="tpl-note-prepay"
+                rows={3}
+                value={state.prepayNote}
+                onChange={e => set('prepayNote', e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="tpl-note-insurance">*** Insurance estimate disclaimer (marks the insurance rows)</Label>
+              <Textarea
+                id="tpl-note-insurance"
+                rows={3}
+                value={state.insuranceNote}
+                onChange={e => set('insuranceNote', e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="tpl-note-contact">Contact / mailing note (no marker)</Label>
+              <Textarea
+                id="tpl-note-contact"
+                rows={2}
+                value={state.contactNote}
+                onChange={e => set('contactNote', e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="tpl-note-extra">Extra notes (no marker; blank line between paragraphs)</Label>
+              <Textarea
+                id="tpl-note-extra"
+                rows={2}
+                value={state.extraNotes}
+                onChange={e => set('extraNotes', e.target.value)}
+              />
+            </div>
           </div>
 
           <div className="space-y-1.5">

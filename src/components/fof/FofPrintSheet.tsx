@@ -49,6 +49,16 @@ export default function FofPrintSheet({
   const totalCents = amounts.totalCents ?? 0;
   const showDiscountRow = template.discountPercent > 0 || template.discountLabel.trim() !== '';
 
+  // Asterisk markers are assigned deterministically so every star on the
+  // page points at exactly one footnote: * validity ↔ Total Cost,
+  // ** prepay terms ↔ discount, *** insurance disclaimer ↔ insurance rows.
+  const validityMark = template.validityNote.trim() ? '*' : '';
+  const prepayMark = template.prepayNote.trim() && showDiscountRow ? '**' : '';
+  const insuranceMark =
+    template.insuranceNote.trim() && (template.showInsuranceEstimate || template.showWriteOff)
+      ? '***'
+      : '';
+
   return (
     <div className="fof-sheet">
       <header className="fof-header">
@@ -73,18 +83,18 @@ export default function FofPrintSheet({
 
       <div className="fof-costs">
         <div className="fof-cost-row">
-          <span>Total (Estimated) Cost*:</span>
+          <span>Total (Estimated) Cost{validityMark}:</span>
           <span>{formatCents(totalCents)}</span>
         </div>
         {template.showInsuranceEstimate && (
           <div className="fof-cost-row">
-            <span>Estimated Insurance Payment***:</span>
+            <span>Estimated Insurance Payment{insuranceMark}:</span>
             <span>−{formatCents(amounts.insuranceEstimateCents ?? 0)}</span>
           </div>
         )}
         {template.showWriteOff && (
           <div className="fof-cost-row">
-            <span>Estimated Insurance Write-Off***:</span>
+            <span>Estimated Insurance Write-Off{insuranceMark}:</span>
             <span>−{formatCents(amounts.writeOffCents ?? 0)}</span>
           </div>
         )}
@@ -104,12 +114,12 @@ export default function FofPrintSheet({
             </div>
             {showDiscountRow && (
               <div className="fof-cost-row">
-                <span>{template.discountLabel}:</span>
+                <span>{template.discountLabel}{prepayMark}:</span>
                 <span>−{formatCents(effective.discountCents)}</span>
               </div>
             )}
             <div className="fof-cost-row fof-cost-total">
-              <span>TOTAL DUE*:</span>
+              <span>TOTAL DUE:</span>
               <span>{formatCents(effective.prepayTotalCents)}</span>
             </div>
           </div>
@@ -119,12 +129,12 @@ export default function FofPrintSheet({
             <div className="fof-box-title">Payment Installment Agreement</div>
             {effective.installmentsCents.map((cents, i) => (
               <div className="fof-cost-row" key={i}>
-                <span>{template.installmentLabels[i] ?? `Installment ${i + 1}`}:</span>
+                <span>{computation.installmentLabels[i] ?? `Installment ${i + 1}`}:</span>
                 <span>{formatCents(cents)}</span>
               </div>
             ))}
             <div className="fof-cost-row fof-cost-total">
-              <span>TOTAL DUE*:</span>
+              <span>TOTAL DUE:</span>
               <span>{formatCents(effective.patientPortionCents)}</span>
             </div>
           </div>
@@ -132,6 +142,10 @@ export default function FofPrintSheet({
       </div>
 
       <div className="fof-footnotes">
+        {validityMark && <p>{validityMark}{template.validityNote}</p>}
+        {prepayMark && <p>{prepayMark}{template.prepayNote}</p>}
+        {insuranceMark && <p>{insuranceMark}{template.insuranceNote}</p>}
+        {template.contactNote.trim() && <p>{template.contactNote}</p>}
         {template.footnotes.map((text, i) => (
           <p key={i}>{text}</p>
         ))}

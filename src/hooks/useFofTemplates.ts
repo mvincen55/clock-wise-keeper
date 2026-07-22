@@ -33,6 +33,10 @@ function mapTemplateRow(row: TemplateRow): FofTemplate {
     installmentLabels: Array.isArray(row.installment_labels)
       ? (row.installment_labels as string[])
       : [],
+    validityNote: row.footnote_validity,
+    prepayNote: row.footnote_prepay,
+    insuranceNote: row.footnote_insurance,
+    contactNote: row.footnote_contact,
     footnotes: Array.isArray(row.footnotes) ? (row.footnotes as string[]) : [],
     signatureIntro: row.signature_intro,
   };
@@ -61,6 +65,10 @@ function seedToInsert(seed: FofTemplateSeed, orgId: string, userId?: string): Ta
     show_installment_option: seed.showInstallmentOption,
     installment_count: seed.installmentCount,
     installment_labels: seed.installmentLabels,
+    footnote_validity: seed.validityNote,
+    footnote_prepay: seed.prepayNote,
+    footnote_insurance: seed.insuranceNote,
+    footnote_contact: seed.contactNote,
     footnotes: seed.footnotes,
     signature_intro: seed.signatureIntro,
     created_by: userId ?? null,

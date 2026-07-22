@@ -54,6 +54,8 @@ import {
   type PlanRules,
 } from '@/lib/fof/insurance';
 import { categorizeCdtCode } from '@/lib/fof/cdt';
+import { friendlyCdtName } from '@/lib/fof/cdt-names';
+import { decideVisitPlan, planForCount } from '@/lib/fof/visits';
 import { DEFAULT_PRACTICE_INFO } from '@/lib/fof/defaults';
 import type { Cents, FofAmounts, FofOverrides, FofTemplate } from '@/lib/fof/types';
 
@@ -76,6 +78,7 @@ interface BuilderLine {
   key: string;
   code: string;
   description: string;
+  tooth: string;
   category: FeeCategory;
   feeInput: string;
   allowedInput: string;
@@ -86,6 +89,7 @@ const newLine = (): BuilderLine => ({
   key: `line-${++lineCounter}`,
   code: '',
   description: '',
+  tooth: '',
   category: 'other',
   feeInput: '',
   allowedInput: '',
@@ -98,6 +102,7 @@ interface BuilderState {
   lines: BuilderLine[];
   deductibleInput: string;
   annualMaxInput: string;
+  paymentCountOverride: string;
   insuranceOverride: string;
   writeOffOverride: string;
   portionOverride: string;
@@ -124,6 +129,7 @@ const initialState = (): BuilderState => ({
   lines: [newLine()],
   deductibleInput: '',
   annualMaxInput: '',
+  paymentCountOverride: '',
   insuranceOverride: '',
   writeOffOverride: '',
   portionOverride: '',
@@ -332,6 +338,23 @@ export default function FofBuilder() {
       }
     : null;
 
+  // In-network plans get no additional prepay discount — the write-off is
+  // already the negotiated saving. Suppress the discount row entirely.
+  const effectiveTemplate: FofTemplate | undefined =
+    template && plan?.isInNetwork
+      ? { ...template, discountPercent: 0, discountLabel: '', prepayNote: '' }
+      : template;
+
+  // Payment plan follows the treatment (front-loaded for implants and
+  // dentures so the balance never runs behind the work); staff can force
+  // a specific payment count.
+  const autoVisitPlan = useMemo(
+    () => decideVisitPlan(feeLines.map(l => l.code)),
+    [feeLines]
+  );
+  const overrideCount = parseInt(state.paymentCountOverride, 10);
+  const visitPlan = overrideCount >= 1 && overrideCount <= 4 ? planForCount(overrideCount) : autoVisitPlan;
+
   const estimate = useMemo(
     () =>
       estimateInsurance(feeLines, planRules, {
@@ -362,21 +385,33 @@ export default function FofBuilder() {
   );
 
   const computation = useMemo(
-    () => (template ? computeFof(template, amounts, overrides) : null),
-    [template, amounts, overrides]
+    () => (effectiveTemplate ? computeFof(effectiveTemplate, amounts, overrides, visitPlan) : null),
+    [effectiveTemplate, amounts, overrides, visitPlan]
   );
 
   // The printout shows one patient-friendly treatment line (like the
   // office's existing forms), not the itemized code/fee list. It writes
-  // itself from the procedures; typing in the field takes over.
+  // itself from the procedures using plain-English CDT names and tooth
+  // numbers; typing in the field takes over.
   const autoTreatment = useMemo(() => {
-    const parts: string[] = [];
-    for (const l of feeLines) {
-      const label = l.description || l.code;
-      if (label && !parts.includes(label)) parts.push(label);
+    const groups: { label: string; teeth: string[] }[] = [];
+    for (const l of state.lines) {
+      const code = l.code.trim();
+      if (!code && !l.description.trim() && !l.feeInput.trim()) continue;
+      const label = friendlyCdtName(code) || l.description.trim() || code;
+      if (!label) continue;
+      let group = groups.find(g => g.label === label);
+      if (!group) {
+        group = { label, teeth: [] };
+        groups.push(group);
+      }
+      const tooth = l.tooth.trim();
+      if (tooth && !group.teeth.includes(tooth)) group.teeth.push(tooth);
     }
-    return parts.join(', ');
-  }, [feeLines]);
+    return groups
+      .map(g => (g.teeth.length ? `${g.label} ${g.teeth.map(t => `#${t}`).join(', ')}` : g.label))
+      .join(', ');
+  }, [state.lines]);
   const printedTreatment = state.note.trim() !== '' ? state.note : autoTreatment;
 
   const isDirty =
@@ -398,10 +433,10 @@ export default function FofBuilder() {
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       dispatch({ type: 'set', field, value: e.target.value });
 
-  const sheet = template && computation && (
+  const sheet = effectiveTemplate && computation && (
     <FofPrintSheet
       practice={practice ?? DEFAULT_PRACTICE_INFO}
-      template={template}
+      template={effectiveTemplate}
       patient={{ patientName: state.patientName, dateISO: state.dateISO, treatment: printedTreatment }}
       amounts={amounts}
       computation={computation}
@@ -503,9 +538,10 @@ export default function FofBuilder() {
                     <option key={item.id} value={item.code}>{item.description}</option>
                   ))}
                 </datalist>
-                <div className="hidden sm:grid grid-cols-[5.5rem_1fr_5rem_6rem_6rem_2rem] gap-1.5 text-xs text-muted-foreground px-1">
+                <div className="hidden sm:grid grid-cols-[5rem_1fr_3.5rem_4.75rem_5.5rem_5.5rem_2rem] gap-1.5 text-xs text-muted-foreground px-1">
                   <span>Code</span>
                   <span>Description</span>
+                  <span>Tooth</span>
                   <span>Category</span>
                   <span className="text-right">Office Fee</span>
                   {insuranceEnabled ? <span className="text-right">Allowed</span> : <span />}
@@ -514,7 +550,7 @@ export default function FofBuilder() {
                 {state.lines.map((line, i) => {
                   const autoAllowed = allowedByCode.get(line.code.trim());
                   return (
-                    <div key={line.key} className="grid sm:grid-cols-[5.5rem_1fr_5rem_6rem_6rem_2rem] grid-cols-2 gap-1.5 items-center">
+                    <div key={line.key} className="grid sm:grid-cols-[5rem_1fr_3.5rem_4.75rem_5.5rem_5.5rem_2rem] grid-cols-2 gap-1.5 items-center">
                       <Input
                         list="fof-code-list"
                         placeholder="D2740"
@@ -528,6 +564,13 @@ export default function FofBuilder() {
                         autoComplete="off"
                         value={line.description}
                         onChange={e => dispatch({ type: 'setLine', index: i, patch: { description: e.target.value } })}
+                      />
+                      <Input
+                        placeholder="#"
+                        autoComplete="off"
+                        className="text-center"
+                        value={line.tooth}
+                        onChange={e => dispatch({ type: 'setLine', index: i, patch: { tooth: e.target.value } })}
                       />
                       <Select
                         value={line.category}
@@ -700,15 +743,23 @@ export default function FofBuilder() {
                     overridden={computation.overridden.patientPortion}
                     onChange={v => dispatch({ type: 'set', field: 'portionOverride', value: v })}
                   />
-                  {template.showPrepayOption && (
+                  {effectiveTemplate!.showPrepayOption && (
                     <>
-                      <OverrideRow
-                        label={template.discountLabel}
-                        computedCents={computation.computed.discountCents}
-                        value={state.discountOverride}
-                        overridden={computation.overridden.discount}
-                        onChange={v => dispatch({ type: 'set', field: 'discountOverride', value: v })}
-                      />
+                      {(effectiveTemplate!.discountPercent > 0 ||
+                        effectiveTemplate!.discountLabel.trim() !== '') && (
+                        <OverrideRow
+                          label={effectiveTemplate!.discountLabel || 'Discount'}
+                          computedCents={computation.computed.discountCents}
+                          value={state.discountOverride}
+                          overridden={computation.overridden.discount}
+                          onChange={v => dispatch({ type: 'set', field: 'discountOverride', value: v })}
+                        />
+                      )}
+                      {plan?.isInNetwork && (
+                        <p className="text-xs text-muted-foreground">
+                          In-network plan — no additional prepay discount is offered.
+                        </p>
+                      )}
                       <OverrideRow
                         label="Prepay TOTAL DUE"
                         computedCents={computation.computed.prepayTotalCents}
@@ -718,17 +769,47 @@ export default function FofBuilder() {
                       />
                     </>
                   )}
-                  {template.showInstallmentOption &&
-                    computation.computed.installmentsCents.map((cents, i) => (
-                      <OverrideRow
-                        key={i}
-                        label={template.installmentLabels[i] ?? `Installment ${i + 1}`}
-                        computedCents={cents}
-                        value={state.installmentOverrides[i] ?? ''}
-                        overridden={computation.overridden.installments[i]}
-                        onChange={v => dispatch({ type: 'setInstallment', index: i, value: v })}
-                      />
-                    ))}
+                  {effectiveTemplate!.showInstallmentOption && (
+                    <>
+                      <div className="flex items-center gap-2 pt-1">
+                        <span className="flex-1 text-sm font-medium">Payment plan</span>
+                        <Select
+                          value={state.paymentCountOverride || 'auto'}
+                          onValueChange={v =>
+                            dispatch({
+                              type: 'set',
+                              field: 'paymentCountOverride',
+                              value: v === 'auto' ? '' : v,
+                            })
+                          }
+                        >
+                          <SelectTrigger className="w-56">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="auto">
+                              Auto — {autoVisitPlan.labels.length} payment{autoVisitPlan.labels.length === 1 ? '' : 's'}
+                            </SelectItem>
+                            {[1, 2, 3, 4].map(n => (
+                              <SelectItem key={n} value={String(n)}>
+                                {n} payment{n === 1 ? '' : 's'}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {computation.computed.installmentsCents.map((cents, i) => (
+                        <OverrideRow
+                          key={i}
+                          label={computation.installmentLabels[i] ?? `Installment ${i + 1}`}
+                          computedCents={cents}
+                          value={state.installmentOverrides[i] ?? ''}
+                          overridden={computation.overridden.installments[i]}
+                          onChange={v => dispatch({ type: 'setInstallment', index: i, value: v })}
+                        />
+                      ))}
+                    </>
+                  )}
                 </CardContent>
               </Card>
             )}

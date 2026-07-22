@@ -6,17 +6,23 @@ import type {
   FofTemplate,
 } from './types';
 import { percentOfCents, splitCents } from './money';
+import { splitCentsWeighted, type VisitPlan } from './visits';
 
 /**
  * Derive all money values on the form from the template rules and the
  * patient-entered amounts. Every derived value can be manually overridden;
  * overriding the patient portion re-derives discount and installments from
  * the overridden portion, while individual overrides only replace themselves.
+ *
+ * When a visit plan is provided it governs the installment count, labels,
+ * and weighting (front-loaded for lab-heavy work); otherwise the template's
+ * even split applies.
  */
 export function computeFof(
   template: FofTemplate,
   amounts: FofAmounts,
-  overrides: FofOverrides = {}
+  overrides: FofOverrides = {},
+  visitPlan?: VisitPlan
 ): FofComputation {
   const total = amounts.totalCents ?? 0;
   const insurance = template.showInsuranceEstimate ? amounts.insuranceEstimateCents ?? 0 : 0;
@@ -31,10 +37,15 @@ export function computeFof(
   const computedPrepayTotal = Math.max(0, effectivePortion - effectiveDiscount);
   const effectivePrepayTotal = overrides.prepayTotalCents ?? computedPrepayTotal;
 
-  const computedInstallments = splitCents(effectivePortion, template.installmentCount);
+  const computedInstallments = visitPlan
+    ? splitCentsWeighted(effectivePortion, visitPlan.weights)
+    : splitCents(effectivePortion, template.installmentCount);
   const effectiveInstallments = computedInstallments.map(
     (value, i) => overrides.installmentsCents?.[i] ?? value
   );
+  const installmentLabels = visitPlan
+    ? visitPlan.labels
+    : computedInstallments.map((_, i) => template.installmentLabels[i] ?? `Installment ${i + 1}`);
 
   const computed: FofComputedValues = {
     patientPortionCents: computedPortion,
@@ -52,6 +63,7 @@ export function computeFof(
   return {
     computed,
     effective,
+    installmentLabels,
     overridden: {
       patientPortion: overrides.patientPortionCents !== undefined,
       discount: overrides.discountCents !== undefined,
