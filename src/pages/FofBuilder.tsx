@@ -1178,6 +1178,22 @@ export default function FofBuilder() {
                                       : ''
                                 }
                                 onChange={e => dispatch({ type: 'setLine', index: i, patch: { insPayInput: e.target.value } })}
+                                onBlur={() => {
+                                  // Snap to what the plan can actually pay:
+                                  // an override beyond the remaining max (or
+                                  // unparseable) settles to the effective
+                                  // amount so the cell never overstates.
+                                  if (line.insPayInput.trim() === '') return;
+                                  const typed = parseCurrencyInput(line.insPayInput);
+                                  const effective = perLineByKey.get(line.key)?.insurancePaysCents;
+                                  if (effective !== undefined && typed !== effective) {
+                                    dispatch({
+                                      type: 'setLine',
+                                      index: i,
+                                      patch: { insPayInput: formatCents(effective) },
+                                    });
+                                  }
+                                }}
                               />
                             </div>
                           </>
@@ -1514,6 +1530,13 @@ export default function FofBuilder() {
                           Preventive doesn't count toward the annual max
                         </Label>
                       </div>
+                      {state.annualMaxInput.trim() !== '' && (
+                        <p className="text-xs font-medium">
+                          {estimate.maxedOut
+                            ? 'This treatment uses up the patient’s annual max — the form will say so.'
+                            : `${formatCents(estimate.remainingMaxCents)} of the patient’s annual max is left after this treatment.`}
+                        </p>
+                      )}
                       <p className="text-xs text-muted-foreground">
                         Write-offs {writeoffsApplied ? 'apply on this form' : "don't apply on this form"} —
                         they follow the carrier's "In network" marker on the Fee Schedules page.

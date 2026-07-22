@@ -108,6 +108,8 @@ export interface InsuranceEstimate {
    * later visits will be out of pocket until benefits renew.
    */
   maxedOut: boolean;
+  /** What's left of the (current) annual max after this treatment. */
+  remainingMaxCents: Cents;
   perLine: LineEstimate[];
 }
 
@@ -145,6 +147,7 @@ export function estimateInsurance(
       insurancePaysCents: 0,
       deductibleUsedCents: 0,
       maxedOut: false,
+      remainingMaxCents: Math.max(0, benefits.remainingAnnualMaxCents),
       perLine: lines.map(line => ({
         officeFeeCents: line.officeFeeCents,
         allowedCents: line.allowedCents ?? line.officeFeeCents,
@@ -235,6 +238,7 @@ export function estimateInsurance(
     // Maxed only once every benefit year in play is spent — an untouched
     // renewal year means benefits are still available.
     maxedOut: remainingMax <= 0 && !renewal,
+    remainingMaxCents: remainingMax,
     perLine,
   };
 }
