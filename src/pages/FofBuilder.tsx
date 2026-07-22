@@ -11,7 +11,7 @@
  * network. Keep it that way — the practice has no BAA covering patient
  * data in this app.
  */
-import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -96,6 +96,13 @@ const DOWNGRADE_MAP: Record<string, string> = {
 const DOWNGRADE_NOTE =
   'Your dental plan applies an "alternate benefit" to tooth-colored (composite) fillings on back teeth: insurance pays as if a silver (amalgam) filling were placed. You still receive the tooth-colored filling; the fee difference is included in your portion.';
 
+// Printed when this treatment plan uses up the patient's annual max, so
+// they aren't surprised when later visits aren't covered.
+const MAXED_NOTE =
+  "This treatment is expected to use the remainder of your dental plan's annual maximum. Until your benefits renew, additional services — including hygiene (cleaning) visits — will be your responsibility.";
+const MAXED_NOTE_PREV_EXEMPT =
+  "This treatment is expected to use the remainder of your dental plan's annual maximum. Preventive care does not count toward your maximum, so hygiene (cleaning) visits remain covered; other services will be your responsibility until your benefits renew.";
+
 const CATEGORY_SHORT: Record<FeeCategory, string> = {
   preventive: 'Prev',
   basic: 'Basic',
@@ -118,6 +125,8 @@ interface BuilderLine {
   category: FeeCategory;
   feeInput: string;
   allowedInput: string;
+  /** '' = downgrade applies (default for D2391–D2394), 'off' = plan pays composite rates. */
+  downgrade: string;
 }
 
 let lineCounter = 0;
@@ -130,6 +139,7 @@ const newLine = (): BuilderLine => ({
   category: 'other',
   feeInput: '',
   allowedInput: '',
+  downgrade: '',
 });
 
 interface BuilderState {
@@ -148,8 +158,7 @@ interface BuilderState {
   nextMaxInput: string;
   nextDedInput: string;
   afterMaxState: string; // '' or 'yes' — reverts to office fees once maxed out
-  writeoffState: string; // '' = follow template, 'yes'/'no' per-form override
-  downgradeState: string; // '' = downgrades on, 'off' = plan pays composite rates
+  prevExemptState: string; // '' or 'yes' — preventive doesn't count toward the max
   paymentCountOverride: string;
   prepayOptionState: string; // '' = follow template, 'on'/'off' = per-form override
   installmentOptionState: string;
@@ -190,8 +199,7 @@ const initialState = (): BuilderState => ({
   nextMaxInput: '$1,500.00',
   nextDedInput: '$50.00',
   afterMaxState: '',
-  writeoffState: '',
-  downgradeState: '',
+  prevExemptState: '',
   paymentCountOverride: '',
   prepayOptionState: '',
   installmentOptionState: '',
@@ -329,6 +337,9 @@ export default function FofBuilder() {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [feeScheduleId, setFeeScheduleId] = useState<string>(NO_SCHEDULE);
+  // Table-of-allowance plans: a second schedule holding the set dollar
+  // amounts the plan pays per code (patient owes the difference).
+  const [payScheduleId, setPayScheduleId] = useState<string>(NO_SCHEDULE);
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
   const [bundleName, setBundleName] = useState('');
 
@@ -353,36 +364,66 @@ export default function FofBuilder() {
   const { data: carrierItems } = useFeeScheduleItems(
     insuranceActive ? feeScheduleId : null
   );
+  const payActive = insuranceActive && payScheduleId !== NO_SCHEDULE;
+  const { data: payItems } = useFeeScheduleItems(payActive ? payScheduleId : null);
 
   const officeByCode = useMemo(() => {
-    const map = new Map<string, { description: string; feeCents: Cents; category: FeeCategory }>();
+    const map = new Map<
+      string,
+      { code: string; description: string; feeCents: Cents; category: FeeCategory }
+    >();
     for (const item of officeItems ?? []) {
-      map.set(item.code, { description: item.description, feeCents: item.feeCents, category: item.category });
+      map.set(item.code.toUpperCase(), {
+        code: item.code,
+        description: item.description,
+        feeCents: item.feeCents,
+        category: item.category,
+      });
     }
     return map;
   }, [officeItems]);
 
   const allowedByCode = useMemo(() => {
     const map = new Map<string, Cents>();
-    for (const item of carrierItems ?? []) map.set(item.code, item.feeCents);
+    for (const item of carrierItems ?? []) map.set(item.code.toUpperCase(), item.feeCents);
     return map;
   }, [carrierItems]);
 
+  const payByCode = useMemo(() => {
+    const map = new Map<string, Cents>();
+    for (const item of payItems ?? []) map.set(item.code.toUpperCase(), item.feeCents);
+    return map;
+  }, [payItems]);
+
   const handleCodeChange = (index: number, rawCode: string) => {
-    const code = rawCode.toUpperCase();
-    const match = officeByCode.get(code.trim());
+    // Exact code match (case-insensitive) fills the line; anything else is
+    // kept as typed so it can drive the description search below the row.
+    const match = officeByCode.get(rawCode.trim().toUpperCase());
     dispatch({
       type: 'setLine',
       index,
       patch: match
         ? {
-            code,
+            code: match.code,
             description: match.description,
             feeInput: formatCents(match.feeCents),
             category: match.category,
           }
-        : { code, category: categorizeCdtCode(code) },
+        : { code: rawCode, category: categorizeCdtCode(rawCode.trim().toUpperCase()) },
     });
+  };
+
+  // Code box doubles as a search box: match by code prefix or by words in
+  // the description ("crown" → D2740…). Hidden once an exact code is set.
+  const codeSuggestions = (query: string) => {
+    const q = query.trim().toLowerCase();
+    if (q.length < 2 || officeByCode.has(query.trim().toUpperCase())) return [];
+    const items = officeItems ?? [];
+    const byCode = items.filter(it => it.code.toLowerCase().startsWith(q));
+    const byDesc = items.filter(
+      it => !it.code.toLowerCase().startsWith(q) && it.description.toLowerCase().includes(q)
+    );
+    return [...byCode, ...byDesc].slice(0, 6);
   };
 
   // Template choice drives the agreement toggles: switching templates
@@ -396,14 +437,13 @@ export default function FofBuilder() {
   };
 
   const lineFromCode = (rawCode: string): BuilderLine => {
-    const code = rawCode.toUpperCase();
-    const match = officeByCode.get(code.trim());
+    const match = officeByCode.get(rawCode.trim().toUpperCase());
     return {
       ...newLine(),
-      code,
+      code: match?.code ?? rawCode.toUpperCase(),
       description: match?.description ?? '',
       feeInput: match ? formatCents(match.feeCents) : '',
-      category: match?.category ?? categorizeCdtCode(code),
+      category: match?.category ?? categorizeCdtCode(rawCode.toUpperCase()),
     };
   };
 
@@ -431,6 +471,7 @@ export default function FofBuilder() {
 
   const handleScheduleChange = (nextId: string) => {
     setFeeScheduleId(nextId);
+    if (nextId === NO_SCHEDULE || nextId === payScheduleId) setPayScheduleId(NO_SCHEDULE);
     if (nextId !== NO_SCHEDULE) {
       if (state.deductibleInput.trim() === '') {
         dispatch({ type: 'set', field: 'deductibleInput', value: '$50.00' });
@@ -441,14 +482,14 @@ export default function FofBuilder() {
     }
   };
 
-  const downgradesOn = state.downgradeState !== 'off';
   const feeLines: FofLine[] = useMemo(
     () =>
       state.lines
         .filter(l => l.code.trim() !== '' || l.description.trim() !== '' || l.feeInput.trim() !== '')
         .map(l => {
           const code = l.code.trim().toUpperCase();
-          const downgradeCode = downgradesOn ? DOWNGRADE_MAP[code] : undefined;
+          // Downgrades are decided per line (default on for D2391–D2394).
+          const downgradeCode = l.downgrade !== 'off' ? DOWNGRADE_MAP[code] : undefined;
           return {
             code,
             description: l.description.trim(),
@@ -458,9 +499,16 @@ export default function FofBuilder() {
               ? parseCurrencyInput(l.allowedInput)
               : allowedByCode.get(code) ?? null,
             benefitBasisCents: downgradeCode ? allowedByCode.get(downgradeCode) ?? null : null,
+            // Table-of-allowance plan: the set payment for the code (the
+            // amalgam entry when downgraded); missing entry = not covered.
+            fixedPayCents: payActive
+              ? (downgradeCode ? payByCode.get(downgradeCode) : undefined) ??
+                payByCode.get(code) ??
+                0
+              : null,
           };
         }),
-    [state.lines, allowedByCode, downgradesOn]
+    [state.lines, allowedByCode, payActive, payByCode]
   );
 
   const clampPct = (value: string, fallback: number) => {
@@ -468,10 +516,13 @@ export default function FofBuilder() {
     return isNaN(n) ? fallback : Math.min(100, Math.max(0, n));
   };
   // Per-form insurance settings: coverage %s and benefits are typed in
-  // directly (no plan configs); write-offs follow the template type
-  // (In-Network shows them, OON never has them).
+  // directly (no plan configs). Write-offs are automatic — they apply
+  // when the selected carrier schedule is marked in network (on the Fee
+  // Schedules page) or the template itself is the In-Network one; only
+  // contracted plans take write-offs.
+  const selectedSchedule = (schedules ?? []).find(s => s.id === feeScheduleId);
   const writeoffsApplied =
-    state.writeoffState === '' ? template?.showWriteOff ?? false : state.writeoffState === 'yes';
+    insuranceActive && ((selectedSchedule?.isInNetwork ?? false) || (template?.showWriteOff ?? false));
   const planRules: PlanRules | null = insuranceActive
     ? {
         preventivePct: clampPct(state.pctPrev, 100),
@@ -480,6 +531,7 @@ export default function FofBuilder() {
         deductibleWaivedPreventive: true,
         writeoffApplies: writeoffsApplied,
         officeFeesAfterMax: state.afterMaxState === 'yes',
+        preventiveExemptFromMax: state.prevExemptState === 'yes',
       }
     : null;
 
@@ -604,17 +656,27 @@ export default function FofBuilder() {
   // estimate is active and some line's benefit basis is below its allowed.
   const downgradeApplied =
     insuranceActive &&
-    template?.showInsuranceEstimate === true &&
     feeLines.some(
       l => l.benefitBasisCents != null && l.benefitBasisCents < (l.allowedCents ?? l.officeFeeCents)
     );
+  // Maxed-out warning: this plan of treatment spends the rest of the
+  // patient's annual max — tell them on the form (hygiene stays covered
+  // when preventive is marked as not counting toward the max).
+  const maxedOut = insuranceActive && estimate.maxedOut && state.annualMaxInput.trim() !== '';
+  const extraFootnotes: string[] = [];
+  if (downgradeApplied) extraFootnotes.push(DOWNGRADE_NOTE);
+  if (maxedOut) {
+    extraFootnotes.push(state.prevExemptState === 'yes' ? MAXED_NOTE_PREV_EXEMPT : MAXED_NOTE);
+  }
   const effectiveTemplate: FofTemplate | undefined = template
     ? {
         ...template,
         showPrepayOption: prepayShown,
         showInstallmentOption: installmentShown,
-        showWriteOff: writeoffsApplied && insuranceActive,
-        footnotes: downgradeApplied ? [...template.footnotes, DOWNGRADE_NOTE] : template.footnotes,
+        showWriteOff: writeoffsApplied,
+        footnotes: extraFootnotes.length
+          ? [...template.footnotes, ...extraFootnotes]
+          : template.footnotes,
         // Discount rules decide the prepay percentage (template default,
         // senior-suppressed, or membership +5%).
         discountPercent: discounts?.prepayDiscountPercent ?? template.discountPercent,
@@ -836,11 +898,6 @@ export default function FofBuilder() {
                 <CardTitle className="text-base">Procedures</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <datalist id="fof-code-list">
-                  {(officeItems ?? []).map(item => (
-                    <option key={item.id} value={item.code}>{item.description}</option>
-                  ))}
-                </datalist>
                 <div className="hidden sm:grid grid-cols-[4.6rem_1fr_2.9rem_2.9rem_4.5rem_5rem_5rem_2rem] gap-1.5 text-xs text-muted-foreground px-1">
                   <span>Code</span>
                   <span>Description</span>
@@ -852,12 +909,15 @@ export default function FofBuilder() {
                   <span />
                 </div>
                 {state.lines.map((line, i) => {
-                  const autoAllowed = allowedByCode.get(line.code.trim());
+                  const lineCode = line.code.trim().toUpperCase();
+                  const autoAllowed = allowedByCode.get(lineCode);
+                  const downgradeTo = DOWNGRADE_MAP[lineCode];
+                  const suggestions = codeSuggestions(line.code);
                   return (
-                    <div key={line.key} className="grid sm:grid-cols-[4.6rem_1fr_2.9rem_2.9rem_4.5rem_5rem_5rem_2rem] grid-cols-2 gap-1.5 items-center">
+                    <Fragment key={line.key}>
+                    <div className="grid sm:grid-cols-[4.6rem_1fr_2.9rem_2.9rem_4.5rem_5rem_5rem_2rem] grid-cols-2 gap-1.5 items-center">
                       <Input
-                        list="fof-code-list"
-                        placeholder="D2740"
+                        placeholder="D2740 / crown"
                         autoComplete="off"
                         className="font-mono"
                         value={line.code}
@@ -936,6 +996,42 @@ export default function FofBuilder() {
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
+                    {suggestions.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pl-1">
+                        {suggestions.map(it => (
+                          <Button
+                            key={it.id}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs font-normal"
+                            onClick={() => handleCodeChange(i, it.code)}
+                          >
+                            <span className="font-mono mr-1.5">{it.code}</span>
+                            <span className="max-w-[16rem] truncate">{it.description}</span>
+                          </Button>
+                        ))}
+                      </div>
+                    )}
+                    {insuranceActive && downgradeTo && (
+                      <div className="flex items-center gap-2 pl-1">
+                        <Switch
+                          id={`fof-dg-${line.key}`}
+                          checked={line.downgrade !== 'off'}
+                          onCheckedChange={v =>
+                            dispatch({ type: 'setLine', index: i, patch: { downgrade: v ? '' : 'off' } })
+                          }
+                        />
+                        <Label
+                          htmlFor={`fof-dg-${line.key}`}
+                          className="text-xs text-muted-foreground font-normal"
+                        >
+                          Downgrades to amalgam benefit ({downgradeTo}) — turn off if this plan
+                          pays composite rates
+                        </Label>
+                      </div>
+                    )}
+                    </Fragment>
                   );
                 })}
                 <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -1040,38 +1136,63 @@ export default function FofBuilder() {
                   </div>
                   {insuranceActive && (
                     <>
-                      <div className="grid gap-3 grid-cols-3">
-                        <div className="space-y-1.5">
-                          <Label htmlFor="fof-pct-prev">Preventive %</Label>
-                          <Input
-                            id="fof-pct-prev"
-                            inputMode="numeric"
-                            autoComplete="off"
-                            value={state.pctPrev}
-                            onChange={setField('pctPrev')}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="fof-pct-basic">Basic %</Label>
-                          <Input
-                            id="fof-pct-basic"
-                            inputMode="numeric"
-                            autoComplete="off"
-                            value={state.pctBasic}
-                            onChange={setField('pctBasic')}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="fof-pct-major">Major %</Label>
-                          <Input
-                            id="fof-pct-major"
-                            inputMode="numeric"
-                            autoComplete="off"
-                            value={state.pctMajor}
-                            onChange={setField('pctMajor')}
-                          />
-                        </div>
+                      <div className="space-y-1.5">
+                        <Label>Plan Payment Schedule (fee-schedule plans — optional)</Label>
+                        <Select value={payScheduleId} onValueChange={setPayScheduleId}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={NO_SCHEDULE}>
+                              None — plan pays category percentages
+                            </SelectItem>
+                            {(schedules ?? [])
+                              .filter(sch => sch.kind === 'carrier' && sch.isActive && sch.id !== feeScheduleId)
+                              .map(sch => (
+                                <SelectItem key={sch.id} value={sch.id}>{sch.name}</SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          For plans that pay a set dollar amount per code (some DD plans):
+                          import the payment amounts as their own fee schedule and pick it
+                          here. The patient owes the difference up to the carrier fee.
+                        </p>
                       </div>
+                      {!payActive && (
+                        <div className="grid gap-3 grid-cols-3">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="fof-pct-prev">Preventive %</Label>
+                            <Input
+                              id="fof-pct-prev"
+                              inputMode="numeric"
+                              autoComplete="off"
+                              value={state.pctPrev}
+                              onChange={setField('pctPrev')}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="fof-pct-basic">Basic %</Label>
+                            <Input
+                              id="fof-pct-basic"
+                              inputMode="numeric"
+                              autoComplete="off"
+                              value={state.pctBasic}
+                              onChange={setField('pctBasic')}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="fof-pct-major">Major %</Label>
+                            <Input
+                              id="fof-pct-major"
+                              inputMode="numeric"
+                              autoComplete="off"
+                              value={state.pctMajor}
+                              onChange={setField('pctMajor')}
+                            />
+                          </div>
+                        </div>
+                      )}
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
                           <Label htmlFor="fof-ded">Patient's Remaining Deductible</Label>
@@ -1132,30 +1253,6 @@ export default function FofBuilder() {
                       )}
                       <div className="flex items-center gap-2">
                         <Switch
-                          id="fof-writeoffs"
-                          checked={writeoffsApplied}
-                          onCheckedChange={v =>
-                            dispatch({ type: 'set', field: 'writeoffState', value: v ? 'yes' : 'no' })
-                          }
-                        />
-                        <Label htmlFor="fof-writeoffs">
-                          In-network — apply write-offs (office fee − allowed)
-                        </Label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          id="fof-downgrade"
-                          checked={downgradesOn}
-                          onCheckedChange={v =>
-                            dispatch({ type: 'set', field: 'downgradeState', value: v ? '' : 'off' })
-                          }
-                        />
-                        <Label htmlFor="fof-downgrade">
-                          Downgrade posterior composites to amalgam benefit (D2391–D2394)
-                        </Label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Switch
                           id="fof-aftermax"
                           checked={state.afterMaxState === 'yes'}
                           onCheckedChange={v =>
@@ -1166,11 +1263,25 @@ export default function FofBuilder() {
                           Reverts to office fees when maxed out (e.g. Altus, some DD plans)
                         </Label>
                       </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="fof-prev-exempt"
+                          checked={state.prevExemptState === 'yes'}
+                          onCheckedChange={v =>
+                            dispatch({ type: 'set', field: 'prevExemptState', value: v ? 'yes' : '' })
+                          }
+                        />
+                        <Label htmlFor="fof-prev-exempt">
+                          Preventive doesn't count toward the annual max
+                        </Label>
+                      </div>
                       <p className="text-xs text-muted-foreground">
+                        Write-offs {writeoffsApplied ? 'apply on this form' : "don't apply on this form"} —
+                        they follow the carrier's "In network" marker on the Fee Schedules page.
                         Allowed fees auto-fill from the selected schedule; type in the Allowed
-                        column to override a line. Downgraded lines pay benefits at the amalgam
-                        rate while the patient is charged for the actual filling. None of these
-                        patient numbers are saved.
+                        column to override a line. If this treatment maxes the patient out, the
+                        form automatically explains that later visits (including hygiene) are out
+                        of pocket. None of these patient numbers are saved.
                       </p>
                     </>
                   )}

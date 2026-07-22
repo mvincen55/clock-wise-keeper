@@ -238,14 +238,15 @@ export default function FofPrintSheet({
 
       <div className="fof-signatures">
         {/* The patient hand-writes their printed name here; only the top
-            of the form is auto-filled. */}
-        <div className="fof-sig-row fof-sig-ack">
-          <div className="fof-sig-field fof-sig-ack-name">
-            <div className="fof-sig-line" />
-            <div className="fof-sig-caption">Patient's Printed Name</div>
-          </div>
-          <div className="fof-sig-ack-text">{template.signatureIntro}</div>
-        </div>
+            of the form is auto-filled. The blank sits inline so the whole
+            thing reads as one sentence, caption tucked under the blank. */}
+        <p className="fof-sig-ack">
+          <span className="fof-sig-ack-blank">
+            <span className="fof-sig-ack-line" />
+            <span className="fof-sig-ack-caption">Patient's Printed Name</span>
+          </span>{' '}
+          {template.signatureIntro}
+        </p>
 
         <div className="fof-choices">
           {template.showPrepayOption && (

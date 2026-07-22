@@ -305,6 +305,27 @@ export default function FofFees() {
                     <span className="text-xs text-muted-foreground">
                       {schedule.itemCount ?? 0} codes
                     </span>
+                    {schedule.kind === 'carrier' && (
+                      <div className="flex items-center gap-1.5 pl-2">
+                        <Switch
+                          id={`innet-${schedule.id}`}
+                          disabled={!isManager || upsertSchedule.isPending}
+                          checked={schedule.isInNetwork}
+                          onCheckedChange={v =>
+                            upsertSchedule.mutate(
+                              { ...schedule, isInNetwork: v },
+                              { onError: err => toast.error(err.message) }
+                            )
+                          }
+                        />
+                        <Label
+                          htmlFor={`innet-${schedule.id}`}
+                          className="text-xs text-muted-foreground font-normal"
+                        >
+                          In network (auto write-offs)
+                        </Label>
+                      </div>
+                    )}
                     <div className="ml-auto flex gap-1.5">
                       {isManager && (
                         <>

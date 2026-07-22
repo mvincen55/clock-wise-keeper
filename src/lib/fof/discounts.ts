@@ -2,18 +2,19 @@ import type { Cents, FofTemplate } from './types';
 import { percentOfCents } from './money';
 
 /**
- * Office discount policy for the FOF:
+ * Office discount policy for the FOF (per the "Courtesy Credits" chart):
  *
- * - Standard (Self-Pay / Out-of-Network): prepay-in-full earns 5% under
- *   65 and 10% at 65+ (the better senior rate IS the senior benefit —
- *   no separate senior discount). Patients 65+ with a portion under
- *   $1,000 get their 10% automatically with no prepay requirement.
+ * - Contract (in-network) insurance and financing templates opt out
+ *   entirely (seniorDiscountApplies=false, membershipDiscountPercent=0);
+ *   exceptions are manager-approved via the manual Office Discount field.
+ * - Standard (Self-Pay / Out-of-Network): under 65 with treatment $1,000+
+ *   earns 5% by prepay-in-full; under $1,000 gets no discount. Patients
+ *   65+ earn 10% by prepay at $1,000+, and get the 10% senior discount
+ *   automatically under $1,000 (due at time of service anyway).
  * - Membership (Illumitrac): members always get the membership % (10%)
- *   automatically, plus a 5% prepay-in-full extra (off the same
- *   pre-discount base). Members 65+ with a portion under $1,000 get the
- *   combined 15% automatically with no prepay requirement.
- * - In-network insurance and financing templates opt out entirely
- *   (seniorDiscountApplies=false, membershipDiscountPercent=0).
+ *   automatically. Members 65+ can add a 5% prepay-in-full extra (off the
+ *   same pre-discount base), and under $1,000 get the combined 15%
+ *   automatically. Under 65 the 10% stands alone — no prepay extra.
  *
  * The patient's 65+ status is entered at form time and lives only in
  * browser memory.
@@ -68,13 +69,17 @@ export function computeFofDiscounts(
         prepayDiscountBase: 'portion',
       };
     }
+    // The +5% prepay extra is a 65+ courtesy only; under 65 the
+    // membership 10% stands alone.
     return {
       autoDiscount: {
         label: `Membership Discount (${membershipPct}%)`,
         cents: percentOfCents(portion, membershipPct),
       },
-      prepayDiscountPercent: SENIOR_RULES.membershipExtraPct,
-      prepayDiscountLabel: `Prepay Discount (${SENIOR_RULES.membershipExtraPct}%)`,
+      prepayDiscountPercent: seniorEligible ? SENIOR_RULES.membershipExtraPct : 0,
+      prepayDiscountLabel: seniorEligible
+        ? `Prepay Discount (${SENIOR_RULES.membershipExtraPct}%)`
+        : '',
       prepayDiscountBase: 'preDiscountTotal',
     };
   }
@@ -86,6 +91,15 @@ export function computeFofDiscounts(
           label: `Senior Discount (${SENIOR_RULES.standardPct}%)`,
           cents: percentOfCents(portion, SENIOR_RULES.standardPct),
         },
+        prepayDiscountPercent: 0,
+        prepayDiscountLabel: '',
+        prepayDiscountBase: 'portion',
+      };
+    }
+    // Under 65 with treatment under $1,000: no courtesy discount at all.
+    if (!isSenior && underThreshold) {
+      return {
+        autoDiscount: null,
         prepayDiscountPercent: 0,
         prepayDiscountLabel: '',
         prepayDiscountBase: 'portion',

@@ -114,10 +114,11 @@ export const DEFAULT_TEMPLATES: FofTemplateSeed[] = [
     discountPercent: 0,
     discountLabel: '',
     // Financed patients can still have insurance: estimate/write-off rows
-    // compute (and print only when non-zero); no prepay or senior
+    // compute (and print only when non-zero); write-offs apply when the
+    // selected carrier schedule is marked in network. No prepay or senior
     // discounts, and Prepay in Full defaults off (still toggleable).
     showInsuranceEstimate: true,
-    showWriteOff: true,
+    showWriteOff: false,
     showPrepayOption: false,
     prepayNote: '',
     insuranceNote: DEFAULT_INSURANCE_NOTE,

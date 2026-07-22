@@ -255,6 +255,99 @@ describe('estimateInsurance', () => {
     expect(withNull.perLine[0]).toEqual(without.perLine[0]);
   });
 
+  it('fixed-pay plan: pays the set amount and the patient owes the rest of the allowed fee', () => {
+    const result = estimateInsurance(
+      [line({ officeFeeCents: 150_000, allowedCents: 120_000, fixedPayCents: 45_000 })],
+      plan,
+      noBenefitsUsed
+    );
+    expect(result.perLine[0].insurancePaysCents).toBe(45_000); // set amount, not 80%
+    expect(result.perLine[0].writeOffCents).toBe(30_000); // office − allowed still applies
+  });
+
+  it('fixed-pay plan: deductible comes out of the set payment; payment never exceeds allowed', () => {
+    const withDed = estimateInsurance(
+      [line({ officeFeeCents: 150_000, allowedCents: 120_000, fixedPayCents: 45_000 })],
+      plan,
+      { remainingDeductibleCents: 5_000, remainingAnnualMaxCents: 1_000_000 }
+    );
+    expect(withDed.perLine[0].insurancePaysCents).toBe(40_000);
+    const overAllowed = estimateInsurance(
+      [line({ officeFeeCents: 30_000, allowedCents: 20_000, fixedPayCents: 45_000 })],
+      plan,
+      noBenefitsUsed
+    );
+    expect(overAllowed.perLine[0].insurancePaysCents).toBe(20_000); // clamped to allowed
+  });
+
+  it('fixed-pay plan: a zero set amount means the code is not covered — office fee applies', () => {
+    const result = estimateInsurance(
+      [line({ officeFeeCents: 30_000, allowedCents: 20_000, fixedPayCents: 0 })],
+      plan,
+      noBenefitsUsed
+    );
+    expect(result.perLine[0].insurancePaysCents).toBe(0);
+    expect(result.perLine[0].writeOffCents).toBe(0);
+    expect(result.perLine[0].allowedCents).toBe(30_000);
+  });
+
+  it('preventive exempt from max: hygiene still pays after the max is spent and never draws it down', () => {
+    const exemptPlan: PlanRules = { ...plan, preventiveExemptFromMax: true };
+    const result = estimateInsurance(
+      [
+        line({ category: 'major', officeFeeCents: 200_000, allowedCents: 200_000 }),
+        line({ category: 'preventive', officeFeeCents: 12_000, allowedCents: 12_000 }),
+      ],
+      exemptPlan,
+      { remainingDeductibleCents: 0, remainingAnnualMaxCents: 100_000 }
+    );
+    // Major line exhausts the max…
+    expect(result.perLine[0].insurancePaysCents).toBe(100_000);
+    // …but the cleaning still pays in full (100%), untouched by the max
+    expect(result.perLine[1].insurancePaysCents).toBe(12_000);
+  });
+
+  it('preventive exempt from max survives office-fees-after-max plans', () => {
+    const exemptPlan: PlanRules = { ...plan, preventiveExemptFromMax: true, officeFeesAfterMax: true };
+    const result = estimateInsurance(
+      [
+        line({ category: 'major', officeFeeCents: 400_000, allowedCents: 400_000 }),
+        line({ category: 'preventive', officeFeeCents: 12_000, allowedCents: 10_000 }),
+      ],
+      exemptPlan,
+      { remainingDeductibleCents: 0, remainingAnnualMaxCents: 100_000 }
+    );
+    expect(result.perLine[1].insurancePaysCents).toBe(10_000);
+    expect(result.perLine[1].writeOffCents).toBe(2_000);
+  });
+
+  it('maxedOut: true once every benefit year in play is spent, false while a renewal remains', () => {
+    const spent = estimateInsurance(
+      [line({ category: 'major', officeFeeCents: 400_000, allowedCents: 400_000 })],
+      plan,
+      { remainingDeductibleCents: 0, remainingAnnualMaxCents: 100_000 }
+    );
+    expect(spent.maxedOut).toBe(true);
+
+    const renewalLeft = estimateInsurance(
+      [line({ category: 'major', officeFeeCents: 400_000, allowedCents: 400_000 })],
+      plan,
+      {
+        remainingDeductibleCents: 0,
+        remainingAnnualMaxCents: 100_000,
+        renewal: { annualMaxCents: 150_000, deductibleCents: 5_000 },
+      }
+    );
+    expect(renewalLeft.maxedOut).toBe(false);
+
+    const plenty = estimateInsurance(
+      [line({ officeFeeCents: 10_000, allowedCents: 10_000 })],
+      plan,
+      noBenefitsUsed
+    );
+    expect(plenty.maxedOut).toBe(false);
+  });
+
   it('full-flow sanity: patient portion = total − writeoffs − insurance', () => {
     const lines = [
       line({ category: 'preventive', officeFeeCents: 15_000, allowedCents: 12_000 }),
