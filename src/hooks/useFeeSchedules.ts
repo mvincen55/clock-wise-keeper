@@ -9,7 +9,8 @@ import type { FeeCategory, PlanRules } from '@/lib/fof/insurance';
 // Fee schedules, items, and insurance plans — de-identified configuration
 // only. No patient data flows through these hooks.
 
-export type FeeScheduleKind = 'office' | 'carrier';
+/** 'payment' = a plan payment table: the set amounts a plan pays per code. */
+export type FeeScheduleKind = 'office' | 'carrier' | 'payment';
 
 export interface FeeSchedule {
   id: string;

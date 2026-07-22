@@ -109,7 +109,7 @@ export const DEFAULT_TEMPLATES: FofTemplateSeed[] = [
   },
   {
     ...BASE_SEED,
-    name: 'Financing / No Discount',
+    name: 'Financing',
     sortOrder: 4,
     discountPercent: 0,
     discountLabel: '',

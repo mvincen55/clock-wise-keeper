@@ -11,7 +11,7 @@
  * network. Keep it that way — the practice has no BAA covering patient
  * data in this app.
  */
-import { Fragment, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -38,6 +38,8 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import {
+  ChevronDown,
+  ChevronUp,
   DollarSign,
   Loader2,
   Plus,
@@ -158,6 +160,7 @@ interface BuilderState {
   spans2Years: string; // '' or 'yes' — treatment crosses a benefit-year renewal
   nextMaxInput: string;
   nextDedInput: string;
+  renewalVisitInput: string; // visit # where the new benefit year starts
   afterMaxState: string; // '' or 'yes' — reverts to office fees once maxed out
   prevExemptState: string; // '' or 'yes' — preventive doesn't count toward the max
   paymentCountOverride: string;
@@ -179,6 +182,7 @@ type BuilderAction =
   | { type: 'setLine'; index: number; patch: Partial<BuilderLine> }
   | { type: 'addLine' }
   | { type: 'addLines'; lines: BuilderLine[] }
+  | { type: 'setLines'; lines: BuilderLine[] }
   | { type: 'removeLine'; index: number }
   | { type: 'setInstallment'; index: number; value: string }
   | { type: 'clearOverrides' }
@@ -200,6 +204,7 @@ const initialState = (): BuilderState => ({
   spans2Years: '',
   nextMaxInput: '$1,500.00',
   nextDedInput: '$50.00',
+  renewalVisitInput: '',
   afterMaxState: '',
   prevExemptState: '',
   paymentCountOverride: '',
@@ -225,6 +230,8 @@ function reducer(state: BuilderState, action: BuilderAction): BuilderState {
     }
     case 'addLine':
       return { ...state, lines: [...state.lines, newLine()] };
+    case 'setLines':
+      return { ...state, lines: action.lines.length ? action.lines : [newLine()] };
     case 'addLines': {
       // Drop fully empty rows before appending a bundle's lines.
       const existing = state.lines.filter(
@@ -301,6 +308,37 @@ function ScaledPreview({ children }: { children: React.ReactNode }) {
   );
 }
 
+interface SectionHeaderProps {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  /** Shown at the right while the section is closed. */
+  summary?: string;
+  extra?: ReactNode;
+}
+
+/** Clickable card header that opens/closes its section. */
+function SectionHeader({ title, open, onToggle, summary, extra }: SectionHeaderProps) {
+  return (
+    <CardHeader className="pb-3 cursor-pointer select-none" onClick={onToggle}>
+      <div className="flex items-center justify-between gap-2">
+        <CardTitle className="text-base">{title}</CardTitle>
+        <div className="flex items-center gap-2 min-w-0">
+          {extra}
+          {!open && summary && (
+            <span className="text-sm text-muted-foreground truncate">{summary}</span>
+          )}
+          {open ? (
+            <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          )}
+        </div>
+      </div>
+    </CardHeader>
+  );
+}
+
 interface OverrideRowProps {
   label: string;
   computedCents: Cents;
@@ -339,6 +377,10 @@ export default function FofBuilder() {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [feeScheduleId, setFeeScheduleId] = useState<string>(NO_SCHEDULE);
+  // Collapsible builder sections (UI-only; patient data untouched).
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const toggleSection = (key: string) =>
+    setCollapsed(c => ({ ...c, [key]: !c[key] }));
   // Table-of-allowance plans: a second schedule holding the set dollar
   // amounts the plan pays per code (patient owes the difference).
   const [payScheduleId, setPayScheduleId] = useState<string>(NO_SCHEDULE);
@@ -415,6 +457,33 @@ export default function FofBuilder() {
     });
   };
 
+  // A line's effective visit: the typed number, else the stage suggested
+  // from the code (multi-segment codes start at their earliest stage).
+  const effectiveVisit = (l: BuilderLine): number => {
+    const typed = parseInt(l.visit, 10);
+    if (!isNaN(typed)) return typed;
+    const code = l.code.trim();
+    if (!code) return 1;
+    const segments = visitSegmentsForCode(code);
+    if (segments.length > 1) return Math.min(...segments.map(s => s.stage));
+    return suggestVisitStage(code);
+  };
+
+  // Changing a visit number re-files the line into visit order (on blur,
+  // so rows don't jump mid-keystroke). Untyped lines sort by their
+  // suggested stage; empty lines sink to the bottom; ties keep their order.
+  const visitSortKey = (l: BuilderLine): number =>
+    l.code.trim() === '' && l.visit.trim() === '' ? 99 : effectiveVisit(l);
+  const sortLinesByVisit = () => {
+    const sorted = state.lines
+      .map((l, i) => [l, i] as const)
+      .sort((a, b) => visitSortKey(a[0]) - visitSortKey(b[0]) || a[1] - b[1])
+      .map(([l]) => l);
+    if (sorted.some((l, i) => l !== state.lines[i])) {
+      dispatch({ type: 'setLines', lines: sorted });
+    }
+  };
+
   // Code box doubles as a search box: match by code prefix or by words in
   // the description ("crown" → D2740…). Hidden once an exact code is set.
   const codeSuggestions = (query: string) => {
@@ -473,7 +542,12 @@ export default function FofBuilder() {
 
   const handleScheduleChange = (nextId: string) => {
     setFeeScheduleId(nextId);
-    if (nextId === NO_SCHEDULE || nextId === payScheduleId) setPayScheduleId(NO_SCHEDULE);
+    setPayScheduleId(NO_SCHEDULE);
+    // A different carrier means a different plan: plan-specific toggles
+    // start from their defaults (all off) rather than carrying over.
+    dispatch({ type: 'set', field: 'afterMaxState', value: '' });
+    dispatch({ type: 'set', field: 'prevExemptState', value: '' });
+    dispatch({ type: 'set', field: 'spans2Years', value: '' });
     if (nextId !== NO_SCHEDULE) {
       if (state.deductibleInput.trim() === '') {
         dispatch({ type: 'set', field: 'deductibleInput', value: '$50.00' });
@@ -484,6 +558,14 @@ export default function FofBuilder() {
     }
   };
 
+  // Visit # where the new benefit year starts (2-year treatment plans);
+  // null = no boundary known, renewal falls back to when the max runs out.
+  const renewalVisitRaw = parseInt(state.renewalVisitInput, 10);
+  const renewalVisit =
+    state.spans2Years === 'yes' && !isNaN(renewalVisitRaw) && renewalVisitRaw > 0
+      ? renewalVisitRaw
+      : null;
+
   const feeLines: FofLine[] = useMemo(
     () =>
       state.lines
@@ -493,24 +575,33 @@ export default function FofBuilder() {
           // Downgrades are decided per line (default on for D2391–D2394).
           const downgradeCode = l.downgrade !== 'off' ? DOWNGRADE_MAP[code] : undefined;
           return {
-            code,
-            description: l.description.trim(),
-            category: l.category,
-            officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
-            allowedCents: l.allowedInput.trim()
-              ? parseCurrencyInput(l.allowedInput)
-              : allowedByCode.get(code) ?? null,
-            benefitBasisCents: downgradeCode ? allowedByCode.get(downgradeCode) ?? null : null,
-            // Table-of-allowance plan: the set payment for the code (the
-            // amalgam entry when downgraded); missing entry = not covered.
-            fixedPayCents: payActive
-              ? (downgradeCode ? payByCode.get(downgradeCode) : undefined) ??
-                payByCode.get(code) ??
-                0
-              : null,
+            line: {
+              code,
+              description: l.description.trim(),
+              category: l.category,
+              officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
+              allowedCents: l.allowedInput.trim()
+                ? parseCurrencyInput(l.allowedInput)
+                : allowedByCode.get(code) ?? null,
+              benefitBasisCents: downgradeCode ? allowedByCode.get(downgradeCode) ?? null : null,
+              // Table-of-allowance plan: the set payment for the code (the
+              // amalgam entry when downgraded); missing entry = not covered.
+              fixedPayCents: payActive
+                ? (downgradeCode ? payByCode.get(downgradeCode) : undefined) ??
+                  payByCode.get(code) ??
+                  0
+                : null,
+              inRenewalYear: renewalVisit !== null && effectiveVisit(l) >= renewalVisit,
+            } satisfies FofLine,
+            visit: effectiveVisit(l),
           };
-        }),
-    [state.lines, allowedByCode, payActive, payByCode]
+        })
+        // Benefits are consumed chronologically: deductible/max math runs
+        // in visit order even if the list hasn't been re-sorted yet.
+        .sort((a, b) => a.visit - b.visit)
+        .map(entry => entry.line),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.lines, allowedByCode, payActive, payByCode, renewalVisit]
   );
 
   const clampPct = (value: string, fallback: number) => {
@@ -564,6 +655,11 @@ export default function FofBuilder() {
   );
 
   const isSenior = state.isSenior === 'yes';
+
+  // Manual dollars taken off the top (collapsed-section summary).
+  const manualAdjustmentsCents =
+    (parseCurrencyInput(state.officeDiscountInput) ?? 0) +
+    (parseCurrencyInput(state.patientCreditInput) ?? 0);
 
   // Discount rules (membership/senior) key off the portion BEFORE any
   // rule-derived discount: total − manual discounts/credit − insurance.
@@ -899,144 +995,155 @@ export default function FofBuilder() {
             </Card>
 
             <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Procedures</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="hidden sm:grid grid-cols-[4.6rem_1fr_2.9rem_2.9rem_4.5rem_5rem_5rem_2rem] gap-1.5 text-xs text-muted-foreground px-1">
-                  <span>Code</span>
-                  <span>Description</span>
-                  <span>Tooth</span>
-                  <span>Visit</span>
-                  <span>Category</span>
-                  <span className="text-right">Office Fee</span>
-                  {insuranceEnabled ? <span className="text-right">Allowed</span> : <span />}
-                  <span />
-                </div>
+              <SectionHeader
+                title="Procedures"
+                open={!collapsed.procedures}
+                onToggle={() => toggleSection('procedures')}
+                summary={`${feeLines.length} · ${formatCents(estimate.totalCents)}`}
+              />
+              <CardContent className={collapsed.procedures ? 'hidden' : 'space-y-2'}>
                 {state.lines.map((line, i) => {
                   const lineCode = line.code.trim().toUpperCase();
                   const autoAllowed = allowedByCode.get(lineCode);
                   const downgradeTo = DOWNGRADE_MAP[lineCode];
                   const suggestions = codeSuggestions(line.code);
+                  const microLabel = 'text-[10px] uppercase tracking-wide text-muted-foreground';
                   return (
-                    <Fragment key={line.key}>
-                    <div className="grid sm:grid-cols-[4.6rem_1fr_2.9rem_2.9rem_4.5rem_5rem_5rem_2rem] grid-cols-2 gap-1.5 items-center">
-                      <Input
-                        placeholder="D2740 / crown"
-                        autoComplete="off"
-                        className="font-mono"
-                        value={line.code}
-                        onChange={e => handleCodeChange(i, e.target.value)}
-                      />
-                      <Input
-                        placeholder="Description"
-                        autoComplete="off"
-                        value={line.description}
-                        onChange={e => dispatch({ type: 'setLine', index: i, patch: { description: e.target.value } })}
-                      />
-                      <Input
-                        placeholder="#"
-                        autoComplete="off"
-                        className="text-center"
-                        value={line.tooth}
-                        onChange={e => dispatch({ type: 'setLine', index: i, patch: { tooth: e.target.value } })}
-                      />
-                      <Input
-                        inputMode="numeric"
-                        autoComplete="off"
-                        className="text-center"
-                        placeholder={
-                          visitSegmentsForCode(line.code).length > 1
-                            ? 'auto'
-                            : String(suggestVisitStage(line.code))
-                        }
-                        value={line.visit}
-                        onChange={e => dispatch({ type: 'setLine', index: i, patch: { visit: e.target.value } })}
-                      />
-                      <Select
-                        value={line.category}
-                        onValueChange={v => dispatch({ type: 'setLine', index: i, patch: { category: v as FeeCategory } })}
-                      >
-                        <SelectTrigger className="h-10">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(Object.keys(CATEGORY_SHORT) as FeeCategory[]).map(c => (
-                            <SelectItem key={c} value={c}>{CATEGORY_SHORT[c]}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        inputMode="decimal"
-                        autoComplete="off"
-                        placeholder="$0.00"
-                        className="text-right"
-                        value={line.feeInput}
-                        onChange={e => dispatch({ type: 'setLine', index: i, patch: { feeInput: e.target.value } })}
-                      />
-                      {insuranceEnabled ? (
+                    <div key={line.key} className="rounded-md border p-2 space-y-1.5">
+                      <div className="flex gap-1.5 items-center">
                         <Input
-                          inputMode="decimal"
+                          placeholder="D2740 / crown"
                           autoComplete="off"
-                          placeholder={
-                            line.category === 'other'
-                              ? 'office fee'
-                              : autoAllowed !== undefined
-                                ? formatCents(autoAllowed)
-                                : 'auto'
-                          }
-                          className="text-right"
-                          value={line.allowedInput}
-                          onChange={e => dispatch({ type: 'setLine', index: i, patch: { allowedInput: e.target.value } })}
+                          className="font-mono w-28 shrink-0"
+                          value={line.code}
+                          onChange={e => handleCodeChange(i, e.target.value)}
                         />
-                      ) : (
-                        <span className="hidden sm:block" />
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive"
-                        onClick={() => dispatch({ type: 'removeLine', index: i })}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                    {suggestions.length > 0 && (
-                      <div className="flex flex-wrap gap-1 pl-1">
-                        {suggestions.map(it => (
-                          <Button
-                            key={it.id}
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-7 px-2 text-xs font-normal"
-                            onClick={() => handleCodeChange(i, it.code)}
-                          >
-                            <span className="font-mono mr-1.5">{it.code}</span>
-                            <span className="max-w-[16rem] truncate">{it.description}</span>
-                          </Button>
-                        ))}
-                      </div>
-                    )}
-                    {insuranceActive && downgradeTo && (
-                      <div className="flex items-center gap-2 pl-1">
-                        <Switch
-                          id={`fof-dg-${line.key}`}
-                          checked={line.downgrade !== 'off'}
-                          onCheckedChange={v =>
-                            dispatch({ type: 'setLine', index: i, patch: { downgrade: v ? '' : 'off' } })
-                          }
+                        <Input
+                          placeholder="Description"
+                          autoComplete="off"
+                          className="flex-1 min-w-0"
+                          value={line.description}
+                          onChange={e => dispatch({ type: 'setLine', index: i, patch: { description: e.target.value } })}
                         />
-                        <Label
-                          htmlFor={`fof-dg-${line.key}`}
-                          className="text-xs text-muted-foreground font-normal"
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 text-destructive"
+                          onClick={() => dispatch({ type: 'removeLine', index: i })}
                         >
-                          Downgrades to amalgam benefit ({downgradeTo}) — turn off if this plan
-                          pays composite rates
-                        </Label>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
-                    )}
-                    </Fragment>
+                      {suggestions.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {suggestions.map(it => (
+                            <Button
+                              key={it.id}
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2 text-xs font-normal"
+                              onClick={() => handleCodeChange(i, it.code)}
+                            >
+                              <span className="font-mono mr-1.5">{it.code}</span>
+                              <span className="max-w-[16rem] truncate">{it.description}</span>
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="grid grid-cols-3 sm:grid-cols-[3.5rem_3.5rem_minmax(4.5rem,1fr)_6.5rem_6.5rem] gap-1.5">
+                        <div className="space-y-0.5">
+                          <span className={microLabel}>Tooth</span>
+                          <Input
+                            placeholder="#"
+                            autoComplete="off"
+                            className="text-center"
+                            value={line.tooth}
+                            onChange={e => dispatch({ type: 'setLine', index: i, patch: { tooth: e.target.value } })}
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className={microLabel}>Visit</span>
+                          <Input
+                            inputMode="numeric"
+                            autoComplete="off"
+                            className="text-center"
+                            placeholder={
+                              visitSegmentsForCode(line.code).length > 1
+                                ? 'auto'
+                                : String(suggestVisitStage(line.code))
+                            }
+                            value={line.visit}
+                            onChange={e => dispatch({ type: 'setLine', index: i, patch: { visit: e.target.value } })}
+                            onBlur={sortLinesByVisit}
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className={microLabel}>Category</span>
+                          <Select
+                            value={line.category}
+                            onValueChange={v => dispatch({ type: 'setLine', index: i, patch: { category: v as FeeCategory } })}
+                          >
+                            <SelectTrigger className="h-10">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(Object.keys(CATEGORY_SHORT) as FeeCategory[]).map(c => (
+                                <SelectItem key={c} value={c}>{CATEGORY_SHORT[c]}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className={microLabel}>Office Fee</span>
+                          <Input
+                            inputMode="decimal"
+                            autoComplete="off"
+                            placeholder="$0.00"
+                            className="text-right"
+                            value={line.feeInput}
+                            onChange={e => dispatch({ type: 'setLine', index: i, patch: { feeInput: e.target.value } })}
+                          />
+                        </div>
+                        {insuranceEnabled && (
+                          <div className="space-y-0.5">
+                            <span className={microLabel}>Allowed</span>
+                            <Input
+                              inputMode="decimal"
+                              autoComplete="off"
+                              placeholder={
+                                line.category === 'other'
+                                  ? 'office fee'
+                                  : autoAllowed !== undefined
+                                    ? formatCents(autoAllowed)
+                                    : 'auto'
+                              }
+                              className="text-right"
+                              value={line.allowedInput}
+                              onChange={e => dispatch({ type: 'setLine', index: i, patch: { allowedInput: e.target.value } })}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      {insuranceActive && downgradeTo && (
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            id={`fof-dg-${line.key}`}
+                            checked={line.downgrade !== 'off'}
+                            onCheckedChange={v =>
+                              dispatch({ type: 'setLine', index: i, patch: { downgrade: v ? '' : 'off' } })
+                            }
+                          />
+                          <Label
+                            htmlFor={`fof-dg-${line.key}`}
+                            className="text-xs text-muted-foreground font-normal"
+                          >
+                            Downgrades to amalgam benefit ({downgradeTo}) — turn off if this plan
+                            pays composite rates
+                          </Label>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
                 <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -1072,34 +1179,6 @@ export default function FofBuilder() {
                     Total: {formatCents(estimate.totalCents)}
                   </span>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2 pt-1">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="fof-office-discount">Office Discount (optional)</Label>
-                    <Input
-                      id="fof-office-discount"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      placeholder="$0.00"
-                      value={state.officeDiscountInput}
-                      onChange={setField('officeDiscountInput')}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="fof-credit">Patient Current Credit (optional)</Label>
-                    <Input
-                      id="fof-credit"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      placeholder="$0.00"
-                      value={state.patientCreditInput}
-                      onChange={setField('patientCreditInput')}
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  These print under the Total only when an amount is entered, and reduce
-                  the Patient's Portion.
-                </p>
                 <div className="space-y-1.5 pt-1">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="fof-note">Treatment description (prints on the form)</Label>
@@ -1138,12 +1217,57 @@ export default function FofBuilder() {
               </CardContent>
             </Card>
 
+            <Card>
+              <SectionHeader
+                title="Discounts & Credits"
+                open={!collapsed.discounts}
+                onToggle={() => toggleSection('discounts')}
+                summary={
+                  manualAdjustmentsCents > 0 ? `−${formatCents(manualAdjustmentsCents)}` : 'None'
+                }
+              />
+              <CardContent className={collapsed.discounts ? 'hidden' : 'space-y-2'}>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fof-office-discount">Office Discount (optional)</Label>
+                    <Input
+                      id="fof-office-discount"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      placeholder="$0.00"
+                      value={state.officeDiscountInput}
+                      onChange={setField('officeDiscountInput')}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fof-credit">Patient Current Credit (optional)</Label>
+                    <Input
+                      id="fof-credit"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      placeholder="$0.00"
+                      value={state.patientCreditInput}
+                      onChange={setField('patientCreditInput')}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  These print under the Total only when an amount is entered, and reduce
+                  the Patient's Portion. Courtesy discounts (senior, membership, prepay)
+                  apply automatically per the template.
+                </p>
+              </CardContent>
+            </Card>
+
             {insuranceEnabled && (
               <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Insurance</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
+                <SectionHeader
+                  title="Insurance"
+                  open={!collapsed.insurance}
+                  onToggle={() => toggleSection('insurance')}
+                  summary={insuranceActive ? selectedSchedule?.name : 'No carrier selected'}
+                />
+                <CardContent className={collapsed.insurance ? 'hidden' : 'space-y-3'}>
                   <div className="space-y-1.5">
                     <Label>Carrier Fee Schedule</Label>
                     <Select value={feeScheduleId} onValueChange={handleScheduleChange}>
@@ -1160,29 +1284,32 @@ export default function FofBuilder() {
                   </div>
                   {insuranceActive && (
                     <>
-                      <div className="space-y-1.5">
-                        <Label>Plan Payment Schedule (fee-schedule plans — optional)</Label>
-                        <Select value={payScheduleId} onValueChange={setPayScheduleId}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value={NO_SCHEDULE}>
-                              None — plan pays category percentages
-                            </SelectItem>
-                            {(schedules ?? [])
-                              .filter(sch => sch.kind === 'carrier' && sch.isActive && sch.id !== feeScheduleId)
-                              .map(sch => (
-                                <SelectItem key={sch.id} value={sch.id}>{sch.name}</SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          For plans that pay a set dollar amount per code (some DD plans):
-                          import the payment amounts as their own fee schedule and pick it
-                          here. The patient owes the difference up to the carrier fee.
-                        </p>
-                      </div>
+                      {(schedules ?? []).some(sch => sch.kind === 'payment' && sch.isActive) && (
+                        <div className="space-y-1.5">
+                          <Label>Plan Payment Table (fee-schedule plans — optional)</Label>
+                          <Select value={payScheduleId} onValueChange={setPayScheduleId}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NO_SCHEDULE}>
+                                None — plan pays category percentages
+                              </SelectItem>
+                              {(schedules ?? [])
+                                .filter(sch => sch.kind === 'payment' && sch.isActive)
+                                .map(sch => (
+                                  <SelectItem key={sch.id} value={sch.id}>{sch.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            For plans that pay a set dollar amount per code: the plan pays
+                            its table amount and the patient owes the difference up to the
+                            {' '}{selectedSchedule?.name ?? 'carrier'} fee. Payment tables
+                            are imported on the Fee Schedules page.
+                          </p>
+                        </div>
+                      )}
                       {!payActive && (
                         <div className="grid gap-3 grid-cols-3">
                           <div className="space-y-1.5">
@@ -1252,28 +1379,47 @@ export default function FofBuilder() {
                         </Label>
                       </div>
                       {state.spans2Years === 'yes' && (
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="fof-next-max">Next Year's Annual Max</Label>
-                            <Input
-                              id="fof-next-max"
-                              inputMode="decimal"
-                              autoComplete="off"
-                              value={state.nextMaxInput}
-                              onChange={setField('nextMaxInput')}
-                            />
+                        <>
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            <div className="space-y-1.5">
+                              <Label htmlFor="fof-next-max">Next Year's Annual Max</Label>
+                              <Input
+                                id="fof-next-max"
+                                inputMode="decimal"
+                                autoComplete="off"
+                                value={state.nextMaxInput}
+                                onChange={setField('nextMaxInput')}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor="fof-next-ded">Next Year's Deductible</Label>
+                              <Input
+                                id="fof-next-ded"
+                                inputMode="decimal"
+                                autoComplete="off"
+                                value={state.nextDedInput}
+                                onChange={setField('nextDedInput')}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor="fof-renewal-visit">New Year Starts at Visit #</Label>
+                              <Input
+                                id="fof-renewal-visit"
+                                inputMode="numeric"
+                                autoComplete="off"
+                                placeholder="e.g. 3"
+                                value={state.renewalVisitInput}
+                                onChange={setField('renewalVisitInput')}
+                              />
+                            </div>
                           </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor="fof-next-ded">Next Year's Deductible</Label>
-                            <Input
-                              id="fof-next-ded"
-                              inputMode="decimal"
-                              autoComplete="off"
-                              value={state.nextDedInput}
-                              onChange={setField('nextDedInput')}
-                            />
-                          </div>
-                        </div>
+                          <p className="text-xs text-muted-foreground">
+                            Visits at or after that number use next year's max and
+                            deductible; earlier visits can only draw on what's left this
+                            year. Left blank, the renewal kicks in whenever this year's
+                            max runs out.
+                          </p>
+                        </>
                       )}
                       <div className="flex items-center gap-2">
                         <Switch
@@ -1315,18 +1461,28 @@ export default function FofBuilder() {
 
             {computation && (
               <Card>
-                <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
-                  <CardTitle className="text-base">Computed Amounts</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => dispatch({ type: 'clearOverrides' })}
-                  >
-                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                    Reset all
-                  </Button>
-                </CardHeader>
-                <CardContent className="space-y-2">
+                <SectionHeader
+                  title="Amounts & Payment Plan"
+                  open={!collapsed.amounts}
+                  onToggle={() => toggleSection('amounts')}
+                  summary={`You pay ${formatCents(computation.effective.patientPortionCents)}`}
+                  extra={
+                    !collapsed.amounts && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={e => {
+                          e.stopPropagation();
+                          dispatch({ type: 'clearOverrides' });
+                        }}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                        Reset all
+                      </Button>
+                    )
+                  }
+                />
+                <CardContent className={collapsed.amounts ? 'hidden' : 'space-y-2'}>
                   {insuranceEnabled && (
                     <>
                       <OverrideRow

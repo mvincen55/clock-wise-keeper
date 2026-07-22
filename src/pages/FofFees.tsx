@@ -270,6 +270,7 @@ export default function FofFees() {
   const [openScheduleId, setOpenScheduleId] = useState<string | null>(null);
   const [importFor, setImportFor] = useState<FeeSchedule | null>(null);
   const [newScheduleName, setNewScheduleName] = useState('');
+  const [newScheduleKind, setNewScheduleKind] = useState<'carrier' | 'payment'>('carrier');
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
@@ -300,7 +301,11 @@ export default function FofFees() {
                       {schedule.name}
                     </button>
                     <Badge variant={schedule.kind === 'office' ? 'default' : 'secondary'}>
-                      {schedule.kind === 'office' ? 'Office UCR' : 'Carrier'}
+                      {schedule.kind === 'office'
+                        ? 'Office UCR'
+                        : schedule.kind === 'payment'
+                          ? 'Payment table'
+                          : 'Carrier'}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
                       {schedule.itemCount ?? 0} codes
@@ -361,28 +366,51 @@ export default function FofFees() {
               ))}
 
               {isManager && (
-                <div className="flex gap-2 pt-1">
-                  <Input
-                    placeholder="New carrier schedule name (e.g. Cigna PPO)"
-                    value={newScheduleName}
-                    onChange={e => setNewScheduleName(e.target.value)}
-                  />
-                  <Button
-                    variant="outline"
-                    disabled={!newScheduleName.trim() || upsertSchedule.isPending}
-                    onClick={() =>
-                      upsertSchedule.mutate(
-                        { name: newScheduleName.trim(), kind: 'carrier' },
-                        {
-                          onSuccess: () => { setNewScheduleName(''); toast.success('Schedule created'); },
-                          onError: err => toast.error(err.message),
-                        }
-                      )
-                    }
-                  >
-                    <Plus className="h-4 w-4 mr-1.5" />
-                    Add
-                  </Button>
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder={
+                        newScheduleKind === 'payment'
+                          ? 'New payment table name (e.g. DD MA Fee Schedule Plan)'
+                          : 'New carrier schedule name (e.g. Cigna PPO)'
+                      }
+                      value={newScheduleName}
+                      onChange={e => setNewScheduleName(e.target.value)}
+                    />
+                    <Select
+                      value={newScheduleKind}
+                      onValueChange={v => setNewScheduleKind(v as 'carrier' | 'payment')}
+                    >
+                      <SelectTrigger className="w-44 shrink-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="carrier">Carrier fees</SelectItem>
+                        <SelectItem value="payment">Plan payment table</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      disabled={!newScheduleName.trim() || upsertSchedule.isPending}
+                      onClick={() =>
+                        upsertSchedule.mutate(
+                          { name: newScheduleName.trim(), kind: newScheduleKind },
+                          {
+                            onSuccess: () => { setNewScheduleName(''); toast.success('Schedule created'); },
+                            onError: err => toast.error(err.message),
+                          }
+                        )
+                      }
+                    >
+                      <Plus className="h-4 w-4 mr-1.5" />
+                      Add
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Carrier fees = the plan's allowed fees. Plan payment table = the set
+                    dollar amounts a fee-schedule plan pays per code (used with the "Plan
+                    Payment Schedule" picker on the FOF).
+                  </p>
                 </div>
               )}
             </CardContent>
