@@ -137,7 +137,7 @@ const SMALL_WORDS = new Set([
 export function titleCase(text: string): string {
   return text.replace(/[A-Za-z]+(?:'[a-z]+)?/g, (word, offset: number) => {
     const prev = offset === 0 ? '' : text[offset - 1];
-    const isPhraseStart = offset === 0 || prev === '(' || prev === '-' || prev === '/';
+    const isPhraseStart = offset === 0 || prev === '(' || prev === '/';
     if (!isPhraseStart && SMALL_WORDS.has(word.toLowerCase())) return word.toLowerCase();
     return word.charAt(0).toUpperCase() + word.slice(1);
   });
