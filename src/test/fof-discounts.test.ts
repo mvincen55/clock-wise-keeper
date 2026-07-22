@@ -59,11 +59,12 @@ describe('computeFofDiscounts — membership (Illumitrac)', () => {
     expect(result.prepayDiscountPercent).toBe(0);
   });
 
-  it('65+ at $1,000+: automatic 10% plus 5% prepay-only extra', () => {
+  it('65+ at $1,000+: automatic 10% plus 5% prepay-only extra off the SAME base', () => {
     const result = computeFofDiscounts(membership, true, 200_000);
     expect(result.autoDiscount).toEqual({ label: 'Membership Discount (10%)', cents: 20_000 });
     expect(result.prepayDiscountPercent).toBe(SENIOR_RULES.membershipExtraPct);
     expect(result.prepayDiscountLabel).toContain('Senior Prepay');
+    expect(result.prepayDiscountBase).toBe('preDiscountTotal');
   });
 
   it('zero portion: membership discount is zero but prepay unchanged', () => {

@@ -101,6 +101,23 @@ describe('computeFof', () => {
     expect(result.effective.prepayTotalCents).toBe(95_000);
   });
 
+  it('Illumitrac senior prepay: 10% + 5% equals a true 15% of the pre-discount total', () => {
+    // $2,000 treatment: membership 10% = $200 auto; senior prepay 5% must
+    // come off the SAME $2,000 base ($100), not the remaining $1,800 ($90).
+    const template = makeTemplate({
+      discountPercent: 5,
+      discountLabel: 'Senior Prepay Discount (5%)',
+    });
+    const result = computeFof(template, {
+      ...amounts(200_000),
+      autoDiscount: { label: 'Membership Discount (10%)', cents: 20_000 },
+      prepayDiscountBaseCents: 200_000,
+    });
+    expect(result.effective.patientPortionCents).toBe(180_000);
+    expect(result.effective.discountCents).toBe(10_000); // 5% of $2,000
+    expect(result.effective.prepayTotalCents).toBe(170_000); // 15% off total
+  });
+
   it('office discount and patient credit reduce the portion', () => {
     const result = computeFof(makeTemplate({ discountPercent: 0 }), {
       ...amounts(100_000),

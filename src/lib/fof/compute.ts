@@ -37,7 +37,10 @@ export function computeFof(
   );
   const effectivePortion = overrides.patientPortionCents ?? computedPortion;
 
-  const computedDiscount = percentOfCents(effectivePortion, template.discountPercent);
+  const computedDiscount = percentOfCents(
+    amounts.prepayDiscountBaseCents ?? effectivePortion,
+    template.discountPercent
+  );
   const effectiveDiscount = overrides.discountCents ?? computedDiscount;
 
   const computedPrepayTotal = Math.max(0, effectivePortion - effectiveDiscount);
