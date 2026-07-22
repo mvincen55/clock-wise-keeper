@@ -1,6 +1,33 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { extractText, getDocumentProxy } from "npm:unpdf";
 import { chunkText, normalizeText } from "./lib.ts";
+
+async function extractPdfTextViaAI(base64: string, filename: string): Promise<string> {
+  const key = Deno.env.get("LOVABLE_API_KEY");
+  if (!key) throw new Error("Server configuration error");
+  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: "Extract all readable text from the provided PDF. Return plain text only, preserving paragraph breaks. No commentary, no markdown." },
+        { role: "user", content: [
+          { type: "file", file: { filename, file_data: `data:application/pdf;base64,${base64}` } },
+          { type: "text", text: "Extract the full text of this document." },
+        ] },
+      ],
+      temperature: 0,
+      max_tokens: 65000,
+    }),
+  });
+  if (!resp.ok) {
+    const t = await resp.text();
+    console.error("AI extract error", resp.status, t);
+    throw new Error("PDF text extraction failed");
+  }
+  const data = await resp.json();
+  return data.choices?.[0]?.message?.content ?? "";
+}
 
 // Ingest an office document (policy / HR / insurance handbook) for the AI
 // assistant: extract text, store the original in the office-docs bucket,
