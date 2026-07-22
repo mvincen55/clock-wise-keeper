@@ -348,6 +348,48 @@ describe('estimateInsurance', () => {
     expect(plenty.maxedOut).toBe(false);
   });
 
+  it('visit-boundary renewal: new-year benefits start at the flagged line, not at exhaustion', () => {
+    const result = estimateInsurance(
+      [
+        line({ category: 'major', officeFeeCents: 100_000, allowedCents: 100_000 }),
+        line({ category: 'major', officeFeeCents: 100_000, allowedCents: 100_000, inRenewalYear: true }),
+      ],
+      plan,
+      {
+        remainingDeductibleCents: 0,
+        remainingAnnualMaxCents: 200_000, // plenty left in year 1
+        renewal: { annualMaxCents: 150_000, deductibleCents: 5_000 },
+      }
+    );
+    // Line 1 pays from year 1 (50% of 1000)
+    expect(result.perLine[0].insurancePaysCents).toBe(50_000);
+    // Line 2 is a new-year visit: deductible re-applies even though year-1
+    // max was never exhausted
+    expect(result.perLine[1].deductibleAppliedCents).toBe(5_000);
+    expect(result.perLine[1].insurancePaysCents).toBe(47_500);
+  });
+
+  it('visit-boundary renewal: year-1 lines cannot borrow from next year early', () => {
+    const result = estimateInsurance(
+      [
+        line({ category: 'major', officeFeeCents: 400_000, allowedCents: 400_000 }),
+        line({ category: 'major', officeFeeCents: 100_000, allowedCents: 100_000 }),
+        line({ category: 'major', officeFeeCents: 100_000, allowedCents: 100_000, inRenewalYear: true }),
+      ],
+      plan,
+      {
+        remainingDeductibleCents: 0,
+        remainingAnnualMaxCents: 100_000,
+        renewal: { annualMaxCents: 150_000, deductibleCents: 0 },
+      }
+    );
+    // Line 1 exhausts year 1; line 2 is still a year-1 visit → nothing left
+    expect(result.perLine[0].insurancePaysCents).toBe(100_000);
+    expect(result.perLine[1].insurancePaysCents).toBe(0);
+    // Line 3 is the new-year visit → paid from the fresh max
+    expect(result.perLine[2].insurancePaysCents).toBe(50_000);
+  });
+
   it('full-flow sanity: patient portion = total − writeoffs − insurance', () => {
     const lines = [
       line({ category: 'preventive', officeFeeCents: 15_000, allowedCents: 12_000 }),

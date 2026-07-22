@@ -42,6 +42,13 @@ export interface FofLine {
    * is a normal percentage plan for this line.
    */
   fixedPayCents?: Cents | null;
+  /**
+   * Treatment spans two benefit years: true on lines whose visit falls in
+   * the NEW benefit year. When any line carries this flag, the renewal
+   * benefits switch in exactly at the first flagged line (calendar-driven)
+   * instead of when the current year's max happens to run out.
+   */
+  inRenewalYear?: boolean;
 }
 
 export interface PlanRules {
@@ -146,12 +153,16 @@ export function estimateInsurance(
   let remainingMax = Math.max(0, benefits.remainingAnnualMaxCents);
   let renewal = benefits.renewal ?? null;
   const perLine: LineEstimate[] = [];
+  // When any line is marked as falling in the new benefit year, the
+  // renewal is calendar-driven: it switches in at that line, and year-1
+  // lines can NOT borrow from next year's max early.
+  const boundaryDriven = lines.some(l => l.inRenewalYear);
 
   for (const line of lines) {
-    // Benefit-year renewal: once this year's max is gone, the next year's
-    // max opens up and its deductible re-applies (estimate-level model —
-    // renewal happens between procedures).
-    if (remainingMax <= 0 && renewal) {
+    // Benefit-year renewal: the next year's max opens up and its
+    // deductible re-applies — at the first new-year visit when a visit
+    // boundary is known, otherwise once this year's max is gone.
+    if (renewal && (boundaryDriven ? line.inRenewalYear : remainingMax <= 0)) {
       remainingMax = Math.max(0, renewal.annualMaxCents);
       remainingDeductible = Math.max(0, renewal.deductibleCents);
       renewal = null;

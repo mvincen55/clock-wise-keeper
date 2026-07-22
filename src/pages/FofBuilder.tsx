@@ -158,6 +158,7 @@ interface BuilderState {
   spans2Years: string; // '' or 'yes' — treatment crosses a benefit-year renewal
   nextMaxInput: string;
   nextDedInput: string;
+  renewalVisitInput: string; // visit # where the new benefit year starts
   afterMaxState: string; // '' or 'yes' — reverts to office fees once maxed out
   prevExemptState: string; // '' or 'yes' — preventive doesn't count toward the max
   paymentCountOverride: string;
@@ -201,6 +202,7 @@ const initialState = (): BuilderState => ({
   spans2Years: '',
   nextMaxInput: '$1,500.00',
   nextDedInput: '$50.00',
+  renewalVisitInput: '',
   afterMaxState: '',
   prevExemptState: '',
   paymentCountOverride: '',
@@ -418,18 +420,23 @@ export default function FofBuilder() {
     });
   };
 
-  // Changing a visit number re-files the line into visit order (on blur,
-  // so rows don't jump mid-keystroke). Untyped lines sort by their
-  // suggested stage; empty lines sink to the bottom; ties keep their order.
-  const visitSortKey = (l: BuilderLine): number => {
+  // A line's effective visit: the typed number, else the stage suggested
+  // from the code (multi-segment codes start at their earliest stage).
+  const effectiveVisit = (l: BuilderLine): number => {
     const typed = parseInt(l.visit, 10);
     if (!isNaN(typed)) return typed;
     const code = l.code.trim();
-    if (!code) return 99;
+    if (!code) return 1;
     const segments = visitSegmentsForCode(code);
     if (segments.length > 1) return Math.min(...segments.map(s => s.stage));
     return suggestVisitStage(code);
   };
+
+  // Changing a visit number re-files the line into visit order (on blur,
+  // so rows don't jump mid-keystroke). Untyped lines sort by their
+  // suggested stage; empty lines sink to the bottom; ties keep their order.
+  const visitSortKey = (l: BuilderLine): number =>
+    l.code.trim() === '' && l.visit.trim() === '' ? 99 : effectiveVisit(l);
   const sortLinesByVisit = () => {
     const sorted = state.lines
       .map((l, i) => [l, i] as const)
@@ -514,6 +521,14 @@ export default function FofBuilder() {
     }
   };
 
+  // Visit # where the new benefit year starts (2-year treatment plans);
+  // null = no boundary known, renewal falls back to when the max runs out.
+  const renewalVisitRaw = parseInt(state.renewalVisitInput, 10);
+  const renewalVisit =
+    state.spans2Years === 'yes' && !isNaN(renewalVisitRaw) && renewalVisitRaw > 0
+      ? renewalVisitRaw
+      : null;
+
   const feeLines: FofLine[] = useMemo(
     () =>
       state.lines
@@ -523,24 +538,33 @@ export default function FofBuilder() {
           // Downgrades are decided per line (default on for D2391–D2394).
           const downgradeCode = l.downgrade !== 'off' ? DOWNGRADE_MAP[code] : undefined;
           return {
-            code,
-            description: l.description.trim(),
-            category: l.category,
-            officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
-            allowedCents: l.allowedInput.trim()
-              ? parseCurrencyInput(l.allowedInput)
-              : allowedByCode.get(code) ?? null,
-            benefitBasisCents: downgradeCode ? allowedByCode.get(downgradeCode) ?? null : null,
-            // Table-of-allowance plan: the set payment for the code (the
-            // amalgam entry when downgraded); missing entry = not covered.
-            fixedPayCents: payActive
-              ? (downgradeCode ? payByCode.get(downgradeCode) : undefined) ??
-                payByCode.get(code) ??
-                0
-              : null,
+            line: {
+              code,
+              description: l.description.trim(),
+              category: l.category,
+              officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
+              allowedCents: l.allowedInput.trim()
+                ? parseCurrencyInput(l.allowedInput)
+                : allowedByCode.get(code) ?? null,
+              benefitBasisCents: downgradeCode ? allowedByCode.get(downgradeCode) ?? null : null,
+              // Table-of-allowance plan: the set payment for the code (the
+              // amalgam entry when downgraded); missing entry = not covered.
+              fixedPayCents: payActive
+                ? (downgradeCode ? payByCode.get(downgradeCode) : undefined) ??
+                  payByCode.get(code) ??
+                  0
+                : null,
+              inRenewalYear: renewalVisit !== null && effectiveVisit(l) >= renewalVisit,
+            } satisfies FofLine,
+            visit: effectiveVisit(l),
           };
-        }),
-    [state.lines, allowedByCode, payActive, payByCode]
+        })
+        // Benefits are consumed chronologically: deductible/max math runs
+        // in visit order even if the list hasn't been re-sorted yet.
+        .sort((a, b) => a.visit - b.visit)
+        .map(entry => entry.line),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.lines, allowedByCode, payActive, payByCode, renewalVisit]
   );
 
   const clampPct = (value: string, fallback: number) => {
@@ -1293,28 +1317,47 @@ export default function FofBuilder() {
                         </Label>
                       </div>
                       {state.spans2Years === 'yes' && (
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="fof-next-max">Next Year's Annual Max</Label>
-                            <Input
-                              id="fof-next-max"
-                              inputMode="decimal"
-                              autoComplete="off"
-                              value={state.nextMaxInput}
-                              onChange={setField('nextMaxInput')}
-                            />
+                        <>
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            <div className="space-y-1.5">
+                              <Label htmlFor="fof-next-max">Next Year's Annual Max</Label>
+                              <Input
+                                id="fof-next-max"
+                                inputMode="decimal"
+                                autoComplete="off"
+                                value={state.nextMaxInput}
+                                onChange={setField('nextMaxInput')}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor="fof-next-ded">Next Year's Deductible</Label>
+                              <Input
+                                id="fof-next-ded"
+                                inputMode="decimal"
+                                autoComplete="off"
+                                value={state.nextDedInput}
+                                onChange={setField('nextDedInput')}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor="fof-renewal-visit">New Year Starts at Visit #</Label>
+                              <Input
+                                id="fof-renewal-visit"
+                                inputMode="numeric"
+                                autoComplete="off"
+                                placeholder="e.g. 3"
+                                value={state.renewalVisitInput}
+                                onChange={setField('renewalVisitInput')}
+                              />
+                            </div>
                           </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor="fof-next-ded">Next Year's Deductible</Label>
-                            <Input
-                              id="fof-next-ded"
-                              inputMode="decimal"
-                              autoComplete="off"
-                              value={state.nextDedInput}
-                              onChange={setField('nextDedInput')}
-                            />
-                          </div>
-                        </div>
+                          <p className="text-xs text-muted-foreground">
+                            Visits at or after that number use next year's max and
+                            deductible; earlier visits can only draw on what's left this
+                            year. Left blank, the renewal kicks in whenever this year's
+                            max runs out.
+                          </p>
+                        </>
                       )}
                       <div className="flex items-center gap-2">
                         <Switch

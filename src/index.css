@@ -421,9 +421,11 @@
 }
 
 /* Reads as one sentence: inline write-on blank, then the intro text.
-   The caption hangs below the blank without breaking the text flow. */
+   The hanging indent keeps wrapped text aligned after the blank (never
+   under it), so the caption owns the space below the line. */
 .fof-sig-ack {
   margin: 0 0 14pt;
+  padding-left: 2.5in;
   font-size: 9pt;
   line-height: 1.5;
 }
@@ -431,7 +433,7 @@
 .fof-sig-ack-blank {
   display: inline-block;
   width: 2.4in;
-  margin-right: 3pt;
+  margin-left: -2.5in;
   position: relative;
   vertical-align: baseline;
 }
