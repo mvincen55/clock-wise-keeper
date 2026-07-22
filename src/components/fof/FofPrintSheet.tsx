@@ -82,7 +82,7 @@ export default function FofPrintSheet({
   for (const extra of template.footnotes) footnoteItems.push(extra);
 
   const installmentCells = effective.installmentsCents.map((cents, i) => ({
-    heading: effective.installmentsCents.length > 1 ? `Visit ${i + 1}` : 'Payment',
+    heading: effective.installmentsCents.length > 1 ? `Payment ${i + 1}` : 'Payment',
     label: computation.installmentLabels[i] ?? `Installment ${i + 1}`,
     cents,
   }));
@@ -146,13 +146,13 @@ export default function FofPrintSheet({
               <span>−{formatCents(amounts.autoDiscount.cents)}</span>
             </div>
           )}
-          {template.showInsuranceEstimate && (
+          {template.showInsuranceEstimate && (amounts.insuranceEstimateCents ?? 0) > 0 && (
             <div className="fof-row">
               <span>Estimated Insurance Payment{insuranceMark}</span>
               <span>−{formatCents(amounts.insuranceEstimateCents ?? 0)}</span>
             </div>
           )}
-          {template.showWriteOff && (
+          {template.showWriteOff && (amounts.writeOffCents ?? 0) > 0 && (
             <div className="fof-row">
               <span>Estimated Insurance Write-Off{insuranceMark}</span>
               <span>−{formatCents(amounts.writeOffCents ?? 0)}</span>

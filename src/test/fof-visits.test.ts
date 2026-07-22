@@ -146,6 +146,18 @@ describe('buildVisitSchedule — half a visit ahead', () => {
     expect(buildVisitSchedule(100, [])).toBeNull();
     expect(buildVisitSchedule(100, [{ label: 'X', feeCents: 0 }])).toBeNull();
   });
+
+  it('skips zero-fee visits (no-charge seat appointment creates no payment)', () => {
+    const plan = buildVisitSchedule(199_800, [
+      { label: 'Porcelain Crown', feeCents: 199_800 },
+      { label: 'CerCr Ins', feeCents: 0 },
+    ]);
+    expect(plan!.weights).toEqual([99_900, 99_900]);
+    expect(plan!.labels).toEqual([
+      'Upon Scheduling',
+      'At Appointment · Porcelain Crown',
+    ]);
+  });
 });
 
 describe('planForCount', () => {

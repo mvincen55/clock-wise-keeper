@@ -85,7 +85,7 @@ const NO_PLAN = '__none__';
 const CATEGORY_SHORT: Record<FeeCategory, string> = {
   preventive: 'Prev',
   basic: 'Basic',
-  major: 'Major',
+  major: 'Maj',
   other: 'No Cov',
 };
 

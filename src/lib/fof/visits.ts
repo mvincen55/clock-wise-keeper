@@ -142,11 +142,12 @@ export function suggestVisitStage(code: string): number {
  */
 export function buildVisitSchedule(
   portionCents: Cents,
-  visits: { label: string; feeCents: Cents }[]
+  allVisits: { label: string; feeCents: Cents }[]
 ): VisitPlan | null {
+  // Zero-fee visits (e.g. a no-charge seat appointment) create no payment.
+  const visits = allVisits.filter(v => v.feeCents > 0);
   if (visits.length === 0) return null;
-  const weights = visits.map(v => Math.max(0, v.feeCents));
-  if (weights.every(w => w === 0)) return null;
+  const weights = visits.map(v => v.feeCents);
   const alloc = splitCentsWeighted(portionCents, weights);
   const halves = alloc.map(a => Math.round(a / 2));
   const n = alloc.length;
