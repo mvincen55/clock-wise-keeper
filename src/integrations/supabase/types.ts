@@ -1221,7 +1221,7 @@ export type Database = {
           doc_id: string
           id: string
           org_id: string
-          tsv: unknown | null
+          tsv: unknown
         }
         Insert: {
           chunk_index: number
@@ -1229,6 +1229,7 @@ export type Database = {
           doc_id: string
           id?: string
           org_id: string
+          tsv?: unknown
         }
         Update: {
           chunk_index?: number
@@ -1236,6 +1237,7 @@ export type Database = {
           doc_id?: string
           id?: string
           org_id?: string
+          tsv?: unknown
         }
         Relationships: [
           {
@@ -2611,14 +2613,14 @@ export type Database = {
         Returns: number
       }
       search_office_doc_chunks: {
-        Args: { p_query: string; p_limit?: number }
+        Args: { p_limit?: number; p_query: string }
         Returns: {
-          doc_id: string
-          title: string
           category: string
           chunk_index: number
           content: string
+          doc_id: string
           rank: number
+          title: string
         }[]
       }
       sweep_attendance: { Args: { p_days?: number }; Returns: string }
