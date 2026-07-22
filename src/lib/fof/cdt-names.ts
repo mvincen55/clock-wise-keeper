@@ -96,6 +96,10 @@ const NAMES: Record<string, string> = {
   '5751': 'Denture reline (lower, lab)',
   // Implants
   '6010': 'Dental implant placement',
+  '6011': 'Implant second-stage surgery',
+  '6013': 'Mini implant placement',
+  '6190': 'Surgical implant guide',
+  '6196': 'Implant index/guide',
   '6056': 'Implant abutment (prefabricated)',
   '6057': 'Implant abutment (custom)',
   '6058': 'Implant crown (porcelain)',
