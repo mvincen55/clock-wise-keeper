@@ -276,7 +276,7 @@ function PlanEditorDialog({
   const upsert = useUpsertInsurancePlan();
   const [state, setState] = useState({
     name: '', feeScheduleId: NONE_SCHEDULE, preventive: '100', basic: '80', major: '50',
-    deductible: '$50.00', annualMax: '$1,500.00', waived: true, writeoff: true, active: true,
+    deductible: '$50.00', annualMax: '$1,500.00', waived: true, network: 'in', active: true,
   });
   const [lastKey, setLastKey] = useState('');
   const key = `${open}-${plan?.id ?? 'new'}`;
@@ -291,7 +291,7 @@ function PlanEditorDialog({
       deductible: formatCents(plan?.deductibleCents ?? 5000),
       annualMax: formatCents(plan?.annualMaxCents ?? 150000),
       waived: plan?.deductibleWaivedPreventive ?? true,
-      writeoff: plan?.writeoffApplies ?? true,
+      network: (plan?.isInNetwork ?? true) ? 'in' : 'oon',
       active: plan?.isActive ?? true,
     });
   }
@@ -354,13 +354,19 @@ function PlanEditorDialog({
               <Input id="plan-max" inputMode="decimal" value={state.annualMax} onChange={e => set('annualMax', e.target.value)} />
             </div>
           </div>
+          <div className="space-y-1.5">
+            <Label>Network</Label>
+            <Select value={state.network} onValueChange={v => set('network', v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="in">In-network — write-offs apply, no prepay discount</SelectItem>
+                <SelectItem value="oon">Out-of-network — no write-offs, prepay discount allowed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex items-center gap-2">
             <Switch id="plan-waived" checked={state.waived} onCheckedChange={v => set('waived', v)} />
             <Label htmlFor="plan-waived">Deductible waived for preventive</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <Switch id="plan-writeoff" checked={state.writeoff} onCheckedChange={v => set('writeoff', v)} />
-            <Label htmlFor="plan-writeoff">In-network write-offs apply (office fee − allowed fee)</Label>
           </div>
           <div className="flex items-center gap-2">
             <Switch id="plan-active" checked={state.active} onCheckedChange={v => set('active', v)} />
@@ -383,7 +389,8 @@ function PlanEditorDialog({
                   deductibleCents: parseCurrencyInput(state.deductible) ?? 0,
                   annualMaxCents: parseCurrencyInput(state.annualMax) ?? 0,
                   deductibleWaivedPreventive: state.waived,
-                  writeoffApplies: state.writeoff,
+                  writeoffApplies: state.network === 'in',
+                  isInNetwork: state.network === 'in',
                   isActive: state.active,
                 },
                 {
@@ -535,6 +542,7 @@ export default function FofFees() {
                     <div className="flex-1 min-w-48">
                       <div className="font-medium">{plan.name}{!plan.isActive && <Badge variant="outline" className="ml-2">inactive</Badge>}</div>
                       <div className="text-xs text-muted-foreground mt-0.5">
+                        {plan.isInNetwork ? 'In-network' : 'Out-of-network'} ·{' '}
                         {plan.preventivePct}/{plan.basicPct}/{plan.majorPct}% ·{' '}
                         {formatCents(plan.deductibleCents)} deductible ·{' '}
                         {formatCents(plan.annualMaxCents)} annual max ·{' '}

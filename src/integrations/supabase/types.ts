@@ -957,6 +957,10 @@ export type Database = {
           created_by: string | null
           discount_label: string
           discount_percent: number
+          footnote_contact: string
+          footnote_insurance: string
+          footnote_prepay: string
+          footnote_validity: string
           footnotes: Json
           id: string
           installment_count: number
@@ -977,6 +981,10 @@ export type Database = {
           created_by?: string | null
           discount_label?: string
           discount_percent?: number
+          footnote_contact?: string
+          footnote_insurance?: string
+          footnote_prepay?: string
+          footnote_validity?: string
           footnotes?: Json
           id?: string
           installment_count?: number
@@ -997,6 +1005,10 @@ export type Database = {
           created_by?: string | null
           discount_label?: string
           discount_percent?: number
+          footnote_contact?: string
+          footnote_insurance?: string
+          footnote_prepay?: string
+          footnote_validity?: string
           footnotes?: Json
           id?: string
           installment_count?: number
@@ -1135,6 +1147,7 @@ export type Database = {
           fee_schedule_id: string | null
           id: string
           is_active: boolean
+          is_in_network: boolean
           major_pct: number
           name: string
           org_id: string
@@ -1152,6 +1165,7 @@ export type Database = {
           fee_schedule_id?: string | null
           id?: string
           is_active?: boolean
+          is_in_network?: boolean
           major_pct?: number
           name: string
           org_id: string
@@ -1169,6 +1183,7 @@ export type Database = {
           fee_schedule_id?: string | null
           id?: string
           is_active?: boolean
+          is_in_network?: boolean
           major_pct?: number
           name?: string
           org_id?: string
