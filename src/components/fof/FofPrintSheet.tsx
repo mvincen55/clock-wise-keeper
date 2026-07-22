@@ -62,7 +62,6 @@ export default function FofPrintSheet({
     <div className="fof-sheet">
       <header className="fof-header">
         <img className="fof-logo" src={logoUrl} alt={practice.practiceName} />
-        <div className="fof-title">Financial Options Form</div>
       </header>
 
       <div className="fof-meta">
