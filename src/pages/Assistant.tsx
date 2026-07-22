@@ -1,0 +1,380 @@
+/**
+ * Ask AI — chat over the office knowledge base (policies, HR info,
+ * insurance handbooks). Answers come from an edge function that retrieves
+ * matching document excerpts and cites its sources. Conversation lives in
+ * memory only. The knowledge base is for internal business documents —
+ * the UI reminds staff not to upload patient records.
+ */
+import { useRef, useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
+import {
+  FileText,
+  Info,
+  Loader2,
+  Plus,
+  Send,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
+import {
+  DOC_CATEGORY_LABELS,
+  useAskDocs,
+  useDeleteOfficeDoc,
+  useOfficeDocs,
+  useUploadOfficeDoc,
+  type ChatMessage,
+  type OfficeDoc,
+  type OfficeDocCategory,
+} from '@/hooks/useOfficeDocs';
+
+const SUGGESTED_QUESTIONS = [
+  'What is our PTO accrual policy?',
+  'How do we handle a patient insurance write-off?',
+  'What is the office late-arrival policy?',
+];
+
+function ChatPanel() {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const ask = useAskDocs();
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const send = (question: string) => {
+    const trimmed = question.trim();
+    if (!trimmed || ask.isPending) return;
+    const history = messages;
+    setMessages(prev => [...prev, { role: 'user', content: trimmed }]);
+    setInput('');
+    ask.mutate(
+      { question: trimmed, history },
+      {
+        onSuccess: result => {
+          setMessages(prev => [
+            ...prev,
+            { role: 'assistant', content: result.answer, sources: result.sources },
+          ]);
+          requestAnimationFrame(() =>
+            scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+          );
+        },
+        onError: err => {
+          setMessages(prev => [
+            ...prev,
+            { role: 'assistant', content: `Sorry — that didn't work: ${err.message}` },
+          ]);
+        },
+      }
+    );
+  };
+
+  return (
+    <Card className="flex flex-col h-[calc(100vh-16rem)] min-h-[24rem]">
+      <CardContent ref={scrollRef} className="flex-1 overflow-y-auto pt-4 space-y-4">
+        {messages.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center gap-4 text-center">
+            <Sparkles className="h-8 w-8 text-primary" />
+            <div className="text-muted-foreground text-sm max-w-md">
+              Ask anything covered by the office's policies, HR documents, or insurance
+              handbooks. Answers cite the document they came from.
+            </div>
+            <div className="flex flex-wrap justify-center gap-2">
+              {SUGGESTED_QUESTIONS.map(q => (
+                <Button key={q} variant="outline" size="sm" onClick={() => send(q)}>
+                  {q}
+                </Button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          messages.map((message, i) => (
+            <div
+              key={i}
+              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[85%] rounded-lg px-4 py-2.5 text-sm whitespace-pre-wrap ${
+                  message.role === 'user'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted'
+                }`}
+              >
+                {message.content}
+                {message.sources && message.sources.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-border/50">
+                    {message.sources.map(source => (
+                      <Badge key={source.id} variant="secondary" className="font-normal">
+                        <FileText className="h-3 w-3 mr-1" />
+                        {source.title}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+        {ask.isPending && (
+          <div className="flex justify-start">
+            <div className="bg-muted rounded-lg px-4 py-3">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          </div>
+        )}
+      </CardContent>
+      <div className="border-t p-3 flex gap-2">
+        <Input
+          placeholder="Ask about office policies, HR, insurance…"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              send(input);
+            }
+          }}
+          disabled={ask.isPending}
+        />
+        <Button onClick={() => send(input)} disabled={ask.isPending || !input.trim()}>
+          <Send className="h-4 w-4" />
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function UploadDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const upload = useUploadOfficeDoc();
+  const [title, setTitle] = useState('');
+  const [category, setCategory] = useState<OfficeDocCategory>('policy');
+  const [file, setFile] = useState<File | null>(null);
+  const [pastedText, setPastedText] = useState('');
+  const [mode, setMode] = useState<'file' | 'text'>('file');
+
+  const reset = () => {
+    setTitle('');
+    setCategory('policy');
+    setFile(null);
+    setPastedText('');
+    setMode('file');
+  };
+
+  const canSubmit =
+    title.trim() !== '' && (mode === 'file' ? !!file : pastedText.trim() !== '');
+
+  const submit = () => {
+    upload.mutate(
+      {
+        title: title.trim(),
+        category,
+        file: mode === 'file' ? file ?? undefined : undefined,
+        text: mode === 'text' ? pastedText : undefined,
+      },
+      {
+        onSuccess: result => {
+          toast.success(`Added "${title.trim()}" (${result.chunks} sections indexed)`);
+          reset();
+          onClose();
+        },
+        onError: err => toast.error(err.message),
+      }
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={isOpen => !isOpen && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Add Document</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="doc-title">Title</Label>
+            <Input
+              id="doc-title"
+              placeholder="e.g. Employee Handbook 2026"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Category</Label>
+            <Select value={category} onValueChange={v => setCategory(v as OfficeDocCategory)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(DOC_CATEGORY_LABELS) as OfficeDocCategory[]).map(key => (
+                  <SelectItem key={key} value={key}>
+                    {DOC_CATEGORY_LABELS[key]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Tabs value={mode} onValueChange={v => setMode(v as 'file' | 'text')}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="file">Upload File</TabsTrigger>
+              <TabsTrigger value="text">Paste Text</TabsTrigger>
+            </TabsList>
+            <TabsContent value="file" className="space-y-1.5">
+              <Input
+                type="file"
+                accept=".pdf,.txt,.md,text/plain,application/pdf"
+                onChange={e => {
+                  const selected = e.target.files?.[0] ?? null;
+                  if (selected && selected.size > 8 * 1024 * 1024) {
+                    toast.error('File is larger than 8 MB. Split it or paste the text.');
+                    e.target.value = '';
+                    return;
+                  }
+                  setFile(selected);
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                PDF or text files up to 8 MB. Scanned/image-only PDFs can't be read — paste
+                the text instead.
+              </p>
+            </TabsContent>
+            <TabsContent value="text">
+              <Textarea
+                rows={6}
+                placeholder="Paste the policy or handbook text here…"
+                value={pastedText}
+                onChange={e => setPastedText(e.target.value)}
+              />
+            </TabsContent>
+          </Tabs>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={submit} disabled={!canSubmit || upload.isPending}>
+            {upload.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Add Document
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DocsPanel() {
+  const { data: docs, isLoading } = useOfficeDocs();
+  const deleteDoc = useDeleteOfficeDoc();
+  const [uploadOpen, setUploadOpen] = useState(false);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          {docs?.length ?? 0} document{docs?.length === 1 ? '' : 's'} in the knowledge base
+        </p>
+        <Button size="sm" onClick={() => setUploadOpen(true)}>
+          <Plus className="h-4 w-4 mr-1.5" />
+          Add Document
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-10">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+        </div>
+      ) : (docs ?? []).length === 0 ? (
+        <Card>
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            No documents yet. Add your office policies, employee handbook, and insurance
+            handbooks so the assistant can look things up.
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {(docs ?? []).map((doc: OfficeDoc) => (
+            <Card key={doc.id}>
+              <CardContent className="py-3 flex items-center gap-3">
+                <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm truncate">{doc.title}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {DOC_CATEGORY_LABELS[(doc.category as OfficeDocCategory) ?? 'other']} ·{' '}
+                    {new Date(doc.created_at).toLocaleDateString()} ·{' '}
+                    {Math.max(1, Math.round(doc.char_count / 1000))}k characters
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-destructive shrink-0"
+                  onClick={() => {
+                    if (confirm(`Remove "${doc.title}" from the knowledge base?`)) {
+                      deleteDoc.mutate(doc, {
+                        onError: err => toast.error(`Delete failed: ${err.message}`),
+                      });
+                    }
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <Alert>
+        <Info className="h-4 w-4" />
+        <AlertDescription>
+          This knowledge base is for internal business documents only — policies, HR
+          materials, and insurance plan handbooks. Do not upload documents containing
+          patient information.
+        </AlertDescription>
+      </Alert>
+
+      <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} />
+    </div>
+  );
+}
+
+export default function Assistant() {
+  return (
+    <div className="p-4 md:p-6 space-y-4 max-w-4xl mx-auto">
+      <div className="flex items-center gap-2">
+        <Sparkles className="h-6 w-6 text-primary" />
+        <h1 className="text-2xl font-bold">Ask AI</h1>
+      </div>
+
+      <Tabs defaultValue="chat">
+        <TabsList>
+          <TabsTrigger value="chat">Chat</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
+        </TabsList>
+        <TabsContent value="chat">
+          <ChatPanel />
+        </TabsContent>
+        <TabsContent value="documents">
+          <DocsPanel />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

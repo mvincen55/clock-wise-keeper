@@ -3,6 +3,10 @@ project_id = "lfiplzmxpmybtbzhmnkp"
 [functions]
   [functions.accept-invite]
     verify_jwt = false
+  [functions.ask-docs]
+    verify_jwt = false
+  [functions.ingest-doc]
+    verify_jwt = false
   [functions.auth-email-hook]
     verify_jwt = false
   [functions.confirm-import]

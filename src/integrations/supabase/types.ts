@@ -1214,6 +1214,90 @@ export type Database = {
           },
         ]
       }
+      office_doc_chunks: {
+        Row: {
+          chunk_index: number
+          content: string
+          doc_id: string
+          id: string
+          org_id: string
+          tsv: unknown | null
+        }
+        Insert: {
+          chunk_index: number
+          content: string
+          doc_id: string
+          id?: string
+          org_id: string
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          doc_id?: string
+          id?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "office_doc_chunks_doc_id_fkey"
+            columns: ["doc_id"]
+            isOneToOne: false
+            referencedRelation: "office_docs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "office_doc_chunks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      office_docs: {
+        Row: {
+          category: string
+          char_count: number
+          created_at: string
+          file_path: string | null
+          id: string
+          mime_type: string | null
+          org_id: string
+          title: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          category?: string
+          char_count?: number
+          created_at?: string
+          file_path?: string | null
+          id?: string
+          mime_type?: string | null
+          org_id: string
+          title: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          category?: string
+          char_count?: number
+          created_at?: string
+          file_path?: string | null
+          id?: string
+          mime_type?: string | null
+          org_id?: string
+          title?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "office_docs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_invites: {
         Row: {
           accepted_at: string | null
@@ -2525,6 +2609,17 @@ export type Database = {
       recompute_attendance_range: {
         Args: { p_end_date: string; p_start_date: string; p_user_id: string }
         Returns: number
+      }
+      search_office_doc_chunks: {
+        Args: { p_query: string; p_limit?: number }
+        Returns: {
+          doc_id: string
+          title: string
+          category: string
+          chunk_index: number
+          content: string
+          rank: number
+        }[]
       }
       sweep_attendance: { Args: { p_days?: number }; Returns: string }
       user_owns_import: { Args: { _import_id: string }; Returns: boolean }
