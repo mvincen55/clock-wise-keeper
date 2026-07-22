@@ -57,6 +57,10 @@ export interface FofAmounts {
   totalCents: Cents | null;
   insuranceEstimateCents: Cents | null;
   writeOffCents: Cents | null;
+  /** Discretionary flat discount; printed only when non-zero. */
+  officeDiscountCents?: Cents | null;
+  /** Existing credit on the patient's account; printed only when non-zero. */
+  patientCreditCents?: Cents | null;
 }
 
 /** Manual overrides of computed values. Memory-only — never persisted. */

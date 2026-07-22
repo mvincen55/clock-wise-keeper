@@ -100,6 +100,8 @@ interface BuilderState {
   dateISO: string;
   note: string;
   lines: BuilderLine[];
+  officeDiscountInput: string;
+  patientCreditInput: string;
   deductibleInput: string;
   annualMaxInput: string;
   paymentCountOverride: string;
@@ -127,6 +129,8 @@ const initialState = (): BuilderState => ({
   dateISO: todayISO(),
   note: '',
   lines: [newLine()],
+  officeDiscountInput: '',
+  patientCreditInput: '',
   deductibleInput: '',
   annualMaxInput: '',
   paymentCountOverride: '',
@@ -370,8 +374,10 @@ export default function FofBuilder() {
       totalCents: estimate.totalCents,
       insuranceEstimateCents: parseOverride(state.insuranceOverride) ?? estimate.insurancePaysCents,
       writeOffCents: parseOverride(state.writeOffOverride) ?? estimate.writeOffCents,
+      officeDiscountCents: parseCurrencyInput(state.officeDiscountInput),
+      patientCreditCents: parseCurrencyInput(state.patientCreditInput),
     }),
-    [estimate, state.insuranceOverride, state.writeOffOverride]
+    [estimate, state.insuranceOverride, state.writeOffOverride, state.officeDiscountInput, state.patientCreditInput]
   );
 
   const overrides: FofOverrides = useMemo(
@@ -625,6 +631,34 @@ export default function FofBuilder() {
                     Total: {formatCents(estimate.totalCents)}
                   </span>
                 </div>
+                <div className="grid gap-3 sm:grid-cols-2 pt-1">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fof-office-discount">Office Discount (optional)</Label>
+                    <Input
+                      id="fof-office-discount"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      placeholder="$0.00"
+                      value={state.officeDiscountInput}
+                      onChange={setField('officeDiscountInput')}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fof-credit">Patient Current Credit (optional)</Label>
+                    <Input
+                      id="fof-credit"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      placeholder="$0.00"
+                      value={state.patientCreditInput}
+                      onChange={setField('patientCreditInput')}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  These print under the Total only when an amount is entered, and reduce
+                  the Patient's Portion.
+                </p>
                 <div className="space-y-1.5 pt-1">
                   <Label htmlFor="fof-note">Treatment description (prints on the form)</Label>
                   <Textarea

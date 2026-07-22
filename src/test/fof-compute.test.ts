@@ -99,6 +99,25 @@ describe('computeFof', () => {
     expect(result.effective.prepayTotalCents).toBe(95_000);
   });
 
+  it('office discount and patient credit reduce the portion', () => {
+    const result = computeFof(makeTemplate({ discountPercent: 0 }), {
+      ...amounts(100_000),
+      officeDiscountCents: 10_000,
+      patientCreditCents: 5_000,
+    });
+    expect(result.effective.patientPortionCents).toBe(85_000);
+  });
+
+  it('omitted office discount and credit change nothing', () => {
+    const withFields = computeFof(makeTemplate(), {
+      ...amounts(100_000),
+      officeDiscountCents: null,
+      patientCreditCents: null,
+    });
+    const without = computeFof(makeTemplate(), amounts(100_000));
+    expect(withFields.effective).toEqual(without.effective);
+  });
+
   it('handles null total as zero', () => {
     const result = computeFof(makeTemplate(), amounts(null));
     expect(result.effective.patientPortionCents).toBe(0);
