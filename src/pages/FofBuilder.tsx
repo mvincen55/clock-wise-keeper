@@ -53,6 +53,7 @@ import {
   type FofLine,
   type PlanRules,
 } from '@/lib/fof/insurance';
+import { categorizeCdtCode } from '@/lib/fof/cdt';
 import { DEFAULT_PRACTICE_INFO } from '@/lib/fof/defaults';
 import type { Cents, FofAmounts, FofOverrides, FofTemplate } from '@/lib/fof/types';
 
@@ -294,7 +295,7 @@ export default function FofBuilder() {
             feeInput: formatCents(match.feeCents),
             category: match.category,
           }
-        : { code },
+        : { code, category: categorizeCdtCode(code) },
     });
   };
 

@@ -20,6 +20,7 @@ import {
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { parseCurrencyInput, formatCents } from '@/lib/fof/money';
+import { categorizeCdtCode } from '@/lib/fof/cdt';
 import type { FeeCategory } from '@/lib/fof/insurance';
 import { useImportFeeScheduleItems, type ImportRow } from '@/hooks/useFeeSchedules';
 
@@ -135,7 +136,11 @@ export default function FeeImportDialog({ open, scheduleId, scheduleName, onClos
         code,
         description: descCol !== NONE ? cellString(row[Number(descCol)]) : '',
         feeCents: fee,
-        category: catCol !== NONE ? detectCategory(cellString(row[Number(catCol)])) : undefined,
+        // Explicit category column wins; otherwise auto-categorize from the
+        // CDT code range (consistent across carriers).
+        category:
+          (catCol !== NONE ? detectCategory(cellString(row[Number(catCol)])) : undefined) ??
+          categorizeCdtCode(code),
       });
     }
     return rows;

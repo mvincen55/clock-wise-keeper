@@ -147,12 +147,25 @@
 
 .fof-sheet {
   width: 7.5in;
+  /* Letter page minus 0.5in margins; flex column pushes the footer to the
+     true bottom of the page in both preview and print. */
+  min-height: 10in;
+  display: flex;
+  flex-direction: column;
   background: white;
   color: black;
   font-family: Arial, Helvetica, sans-serif;
   font-size: 10pt;
   line-height: 1.35;
   padding: 0.25in;
+}
+
+.fof-footer {
+  margin-top: auto;
+  padding-top: 6pt;
+  border-top: 1px solid black;
+  text-align: center;
+  font-size: 8.5pt;
 }
 
 .fof-header {

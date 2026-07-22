@@ -29,6 +29,7 @@ import { toast } from 'sonner';
 import { ArrowLeft, FileSpreadsheet, Loader2, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import FeeImportDialog from '@/components/fof/FeeImportDialog';
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
+import { categorizeCdtCode } from '@/lib/fof/cdt';
 import type { FeeCategory } from '@/lib/fof/insurance';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import {
@@ -98,7 +99,11 @@ function ItemEditorDialog({
                 id="item-code"
                 placeholder="D2740"
                 value={code}
-                onChange={e => setCode(e.target.value.toUpperCase())}
+                onChange={e => {
+                  const next = e.target.value.toUpperCase();
+                  setCode(next);
+                  if (!item) setCategory(categorizeCdtCode(next));
+                }}
                 disabled={!!item}
               />
             </div>

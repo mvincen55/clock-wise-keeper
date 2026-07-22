@@ -62,7 +62,6 @@ export default function FofPrintSheet({
     <div className="fof-sheet">
       <header className="fof-header">
         <img className="fof-logo" src={logoUrl} alt={practice.practiceName} />
-        <div>{practice.addressLine1}, {practice.addressLine2} · {practice.phone}</div>
         <div className="fof-title">Financial Options Form</div>
       </header>
 
@@ -209,6 +208,10 @@ export default function FofPrintSheet({
           </div>
         </div>
       </div>
+
+      <footer className="fof-footer">
+        {practice.practiceName} · {practice.addressLine1}, {practice.addressLine2} · {practice.phone}
+      </footer>
     </div>
   );
 }
