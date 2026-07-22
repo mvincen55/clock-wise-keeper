@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import {
   DollarSign,
@@ -105,6 +106,8 @@ interface BuilderState {
   deductibleInput: string;
   annualMaxInput: string;
   paymentCountOverride: string;
+  prepayOptionState: string; // '' = follow template, 'on'/'off' = per-form override
+  installmentOptionState: string;
   insuranceOverride: string;
   writeOffOverride: string;
   portionOverride: string;
@@ -134,6 +137,8 @@ const initialState = (): BuilderState => ({
   deductibleInput: '',
   annualMaxInput: '',
   paymentCountOverride: '',
+  prepayOptionState: '',
+  installmentOptionState: '',
   insuranceOverride: '',
   writeOffOverride: '',
   portionOverride: '',
@@ -342,12 +347,26 @@ export default function FofBuilder() {
       }
     : null;
 
-  // In-network plans get no additional prepay discount — the write-off is
-  // already the negotiated saving. Suppress the discount row entirely.
-  const effectiveTemplate: FofTemplate | undefined =
-    template && plan?.isInNetwork
-      ? { ...template, discountPercent: 0, discountLabel: '', prepayNote: '' }
-      : template;
+  // In-network plans get no prepay option at all — the write-off is the
+  // negotiated saving, so only the installment agreement is offered.
+  // Staff can also toggle either agreement per form.
+  const prepayShown = plan?.isInNetwork
+    ? false
+    : state.prepayOptionState === ''
+      ? template?.showPrepayOption ?? false
+      : state.prepayOptionState === 'on';
+  const installmentShown =
+    state.installmentOptionState === ''
+      ? template?.showInstallmentOption ?? false
+      : state.installmentOptionState === 'on';
+  const effectiveTemplate: FofTemplate | undefined = template
+    ? {
+        ...template,
+        showPrepayOption: prepayShown,
+        showInstallmentOption: installmentShown,
+        ...(plan?.isInNetwork ? { discountPercent: 0, discountLabel: '', prepayNote: '' } : {}),
+      }
+    : undefined;
 
   // Payment plan follows the treatment (front-loaded for implants and
   // dentures so the balance never runs behind the work); staff can force
@@ -510,6 +529,35 @@ export default function FofBuilder() {
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="opt-prepay"
+                      checked={prepayShown}
+                      disabled={!!plan?.isInNetwork}
+                      onCheckedChange={v =>
+                        dispatch({ type: 'set', field: 'prepayOptionState', value: v ? 'on' : 'off' })
+                      }
+                    />
+                    <Label htmlFor="opt-prepay">Prepay in Full option</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="opt-installment"
+                      checked={installmentShown}
+                      onCheckedChange={v =>
+                        dispatch({ type: 'set', field: 'installmentOptionState', value: v ? 'on' : 'off' })
+                      }
+                    />
+                    <Label htmlFor="opt-installment">Payment Installment option</Label>
+                  </div>
+                </div>
+                {plan?.isInNetwork && (
+                  <p className="text-xs text-muted-foreground">
+                    In-network plan — the prepay option is not offered; the form shows the
+                    Payment Installment Agreement only.
+                  </p>
+                )}
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="fof-name">Patient Name</Label>
@@ -788,11 +836,6 @@ export default function FofBuilder() {
                           overridden={computation.overridden.discount}
                           onChange={v => dispatch({ type: 'set', field: 'discountOverride', value: v })}
                         />
-                      )}
-                      {plan?.isInNetwork && (
-                        <p className="text-xs text-muted-foreground">
-                          In-network plan — no additional prepay discount is offered.
-                        </p>
                       )}
                       <OverrideRow
                         label="Prepay TOTAL DUE"
