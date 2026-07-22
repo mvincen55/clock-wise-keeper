@@ -140,12 +140,18 @@
 
 /* ---- Financial Options Form (FOF) print sheet ---- */
 /* Hidden on screen except inside the preview card; becomes the only
-   visible content when printing from the FOF builder. */
+   visible content when printing from the FOF builder. Card-based layout:
+   navy accents on white, tuned to degrade cleanly in grayscale. */
 .fof-print-root {
   display: none;
 }
 
 .fof-sheet {
+  --fof-navy: #1f3a5c;
+  --fof-ink: #16202c;
+  --fof-muted: #55606c;
+  --fof-line: #c9d2dc;
+  --fof-tint: #eef3f8;
   width: 7.5in;
   /* Letter page minus 0.5in margins; flex column pushes the footer to the
      true bottom of the page in both preview and print. */
@@ -153,171 +159,278 @@
   display: flex;
   flex-direction: column;
   background: white;
-  color: #111;
+  color: var(--fof-ink);
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  font-size: 9.5pt;
+  font-size: 9pt;
   line-height: 1.4;
   padding: 0.25in;
   print-color-adjust: exact;
   -webkit-print-color-adjust: exact;
 }
 
-.fof-footer {
-  margin-top: auto;
-  padding-top: 7pt;
-  border-top: 0.75pt solid #999;
-  text-align: center;
-  font-size: 7.5pt;
-  color: #555;
-  letter-spacing: 0.02em;
-}
-
-.fof-footer-name {
-  display: block;
-  font-weight: 600;
-  color: #333;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.fof-kicker {
   font-size: 7pt;
-  margin-bottom: 1pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fof-navy);
 }
 
-.fof-header {
-  text-align: center;
-  border-bottom: 1.5pt solid #111;
-  padding-bottom: 10pt;
-  margin-bottom: 12pt;
+/* Header: logo left, date/patient right */
+.fof-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16pt;
+  border-bottom: 1.25pt solid var(--fof-navy);
+  padding-bottom: 8pt;
+  margin-bottom: 10pt;
 }
 
 .fof-logo {
   display: block;
-  height: 1.15in;
+  height: 0.78in;
   width: auto;
-  margin: 0 auto;
 }
 
-.fof-meta {
+.fof-head-meta {
+  text-align: right;
   display: flex;
-  justify-content: space-between;
-  gap: 16pt;
-  margin-bottom: 8pt;
+  flex-direction: column;
+  gap: 3pt;
 }
 
-.fof-meta-field {
-  display: flex;
-  align-items: baseline;
-  gap: 5pt;
-}
-
-.fof-treatment {
-  margin-bottom: 12pt;
-}
-
-.fof-label {
-  font-weight: 600;
-  font-size: 7.5pt;
-  letter-spacing: 0.08em;
+.fof-meta-key {
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #444;
-  white-space: nowrap;
+  color: var(--fof-muted);
+  margin-right: 5pt;
 }
 
-.fof-blank {
-  display: inline-block;
-  border-bottom: 0.75pt solid #111;
-  padding: 0 5pt 1pt;
-  min-height: 12pt;
+.fof-meta-value {
   font-size: 10pt;
+  font-weight: 700;
 }
 
-.fof-costs {
-  width: 4.8in;
-  margin: 0 auto 12pt;
-  border: 0.75pt solid #ccc;
-  border-radius: 3pt;
+/* Hero: treatment left, total cost card right */
+.fof-hero {
+  display: flex;
+  gap: 12pt;
+  align-items: stretch;
+  margin-bottom: 10pt;
+}
+
+.fof-hero-treatment {
+  flex: 1.2;
+  padding-top: 4pt;
+}
+
+.fof-treatment-text {
+  font-size: 12.5pt;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 3pt;
+}
+
+.fof-hero-card {
+  flex: 1;
+  border: 1pt solid var(--fof-navy);
+  border-radius: 5pt;
+  background: var(--fof-tint);
+  text-align: center;
+  padding: 8pt 10pt;
+}
+
+.fof-hero-amount {
+  font-size: 24pt;
+  font-weight: 800;
+  color: var(--fof-navy);
+  line-height: 1.15;
+  margin: 2pt 0;
+}
+
+.fof-hero-sub {
+  font-size: 7.5pt;
+  color: var(--fof-muted);
+}
+
+/* Breakdown + callout cards */
+.fof-cards {
+  display: flex;
+  gap: 12pt;
+  align-items: stretch;
+  margin-bottom: 10pt;
+}
+
+.fof-card {
+  border: 0.75pt solid var(--fof-line);
+  border-radius: 5pt;
   padding: 7pt 10pt;
 }
 
-.fof-cost-row {
+.fof-breakdown {
+  flex: 1.25;
+}
+
+.fof-card-title {
+  font-size: 7.5pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fof-navy);
+  margin-bottom: 4pt;
+}
+
+.fof-row {
   display: flex;
   justify-content: space-between;
   gap: 8pt;
   padding: 2pt 0;
+  border-bottom: 0.5pt solid #e6eaef;
 }
 
-.fof-cost-total {
-  font-weight: 700;
-  font-size: 10.5pt;
-  border-top: 1.25pt solid #111;
-  margin-top: 3pt;
-  padding-top: 3pt;
+.fof-row:last-child {
+  border-bottom: none;
 }
 
-.fof-agreements {
-  display: flex;
-  gap: 0.22in;
-  margin-bottom: 12pt;
+.fof-row-total {
+  font-weight: 800;
+  font-size: 10pt;
+  color: var(--fof-navy);
+  border-top: 1.25pt solid var(--fof-navy);
+  margin-top: 2pt;
+  padding-top: 3.5pt;
+}
+
+.fof-callout {
+  flex: 1;
+  background: var(--fof-tint);
+  border-color: var(--fof-line);
+}
+
+.fof-callout p {
+  margin: 0;
+  font-size: 7.5pt;
+  line-height: 1.45;
+  color: #33404d;
+}
+
+/* Agreement cards: title band + horizontal payment cells */
+.fof-agreement {
+  border: 0.75pt solid var(--fof-navy);
+  border-radius: 5pt;
+  overflow: hidden;
+  margin-bottom: 8pt;
   page-break-inside: avoid;
 }
 
-.fof-box {
-  flex: 1;
-  border: 0.75pt solid #333;
-  border-radius: 3pt;
-  overflow: hidden;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.fof-box-title {
-  font-weight: 700;
+.fof-agreement-title {
   font-size: 8pt;
-  letter-spacing: 0.09em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   text-align: center;
-  background: #f0f0f0;
-  border-bottom: 0.75pt solid #333;
-  padding: 4.5pt 8pt;
-  margin: 0;
+  color: var(--fof-navy);
+  background: var(--fof-tint);
+  border-bottom: 0.75pt solid var(--fof-navy);
+  padding: 3.5pt 8pt;
 }
 
-.fof-box .fof-cost-row {
-  padding: 2pt 9pt;
+.fof-cells {
+  display: flex;
+  align-items: stretch;
 }
 
-.fof-box .fof-cost-row:first-of-type {
-  padding-top: 5pt;
+.fof-cell {
+  flex: 1;
+  text-align: center;
+  padding: 6pt 6pt 7pt;
+  border-right: 0.5pt solid var(--fof-line);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 1pt;
 }
 
-.fof-box .fof-cost-total {
+.fof-cell:last-child {
+  border-right: none;
+}
+
+.fof-cell-head {
+  font-size: 6.8pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fof-muted);
+}
+
+.fof-cell-label {
+  font-size: 7.5pt;
+  color: var(--fof-muted);
+}
+
+.fof-cell-amount {
+  font-size: 11pt;
+  font-weight: 700;
   margin-top: auto;
-  background: #fafafa;
-  border-top: 0.75pt solid #333;
-  padding: 3.5pt 9pt;
-  font-size: 10pt;
+}
+
+.fof-cell-total {
+  background: var(--fof-navy);
+  color: white;
+}
+
+.fof-cell-total .fof-cell-head {
+  color: #cdd9e6;
+}
+
+.fof-cell-total .fof-cell-amount {
+  color: white;
+  font-weight: 800;
+}
+
+/* Contact band */
+.fof-band {
+  background: var(--fof-tint);
+  border-radius: 5pt;
+  padding: 6pt 10pt;
+  font-size: 7.2pt;
+  line-height: 1.45;
+  color: #33404d;
+  margin-bottom: 8pt;
 }
 
 .fof-footnotes {
   font-size: 6.8pt;
   line-height: 1.35;
-  color: #444;
-  margin-bottom: 12pt;
-  padding-top: 6pt;
-  border-top: 0.75pt solid #ddd;
+  color: var(--fof-muted);
+  margin-bottom: 8pt;
 }
 
 .fof-footnotes p {
   margin: 0 0 2.5pt;
 }
 
+/* Signature block */
 .fof-signatures {
   page-break-inside: avoid;
+  border-top: 0.75pt solid var(--fof-line);
+  padding-top: 8pt;
+}
+
+.fof-blank {
+  display: inline-block;
+  border-bottom: 0.75pt solid var(--fof-ink);
+  padding: 0 5pt 1pt;
+  min-height: 12pt;
+  font-size: 10pt;
 }
 
 .fof-sig-intro {
   margin-bottom: 8pt;
-  font-size: 9.5pt;
+  font-size: 9pt;
 }
 
 .fof-sig-name-block {
@@ -331,7 +444,7 @@
   font-size: 6.5pt;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #555;
+  color: var(--fof-muted);
   margin-top: 1.5pt;
   margin-bottom: 5pt;
 }
@@ -339,23 +452,24 @@
 .fof-choices {
   display: flex;
   gap: 0.4in;
-  margin: 7pt 0 16pt;
+  margin: 6pt 0 14pt;
 }
 
 .fof-choice {
   display: flex;
   align-items: center;
   gap: 6pt;
-  font-weight: 600;
-  font-size: 9.5pt;
+  font-weight: 700;
+  font-size: 9pt;
+  color: var(--fof-navy);
 }
 
 .fof-checkbox {
   display: inline-block;
   width: 10pt;
   height: 10pt;
-  border: 1.1pt solid #111;
-  border-radius: 1.5pt;
+  border: 1.1pt solid var(--fof-navy);
+  border-radius: 2pt;
 }
 
 .fof-sig-row {
@@ -373,8 +487,29 @@
 }
 
 .fof-sig-line {
-  border-bottom: 0.75pt solid #111;
-  height: 20pt;
+  border-bottom: 0.75pt solid var(--fof-ink);
+  height: 19pt;
+}
+
+/* Footer pinned to the page bottom */
+.fof-footer {
+  margin-top: auto;
+  padding-top: 6pt;
+  border-top: 0.75pt solid var(--fof-line);
+  text-align: center;
+  font-size: 7.5pt;
+  color: var(--fof-muted);
+  letter-spacing: 0.02em;
+}
+
+.fof-footer-name {
+  display: block;
+  font-weight: 700;
+  color: var(--fof-navy);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-size: 7pt;
+  margin-bottom: 1pt;
 }
 
 @page fof {
