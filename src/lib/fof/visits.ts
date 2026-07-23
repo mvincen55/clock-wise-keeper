@@ -172,16 +172,17 @@ export function suggestVisitStage(code: string): number {
 }
 
 /**
- * Build the payment schedule from actual per-visit work, "half a visit
- * ahead": Upon Scheduling collects half of Visit 1; each visit start
- * collects the rest of that visit plus half of the next; the final visit
- * collects its remaining half. The patient portion is allocated across
- * visits proportionally to each visit's fees; the schedule always sums
- * exactly to the portion and the balance never runs behind the work.
+ * Build the payment schedule from actual per-visit work, a FULL visit
+ * ahead: Upon Scheduling collects Visit 1, and each visit start collects
+ * the next visit — so the patient walks into every visit with that day's
+ * work already paid and never carries a balance. The patient portion is
+ * allocated across visits proportionally to each visit's fees; the
+ * schedule always sums exactly to the portion.
  *
  * A visit's `dueAtVisitCents` marks fees that are billed AT that visit
- * with no half-ahead prepay (e.g. the surgical guide D5982) — they're
- * excluded from the ahead-shifting and added flat to that visit's payment.
+ * with no prepay (e.g. the surgical guide D5982) — they're excluded from
+ * the ahead-shifting and added flat to that visit's payment. Slots with
+ * nothing due (typically the final visit) drop off the schedule.
  */
 export function buildVisitSchedule(
   portionCents: Cents,
@@ -200,13 +201,11 @@ export function buildVisitSchedule(
     return Math.min(alloc[i], Math.round((alloc[i] * dueFee) / v.feeCents));
   });
   const ahead = alloc.map((a, i) => a - dueAt[i]);
-  const halves = ahead.map(a => Math.round(a / 2));
 
-  const payments: Cents[] = [halves[0]];
-  for (let i = 0; i < n - 1; i++) {
-    payments.push(ahead[i] - halves[i] + halves[i + 1] + dueAt[i]);
+  const payments: Cents[] = [ahead[0]];
+  for (let i = 0; i < n; i++) {
+    payments.push(dueAt[i] + (i + 1 < n ? ahead[i + 1] : 0));
   }
-  payments.push(ahead[n - 1] - halves[n - 1] + dueAt[n - 1]);
 
   const labels = [
     'Upon Scheduling',
@@ -216,8 +215,7 @@ export function buildVisitSchedule(
         : `At Visit ${i + 1}${v.label ? ` · ${v.label}` : ''}`
     ),
   ];
-  // Drop empty slots (e.g. nothing due Upon Scheduling when the whole
-  // first visit is billed at the visit).
+  // Drop empty slots (usually the final visit — everything was prepaid).
   const slots = payments
     .map((p, i) => ({ p, label: labels[i] }))
     .filter(s => s.p > 0);

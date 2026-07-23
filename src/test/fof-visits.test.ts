@@ -127,40 +127,34 @@ describe('visitSegmentsForCode', () => {
       { label: 'Delivery', feeCents: deliveryFee },
     ])!;
     expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(199_800);
-    expect(plan.labels).toEqual([
-      'Upon Scheduling',
-      'At Visit 1 · Prep',
-      'At Visit 2 · Delivery',
-    ]);
+    // Full-ahead: Delivery is prepaid at the Prep visit, so no payment
+    // slot remains at Delivery itself.
+    expect(plan.labels).toEqual(['Upon Scheduling', 'At Visit 1 · Prep']);
   });
 });
 
-describe('buildVisitSchedule — half a visit ahead', () => {
-  it('single visit becomes half at scheduling, half at appointment', () => {
+describe('buildVisitSchedule — a full visit ahead, never a balance', () => {
+  it('single visit is collected in full at scheduling', () => {
     const plan = buildVisitSchedule(80_000, [{ label: 'Filling', feeCents: 80_000 }]);
-    expect(plan!.weights).toEqual([40_000, 40_000]);
-    expect(plan!.labels[0]).toBe('Upon Scheduling');
-    expect(plan!.labels[1]).toContain('At Appointment');
+    expect(plan!.weights).toEqual([80_000]);
+    expect(plan!.labels).toEqual(['Upon Scheduling']);
   });
 
-  it('collects each visit plus half the next, ending with the final half', () => {
+  it('scheduling covers visit 1 and each visit covers the next; nothing left at the last', () => {
     // Visits allocated 40k / 60k / 100k of a 200k portion
     const plan = buildVisitSchedule(200_000, [
       { label: 'Surgery', feeCents: 40_000 },
       { label: 'Placement', feeCents: 60_000 },
       { label: 'Crown', feeCents: 100_000 },
     ]);
-    // Scheduling: half of v1 = 20k
-    // Visit 1: rest of v1 (20k) + half v2 (30k) = 50k
-    // Visit 2: rest of v2 (30k) + half v3 (50k) = 80k
-    // Visit 3: rest of v3 = 50k
-    expect(plan!.weights).toEqual([20_000, 50_000, 80_000, 50_000]);
+    // Scheduling: v1 (40k); Visit 1: v2 (60k); Visit 2: v3 (100k);
+    // Visit 3: nothing due — slot dropped
+    expect(plan!.weights).toEqual([40_000, 60_000, 100_000]);
     expect(plan!.weights.reduce((a, b) => a + b, 0)).toBe(200_000);
     expect(plan!.labels).toEqual([
       'Upon Scheduling',
       'At Visit 1 · Surgery',
       'At Visit 2 · Placement',
-      'At Visit 3 · Crown',
     ]);
   });
 
@@ -169,11 +163,11 @@ describe('buildVisitSchedule — half a visit ahead', () => {
       { label: 'A', feeCents: 100_000 },
       { label: 'B', feeCents: 200_000 },
     ]);
-    // Allocation 30k/60k → payments: 15k, 15k+30k=45k, 30k
-    expect(plan!.weights).toEqual([15_000, 45_000, 30_000]);
+    // Allocation 30k/60k → scheduling 30k, visit 1 collects 60k
+    expect(plan!.weights).toEqual([30_000, 60_000]);
   });
 
-  it('balance never runs behind the work at any visit', () => {
+  it('every visit is fully paid BEFORE it happens', () => {
     const visits = [
       { label: 'A', feeCents: 37_700 },
       { label: 'B', feeCents: 271_700 },
@@ -182,11 +176,12 @@ describe('buildVisitSchedule — half a visit ahead', () => {
     const total = visits.reduce((s, v) => s + v.feeCents, 0);
     const plan = buildVisitSchedule(total, visits)!;
     let paid = 0;
-    let workDone = 0;
+    let workIncludingVisit = 0;
     for (let visit = 0; visit < visits.length; visit++) {
-      paid += plan.weights[visit]; // payment at start of this visit (index 0 = scheduling)
-      if (visit > 0) workDone += visits[visit - 1].feeCents;
-      expect(paid).toBeGreaterThanOrEqual(workDone);
+      paid += plan.weights[visit] ?? 0; // payment collected before/at arrival
+      workIncludingVisit += visits[visit].feeCents;
+      // Money in hand covers the CURRENT visit's work, not just prior visits
+      expect(paid).toBeGreaterThanOrEqual(workIncludingVisit);
     }
     expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(total);
   });
@@ -196,17 +191,16 @@ describe('buildVisitSchedule — half a visit ahead', () => {
     expect(buildVisitSchedule(100, [{ label: 'X', feeCents: 0 }])).toBeNull();
   });
 
-  it('due-at-visit fees (e.g. surgical guide) skip the half-ahead prepay', () => {
+  it('due-at-visit fees (e.g. surgical guide) are paid at their visit, everything else ahead', () => {
     // Visit 1 = 200k of which 100k is the guide (billed at the visit);
     // visit 2 = 100k. Portion equals the fees.
     const plan = buildVisitSchedule(300_000, [
       { label: 'Surgery', feeCents: 200_000, dueAtVisitCents: 100_000 },
       { label: 'Delivery', feeCents: 100_000 },
     ])!;
-    // Scheduling: half of visit 1's ahead-eligible 100k = 50k (NOT 100k)
-    // Visit 1: rest of ahead (50k) + half v2 (50k) + guide 100k = 200k
-    // Visit 2: remaining 50k
-    expect(plan.weights).toEqual([50_000, 200_000, 50_000]);
+    // Scheduling: visit 1's ahead-eligible 100k (guide NOT prepaid)
+    // Visit 1: guide 100k + next visit 100k; Visit 2: nothing — dropped
+    expect(plan.weights).toEqual([100_000, 200_000]);
     expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(300_000);
   });
 
@@ -224,11 +218,9 @@ describe('buildVisitSchedule — half a visit ahead', () => {
       { label: 'Porcelain Crown', feeCents: 199_800 },
       { label: 'CerCr Ins', feeCents: 0 },
     ]);
-    expect(plan!.weights).toEqual([99_900, 99_900]);
-    expect(plan!.labels).toEqual([
-      'Upon Scheduling',
-      'At Appointment · Porcelain Crown',
-    ]);
+    // Only the crown visit bills, fully prepaid at scheduling.
+    expect(plan!.weights).toEqual([199_800]);
+    expect(plan!.labels).toEqual(['Upon Scheduling']);
   });
 });
 

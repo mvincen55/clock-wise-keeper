@@ -248,6 +248,9 @@ export default function FofPrintSheet({
           <span className="fof-sig-ack-text">{template.signatureIntro}</span>
         </p>
 
+        {/* Checkboxes only make sense as a choice — with a single
+            agreement offered there's nothing to pick, so no boxes. */}
+        {template.showPrepayOption && template.showInstallmentOption && (
         <div className="fof-choices">
           {template.showPrepayOption && (
             <div className="fof-choice">
@@ -260,6 +263,7 @@ export default function FofPrintSheet({
             </div>
           )}
         </div>
+        )}
 
         <div className="fof-sig-row">
           <div className="fof-sig-field fof-sig-wide">
