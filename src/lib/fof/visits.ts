@@ -202,10 +202,10 @@ export function buildVisitSchedule(
   });
   const ahead = alloc.map((a, i) => a - dueAt[i]);
 
+  // Payment names read like the appointment itself ("Dental Implant
+  // Surgery", "Crown Impressions") — no "At Visit N" prefix.
   const visitLabel = (i: number) =>
-    n === 1
-      ? `At Appointment${visits[i].label ? ` · ${visits[i].label}` : ''}`
-      : `At Visit ${i + 1}${visits[i].label ? ` · ${visits[i].label}` : ''}`;
+    visits[i].label || (n === 1 ? 'At Appointment' : `Visit ${i + 1}`);
 
   let payments: Cents[];
   let labels: string[];

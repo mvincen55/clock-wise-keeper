@@ -817,18 +817,39 @@ export default function FofBuilder() {
     // A typed Visit # pins the whole line to that visit; otherwise the
     // code's segments spread the fee across its clinical visits (crowns
     // split half to Prep, half to Delivery, etc.).
-    const entries: { raw: number; feeCents: number; label: string; dueAtVisit: boolean }[] = [];
+    // Appointment-style names: the noun of the procedure carries into its
+    // lab segments ("Crown Prep", "Denture Impressions"), surgical codes
+    // get a "Surgery" suffix, and an all-workup visit is the Work Up Visit.
+    const nounOf = (label: string) => {
+      const words = label.replace(/\(.*?\)/g, '').trim().split(/\s+/);
+      return words[words.length - 1] || label;
+    };
+    const isSurgical = (code: string) => {
+      const m = /^D(\d{4})$/i.exec(code.trim());
+      if (!m) return false;
+      const num = parseInt(m[1], 10);
+      return (num >= 6010 && num < 6055) || (num >= 7000 && num < 8000) || (num >= 4210 && num < 4300);
+    };
+    const entries: {
+      raw: number;
+      feeCents: number;
+      label: string;
+      dueAtVisit: boolean;
+      workup: boolean;
+    }[] = [];
     for (const l of active) {
       // Membership-covered procedures owe nothing at their visit.
       const fee = freeUnderMembership(l) ? 0 : parseCurrencyInput(l.feeInput) ?? 0;
-      const lineLabel = friendlyCdtName(l.code) || l.description.trim();
+      const base = friendlyCdtName(l.code) || l.description.trim();
+      const lineLabel =
+        isSurgical(l.code) && !/surger/i.test(base) ? `${base} Surgery` : base;
+      const workup = l.category === 'workup';
       // Work-up procedures (and the surgical guide) are billed at their
       // visit, never prepaid ahead.
-      const dueAtVisit =
-        NO_PREPAY_CODES.has(l.code.trim().toUpperCase()) || l.category === 'workup';
+      const dueAtVisit = NO_PREPAY_CODES.has(l.code.trim().toUpperCase()) || workup;
       const typed = parseInt(l.visit, 10);
       if (typed >= 1) {
-        entries.push({ raw: typed, feeCents: fee, label: lineLabel, dueAtVisit });
+        entries.push({ raw: typed, feeCents: fee, label: lineLabel, dueAtVisit, workup });
         continue;
       }
       const segments = visitSegmentsForCode(l.code);
@@ -836,7 +857,8 @@ export default function FofBuilder() {
       segments.forEach((segment, i) => {
         const part = i === segments.length - 1 ? remaining : Math.round(fee * segment.share);
         remaining -= part;
-        entries.push({ raw: segment.stage, feeCents: part, label: segment.label || lineLabel, dueAtVisit });
+        const label = segment.label ? `${nounOf(base)} ${segment.label}` : lineLabel;
+        entries.push({ raw: segment.stage, feeCents: part, label, dueAtVisit, workup });
       });
     }
     const distinct = [...new Set(entries.map(e => e.raw))].sort((a, b) => a - b);
@@ -844,7 +866,7 @@ export default function FofBuilder() {
       const group = entries.filter(e => e.raw === v);
       const top = group.reduce((best, e) => (e.feeCents > best.feeCents ? e : best), group[0]);
       return {
-        label: top.label,
+        label: group.every(e => e.workup) ? 'Work Up Visit' : top.label,
         feeCents: group.reduce((sum, e) => sum + e.feeCents, 0),
         dueAtVisitCents: group.reduce((sum, e) => sum + (e.dueAtVisit ? e.feeCents : 0), 0),
       };
