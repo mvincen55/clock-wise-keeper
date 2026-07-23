@@ -398,7 +398,10 @@
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4pt;
   color: white;
   background: var(--fof-navy);
   padding: 3.5pt 4pt;
@@ -431,17 +434,45 @@
   -webkit-print-color-adjust: exact;
 }
 
+/* "You save $X" chip: dark badge + bold amount so it still reads as a
+   clear highlight on a black-and-white printer. */
 .fof-save-chip {
   margin-top: 4pt;
-  background: #e6f3ea;
-  color: #1d6f3d;
+  display: flex;
+  align-items: center;
+  gap: 6pt;
+  background: #e9f4ec;
+  border: 0.75pt solid #b9dcc4;
+  color: #14532d;
   border-radius: 4pt;
   font-size: 7.4pt;
-  font-weight: 700;
-  padding: 3pt 6pt;
-  text-align: center;
+  padding: 3.5pt 6pt;
+  text-align: left;
   print-color-adjust: exact;
   -webkit-print-color-adjust: exact;
+}
+
+.fof-save-chip strong {
+  font-weight: 800;
+}
+
+.fof-save-badge {
+  width: 14pt;
+  height: 14pt;
+  border-radius: 50%;
+  background: #1d6f3d;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.fof-save-badge .fof-icon {
+  width: 8pt;
+  height: 8pt;
 }
 
 /* Agreement cards: title band + horizontal payment cells */
@@ -529,23 +560,22 @@
   margin-bottom: 8pt;
 }
 
-/* Split contact band: financing on the left, mailing on the right */
+/* Contact band: financing and mailing stacked (side-by-side felt busy) */
 .fof-band-split {
   display: flex;
-  gap: 10pt;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 5pt;
 }
 
 .fof-band-cell {
-  flex: 1;
   display: flex;
   gap: 6pt;
   align-items: flex-start;
 }
 
 .fof-band-cell + .fof-band-cell {
-  border-left: 0.75pt solid var(--fof-line);
-  padding-left: 10pt;
+  border-top: 0.75pt solid var(--fof-line);
+  padding-top: 5pt;
 }
 
 .fof-band-title {

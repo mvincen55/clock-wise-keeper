@@ -86,6 +86,19 @@ const GlobeIcon = () => (
     <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20" />
   </svg>
 );
+const DollarBadgeIcon = () => (
+  <svg {...iconProps}>
+    <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" />
+    <path d="M12 18V6" />
+  </svg>
+);
+const BanknoteIcon = () => (
+  <svg {...iconProps}>
+    <rect x="2" y="6" width="20" height="12" rx="2" />
+    <circle cx="12" cy="12" r="2" />
+    <path d="M6 12h.01M18 12h.01" />
+  </svg>
+);
 
 export default function FofPrintSheet({
   practice,
@@ -258,7 +271,9 @@ export default function FofPrintSheet({
           <div className="fof-options-head">Choose Your Payment Option</div>
           <div className="fof-options-row">
             <div className="fof-option">
-              <div className="fof-option-title">Option 1 · Prepay in Full — Pay Today &amp; Save</div>
+              <div className="fof-option-title">
+                <BanknoteIcon /> Option 1 · Prepay in Full — Pay Today &amp; Save
+              </div>
               <div className="fof-option-body">
                 <div className="fof-row">
                   <span>Total Patient Portion</span>
@@ -279,14 +294,22 @@ export default function FofPrintSheet({
                 </div>
                 {effective.discountCents > 0 && (
                   <div className="fof-save-chip">
-                    You save {formatCents(effective.discountCents)} when you prepay in full.
+                    <span className="fof-save-badge">
+                      <DollarBadgeIcon />
+                    </span>
+                    <span>
+                      <strong>You save {formatCents(effective.discountCents)}</strong> when
+                      you prepay in full.
+                    </span>
                   </div>
                 )}
               </div>
             </div>
             <div className="fof-or">or</div>
             <div className="fof-option">
-              <div className="fof-option-title">Option 2 · Payment Installment Agreement</div>
+              <div className="fof-option-title">
+                <CalendarIcon /> Option 2 · Payment Installment Agreement
+              </div>
               <div className="fof-option-body">
                 {installmentCells.map((cell, i) => (
                   <div className="fof-row" key={i}>
