@@ -189,7 +189,12 @@ export function estimateInsurance(
     // Max-exempt preventive lines are unaffected by an exhausted max.
     const revertedToOfficeFee = !!plan.officeFeesAfterMax && remainingMax <= 0 && !exemptFromMax;
     const fixedPay = line.fixedPayCents ?? null;
-    const covered = (fixedPay !== null ? fixedPay > 0 : pct > 0) && !revertedToOfficeFee;
+    // Work-up procedures are never insurance-covered — not even when a
+    // table-of-allowance pay schedule happens to list the code.
+    const covered =
+      line.category !== 'workup' &&
+      (fixedPay !== null ? fixedPay > 0 : pct > 0) &&
+      !revertedToOfficeFee;
     const writeOff =
       plan.writeoffApplies && covered ? Math.max(0, line.officeFeeCents - allowed) : 0;
 

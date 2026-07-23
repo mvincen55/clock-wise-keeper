@@ -268,6 +268,6 @@ ${excerpts ? `Relevant excerpts:\n\n${excerpts}` : "No excerpts matched this que
     return json({ answer, sources });
   } catch (error) {
     console.error("ask-docs error:", error);
-    return json({ error: error instanceof Error ? error.message : "Unexpected error" }, 500);
+    return json({ error: "Unexpected error" }, 500);
   }
 });

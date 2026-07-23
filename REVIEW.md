@@ -189,3 +189,112 @@ DB row counts confirmed back to baseline after cleanup; only the real owner's da
 
 Verification: `npx vitest run` (29/29), `npx tsc -p tsconfig.app.json --noEmit` (clean),
 `npx vite build` (succeeds).
+
+---
+
+# FOF / Email / Docs Pass — 2026-07-23
+
+Adversarial review of the July 22–23 push — the FOF builder + fee schedules, the office
+knowledge base + Ask AI, the email infrastructure, and the new AI edge functions — before
+regular front-desk use. Focus areas: the **HIPAA boundary** (no BAA — patient data must never
+leave the browser), **money math**, **RLS on the new tables**, and the **new edge functions**.
+Unlike the earlier passes, no SQL was run against the live DB from this session: every schema
+fix is a migration in this commit (`20260723170000_fof_security_review.sql`) and takes effect
+when this branch merges and Lovable applies it.
+
+## Verdict
+
+The FOF money engine held up — every adversarial case tried against `compute`/`insurance`/
+`discounts`/`visits` matched the documented policy, and the printed sheet is pure props→JSX
+with exactly one network call on the page. The gaps were around the edges: **one real
+HIPAA-boundary hole** (staff-typed text could reach the AI provider despite a commit claiming
+otherwise), an effectively **unauthenticated AI relay**, **two RLS posture deviations**, and
+**three email-pipeline defects** — including the suppression list never being consulted before
+a send. All fixed in this commit; structural items that need a deliberate decision are flagged
+as open items.
+
+## Findings & fixes
+
+| # | Severity | Gap found | Fix applied |
+|---|---|---|---|
+| F1 | High | **Staff-typed text reached the AI (HIPAA).** `FofBuilder.aiNamePayments` sent `l.description` (typed text, *preferred* over the friendly CDT name) as the `procedures` payload, and custom codes leaked typed descriptions into the "auto" slot labels too. Commit `85543bc` ("AI never sees typed text") had only fixed the *label-override* vector. A description like "Crown for Jane D…" would have gone to the non-BAA Gemini gateway. | AI payload is now built by `src/lib/fof/ai.ts` **from CDT codes only** (friendly name, else the bare code; code-less lines dropped) — de-identified by construction, with no description input to leak. Slot labels are rebuilt from parallel code-derived `safeLabel`s (same schedule structure, safe wording). Regression-tested in `src/test/fof-ai.test.ts` |
+| F2 | High | **`name-visits` was an authenticated-by-omission AI relay.** Absent from `config.toml` (implicit `verify_jwt`), zero in-code auth, no org check, unbounded caller-controlled prompt strings — any valid JWT (including the anon key) could drain AI credits and push arbitrary text to the gateway. | `getUser()` + active `org_members` check (same posture as `ask-docs`/`ingest-doc`), explicit `verify_jwt = true` in `config.toml`, every input normalized and hard-capped (12 slots/visits, 12 procedures/visit, 80 chars per label) |
+| F3 | Med | **`fof_settings` / `fof_templates` were member-writable** while every other config table is member-read/admin-write: any employee could change the practice identity and the discount rules (percentages, membership/senior flags) their FOFs compute from. | Policies switched to `is_org_admin` manage + member read (migration). `FofTemplates` page is read-only for employees; `useFofTemplates`/`useFofSettings` no longer attempt first-use seeding as an employee (in-memory factory defaults instead — no silent failures, no broken builder) |
+| F4 | Med | **4 email queue RPCs are SECURITY DEFINER with no pinned `search_path`** (`enqueue_email`, `read_email_batch`, `delete_email`, `move_to_dlq`) — violates the established posture. Mitigated in practice: calls are schema-qualified and EXECUTE is service_role-only. | `ALTER FUNCTION … SET search_path = public` for all four (migration) |
+| F5 | Med | **Suppression list never consulted.** `suppressed_emails` is written (append-only, well-designed) but the send path never read it — bounced/complained/unsubscribed recipients kept receiving mail. | `process-email-queue` checks suppression (case-insensitive) before every send; suppressed sends are logged with status `suppressed` and dropped from the queue |
+| F6 | Med | **The queue processor's service-role gate decoded JWT claims without verifying the signature** — safe only while `verify_jwt=true` holds; one config regression away from a forged `role:service_role` bypass into full service-role queue processing. | In-code gate now does a constant-time (SHA-256) comparison of the bearer token against the service-role key itself — no trust in unverified claims |
+| F7 | Med | *(discovered)* **`email_send_log`'s CHECK constraint rejected `rate_limited`**, the status the processor logs on 429s — the insert failed silently and rate-limited attempts were never recorded. | Constraint widened to include `rate_limited` (migration) |
+| F8 | Low | **Cross-org schedule references possible.** RLS on `fee_schedule_items`/`insurance_plans` checks only the row's own `org_id`; an admin knowing another org's schedule UUID could attach rows to it. No data disclosure, but unenforced org consistency. | Composite FKs `(schedule_id/fee_schedule_id, org_id) → fee_schedules(id, org_id)` (migration; `SET NULL` scoped to the pointer column) |
+| F9 | Low | **`ingest-doc` decoded unbounded base64 before its 8 MB check** (memory exhaustion before the guard fires); several 5xx responses returned raw Postgres/storage error text. | `content-length` + base64 string-length guards *before* decode; internal 5xx details moved to logs, generic messages returned (`ask-docs` catch too — 4xx messages stay specific) |
+| F10 | Low | **A table-of-allowance pay schedule could make `workup` covered.** `fixedPayCents` bypassed the category percentage, so a carrier schedule listing D0367 would pay on a work-up line, contradicting "never insurance-covered". | `estimateInsurance` excludes `workup` from coverage unconditionally; tested both ways |
+| F11 | Info | `auth-email-hook` logged full recipient addresses on every auth event; the Ask AI chat gave no hint that questions leave the building. | Log lines mask the address (`j***@domain`); chat panel now says answers come from an external AI service — never include a patient's name or details |
+
+## Verified good (on the record)
+
+- **RLS**: every new table (`fof_*`, `fee_*`, `insurance_plans`, `office_doc*`, email tables) has
+  RLS enabled with org-scoped policies — no `USING (true)`, no policy-less lockouts, no grants to
+  anon/authenticated. `is_org_member`/`is_org_admin` remain SECURITY DEFINER with pinned path.
+- **`search_office_doc_chunks`** is SECURITY INVOKER + pinned path with parameterized
+  `websearch_to_tsquery` — caller RLS applies to full-text search; no cross-org read, no injection.
+- **`office-docs` bucket** is private and org-foldered (admin write / member read, UUID-cast
+  folder check fails closed). `ingest-doc` derives `org_id` server-side, requires owner/manager,
+  and sanitizes filenames against traversal.
+- **`ask-docs`** runs under the caller's JWT via the anon key — RLS scopes retrieval; no client
+  `org_id` is trusted anywhere in the new functions.
+- **Email infra**: queue RPCs EXECUTE-locked to service_role; suppression table append-only;
+  duplicate-send guard backed by the partial unique index; webhook signature + timestamp
+  verification precedes any service-role write; React Email escaping blocks HTML/URL injection
+  in templates.
+- **MCP function**: OAuth issuer/audience pinned, per-tool auth checks, publishable key + user
+  token so RLS scopes every read; read-only tools, no PHI.
+- **Money math** (now 144 tests): the Illumitrac senior prepay is a true 15% off one base;
+  `splitCents` (remainder-last, office convention) and `splitCentsWeighted` (remainder-first,
+  front-loaded) always sum exactly; `buildVisitSchedule` sums exactly to the portion in every
+  branch — workup-first visits, due-at-visit scaling under partial insurance, single-visit
+  half/half — and every visit is fully paid before it happens; benefit-year renewal switches at
+  the flagged visit and year-1 lines can't borrow ahead.
+- **Print path**: `FofPrintSheet` is pure props → JSX (no hooks/fetching); printing is
+  `window.print()` straight to the OS dialog; FOF toasts carry no patient data; the fee import
+  parses spreadsheets entirely in the browser.
+
+## Open items (non-blocking, flagged)
+
+1. **One secret spans trust boundaries.** `LOVABLE_API_KEY` authenticates the AI gateway, the
+   outbound email sends, the auth-email webhook *signature*, and the hook's preview endpoint. A
+   leak from any of five functions would let an attacker forge auth-email webhooks — phishing
+   from the practice's real sending domain. Recommend a dedicated webhook secret (env-preferred
+   lookup); needs a Supabase secret set deliberately, so not changed in this commit.
+2. **Ask AI invites patient-scenario questions** and forwards them (plus chat history) verbatim
+   to the non-BAA provider. The new UI reminder mitigates; a server-side identifier scrub — or a
+   BAA — is the real fix if usage grows.
+3. **`parse-pdf` sends employee time data** (names, hours) to the same non-BAA provider and
+   stores the model output. Employee PII, not PHI; core to the import feature; stated here so
+   it's a decision, not an accident.
+4. `ingest-doc` resolves membership with `.limit(1)` — a multi-org admin ingests into an
+   arbitrary org. Harmless for a single-org practice; fix before ever adding a second org.
+5. The email **cron job + vault secret + `net.http_post`** are applied out-of-band via the
+   Management API and can't be reviewed from the repo — verify them against the live DB in the
+   next Lovable session.
+6. **Deployed code lags this branch**: the live functions and DB run pre-review code until merge,
+   when Lovable applies `20260723170000_*` and redeploys. Smoke-test after merge: one AI naming
+   call as an employee, one doc upload, one auth email to a suppressed address.
+
+## Files changed in this pass
+
+- `src/lib/fof/ai.ts` *(new)* — de-identified name-visits payload builder
+- `src/pages/FofBuilder.tsx` — AI call rebuilt on codes + safeLabels; visitWork carries safe labels
+- `src/lib/fof/insurance.ts` — workup never covered, fixed-pay included
+- `src/pages/FofTemplates.tsx` — manager-only editing, read-only for employees
+- `src/hooks/useFofTemplates.ts` — admin-only seeding with in-memory defaults for employees
+- `src/pages/Assistant.tsx` — external-AI reminder under the chat input
+- `supabase/functions/name-visits/index.ts` — auth + membership + input caps
+- `supabase/functions/process-email-queue/index.ts` — suppression check, key-match service gate
+- `supabase/functions/auth-email-hook/index.ts` — masked recipient logs
+- `supabase/functions/ingest-doc/index.ts` — pre-decode size guards, generic 5xx
+- `supabase/functions/ask-docs/index.ts` — generic 5xx
+- `supabase/config.toml` — `name-visits` declared `verify_jwt = true`
+- `supabase/migrations/20260723170000_fof_security_review.sql` — F3/F4/F7/F8
+- `src/test/fof-ai.test.ts` *(new)*, `src/test/fof-insurance.test.ts`, `src/test/fof-visits.test.ts` — 8 new tests
+
+Verification: `npx vitest run` (144/144), `npx tsc -p tsconfig.app.json --noEmit` (clean),
+`npx vite build` (succeeds).

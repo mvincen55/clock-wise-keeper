@@ -225,6 +225,20 @@ describe('buildVisitSchedule — a full visit ahead, real payment at the last vi
     expect(plan.labels[0]).toBe('Surgical Guide');
   });
 
+  it('scales due-at-visit fees when insurance covers part of the portion', () => {
+    // Fees 200k (guide 100k of it) + 100k, but the patient only owes 150k:
+    // the due-at-visit share scales with the allocation and the schedule
+    // still sums exactly to the portion.
+    const plan = buildVisitSchedule(150_000, [
+      { label: 'Surgery', feeCents: 200_000, dueAtVisitCents: 100_000 },
+      { label: 'Delivery', feeCents: 100_000 },
+    ])!;
+    expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(150_000);
+    // Visit 1 allocation 100k → 50k ahead (scheduling) + 50k at the visit.
+    expect(plan.weights[0]).toBe(50_000);
+    expect(plan.labels[0]).toBe('Upon Scheduling');
+  });
+
   it('trailing zero-fee delivery visits relabel (and collect) the final half', () => {
     const plan = buildVisitSchedule(199_800, [
       { label: 'Porcelain Crown', feeCents: 199_800 },

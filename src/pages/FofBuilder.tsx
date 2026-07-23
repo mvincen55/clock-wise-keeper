@@ -85,6 +85,7 @@ import {
 import { categorizeCdtCode } from '@/lib/fof/cdt';
 import { friendlyCdtName } from '@/lib/fof/cdt-names';
 import { computeFofDiscounts } from '@/lib/fof/discounts';
+import { buildNameVisitsPayload, safeProcedureLabel } from '@/lib/fof/ai';
 import {
   buildVisitSchedule,
   DAY_OF_SERVICE_THRESHOLD_CENTS,
@@ -895,6 +896,8 @@ export default function FofBuilder() {
       raw: number;
       feeCents: number;
       label: string;
+      /** Code-derived wording only — safe to leave the browser (AI naming). */
+      safeLabel: string;
       dueAtVisit: boolean;
       workup: boolean;
     }[] = [];
@@ -904,13 +907,20 @@ export default function FofBuilder() {
       const base = friendlyCdtName(l.code) || l.description.trim();
       const lineLabel =
         isSurgical(l.code) && !/surger/i.test(base) ? `${base} Surgery` : base;
+      // Parallel label built from the code alone: typed descriptions may
+      // print, but must never reach the AI (HIPAA — no BAA).
+      const safeBase = safeProcedureLabel(l.code) ?? '';
+      const safeLineLabel =
+        isSurgical(l.code) && safeBase && !/surger/i.test(safeBase)
+          ? `${safeBase} Surgery`
+          : safeBase;
       const workup = l.workupFlag === 'yes';
       // Work-up procedures (and the surgical guide) are billed at their
       // visit, never prepaid ahead.
       const dueAtVisit = NO_PREPAY_CODES.has(l.code.trim().toUpperCase()) || workup;
       const typed = parseInt(l.visit, 10);
       if (typed >= 1) {
-        entries.push({ raw: typed, feeCents: fee, label: lineLabel, dueAtVisit, workup });
+        entries.push({ raw: typed, feeCents: fee, label: lineLabel, safeLabel: safeLineLabel, dueAtVisit, workup });
         continue;
       }
       const segments = visitSegmentsForCode(l.code);
@@ -919,15 +929,20 @@ export default function FofBuilder() {
         const part = i === segments.length - 1 ? remaining : Math.round(fee * segment.share);
         remaining -= part;
         const label = segment.label ? `${nounOf(base)} ${segment.label}` : lineLabel;
-        entries.push({ raw: segment.stage, feeCents: part, label, dueAtVisit, workup });
+        const safeLabel = segment.label
+          ? `${safeBase ? nounOf(safeBase) : ''} ${segment.label}`.trim()
+          : safeLineLabel;
+        entries.push({ raw: segment.stage, feeCents: part, label, safeLabel, dueAtVisit, workup });
       });
     }
     const distinct = [...new Set(entries.map(e => e.raw))].sort((a, b) => a - b);
     return distinct.map(v => {
       const group = entries.filter(e => e.raw === v);
       const top = group.reduce((best, e) => (e.feeCents > best.feeCents ? e : best), group[0]);
+      const allWorkup = group.every(e => e.workup);
       return {
-        label: group.every(e => e.workup) ? 'Work Up Visit' : top.label,
+        label: allWorkup ? 'Work Up Visit' : top.label,
+        safeLabel: allWorkup ? 'Work Up Visit' : top.safeLabel,
         feeCents: group.reduce((sum, e) => sum + e.feeCents, 0),
         dueAtVisitCents: group.reduce((sum, e) => sum + (e.dueAtVisit ? e.feeCents : 0), 0),
       };
@@ -1032,29 +1047,42 @@ export default function FofBuilder() {
   );
 
   // AI pass over the payment names and treatment wording. HIPAA: the
-  // request contains ONLY procedure names and visit order — never the
-  // patient's name, the date, or any dollar amounts. It also sends the
-  // AUTO-generated slot labels, not staff-typed overrides.
+  // request is built ONLY from CDT codes, code-derived labels, and
+  // strictly-validated tooth numbers (src/lib/fof/ai.ts) — staff-typed
+  // descriptions, edited labels, patient fields, and dollar amounts never
+  // leave the browser. The doctor name comes from the fixed FOF_DOCTORS
+  // dropdown, never free text.
   const aiCall = async (wantTreatment: boolean) => {
     if (!computation) return null;
-    const byVisit = new Map<number, string[]>();
+    const byVisit = new Map<number, { code: string; tooth: string }[]>();
     for (const l of state.lines) {
-      const base = l.description.trim() || friendlyCdtName(l.code) || '';
-      if (!base) continue;
-      // Tooth numbers ride along (except dentures, where the arch is in
-      // the name) so the AI can write "remove tooth #24".
-      const numMatch = /^D(\d{4})$/i.exec(l.code.trim());
-      const denture = numMatch !== null && +numMatch[1] >= 5000 && +numMatch[1] < 5900;
-      const tooth = l.tooth.trim();
-      const label = !denture && tooth !== '' ? `${base} (tooth #${tooth})` : base;
-      byVisit.set(effectiveVisit(l), [...(byVisit.get(effectiveVisit(l)) ?? []), label]);
+      if (!l.code.trim()) continue;
+      byVisit.set(effectiveVisit(l), [
+        ...(byVisit.get(effectiveVisit(l)) ?? []),
+        { code: l.code, tooth: l.tooth },
+      ]);
     }
-    const visits = [...byVisit.entries()]
+    const visitEntries = [...byVisit.entries()]
       .sort((a, b) => a[0] - b[0])
-      .map(([, procedures]) => ({ procedures }));
-    const autoSlots = rawVisitPlan?.labels ?? computation.installmentLabels;
+      .map(([, entries]) => entries);
+    // Display slot labels can embed typed descriptions (custom codes
+    // fall back to them), so the AI slots are REBUILT from the
+    // code-derived safeLabels — same schedule structure, safe wording.
+    const safeSchedule =
+      rawVisitPlan?.key === 'visitSchedule' && visitWork
+        ? buildVisitSchedule(
+            schedulePortion,
+            visitWork.map(v => ({
+              label: v.safeLabel,
+              feeCents: v.feeCents,
+              dueAtVisitCents: v.dueAtVisitCents,
+            }))
+          )
+        : null;
+    const autoSlots =
+      safeSchedule?.labels ?? rawVisitPlan?.labels ?? computation.installmentLabels;
     const { data, error } = await supabase.functions.invoke('name-visits', {
-      body: { slots: autoSlots, visits, wantTreatment, doctorName },
+      body: { ...buildNameVisitsPayload(visitEntries, autoSlots), wantTreatment, doctorName },
     });
     if (error) throw new Error(error.message);
     return { data, slotCount: autoSlots.length };
