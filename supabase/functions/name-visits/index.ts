@@ -61,8 +61,13 @@ Deno.serve(async (req) => {
             content:
               "You are the treatment coordinator at a dental office — a warm, confident closer who makes patients feel great about saying yes to the care they need. You word the Financial Options Form. You get the clinical visits (with their procedures, some annotated with tooth numbers) and the current payment slot labels in order. " +
               'Reply with ONLY a JSON object: {"names": string[], "treatment": string}. ' +
-              "names: rewrite each slot label, short (2-5 words), specific and timing-first so the patient knows WHEN it's due and what it's for: visit payments read like 'At the Records Visit', 'At Crown Prep', 'On Denture Delivery'; scheduling payments keep 'Upon Scheduling' (optionally + what's being scheduled). Name each visit after its most significant procedure — never a vague label like 'Diagnostic Visit' when real treatment happens that day. A payment may prepay later work — never name it after work that happens at a different visit, and NEVER invent visits or stages not in the list. No 'Visit 1/2/3' numbering, codes, or prices. Exactly one name per slot, same order. " +
-              `treatment: 2-3 clean, confident sentences summarizing the whole plan, written in third person using the doctor's name (the doctor is ${JSON.stringify(doctor)}). Slightly clinical but still plain English — a patient should understand every word and feel the value of the plan. Include the tooth numbers given in the visit list (e.g. 'stabilize teeth #23 and #26', 'a crown on tooth #30'); for dentures and partials use arch wording ('a new lower partial denture'), never tooth numbers. End on the outcome (function, comfort, or the finished smile). No codes, no prices, no per-visit breakdown, no hype words like 'amazing'; 400 characters max.`,
+              "names: rewrite each slot label, short (2-5 words), specific and timing-first so the patient knows WHEN it's due and what it's for. Name each visit after its most significant procedure that day: 'At the Extraction Visit', 'At Crown Prep', 'At Implant Surgery', 'On Partial Delivery' — never a vague label like 'Diagnostic Visit' or 'Treatment Visit' when real work happens that day. Scheduling payments keep 'Upon Scheduling' (optionally + what's being scheduled). A payment may prepay later work — never name it after work that happens at a different visit, and NEVER invent visits or stages not in the list. No 'Visit 1/2/3' numbering, codes, or prices. Exactly one name per slot, same order. " +
+              `treatment: 2-3 clean sentences summarizing the whole plan, written in third person using the doctor's name (the doctor is ${JSON.stringify(doctor)}). RULES: ` +
+              "(1) Describe the actual procedures in plain concrete verbs — 'splint the loose teeth', 'remove tooth #24', 'place porcelain crowns on teeth #22 and #27'. NEVER vague clinical filler like 'stabilize initial symptoms', 'address concerns', or 'comprehensive treatment'. " +
+              "(2) Every tooth number provided in the visit list MUST appear next to its procedure. EXCEPTION: dentures and partials get arch wording only ('a new lower partial denture') — never tooth numbers or ranges for a denture, even if teeth are listed. " +
+              "(3) Never promise or guarantee results. Frame outcomes as the goal: 'designed to restore comfortable chewing', 'to help rebuild a strong, functional bite'. BANNED: 'full function', 'complete', 'perfect', 'permanent', 'guaranteed', 'will restore', 'pain-free', and any absolute promise. " +
+              "(4) End on the goal of the plan (comfort, function, or the finished smile) — as an aim, not a promise. " +
+              "No codes, no prices, no per-visit breakdown, no hype words; 420 characters max.",
           },
           {
             role: "user",
@@ -88,7 +93,7 @@ Deno.serve(async (req) => {
     }
     const treatment =
       typeof parsed.treatment === "string" && parsed.treatment.trim().length > 0
-        ? parsed.treatment.trim().slice(0, 400)
+        ? parsed.treatment.trim().slice(0, 450)
         : null;
     return json({ names: names.map((n) => (n as string).trim()), treatment });
   } catch (_err) {
