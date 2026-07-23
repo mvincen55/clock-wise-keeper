@@ -93,7 +93,7 @@ const DollarSealIcon = () => (
       fill="currentColor"
       d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
     />
-    <g fill="none" stroke="#1d6f3d" strokeWidth="1.7" strokeLinecap="round">
+    <g fill="none" stroke="white" strokeWidth="1.7" strokeLinecap="round">
       <path d="M14.3 9.2h-3.4a1.45 1.45 0 1 0 0 2.9h2.2a1.45 1.45 0 1 1 0 2.9H9.7" />
       <path d="M12 7.4v9.2" />
     </g>

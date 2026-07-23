@@ -484,9 +484,11 @@
   display: flex;
   align-items: center;
   gap: 6pt;
-  /* Softened green: still pops, no longer the only thing the eye finds. */
-  background: rgba(29, 111, 61, 0.78);
-  color: white;
+  /* Light chip + dark text; the solid green seal carries the pop so the
+     banner no longer dominates the page. */
+  background: #ddefe3;
+  border: 0.75pt solid #a4cdb2;
+  color: #14532d;
   border-radius: 4pt;
   font-size: 7.8pt;
   padding: 4.5pt 7pt;
@@ -500,8 +502,8 @@
 }
 
 .fof-save-seal {
-  /* White seal, green dollar sign — sits on the solid green banner. */
-  color: white;
+  /* Solid green seal with a white dollar sign on the light chip. */
+  color: #1d6f3d;
   display: flex;
   align-items: center;
   flex: 0 0 auto;

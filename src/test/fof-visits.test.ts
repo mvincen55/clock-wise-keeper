@@ -127,9 +127,9 @@ describe('visitSegmentsForCode', () => {
       { label: 'Delivery', feeCents: deliveryFee },
     ])!;
     expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(199_800);
-    // Full-ahead: Delivery is prepaid at the Prep visit, so no payment
-    // slot remains at Delivery itself.
-    expect(plan.labels).toEqual(['Upon Scheduling', 'Prep']);
+    // Full-ahead: Delivery is prepaid at the Prep visit but stays on the
+    // plan showing nothing due.
+    expect(plan.labels).toEqual(['Upon Scheduling', 'Prep', 'Delivery']);
   });
 });
 
@@ -148,10 +148,10 @@ describe('buildVisitSchedule — a full visit ahead, never a balance', () => {
       { label: 'Crown', feeCents: 100_000 },
     ]);
     // Scheduling: v1 (40k); Visit 1: v2 (60k); Visit 2: v3 (100k);
-    // Visit 3: nothing due — slot dropped
-    expect(plan!.weights).toEqual([40_000, 60_000, 100_000]);
+    // Visit 3 stays visible with nothing due — already paid
+    expect(plan!.weights).toEqual([40_000, 60_000, 100_000, 0]);
     expect(plan!.weights.reduce((a, b) => a + b, 0)).toBe(200_000);
-    expect(plan!.labels).toEqual(['Upon Scheduling', 'Surgery', 'Placement']);
+    expect(plan!.labels).toEqual(['Upon Scheduling', 'Surgery', 'Placement', 'Crown']);
   });
 
   it('allocates the portion proportionally to visit fees', () => {
@@ -159,8 +159,8 @@ describe('buildVisitSchedule — a full visit ahead, never a balance', () => {
       { label: 'A', feeCents: 100_000 },
       { label: 'B', feeCents: 200_000 },
     ]);
-    // Allocation 30k/60k → scheduling 30k, visit 1 collects 60k
-    expect(plan!.weights).toEqual([30_000, 60_000]);
+    // Allocation 30k/60k → scheduling 30k, visit 1 collects 60k, visit 2 paid
+    expect(plan!.weights).toEqual([30_000, 60_000, 0]);
   });
 
   it('every visit is fully paid BEFORE it happens', () => {
@@ -195,8 +195,8 @@ describe('buildVisitSchedule — a full visit ahead, never a balance', () => {
       { label: 'Delivery', feeCents: 100_000 },
     ])!;
     // Scheduling: visit 1's ahead-eligible 100k (guide NOT prepaid)
-    // Visit 1: guide 100k + next visit 100k; Visit 2: nothing — dropped
-    expect(plan.weights).toEqual([100_000, 200_000]);
+    // Visit 1: guide 100k + next visit 100k; Visit 2 shows $0 due
+    expect(plan.weights).toEqual([100_000, 200_000, 0]);
     expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(300_000);
   });
 
@@ -208,10 +208,10 @@ describe('buildVisitSchedule — a full visit ahead, never a balance', () => {
       { label: 'Surgery', feeCents: 150_000 },
       { label: 'Delivery', feeCents: 100_000 },
     ])!;
-    expect(plan.labels).toEqual(['Work Up', 'Upon Scheduling', 'Surgery']);
+    expect(plan.labels).toEqual(['Work Up', 'Upon Scheduling', 'Surgery', 'Delivery']);
     // Work-up fees at visit 1; surgery paid when scheduling it after the
-    // work-up; delivery paid at the surgery visit; nothing at delivery.
-    expect(plan.weights).toEqual([50_000, 150_000, 100_000]);
+    // work-up; delivery paid at the surgery visit; delivery shows $0 due.
+    expect(plan.weights).toEqual([50_000, 150_000, 100_000, 0]);
     expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(300_000);
   });
 

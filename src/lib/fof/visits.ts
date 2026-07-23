@@ -229,10 +229,13 @@ export function buildVisitSchedule(
     }
   }
 
-  // Drop empty slots (usually the final visit — everything was prepaid).
+  // Keep zero-due visit slots — the final Delivery visit showing $0.00
+  // tells the patient it's already paid. Only an empty Upon Scheduling
+  // slot (all-workup or all-due-at-visit first visits) drops out, and a
+  // single-visit plan stays a single payment.
   const slots = payments
     .map((p, i) => ({ p, label: labels[i] }))
-    .filter(s => s.p > 0);
+    .filter(s => s.p > 0 || (n > 1 && s.label !== 'Upon Scheduling'));
   if (slots.length > 0 && slots.length < payments.length) {
     return { key: 'visitSchedule', labels: slots.map(s => s.label), weights: slots.map(s => s.p) };
   }
