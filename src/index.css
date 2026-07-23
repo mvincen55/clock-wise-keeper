@@ -477,19 +477,18 @@
   -webkit-print-color-adjust: exact;
 }
 
-/* "You save $X" chip: dark badge + bold amount so it still reads as a
-   clear highlight on a black-and-white printer. */
+/* "You save $X" banner: solid green with white text so it POPS — and
+   prints as a dark band with white text on a black-and-white printer. */
 .fof-save-chip {
   margin-top: 4pt;
   display: flex;
   align-items: center;
   gap: 6pt;
-  background: #e9f4ec;
-  border: 0.75pt solid #b9dcc4;
-  color: #14532d;
+  background: #1d6f3d;
+  color: white;
   border-radius: 4pt;
-  font-size: 7.4pt;
-  padding: 3.5pt 6pt;
+  font-size: 7.8pt;
+  padding: 4.5pt 7pt;
   text-align: left;
   print-color-adjust: exact;
   -webkit-print-color-adjust: exact;
@@ -500,7 +499,8 @@
 }
 
 .fof-save-seal {
-  color: #1d6f3d;
+  /* White seal, green dollar sign — sits on the solid green banner. */
+  color: white;
   display: flex;
   align-items: center;
   flex: 0 0 auto;
@@ -509,8 +509,8 @@
 }
 
 .fof-save-seal .fof-icon {
-  width: 14pt;
-  height: 14pt;
+  width: 15pt;
+  height: 15pt;
 }
 
 /* Agreement cards: title band + horizontal payment cells */

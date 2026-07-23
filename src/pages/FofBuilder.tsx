@@ -47,8 +47,10 @@ import {
   RotateCcw,
   Settings2,
   ShieldCheck,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import FofPrintSheet from '@/components/fof/FofPrintSheet';
 import { useFofSettings, useFofTemplates } from '@/hooks/useFofTemplates';
 import {
@@ -426,6 +428,7 @@ export default function FofBuilder() {
   const [payScheduleId, setPayScheduleId] = useState<string>(NO_SCHEDULE);
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
   const [bundleName, setBundleName] = useState('');
+  const [aiNaming, setAiNaming] = useState(false);
 
   const { data: bundles } = useProcedureBundles();
   const saveBundle = useSaveProcedureBundle();
@@ -969,6 +972,41 @@ export default function FofBuilder() {
     () => (effectiveTemplate ? computeFof(effectiveTemplate, amounts, overrides, visitPlan) : null),
     [effectiveTemplate, amounts, overrides, visitPlan]
   );
+
+  // AI pass over the payment names, applied as editable overrides.
+  // HIPAA: the request contains ONLY procedure names and visit order —
+  // never the patient's name, the date, or any dollar amounts.
+  const aiNamePayments = async () => {
+    if (!computation) return;
+    setAiNaming(true);
+    try {
+      const byVisit = new Map<number, string[]>();
+      for (const l of state.lines) {
+        const label = l.description.trim() || friendlyCdtName(l.code) || '';
+        if (!label) continue;
+        byVisit.set(effectiveVisit(l), [...(byVisit.get(effectiveVisit(l)) ?? []), label]);
+      }
+      const visits = [...byVisit.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([, procedures]) => ({ procedures }));
+      const { data, error } = await supabase.functions.invoke('name-visits', {
+        body: { slots: computation.installmentLabels, visits },
+      });
+      if (error) throw new Error(error.message);
+      const names: string[] = data?.names ?? [];
+      if (names.length !== computation.installmentLabels.length) {
+        throw new Error('AI returned an unexpected number of names');
+      }
+      names.forEach((name, i) =>
+        dispatch({ type: 'setInstallmentLabel', index: i, value: name })
+      );
+      toast.success('Payment names updated — edit any of them freely');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'AI naming failed');
+    } finally {
+      setAiNaming(false);
+    }
+  };
 
   // The printout shows one patient-friendly treatment line (like the
   // office's existing forms), not the itemized code/fee list. Each row's
@@ -1827,6 +1865,20 @@ export default function FofBuilder() {
                             ))}
                           </SelectContent>
                         </Select>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={aiNaming || feeLines.length === 0}
+                          onClick={aiNamePayments}
+                          title="Have AI suggest friendlier payment names — edit freely after"
+                        >
+                          {aiNaming ? (
+                            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                          )}
+                          AI names
+                        </Button>
                       </div>
                       {computation.computed.installmentsCents.map((cents, i) => (
                         <div key={i} className="flex items-center gap-2">
