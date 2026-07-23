@@ -109,6 +109,17 @@ const MAXED_NOTE =
 const MAXED_NOTE_PREV_EXEMPT =
   "This treatment is expected to use the remainder of your dental plan's annual maximum. Preventive care does not count toward your maximum, so hygiene (cleaning) visits remain covered; other services will be your responsibility until your benefits renew.";
 
+// Procedures the Illumitrac membership plans include at no charge (per the
+// office Policy Handbook / 2025 flyer): cleanings (adult/child/perio),
+// exams, emergency exam, needed X-rays (CBCT D0367 excluded), fluoride and
+// sealants (child plan). Per-line toggle covers used-up yearly allowances.
+const ILLUMITRAC_INCLUDED = new Set([
+  'D0120', 'D0140', 'D0150', // exams + emergency exam
+  'D0210', 'D0220', 'D0230', 'D0272', 'D0274', 'D0330', // X-rays (no CBCT)
+  'D1110', 'D1120', 'D4910', // cleanings incl. perio maintenance
+  'D1206', 'D1208', 'D1351', // fluoride + sealant (child plan)
+]);
+
 const CATEGORY_SHORT: Record<FeeCategory, string> = {
   preventive: 'Preventive',
   basic: 'Basic',
@@ -133,6 +144,8 @@ interface BuilderLine {
   allowedInput: string;
   /** Per-line insurance payment override; '' = computed automatically. */
   insPayInput: string;
+  /** '' = membership-included codes are free, 'off' = charge (allowance used). */
+  membershipFree: string;
   /** '' = downgrade applies (default for D2391–D2394), 'off' = plan pays composite rates. */
   downgrade: string;
 }
@@ -148,6 +161,7 @@ const newLine = (): BuilderLine => ({
   feeInput: '',
   allowedInput: '',
   insPayInput: '',
+  membershipFree: '',
   downgrade: '',
 });
 
@@ -577,6 +591,15 @@ export default function FofBuilder() {
       ? renewalVisitRaw
       : null;
 
+  // Illumitrac membership templates include certain procedures at no
+  // charge — those lines cost $0 (still listed for the patient) unless
+  // the per-line switch says the year's allowance is used up.
+  const membershipActive = (template?.membershipDiscountPercent ?? 0) > 0;
+  const freeUnderMembership = (l: BuilderLine) =>
+    membershipActive &&
+    ILLUMITRAC_INCLUDED.has(l.code.trim().toUpperCase()) &&
+    l.membershipFree !== 'off';
+
   const feeLineEntries = useMemo(
     () =>
       state.lines
@@ -592,7 +615,7 @@ export default function FofBuilder() {
               code,
               description: l.description.trim(),
               category: l.category,
-              officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
+              officeFeeCents: freeUnderMembership(l) ? 0 : parseCurrencyInput(l.feeInput) ?? 0,
               allowedCents: l.allowedInput.trim()
                 ? parseCurrencyInput(l.allowedInput)
                 : allowedByCode.get(code) ?? null,
@@ -615,7 +638,7 @@ export default function FofBuilder() {
         // in visit order even if the list hasn't been re-sorted yet.
         .sort((a, b) => a.visit - b.visit),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state.lines, allowedByCode, payActive, payByCode, renewalVisit]
+    [state.lines, allowedByCode, payActive, payByCode, renewalVisit, membershipActive]
   );
   const feeLines: FofLine[] = useMemo(
     () => feeLineEntries.map(entry => entry.line),
@@ -794,6 +817,20 @@ export default function FofBuilder() {
   if (downgradeApplied) extraFootnotes.push(DOWNGRADE_NOTE);
   if (maxedOut) {
     extraFootnotes.push(state.prevExemptState === 'yes' ? MAXED_NOTE_PREV_EXEMPT : MAXED_NOTE);
+  }
+  // Tell the patient which listed procedures their membership covers.
+  const membershipFreeLabels = [
+    ...new Set(
+      state.lines
+        .filter(l => freeUnderMembership(l) && (l.code.trim() !== '' || l.feeInput.trim() !== ''))
+        .map(l => l.description.trim() || l.code.trim().toUpperCase())
+        .filter(Boolean)
+    ),
+  ];
+  if (membershipFreeLabels.length > 0) {
+    extraFootnotes.push(
+      `Included at no charge with your Illumitrac membership: ${membershipFreeLabels.join(', ')}.`
+    );
   }
   const effectiveTemplate: FofTemplate | undefined = template
     ? {
@@ -1214,6 +1251,24 @@ export default function FofBuilder() {
                           >
                             Downgrades to amalgam benefit ({downgradeTo}) — turn off if this plan
                             pays composite rates
+                          </Label>
+                        </div>
+                      )}
+                      {membershipActive && ILLUMITRAC_INCLUDED.has(lineCode) && (
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            id={`fof-mem-${line.key}`}
+                            checked={line.membershipFree !== 'off'}
+                            onCheckedChange={v =>
+                              dispatch({ type: 'setLine', index: i, patch: { membershipFree: v ? '' : 'off' } })
+                            }
+                          />
+                          <Label
+                            htmlFor={`fof-mem-${line.key}`}
+                            className="text-xs text-muted-foreground font-normal"
+                          >
+                            Included with Illumitrac — no charge (turn off if this year's
+                            allowance is used up)
                           </Label>
                         </div>
                       )}
