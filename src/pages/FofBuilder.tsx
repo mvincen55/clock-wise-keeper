@@ -110,10 +110,10 @@ const MAXED_NOTE_PREV_EXEMPT =
   "This treatment is expected to use the remainder of your dental plan's annual maximum. Preventive care does not count toward your maximum, so hygiene (cleaning) visits remain covered; other services will be your responsibility until your benefits renew.";
 
 const CATEGORY_SHORT: Record<FeeCategory, string> = {
-  preventive: 'Prev',
+  preventive: 'Preventive',
   basic: 'Basic',
-  major: 'Maj',
-  other: 'No Cov',
+  major: 'Major',
+  other: 'No Coverage',
 };
 
 function todayISO(): string {
