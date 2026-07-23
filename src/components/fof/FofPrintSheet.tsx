@@ -33,6 +33,60 @@ function formatDateMDY(iso: string): string {
   return `${m}/${d}/${y}`;
 }
 
+// Tiny inline icons (lucide outlines) — self-contained so the printed
+// page never depends on a font or network asset.
+const iconProps = {
+  className: 'fof-icon',
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 2,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+} as const;
+
+const CalendarIcon = () => (
+  <svg {...iconProps}>
+    <rect x="3" y="4" width="18" height="18" rx="2" />
+    <path d="M16 2v4M8 2v4M3 10h18" />
+  </svg>
+);
+const UserIcon = () => (
+  <svg {...iconProps}>
+    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+const ShieldIcon = () => (
+  <svg {...iconProps}>
+    <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+    <path d="m9 12 2 2 4-4" />
+  </svg>
+);
+const PhoneIcon = () => (
+  <svg {...iconProps}>
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+  </svg>
+);
+const MailIcon = () => (
+  <svg {...iconProps}>
+    <rect x="2" y="4" width="20" height="16" rx="2" />
+    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+  </svg>
+);
+const PinIcon = () => (
+  <svg {...iconProps}>
+    <path d="M20 10c0 4.99-5.54 10.19-7.4 11.79a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0" />
+    <circle cx="12" cy="10" r="3" />
+  </svg>
+);
+const GlobeIcon = () => (
+  <svg {...iconProps}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20" />
+  </svg>
+);
+
 export default function FofPrintSheet({
   practice,
   template,
@@ -81,6 +135,10 @@ export default function FofPrintSheet({
     cents,
   }));
 
+  // Both agreements side-by-side under "Choose Your Payment Option";
+  // a lone agreement keeps the full-width card.
+  const bothOptions = template.showPrepayOption && template.showInstallmentOption;
+
   // Content-aware density: long treatment lines, big footnote blocks, and
   // double agreement cards tighten spacing/type in steps so the form
   // always fits one letter page and still looks composed.
@@ -89,8 +147,10 @@ export default function FofPrintSheet({
     footnoteItems.join(' ').length / 2 +
     (callout ? callout.text.length / 4 : 0) +
     (template.contactNote.trim() ? 80 : 0) +
-    (template.showPrepayOption ? 120 : 0) +
-    (template.showInstallmentOption ? 60 + installmentCells.length * 30 : 0);
+    (bothOptions
+      ? 150 + installmentCells.length * 14
+      : (template.showPrepayOption ? 120 : 0) +
+        (template.showInstallmentOption ? 60 + installmentCells.length * 30 : 0));
   const densityClass =
     contentScore > 700 ? ' fof-dense fof-denser' : contentScore > 520 ? ' fof-dense' : '';
 
@@ -99,13 +159,15 @@ export default function FofPrintSheet({
       <header className="fof-head">
         <img className="fof-logo" src={logoUrl} alt={practice.practiceName} />
         <div className="fof-head-meta">
-          <div>
+          <div className="fof-meta-item">
+            <CalendarIcon />
             <span className="fof-meta-key">Date</span>
             <span className="fof-meta-value">
               {patient.dateISO ? formatDateMDY(patient.dateISO) : '—'}
             </span>
           </div>
-          <div>
+          <div className="fof-meta-item">
+            <UserIcon />
             <span className="fof-meta-key">Patient</span>
             <span className="fof-meta-value">{patient.patientName || '—'}</span>
           </div>
@@ -180,15 +242,67 @@ export default function FofPrintSheet({
         {callout && (
           <div className="fof-card fof-callout">
             <div className="fof-card-title">
-              {callout.title}
-              {callout.mark}
+              <ShieldIcon />
+              <span>
+                {callout.title}
+                {callout.mark}
+              </span>
             </div>
             <p>{callout.text}</p>
           </div>
         )}
       </section>
 
-      {template.showPrepayOption && (
+      {bothOptions ? (
+        <section className="fof-options">
+          <div className="fof-options-head">Choose Your Payment Option</div>
+          <div className="fof-options-row">
+            <div className="fof-option">
+              <div className="fof-option-title">Option 1 · Prepay in Full — Pay Today &amp; Save</div>
+              <div className="fof-option-body">
+                <div className="fof-row">
+                  <span>Total Patient Portion</span>
+                  <span>{formatCents(effective.patientPortionCents)}</span>
+                </div>
+                {showDiscountRow && (
+                  <div className="fof-row">
+                    <span>
+                      {template.discountLabel}
+                      {prepayMark}
+                    </span>
+                    <span>−{formatCents(effective.discountCents)}</span>
+                  </div>
+                )}
+                <div className="fof-row fof-row-total">
+                  <span>Total Due Today</span>
+                  <span>{formatCents(effective.prepayTotalCents)}</span>
+                </div>
+                {effective.discountCents > 0 && (
+                  <div className="fof-save-chip">
+                    You save {formatCents(effective.discountCents)} when you prepay in full.
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="fof-or">or</div>
+            <div className="fof-option">
+              <div className="fof-option-title">Option 2 · Payment Installment Agreement</div>
+              <div className="fof-option-body">
+                {installmentCells.map((cell, i) => (
+                  <div className="fof-row" key={i}>
+                    <span>{cell.label}</span>
+                    <span>{formatCents(cell.cents)}</span>
+                  </div>
+                ))}
+                <div className="fof-row fof-row-total">
+                  <span>Total Due</span>
+                  <span>{formatCents(effective.patientPortionCents)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : template.showPrepayOption ? (
         <section className="fof-agreement">
           <div className="fof-agreement-title">Prepay in Full Agreement</div>
           <div className="fof-cells">
@@ -211,9 +325,7 @@ export default function FofPrintSheet({
             </div>
           </div>
         </section>
-      )}
-
-      {template.showInstallmentOption && (
+      ) : template.showInstallmentOption ? (
         <section className="fof-agreement">
           <div className="fof-agreement-title">Payment Installment Agreement</div>
           <div className="fof-cells">
@@ -230,10 +342,35 @@ export default function FofPrintSheet({
             </div>
           </div>
         </section>
-      )}
+      ) : null}
 
       {template.contactNote.trim() !== '' && (
-        <section className="fof-band">{template.contactNote}</section>
+        <section className="fof-band fof-band-split">
+          <div className="fof-band-cell">
+            <span className="fof-icon-bubble">
+              <PhoneIcon />
+            </span>
+            <div>
+              <div className="fof-band-title">Financing Options Available</div>
+              <p>
+                We offer outside financing through trusted providers. Call us at{' '}
+                {practice.phone} to learn more — or with any questions about this form.
+              </p>
+            </div>
+          </div>
+          <div className="fof-band-cell">
+            <span className="fof-icon-bubble">
+              <MailIcon />
+            </span>
+            <div>
+              <div className="fof-band-title">Please Mail Your Signed Copy</div>
+              <p>
+                Along with your payment, to {practice.practiceName},{' '}
+                {practice.addressLine1}, {practice.addressLine2}.
+              </p>
+            </div>
+          </div>
+        </section>
       )}
 
       {footnoteItems.length > 0 && (
@@ -296,11 +433,20 @@ export default function FofPrintSheet({
       </div>
 
       <footer className="fof-footer">
-        <span className="fof-footer-name">{practice.practiceName}</span>
-        <span>
-          {practice.addressLine1}, {practice.addressLine2} · {practice.phone}
-          {practice.website.trim() ? ` · ${practice.website}` : ''}
+        <span className="fof-footer-item">
+          <PinIcon />
+          {practice.addressLine1}, {practice.addressLine2}
         </span>
+        <span className="fof-footer-item">
+          <PhoneIcon />
+          {practice.phone}
+        </span>
+        {practice.website.trim() !== '' && (
+          <span className="fof-footer-item">
+            <GlobeIcon />
+            {practice.website}
+          </span>
+        )}
       </footer>
     </div>
   );
