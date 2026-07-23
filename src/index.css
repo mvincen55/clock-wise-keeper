@@ -648,10 +648,10 @@
 }
 
 /* Signature block */
+/* The boxed fine print above provides the visual break — no rule needed. */
 .fof-signatures {
   page-break-inside: avoid;
-  border-top: 0.75pt solid var(--fof-line);
-  padding-top: 16pt;
+  padding-top: 10pt;
 }
 
 /* Reads as one sentence on one line: the write-on blank stretches to
@@ -808,7 +808,7 @@
 }
 
 .fof-dense .fof-signatures {
-  padding-top: 11pt;
+  padding-top: 8pt;
 }
 
 .fof-denser .fof-logo {
