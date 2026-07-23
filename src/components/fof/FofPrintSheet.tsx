@@ -195,8 +195,16 @@ export default function FofPrintSheet({
       ? 150 + installmentCells.length * 14
       : (template.showPrepayOption ? 120 : 0) +
         (template.showInstallmentOption ? 60 + installmentCells.length * 30 : 0));
+  // Sparse forms go the other way: roomier type/spacing plus distributed
+  // leftover space so the sheet always fills the whole letter page.
   const densityClass =
-    contentScore > 700 ? ' fof-dense fof-denser' : contentScore > 520 ? ' fof-dense' : '';
+    contentScore > 700
+      ? ' fof-dense fof-denser'
+      : contentScore > 520
+        ? ' fof-dense'
+        : contentScore < 400
+          ? ' fof-roomy'
+          : '';
 
   return (
     <div className={`fof-sheet${densityClass}`}>

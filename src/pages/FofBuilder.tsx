@@ -1128,9 +1128,30 @@ export default function FofBuilder() {
           <div className="space-y-4">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Template & Patient</CardTitle>
+                <CardTitle className="text-base">Patient</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fof-name">Patient Name</Label>
+                    <Input
+                      id="fof-name"
+                      autoComplete="off"
+                      value={state.patientName}
+                      onChange={setField('patientName')}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fof-date">Date</Label>
+                    <Input
+                      id="fof-date"
+                      type="date"
+                      autoComplete="off"
+                      value={state.dateISO}
+                      onChange={setField('dateISO')}
+                    />
+                  </div>
+                </div>
                 <Select value={template.id} onValueChange={handleTemplateChange}>
                   <SelectTrigger>
                     <SelectValue />
@@ -1195,27 +1216,6 @@ export default function FofBuilder() {
                     {discounts.autoDiscount.label} applies automatically — no prepay required.
                   </p>
                 )}
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="fof-name">Patient Name</Label>
-                    <Input
-                      id="fof-name"
-                      autoComplete="off"
-                      value={state.patientName}
-                      onChange={setField('patientName')}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="fof-date">Date</Label>
-                    <Input
-                      id="fof-date"
-                      type="date"
-                      autoComplete="off"
-                      value={state.dateISO}
-                      onChange={setField('dateISO')}
-                    />
-                  </div>
-                </div>
               </CardContent>
             </Card>
 
