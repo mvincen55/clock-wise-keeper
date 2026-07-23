@@ -420,24 +420,21 @@
   padding-top: 8pt;
 }
 
-/* Reads as one sentence: inline write-on blank, then the intro text.
-   The hanging indent keeps wrapped text aligned after the blank (never
-   under it), so the caption owns the space below the line. */
+/* Reads as one sentence on one line: the write-on blank stretches to
+   push the sentence flush right, ending with "plan:" at the line's end.
+   The caption sits centered under the blank. */
 .fof-sig-ack {
+  display: flex;
+  align-items: flex-end;
+  gap: 6pt;
   margin: 0 0 14pt;
-  padding-left: 2in;
-  /* Sized so the blank + full sentence (through "plan:") stay on ONE line
-     of a letter page; the hanging indent is only a wrap fallback. */
   font-size: 8.5pt;
   line-height: 1.5;
 }
 
 .fof-sig-ack-blank {
-  display: inline-block;
-  width: 1.9in;
-  margin-left: -2in;
+  flex: 1;
   position: relative;
-  vertical-align: baseline;
 }
 
 .fof-sig-ack-line {
@@ -450,11 +447,17 @@
   position: absolute;
   top: 100%;
   left: 0;
+  right: 0;
   margin-top: 1pt;
-  font-size: 6.5pt;
+  font-size: 6pt;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--fof-muted);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.fof-sig-ack-text {
   white-space: nowrap;
 }
 

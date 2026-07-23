@@ -244,8 +244,8 @@ export default function FofPrintSheet({
           <span className="fof-sig-ack-blank">
             <span className="fof-sig-ack-line" />
             <span className="fof-sig-ack-caption">Patient's Printed Name</span>
-          </span>{' '}
-          {template.signatureIntro}
+          </span>
+          <span className="fof-sig-ack-text">{template.signatureIntro}</span>
         </p>
 
         <div className="fof-choices">
