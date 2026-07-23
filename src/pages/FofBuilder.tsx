@@ -1058,8 +1058,15 @@ export default function FofBuilder() {
         description: string;
         fee: number | null;
         entryDate: string;
+        visit: number | null;
       }[] = data?.rows ?? [];
       if (rows.length === 0) throw new Error('No procedures found in the screenshot');
+      // Renumber the screenshot's visit groups to start at Visit 1 (a
+      // case that begins at "Visit 5" in the PMS becomes Visit 1 here).
+      const visitNumbers = rows
+        .map(r => r.visit)
+        .filter((v): v is number => typeof v === 'number' && isFinite(v));
+      const minVisit = visitNumbers.length > 0 ? Math.min(...visitNumbers) : null;
       let flagged = 0;
       const lines = rows.map(r => {
         const base = lineFromCode(r.code);
@@ -1086,6 +1093,8 @@ export default function FofBuilder() {
           description: base.description || r.description,
           feeInput: extractedFee !== null ? formatCents(extractedFee) : base.feeInput,
           entryDate: r.entryDate,
+          visit:
+            r.visit !== null && minVisit !== null ? String(r.visit - minVisit + 1) : base.visit,
           feeFlag: flags.length ? `Screenshot fee differs from ${flags.join(' and ')}` : '',
         };
       });

@@ -44,10 +44,11 @@ Deno.serve(async (req) => {
             role: "system",
             content:
               "You extract procedure rows from a dental practice-management screenshot (treatment plan, case view, or ledger). Return ONLY a JSON array of rows: " +
-              '[{"code": string, "tooth": string, "description": string, "fee": number|null, "entryDate": string}] — ' +
+              '[{"code": string, "tooth": string, "description": string, "fee": number|null, "entryDate": string, "visit": number|null}] — ' +
               "code = the procedure code exactly as shown (e.g. D2740, 2014); tooth = the Th column value or empty string; description = the description column text; " +
               "fee = the dollar amount from the Fee column (or OFFICE column if there is no Fee column) as a plain number, null when blank or 0.00 with no real fee; " +
-              "entryDate = the Entry Date column value as shown (M/D/YYYY) or empty string. " +
+              "entryDate = the Entry Date column value as shown (M/D/YYYY) or empty string; " +
+              'visit = the number from the "Visit N" section header this row appears under, as a number, or null when there is no visit grouping. ' +
               "STRICTLY IGNORE insurance estimate columns (Prim Ins, Ins Pays) and patient portion columns (Pat. Portion) — never include them. " +
               "Skip header rows, totals rows, and rows with no code. Preserve row order. Reply with ONLY the JSON array.",
           },
@@ -81,6 +82,7 @@ Deno.serve(async (req) => {
         description: typeof r.description === "string" ? r.description.trim() : "",
         fee: typeof r.fee === "number" && isFinite(r.fee) && r.fee > 0 ? r.fee : null,
         entryDate: typeof r.entryDate === "string" ? r.entryDate.trim() : "",
+        visit: typeof r.visit === "number" && isFinite(r.visit) && r.visit > 0 ? r.visit : null,
       }))
       .filter((r) => r.code !== "");
     if (rows.length === 0) return json({ error: "No rows found in the screenshot" }, 502);
