@@ -16,6 +16,8 @@ export interface FofPracticeInfo {
   addressLine2: string;
   phone: string;
   website: string;
+  /** Used by the AI treatment wording ("Dr. Scott will..."). */
+  doctorName: string;
 }
 
 export interface FofTemplate {
