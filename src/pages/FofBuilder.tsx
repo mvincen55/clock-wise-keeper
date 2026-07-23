@@ -1070,6 +1070,30 @@ export default function FofBuilder() {
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       dispatch({ type: 'set', field, value: e.target.value });
 
+  // Office-copy detail lines for the auto-printed second page: the exact
+  // codes and amounts behind the patient-facing summary. Memory-only.
+  const officeLines = state.lines
+    .filter(l => l.code.trim() !== '' || l.description.trim() !== '' || l.feeInput.trim() !== '')
+    .map(l => {
+      const code = l.code.trim().toUpperCase();
+      const per = perLineByKey.get(l.key);
+      return {
+        code,
+        tooth: l.tooth.trim(),
+        visit: String(effectiveVisit(l)),
+        category: CATEGORY_SHORT[l.category],
+        description: l.description.trim(),
+        officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
+        allowableCents: insuranceActive
+          ? l.allowedInput.trim()
+            ? parseCurrencyInput(l.allowedInput)
+            : allowedByCode.get(code) ?? null
+          : null,
+        insPaysCents: per?.insurancePaysCents ?? 0,
+        writeOffCents: per?.writeOffCents ?? 0,
+      };
+    });
+
   const sheet = effectiveTemplate && computation && (
     <FofPrintSheet
       practice={practice ?? DEFAULT_PRACTICE_INFO}
@@ -1077,6 +1101,7 @@ export default function FofBuilder() {
       patient={{ patientName: state.patientName, dateISO: state.dateISO, treatment: printedTreatment }}
       amounts={amounts}
       computation={computation}
+      officeLines={officeLines}
     />
   );
 
@@ -1847,7 +1872,7 @@ export default function FofBuilder() {
                         />
                       )}
                       <OverrideRow
-                        label="Prepay TOTAL DUE"
+                        label="Total Due with Prepay"
                         computedCents={computation.computed.prepayTotalCents}
                         value={state.prepayOverride}
                         overridden={computation.overridden.prepayTotal}
