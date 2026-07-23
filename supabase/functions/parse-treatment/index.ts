@@ -61,16 +61,36 @@ Deno.serve(async (req) => {
             ],
           },
         ],
-        max_tokens: 2000,
+        max_tokens: 4000,
       }),
     });
     if (!response.ok) return json({ error: "AI request failed" }, 502);
     const data = await response.json();
     const raw: string = data?.choices?.[0]?.message?.content ?? "";
     const match = raw.match(/\[[\s\S]*\]/);
-    if (!match) return json({ error: "No rows found in the screenshot" }, 502);
-    const parsed = JSON.parse(match[0]) as unknown;
-    if (!Array.isArray(parsed)) return json({ error: "No rows found in the screenshot" }, 502);
+    let parsed: unknown = null;
+    if (match) {
+      try {
+        parsed = JSON.parse(match[0]);
+      } catch {
+        parsed = null;
+      }
+    }
+    if (!Array.isArray(parsed)) {
+      // Truncated output: salvage the complete row objects that did fit.
+      parsed = (raw.match(/\{[^{}]*\}/g) ?? [])
+        .map((o) => {
+          try {
+            return JSON.parse(o) as unknown;
+          } catch {
+            return null;
+          }
+        })
+        .filter((o) => o !== null);
+    }
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return json({ error: "No rows found in the screenshot" }, 502);
+    }
     const rows = parsed
       .filter(
         (r): r is Record<string, unknown> =>

@@ -1136,6 +1136,29 @@ export default function FofBuilder() {
   // back. The Fee column fills the lines, but every ESTIMATE (allowable,
   // ins pays, portion) is recomputed from our own schedules — never taken
   // from the screenshot — and differing fees get flagged.
+  // Large screenshots (retina captures are often multi-MB PNGs) get
+  // downscaled/re-encoded in memory so they fit the function's payload
+  // cap; nothing ever touches disk or storage.
+  const shrinkForUpload = (dataUrl: string): Promise<string> =>
+    new Promise(resolve => {
+      if (dataUrl.length < 4_000_000) return resolve(dataUrl);
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 2200 / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(dataUrl);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.9));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+
   const importScreenshot = async (file: File) => {
     setImporting(true);
     try {
@@ -1145,10 +1168,24 @@ export default function FofBuilder() {
         reader.onerror = () => reject(new Error('Could not read the image'));
         reader.readAsDataURL(file);
       });
+      const image = await shrinkForUpload(dataUrl);
       const { data, error } = await supabase.functions.invoke('parse-treatment', {
-        body: { image: dataUrl },
+        body: { image },
       });
-      if (error) throw new Error(error.message);
+      if (error) {
+        // invoke() wraps non-2xx responses in a generic message; the
+        // function's JSON body has the actual reason.
+        let message = error.message;
+        try {
+          const body = (await (
+            error as { context?: { json?: () => Promise<unknown> } }
+          ).context?.json?.()) as { error?: string } | undefined;
+          if (body?.error) message = body.error;
+        } catch {
+          /* keep the generic message */
+        }
+        throw new Error(message);
+      }
       const rows: {
         code: string;
         tooth: string;
