@@ -611,7 +611,9 @@ export default function FofBuilder() {
     return {
       ...newLine(),
       code: match?.code ?? rawCode.toUpperCase(),
-      description: match ? friendlyCdtName(match.code) || match.description : '',
+      description: match
+        ? friendlyCdtName(match.code) || match.description
+        : friendlyCdtName(rawCode.toUpperCase()) || '',
       feeInput: match ? formatCents(match.feeCents) : '',
       ...resolveCategory(match?.category ?? categorizeCdtCode(rawCode.toUpperCase())),
     };
@@ -1116,28 +1118,33 @@ export default function FofBuilder() {
         const extractedFee = r.fee !== null ? Math.round(r.fee * 100) : null;
         const officeFee = officeByCode.get(code)?.feeCents ?? null;
         const carrierAllowed = allowedByCode.get(code) ?? null;
-        const flags: string[] = [];
+        // PMS "Fee" columns are often the insurance-contracted fee — our
+        // own office fee wins whenever the code is on file; the
+        // screenshot's number only fills gaps, and differences get
+        // flagged either way.
+        let feeFlag = '';
         if (extractedFee !== null && officeFee !== null && extractedFee !== officeFee) {
-          flags.push(`office fee on file ${formatCents(officeFee)}`);
-        }
-        if (
+          feeFlag = `PMS shows ${formatCents(extractedFee)} — using our office fee ${formatCents(officeFee)}`;
+        } else if (
           extractedFee !== null &&
+          officeFee === null &&
           insuranceActive &&
           carrierAllowed !== null &&
           extractedFee !== carrierAllowed
         ) {
-          flags.push(`${selectedSchedule?.name ?? 'carrier'} allowable ${formatCents(carrierAllowed)}`);
+          feeFlag = `PMS fee ${formatCents(extractedFee)} differs from ${selectedSchedule?.name ?? 'carrier'} allowable ${formatCents(carrierAllowed)}`;
         }
-        if (flags.length) flagged++;
+        if (feeFlag) flagged++;
+        const fee = officeFee ?? extractedFee;
         return {
           ...base,
           tooth: r.tooth,
           description: base.description || r.description,
-          feeInput: extractedFee !== null ? formatCents(extractedFee) : base.feeInput,
+          feeInput: fee !== null ? formatCents(fee) : base.feeInput,
           entryDate: r.entryDate,
           visit:
             r.visit !== null && minVisit !== null ? String(r.visit - minVisit + 1) : base.visit,
-          feeFlag: flags.length ? `Screenshot fee differs from ${flags.join(' and ')}` : '',
+          feeFlag,
         };
       });
       dispatch({ type: 'addLines', lines });
