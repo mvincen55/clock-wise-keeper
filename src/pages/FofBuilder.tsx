@@ -1027,31 +1027,36 @@ export default function FofBuilder() {
     [effectiveTemplate, amounts, overrides, visitPlan]
   );
 
-  // AI pass over the payment names, applied as editable overrides.
-  // HIPAA: the request contains ONLY procedure names and visit order —
-  // never the patient's name, the date, or any dollar amounts.
+  // AI pass over the payment names and treatment wording. HIPAA: the
+  // request contains ONLY procedure names and visit order — never the
+  // patient's name, the date, or any dollar amounts. It also sends the
+  // AUTO-generated slot labels, not staff-typed overrides.
+  const aiCall = async (wantTreatment: boolean) => {
+    if (!computation) return null;
+    const byVisit = new Map<number, string[]>();
+    for (const l of state.lines) {
+      const label = l.description.trim() || friendlyCdtName(l.code) || '';
+      if (!label) continue;
+      byVisit.set(effectiveVisit(l), [...(byVisit.get(effectiveVisit(l)) ?? []), label]);
+    }
+    const visits = [...byVisit.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([, procedures]) => ({ procedures }));
+    const autoSlots = rawVisitPlan?.labels ?? computation.installmentLabels;
+    const { data, error } = await supabase.functions.invoke('name-visits', {
+      body: { slots: autoSlots, visits, wantTreatment },
+    });
+    if (error) throw new Error(error.message);
+    return { data, slotCount: autoSlots.length };
+  };
+
   const aiNamePayments = async () => {
-    if (!computation) return;
     setAiNaming(true);
     try {
-      const byVisit = new Map<number, string[]>();
-      for (const l of state.lines) {
-        const label = l.description.trim() || friendlyCdtName(l.code) || '';
-        if (!label) continue;
-        byVisit.set(effectiveVisit(l), [...(byVisit.get(effectiveVisit(l)) ?? []), label]);
-      }
-      const visits = [...byVisit.entries()]
-        .sort((a, b) => a[0] - b[0])
-        .map(([, procedures]) => ({ procedures }));
-      // Send the AUTO-generated slot labels, not the override-applied
-      // ones — staff-typed text never leaves the browser.
-      const autoSlots = rawVisitPlan?.labels ?? computation.installmentLabels;
-      const { data, error } = await supabase.functions.invoke('name-visits', {
-        body: { slots: autoSlots, visits },
-      });
-      if (error) throw new Error(error.message);
-      const names: string[] = data?.names ?? [];
-      if (names.length !== computation.installmentLabels.length) {
+      const result = await aiCall(false);
+      if (!result) return;
+      const names: string[] = result.data?.names ?? [];
+      if (names.length !== result.slotCount) {
         throw new Error('AI returned an unexpected number of names');
       }
       names.forEach((name, i) =>
@@ -1064,6 +1069,44 @@ export default function FofBuilder() {
       setAiNaming(false);
     }
   };
+
+  // Auto-polish: once the treatment settles (2.5s of quiet), AI rewords
+  // the treatment summary like a human and names the payments — silently,
+  // and never overwriting anything staff already typed.
+  const aiSignature = useMemo(
+    () =>
+      JSON.stringify(
+        state.lines.map(l => [l.code, l.tooth, l.description, l.visit, l.feeInput])
+      ),
+    [state.lines]
+  );
+  const [aiText, setAiText] = useState<{ signature: string; treatment: string } | null>(null);
+  const aiRanForRef = useRef<string>('');
+  useEffect(() => {
+    if (feeLines.length === 0 || importing || !computation) return;
+    if (aiRanForRef.current === aiSignature) return;
+    const timer = setTimeout(async () => {
+      aiRanForRef.current = aiSignature;
+      try {
+        const result = await aiCall(true);
+        if (!result) return;
+        if (typeof result.data?.treatment === 'string' && result.data.treatment.trim() !== '') {
+          setAiText({ signature: aiSignature, treatment: result.data.treatment.trim() });
+        }
+        const names: string[] = result.data?.names ?? [];
+        const noManualNames = state.installmentLabelOverrides.every(l => !l || l.trim() === '');
+        if (names.length === result.slotCount && noManualNames) {
+          names.forEach((name, i) =>
+            dispatch({ type: 'setInstallmentLabel', index: i, value: name })
+          );
+        }
+      } catch {
+        // Silent — the auto wording is a bonus, never an error state.
+      }
+    }, 2500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiSignature, feeLines.length, importing]);
 
   // The reminder every import path goes through — no patient info in the
   // image, ever.
@@ -1194,7 +1237,12 @@ export default function FofBuilder() {
       if (code !== '' && !/^D\d{4}$/i.test(code)) continue;
       const label = l.description.trim();
       if (!label) continue;
-      const tooth = l.tooth.trim();
+      // Denture/partial codes read "Lower Partial Denture" — the arch is
+      // in the name, tooth numbers are noise on the patient line.
+      const numMatch = /^D(\d{4})$/i.exec(code);
+      const dentureCode =
+        numMatch !== null && +numMatch[1] >= 5000 && +numMatch[1] < 5900;
+      const tooth = dentureCode ? '' : l.tooth.trim();
       if (!tooth) {
         if (!general.includes(label)) general.push(label);
         continue;
@@ -1216,9 +1264,11 @@ export default function FofBuilder() {
     ].join('; ');
   }, [state.lines]);
   // The textarea holds the REAL text: it auto-writes from the procedures
-  // until the staff edits it, then their wording sticks.
+  // (AI's human wording once it arrives, list-style until then) until the
+  // staff edits it, then their wording sticks.
   const noteEdited = state.noteEdited === 'yes';
-  const printedTreatment = noteEdited ? state.note : autoTreatment;
+  const aiTreatment = aiText && aiText.signature === aiSignature ? aiText.treatment : '';
+  const printedTreatment = noteEdited ? state.note : aiTreatment || autoTreatment;
 
   const isDirty =
     state.patientName.trim() !== '' ||
@@ -1738,7 +1788,7 @@ export default function FofBuilder() {
                       rows={2}
                       className="pr-16"
                       placeholder="Writes itself from the procedures above"
-                      value={noteEdited ? state.note : autoTreatment}
+                      value={printedTreatment}
                       onChange={e => {
                         dispatch({ type: 'set', field: 'note', value: e.target.value });
                         dispatch({ type: 'set', field: 'noteEdited', value: 'yes' });

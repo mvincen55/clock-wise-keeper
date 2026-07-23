@@ -192,6 +192,15 @@ export function buildVisitSchedule(
   // Zero-fee visits (e.g. a no-charge seat appointment) create no payment.
   const visits = allVisits.filter(v => v.feeCents > 0);
   if (visits.length === 0) return null;
+  // When zero-fee visits trail the last paying visit (try-ins, seat and
+  // delivery appointments), the final half is collected at the LAST of
+  // them — label the final payment accordingly ("Denture Delivery").
+  const lastPayingIdx = allVisits.reduce((idx, v, i) => (v.feeCents > 0 ? i : idx), -1);
+  const trailingLabel = allVisits
+    .slice(lastPayingIdx + 1)
+    .map(v => v.label)
+    .filter(label => label.trim() !== '')
+    .pop();
   const weights = visits.map(v => v.feeCents);
   const alloc = splitCentsWeighted(portionCents, weights);
   const n = alloc.length;
@@ -236,6 +245,8 @@ export function buildVisitSchedule(
       labels.push(visitLabel(i));
     }
   }
+
+  if (trailingLabel) labels[labels.length - 1] = trailingLabel;
 
   // Keep zero-due visit slots — the final Delivery visit showing $0.00
   // tells the patient it's already paid. Only an empty Upon Scheduling
