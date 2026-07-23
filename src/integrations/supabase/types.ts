@@ -488,6 +488,143 @@ export type Database = {
           },
         ]
       }
+      checklist_completions: {
+        Row: {
+          completed_at: string
+          completed_by: string
+          completed_by_name: string
+          id: string
+          item_id: string
+          org_id: string
+          period_key: string
+        }
+        Insert: {
+          completed_at?: string
+          completed_by: string
+          completed_by_name?: string
+          id?: string
+          item_id: string
+          org_id: string
+          period_key: string
+        }
+        Update: {
+          completed_at?: string
+          completed_by?: string
+          completed_by_name?: string
+          id?: string
+          item_id?: string
+          org_id?: string
+          period_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_completions_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_completions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklist_items: {
+        Row: {
+          cadence: string
+          checklist_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          org_id: string
+          per_person: boolean
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          cadence?: string
+          checklist_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          org_id: string
+          per_person?: boolean
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          cadence?: string
+          checklist_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          org_id?: string
+          per_person?: boolean
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_items_checklist_id_fkey"
+            columns: ["checklist_id"]
+            isOneToOne: false
+            referencedRelation: "checklists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_items_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklists: {
+        Row: {
+          audience: string
+          created_at: string
+          id: string
+          name: string
+          org_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          audience?: string
+          created_at?: string
+          id?: string
+          name: string
+          org_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          audience?: string
+          created_at?: string
+          id?: string
+          name?: string
+          org_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklists_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       change_requests: {
         Row: {
           created_at: string
