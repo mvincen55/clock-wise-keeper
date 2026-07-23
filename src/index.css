@@ -475,6 +475,9 @@
   display: flex;
   gap: 0.4in;
   margin: 6pt 0 14pt;
+  /* Tabbed in slightly so the agreement checkboxes sit inside the
+     sentence above rather than flush with the margin. */
+  padding-left: 0.35in;
 }
 
 .fof-choice {

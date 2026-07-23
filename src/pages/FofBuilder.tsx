@@ -109,6 +109,10 @@ const MAXED_NOTE =
 const MAXED_NOTE_PREV_EXEMPT =
   "This treatment is expected to use the remainder of your dental plan's annual maximum. Preventive care does not count toward your maximum, so hygiene (cleaning) visits remain covered; other services will be your responsibility until your benefits renew.";
 
+// Fees billed AT their visit with no half-ahead prepay in the installment
+// schedule — per office policy the surgical guide isn't prepaid.
+const NO_PREPAY_CODES = new Set(['D5982']);
+
 // Procedures the Illumitrac membership plans include at no charge (per the
 // office Policy Handbook / 2025 flyer): cleanings (adult/child/perio),
 // exams, emergency exam, needed X-rays (CBCT D0367 excluded), fluoride and
@@ -758,13 +762,14 @@ export default function FofBuilder() {
     // A typed Visit # pins the whole line to that visit; otherwise the
     // code's segments spread the fee across its clinical visits (crowns
     // split half to Prep, half to Delivery, etc.).
-    const entries: { raw: number; feeCents: number; label: string }[] = [];
+    const entries: { raw: number; feeCents: number; label: string; dueAtVisit: boolean }[] = [];
     for (const l of active) {
       const fee = parseCurrencyInput(l.feeInput) ?? 0;
       const lineLabel = friendlyCdtName(l.code) || l.description.trim();
+      const dueAtVisit = NO_PREPAY_CODES.has(l.code.trim().toUpperCase());
       const typed = parseInt(l.visit, 10);
       if (typed >= 1) {
-        entries.push({ raw: typed, feeCents: fee, label: lineLabel });
+        entries.push({ raw: typed, feeCents: fee, label: lineLabel, dueAtVisit });
         continue;
       }
       const segments = visitSegmentsForCode(l.code);
@@ -772,14 +777,18 @@ export default function FofBuilder() {
       segments.forEach((segment, i) => {
         const part = i === segments.length - 1 ? remaining : Math.round(fee * segment.share);
         remaining -= part;
-        entries.push({ raw: segment.stage, feeCents: part, label: segment.label || lineLabel });
+        entries.push({ raw: segment.stage, feeCents: part, label: segment.label || lineLabel, dueAtVisit });
       });
     }
     const distinct = [...new Set(entries.map(e => e.raw))].sort((a, b) => a - b);
     return distinct.map(v => {
       const group = entries.filter(e => e.raw === v);
       const top = group.reduce((best, e) => (e.feeCents > best.feeCents ? e : best), group[0]);
-      return { label: top.label, feeCents: group.reduce((sum, e) => sum + e.feeCents, 0) };
+      return {
+        label: top.label,
+        feeCents: group.reduce((sum, e) => sum + e.feeCents, 0),
+        dueAtVisitCents: group.reduce((sum, e) => sum + (e.dueAtVisit ? e.feeCents : 0), 0),
+      };
     });
   }, [state.lines]);
 
@@ -885,23 +894,35 @@ export default function FofBuilder() {
   // Description IS what prints (it auto-fills patient-friendly); a
   // blanked description intentionally omits that procedure from the line.
   const autoTreatment = useMemo(() => {
-    const groups: { label: string; teeth: string[] }[] = [];
+    // Group by tooth so the tooth number reads once per group ("Tooth #2:
+    // Surgical Guide, Dental Implant, …") instead of trailing every item.
+    const general: string[] = [];
+    const byTooth: { tooth: string; labels: string[] }[] = [];
     for (const l of state.lines) {
       const code = l.code.trim();
       if (!code && !l.description.trim() && !l.feeInput.trim()) continue;
       const label = l.description.trim();
       if (!label) continue;
-      let group = groups.find(g => g.label === label);
-      if (!group) {
-        group = { label, teeth: [] };
-        groups.push(group);
-      }
       const tooth = l.tooth.trim();
-      if (tooth && !group.teeth.includes(tooth)) group.teeth.push(tooth);
+      if (!tooth) {
+        if (!general.includes(label)) general.push(label);
+        continue;
+      }
+      let group = byTooth.find(g => g.tooth === tooth);
+      if (!group) {
+        group = { tooth, labels: [] };
+        byTooth.push(group);
+      }
+      if (!group.labels.includes(label)) group.labels.push(label);
     }
-    return groups
-      .map(g => (g.teeth.length ? `${g.label} ${g.teeth.map(t => `#${t}`).join(', ')}` : g.label))
-      .join(', ');
+    const toothLabel = (tooth: string) => {
+      const parts = tooth.split(/[\s,;/]+/).filter(Boolean);
+      return parts.length > 1 ? `Teeth #${parts.join(', #')}` : `Tooth #${parts[0] ?? tooth}`;
+    };
+    return [
+      ...(general.length ? [general.join(', ')] : []),
+      ...byTooth.map(g => `${toothLabel(g.tooth)}: ${g.labels.join(', ')}`),
+    ].join('; ');
   }, [state.lines]);
   // The textarea holds the REAL text: it auto-writes from the procedures
   // until the staff edits it, then their wording sticks.

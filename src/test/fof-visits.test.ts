@@ -196,6 +196,29 @@ describe('buildVisitSchedule — half a visit ahead', () => {
     expect(buildVisitSchedule(100, [{ label: 'X', feeCents: 0 }])).toBeNull();
   });
 
+  it('due-at-visit fees (e.g. surgical guide) skip the half-ahead prepay', () => {
+    // Visit 1 = 200k of which 100k is the guide (billed at the visit);
+    // visit 2 = 100k. Portion equals the fees.
+    const plan = buildVisitSchedule(300_000, [
+      { label: 'Surgery', feeCents: 200_000, dueAtVisitCents: 100_000 },
+      { label: 'Delivery', feeCents: 100_000 },
+    ])!;
+    // Scheduling: half of visit 1's ahead-eligible 100k = 50k (NOT 100k)
+    // Visit 1: rest of ahead (50k) + half v2 (50k) + guide 100k = 200k
+    // Visit 2: remaining 50k
+    expect(plan.weights).toEqual([50_000, 200_000, 50_000]);
+    expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(300_000);
+  });
+
+  it('a fully due-at-visit single appointment collects nothing at scheduling', () => {
+    const plan = buildVisitSchedule(112_000, [
+      { label: 'Surgical Guide', feeCents: 112_000, dueAtVisitCents: 112_000 },
+    ])!;
+    // The empty Upon Scheduling slot is dropped entirely
+    expect(plan.weights).toEqual([112_000]);
+    expect(plan.labels[0]).toContain('At Appointment');
+  });
+
   it('skips zero-fee visits (no-charge seat appointment creates no payment)', () => {
     const plan = buildVisitSchedule(199_800, [
       { label: 'Porcelain Crown', feeCents: 199_800 },
