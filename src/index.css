@@ -359,7 +359,7 @@
 }
 
 .fof-cell-head {
-  font-size: 6.8pt;
+  font-size: 7.2pt;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -396,14 +396,14 @@
   background: var(--fof-tint);
   border-radius: 5pt;
   padding: 6pt 10pt;
-  font-size: 7.2pt;
+  font-size: 7.5pt;
   line-height: 1.45;
   color: #3d3749;
   margin-bottom: 8pt;
 }
 
 .fof-footnotes {
-  font-size: 6.8pt;
+  font-size: 7.4pt;
   line-height: 1.35;
   color: var(--fof-muted);
   margin-bottom: 8pt;
@@ -417,7 +417,7 @@
 .fof-signatures {
   page-break-inside: avoid;
   border-top: 0.75pt solid var(--fof-line);
-  padding-top: 8pt;
+  padding-top: 16pt;
 }
 
 /* Reads as one sentence on one line: the write-on blank stretches to
@@ -449,7 +449,7 @@
   left: 0;
   right: 0;
   margin-top: 1pt;
-  font-size: 6pt;
+  font-size: 6.5pt;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--fof-muted);
@@ -462,7 +462,7 @@
 }
 
 .fof-sig-caption {
-  font-size: 6.5pt;
+  font-size: 7pt;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--fof-muted);
@@ -562,7 +562,7 @@
 }
 
 .fof-dense .fof-signatures {
-  padding-top: 6pt;
+  padding-top: 11pt;
 }
 
 .fof-denser .fof-logo {
@@ -579,11 +579,11 @@
 
 .fof-denser .fof-callout p,
 .fof-denser .fof-band {
-  font-size: 6.6pt;
+  font-size: 7pt;
 }
 
 .fof-denser .fof-footnotes {
-  font-size: 6.3pt;
+  font-size: 7pt;
 }
 
 .fof-denser .fof-cell-amount {

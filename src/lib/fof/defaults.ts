@@ -27,7 +27,7 @@ export const DEFAULT_INSURANCE_NOTE =
   'Please note that the calculated insurance payment, including any write-offs, is only an estimate. While we have made every effort to calculate this amount accurately, any insurance underpayment will remain your responsibility. If you believe there has been a change to your insurance coverage, please notify us as soon as possible.';
 
 export const DEFAULT_CONTACT_NOTE =
-  'If you are interested in exploring alternate financial arrangements, such as payment through an outside financing company, or if you have any questions regarding this form, please contact us at (508) 993-0515. Kindly mail your signed copy along with your payment to: Harelick Dental Associates, LLC. 278 Alden Road, Fairhaven, MA 02719';
+  "Questions about this form, or interested in another payment arrangement such as outside financing? Call us at (508) 993-0515 — we're happy to help. Please mail your signed copy, along with your payment, to Harelick Dental Associates, LLC, 278 Alden Road, Fairhaven, MA 02719.";
 
 const DEFAULT_INSTALLMENT_LABELS = [
   'Visit 1 (Upon scheduling)',
