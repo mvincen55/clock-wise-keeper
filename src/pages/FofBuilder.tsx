@@ -885,23 +885,35 @@ export default function FofBuilder() {
   // Description IS what prints (it auto-fills patient-friendly); a
   // blanked description intentionally omits that procedure from the line.
   const autoTreatment = useMemo(() => {
-    const groups: { label: string; teeth: string[] }[] = [];
+    // Group by tooth so the tooth number reads once per group ("Tooth #2:
+    // Surgical Guide, Dental Implant, …") instead of trailing every item.
+    const general: string[] = [];
+    const byTooth: { tooth: string; labels: string[] }[] = [];
     for (const l of state.lines) {
       const code = l.code.trim();
       if (!code && !l.description.trim() && !l.feeInput.trim()) continue;
       const label = l.description.trim();
       if (!label) continue;
-      let group = groups.find(g => g.label === label);
-      if (!group) {
-        group = { label, teeth: [] };
-        groups.push(group);
-      }
       const tooth = l.tooth.trim();
-      if (tooth && !group.teeth.includes(tooth)) group.teeth.push(tooth);
+      if (!tooth) {
+        if (!general.includes(label)) general.push(label);
+        continue;
+      }
+      let group = byTooth.find(g => g.tooth === tooth);
+      if (!group) {
+        group = { tooth, labels: [] };
+        byTooth.push(group);
+      }
+      if (!group.labels.includes(label)) group.labels.push(label);
     }
-    return groups
-      .map(g => (g.teeth.length ? `${g.label} ${g.teeth.map(t => `#${t}`).join(', ')}` : g.label))
-      .join(', ');
+    const toothLabel = (tooth: string) => {
+      const parts = tooth.split(/[\s,;/]+/).filter(Boolean);
+      return parts.length > 1 ? `Teeth #${parts.join(', #')}` : `Tooth #${parts[0] ?? tooth}`;
+    };
+    return [
+      ...(general.length ? [general.join(', ')] : []),
+      ...byTooth.map(g => `${toothLabel(g.tooth)}: ${g.labels.join(', ')}`),
+    ].join('; ');
   }, [state.lines]);
   // The textarea holds the REAL text: it auto-writes from the procedures
   // until the staff edits it, then their wording sticks.
