@@ -33,6 +33,8 @@ interface FofPrintSheetProps {
   officeLines?: FofOfficeLine[];
   /** Signed-in staff member's name for the office copy's created-by line. */
   createdBy?: string;
+  /** Treating doctor selected on the builder; listed on the office copy. */
+  doctorName?: string;
   /** Marked on the office copy when rows came from a PMS screenshot import. */
   importedFromScreenshot?: boolean;
 }
@@ -158,6 +160,7 @@ export default function FofPrintSheet({
   computation,
   officeLines,
   createdBy,
+  doctorName,
   importedFromScreenshot,
 }: FofPrintSheetProps) {
   const { effective } = computation;
@@ -548,7 +551,8 @@ export default function FofPrintSheet({
             <div className="fof-office-title">Office Copy — FOF Detail</div>
             <div className="fof-office-sub">
               Patient: {patient.patientName || '—'} · Date:{' '}
-              {patient.dateISO ? formatDateMDY(patient.dateISO) : '—'} · Template:{' '}
+              {patient.dateISO ? formatDateMDY(patient.dateISO) : '—'}
+              {doctorName?.trim() ? ` · Doctor: ${doctorName}` : ''} · Template:{' '}
               {template.name}
               {createdBy?.trim() ? (
                 <>
