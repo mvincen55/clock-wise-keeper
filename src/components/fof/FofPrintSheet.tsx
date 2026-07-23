@@ -135,7 +135,7 @@ export default function FofPrintSheet({
           </div>
           {(amounts.officeDiscountCents ?? 0) > 0 && (
             <div className="fof-row">
-              <span>Office Discount</span>
+              <span>{amounts.officeDiscountLabel?.trim() || 'Office Discount'}</span>
               <span>−{formatCents(amounts.officeDiscountCents!)}</span>
             </div>
           )}

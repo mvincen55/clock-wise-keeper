@@ -64,6 +64,8 @@ export interface FofAmounts {
   writeOffCents: Cents | null;
   /** Discretionary flat discount; printed only when non-zero. */
   officeDiscountCents?: Cents | null;
+  /** What the discount is for; blank prints as plain "Office Discount". */
+  officeDiscountLabel?: string;
   /** Existing credit on the patient's account; printed only when non-zero. */
   patientCreditCents?: Cents | null;
   /** Rule-derived discount (membership/senior); printed only when non-zero. */
