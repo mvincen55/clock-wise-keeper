@@ -484,7 +484,8 @@
   display: flex;
   align-items: center;
   gap: 6pt;
-  background: #1d6f3d;
+  /* Softened green: still pops, no longer the only thing the eye finds. */
+  background: rgba(29, 111, 61, 0.78);
   color: white;
   border-radius: 4pt;
   font-size: 7.8pt;
