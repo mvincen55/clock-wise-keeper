@@ -1187,6 +1187,50 @@ export type Database = {
           },
         ]
       }
+      important_numbers: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          notes: string
+          org_id: string
+          section: string
+          sort_order: number
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          notes?: string
+          org_id: string
+          section: string
+          sort_order?: number
+          updated_at?: string
+          value?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          notes?: string
+          org_id?: string
+          section?: string
+          sort_order?: number
+          updated_at?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "important_numbers_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       insurance_plans: {
         Row: {
           annual_max_cents: number

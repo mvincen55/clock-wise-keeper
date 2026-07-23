@@ -2,7 +2,7 @@ import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Clock, Table2, CalendarDays, FileText, LogOut, Menu, X, Settings, ShieldCheck, Send, CheckSquare, Users, Calendar, ReceiptText, Sparkles, BookOpen, type LucideIcon } from 'lucide-react';
+import { Clock, Table2, CalendarDays, FileText, LogOut, Menu, X, Settings, ShieldCheck, Send, CheckSquare, Users, Calendar, ReceiptText, Sparkles, BookOpen, Phone, type LucideIcon } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import NotificationBell from '@/components/NotificationBell';
 import { useApprovalCounts } from '@/hooks/useApprovalCounts';
@@ -39,6 +39,10 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Patient Forms',
     items: [{ to: '/fof', icon: ReceiptText, label: 'Financial Options Form' }],
+  },
+  {
+    label: 'Office Forms',
+    items: [{ to: '/important-numbers', icon: Phone, label: 'Important Numbers' }],
   },
   {
     label: 'My Time',
