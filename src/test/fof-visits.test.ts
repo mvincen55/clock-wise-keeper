@@ -270,7 +270,9 @@ describe('friendlyCdtName', () => {
     expect(friendlyCdtName('D1110')).toBe('Adult Cleaning');
     expect(friendlyCdtName('D6111')).toBe('Implant-Supported Lower Denture');
     expect(friendlyCdtName('D3310')).toBe('Root Canal (Front Tooth)');
-    expect(friendlyCdtName('D2750')).toBe('Porcelain-Fused-to-Metal Crown');
+    // Material/metal qualifiers stay off the patient-facing names.
+    expect(friendlyCdtName('D2750')).toBe('Crown');
+    expect(friendlyCdtName('D6059')).toBe('Implant Crown');
   });
 
   it('returns null for unknown or custom codes', () => {
