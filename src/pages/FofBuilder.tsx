@@ -989,8 +989,11 @@ export default function FofBuilder() {
       const visits = [...byVisit.entries()]
         .sort((a, b) => a[0] - b[0])
         .map(([, procedures]) => ({ procedures }));
+      // Send the AUTO-generated slot labels, not the override-applied
+      // ones — staff-typed text never leaves the browser.
+      const autoSlots = rawVisitPlan?.labels ?? computation.installmentLabels;
       const { data, error } = await supabase.functions.invoke('name-visits', {
-        body: { slots: computation.installmentLabels, visits },
+        body: { slots: autoSlots, visits },
       });
       if (error) throw new Error(error.message);
       const names: string[] = data?.names ?? [];
@@ -1143,9 +1146,24 @@ export default function FofBuilder() {
                     <Switch
                       id="opt-prepay"
                       checked={prepayShown}
-                      onCheckedChange={v =>
-                        dispatch({ type: 'set', field: 'prepayOptionState', value: v ? 'on' : 'off' })
-                      }
+                      onCheckedChange={v => {
+                        // Standard policy: no prepay discount with contract
+                        // insurance or financing — overriding needs a
+                        // deliberate yes (SLH / Office Manager approval).
+                        if (
+                          v &&
+                          template &&
+                          !template.showPrepayOption &&
+                          !confirm(
+                            'Standard policy: this template has no Prepay in Full option ' +
+                              '(contract insurance / financing get no additional discounts ' +
+                              'unless approved by SLH or the Office Manager). Turn it on anyway?'
+                          )
+                        ) {
+                          return;
+                        }
+                        dispatch({ type: 'set', field: 'prepayOptionState', value: v ? 'on' : 'off' });
+                      }}
                     />
                     <Label htmlFor="opt-prepay">Prepay in Full option</Label>
                   </div>

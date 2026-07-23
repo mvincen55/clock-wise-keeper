@@ -327,7 +327,7 @@ export default function FofPrintSheet({
                   </div>
                 )}
                 <div className="fof-row fof-row-total">
-                  <span>Total Due Today</span>
+                  <span>Total Due with Prepay</span>
                   <span>{formatCents(effective.prepayTotalCents)}</span>
                 </div>
                 {effective.discountCents > 0 && (
