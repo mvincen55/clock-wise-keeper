@@ -4,8 +4,9 @@
 // tweak.
 //
 // HIPAA note: the payload is DE-IDENTIFIED BY CONSTRUCTION — procedure
-// names and visit order only. No patient name, no date, no dollar
-// amounts, no identifiers of any kind may be added to this request.
+// names, tooth numbers, visit order, and the practice's doctor name only.
+// No patient name, no date, no dollar amounts, no identifiers of any
+// kind may be added to this request.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,17 +29,23 @@ Deno.serve(async (req) => {
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!apiKey) return json({ error: "AI is not configured" }, 500);
 
-    const { slots, visits, wantTreatment } = (await req.json()) as {
+    const { slots, visits, wantTreatment, doctorName } = (await req.json()) as {
       /** Current payment slot labels, in order (e.g. "Upon Scheduling", "Crown Prep"). */
       slots: string[];
-      /** Procedures happening at each clinical visit, in order. */
+      /** Procedures happening at each clinical visit, in order (may include "(tooth #N)"). */
       visits: { procedures: string[] }[];
       /** Also write a plain-language treatment summary for the form. */
       wantTreatment?: boolean;
+      /** Treating doctor's display name (practice config, not patient data). */
+      doctorName?: string;
     };
     if (!Array.isArray(slots) || slots.length === 0 || slots.length > 12) {
       return json({ error: "Bad request" }, 400);
     }
+    const doctor =
+      typeof doctorName === "string" && doctorName.trim().length > 0 && doctorName.length <= 40
+        ? doctorName.trim()
+        : "The doctor";
     const visitLines = (visits ?? [])
       .map((v, i) => `Visit ${i + 1}: ${(v.procedures ?? []).slice(0, 12).join(", ") || "—"}`)
       .join("\n");
@@ -52,10 +59,10 @@ Deno.serve(async (req) => {
           {
             role: "system",
             content:
-              "You word a dental Financial Options Form so a patient instantly understands it. You get the clinical visits (with their procedures) and the current payment slot labels in order. " +
+              "You are the treatment coordinator at a dental office — a warm, confident closer who makes patients feel great about saying yes to the care they need. You word the Financial Options Form. You get the clinical visits (with their procedures, some annotated with tooth numbers) and the current payment slot labels in order. " +
               'Reply with ONLY a JSON object: {"names": string[], "treatment": string}. ' +
-              "names: rewrite each slot label, short (2-5 words), natural, timing-first so the patient knows WHEN it's due: visit payments read like 'At the Work Up Visit', 'At Crown Prep', 'On Denture Delivery'; scheduling payments keep 'Upon Scheduling' (optionally + what's being scheduled). A payment may prepay later work — never name it after work that happens at a different visit, and NEVER invent visits or stages not in the list. No 'Visit 1/2/3' numbering, codes, or prices. Exactly one name per slot, same order. " +
-              "treatment: 1-2 warm, plain sentences summarizing the whole plan the way a person would say it to a patient (e.g. 'We'll steady the loose teeth with splinting, remove the tooth that can't be saved, place two porcelain crowns, and finish with a lower partial denture.'). No codes, no prices, no per-visit breakdown; mention arch wording like 'lower partial denture' instead of tooth numbers; 320 characters max.",
+              "names: rewrite each slot label, short (2-5 words), specific and timing-first so the patient knows WHEN it's due and what it's for: visit payments read like 'At the Records Visit', 'At Crown Prep', 'On Denture Delivery'; scheduling payments keep 'Upon Scheduling' (optionally + what's being scheduled). Name each visit after its most significant procedure — never a vague label like 'Diagnostic Visit' when real treatment happens that day. A payment may prepay later work — never name it after work that happens at a different visit, and NEVER invent visits or stages not in the list. No 'Visit 1/2/3' numbering, codes, or prices. Exactly one name per slot, same order. " +
+              `treatment: 2-3 clean, confident sentences summarizing the whole plan, written in third person using the doctor's name (the doctor is ${JSON.stringify(doctor)}). Slightly clinical but still plain English — a patient should understand every word and feel the value of the plan. Include the tooth numbers given in the visit list (e.g. 'stabilize teeth #23 and #26', 'a crown on tooth #30'); for dentures and partials use arch wording ('a new lower partial denture'), never tooth numbers. End on the outcome (function, comfort, or the finished smile). No codes, no prices, no per-visit breakdown, no hype words like 'amazing'; 400 characters max.`,
           },
           {
             role: "user",

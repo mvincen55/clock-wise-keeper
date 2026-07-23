@@ -956,6 +956,7 @@ export type Database = {
           address_line1: string
           address_line2: string
           created_at: string
+          doctor_name: string
           id: string
           org_id: string
           phone: string
@@ -967,6 +968,7 @@ export type Database = {
           address_line1?: string
           address_line2?: string
           created_at?: string
+          doctor_name?: string
           id?: string
           org_id: string
           phone?: string
@@ -978,6 +980,7 @@ export type Database = {
           address_line1?: string
           address_line2?: string
           created_at?: string
+          doctor_name?: string
           id?: string
           org_id?: string
           phone?: string

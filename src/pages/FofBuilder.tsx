@@ -128,6 +128,9 @@ const MAXED_NOTE_PREV_EXEMPT =
 // schedule — per office policy the surgical guide isn't prepaid.
 const NO_PREPAY_CODES = new Set(['D5982']);
 
+// Doctors the treatment wording can be attributed to.
+const FOF_DOCTORS = ['Dr. Scott', 'Dr. Jennie', 'Dr. Robert', 'Dr. Nicole', 'Dr. Natalie'];
+
 // Procedures the Illumitrac membership plans include at no charge (per the
 // office Policy Handbook / 2025 flyer): cleanings (adult/child/perio),
 // exams, emergency exam, needed X-rays (CBCT D0367 excluded), fluoride and
@@ -462,6 +465,7 @@ export default function FofBuilder() {
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
   const [bundleName, setBundleName] = useState('');
   const [aiNaming, setAiNaming] = useState(false);
+  const [doctorName, setDoctorName] = useState(FOF_DOCTORS[0]);
   const [importing, setImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   // In-app confirm dialog (native confirm() shows ugly browser chrome).
@@ -1035,8 +1039,14 @@ export default function FofBuilder() {
     if (!computation) return null;
     const byVisit = new Map<number, string[]>();
     for (const l of state.lines) {
-      const label = l.description.trim() || friendlyCdtName(l.code) || '';
-      if (!label) continue;
+      const base = l.description.trim() || friendlyCdtName(l.code) || '';
+      if (!base) continue;
+      // Tooth numbers ride along (except dentures, where the arch is in
+      // the name) so the AI can write "remove tooth #24".
+      const numMatch = /^D(\d{4})$/i.exec(l.code.trim());
+      const denture = numMatch !== null && +numMatch[1] >= 5000 && +numMatch[1] < 5900;
+      const tooth = l.tooth.trim();
+      const label = !denture && tooth !== '' ? `${base} (tooth #${tooth})` : base;
       byVisit.set(effectiveVisit(l), [...(byVisit.get(effectiveVisit(l)) ?? []), label]);
     }
     const visits = [...byVisit.entries()]
@@ -1044,7 +1054,7 @@ export default function FofBuilder() {
       .map(([, procedures]) => ({ procedures }));
     const autoSlots = rawVisitPlan?.labels ?? computation.installmentLabels;
     const { data, error } = await supabase.functions.invoke('name-visits', {
-      body: { slots: autoSlots, visits, wantTreatment },
+      body: { slots: autoSlots, visits, wantTreatment, doctorName },
     });
     if (error) throw new Error(error.message);
     return { data, slotCount: autoSlots.length };
@@ -1144,6 +1154,7 @@ export default function FofBuilder() {
         tooth: string;
         description: string;
         fee: number | null;
+        officeFee: number | null;
         entryDate: string;
         visit: number | null;
       }[] = data?.rows ?? [];
@@ -1158,27 +1169,25 @@ export default function FofBuilder() {
       const lines = rows.map(r => {
         const base = lineFromCode(r.code);
         const code = r.code.trim().toUpperCase();
-        const extractedFee = r.fee !== null ? Math.round(r.fee * 100) : null;
-        const officeFee = officeByCode.get(code)?.feeCents ?? null;
-        const carrierAllowed = allowedByCode.get(code) ?? null;
-        // PMS "Fee" columns are often the insurance-contracted fee — our
-        // own office fee wins whenever the code is on file; the
-        // screenshot's number only fills gaps, and differences get
-        // flagged either way.
+        const contractedFee = r.fee !== null ? Math.round(r.fee * 100) : null;
+        const pmsOfficeFee = r.officeFee !== null ? Math.round(r.officeFee * 100) : null;
+        const onFileFee = officeByCode.get(code)?.feeCents ?? null;
+        // The PMS OFFICE column is the office's current fee — it wins.
+        // Our schedule fee backs it up, and the contracted "Fee" column is
+        // only a last resort. Disagreements with our schedule get flagged.
         let feeFlag = '';
-        if (extractedFee !== null && officeFee !== null && extractedFee !== officeFee) {
-          feeFlag = `PMS shows ${formatCents(extractedFee)} — using our office fee ${formatCents(officeFee)}`;
+        if (pmsOfficeFee !== null && onFileFee !== null && pmsOfficeFee !== onFileFee) {
+          feeFlag = `PMS office fee ${formatCents(pmsOfficeFee)} differs from our fee schedule ${formatCents(onFileFee)} — using the PMS office fee`;
         } else if (
-          extractedFee !== null &&
-          officeFee === null &&
-          insuranceActive &&
-          carrierAllowed !== null &&
-          extractedFee !== carrierAllowed
+          pmsOfficeFee === null &&
+          contractedFee !== null &&
+          onFileFee !== null &&
+          contractedFee !== onFileFee
         ) {
-          feeFlag = `PMS fee ${formatCents(extractedFee)} differs from ${selectedSchedule?.name ?? 'carrier'} allowable ${formatCents(carrierAllowed)}`;
+          feeFlag = `PMS shows ${formatCents(contractedFee)} — using our office fee ${formatCents(onFileFee)}`;
         }
         if (feeFlag) flagged++;
-        const fee = officeFee ?? extractedFee;
+        const fee = pmsOfficeFee ?? onFileFee ?? contractedFee;
         return {
           ...base,
           tooth: r.tooth,
@@ -1379,7 +1388,7 @@ export default function FofBuilder() {
                 <CardTitle className="text-base">Patient</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="fof-name">Patient Name</Label>
                     <Input
@@ -1398,6 +1407,19 @@ export default function FofBuilder() {
                       value={state.dateISO}
                       onChange={setField('dateISO')}
                     />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Doctor</Label>
+                    <Select value={doctorName} onValueChange={setDoctorName}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FOF_DOCTORS.map(d => (
+                          <SelectItem key={d} value={d}>{d}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <Select value={template.id} onValueChange={handleTemplateChange}>

@@ -44,9 +44,10 @@ Deno.serve(async (req) => {
             role: "system",
             content:
               "You extract procedure rows from a dental practice-management screenshot (treatment plan, case view, or ledger). Return ONLY a JSON array of rows: " +
-              '[{"code": string, "tooth": string, "description": string, "fee": number|null, "entryDate": string, "visit": number|null}] — ' +
+              '[{"code": string, "tooth": string, "description": string, "fee": number|null, "officeFee": number|null, "entryDate": string, "visit": number|null}] — ' +
               "code = the procedure code exactly as shown (e.g. D2740, 2014); tooth = the Th column value or empty string; description = the description column text; " +
-              "fee = the dollar amount from the Fee column (or OFFICE column if there is no Fee column) as a plain number, null when blank or 0.00 with no real fee; " +
+              "fee = the dollar amount from the Fee column as a plain number (null when blank or 0.00); " +
+              "officeFee = the dollar amount from the OFFICE column as a plain number (null when there is no OFFICE column or it is blank/0.00) — Fee and OFFICE are DIFFERENT columns, read each from its own column; " +
               "entryDate = the Entry Date column value as shown (M/D/YYYY) or empty string; " +
               'visit = the number from the "Visit N" section header this row appears under, as a number, or null when there is no visit grouping. ' +
               "STRICTLY IGNORE insurance estimate columns (Prim Ins, Ins Pays) and patient portion columns (Pat. Portion) — never include them. " +
@@ -81,6 +82,10 @@ Deno.serve(async (req) => {
         tooth: typeof r.tooth === "string" ? r.tooth.trim() : "",
         description: typeof r.description === "string" ? r.description.trim() : "",
         fee: typeof r.fee === "number" && isFinite(r.fee) && r.fee > 0 ? r.fee : null,
+        officeFee:
+          typeof r.officeFee === "number" && isFinite(r.officeFee) && r.officeFee > 0
+            ? r.officeFee
+            : null,
         entryDate: typeof r.entryDate === "string" ? r.entryDate.trim() : "",
         visit: typeof r.visit === "number" && isFinite(r.visit) && r.visit > 0 ? r.visit : null,
       }))
