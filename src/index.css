@@ -318,6 +318,132 @@
   color: #3d3749;
 }
 
+/* Inline icons */
+.fof-icon {
+  width: 8.5pt;
+  height: 8.5pt;
+  flex: 0 0 auto;
+}
+
+.fof-meta-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4pt;
+  color: var(--fof-navy);
+}
+
+.fof-callout .fof-card-title {
+  display: flex;
+  align-items: center;
+  gap: 4pt;
+}
+
+.fof-icon-bubble {
+  width: 15pt;
+  height: 15pt;
+  border-radius: 50%;
+  background: #e7e1f2;
+  color: var(--fof-navy);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+/* Payment options: side-by-side cards joined by an OR badge */
+.fof-options {
+  margin-bottom: 8pt;
+  page-break-inside: avoid;
+}
+
+.fof-options-head {
+  display: flex;
+  align-items: center;
+  gap: 8pt;
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fof-navy);
+  margin-bottom: 5pt;
+}
+
+.fof-options-head::before,
+.fof-options-head::after {
+  content: '';
+  flex: 1;
+  border-top: 0.75pt solid var(--fof-line);
+}
+
+.fof-options-row {
+  display: flex;
+  gap: 6pt;
+  align-items: stretch;
+}
+
+.fof-option {
+  flex: 1;
+  border: 0.9pt solid var(--fof-navy);
+  border-radius: 5pt;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.fof-option-title {
+  font-size: 7.4pt;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-align: center;
+  color: white;
+  background: var(--fof-navy);
+  padding: 3.5pt 4pt;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.fof-option-body {
+  padding: 5pt 8pt 6pt;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.fof-or {
+  align-self: center;
+  flex: 0 0 auto;
+  width: 16pt;
+  height: 16pt;
+  border-radius: 50%;
+  background: var(--fof-navy);
+  color: white;
+  font-size: 6.5pt;
+  font-weight: 800;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.fof-save-chip {
+  margin-top: 4pt;
+  background: #e6f3ea;
+  color: #1d6f3d;
+  border-radius: 4pt;
+  font-size: 7.4pt;
+  font-weight: 700;
+  padding: 3pt 6pt;
+  text-align: center;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
 /* Agreement cards: title band + horizontal payment cells */
 .fof-agreement {
   border: 0.75pt solid var(--fof-navy);
@@ -401,6 +527,38 @@
   line-height: 1.45;
   color: #3d3749;
   margin-bottom: 8pt;
+}
+
+/* Split contact band: financing on the left, mailing on the right */
+.fof-band-split {
+  display: flex;
+  gap: 10pt;
+  align-items: flex-start;
+}
+
+.fof-band-cell {
+  flex: 1;
+  display: flex;
+  gap: 6pt;
+  align-items: flex-start;
+}
+
+.fof-band-cell + .fof-band-cell {
+  border-left: 0.75pt solid var(--fof-line);
+  padding-left: 10pt;
+}
+
+.fof-band-title {
+  font-size: 7.6pt;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fof-navy);
+  margin-bottom: 1.5pt;
+}
+
+.fof-band-cell p {
+  margin: 0;
 }
 
 .fof-footnotes {
@@ -554,6 +712,18 @@
   padding: 4.5pt 8pt;
 }
 
+.fof-dense .fof-options {
+  margin-bottom: 6pt;
+}
+
+.fof-dense .fof-option-body {
+  padding: 4pt 6pt 5pt;
+}
+
+.fof-denser .fof-option-title {
+  font-size: 6.8pt;
+}
+
 .fof-dense .fof-footnotes {
   margin-bottom: 6pt;
 }
@@ -592,24 +762,28 @@
 }
 
 /* Footer pinned to the page bottom */
+/* Solid brand footer bar — degrades to a dark gray band in grayscale */
 .fof-footer {
   margin-top: auto;
-  padding-top: 6pt;
-  border-top: 0.75pt solid var(--fof-line);
-  text-align: center;
+  padding: 6pt 10pt;
+  border-radius: 5pt;
+  background: var(--fof-navy);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14pt;
   font-size: 7.5pt;
-  color: var(--fof-muted);
   letter-spacing: 0.02em;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
 }
 
-.fof-footer-name {
-  display: block;
-  font-weight: 700;
-  color: var(--fof-navy);
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  font-size: 7pt;
-  margin-bottom: 1pt;
+.fof-footer-item {
+  display: flex;
+  align-items: center;
+  gap: 4pt;
+  white-space: nowrap;
 }
 
 @page fof {
