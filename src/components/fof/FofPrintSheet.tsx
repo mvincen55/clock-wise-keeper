@@ -86,6 +86,11 @@ const GlobeIcon = () => (
     <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20" />
   </svg>
 );
+const ToothIcon = () => (
+  <svg {...iconProps}>
+    <path d="M7 3C4.5 3 3 5.2 3 7.5c0 1.6.7 2.7 1.2 4 .6 1.5.8 3.6 1 5.5.2 1.7.5 4 2 4 1.8 0 1.2-3.2 2.2-5.2.3-.6 1-.6 1.3 0 1 2 .3 5.2 2.2 5.2 1.5 0 1.8-2.3 2-4 .2-1.9.4-4 1-5.5.5-1.3 1.2-2.4 1.2-4C17.1 5.2 15.5 3 13 3c-1.2 0-2 .5-3 1-1-.5-1.8-1-3-1z" />
+  </svg>
+);
 const DollarBadgeIcon = () => (
   <svg {...iconProps}>
     <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" />
@@ -188,6 +193,9 @@ export default function FofPrintSheet({
       </header>
 
       <section className="fof-hero">
+        <span className="fof-hero-icon">
+          <ToothIcon />
+        </span>
         <div className="fof-hero-treatment">
           <div className="fof-kicker">Your Treatment</div>
           <div className="fof-treatment-text">{patient.treatment || '—'}</div>
@@ -254,14 +262,18 @@ export default function FofPrintSheet({
 
         {callout && (
           <div className="fof-card fof-callout">
-            <div className="fof-card-title">
-              <ShieldIcon />
-              <span>
-                {callout.title}
-                {callout.mark}
+            <div className="fof-callout-inner">
+              <span className="fof-icon-bubble">
+                <ShieldIcon />
               </span>
+              <div>
+                <div className="fof-card-title">
+                  {callout.title}
+                  {callout.mark}
+                </div>
+                <p>{callout.text}</p>
+              </div>
             </div>
-            <p>{callout.text}</p>
           </div>
         )}
       </section>
@@ -378,18 +390,6 @@ export default function FofPrintSheet({
               <p>
                 We offer outside financing through trusted providers. Call us at{' '}
                 {practice.phone} to learn more — or with any questions about this form.
-              </p>
-            </div>
-          </div>
-          <div className="fof-band-cell">
-            <span className="fof-icon-bubble">
-              <MailIcon />
-            </span>
-            <div>
-              <div className="fof-band-title">Please Mail Your Signed Copy</div>
-              <p>
-                Along with your payment, to {practice.practiceName},{' '}
-                {practice.addressLine1}, {practice.addressLine2}.
               </p>
             </div>
           </div>

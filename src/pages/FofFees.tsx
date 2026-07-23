@@ -48,6 +48,7 @@ const CATEGORY_LABELS: Record<FeeCategory, string> = {
   preventive: 'Preventive',
   basic: 'Basic',
   major: 'Major',
+  workup: 'Work Up (billed at visit)',
   other: 'Other / Not covered',
 };
 

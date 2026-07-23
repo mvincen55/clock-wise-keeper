@@ -204,6 +204,25 @@ describe('buildVisitSchedule — a full visit ahead, never a balance', () => {
     expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(300_000);
   });
 
+  it('an all-workup first visit bills at the visit and Upon Scheduling moves after it', () => {
+    // Visit 1 = work-up only (CT scan + models, billed at the visit);
+    // visits 2-3 are the treatment.
+    const plan = buildVisitSchedule(300_000, [
+      { label: 'Work Up', feeCents: 50_000, dueAtVisitCents: 50_000 },
+      { label: 'Surgery', feeCents: 150_000 },
+      { label: 'Delivery', feeCents: 100_000 },
+    ])!;
+    expect(plan.labels).toEqual([
+      'At Visit 1 · Work Up',
+      'Upon Scheduling',
+      'At Visit 2 · Surgery',
+    ]);
+    // Work-up fees at visit 1; surgery paid when scheduling it after the
+    // work-up; delivery paid at the surgery visit; nothing at delivery.
+    expect(plan.weights).toEqual([50_000, 150_000, 100_000]);
+    expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(300_000);
+  });
+
   it('a fully due-at-visit single appointment collects nothing at scheduling', () => {
     const plan = buildVisitSchedule(112_000, [
       { label: 'Surgical Guide', feeCents: 112_000, dueAtVisitCents: 112_000 },
