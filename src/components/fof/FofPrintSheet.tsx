@@ -93,7 +93,7 @@ const DollarSealIcon = () => (
       fill="currentColor"
       d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
     />
-    <g fill="none" stroke="white" strokeWidth="1.7" strokeLinecap="round">
+    <g fill="none" stroke="#1d6f3d" strokeWidth="1.7" strokeLinecap="round">
       <path d="M14.3 9.2h-3.4a1.45 1.45 0 1 0 0 2.9h2.2a1.45 1.45 0 1 1 0 2.9H9.7" />
       <path d="M12 7.4v9.2" />
     </g>
@@ -112,11 +112,22 @@ const InfoIcon = () => (
     />
   </svg>
 );
-const CircleDollarIcon = () => (
-  <svg {...iconProps}>
-    <circle cx="12" cy="12" r="10" />
-    <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" />
-    <path d="M12 18V6" />
+// Filled icons for the option title chips — solid shapes read at print size.
+const FilledDollarIcon = () => (
+  <svg className="fof-icon" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="11" fill="currentColor" />
+    <g fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+      <path d="M15.3 8.6h-4.8a1.85 1.85 0 1 0 0 3.7h3a1.85 1.85 0 1 1 0 3.7H8.7" />
+      <path d="M12 6.2v11.6" />
+    </g>
+  </svg>
+);
+const FilledCalendarIcon = () => (
+  <svg className="fof-icon" viewBox="0 0 24 24">
+    <rect x="2.5" y="4.5" width="19" height="17" rx="3" fill="currentColor" />
+    <g fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+      <path d="M8 2.5v4M16 2.5v4M2.5 10h19" />
+    </g>
   </svg>
 );
 
@@ -184,8 +195,16 @@ export default function FofPrintSheet({
       ? 150 + installmentCells.length * 14
       : (template.showPrepayOption ? 120 : 0) +
         (template.showInstallmentOption ? 60 + installmentCells.length * 30 : 0));
+  // Sparse forms go the other way: roomier type/spacing plus distributed
+  // leftover space so the sheet always fills the whole letter page.
   const densityClass =
-    contentScore > 700 ? ' fof-dense fof-denser' : contentScore > 520 ? ' fof-dense' : '';
+    contentScore > 700
+      ? ' fof-dense fof-denser'
+      : contentScore > 520
+        ? ' fof-dense'
+        : contentScore < 400
+          ? ' fof-roomy'
+          : '';
 
   return (
     <div className={`fof-sheet${densityClass}`}>
@@ -297,7 +316,7 @@ export default function FofPrintSheet({
             <div className="fof-option">
               <div className="fof-option-title">
                 <span className="fof-option-icon">
-                  <CircleDollarIcon />
+                  <FilledDollarIcon />
                 </span>
                 Option 1 · Prepay in Full — Pay Today &amp; Save
               </div>
@@ -316,7 +335,7 @@ export default function FofPrintSheet({
                   </div>
                 )}
                 <div className="fof-row fof-row-total">
-                  <span>Total Due Today</span>
+                  <span>Total Due with Prepay</span>
                   <span>{formatCents(effective.prepayTotalCents)}</span>
                 </div>
                 {effective.discountCents > 0 && (
@@ -336,7 +355,7 @@ export default function FofPrintSheet({
             <div className="fof-option">
               <div className="fof-option-title">
                 <span className="fof-option-icon">
-                  <CalendarIcon />
+                  <FilledCalendarIcon />
                 </span>
                 Option 2 · Payment Installment Agreement
               </div>

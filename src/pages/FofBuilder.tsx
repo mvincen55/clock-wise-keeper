@@ -47,8 +47,10 @@ import {
   RotateCcw,
   Settings2,
   ShieldCheck,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import FofPrintSheet from '@/components/fof/FofPrintSheet';
 import { useFofSettings, useFofTemplates } from '@/hooks/useFofTemplates';
 import {
@@ -426,6 +428,7 @@ export default function FofBuilder() {
   const [payScheduleId, setPayScheduleId] = useState<string>(NO_SCHEDULE);
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
   const [bundleName, setBundleName] = useState('');
+  const [aiNaming, setAiNaming] = useState(false);
 
   const { data: bundles } = useProcedureBundles();
   const saveBundle = useSaveProcedureBundle();
@@ -817,18 +820,39 @@ export default function FofBuilder() {
     // A typed Visit # pins the whole line to that visit; otherwise the
     // code's segments spread the fee across its clinical visits (crowns
     // split half to Prep, half to Delivery, etc.).
-    const entries: { raw: number; feeCents: number; label: string; dueAtVisit: boolean }[] = [];
+    // Appointment-style names: the noun of the procedure carries into its
+    // lab segments ("Crown Prep", "Denture Impressions"), surgical codes
+    // get a "Surgery" suffix, and an all-workup visit is the Work Up Visit.
+    const nounOf = (label: string) => {
+      const words = label.replace(/\(.*?\)/g, '').trim().split(/\s+/);
+      return words[words.length - 1] || label;
+    };
+    const isSurgical = (code: string) => {
+      const m = /^D(\d{4})$/i.exec(code.trim());
+      if (!m) return false;
+      const num = parseInt(m[1], 10);
+      return (num >= 6010 && num < 6055) || (num >= 7000 && num < 8000) || (num >= 4210 && num < 4300);
+    };
+    const entries: {
+      raw: number;
+      feeCents: number;
+      label: string;
+      dueAtVisit: boolean;
+      workup: boolean;
+    }[] = [];
     for (const l of active) {
       // Membership-covered procedures owe nothing at their visit.
       const fee = freeUnderMembership(l) ? 0 : parseCurrencyInput(l.feeInput) ?? 0;
-      const lineLabel = friendlyCdtName(l.code) || l.description.trim();
+      const base = friendlyCdtName(l.code) || l.description.trim();
+      const lineLabel =
+        isSurgical(l.code) && !/surger/i.test(base) ? `${base} Surgery` : base;
+      const workup = l.category === 'workup';
       // Work-up procedures (and the surgical guide) are billed at their
       // visit, never prepaid ahead.
-      const dueAtVisit =
-        NO_PREPAY_CODES.has(l.code.trim().toUpperCase()) || l.category === 'workup';
+      const dueAtVisit = NO_PREPAY_CODES.has(l.code.trim().toUpperCase()) || workup;
       const typed = parseInt(l.visit, 10);
       if (typed >= 1) {
-        entries.push({ raw: typed, feeCents: fee, label: lineLabel, dueAtVisit });
+        entries.push({ raw: typed, feeCents: fee, label: lineLabel, dueAtVisit, workup });
         continue;
       }
       const segments = visitSegmentsForCode(l.code);
@@ -836,7 +860,8 @@ export default function FofBuilder() {
       segments.forEach((segment, i) => {
         const part = i === segments.length - 1 ? remaining : Math.round(fee * segment.share);
         remaining -= part;
-        entries.push({ raw: segment.stage, feeCents: part, label: segment.label || lineLabel, dueAtVisit });
+        const label = segment.label ? `${nounOf(base)} ${segment.label}` : lineLabel;
+        entries.push({ raw: segment.stage, feeCents: part, label, dueAtVisit, workup });
       });
     }
     const distinct = [...new Set(entries.map(e => e.raw))].sort((a, b) => a - b);
@@ -844,7 +869,7 @@ export default function FofBuilder() {
       const group = entries.filter(e => e.raw === v);
       const top = group.reduce((best, e) => (e.feeCents > best.feeCents ? e : best), group[0]);
       return {
-        label: top.label,
+        label: group.every(e => e.workup) ? 'Work Up Visit' : top.label,
         feeCents: group.reduce((sum, e) => sum + e.feeCents, 0),
         dueAtVisitCents: group.reduce((sum, e) => sum + (e.dueAtVisit ? e.feeCents : 0), 0),
       };
@@ -947,6 +972,44 @@ export default function FofBuilder() {
     () => (effectiveTemplate ? computeFof(effectiveTemplate, amounts, overrides, visitPlan) : null),
     [effectiveTemplate, amounts, overrides, visitPlan]
   );
+
+  // AI pass over the payment names, applied as editable overrides.
+  // HIPAA: the request contains ONLY procedure names and visit order —
+  // never the patient's name, the date, or any dollar amounts.
+  const aiNamePayments = async () => {
+    if (!computation) return;
+    setAiNaming(true);
+    try {
+      const byVisit = new Map<number, string[]>();
+      for (const l of state.lines) {
+        const label = l.description.trim() || friendlyCdtName(l.code) || '';
+        if (!label) continue;
+        byVisit.set(effectiveVisit(l), [...(byVisit.get(effectiveVisit(l)) ?? []), label]);
+      }
+      const visits = [...byVisit.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([, procedures]) => ({ procedures }));
+      // Send the AUTO-generated slot labels, not the override-applied
+      // ones — staff-typed text never leaves the browser.
+      const autoSlots = rawVisitPlan?.labels ?? computation.installmentLabels;
+      const { data, error } = await supabase.functions.invoke('name-visits', {
+        body: { slots: autoSlots, visits },
+      });
+      if (error) throw new Error(error.message);
+      const names: string[] = data?.names ?? [];
+      if (names.length !== computation.installmentLabels.length) {
+        throw new Error('AI returned an unexpected number of names');
+      }
+      names.forEach((name, i) =>
+        dispatch({ type: 'setInstallmentLabel', index: i, value: name })
+      );
+      toast.success('Payment names updated — edit any of them freely');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'AI naming failed');
+    } finally {
+      setAiNaming(false);
+    }
+  };
 
   // The printout shows one patient-friendly treatment line (like the
   // office's existing forms), not the itemized code/fee list. Each row's
@@ -1065,9 +1128,30 @@ export default function FofBuilder() {
           <div className="space-y-4">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Template & Patient</CardTitle>
+                <CardTitle className="text-base">Patient</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fof-name">Patient Name</Label>
+                    <Input
+                      id="fof-name"
+                      autoComplete="off"
+                      value={state.patientName}
+                      onChange={setField('patientName')}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fof-date">Date</Label>
+                    <Input
+                      id="fof-date"
+                      type="date"
+                      autoComplete="off"
+                      value={state.dateISO}
+                      onChange={setField('dateISO')}
+                    />
+                  </div>
+                </div>
                 <Select value={template.id} onValueChange={handleTemplateChange}>
                   <SelectTrigger>
                     <SelectValue />
@@ -1083,9 +1167,24 @@ export default function FofBuilder() {
                     <Switch
                       id="opt-prepay"
                       checked={prepayShown}
-                      onCheckedChange={v =>
-                        dispatch({ type: 'set', field: 'prepayOptionState', value: v ? 'on' : 'off' })
-                      }
+                      onCheckedChange={v => {
+                        // Standard policy: no prepay discount with contract
+                        // insurance or financing — overriding needs a
+                        // deliberate yes (SLH / Office Manager approval).
+                        if (
+                          v &&
+                          template &&
+                          !template.showPrepayOption &&
+                          !confirm(
+                            'Standard policy: this template has no Prepay in Full option ' +
+                              '(contract insurance / financing get no additional discounts ' +
+                              'unless approved by SLH or the Office Manager). Turn it on anyway?'
+                          )
+                        ) {
+                          return;
+                        }
+                        dispatch({ type: 'set', field: 'prepayOptionState', value: v ? 'on' : 'off' });
+                      }}
                     />
                     <Label htmlFor="opt-prepay">Prepay in Full option</Label>
                   </div>
@@ -1117,27 +1216,6 @@ export default function FofBuilder() {
                     {discounts.autoDiscount.label} applies automatically — no prepay required.
                   </p>
                 )}
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="fof-name">Patient Name</Label>
-                    <Input
-                      id="fof-name"
-                      autoComplete="off"
-                      value={state.patientName}
-                      onChange={setField('patientName')}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="fof-date">Date</Label>
-                    <Input
-                      id="fof-date"
-                      type="date"
-                      autoComplete="off"
-                      value={state.dateISO}
-                      onChange={setField('dateISO')}
-                    />
-                  </div>
-                </div>
               </CardContent>
             </Card>
 
@@ -1805,6 +1883,20 @@ export default function FofBuilder() {
                             ))}
                           </SelectContent>
                         </Select>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={aiNaming || feeLines.length === 0}
+                          onClick={aiNamePayments}
+                          title="Have AI suggest friendlier payment names — edit freely after"
+                        >
+                          {aiNaming ? (
+                            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                          )}
+                          AI names
+                        </Button>
                       </div>
                       {computation.computed.installmentsCents.map((cents, i) => (
                         <div key={i} className="flex items-center gap-2">

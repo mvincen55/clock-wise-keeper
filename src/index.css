@@ -477,19 +477,18 @@
   -webkit-print-color-adjust: exact;
 }
 
-/* "You save $X" chip: dark badge + bold amount so it still reads as a
-   clear highlight on a black-and-white printer. */
+/* "You save $X" banner: solid green with white text so it POPS — and
+   prints as a dark band with white text on a black-and-white printer. */
 .fof-save-chip {
   margin-top: 4pt;
   display: flex;
   align-items: center;
   gap: 6pt;
-  background: #e9f4ec;
-  border: 0.75pt solid #b9dcc4;
-  color: #14532d;
+  background: #1d6f3d;
+  color: white;
   border-radius: 4pt;
-  font-size: 7.4pt;
-  padding: 3.5pt 6pt;
+  font-size: 7.8pt;
+  padding: 4.5pt 7pt;
   text-align: left;
   print-color-adjust: exact;
   -webkit-print-color-adjust: exact;
@@ -500,7 +499,8 @@
 }
 
 .fof-save-seal {
-  color: #1d6f3d;
+  /* White seal, green dollar sign — sits on the solid green banner. */
+  color: white;
   display: flex;
   align-items: center;
   flex: 0 0 auto;
@@ -509,8 +509,8 @@
 }
 
 .fof-save-seal .fof-icon {
-  width: 14pt;
-  height: 14pt;
+  width: 15pt;
+  height: 15pt;
 }
 
 /* Agreement cards: title band + horizontal payment cells */
@@ -764,6 +764,68 @@
 .fof-sig-line {
   border-bottom: 0.75pt solid var(--fof-ink);
   height: 19pt;
+}
+
+/* Sparse forms: roomier type and spacing, with leftover height
+   distributed between sections so the page always looks fully used. */
+.fof-roomy {
+  justify-content: space-between;
+  font-size: 9.5pt;
+}
+
+.fof-roomy .fof-head {
+  padding-bottom: 12pt;
+  margin-bottom: 14pt;
+}
+
+.fof-roomy .fof-treatment-text {
+  font-size: 14pt;
+}
+
+.fof-roomy .fof-hero-amount {
+  font-size: 28pt;
+}
+
+.fof-roomy .fof-hero,
+.fof-roomy .fof-cards,
+.fof-roomy .fof-options,
+.fof-roomy .fof-agreement,
+.fof-roomy .fof-band {
+  margin-bottom: 14pt;
+}
+
+.fof-roomy .fof-card {
+  padding: 10pt 12pt;
+}
+
+.fof-roomy .fof-row {
+  padding: 3.5pt 0;
+}
+
+.fof-roomy .fof-option-body {
+  padding: 9pt 11pt 10pt;
+}
+
+.fof-roomy .fof-footnotes {
+  padding: 8pt 10pt;
+  font-size: 7.8pt;
+  margin-bottom: 14pt;
+}
+
+.fof-roomy .fof-sig-ack {
+  margin-bottom: 20pt;
+}
+
+.fof-roomy .fof-choices {
+  margin: 10pt 0 18pt;
+}
+
+.fof-roomy .fof-sig-line {
+  height: 24pt;
+}
+
+.fof-roomy .fof-signatures {
+  padding-top: 14pt;
 }
 
 /* Content-aware density: tighter spacing/type when the form is full */

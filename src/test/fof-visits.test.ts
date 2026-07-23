@@ -129,7 +129,7 @@ describe('visitSegmentsForCode', () => {
     expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(199_800);
     // Full-ahead: Delivery is prepaid at the Prep visit, so no payment
     // slot remains at Delivery itself.
-    expect(plan.labels).toEqual(['Upon Scheduling', 'At Visit 1 · Prep']);
+    expect(plan.labels).toEqual(['Upon Scheduling', 'Prep']);
   });
 });
 
@@ -151,11 +151,7 @@ describe('buildVisitSchedule — a full visit ahead, never a balance', () => {
     // Visit 3: nothing due — slot dropped
     expect(plan!.weights).toEqual([40_000, 60_000, 100_000]);
     expect(plan!.weights.reduce((a, b) => a + b, 0)).toBe(200_000);
-    expect(plan!.labels).toEqual([
-      'Upon Scheduling',
-      'At Visit 1 · Surgery',
-      'At Visit 2 · Placement',
-    ]);
+    expect(plan!.labels).toEqual(['Upon Scheduling', 'Surgery', 'Placement']);
   });
 
   it('allocates the portion proportionally to visit fees', () => {
@@ -212,11 +208,7 @@ describe('buildVisitSchedule — a full visit ahead, never a balance', () => {
       { label: 'Surgery', feeCents: 150_000 },
       { label: 'Delivery', feeCents: 100_000 },
     ])!;
-    expect(plan.labels).toEqual([
-      'At Visit 1 · Work Up',
-      'Upon Scheduling',
-      'At Visit 2 · Surgery',
-    ]);
+    expect(plan.labels).toEqual(['Work Up', 'Upon Scheduling', 'Surgery']);
     // Work-up fees at visit 1; surgery paid when scheduling it after the
     // work-up; delivery paid at the surgery visit; nothing at delivery.
     expect(plan.weights).toEqual([50_000, 150_000, 100_000]);
@@ -229,7 +221,7 @@ describe('buildVisitSchedule — a full visit ahead, never a balance', () => {
     ])!;
     // The empty Upon Scheduling slot is dropped entirely
     expect(plan.weights).toEqual([112_000]);
-    expect(plan.labels[0]).toContain('At Appointment');
+    expect(plan.labels[0]).toBe('Surgical Guide');
   });
 
   it('skips zero-fee visits (no-charge seat appointment creates no payment)', () => {
