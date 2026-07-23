@@ -172,6 +172,7 @@ interface BuilderState {
   noteEdited: string; // '' = treatment text auto-writes from lines, 'yes' = staff took over
   lines: BuilderLine[];
   officeDiscountInput: string;
+  officeDiscountReason: string; // what the discount is for; blank = plain "Office Discount"
   patientCreditInput: string;
   deductibleInput: string;
   annualMaxInput: string;
@@ -216,6 +217,7 @@ const initialState = (): BuilderState => ({
   noteEdited: '',
   lines: [newLine()],
   officeDiscountInput: '',
+  officeDiscountReason: '',
   patientCreditInput: '',
   deductibleInput: '',
   annualMaxInput: '',
@@ -854,12 +856,13 @@ export default function FofBuilder() {
       insuranceEstimateCents: parseOverride(state.insuranceOverride) ?? estimate.insurancePaysCents,
       writeOffCents: parseOverride(state.writeOffOverride) ?? estimate.writeOffCents,
       officeDiscountCents: parseCurrencyInput(state.officeDiscountInput),
+      officeDiscountLabel: state.officeDiscountReason.trim() || undefined,
       patientCreditCents: parseCurrencyInput(state.patientCreditInput),
       autoDiscount: discounts?.autoDiscount ?? null,
       prepayDiscountBaseCents:
         discounts?.prepayDiscountBase === 'preDiscountTotal' ? portionBeforeAutoDiscount : null,
     }),
-    [estimate, state.insuranceOverride, state.writeOffOverride, state.officeDiscountInput, state.patientCreditInput, discounts, portionBeforeAutoDiscount]
+    [estimate, state.insuranceOverride, state.writeOffOverride, state.officeDiscountInput, state.officeDiscountReason, state.patientCreditInput, discounts, portionBeforeAutoDiscount]
   );
 
   const overrides: FofOverrides = useMemo(
@@ -1382,6 +1385,20 @@ export default function FofBuilder() {
                     />
                   </div>
                 </div>
+                {(parseCurrencyInput(state.officeDiscountInput) ?? 0) > 0 && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fof-office-discount-reason">
+                      What's this discount for? (prints as the line's name)
+                    </Label>
+                    <Input
+                      id="fof-office-discount-reason"
+                      autoComplete="off"
+                      placeholder='Leave blank to print "Office Discount"'
+                      value={state.officeDiscountReason}
+                      onChange={setField('officeDiscountReason')}
+                    />
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground">
                   These print under the Total only when an amount is entered, and reduce
                   the Patient's Portion. Courtesy discounts (senior, membership, prepay)
