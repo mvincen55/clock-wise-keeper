@@ -49,8 +49,11 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  Upload,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
 import FofPrintSheet from '@/components/fof/FofPrintSheet';
 import { useFofSettings, useFofTemplates } from '@/hooks/useFofTemplates';
 import {
@@ -153,6 +156,10 @@ interface BuilderLine {
   insPayInput: string;
   /** '' = membership-included codes are free, 'off' = charge (allowance used). */
   membershipFree: string;
+  /** PMS entry date from an imported screenshot; office-copy page only. */
+  entryDate: string;
+  /** Warning when an imported fee differs from the fees on file. */
+  feeFlag: string;
   /** '' = downgrade applies (default for D2391–D2394), 'off' = plan pays composite rates. */
   downgrade: string;
 }
@@ -169,6 +176,8 @@ const newLine = (): BuilderLine => ({
   allowedInput: '',
   insPayInput: '',
   membershipFree: '',
+  entryDate: '',
+  feeFlag: '',
   downgrade: '',
 });
 
@@ -193,6 +202,7 @@ interface BuilderState {
   afterMaxState: string; // '' or 'yes' — reverts to office fees once maxed out
   prevExemptState: string; // '' or 'yes' — preventive doesn't count toward the max
   paymentCountOverride: string;
+  importUsed: string; // 'yes' when rows came from a screenshot import (office copy notes it)
   prepayOptionState: string; // '' = follow template, 'on'/'off' = per-form override
   installmentOptionState: string;
   isSenior: string; // '' or 'yes' — patient is 65+; memory only
@@ -243,6 +253,7 @@ const initialState = (): BuilderState => ({
   afterMaxState: '',
   prevExemptState: '',
   paymentCountOverride: '',
+  importUsed: '',
   prepayOptionState: '',
   installmentOptionState: '',
   isSenior: '',
@@ -429,12 +440,24 @@ export default function FofBuilder() {
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
   const [bundleName, setBundleName] = useState('');
   const [aiNaming, setAiNaming] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const { data: bundles } = useProcedureBundles();
   const saveBundle = useSaveProcedureBundle();
   const deleteBundle = useDeleteProcedureBundle();
   const { data: orgCtx } = useOrgContext();
   const isManager = orgCtx?.role === 'owner' || orgCtx?.role === 'manager';
+  // Who's signed in — printed on the office copy's created-by line.
+  const { user } = useAuth();
+  const { data: myProfile } = useQuery({
+    queryKey: ['my-profile', user?.id],
+    enabled: !!user,
+    queryFn: async () =>
+      (await supabase.from('profiles').select('full_name, email').eq('id', user!.id).maybeSingle())
+        .data,
+  });
+  const createdBy = myProfile?.full_name || myProfile?.email || user?.email || '';
 
   const activeTemplates = useMemo(
     () => (templates ?? []).filter(t => t.isActive),
@@ -1011,6 +1034,75 @@ export default function FofBuilder() {
     }
   };
 
+  // Screenshot import: staff crop out patient identifiers first; the
+  // image is parsed in memory (never stored) and only procedure rows come
+  // back. The Fee column fills the lines, but every ESTIMATE (allowable,
+  // ins pays, portion) is recomputed from our own schedules — never taken
+  // from the screenshot — and differing fees get flagged.
+  const importScreenshot = async (file: File) => {
+    setImporting(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('Could not read the image'));
+        reader.readAsDataURL(file);
+      });
+      const { data, error } = await supabase.functions.invoke('parse-treatment', {
+        body: { image: dataUrl },
+      });
+      if (error) throw new Error(error.message);
+      const rows: {
+        code: string;
+        tooth: string;
+        description: string;
+        fee: number | null;
+        entryDate: string;
+      }[] = data?.rows ?? [];
+      if (rows.length === 0) throw new Error('No procedures found in the screenshot');
+      let flagged = 0;
+      const lines = rows.map(r => {
+        const base = lineFromCode(r.code);
+        const code = r.code.trim().toUpperCase();
+        const extractedFee = r.fee !== null ? Math.round(r.fee * 100) : null;
+        const officeFee = officeByCode.get(code)?.feeCents ?? null;
+        const carrierAllowed = allowedByCode.get(code) ?? null;
+        const flags: string[] = [];
+        if (extractedFee !== null && officeFee !== null && extractedFee !== officeFee) {
+          flags.push(`office fee on file ${formatCents(officeFee)}`);
+        }
+        if (
+          extractedFee !== null &&
+          insuranceActive &&
+          carrierAllowed !== null &&
+          extractedFee !== carrierAllowed
+        ) {
+          flags.push(`${selectedSchedule?.name ?? 'carrier'} allowable ${formatCents(carrierAllowed)}`);
+        }
+        if (flags.length) flagged++;
+        return {
+          ...base,
+          tooth: r.tooth,
+          description: base.description || r.description,
+          feeInput: extractedFee !== null ? formatCents(extractedFee) : base.feeInput,
+          entryDate: r.entryDate,
+          feeFlag: flags.length ? `Screenshot fee differs from ${flags.join(' and ')}` : '',
+        };
+      });
+      dispatch({ type: 'addLines', lines });
+      dispatch({ type: 'set', field: 'importUsed', value: 'yes' });
+      toast.success(
+        `Imported ${lines.length} procedure${lines.length === 1 ? '' : 's'}${
+          flagged ? ` — ${flagged} fee difference${flagged === 1 ? '' : 's'} flagged` : ''
+        }. Estimates come from your fee schedules, not the screenshot.`
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Screenshot import failed');
+    } finally {
+      setImporting(false);
+    }
+  };
+
   // The printout shows one patient-friendly treatment line (like the
   // office's existing forms), not the itemized code/fee list. Each row's
   // Description IS what prints (it auto-fills patient-friendly); a
@@ -1089,6 +1181,7 @@ export default function FofBuilder() {
             ? parseCurrencyInput(l.allowedInput)
             : allowedByCode.get(code) ?? null
           : null,
+        entryDate: l.entryDate,
         insPaysCents: per?.insurancePaysCents ?? 0,
         writeOffCents: per?.writeOffCents ?? 0,
       };
@@ -1102,6 +1195,8 @@ export default function FofBuilder() {
       amounts={amounts}
       computation={computation}
       officeLines={officeLines}
+      createdBy={createdBy}
+      importedFromScreenshot={state.importUsed === 'yes'}
     />
   );
 
@@ -1460,6 +1555,18 @@ export default function FofBuilder() {
                           </Label>
                         </div>
                       )}
+                      {(line.feeFlag !== '' || line.entryDate !== '') && (
+                        <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                          {line.feeFlag !== '' && (
+                            <span className="text-amber-600 font-medium">⚠ {line.feeFlag}</span>
+                          )}
+                          {line.entryDate !== '' && (
+                            <span className="text-muted-foreground">
+                              Entry date: {line.entryDate} (office copy only)
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1467,6 +1574,31 @@ export default function FofBuilder() {
                   <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'addLine' })}>
                     <Plus className="h-3.5 w-3.5 mr-1.5" />
                     Add Procedure
+                  </Button>
+                  <input
+                    ref={importInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (file) importScreenshot(file);
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={importing}
+                    title="Upload a treatment-plan screenshot — crop out the patient's name first. Estimates still come from your fee schedules."
+                    onClick={() => importInputRef.current?.click()}
+                  >
+                    {importing ? (
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-3.5 w-3.5 mr-1.5" />
+                    )}
+                    Import Screenshot
                   </Button>
                   {(bundles ?? []).length > 0 && (
                     <Select value="" onValueChange={insertBundle}>
