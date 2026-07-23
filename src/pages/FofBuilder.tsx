@@ -621,7 +621,9 @@ export default function FofBuilder() {
               code,
               description: l.description.trim(),
               category: l.category,
-              officeFeeCents: freeUnderMembership(l) ? 0 : parseCurrencyInput(l.feeInput) ?? 0,
+              // Membership-included fees stay in the total (the patient
+              // sees the value); they come off as their own covered row.
+              officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
               allowedCents: l.allowedInput.trim()
                 ? parseCurrencyInput(l.allowedInput)
                 : allowedByCode.get(code) ?? null,
@@ -714,6 +716,12 @@ export default function FofBuilder() {
 
   const isSenior = state.isSenior === 'yes';
 
+  // Membership-covered fees: shown in the total, then written off as a row.
+  const membershipCoveredCents = state.lines.reduce(
+    (sum, l) => sum + (freeUnderMembership(l) ? parseCurrencyInput(l.feeInput) ?? 0 : 0),
+    0
+  );
+
   // Manual dollars taken off the top (collapsed-section summary).
   const manualAdjustmentsCents =
     (parseCurrencyInput(state.officeDiscountInput) ?? 0) +
@@ -734,14 +742,48 @@ export default function FofBuilder() {
       estimate.totalCents -
         (parseCurrencyInput(state.officeDiscountInput) ?? 0) -
         (parseCurrencyInput(state.patientCreditInput) ?? 0) -
+        membershipCoveredCents -
         insurance -
         writeOff
     );
-  }, [template, estimate, state.insuranceOverride, state.writeOffOverride, state.officeDiscountInput, state.patientCreditInput]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template, estimate, state.insuranceOverride, state.writeOffOverride, state.officeDiscountInput, state.patientCreditInput, membershipCoveredCents]);
+
+  // The TEMPLATE decides which agreements are offered; staff can toggle
+  // either per form (definitions live up here so the discount rules can
+  // react to a forced-on prepay).
+  const prepayShown =
+    state.prepayOptionState === ''
+      ? template?.showPrepayOption ?? false
+      : state.prepayOptionState === 'on';
+  const installmentShown =
+    state.installmentOptionState === ''
+      ? template?.showInstallmentOption ?? false
+      : state.installmentOptionState === 'on';
+
+  // Turning Prepay in Full ON for a template that normally has no prepay
+  // (Financing, In-Network) is a manager override: the standard courtesy
+  // rates come back with it — 5% under 65, 10% at 65+ — so the senior
+  // toggle reappears too.
+  const prepayForcedOn =
+    prepayShown &&
+    !!template &&
+    !template.showPrepayOption &&
+    !template.seniorDiscountApplies &&
+    template.membershipDiscountPercent === 0;
+  const discountRulesTemplate = template
+    ? prepayForcedOn
+      ? { ...template, seniorDiscountApplies: true }
+      : template
+    : null;
 
   const discounts = useMemo(
-    () => (template ? computeFofDiscounts(template, isSenior, portionBeforeAutoDiscount) : null),
-    [template, isSenior, portionBeforeAutoDiscount]
+    () =>
+      discountRulesTemplate
+        ? computeFofDiscounts(discountRulesTemplate, isSenior, portionBeforeAutoDiscount)
+        : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [template, prepayForcedOn, isSenior, portionBeforeAutoDiscount]
   );
 
   // Portions under $1,000 default to a single "Due at Time of Service"
@@ -764,7 +806,8 @@ export default function FofBuilder() {
     // split half to Prep, half to Delivery, etc.).
     const entries: { raw: number; feeCents: number; label: string; dueAtVisit: boolean }[] = [];
     for (const l of active) {
-      const fee = parseCurrencyInput(l.feeInput) ?? 0;
+      // Membership-covered procedures owe nothing at their visit.
+      const fee = freeUnderMembership(l) ? 0 : parseCurrencyInput(l.feeInput) ?? 0;
       const lineLabel = friendlyCdtName(l.code) || l.description.trim();
       const dueAtVisit = NO_PREPAY_CODES.has(l.code.trim().toUpperCase());
       const typed = parseInt(l.visit, 10);
@@ -790,7 +833,8 @@ export default function FofBuilder() {
         dueAtVisitCents: group.reduce((sum, e) => sum + (e.dueAtVisit ? e.feeCents : 0), 0),
       };
     });
-  }, [state.lines]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.lines, membershipActive]);
 
   const schedulePortion = parseOverride(state.portionOverride) ?? projectedPortion;
   const scheduleFromVisits = visitWork ? buildVisitSchedule(schedulePortion, visitWork) : null;
@@ -802,17 +846,6 @@ export default function FofBuilder() {
   const visitPlan =
     overrideCount >= 1 && overrideCount <= 4 ? planForCount(overrideCount) : autoVisitPlan;
 
-  // The TEMPLATE decides which agreements are offered (the In-Network
-  // template ships with prepay off); the plan's network flag only affects
-  // write-off math. Staff can toggle either agreement per form.
-  const prepayShown =
-    state.prepayOptionState === ''
-      ? template?.showPrepayOption ?? false
-      : state.prepayOptionState === 'on';
-  const installmentShown =
-    state.installmentOptionState === ''
-      ? template?.showInstallmentOption ?? false
-      : state.installmentOptionState === 'on';
   // The downgrade note prints only when it changed the math: an insurance
   // estimate is active and some line's benefit basis is below its allowed.
   const downgradeApplied =
@@ -867,11 +900,12 @@ export default function FofBuilder() {
       officeDiscountCents: parseCurrencyInput(state.officeDiscountInput),
       officeDiscountLabel: state.officeDiscountReason.trim() || undefined,
       patientCreditCents: parseCurrencyInput(state.patientCreditInput),
+      membershipCoveredCents,
       autoDiscount: discounts?.autoDiscount ?? null,
       prepayDiscountBaseCents:
         discounts?.prepayDiscountBase === 'preDiscountTotal' ? portionBeforeAutoDiscount : null,
     }),
-    [estimate, state.insuranceOverride, state.writeOffOverride, state.officeDiscountInput, state.officeDiscountReason, state.patientCreditInput, discounts, portionBeforeAutoDiscount]
+    [estimate, state.insuranceOverride, state.writeOffOverride, state.officeDiscountInput, state.officeDiscountReason, state.patientCreditInput, discounts, portionBeforeAutoDiscount, membershipCoveredCents]
   );
 
   const overrides: FofOverrides = useMemo(
@@ -1040,7 +1074,7 @@ export default function FofBuilder() {
                     />
                     <Label htmlFor="opt-installment">Payment Installment option</Label>
                   </div>
-                  {template.seniorDiscountApplies && (
+                  {(template.seniorDiscountApplies || prepayForcedOn) && (
                     <div className="flex items-center gap-2">
                       <Switch
                         id="opt-senior"

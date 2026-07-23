@@ -147,6 +147,12 @@ export default function FofPrintSheet({
               <span>−{formatCents(amounts.patientCreditCents!)}</span>
             </div>
           )}
+          {(amounts.membershipCoveredCents ?? 0) > 0 && (
+            <div className="fof-row">
+              <span>Included with Illumitrac Membership</span>
+              <span>−{formatCents(amounts.membershipCoveredCents!)}</span>
+            </div>
+          )}
           {amounts.autoDiscount && amounts.autoDiscount.cents > 0 && (
             <div className="fof-row">
               <span>{amounts.autoDiscount.label}</span>
