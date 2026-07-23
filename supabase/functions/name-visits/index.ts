@@ -4,13 +4,12 @@
 // tweak.
 //
 // HIPAA note: the payload must be DE-IDENTIFIED BY CONSTRUCTION —
-// procedure names, tooth numbers, visit order, and the practice's doctor
-// name only. No patient name, no date, no dollar amounts, no identifiers
-// of any kind may be added to this request. The client builds it from
-// CDT-derived wording (see src/lib/fof/ai.ts); this function additionally
-// authenticates the caller, requires an active org membership, and
-// hard-caps every string so it can never be used as an open relay to the
-// (non-BAA) AI gateway.
+// procedure names, validated tooth numbers, visit order, and the
+// practice's doctor name only. The client builds it exclusively from CDT
+// friendly names / codes (see buildNameVisitsPayload in
+// src/lib/fof/ai.ts); this function additionally authenticates the
+// caller, requires an active org membership, and hard-caps every string
+// so it can never be used as an open relay to the (non-BAA) AI gateway.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -87,7 +86,7 @@ Deno.serve(async (req) => {
     }
     const doctor =
       typeof doctorName === "string" && doctorName.trim().length > 0 && doctorName.length <= 40
-        ? doctorName.trim()
+        ? doctorName.replace(/\s+/g, " ").trim()
         : "The doctor";
     const visitLines = (Array.isArray(visits) ? visits : [])
       .map((v, i) => {

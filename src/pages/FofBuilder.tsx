@@ -85,7 +85,7 @@ import {
 import { categorizeCdtCode } from '@/lib/fof/cdt';
 import { friendlyCdtName } from '@/lib/fof/cdt-names';
 import { computeFofDiscounts } from '@/lib/fof/discounts';
-import { safeProcedureLabel } from '@/lib/fof/ai';
+import { buildNameVisitsPayload, safeProcedureLabel } from '@/lib/fof/ai';
 import {
   buildVisitSchedule,
   DAY_OF_SERVICE_THRESHOLD_CENTS,
@@ -1047,31 +1047,27 @@ export default function FofBuilder() {
   );
 
   // AI pass over the payment names and treatment wording. HIPAA: the
-  // request is built ONLY from CDT-derived wording (src/lib/fof/ai.ts) —
-  // procedure names from codes, tooth numbers, visit order, and the
-  // practice's doctor name. Staff-typed descriptions, edited labels,
-  // patient fields, and dollar amounts never leave the browser.
+  // request is built ONLY from CDT codes, code-derived labels, and
+  // strictly-validated tooth numbers (src/lib/fof/ai.ts) — staff-typed
+  // descriptions, edited labels, patient fields, and dollar amounts never
+  // leave the browser. The doctor name comes from the fixed FOF_DOCTORS
+  // dropdown, never free text.
   const aiCall = async (wantTreatment: boolean) => {
     if (!computation) return null;
-    const byVisit = new Map<number, string[]>();
+    const byVisit = new Map<number, { code: string; tooth: string }[]>();
     for (const l of state.lines) {
-      // Code-derived wording only — never the typed description.
-      const base = safeProcedureLabel(l.code);
-      if (!base) continue;
-      // Tooth numbers ride along (except dentures, where the arch is in
-      // the name) so the AI can write "remove tooth #24".
-      const numMatch = /^D(\d{4})$/i.exec(l.code.trim());
-      const denture = numMatch !== null && +numMatch[1] >= 5000 && +numMatch[1] < 5900;
-      const tooth = l.tooth.trim();
-      const label = !denture && tooth !== '' ? `${base} (tooth #${tooth})` : base;
-      byVisit.set(effectiveVisit(l), [...(byVisit.get(effectiveVisit(l)) ?? []), label]);
+      if (!l.code.trim()) continue;
+      byVisit.set(effectiveVisit(l), [
+        ...(byVisit.get(effectiveVisit(l)) ?? []),
+        { code: l.code, tooth: l.tooth },
+      ]);
     }
-    const visits = [...byVisit.entries()]
+    const visitEntries = [...byVisit.entries()]
       .sort((a, b) => a[0] - b[0])
-      .map(([, procedures]) => ({ procedures }));
-    // Display slot labels can embed typed descriptions (custom codes fall
-    // back to them), so the AI slots are REBUILT from the code-derived
-    // safeLabels — same schedule structure, safe wording.
+      .map(([, entries]) => entries);
+    // Display slot labels can embed typed descriptions (custom codes
+    // fall back to them), so the AI slots are REBUILT from the
+    // code-derived safeLabels — same schedule structure, safe wording.
     const safeSchedule =
       rawVisitPlan?.key === 'visitSchedule' && visitWork
         ? buildVisitSchedule(
@@ -1086,7 +1082,7 @@ export default function FofBuilder() {
     const autoSlots =
       safeSchedule?.labels ?? rawVisitPlan?.labels ?? computation.installmentLabels;
     const { data, error } = await supabase.functions.invoke('name-visits', {
-      body: { slots: autoSlots, visits, wantTreatment, doctorName },
+      body: { ...buildNameVisitsPayload(visitEntries, autoSlots), wantTreatment, doctorName },
     });
     if (error) throw new Error(error.message);
     return { data, slotCount: autoSlots.length };

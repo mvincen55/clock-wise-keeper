@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildNameVisitsPayload, safeProcedureLabel } from '@/lib/fof/ai';
+import { buildNameVisitsPayload, safeProcedureLabel, safeToothSuffix } from '@/lib/fof/ai';
 
 // HIPAA regression tests: the name-visits request must be de-identified by
 // construction. The builder takes CDT codes only, so staff-typed
@@ -48,5 +48,47 @@ describe('buildNameVisitsPayload', () => {
     const payload = buildNameVisitsPayload([['D2740']], ['Upon Scheduling', 'Crown Prep']);
     expect(JSON.stringify(payload)).not.toContain('Jane');
     expect(JSON.stringify(payload)).not.toContain(typedDescription);
+  });
+
+  it('carries validated tooth numbers but never on dentures', () => {
+    const payload = buildNameVisitsPayload(
+      [
+        [
+          { code: 'D7140', tooth: '24' },
+          { code: 'D5214', tooth: '19*30' },
+        ],
+      ],
+      ['Upon Scheduling']
+    );
+    expect(payload.visits[0].procedures[0]).toBe('Tooth Extraction (tooth #24)');
+    // Denture code: arch is in the name; tooth numbers are dropped.
+    expect(payload.visits[0].procedures[1]).not.toContain('#');
+  });
+
+  it('drops any tooth value that is not a strict tooth number', () => {
+    // Free text typed into the tooth box can never reach the AI.
+    const payload = buildNameVisitsPayload(
+      [[{ code: 'D2740', tooth: 'Jane Doe' }]],
+      ['Upon Scheduling']
+    );
+    expect(JSON.stringify(payload)).not.toContain('Jane');
+    expect(payload.visits[0].procedures[0]).toBe('Porcelain Crown');
+  });
+});
+
+describe('safeToothSuffix', () => {
+  it('accepts tooth numbers, primary letters, and PMS pairs', () => {
+    expect(safeToothSuffix('30')).toBe('(tooth #30)');
+    expect(safeToothSuffix('t')).toBe('(tooth #T)');
+    expect(safeToothSuffix('19*30')).toBe('(tooth #19*30)');
+    expect(safeToothSuffix('19-31')).toBe('(tooth #19-31)');
+  });
+
+  it('rejects anything else', () => {
+    expect(safeToothSuffix('')).toBeNull();
+    expect(safeToothSuffix('0')).toBeNull();
+    expect(safeToothSuffix('33x')).toBeNull();
+    expect(safeToothSuffix('Jane')).toBeNull();
+    expect(safeToothSuffix('#8; drop table')).toBeNull();
   });
 });
