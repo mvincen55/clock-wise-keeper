@@ -36,6 +36,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import {
   ChevronDown,
@@ -454,6 +464,13 @@ export default function FofBuilder() {
   const [aiNaming, setAiNaming] = useState(false);
   const [importing, setImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
+  // In-app confirm dialog (native confirm() shows ugly browser chrome).
+  const [confirmState, setConfirmState] = useState<null | {
+    title: string;
+    body: string;
+    action: string;
+    onConfirm: () => void;
+  }>(null);
 
   const { data: bundles } = useProcedureBundles();
   const saveBundle = useSaveProcedureBundle();
@@ -1048,11 +1065,16 @@ export default function FofBuilder() {
 
   // The reminder every import path goes through — no patient info in the
   // image, ever.
-  const confirmNoPatientInfo = () =>
-    confirm(
-      "Before importing: make sure the screenshot does NOT show the patient's name " +
-        'or any other personal information — crop it out first. Continue?'
-    );
+  const askNoPatientInfo = (onConfirm: () => void) =>
+    setConfirmState({
+      title: 'Before you import',
+      body:
+        "Make sure the screenshot does NOT show the patient's name or any other " +
+        'personal information — crop it out first. Only procedure codes, fees, and ' +
+        'dates should be visible.',
+      action: 'Import',
+      onConfirm,
+    });
 
   // Screenshot import: staff crop out patient identifiers first; the
   // image is parsed in memory (never stored) and only procedure rows come
@@ -1142,7 +1164,7 @@ export default function FofBuilder() {
       const file = item.getAsFile();
       if (!file) return;
       e.preventDefault();
-      if (confirmNoPatientInfo()) importScreenshot(file);
+      askNoPatientInfo(() => importScreenshot(file));
     };
     document.addEventListener('paste', onPaste);
     return () => document.removeEventListener('paste', onPaste);
@@ -1340,16 +1362,17 @@ export default function FofBuilder() {
                         // Standard policy: no prepay discount with contract
                         // insurance or financing — overriding needs a
                         // deliberate yes (SLH / Office Manager approval).
-                        if (
-                          v &&
-                          template &&
-                          !template.showPrepayOption &&
-                          !confirm(
-                            'Standard policy: this template has no Prepay in Full option ' +
-                              '(contract insurance / financing get no additional discounts ' +
-                              'unless approved by SLH or the Office Manager). Turn it on anyway?'
-                          )
-                        ) {
+                        if (v && template && !template.showPrepayOption) {
+                          setConfirmState({
+                            title: 'Against standard policy',
+                            body:
+                              'This template has no Prepay in Full option — contract ' +
+                              'insurance and financing get no additional discounts unless ' +
+                              'approved by SLH or the Office Manager. Turn it on anyway?',
+                            action: 'Turn it on',
+                            onConfirm: () =>
+                              dispatch({ type: 'set', field: 'prepayOptionState', value: 'on' }),
+                          });
                           return;
                         }
                         dispatch({ type: 'set', field: 'prepayOptionState', value: v ? 'on' : 'off' });
@@ -1662,9 +1685,7 @@ export default function FofBuilder() {
                     size="sm"
                     disabled={importing}
                     title="Upload or paste (Ctrl+V) a treatment-plan screenshot — crop out the patient's name first. Estimates still come from your fee schedules."
-                    onClick={() => {
-                      if (confirmNoPatientInfo()) importInputRef.current?.click();
-                    }}
+                    onClick={() => askNoPatientInfo(() => importInputRef.current?.click())}
                   >
                     {importing ? (
                       <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
@@ -2193,6 +2214,26 @@ export default function FofBuilder() {
           </Card>
         </div>
       )}
+
+      <AlertDialog open={!!confirmState} onOpenChange={open => !open && setConfirmState(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmState?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmState?.body}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                confirmState?.onConfirm();
+                setConfirmState(null);
+              }}
+            >
+              {confirmState?.action ?? 'Continue'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={bundleDialogOpen} onOpenChange={open => !open && setBundleDialogOpen(false)}>
         <DialogContent className="max-w-md">
