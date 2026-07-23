@@ -242,6 +242,10 @@
   background: var(--fof-tint);
   text-align: center;
   padding: 8pt 10pt;
+  /* Content centers vertically even when the treatment text runs long. */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .fof-hero-amount {
