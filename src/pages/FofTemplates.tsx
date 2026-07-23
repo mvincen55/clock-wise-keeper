@@ -34,9 +34,10 @@ import {
   useUpsertFofTemplate,
   type FofTemplateUpsert,
 } from '@/hooks/useFofTemplates';
+import { useOrgContext } from '@/hooks/useOrgContext';
 import type { FofPracticeInfo, FofTemplate } from '@/lib/fof/types';
 
-function HeaderSettingsCard() {
+function HeaderSettingsCard({ isManager }: { isManager: boolean }) {
   const { data: settings, isLoading } = useFofSettings();
   const upsert = useUpsertFofSettings();
   const [form, setForm] = useState<FofPracticeInfo | null>(null);
@@ -68,39 +69,41 @@ function HeaderSettingsCard() {
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="hdr-name">Practice Name</Label>
-            <Input id="hdr-name" value={form.practiceName} onChange={set('practiceName')} />
+            <Input id="hdr-name" value={form.practiceName} onChange={set('practiceName')} disabled={!isManager} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="hdr-phone">Phone</Label>
-            <Input id="hdr-phone" value={form.phone} onChange={set('phone')} />
+            <Input id="hdr-phone" value={form.phone} onChange={set('phone')} disabled={!isManager} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="hdr-addr1">Address Line 1</Label>
-            <Input id="hdr-addr1" value={form.addressLine1} onChange={set('addressLine1')} />
+            <Input id="hdr-addr1" value={form.addressLine1} onChange={set('addressLine1')} disabled={!isManager} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="hdr-addr2">Address Line 2</Label>
-            <Input id="hdr-addr2" value={form.addressLine2} onChange={set('addressLine2')} />
+            <Input id="hdr-addr2" value={form.addressLine2} onChange={set('addressLine2')} disabled={!isManager} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="hdr-website">Website</Label>
-            <Input id="hdr-website" value={form.website} onChange={set('website')} />
+            <Input id="hdr-website" value={form.website} onChange={set('website')} disabled={!isManager} />
           </div>
         </div>
-        <div className="flex justify-end">
-          <Button
-            disabled={upsert.isPending}
-            onClick={() =>
-              upsert.mutate(form, {
-                onSuccess: () => toast.success('Practice info saved'),
-                onError: err => toast.error(`Save failed: ${err.message}`),
-              })
-            }
-          >
-            {upsert.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Save Header
-          </Button>
-        </div>
+        {isManager && (
+          <div className="flex justify-end">
+            <Button
+              disabled={upsert.isPending}
+              onClick={() =>
+                upsert.mutate(form, {
+                  onSuccess: () => toast.success('Practice info saved'),
+                  onError: err => toast.error(`Save failed: ${err.message}`),
+                })
+              }
+            >
+              {upsert.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save Header
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -111,6 +114,10 @@ export default function FofTemplates() {
   const upsert = useUpsertFofTemplate();
   const remove = useDeleteFofTemplate();
   const restore = useRestoreDefaultFofTemplates();
+  // Templates and practice info are admin-write (RLS enforced); employees
+  // see the configuration read-only rather than getting failing controls.
+  const { data: orgCtx } = useOrgContext();
+  const isManager = orgCtx?.role === 'owner' || orgCtx?.role === 'manager';
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<FofTemplate | null>(null);
@@ -141,19 +148,21 @@ export default function FofTemplates() {
           </Button>
           <h1 className="text-2xl font-bold">FOF Templates</h1>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setConfirmRestore(true)}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Restore Defaults
-          </Button>
-          <Button onClick={() => openEditor(null)}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Template
-          </Button>
-        </div>
+        {isManager && (
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setConfirmRestore(true)}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Restore Defaults
+            </Button>
+            <Button onClick={() => openEditor(null)}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Template
+            </Button>
+          </div>
+        )}
       </div>
 
-      <HeaderSettingsCard />
+      <HeaderSettingsCard isManager={isManager} />
 
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
@@ -182,6 +191,7 @@ export default function FofTemplates() {
                   <Switch
                     id={`active-${template.id}`}
                     checked={template.isActive}
+                    disabled={!isManager}
                     onCheckedChange={isActive =>
                       upsert.mutate(
                         { ...template, isActive },
@@ -189,17 +199,21 @@ export default function FofTemplates() {
                       )
                     }
                   />
-                  <Button variant="ghost" size="icon" onClick={() => openEditor(template)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive"
-                    onClick={() => setDeleting(template)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {isManager && (
+                    <>
+                      <Button variant="ghost" size="icon" onClick={() => openEditor(template)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive"
+                        onClick={() => setDeleting(template)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </CardContent>
             </Card>

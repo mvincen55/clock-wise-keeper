@@ -83,6 +83,7 @@ function seedToInsert(seed: FofTemplateSeed, orgId: string, userId?: string): Ta
 export function useFofTemplates() {
   const { user } = useAuth();
   const { data: ctx } = useOrgContext();
+  const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
 
   return useQuery({
     queryKey: ['fof-templates', ctx?.org_id],
@@ -97,8 +98,14 @@ export function useFofTemplates() {
         .order('name');
       if (error) throw error;
 
-      // First use for this org: seed the factory templates.
+      // First use for this org: admins seed the factory templates.
+      // fof_templates is admin-write, so an employee who gets here first
+      // works from the same defaults in-memory until an admin's first
+      // visit persists them.
       if (!data || data.length === 0) {
+        if (!isAdmin) {
+          return DEFAULT_TEMPLATES.map((t, i) => ({ ...t, id: `default-${i}` }));
+        }
         const inserts = DEFAULT_TEMPLATES.map(t => seedToInsert(t, ctx.org_id, user?.id));
         const { data: seeded, error: seedError } = await supabase
           .from('fof_templates')
@@ -115,6 +122,7 @@ export function useFofTemplates() {
 export function useFofSettings() {
   const { user } = useAuth();
   const { data: ctx } = useOrgContext();
+  const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
 
   return useQuery({
     queryKey: ['fof-settings', ctx?.org_id],
@@ -129,6 +137,9 @@ export function useFofSettings() {
       if (error) throw error;
       if (data) return mapSettingsRow(data);
 
+      // fof_settings is admin-write; employees print with the defaults
+      // until an admin's first visit creates the row.
+      if (!isAdmin) return DEFAULT_PRACTICE_INFO;
       const { data: created, error: createError } = await supabase
         .from('fof_settings')
         .insert({ org_id: ctx.org_id })
