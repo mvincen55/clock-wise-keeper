@@ -1301,7 +1301,7 @@ export default function FofBuilder() {
                             className="text-center"
                             placeholder={
                               visitSegmentsForCode(line.code).length > 1
-                                ? 'auto'
+                                ? ''
                                 : String(suggestVisitStage(line.code))
                             }
                             value={line.visit}
@@ -1451,7 +1451,7 @@ export default function FofBuilder() {
                       <SelectContent>
                         {(bundles ?? []).map(b => (
                           <SelectItem key={b.id} value={b.id}>
-                            {b.name} ({b.codes.length})
+                            {b.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
