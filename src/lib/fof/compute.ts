@@ -30,10 +30,11 @@ export function computeFof(
   const officeDiscount = amounts.officeDiscountCents ?? 0;
   const patientCredit = amounts.patientCreditCents ?? 0;
   const autoDiscount = amounts.autoDiscount?.cents ?? 0;
+  const membershipCovered = amounts.membershipCoveredCents ?? 0;
 
   const computedPortion = Math.max(
     0,
-    total - officeDiscount - patientCredit - autoDiscount - insurance - writeOff
+    total - officeDiscount - patientCredit - autoDiscount - membershipCovered - insurance - writeOff
   );
   const effectivePortion = overrides.patientPortionCents ?? computedPortion;
 
