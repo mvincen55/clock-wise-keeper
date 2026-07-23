@@ -9,6 +9,11 @@ describe('categorizeCdtCode', () => {
     expect(categorizeCdtCode('D1206')).toBe('preventive'); // fluoride
   });
 
+  it('maps diagnostic work-up codes to workup (billed at visit, no coverage)', () => {
+    expect(categorizeCdtCode('D0367')).toBe('workup'); // CT scan
+    expect(categorizeCdtCode('D0470')).toBe('workup'); // diagnostic models
+  });
+
   it('maps fillings to basic and crowns to major', () => {
     expect(categorizeCdtCode('D2140')).toBe('basic'); // amalgam
     expect(categorizeCdtCode('D2392')).toBe('basic'); // composite

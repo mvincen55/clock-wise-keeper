@@ -128,6 +128,7 @@ const CATEGORY_SHORT: Record<FeeCategory, string> = {
   preventive: 'Preventive',
   basic: 'Basic',
   major: 'Major',
+  workup: 'Work Up',
   other: 'No Coverage',
 };
 
@@ -199,9 +200,13 @@ interface BuilderState {
   discountOverride: string;
   prepayOverride: string;
   installmentOverrides: string[];
+  installmentLabelOverrides: string[]; // '' = auto-generated visit name
 }
 
-type ScalarField = keyof Omit<BuilderState, 'lines' | 'installmentOverrides'>;
+type ScalarField = keyof Omit<
+  BuilderState,
+  'lines' | 'installmentOverrides' | 'installmentLabelOverrides'
+>;
 
 type BuilderAction =
   | { type: 'set'; field: ScalarField; value: string }
@@ -211,6 +216,7 @@ type BuilderAction =
   | { type: 'setLines'; lines: BuilderLine[] }
   | { type: 'removeLine'; index: number }
   | { type: 'setInstallment'; index: number; value: string }
+  | { type: 'setInstallmentLabel'; index: number; value: string }
   | { type: 'clearOverrides' }
   | { type: 'clearAll' };
 
@@ -244,6 +250,7 @@ const initialState = (): BuilderState => ({
   discountOverride: '',
   prepayOverride: '',
   installmentOverrides: [],
+  installmentLabelOverrides: [],
 });
 
 function reducer(state: BuilderState, action: BuilderAction): BuilderState {
@@ -275,9 +282,15 @@ function reducer(state: BuilderState, action: BuilderAction): BuilderState {
       next[action.index] = action.value;
       return { ...state, installmentOverrides: next };
     }
+    case 'setInstallmentLabel': {
+      const next = [...state.installmentLabelOverrides];
+      next[action.index] = action.value;
+      return { ...state, installmentLabelOverrides: next };
+    }
     case 'clearOverrides':
       return {
         ...state,
+        installmentLabelOverrides: [],
         insuranceOverride: '',
         writeOffOverride: '',
         portionOverride: '',
@@ -809,7 +822,10 @@ export default function FofBuilder() {
       // Membership-covered procedures owe nothing at their visit.
       const fee = freeUnderMembership(l) ? 0 : parseCurrencyInput(l.feeInput) ?? 0;
       const lineLabel = friendlyCdtName(l.code) || l.description.trim();
-      const dueAtVisit = NO_PREPAY_CODES.has(l.code.trim().toUpperCase());
+      // Work-up procedures (and the surgical guide) are billed at their
+      // visit, never prepaid ahead.
+      const dueAtVisit =
+        NO_PREPAY_CODES.has(l.code.trim().toUpperCase()) || l.category === 'workup';
       const typed = parseInt(l.visit, 10);
       if (typed >= 1) {
         entries.push({ raw: typed, feeCents: fee, label: lineLabel, dueAtVisit });
@@ -843,8 +859,17 @@ export default function FofBuilder() {
     projectedPortion > 0 && projectedPortion < DAY_OF_SERVICE_THRESHOLD_CENTS
       ? VISIT_PLANS.dayOfService
       : scheduleFromVisits ?? treatmentVisitPlan;
-  const visitPlan =
+  const rawVisitPlan =
     overrideCount >= 1 && overrideCount <= 4 ? planForCount(overrideCount) : autoVisitPlan;
+  // Staff-edited payment names take over the auto visit labels.
+  const visitPlan = rawVisitPlan
+    ? {
+        ...rawVisitPlan,
+        labels: rawVisitPlan.labels.map(
+          (label, i) => state.installmentLabelOverrides[i]?.trim() || label
+        ),
+      }
+    : rawVisitPlan;
 
   // The downgrade note prints only when it changed the math: an insurance
   // estimate is active and some line's benefit basis is below its allowed.
@@ -1241,7 +1266,9 @@ export default function FofBuilder() {
                                 inputMode="decimal"
                                 autoComplete="off"
                                 placeholder={
-                                  line.category === 'other' || autoAllowed === undefined
+                                  line.category === 'other' ||
+                                  line.category === 'workup' ||
+                                  autoAllowed === undefined
                                     ? 'office fee'
                                     : 'auto'
                                 }
@@ -1780,14 +1807,46 @@ export default function FofBuilder() {
                         </Select>
                       </div>
                       {computation.computed.installmentsCents.map((cents, i) => (
-                        <OverrideRow
-                          key={i}
-                          label={computation.installmentLabels[i] ?? `Installment ${i + 1}`}
-                          computedCents={cents}
-                          value={state.installmentOverrides[i] ?? ''}
-                          overridden={computation.overridden.installments[i]}
-                          onChange={v => dispatch({ type: 'setInstallment', index: i, value: v })}
-                        />
+                        <div key={i} className="flex items-center gap-2">
+                          {/* The payment name is live text — edit it and the
+                              printout follows; clear it to go back to auto. */}
+                          <Input
+                            className="flex-1 min-w-0 text-sm"
+                            autoComplete="off"
+                            value={
+                              (state.installmentLabelOverrides[i] ?? '') !== ''
+                                ? state.installmentLabelOverrides[i]
+                                : computation.installmentLabels[i] ?? `Installment ${i + 1}`
+                            }
+                            onChange={e =>
+                              dispatch({ type: 'setInstallmentLabel', index: i, value: e.target.value })
+                            }
+                          />
+                          {computation.overridden.installments[i] && (
+                            <Badge variant="secondary">custom</Badge>
+                          )}
+                          <Input
+                            className="w-32 shrink-0 text-right"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            placeholder={formatCents(cents)}
+                            value={state.installmentOverrides[i] ?? ''}
+                            onChange={e =>
+                              dispatch({ type: 'setInstallment', index: i, value: e.target.value })
+                            }
+                          />
+                          {computation.overridden.installments[i] && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0"
+                              title="Reset to computed value"
+                              onClick={() => dispatch({ type: 'setInstallment', index: i, value: '' })}
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       ))}
                     </>
                   )}

@@ -18,7 +18,12 @@
 import type { Cents } from './types';
 import { percentOfCents } from './money';
 
-export type FeeCategory = 'preventive' | 'basic' | 'major' | 'other';
+/**
+ * 'workup' = diagnostic work-up procedures (CT scan, diagnostic models):
+ * never insurance-covered, and billed at their visit — an all-workup
+ * first visit owes nothing upon scheduling.
+ */
+export type FeeCategory = 'preventive' | 'basic' | 'major' | 'workup' | 'other';
 
 export interface FofLine {
   code: string;

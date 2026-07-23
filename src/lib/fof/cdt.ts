@@ -8,10 +8,15 @@ import type { FeeCategory } from './insurance';
  * Only D-prefixed codes are real CDT — bare numbers and lettered codes
  * are custom office codes, which are never insurance-covered ('other').
  */
+// Diagnostic work-up codes (CT scan, diagnostic models): no coverage,
+// billed at their visit rather than prepaid.
+const WORKUP_CODES = new Set([367, 470]);
+
 export function categorizeCdtCode(code: string): FeeCategory {
   const match = /^D(\d{4})$/i.exec(code.trim());
   if (!match) return 'other';
   const n = parseInt(match[1], 10);
+  if (WORKUP_CODES.has(n)) return 'workup';
   if (n < 100) return 'other';
   if (n < 2000) return 'preventive'; // diagnostic + preventive
   if (n < 2400) return 'basic'; // fillings

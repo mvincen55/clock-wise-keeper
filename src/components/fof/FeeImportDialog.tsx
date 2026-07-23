@@ -51,6 +51,7 @@ function cellFee(value: string | number | null | undefined): number | null {
 function detectCategory(value: string): FeeCategory | undefined {
   const v = value.toLowerCase();
   if (!v) return undefined;
+  if (v.startsWith('work') || v.includes('workup')) return 'workup';
   if (v.startsWith('prev') || v.includes('diagnostic')) return 'preventive';
   if (v.startsWith('basic')) return 'basic';
   if (v.startsWith('major')) return 'major';

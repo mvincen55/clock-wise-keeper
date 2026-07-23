@@ -202,19 +202,33 @@ export function buildVisitSchedule(
   });
   const ahead = alloc.map((a, i) => a - dueAt[i]);
 
-  const payments: Cents[] = [ahead[0]];
-  for (let i = 0; i < n; i++) {
-    payments.push(dueAt[i] + (i + 1 < n ? ahead[i + 1] : 0));
+  const visitLabel = (i: number) =>
+    n === 1
+      ? `At Appointment${visits[i].label ? ` · ${visits[i].label}` : ''}`
+      : `At Visit ${i + 1}${visits[i].label ? ` · ${visits[i].label}` : ''}`;
+
+  let payments: Cents[];
+  let labels: string[];
+  if (ahead[0] === 0 && dueAt[0] > 0 && n > 1) {
+    // The first visit is entirely billed-at-visit work (a work-up or a
+    // surgical guide): nothing is owed to book it. Treatment gets
+    // scheduled AFTER that visit, so "Upon Scheduling" moves to follow
+    // it, covering visit 2; each later visit then covers the next.
+    payments = [dueAt[0], ahead[1]];
+    labels = [visitLabel(0), 'Upon Scheduling'];
+    for (let i = 1; i < n; i++) {
+      payments.push(dueAt[i] + (i + 1 < n ? ahead[i + 1] : 0));
+      labels.push(visitLabel(i));
+    }
+  } else {
+    payments = [ahead[0]];
+    labels = ['Upon Scheduling'];
+    for (let i = 0; i < n; i++) {
+      payments.push(dueAt[i] + (i + 1 < n ? ahead[i + 1] : 0));
+      labels.push(visitLabel(i));
+    }
   }
 
-  const labels = [
-    'Upon Scheduling',
-    ...visits.map((v, i) =>
-      n === 1
-        ? `At Appointment${v.label ? ` · ${v.label}` : ''}`
-        : `At Visit ${i + 1}${v.label ? ` · ${v.label}` : ''}`
-    ),
-  ];
   // Drop empty slots (usually the final visit — everything was prepaid).
   const slots = payments
     .map((p, i) => ({ p, label: labels[i] }))
