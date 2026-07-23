@@ -340,8 +340,8 @@
 }
 
 .fof-icon-bubble {
-  width: 15pt;
-  height: 15pt;
+  width: 18pt;
+  height: 18pt;
   border-radius: 50%;
   background: #e7e1f2;
   color: var(--fof-navy);
@@ -351,6 +351,31 @@
   flex: 0 0 auto;
   print-color-adjust: exact;
   -webkit-print-color-adjust: exact;
+}
+
+.fof-icon-bubble .fof-icon {
+  width: 9.5pt;
+  height: 9.5pt;
+}
+
+/* White chip holding the icon in an option title band */
+.fof-option-icon {
+  width: 13pt;
+  height: 13pt;
+  border-radius: 3pt;
+  background: white;
+  color: var(--fof-navy);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.fof-option-icon .fof-icon {
+  width: 8.5pt;
+  height: 8.5pt;
 }
 
 /* Payment options: side-by-side cards joined by an OR badge */
@@ -456,23 +481,18 @@
   font-weight: 800;
 }
 
-.fof-save-badge {
-  width: 14pt;
-  height: 14pt;
-  border-radius: 50%;
-  background: #1d6f3d;
-  color: white;
+.fof-save-seal {
+  color: #1d6f3d;
   display: flex;
   align-items: center;
-  justify-content: center;
   flex: 0 0 auto;
   print-color-adjust: exact;
   -webkit-print-color-adjust: exact;
 }
 
-.fof-save-badge .fof-icon {
-  width: 8pt;
-  height: 8pt;
+.fof-save-seal .fof-icon {
+  width: 14pt;
+  height: 14pt;
 }
 
 /* Agreement cards: title band + horizontal payment cells */
@@ -592,10 +612,35 @@
 }
 
 .fof-footnotes {
+  display: flex;
+  gap: 6pt;
+  align-items: flex-start;
+  border: 0.75pt solid var(--fof-line);
+  border-radius: 5pt;
+  padding: 5pt 8pt;
   font-size: 7.4pt;
   line-height: 1.35;
   color: var(--fof-muted);
   margin-bottom: 8pt;
+}
+
+.fof-info-badge {
+  color: var(--fof-navy);
+  display: flex;
+  flex: 0 0 auto;
+  margin-top: 0.5pt;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.fof-info-badge .fof-icon {
+  width: 11pt;
+  height: 11pt;
+}
+
+.fof-footnotes-list {
+  flex: 1;
+  min-width: 0;
 }
 
 .fof-footnotes p {

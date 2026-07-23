@@ -40,7 +40,7 @@ const iconProps = {
   viewBox: '0 0 24 24',
   fill: 'none',
   stroke: 'currentColor',
-  strokeWidth: 2,
+  strokeWidth: 2.2,
   strokeLinecap: 'round',
   strokeLinejoin: 'round',
 } as const;
@@ -86,15 +86,30 @@ const GlobeIcon = () => (
     <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20" />
   </svg>
 );
-const ToothIcon = () => (
-  <svg {...iconProps}>
-    <path d="M7 3C4.5 3 3 5.2 3 7.5c0 1.6.7 2.7 1.2 4 .6 1.5.8 3.6 1 5.5.2 1.7.5 4 2 4 1.8 0 1.2-3.2 2.2-5.2.3-.6 1-.6 1.3 0 1 2 .3 5.2 2.2 5.2 1.5 0 1.8-2.3 2-4 .2-1.9.4-4 1-5.5.5-1.3 1.2-2.4 1.2-4C17.1 5.2 15.5 3 13 3c-1.2 0-2 .5-3 1-1-.5-1.8-1-3-1z" />
+// Filled scalloped seal with a white dollar sign (the "you save" badge).
+const DollarSealIcon = () => (
+  <svg className="fof-icon" viewBox="0 0 24 24">
+    <path
+      fill="currentColor"
+      d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
+    />
+    <g fill="none" stroke="white" strokeWidth="1.7" strokeLinecap="round">
+      <path d="M14.3 9.2h-3.4a1.45 1.45 0 1 0 0 2.9h2.2a1.45 1.45 0 1 1 0 2.9H9.7" />
+      <path d="M12 7.4v9.2" />
+    </g>
   </svg>
 );
-const DollarBadgeIcon = () => (
-  <svg {...iconProps}>
-    <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" />
-    <path d="M12 18V6" />
+// Filled info dot for the fine-print block.
+const InfoIcon = () => (
+  <svg className="fof-icon" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10" fill="currentColor" />
+    <path
+      d="M12 16.2v-5M12 7.8h.01"
+      fill="none"
+      stroke="white"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+    />
   </svg>
 );
 const BanknoteIcon = () => (
@@ -193,9 +208,6 @@ export default function FofPrintSheet({
       </header>
 
       <section className="fof-hero">
-        <span className="fof-hero-icon">
-          <ToothIcon />
-        </span>
         <div className="fof-hero-treatment">
           <div className="fof-kicker">Your Treatment</div>
           <div className="fof-treatment-text">{patient.treatment || '—'}</div>
@@ -284,7 +296,10 @@ export default function FofPrintSheet({
           <div className="fof-options-row">
             <div className="fof-option">
               <div className="fof-option-title">
-                <BanknoteIcon /> Option 1 · Prepay in Full — Pay Today &amp; Save
+                <span className="fof-option-icon">
+                  <BanknoteIcon />
+                </span>
+                Option 1 · Prepay in Full — Pay Today &amp; Save
               </div>
               <div className="fof-option-body">
                 <div className="fof-row">
@@ -306,8 +321,8 @@ export default function FofPrintSheet({
                 </div>
                 {effective.discountCents > 0 && (
                   <div className="fof-save-chip">
-                    <span className="fof-save-badge">
-                      <DollarBadgeIcon />
+                    <span className="fof-save-seal">
+                      <DollarSealIcon />
                     </span>
                     <span>
                       <strong>You save {formatCents(effective.discountCents)}</strong> when
@@ -320,7 +335,10 @@ export default function FofPrintSheet({
             <div className="fof-or">or</div>
             <div className="fof-option">
               <div className="fof-option-title">
-                <CalendarIcon /> Option 2 · Payment Installment Agreement
+                <span className="fof-option-icon">
+                  <CalendarIcon />
+                </span>
+                Option 2 · Payment Installment Agreement
               </div>
               <div className="fof-option-body">
                 {installmentCells.map((cell, i) => (
@@ -398,9 +416,14 @@ export default function FofPrintSheet({
 
       {footnoteItems.length > 0 && (
         <div className="fof-footnotes">
-          {footnoteItems.map((text, i) => (
-            <p key={i}>{text}</p>
-          ))}
+          <span className="fof-info-badge">
+            <InfoIcon />
+          </span>
+          <div className="fof-footnotes-list">
+            {footnoteItems.map((text, i) => (
+              <p key={i}>{text}</p>
+            ))}
+          </div>
         </div>
       )}
 
