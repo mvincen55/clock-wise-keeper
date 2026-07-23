@@ -78,6 +78,15 @@ Deno.serve(async (req) => {
     }
     const orgId = membership.org_id;
 
+    // Reject oversized requests BEFORE reading/decoding the body — the
+    // 8 MB check on decoded bytes alone lets an unbounded base64 string
+    // exhaust memory first. Base64 inflates ~4/3, plus JSON overhead.
+    const maxRequestBytes = Math.ceil((MAX_FILE_BYTES * 4) / 3) + 64 * 1024;
+    const contentLength = Number(req.headers.get("content-length") ?? 0);
+    if (contentLength > maxRequestBytes) {
+      return json({ error: "File too large (max 8 MB)" }, 413);
+    }
+
     const body = await req.json();
     const title = String(body.title ?? "").trim();
     const category = CATEGORIES.has(body.category) ? body.category : "other";
@@ -91,6 +100,9 @@ Deno.serve(async (req) => {
       text = normalizeText(body.text);
       mimeType = "text/plain";
     } else if (typeof body.base64 === "string" && body.base64) {
+      if (body.base64.length > maxRequestBytes) {
+        return json({ error: "File too large (max 8 MB)" }, 400);
+      }
       const bytes = Uint8Array.from(atob(body.base64), (c) => c.charCodeAt(0));
       if (bytes.length > MAX_FILE_BYTES) return json({ error: "File too large (max 8 MB)" }, 400);
       mimeType = String(body.contentType ?? "application/octet-stream");
@@ -111,7 +123,10 @@ Deno.serve(async (req) => {
       const { error: uploadError } = await supabase.storage
         .from("office-docs")
         .upload(filePath, bytes, { contentType: mimeType });
-      if (uploadError) return json({ error: `Upload failed: ${uploadError.message}` }, 500);
+      if (uploadError) {
+        console.error("ingest-doc upload error:", uploadError);
+        return json({ error: "Could not store the file" }, 500);
+      }
     } else {
       return json({ error: "Provide either text or base64 file content" }, 400);
     }
@@ -136,7 +151,10 @@ Deno.serve(async (req) => {
       })
       .select("id")
       .single();
-    if (docError) return json({ error: `Save failed: ${docError.message}` }, 500);
+    if (docError) {
+      console.error("ingest-doc save error:", docError);
+      return json({ error: "Save failed" }, 500);
+    }
 
     const chunks = chunkText(text);
     const { error: chunkError } = await supabase.from("office_doc_chunks").insert(
@@ -149,12 +167,13 @@ Deno.serve(async (req) => {
     );
     if (chunkError) {
       await supabase.from("office_docs").delete().eq("id", doc.id);
-      return json({ error: `Indexing failed: ${chunkError.message}` }, 500);
+      console.error("ingest-doc chunk error:", chunkError);
+      return json({ error: "Indexing failed" }, 500);
     }
 
     return json({ id: doc.id, chunks: chunks.length, chars: text.length });
   } catch (error) {
     console.error("ingest-doc error:", error);
-    return json({ error: error instanceof Error ? error.message : "Unexpected error" }, 500);
+    return json({ error: "Unexpected error" }, 500);
   }
 });

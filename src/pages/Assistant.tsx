@@ -144,7 +144,8 @@ function ChatPanel() {
           </div>
         )}
       </CardContent>
-      <div className="border-t p-3 flex gap-2">
+      <div className="border-t p-3 space-y-1.5">
+        <div className="flex gap-2">
         <Input
           placeholder="Ask about office policies, HR, insurance…"
           value={input}
@@ -160,6 +161,12 @@ function ChatPanel() {
         <Button onClick={() => send(input)} disabled={ask.isPending || !input.trim()}>
           <Send className="h-4 w-4" />
         </Button>
+        </div>
+        {/* Questions go to an external AI service (no BAA) — keep them generic. */}
+        <p className="text-xs text-muted-foreground">
+          Answers come from an external AI service. Ask in general terms — never include a
+          patient's name or details.
+        </p>
       </div>
     </Card>
   );

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useOfficeClosures, useGenerateClosures, useAddClosure, useDeleteClosure } from '@/hooks/useOfficeClosures';
 import { usePayrollSettings, useUpsertPayrollSettings } from '@/hooks/usePayrollSettings';
 import { useAuth } from '@/hooks/useAuth';
@@ -9,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Loader2, Shield, Timer, CalendarDays, Plus, Trash2, DollarSign, RefreshCw } from 'lucide-react';
+import { Loader2, Shield, Timer, CalendarDays, Plus, Trash2, DollarSign, RefreshCw, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/time-utils';
 
@@ -126,6 +127,26 @@ export default function Settings() {
               <p className="text-sm font-medium px-3 py-2 rounded-md border bg-muted">Eastern (ET)</p>
             </div>
           </div>
+        </CardContent>
+      </Card>
+      )}
+
+      {/* Work Zones (manager only) — lives here instead of the sidebar */}
+      {isManager && (
+      <Card className="card-elevated">
+        <CardHeader className="border-b">
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5" />
+            Work Zones
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Geofenced clock-in zones and location tracking configuration.
+          </p>
+          <Button variant="outline" asChild>
+            <Link to="/work-zones">Manage Work Zones</Link>
+          </Button>
         </CardContent>
       </Card>
       )}

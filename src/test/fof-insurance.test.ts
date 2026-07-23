@@ -119,6 +119,30 @@ describe('estimateInsurance', () => {
     expect(result.perLine[0].allowedCents).toBe(30_000); // office fee, not carrier allowed
   });
 
+  it("workup lines are never covered — even on a percentage plan with benefits left", () => {
+    const result = estimateInsurance(
+      [line({ category: 'workup', officeFeeCents: 45_000, allowedCents: 30_000 })],
+      plan,
+      noBenefitsUsed
+    );
+    expect(result.perLine[0].insurancePaysCents).toBe(0);
+    expect(result.perLine[0].writeOffCents).toBe(0);
+    expect(result.perLine[0].allowedCents).toBe(45_000); // office fee applies
+  });
+
+  it('workup lines stay uncovered when a table-of-allowance schedule lists the code', () => {
+    // A carrier pay schedule that happens to include the CT scan must not
+    // turn a work-up procedure into a covered one.
+    const result = estimateInsurance(
+      [line({ category: 'workup', officeFeeCents: 45_000, allowedCents: 30_000, fixedPayCents: 20_000 })],
+      plan,
+      noBenefitsUsed
+    );
+    expect(result.perLine[0].insurancePaysCents).toBe(0);
+    expect(result.perLine[0].writeOffCents).toBe(0);
+    expect(result.insurancePaysCents).toBe(0);
+  });
+
   it('skips write-offs when the plan does not apply them (out of network)', () => {
     const oonPlan: PlanRules = { ...plan, writeoffApplies: false };
     const result = estimateInsurance(

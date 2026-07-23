@@ -3,10 +3,16 @@
 // slot labels, return friendlier appointment-style names for staff to
 // tweak.
 //
-// HIPAA note: the payload is DE-IDENTIFIED BY CONSTRUCTION — procedure
-// names, tooth numbers, visit order, and the practice's doctor name only.
-// No patient name, no date, no dollar amounts, no identifiers of any
-// kind may be added to this request.
+// HIPAA note: the payload must be DE-IDENTIFIED BY CONSTRUCTION —
+// procedure names, tooth numbers, visit order, and the practice's doctor
+// name only. No patient name, no date, no dollar amounts, no identifiers
+// of any kind may be added to this request. The client builds it from
+// CDT-derived wording (see src/lib/fof/ai.ts); this function additionally
+// authenticates the caller, requires an active org membership, and
+// hard-caps every string so it can never be used as an open relay to the
+// (non-BAA) AI gateway.
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,11 +29,43 @@ const json = (body: unknown, status = 200) =>
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-2.5-flash";
 
+const MAX_SLOTS = 12;
+const MAX_VISITS = 12;
+const MAX_PROCEDURES_PER_VISIT = 12;
+const MAX_LABEL_LENGTH = 80;
+
+/** Coerce to a bounded single-line string; empty result = dropped. */
+const boundedLabel = (value: unknown): string =>
+  typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, MAX_LABEL_LENGTH) : "";
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!apiKey) return json({ error: "AI is not configured" }, 500);
+
+    // The platform gateway verifies the JWT (verify_jwt=true), but the
+    // caller is re-checked here so the function stays closed even if the
+    // config ever regresses — same posture as ask-docs/ingest-doc.
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) return json({ error: "Missing authorization" }, 401);
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return json({ error: "Unauthorized" }, 401);
+
+    // Only active org members may spend AI credits.
+    const { data: membership } = await supabase
+      .from("org_members")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle();
+    if (!membership) return json({ error: "Unauthorized" }, 403);
 
     const { slots, visits, wantTreatment, doctorName } = (await req.json()) as {
       /** Current payment slot labels, in order (e.g. "Upon Scheduling", "Crown Prep"). */
@@ -39,15 +77,26 @@ Deno.serve(async (req) => {
       /** Treating doctor's display name (practice config, not patient data). */
       doctorName?: string;
     };
-    if (!Array.isArray(slots) || slots.length === 0 || slots.length > 12) {
+    if (!Array.isArray(slots) || slots.length === 0 || slots.length > MAX_SLOTS) {
+      return json({ error: "Bad request" }, 400);
+    }
+    const boundedSlots = slots.map(boundedLabel);
+    if (boundedSlots.some((s) => s === "")) return json({ error: "Bad request" }, 400);
+    if (Array.isArray(visits) && visits.length > MAX_VISITS) {
       return json({ error: "Bad request" }, 400);
     }
     const doctor =
       typeof doctorName === "string" && doctorName.trim().length > 0 && doctorName.length <= 40
         ? doctorName.trim()
         : "The doctor";
-    const visitLines = (visits ?? [])
-      .map((v, i) => `Visit ${i + 1}: ${(v.procedures ?? []).slice(0, 12).join(", ") || "—"}`)
+    const visitLines = (Array.isArray(visits) ? visits : [])
+      .map((v, i) => {
+        const procedures = (Array.isArray(v?.procedures) ? v.procedures : [])
+          .slice(0, MAX_PROCEDURES_PER_VISIT)
+          .map(boundedLabel)
+          .filter(Boolean);
+        return `Visit ${i + 1}: ${procedures.join(", ") || "—"}`;
+      })
       .join("\n");
 
     const response = await fetch(GATEWAY_URL, {
@@ -71,7 +120,7 @@ Deno.serve(async (req) => {
           },
           {
             role: "user",
-            content: `Clinical visits:\n${visitLines}\n\nCurrent slot labels (rename each): ${JSON.stringify(slots)}\n\nInclude treatment summary: ${wantTreatment ? "yes" : "no"}`,
+            content: `Clinical visits:\n${visitLines}\n\nCurrent slot labels (rename each): ${JSON.stringify(boundedSlots)}\n\nInclude treatment summary: ${wantTreatment ? "yes" : "no"}`,
           },
         ],
         max_tokens: 500,

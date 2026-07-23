@@ -52,6 +52,26 @@ export function useOfficeDocs() {
   });
 }
 
+/** Full text of one document, reassembled from its indexed chunks. */
+export function useOfficeDocContent(docId: string | null) {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+
+  return useQuery({
+    queryKey: ['office-doc-content', docId],
+    enabled: !!user && !!ctx && !!docId,
+    queryFn: async (): Promise<string> => {
+      const { data, error } = await supabase
+        .from('office_doc_chunks')
+        .select('chunk_index, content')
+        .eq('doc_id', docId!)
+        .order('chunk_index');
+      if (error) throw error;
+      return (data ?? []).map(c => c.content).join('\n\n');
+    },
+  });
+}
+
 export interface UploadDocInput {
   title: string;
   category: OfficeDocCategory;
