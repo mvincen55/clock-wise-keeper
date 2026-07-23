@@ -36,6 +36,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import {
   ChevronDown,
@@ -137,6 +147,15 @@ const CATEGORY_SHORT: Record<FeeCategory, string> = {
   other: 'No Coverage',
 };
 
+/**
+ * Coverage bucket and Work Up are separate ideas: the DB/auto-categorizer
+ * may say 'workup', which the builder splits into No Coverage + the
+ * per-line Work Up flag (billed at its visit).
+ */
+function resolveCategory(cat: FeeCategory): { category: FeeCategory; workupFlag: string } {
+  return cat === 'workup' ? { category: 'other', workupFlag: 'yes' } : { category: cat, workupFlag: '' };
+}
+
 function todayISO(): string {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -156,6 +175,8 @@ interface BuilderLine {
   insPayInput: string;
   /** '' = membership-included codes are free, 'off' = charge (allowance used). */
   membershipFree: string;
+  /** 'yes' = work-up procedure: billed at its visit, never prepaid. */
+  workupFlag: string;
   /** PMS entry date from an imported screenshot; office-copy page only. */
   entryDate: string;
   /** Warning when an imported fee differs from the fees on file. */
@@ -176,6 +197,7 @@ const newLine = (): BuilderLine => ({
   allowedInput: '',
   insPayInput: '',
   membershipFree: '',
+  workupFlag: '',
   entryDate: '',
   feeFlag: '',
   downgrade: '',
@@ -442,6 +464,13 @@ export default function FofBuilder() {
   const [aiNaming, setAiNaming] = useState(false);
   const [importing, setImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
+  // In-app confirm dialog (native confirm() shows ugly browser chrome).
+  const [confirmState, setConfirmState] = useState<null | {
+    title: string;
+    body: string;
+    action: string;
+    onConfirm: () => void;
+  }>(null);
 
   const { data: bundles } = useProcedureBundles();
   const saveBundle = useSaveProcedureBundle();
@@ -519,9 +548,9 @@ export default function FofBuilder() {
             // the form (schedule description as fallback).
             description: friendlyCdtName(match.code) || match.description,
             feeInput: formatCents(match.feeCents),
-            category: match.category,
+            ...resolveCategory(match.category),
           }
-        : { code: rawCode, category: categorizeCdtCode(rawCode.trim().toUpperCase()) },
+        : { code: rawCode, ...resolveCategory(categorizeCdtCode(rawCode.trim().toUpperCase())) },
     });
   };
 
@@ -584,7 +613,7 @@ export default function FofBuilder() {
       code: match?.code ?? rawCode.toUpperCase(),
       description: match ? friendlyCdtName(match.code) || match.description : '',
       feeInput: match ? formatCents(match.feeCents) : '',
-      category: match?.category ?? categorizeCdtCode(rawCode.toUpperCase()),
+      ...resolveCategory(match?.category ?? categorizeCdtCode(rawCode.toUpperCase())),
     };
   };
 
@@ -869,7 +898,7 @@ export default function FofBuilder() {
       const base = friendlyCdtName(l.code) || l.description.trim();
       const lineLabel =
         isSurgical(l.code) && !/surger/i.test(base) ? `${base} Surgery` : base;
-      const workup = l.category === 'workup';
+      const workup = l.workupFlag === 'yes';
       // Work-up procedures (and the surgical guide) are billed at their
       // visit, never prepaid ahead.
       const dueAtVisit = NO_PREPAY_CODES.has(l.code.trim().toUpperCase()) || workup;
@@ -1034,6 +1063,19 @@ export default function FofBuilder() {
     }
   };
 
+  // The reminder every import path goes through — no patient info in the
+  // image, ever.
+  const askNoPatientInfo = (onConfirm: () => void) =>
+    setConfirmState({
+      title: 'Before you import',
+      body:
+        "Make sure the screenshot does NOT show the patient's name or any other " +
+        'personal information — crop it out first. Only procedure codes, fees, and ' +
+        'dates should be visible.',
+      action: 'Import',
+      onConfirm,
+    });
+
   // Screenshot import: staff crop out patient identifiers first; the
   // image is parsed in memory (never stored) and only procedure rows come
   // back. The Fee column fills the lines, but every ESTIMATE (allowable,
@@ -1112,6 +1154,22 @@ export default function FofBuilder() {
     }
   };
 
+  // Paste-to-import: Ctrl/Cmd+V with a screenshot on the clipboard runs
+  // the same import (text pastes into inputs are untouched).
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if (importing) return;
+      const item = [...(e.clipboardData?.items ?? [])].find(it => it.type.startsWith('image/'));
+      if (!item) return;
+      const file = item.getAsFile();
+      if (!file) return;
+      e.preventDefault();
+      askNoPatientInfo(() => importScreenshot(file));
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  });
+
   // The printout shows one patient-friendly treatment line (like the
   // office's existing forms), not the itemized code/fee list. Each row's
   // Description IS what prints (it auto-fills patient-friendly); a
@@ -1124,6 +1182,9 @@ export default function FofBuilder() {
     for (const l of state.lines) {
       const code = l.code.trim();
       if (!code && !l.description.trim() && !l.feeInput.trim()) continue;
+      // Custom PMS codes (non-D) belong on the office copy, not the
+      // patient-facing treatment line.
+      if (code !== '' && !/^D\d{4}$/i.test(code)) continue;
       const label = l.description.trim();
       if (!label) continue;
       const tooth = l.tooth.trim();
@@ -1182,7 +1243,8 @@ export default function FofBuilder() {
         code,
         tooth: l.tooth.trim(),
         visit: String(effectiveVisit(l)),
-        category: CATEGORY_SHORT[l.category],
+        category:
+          CATEGORY_SHORT[l.category] + (l.workupFlag === 'yes' ? ' \u00b7 Work Up' : ''),
         description: l.description.trim(),
         officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
         allowableCents: insuranceActive
@@ -1300,16 +1362,17 @@ export default function FofBuilder() {
                         // Standard policy: no prepay discount with contract
                         // insurance or financing — overriding needs a
                         // deliberate yes (SLH / Office Manager approval).
-                        if (
-                          v &&
-                          template &&
-                          !template.showPrepayOption &&
-                          !confirm(
-                            'Standard policy: this template has no Prepay in Full option ' +
-                              '(contract insurance / financing get no additional discounts ' +
-                              'unless approved by SLH or the Office Manager). Turn it on anyway?'
-                          )
-                        ) {
+                        if (v && template && !template.showPrepayOption) {
+                          setConfirmState({
+                            title: 'Against standard policy',
+                            body:
+                              'This template has no Prepay in Full option — contract ' +
+                              'insurance and financing get no additional discounts unless ' +
+                              'approved by SLH or the Office Manager. Turn it on anyway?',
+                            action: 'Turn it on',
+                            onConfirm: () =>
+                              dispatch({ type: 'set', field: 'prepayOptionState', value: 'on' }),
+                          });
                           return;
                         }
                         dispatch({ type: 'set', field: 'prepayOptionState', value: v ? 'on' : 'off' });
@@ -1448,9 +1511,11 @@ export default function FofBuilder() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {(Object.keys(CATEGORY_SHORT) as FeeCategory[]).map(c => (
-                                <SelectItem key={c} value={c}>{CATEGORY_SHORT[c]}</SelectItem>
-                              ))}
+                              {(Object.keys(CATEGORY_SHORT) as FeeCategory[])
+                                .filter(c => c !== 'workup')
+                                .map(c => (
+                                  <SelectItem key={c} value={c}>{CATEGORY_SHORT[c]}</SelectItem>
+                                ))}
                             </SelectContent>
                           </Select>
                         </div>
@@ -1564,6 +1629,26 @@ export default function FofBuilder() {
                           </Label>
                         </div>
                       )}
+                      {(line.workupFlag === 'yes' ||
+                        line.category === 'other' ||
+                        categorizeCdtCode(lineCode) === 'workup') && (
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            id={`fof-wu-${line.key}`}
+                            checked={line.workupFlag === 'yes'}
+                            onCheckedChange={v =>
+                              dispatch({ type: 'setLine', index: i, patch: { workupFlag: v ? 'yes' : '' } })
+                            }
+                          />
+                          <Label
+                            htmlFor={`fof-wu-${line.key}`}
+                            className="text-xs text-muted-foreground font-normal"
+                          >
+                            Work Up — billed at its visit, not prepaid (combines with the
+                            category above)
+                          </Label>
+                        </div>
+                      )}
                       {(line.feeFlag !== '' || line.entryDate !== '') && (
                         <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
                           {line.feeFlag !== '' && (
@@ -1599,8 +1684,8 @@ export default function FofBuilder() {
                     variant="outline"
                     size="sm"
                     disabled={importing}
-                    title="Upload a treatment-plan screenshot — crop out the patient's name first. Estimates still come from your fee schedules."
-                    onClick={() => importInputRef.current?.click()}
+                    title="Upload or paste (Ctrl+V) a treatment-plan screenshot — crop out the patient's name first. Estimates still come from your fee schedules."
+                    onClick={() => askNoPatientInfo(() => importInputRef.current?.click())}
                   >
                     {importing ? (
                       <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
@@ -2129,6 +2214,26 @@ export default function FofBuilder() {
           </Card>
         </div>
       )}
+
+      <AlertDialog open={!!confirmState} onOpenChange={open => !open && setConfirmState(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmState?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmState?.body}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                confirmState?.onConfirm();
+                setConfirmState(null);
+              }}
+            >
+              {confirmState?.action ?? 'Continue'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={bundleDialogOpen} onOpenChange={open => !open && setBundleDialogOpen(false)}>
         <DialogContent className="max-w-md">
