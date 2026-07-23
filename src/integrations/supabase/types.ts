@@ -821,6 +821,65 @@ export type Database = {
           },
         ]
       }
+      deposit_logs: {
+        Row: {
+          cash_cents: number
+          checks: Json
+          created_at: string
+          deposit_date: string
+          id: string
+          illumitrac_cents: number
+          ins_cc_cents: number
+          notes: string
+          org_id: string
+          outside_financing_cents: number
+          prepared_by: string | null
+          prepared_by_name: string
+          pt_cc_cents: number
+          updated_at: string
+        }
+        Insert: {
+          cash_cents?: number
+          checks?: Json
+          created_at?: string
+          deposit_date: string
+          id?: string
+          illumitrac_cents?: number
+          ins_cc_cents?: number
+          notes?: string
+          org_id: string
+          outside_financing_cents?: number
+          prepared_by?: string | null
+          prepared_by_name?: string
+          pt_cc_cents?: number
+          updated_at?: string
+        }
+        Update: {
+          cash_cents?: number
+          checks?: Json
+          created_at?: string
+          deposit_date?: string
+          id?: string
+          illumitrac_cents?: number
+          ins_cc_cents?: number
+          notes?: string
+          org_id?: string
+          outside_financing_cents?: number
+          prepared_by?: string | null
+          prepared_by_name?: string
+          pt_cc_cents?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deposit_logs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_send_log: {
         Row: {
           created_at: string

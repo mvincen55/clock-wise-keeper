@@ -26,6 +26,7 @@ import Assistant from "@/pages/Assistant";
 import PolicyManual from "@/pages/PolicyManual";
 import ImportantNumbers from "@/pages/ImportantNumbers";
 import Checklists from "@/pages/Checklists";
+import DepositLog from "@/pages/DepositLog";
 import AcceptInvite from "@/pages/AcceptInvite";
 import NotFound from "@/pages/NotFound";
 import OAuthConsent from "@/pages/OAuthConsent";
@@ -73,6 +74,7 @@ const App = () => (
             <Route path="/policy-manual" element={<ProtectedRoute><PolicyManual /></ProtectedRoute>} />
             <Route path="/important-numbers" element={<ProtectedRoute><ImportantNumbers /></ProtectedRoute>} />
             <Route path="/checklists" element={<ProtectedRoute><Checklists /></ProtectedRoute>} />
+            <Route path="/deposit-log" element={<ProtectedRoute><DepositLog /></ProtectedRoute>} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
             <Route path="*" element={<Navigate to="/auth" replace />} />
