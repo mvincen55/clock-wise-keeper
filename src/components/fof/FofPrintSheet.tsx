@@ -49,10 +49,12 @@ export default function FofPrintSheet({
   // terms ↔ discount, *** insurance disclaimer ↔ insurance rows.
   const validityMark = template.validityNote.trim() ? '*' : '';
   const prepayMark = template.prepayNote.trim() && showDiscountRow ? '**' : '';
-  const insuranceMark =
-    template.insuranceNote.trim() && (template.showInsuranceEstimate || template.showWriteOff)
-      ? '***'
-      : '';
+  // The insurance disclaimer only earns its spot when an insurance row
+  // actually prints — no payment and no write-off means no note.
+  const insuranceRowsShown =
+    (template.showInsuranceEstimate && (amounts.insuranceEstimateCents ?? 0) > 0) ||
+    (template.showWriteOff && (amounts.writeOffCents ?? 0) > 0);
+  const insuranceMark = template.insuranceNote.trim() && insuranceRowsShown ? '***' : '';
 
   // The most relevant note is promoted into the callout card beside the
   // cost breakdown; it keeps its marker and is dropped from the footnotes.
