@@ -45,7 +45,9 @@ Deno.serve(async (req) => {
             content:
               "You extract procedure rows from a dental practice-management screenshot (treatment plan, case view, or ledger). Return ONLY a JSON array of rows: " +
               '[{"code": string, "tooth": string, "description": string, "fee": number|null, "officeFee": number|null, "entryDate": string, "visit": number|null}] — ' +
-              "code = the procedure code exactly as shown (e.g. D2740, 2014); tooth = the Th column value or empty string; description = the description column text; " +
+              "code = the procedure code exactly as shown (e.g. D2740, 2014); " +
+              "tooth = the Th (tooth) column value copied EXACTLY as shown (e.g. 3, 22, 19*30) — check this cell carefully on EVERY row: crowns, fillings, extractions, splints, and buildups almost always have a tooth number, so only return an empty string when that cell is truly blank; " +
+              "description = the description column text; " +
               "fee = the dollar amount from the Fee column as a plain number (null when blank or 0.00); " +
               "officeFee = the dollar amount from the OFFICE column as a plain number (null when there is no OFFICE column or it is blank/0.00) — Fee and OFFICE are DIFFERENT columns, read each from its own column; " +
               "entryDate = the Entry Date column value as shown (M/D/YYYY) or empty string; " +

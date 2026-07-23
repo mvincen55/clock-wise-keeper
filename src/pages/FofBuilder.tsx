@@ -1085,10 +1085,11 @@ export default function FofBuilder() {
   // and never overwriting anything staff already typed.
   const aiSignature = useMemo(
     () =>
-      JSON.stringify(
-        state.lines.map(l => [l.code, l.tooth, l.description, l.visit, l.feeInput])
-      ),
-    [state.lines]
+      JSON.stringify([
+        doctorName,
+        state.lines.map(l => [l.code, l.tooth, l.description, l.visit, l.feeInput]),
+      ]),
+    [state.lines, doctorName]
   );
   const [aiText, setAiText] = useState<{ signature: string; treatment: string } | null>(null);
   const aiRanForRef = useRef<string>('');
@@ -1370,6 +1371,7 @@ export default function FofBuilder() {
       computation={computation}
       officeLines={officeLines}
       createdBy={createdBy}
+      doctorName={doctorName}
       importedFromScreenshot={state.importUsed === 'yes'}
     />
   );
