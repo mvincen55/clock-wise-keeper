@@ -17,7 +17,7 @@ const NAMES: Record<string, string> = {
   '0274': 'Bitewing X-rays (4)',
   '0330': 'Panoramic X-ray',
   '0350': 'Oral photographs',
-  '0367': '3D cone beam scan',
+  '0367': 'CT scan',
   '0470': 'Diagnostic models',
   // Preventive
   '1110': 'Adult cleaning',
@@ -94,8 +94,9 @@ const NAMES: Record<string, string> = {
   '5731': 'Denture reline (lower, in office)',
   '5750': 'Denture reline (upper, lab)',
   '5751': 'Denture reline (lower, lab)',
+  '5982': 'Surgical guide',
   // Implants
-  '6010': 'Dental implant placement',
+  '6010': 'Dental implant',
   '6011': 'Implant second-stage surgery',
   '6013': 'Mini implant placement',
   '6190': 'Surgical implant guide',
@@ -103,7 +104,7 @@ const NAMES: Record<string, string> = {
   '6056': 'Implant abutment (prefabricated)',
   '6057': 'Implant abutment (custom)',
   '6058': 'Implant crown (porcelain)',
-  '6059': 'Implant crown (porcelain on metal)',
+  '6059': 'Implant crown',
   '6065': 'Implant crown (screw-retained)',
   '6110': 'Implant-supported upper denture',
   '6111': 'Implant-supported lower denture',
@@ -122,7 +123,7 @@ const NAMES: Record<string, string> = {
   '7230': 'Impacted tooth removal (partial bone)',
   '7240': 'Impacted tooth removal (full bone)',
   '7250': 'Root removal',
-  '7953': 'Bone graft (extraction site)',
+  '7953': 'Site preservation',
   // Adjunctive
   '9110': 'Emergency pain treatment',
   '9222': 'Deep sedation (first 15 min)',
