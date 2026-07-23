@@ -36,6 +36,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import {
   ChevronDown,
@@ -49,8 +59,11 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  Upload,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
 import FofPrintSheet from '@/components/fof/FofPrintSheet';
 import { useFofSettings, useFofTemplates } from '@/hooks/useFofTemplates';
 import {
@@ -72,7 +85,7 @@ import {
 import { categorizeCdtCode } from '@/lib/fof/cdt';
 import { friendlyCdtName } from '@/lib/fof/cdt-names';
 import { computeFofDiscounts } from '@/lib/fof/discounts';
-import { buildNameVisitsPayload, safeProcedureLabel } from '@/lib/fof/ai';
+import { safeProcedureLabel } from '@/lib/fof/ai';
 import {
   buildVisitSchedule,
   DAY_OF_SERVICE_THRESHOLD_CENTS,
@@ -116,6 +129,9 @@ const MAXED_NOTE_PREV_EXEMPT =
 // schedule — per office policy the surgical guide isn't prepaid.
 const NO_PREPAY_CODES = new Set(['D5982']);
 
+// Doctors the treatment wording can be attributed to.
+const FOF_DOCTORS = ['Dr. Scott', 'Dr. Jennie', 'Dr. Robert', 'Dr. Nicole', 'Dr. Natalie'];
+
 // Procedures the Illumitrac membership plans include at no charge (per the
 // office Policy Handbook / 2025 flyer): cleanings (adult/child/perio),
 // exams, emergency exam, needed X-rays (CBCT D0367 excluded), fluoride and
@@ -134,6 +150,15 @@ const CATEGORY_SHORT: Record<FeeCategory, string> = {
   workup: 'Work Up',
   other: 'No Coverage',
 };
+
+/**
+ * Coverage bucket and Work Up are separate ideas: the DB/auto-categorizer
+ * may say 'workup', which the builder splits into No Coverage + the
+ * per-line Work Up flag (billed at its visit).
+ */
+function resolveCategory(cat: FeeCategory): { category: FeeCategory; workupFlag: string } {
+  return cat === 'workup' ? { category: 'other', workupFlag: 'yes' } : { category: cat, workupFlag: '' };
+}
 
 function todayISO(): string {
   const now = new Date();
@@ -154,6 +179,12 @@ interface BuilderLine {
   insPayInput: string;
   /** '' = membership-included codes are free, 'off' = charge (allowance used). */
   membershipFree: string;
+  /** 'yes' = work-up procedure: billed at its visit, never prepaid. */
+  workupFlag: string;
+  /** PMS entry date from an imported screenshot; office-copy page only. */
+  entryDate: string;
+  /** Warning when an imported fee differs from the fees on file. */
+  feeFlag: string;
   /** '' = downgrade applies (default for D2391–D2394), 'off' = plan pays composite rates. */
   downgrade: string;
 }
@@ -170,6 +201,9 @@ const newLine = (): BuilderLine => ({
   allowedInput: '',
   insPayInput: '',
   membershipFree: '',
+  workupFlag: '',
+  entryDate: '',
+  feeFlag: '',
   downgrade: '',
 });
 
@@ -194,6 +228,7 @@ interface BuilderState {
   afterMaxState: string; // '' or 'yes' — reverts to office fees once maxed out
   prevExemptState: string; // '' or 'yes' — preventive doesn't count toward the max
   paymentCountOverride: string;
+  importUsed: string; // 'yes' when rows came from a screenshot import (office copy notes it)
   prepayOptionState: string; // '' = follow template, 'on'/'off' = per-form override
   installmentOptionState: string;
   isSenior: string; // '' or 'yes' — patient is 65+; memory only
@@ -244,6 +279,7 @@ const initialState = (): BuilderState => ({
   afterMaxState: '',
   prevExemptState: '',
   paymentCountOverride: '',
+  importUsed: '',
   prepayOptionState: '',
   installmentOptionState: '',
   isSenior: '',
@@ -430,12 +466,32 @@ export default function FofBuilder() {
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
   const [bundleName, setBundleName] = useState('');
   const [aiNaming, setAiNaming] = useState(false);
+  const [doctorName, setDoctorName] = useState(FOF_DOCTORS[0]);
+  const [importing, setImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  // In-app confirm dialog (native confirm() shows ugly browser chrome).
+  const [confirmState, setConfirmState] = useState<null | {
+    title: string;
+    body: string;
+    action: string;
+    onConfirm: () => void;
+  }>(null);
 
   const { data: bundles } = useProcedureBundles();
   const saveBundle = useSaveProcedureBundle();
   const deleteBundle = useDeleteProcedureBundle();
   const { data: orgCtx } = useOrgContext();
   const isManager = orgCtx?.role === 'owner' || orgCtx?.role === 'manager';
+  // Who's signed in — printed on the office copy's created-by line.
+  const { user } = useAuth();
+  const { data: myProfile } = useQuery({
+    queryKey: ['my-profile', user?.id],
+    enabled: !!user,
+    queryFn: async () =>
+      (await supabase.from('profiles').select('full_name, email').eq('id', user!.id).maybeSingle())
+        .data,
+  });
+  const createdBy = myProfile?.full_name || myProfile?.email || user?.email || '';
 
   const activeTemplates = useMemo(
     () => (templates ?? []).filter(t => t.isActive),
@@ -497,9 +553,9 @@ export default function FofBuilder() {
             // the form (schedule description as fallback).
             description: friendlyCdtName(match.code) || match.description,
             feeInput: formatCents(match.feeCents),
-            category: match.category,
+            ...resolveCategory(match.category),
           }
-        : { code: rawCode, category: categorizeCdtCode(rawCode.trim().toUpperCase()) },
+        : { code: rawCode, ...resolveCategory(categorizeCdtCode(rawCode.trim().toUpperCase())) },
     });
   };
 
@@ -560,9 +616,11 @@ export default function FofBuilder() {
     return {
       ...newLine(),
       code: match?.code ?? rawCode.toUpperCase(),
-      description: match ? friendlyCdtName(match.code) || match.description : '',
+      description: match
+        ? friendlyCdtName(match.code) || match.description
+        : friendlyCdtName(rawCode.toUpperCase()) || '',
       feeInput: match ? formatCents(match.feeCents) : '',
-      category: match?.category ?? categorizeCdtCode(rawCode.toUpperCase()),
+      ...resolveCategory(match?.category ?? categorizeCdtCode(rawCode.toUpperCase())),
     };
   };
 
@@ -856,7 +914,7 @@ export default function FofBuilder() {
         isSurgical(l.code) && safeBase && !/surger/i.test(safeBase)
           ? `${safeBase} Surgery`
           : safeBase;
-      const workup = l.category === 'workup';
+      const workup = l.workupFlag === 'yes';
       // Work-up procedures (and the surgical guide) are billed at their
       // visit, never prepaid ahead.
       const dueAtVisit = NO_PREPAY_CODES.has(l.code.trim().toUpperCase()) || workup;
@@ -988,44 +1046,59 @@ export default function FofBuilder() {
     [effectiveTemplate, amounts, overrides, visitPlan]
   );
 
-  // AI pass over the payment names, applied as editable overrides.
-  // HIPAA: the request is built ONLY from CDT codes and code-derived
-  // labels (src/lib/fof/ai.ts) — staff-typed descriptions, edited labels,
+  // AI pass over the payment names and treatment wording. HIPAA: the
+  // request is built ONLY from CDT-derived wording (src/lib/fof/ai.ts) —
+  // procedure names from codes, tooth numbers, visit order, and the
+  // practice's doctor name. Staff-typed descriptions, edited labels,
   // patient fields, and dollar amounts never leave the browser.
+  const aiCall = async (wantTreatment: boolean) => {
+    if (!computation) return null;
+    const byVisit = new Map<number, string[]>();
+    for (const l of state.lines) {
+      // Code-derived wording only — never the typed description.
+      const base = safeProcedureLabel(l.code);
+      if (!base) continue;
+      // Tooth numbers ride along (except dentures, where the arch is in
+      // the name) so the AI can write "remove tooth #24".
+      const numMatch = /^D(\d{4})$/i.exec(l.code.trim());
+      const denture = numMatch !== null && +numMatch[1] >= 5000 && +numMatch[1] < 5900;
+      const tooth = l.tooth.trim();
+      const label = !denture && tooth !== '' ? `${base} (tooth #${tooth})` : base;
+      byVisit.set(effectiveVisit(l), [...(byVisit.get(effectiveVisit(l)) ?? []), label]);
+    }
+    const visits = [...byVisit.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([, procedures]) => ({ procedures }));
+    // Display slot labels can embed typed descriptions (custom codes fall
+    // back to them), so the AI slots are REBUILT from the code-derived
+    // safeLabels — same schedule structure, safe wording.
+    const safeSchedule =
+      rawVisitPlan?.key === 'visitSchedule' && visitWork
+        ? buildVisitSchedule(
+            schedulePortion,
+            visitWork.map(v => ({
+              label: v.safeLabel,
+              feeCents: v.feeCents,
+              dueAtVisitCents: v.dueAtVisitCents,
+            }))
+          )
+        : null;
+    const autoSlots =
+      safeSchedule?.labels ?? rawVisitPlan?.labels ?? computation.installmentLabels;
+    const { data, error } = await supabase.functions.invoke('name-visits', {
+      body: { slots: autoSlots, visits, wantTreatment, doctorName },
+    });
+    if (error) throw new Error(error.message);
+    return { data, slotCount: autoSlots.length };
+  };
+
   const aiNamePayments = async () => {
-    if (!computation) return;
     setAiNaming(true);
     try {
-      const byVisit = new Map<number, string[]>();
-      for (const l of state.lines) {
-        if (!l.code.trim()) continue;
-        byVisit.set(effectiveVisit(l), [...(byVisit.get(effectiveVisit(l)) ?? []), l.code]);
-      }
-      const visitCodes = [...byVisit.entries()]
-        .sort((a, b) => a[0] - b[0])
-        .map(([, codes]) => codes);
-      // Display slot labels can embed typed descriptions (custom codes
-      // fall back to them), so the AI slots are REBUILT from the
-      // code-derived safeLabels — same schedule structure, safe wording.
-      const safeSchedule =
-        rawVisitPlan?.key === 'visitSchedule' && visitWork
-          ? buildVisitSchedule(
-              schedulePortion,
-              visitWork.map(v => ({
-                label: v.safeLabel,
-                feeCents: v.feeCents,
-                dueAtVisitCents: v.dueAtVisitCents,
-              }))
-            )
-          : null;
-      const autoSlots =
-        safeSchedule?.labels ?? rawVisitPlan?.labels ?? computation.installmentLabels;
-      const { data, error } = await supabase.functions.invoke('name-visits', {
-        body: buildNameVisitsPayload(visitCodes, autoSlots),
-      });
-      if (error) throw new Error(error.message);
-      const names: string[] = data?.names ?? [];
-      if (names.length !== computation.installmentLabels.length) {
+      const result = await aiCall(false);
+      if (!result) return;
+      const names: string[] = result.data?.names ?? [];
+      if (names.length !== result.slotCount) {
         throw new Error('AI returned an unexpected number of names');
       }
       names.forEach((name, i) =>
@@ -1039,6 +1112,192 @@ export default function FofBuilder() {
     }
   };
 
+  // Auto-polish: once the treatment settles (2.5s of quiet), AI rewords
+  // the treatment summary like a human and names the payments — silently,
+  // and never overwriting anything staff already typed.
+  const aiSignature = useMemo(
+    () =>
+      JSON.stringify(
+        state.lines.map(l => [l.code, l.tooth, l.description, l.visit, l.feeInput])
+      ),
+    [state.lines]
+  );
+  const [aiText, setAiText] = useState<{ signature: string; treatment: string } | null>(null);
+  const aiRanForRef = useRef<string>('');
+  useEffect(() => {
+    if (feeLines.length === 0 || importing || !computation) return;
+    if (aiRanForRef.current === aiSignature) return;
+    const timer = setTimeout(async () => {
+      aiRanForRef.current = aiSignature;
+      try {
+        const result = await aiCall(true);
+        if (!result) return;
+        if (typeof result.data?.treatment === 'string' && result.data.treatment.trim() !== '') {
+          setAiText({ signature: aiSignature, treatment: result.data.treatment.trim() });
+        }
+        const names: string[] = result.data?.names ?? [];
+        const noManualNames = state.installmentLabelOverrides.every(l => !l || l.trim() === '');
+        if (names.length === result.slotCount && noManualNames) {
+          names.forEach((name, i) =>
+            dispatch({ type: 'setInstallmentLabel', index: i, value: name })
+          );
+        }
+      } catch {
+        // Silent — the auto wording is a bonus, never an error state.
+      }
+    }, 2500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiSignature, feeLines.length, importing]);
+
+  // The reminder every import path goes through — no patient info in the
+  // image, ever.
+  const askNoPatientInfo = (onConfirm: () => void) =>
+    setConfirmState({
+      title: 'Before you import',
+      body:
+        "Make sure the screenshot does NOT show the patient's name or any other " +
+        'personal information — crop it out first. Only procedure codes, fees, and ' +
+        'dates should be visible.',
+      action: 'Import',
+      onConfirm,
+    });
+
+  // Screenshot import: staff crop out patient identifiers first; the
+  // image is parsed in memory (never stored) and only procedure rows come
+  // back. The Fee column fills the lines, but every ESTIMATE (allowable,
+  // ins pays, portion) is recomputed from our own schedules — never taken
+  // from the screenshot — and differing fees get flagged.
+  // Large screenshots (retina captures are often multi-MB PNGs) get
+  // downscaled/re-encoded in memory so they fit the function's payload
+  // cap; nothing ever touches disk or storage.
+  const shrinkForUpload = (dataUrl: string): Promise<string> =>
+    new Promise(resolve => {
+      if (dataUrl.length < 4_000_000) return resolve(dataUrl);
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 2200 / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(dataUrl);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.9));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+
+  const importScreenshot = async (file: File) => {
+    setImporting(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('Could not read the image'));
+        reader.readAsDataURL(file);
+      });
+      const image = await shrinkForUpload(dataUrl);
+      const { data, error } = await supabase.functions.invoke('parse-treatment', {
+        body: { image },
+      });
+      if (error) {
+        // invoke() wraps non-2xx responses in a generic message; the
+        // function's JSON body has the actual reason.
+        let message = error.message;
+        try {
+          const body = (await (
+            error as { context?: { json?: () => Promise<unknown> } }
+          ).context?.json?.()) as { error?: string } | undefined;
+          if (body?.error) message = body.error;
+        } catch {
+          /* keep the generic message */
+        }
+        throw new Error(message);
+      }
+      const rows: {
+        code: string;
+        tooth: string;
+        description: string;
+        fee: number | null;
+        officeFee: number | null;
+        entryDate: string;
+        visit: number | null;
+      }[] = data?.rows ?? [];
+      if (rows.length === 0) throw new Error('No procedures found in the screenshot');
+      // Renumber the screenshot's visit groups to start at Visit 1 (a
+      // case that begins at "Visit 5" in the PMS becomes Visit 1 here).
+      const visitNumbers = rows
+        .map(r => r.visit)
+        .filter((v): v is number => typeof v === 'number' && isFinite(v));
+      const minVisit = visitNumbers.length > 0 ? Math.min(...visitNumbers) : null;
+      let flagged = 0;
+      const lines = rows.map(r => {
+        const base = lineFromCode(r.code);
+        const code = r.code.trim().toUpperCase();
+        const contractedFee = r.fee !== null ? Math.round(r.fee * 100) : null;
+        const pmsOfficeFee = r.officeFee !== null ? Math.round(r.officeFee * 100) : null;
+        const onFileFee = officeByCode.get(code)?.feeCents ?? null;
+        // The PMS OFFICE column is the office's current fee — it wins.
+        // Our schedule fee backs it up, and the contracted "Fee" column is
+        // only a last resort. Disagreements with our schedule get flagged.
+        let feeFlag = '';
+        if (pmsOfficeFee !== null && onFileFee !== null && pmsOfficeFee !== onFileFee) {
+          feeFlag = `PMS office fee ${formatCents(pmsOfficeFee)} differs from our fee schedule ${formatCents(onFileFee)} — using the PMS office fee`;
+        } else if (
+          pmsOfficeFee === null &&
+          contractedFee !== null &&
+          onFileFee !== null &&
+          contractedFee !== onFileFee
+        ) {
+          feeFlag = `PMS shows ${formatCents(contractedFee)} — using our office fee ${formatCents(onFileFee)}`;
+        }
+        if (feeFlag) flagged++;
+        const fee = pmsOfficeFee ?? onFileFee ?? contractedFee;
+        return {
+          ...base,
+          tooth: r.tooth,
+          description: base.description || r.description,
+          feeInput: fee !== null ? formatCents(fee) : base.feeInput,
+          entryDate: r.entryDate,
+          visit:
+            r.visit !== null && minVisit !== null ? String(r.visit - minVisit + 1) : base.visit,
+          feeFlag,
+        };
+      });
+      dispatch({ type: 'addLines', lines });
+      dispatch({ type: 'set', field: 'importUsed', value: 'yes' });
+      toast.success(
+        `Imported ${lines.length} procedure${lines.length === 1 ? '' : 's'}${
+          flagged ? ` — ${flagged} fee difference${flagged === 1 ? '' : 's'} flagged` : ''
+        }. Estimates come from your fee schedules, not the screenshot.`
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Screenshot import failed');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  // Paste-to-import: Ctrl/Cmd+V with a screenshot on the clipboard runs
+  // the same import (text pastes into inputs are untouched).
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if (importing) return;
+      const item = [...(e.clipboardData?.items ?? [])].find(it => it.type.startsWith('image/'));
+      if (!item) return;
+      const file = item.getAsFile();
+      if (!file) return;
+      e.preventDefault();
+      askNoPatientInfo(() => importScreenshot(file));
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  });
+
   // The printout shows one patient-friendly treatment line (like the
   // office's existing forms), not the itemized code/fee list. Each row's
   // Description IS what prints (it auto-fills patient-friendly); a
@@ -1051,9 +1310,17 @@ export default function FofBuilder() {
     for (const l of state.lines) {
       const code = l.code.trim();
       if (!code && !l.description.trim() && !l.feeInput.trim()) continue;
+      // Custom PMS codes (non-D) belong on the office copy, not the
+      // patient-facing treatment line.
+      if (code !== '' && !/^D\d{4}$/i.test(code)) continue;
       const label = l.description.trim();
       if (!label) continue;
-      const tooth = l.tooth.trim();
+      // Denture/partial codes read "Lower Partial Denture" — the arch is
+      // in the name, tooth numbers are noise on the patient line.
+      const numMatch = /^D(\d{4})$/i.exec(code);
+      const dentureCode =
+        numMatch !== null && +numMatch[1] >= 5000 && +numMatch[1] < 5900;
+      const tooth = dentureCode ? '' : l.tooth.trim();
       if (!tooth) {
         if (!general.includes(label)) general.push(label);
         continue;
@@ -1075,9 +1342,11 @@ export default function FofBuilder() {
     ].join('; ');
   }, [state.lines]);
   // The textarea holds the REAL text: it auto-writes from the procedures
-  // until the staff edits it, then their wording sticks.
+  // (AI's human wording once it arrives, list-style until then) until the
+  // staff edits it, then their wording sticks.
   const noteEdited = state.noteEdited === 'yes';
-  const printedTreatment = noteEdited ? state.note : autoTreatment;
+  const aiTreatment = aiText && aiText.signature === aiSignature ? aiText.treatment : '';
+  const printedTreatment = noteEdited ? state.note : aiTreatment || autoTreatment;
 
   const isDirty =
     state.patientName.trim() !== '' ||
@@ -1109,7 +1378,8 @@ export default function FofBuilder() {
         code,
         tooth: l.tooth.trim(),
         visit: String(effectiveVisit(l)),
-        category: CATEGORY_SHORT[l.category],
+        category:
+          CATEGORY_SHORT[l.category] + (l.workupFlag === 'yes' ? ' \u00b7 Work Up' : ''),
         description: l.description.trim(),
         officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
         allowableCents: insuranceActive
@@ -1117,6 +1387,7 @@ export default function FofBuilder() {
             ? parseCurrencyInput(l.allowedInput)
             : allowedByCode.get(code) ?? null
           : null,
+        entryDate: l.entryDate,
         insPaysCents: per?.insurancePaysCents ?? 0,
         writeOffCents: per?.writeOffCents ?? 0,
       };
@@ -1130,6 +1401,8 @@ export default function FofBuilder() {
       amounts={amounts}
       computation={computation}
       officeLines={officeLines}
+      createdBy={createdBy}
+      importedFromScreenshot={state.importUsed === 'yes'}
     />
   );
 
@@ -1184,7 +1457,7 @@ export default function FofBuilder() {
                 <CardTitle className="text-base">Patient</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="fof-name">Patient Name</Label>
                     <Input
@@ -1203,6 +1476,19 @@ export default function FofBuilder() {
                       value={state.dateISO}
                       onChange={setField('dateISO')}
                     />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Doctor</Label>
+                    <Select value={doctorName} onValueChange={setDoctorName}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FOF_DOCTORS.map(d => (
+                          <SelectItem key={d} value={d}>{d}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <Select value={template.id} onValueChange={handleTemplateChange}>
@@ -1224,16 +1510,17 @@ export default function FofBuilder() {
                         // Standard policy: no prepay discount with contract
                         // insurance or financing — overriding needs a
                         // deliberate yes (SLH / Office Manager approval).
-                        if (
-                          v &&
-                          template &&
-                          !template.showPrepayOption &&
-                          !confirm(
-                            'Standard policy: this template has no Prepay in Full option ' +
-                              '(contract insurance / financing get no additional discounts ' +
-                              'unless approved by SLH or the Office Manager). Turn it on anyway?'
-                          )
-                        ) {
+                        if (v && template && !template.showPrepayOption) {
+                          setConfirmState({
+                            title: 'Against standard policy',
+                            body:
+                              'This template has no Prepay in Full option — contract ' +
+                              'insurance and financing get no additional discounts unless ' +
+                              'approved by SLH or the Office Manager. Turn it on anyway?',
+                            action: 'Turn it on',
+                            onConfirm: () =>
+                              dispatch({ type: 'set', field: 'prepayOptionState', value: 'on' }),
+                          });
                           return;
                         }
                         dispatch({ type: 'set', field: 'prepayOptionState', value: v ? 'on' : 'off' });
@@ -1372,9 +1659,11 @@ export default function FofBuilder() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {(Object.keys(CATEGORY_SHORT) as FeeCategory[]).map(c => (
-                                <SelectItem key={c} value={c}>{CATEGORY_SHORT[c]}</SelectItem>
-                              ))}
+                              {(Object.keys(CATEGORY_SHORT) as FeeCategory[])
+                                .filter(c => c !== 'workup')
+                                .map(c => (
+                                  <SelectItem key={c} value={c}>{CATEGORY_SHORT[c]}</SelectItem>
+                                ))}
                             </SelectContent>
                           </Select>
                         </div>
@@ -1488,6 +1777,38 @@ export default function FofBuilder() {
                           </Label>
                         </div>
                       )}
+                      {(line.workupFlag === 'yes' ||
+                        line.category === 'other' ||
+                        categorizeCdtCode(lineCode) === 'workup') && (
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            id={`fof-wu-${line.key}`}
+                            checked={line.workupFlag === 'yes'}
+                            onCheckedChange={v =>
+                              dispatch({ type: 'setLine', index: i, patch: { workupFlag: v ? 'yes' : '' } })
+                            }
+                          />
+                          <Label
+                            htmlFor={`fof-wu-${line.key}`}
+                            className="text-xs text-muted-foreground font-normal"
+                          >
+                            Work Up — billed at its visit, not prepaid (combines with the
+                            category above)
+                          </Label>
+                        </div>
+                      )}
+                      {(line.feeFlag !== '' || line.entryDate !== '') && (
+                        <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                          {line.feeFlag !== '' && (
+                            <span className="text-amber-600 font-medium">⚠ {line.feeFlag}</span>
+                          )}
+                          {line.entryDate !== '' && (
+                            <span className="text-muted-foreground">
+                              Entry date: {line.entryDate} (office copy only)
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1495,6 +1816,31 @@ export default function FofBuilder() {
                   <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'addLine' })}>
                     <Plus className="h-3.5 w-3.5 mr-1.5" />
                     Add Procedure
+                  </Button>
+                  <input
+                    ref={importInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (file) importScreenshot(file);
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={importing}
+                    title="Upload or paste (Ctrl+V) a treatment-plan screenshot — crop out the patient's name first. Estimates still come from your fee schedules."
+                    onClick={() => askNoPatientInfo(() => importInputRef.current?.click())}
+                  >
+                    {importing ? (
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-3.5 w-3.5 mr-1.5" />
+                    )}
+                    Import Screenshot
                   </Button>
                   {(bundles ?? []).length > 0 && (
                     <Select value="" onValueChange={insertBundle}>
@@ -1533,7 +1879,7 @@ export default function FofBuilder() {
                       rows={2}
                       className="pr-16"
                       placeholder="Writes itself from the procedures above"
-                      value={noteEdited ? state.note : autoTreatment}
+                      value={printedTreatment}
                       onChange={e => {
                         dispatch({ type: 'set', field: 'note', value: e.target.value });
                         dispatch({ type: 'set', field: 'noteEdited', value: 'yes' });
@@ -2016,6 +2362,26 @@ export default function FofBuilder() {
           </Card>
         </div>
       )}
+
+      <AlertDialog open={!!confirmState} onOpenChange={open => !open && setConfirmState(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmState?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmState?.body}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                confirmState?.onConfirm();
+                setConfirmState(null);
+              }}
+            >
+              {confirmState?.action ?? 'Continue'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={bundleDialogOpen} onOpenChange={open => !open && setBundleDialogOpen(false)}>
         <DialogContent className="max-w-md">

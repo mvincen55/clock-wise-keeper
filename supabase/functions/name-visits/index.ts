@@ -4,11 +4,13 @@
 // tweak.
 //
 // HIPAA note: the payload must be DE-IDENTIFIED BY CONSTRUCTION —
-// procedure names and visit order only. The client builds it exclusively
-// from CDT friendly names / codes (see buildNameVisitsPayload in
-// src/lib/fof/ai.ts); this function additionally authenticates the
-// caller, requires an active org membership, and hard-caps every string
-// so it can never be used as an open relay to the (non-BAA) AI gateway.
+// procedure names, tooth numbers, visit order, and the practice's doctor
+// name only. No patient name, no date, no dollar amounts, no identifiers
+// of any kind may be added to this request. The client builds it from
+// CDT-derived wording (see src/lib/fof/ai.ts); this function additionally
+// authenticates the caller, requires an active org membership, and
+// hard-caps every string so it can never be used as an open relay to the
+// (non-BAA) AI gateway.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -65,11 +67,15 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!membership) return json({ error: "Unauthorized" }, 403);
 
-    const { slots, visits } = (await req.json()) as {
+    const { slots, visits, wantTreatment, doctorName } = (await req.json()) as {
       /** Current payment slot labels, in order (e.g. "Upon Scheduling", "Crown Prep"). */
       slots: string[];
-      /** Procedures happening at each clinical visit, in order. */
+      /** Procedures happening at each clinical visit, in order (may include "(tooth #N)"). */
       visits: { procedures: string[] }[];
+      /** Also write a plain-language treatment summary for the form. */
+      wantTreatment?: boolean;
+      /** Treating doctor's display name (practice config, not patient data). */
+      doctorName?: string;
     };
     if (!Array.isArray(slots) || slots.length === 0 || slots.length > MAX_SLOTS) {
       return json({ error: "Bad request" }, 400);
@@ -79,6 +85,10 @@ Deno.serve(async (req) => {
     if (Array.isArray(visits) && visits.length > MAX_VISITS) {
       return json({ error: "Bad request" }, 400);
     }
+    const doctor =
+      typeof doctorName === "string" && doctorName.trim().length > 0 && doctorName.length <= 40
+        ? doctorName.trim()
+        : "The doctor";
     const visitLines = (Array.isArray(visits) ? visits : [])
       .map((v, i) => {
         const procedures = (Array.isArray(v?.procedures) ? v.procedures : [])
@@ -98,22 +108,31 @@ Deno.serve(async (req) => {
           {
             role: "system",
             content:
-              "You name the payments on a dental Financial Options Form so a patient instantly understands when each payment happens. You are given the clinical visits (with their procedures) and the current payment slot labels in order. Rewrite each slot label to be short (2-4 words), natural, and specific to the treatment: e.g. 'Work Up Visit', 'Upon Scheduling Surgery', 'Implant Surgery', 'Crown Impressions', 'Denture Delivery'. Keep 'Upon Scheduling' slots recognizable as scheduling payments (you may add what is being scheduled). Never use 'Visit 1/2/3' numbering, codes, or prices. Reply with ONLY a JSON array of strings, exactly one per slot, same order.",
+              "You are the treatment coordinator at a dental office — a warm, confident closer who makes patients feel great about saying yes to the care they need. You word the Financial Options Form. You get the clinical visits (with their procedures, some annotated with tooth numbers) and the current payment slot labels in order. " +
+              'Reply with ONLY a JSON object: {"names": string[], "treatment": string}. ' +
+              "names: rewrite each slot label, short (2-5 words), specific and timing-first so the patient knows WHEN it's due and what it's for. Name each visit after its most significant procedure that day: 'At the Extraction Visit', 'At Crown Prep', 'At Implant Surgery', 'On Partial Delivery' — never a vague label like 'Diagnostic Visit' or 'Treatment Visit' when real work happens that day. Scheduling payments keep 'Upon Scheduling' (optionally + what's being scheduled). A payment may prepay later work — never name it after work that happens at a different visit, and NEVER invent visits or stages not in the list. No 'Visit 1/2/3' numbering, codes, or prices. Exactly one name per slot, same order. " +
+              `treatment: 2-3 clean sentences summarizing the whole plan, written in third person using the doctor's name (the doctor is ${JSON.stringify(doctor)}). RULES: ` +
+              "(1) Describe the actual procedures in plain concrete verbs — 'splint the loose teeth', 'remove tooth #24', 'place porcelain crowns on teeth #22 and #27'. NEVER vague clinical filler like 'stabilize initial symptoms', 'address concerns', or 'comprehensive treatment'. " +
+              "(2) Every tooth number provided in the visit list MUST appear next to its procedure. EXCEPTION: dentures and partials get arch wording only ('a new lower partial denture') — never tooth numbers or ranges for a denture, even if teeth are listed. " +
+              "(3) Never promise or guarantee results. Frame outcomes as the goal: 'designed to restore comfortable chewing', 'to help rebuild a strong, functional bite'. BANNED: 'full function', 'complete', 'perfect', 'permanent', 'guaranteed', 'will restore', 'pain-free', and any absolute promise. " +
+              "(4) End on the goal of the plan (comfort, function, or the finished smile) — as an aim, not a promise. " +
+              "No codes, no prices, no per-visit breakdown, no hype words; 420 characters max.",
           },
           {
             role: "user",
-            content: `Clinical visits:\n${visitLines}\n\nCurrent slot labels (rename each): ${JSON.stringify(boundedSlots)}`,
+            content: `Clinical visits:\n${visitLines}\n\nCurrent slot labels (rename each): ${JSON.stringify(boundedSlots)}\n\nInclude treatment summary: ${wantTreatment ? "yes" : "no"}`,
           },
         ],
-        max_tokens: 300,
+        max_tokens: 500,
       }),
     });
     if (!response.ok) return json({ error: "AI request failed" }, 502);
     const data = await response.json();
     const raw: string = data?.choices?.[0]?.message?.content ?? "";
-    const match = raw.match(/\[[\s\S]*\]/);
+    const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return json({ error: "AI returned no names" }, 502);
-    const names = JSON.parse(match[0]) as unknown;
+    const parsed = JSON.parse(match[0]) as { names?: unknown; treatment?: unknown };
+    const names = parsed.names;
     if (
       !Array.isArray(names) ||
       names.length !== slots.length ||
@@ -121,7 +140,11 @@ Deno.serve(async (req) => {
     ) {
       return json({ error: "AI returned unusable names" }, 502);
     }
-    return json({ names: names.map((n) => (n as string).trim()) });
+    const treatment =
+      typeof parsed.treatment === "string" && parsed.treatment.trim().length > 0
+        ? parsed.treatment.trim().slice(0, 450)
+        : null;
+    return json({ names: names.map((n) => (n as string).trim()), treatment });
   } catch (_err) {
     return json({ error: "Unexpected error" }, 500);
   }

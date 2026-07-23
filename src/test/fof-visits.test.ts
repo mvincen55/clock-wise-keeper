@@ -239,14 +239,14 @@ describe('buildVisitSchedule — a full visit ahead, real payment at the last vi
     expect(plan.labels[0]).toBe('Upon Scheduling');
   });
 
-  it('skips zero-fee visits (no-charge seat appointment creates no payment)', () => {
+  it('trailing zero-fee delivery visits relabel (and collect) the final half', () => {
     const plan = buildVisitSchedule(199_800, [
       { label: 'Porcelain Crown', feeCents: 199_800 },
-      { label: 'CerCr Ins', feeCents: 0 },
+      { label: 'Crown Seat', feeCents: 0 },
     ]);
-    // Only the crown visit bills: half at scheduling, half at the visit.
+    // Half at scheduling; the other half is collected at the seat visit.
     expect(plan!.weights).toEqual([99_900, 99_900]);
-    expect(plan!.labels).toEqual(['Upon Scheduling', 'Porcelain Crown']);
+    expect(plan!.labels).toEqual(['Upon Scheduling', 'Crown Seat']);
   });
 });
 

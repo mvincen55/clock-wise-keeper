@@ -16,6 +16,8 @@ export interface FofPracticeInfo {
   addressLine2: string;
   phone: string;
   website: string;
+  /** Used by the AI treatment wording ("Dr. Scott will..."). */
+  doctorName: string;
 }
 
 export interface FofTemplate {
@@ -94,6 +96,8 @@ export interface FofOfficeLine {
   visit: string;
   category: string;
   description: string;
+  /** PMS entry date carried over from an imported screenshot, if any. */
+  entryDate: string;
   officeFeeCents: Cents;
   allowableCents: Cents | null;
   insPaysCents: Cents;

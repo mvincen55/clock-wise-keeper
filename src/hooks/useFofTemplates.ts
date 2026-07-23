@@ -51,6 +51,7 @@ function mapSettingsRow(row: SettingsRow): FofPracticeInfo {
     addressLine2: row.address_line2,
     phone: row.phone,
     website: row.website,
+    doctorName: row.doctor_name,
   };
 }
 
@@ -166,6 +167,7 @@ export function useUpsertFofSettings() {
           ...(updates.addressLine2 !== undefined && { address_line2: updates.addressLine2 }),
           ...(updates.phone !== undefined && { phone: updates.phone }),
           ...(updates.website !== undefined && { website: updates.website }),
+          ...(updates.doctorName !== undefined && { doctor_name: updates.doctorName }),
         },
         { onConflict: 'org_id' }
       );
