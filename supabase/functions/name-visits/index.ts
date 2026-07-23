@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
           {
             role: "system",
             content:
-              "You name the payments on a dental Financial Options Form so a patient instantly understands when each payment happens. You are given the clinical visits (with their procedures) and the current payment slot labels in order. Rewrite each slot label to be short (2-4 words), natural, and specific to the treatment: e.g. 'Work Up Visit', 'Upon Scheduling Surgery', 'Implant Surgery', 'Crown Impressions', 'Denture Delivery'. Keep 'Upon Scheduling' slots recognizable as scheduling payments (you may add what is being scheduled). Never use 'Visit 1/2/3' numbering, codes, or prices. Reply with ONLY a JSON array of strings, exactly one per slot, same order.",
+              "You name the payments on a dental Financial Options Form so a patient instantly understands when each payment happens. You are given the clinical visits (with their procedures) and the current payment slot labels in order. Rewrite each slot label to be short (2-4 words), natural, and specific: e.g. 'Work Up Visit', 'Upon Scheduling Surgery', 'Implant Surgery', 'Crown Prep Visit'. STRICT RULES: each slot corresponds to an existing visit (or a scheduling payment) — name it ONLY from the procedures actually listed for that visit; NEVER invent visits, stages, or events that are not in the visit list (no 'Delivery', 'Installation', or 'Seat' names unless a listed visit's procedures are that work). Keep 'Upon Scheduling' slots recognizable as scheduling payments (you may add what is being scheduled). Never use 'Visit 1/2/3' numbering, codes, or prices. Reply with ONLY a JSON array of strings, exactly one per slot, same order.",
           },
           {
             role: "user",
