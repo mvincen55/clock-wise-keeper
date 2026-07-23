@@ -133,11 +133,11 @@ describe('visitSegmentsForCode', () => {
   });
 });
 
-describe('buildVisitSchedule — a full visit ahead, never a balance', () => {
-  it('single visit is collected in full at scheduling', () => {
+describe('buildVisitSchedule — a full visit ahead, real payment at the last visit', () => {
+  it('single visit is half at scheduling, half at the appointment', () => {
     const plan = buildVisitSchedule(80_000, [{ label: 'Filling', feeCents: 80_000 }]);
-    expect(plan!.weights).toEqual([80_000]);
-    expect(plan!.labels).toEqual(['Upon Scheduling']);
+    expect(plan!.weights).toEqual([40_000, 40_000]);
+    expect(plan!.labels).toEqual(['Upon Scheduling', 'Filling']);
   });
 
   it('scheduling covers visit 1 and each visit covers the next; nothing left at the last', () => {
@@ -147,9 +147,9 @@ describe('buildVisitSchedule — a full visit ahead, never a balance', () => {
       { label: 'Placement', feeCents: 60_000 },
       { label: 'Crown', feeCents: 100_000 },
     ]);
-    // Scheduling: v1 (40k); Visit 1: v2 (60k); Visit 2: v3 (100k);
-    // Visit 3 stays visible with nothing due — already paid
-    expect(plan!.weights).toEqual([40_000, 60_000, 100_000, 0]);
+    // Scheduling: v1 (40k); Visit 1: v2 (60k); Visit 2: half of v3
+    // (50k); Visit 3: the other half on delivery (50k)
+    expect(plan!.weights).toEqual([40_000, 60_000, 50_000, 50_000]);
     expect(plan!.weights.reduce((a, b) => a + b, 0)).toBe(200_000);
     expect(plan!.labels).toEqual(['Upon Scheduling', 'Surgery', 'Placement', 'Crown']);
   });
@@ -159,8 +159,9 @@ describe('buildVisitSchedule — a full visit ahead, never a balance', () => {
       { label: 'A', feeCents: 100_000 },
       { label: 'B', feeCents: 200_000 },
     ]);
-    // Allocation 30k/60k → scheduling 30k, visit 1 collects 60k, visit 2 paid
-    expect(plan!.weights).toEqual([30_000, 60_000, 0]);
+    // Allocation 30k/60k → scheduling 30k, visit 1 collects half of
+    // visit 2 (30k), the rest on arrival at visit 2
+    expect(plan!.weights).toEqual([30_000, 30_000, 30_000]);
   });
 
   it('every visit is fully paid BEFORE it happens', () => {
@@ -171,10 +172,10 @@ describe('buildVisitSchedule — a full visit ahead, never a balance', () => {
     ];
     const total = visits.reduce((s, v) => s + v.feeCents, 0);
     const plan = buildVisitSchedule(total, visits)!;
-    let paid = 0;
+    let paid = plan.weights[0]; // upon scheduling
     let workIncludingVisit = 0;
     for (let visit = 0; visit < visits.length; visit++) {
-      paid += plan.weights[visit] ?? 0; // payment collected before/at arrival
+      paid += plan.weights[visit + 1] ?? 0; // collected on arrival at this visit
       workIncludingVisit += visits[visit].feeCents;
       // Money in hand covers the CURRENT visit's work, not just prior visits
       expect(paid).toBeGreaterThanOrEqual(workIncludingVisit);
@@ -195,8 +196,8 @@ describe('buildVisitSchedule — a full visit ahead, never a balance', () => {
       { label: 'Delivery', feeCents: 100_000 },
     ])!;
     // Scheduling: visit 1's ahead-eligible 100k (guide NOT prepaid)
-    // Visit 1: guide 100k + next visit 100k; Visit 2 shows $0 due
-    expect(plan.weights).toEqual([100_000, 200_000, 0]);
+    // Visit 1: guide 100k + half of delivery 50k; Visit 2: the rest
+    expect(plan.weights).toEqual([100_000, 150_000, 50_000]);
     expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(300_000);
   });
 
@@ -210,8 +211,8 @@ describe('buildVisitSchedule — a full visit ahead, never a balance', () => {
     ])!;
     expect(plan.labels).toEqual(['Work Up', 'Upon Scheduling', 'Surgery', 'Delivery']);
     // Work-up fees at visit 1; surgery paid when scheduling it after the
-    // work-up; delivery paid at the surgery visit; delivery shows $0 due.
-    expect(plan.weights).toEqual([50_000, 150_000, 100_000, 0]);
+    // work-up; half of delivery at the surgery visit, half on delivery.
+    expect(plan.weights).toEqual([50_000, 150_000, 50_000, 50_000]);
     expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(300_000);
   });
 
@@ -229,9 +230,9 @@ describe('buildVisitSchedule — a full visit ahead, never a balance', () => {
       { label: 'Porcelain Crown', feeCents: 199_800 },
       { label: 'CerCr Ins', feeCents: 0 },
     ]);
-    // Only the crown visit bills, fully prepaid at scheduling.
-    expect(plan!.weights).toEqual([199_800]);
-    expect(plan!.labels).toEqual(['Upon Scheduling']);
+    // Only the crown visit bills: half at scheduling, half at the visit.
+    expect(plan!.weights).toEqual([99_900, 99_900]);
+    expect(plan!.labels).toEqual(['Upon Scheduling', 'Porcelain Crown']);
   });
 });
 

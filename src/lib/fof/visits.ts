@@ -175,14 +175,15 @@ export function suggestVisitStage(code: string): number {
  * Build the payment schedule from actual per-visit work, a FULL visit
  * ahead: Upon Scheduling collects Visit 1, and each visit start collects
  * the next visit — so the patient walks into every visit with that day's
- * work already paid and never carries a balance. The patient portion is
- * allocated across visits proportionally to each visit's fees; the
- * schedule always sums exactly to the portion.
+ * work already paid and never carries a balance. The FINAL visit splits
+ * half-and-half (half prepaid at the prior payment, half collected at
+ * the visit itself) so there's still a real payment on delivery. The
+ * patient portion is allocated across visits proportionally to each
+ * visit's fees; the schedule always sums exactly to the portion.
  *
  * A visit's `dueAtVisitCents` marks fees that are billed AT that visit
  * with no prepay (e.g. the surgical guide D5982) — they're excluded from
- * the ahead-shifting and added flat to that visit's payment. Slots with
- * nothing due (typically the final visit) drop off the schedule.
+ * the ahead-shifting and added flat to that visit's payment.
  */
 export function buildVisitSchedule(
   portionCents: Cents,
@@ -207,6 +208,13 @@ export function buildVisitSchedule(
   const visitLabel = (i: number) =>
     visits[i].label || (n === 1 ? 'At Appointment' : `Visit ${i + 1}`);
 
+  // The final visit's ahead-eligible cost splits half/half: half is
+  // prepaid with the prior payment, half is collected at the visit.
+  const lastHalf = Math.round(ahead[n - 1] / 2);
+  // What it costs to book visit j ahead of time.
+  const coverAhead = (j: number) => (j < n - 1 ? ahead[j] : lastHalf);
+  const lastRemainder = ahead[n - 1] - lastHalf;
+
   let payments: Cents[];
   let labels: string[];
   if (ahead[0] === 0 && dueAt[0] > 0 && n > 1) {
@@ -214,17 +222,17 @@ export function buildVisitSchedule(
     // surgical guide): nothing is owed to book it. Treatment gets
     // scheduled AFTER that visit, so "Upon Scheduling" moves to follow
     // it, covering visit 2; each later visit then covers the next.
-    payments = [dueAt[0], ahead[1]];
+    payments = [dueAt[0], coverAhead(1)];
     labels = [visitLabel(0), 'Upon Scheduling'];
     for (let i = 1; i < n; i++) {
-      payments.push(dueAt[i] + (i + 1 < n ? ahead[i + 1] : 0));
+      payments.push(dueAt[i] + (i + 1 < n ? coverAhead(i + 1) : lastRemainder));
       labels.push(visitLabel(i));
     }
   } else {
-    payments = [ahead[0]];
+    payments = [coverAhead(0)];
     labels = ['Upon Scheduling'];
     for (let i = 0; i < n; i++) {
-      payments.push(dueAt[i] + (i + 1 < n ? ahead[i + 1] : 0));
+      payments.push(dueAt[i] + (i + 1 < n ? coverAhead(i + 1) : lastRemainder));
       labels.push(visitLabel(i));
     }
   }

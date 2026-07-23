@@ -1,6 +1,7 @@
 import type {
   FofAmounts,
   FofComputation,
+  FofOfficeLine,
   FofPatientFields,
   FofPracticeInfo,
   FofTemplate,
@@ -25,6 +26,11 @@ interface FofPrintSheetProps {
   /** Effective (post-override) totals shown on the form. */
   amounts: FofAmounts;
   computation: FofComputation;
+  /**
+   * Line detail for the auto-printed OFFICE COPY second page — the exact
+   * codes/fees behind the patient-facing summary. Memory-only.
+   */
+  officeLines?: FofOfficeLine[];
 }
 
 function formatDateMDY(iso: string): string {
@@ -137,6 +143,7 @@ export default function FofPrintSheet({
   patient,
   amounts,
   computation,
+  officeLines,
 }: FofPrintSheetProps) {
   const { effective } = computation;
   const totalCents = amounts.totalCents ?? 0;
@@ -207,6 +214,7 @@ export default function FofPrintSheet({
           : '';
 
   return (
+    <>
     <div className={`fof-sheet${densityClass}`}>
       <header className="fof-head">
         <img className="fof-logo" src={logoUrl} alt={practice.practiceName} />
@@ -514,5 +522,143 @@ export default function FofPrintSheet({
         )}
       </footer>
     </div>
+
+    {/* OFFICE COPY — auto-printed second page recording exactly what was
+        behind this FOF (codes, fees, insurance math). Never persisted;
+        filed on paper with the signed form. */}
+    {officeLines && officeLines.length > 0 && (
+      <div className="fof-sheet fof-office-page">
+        <div className="fof-office-head">
+          <div>
+            <div className="fof-office-title">Office Copy — FOF Detail</div>
+            <div className="fof-office-sub">
+              Patient: {patient.patientName || '—'} · Date:{' '}
+              {patient.dateISO ? formatDateMDY(patient.dateISO) : '—'} · Template:{' '}
+              {template.name}
+            </div>
+          </div>
+          <div className="fof-office-stamp">Office Use Only</div>
+        </div>
+
+        <table className="fof-office-table">
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Th</th>
+              <th>Visit</th>
+              <th>Category</th>
+              <th>Description</th>
+              <th className="num">Fee</th>
+              <th className="num">Allowable</th>
+              <th className="num">Ins Pays</th>
+              <th className="num">Write-Off</th>
+            </tr>
+          </thead>
+          <tbody>
+            {officeLines.map((l, i) => (
+              <tr key={i}>
+                <td>{l.code || '—'}</td>
+                <td>{l.tooth || ''}</td>
+                <td>{l.visit}</td>
+                <td>{l.category}</td>
+                <td>{l.description}</td>
+                <td className="num">{formatCents(l.officeFeeCents)}</td>
+                <td className="num">
+                  {l.allowableCents !== null ? formatCents(l.allowableCents) : '—'}
+                </td>
+                <td className="num">{l.insPaysCents > 0 ? formatCents(l.insPaysCents) : '—'}</td>
+                <td className="num">{l.writeOffCents > 0 ? formatCents(l.writeOffCents) : '—'}</td>
+              </tr>
+            ))}
+            <tr className="fof-office-totals">
+              <td colSpan={5}>Totals</td>
+              <td className="num">
+                {formatCents(officeLines.reduce((s, l) => s + l.officeFeeCents, 0))}
+              </td>
+              <td className="num" />
+              <td className="num">
+                {formatCents(officeLines.reduce((s, l) => s + l.insPaysCents, 0))}
+              </td>
+              <td className="num">
+                {formatCents(officeLines.reduce((s, l) => s + l.writeOffCents, 0))}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div className="fof-office-summary">
+          <div className="fof-office-col">
+            <div className="fof-card-title">As Printed on the FOF</div>
+            <div className="fof-row">
+              <span>Total (Estimated) Cost</span>
+              <span>{formatCents(totalCents)}</span>
+            </div>
+            {(amounts.officeDiscountCents ?? 0) > 0 && (
+              <div className="fof-row">
+                <span>{amounts.officeDiscountLabel?.trim() || 'Office Discount'}</span>
+                <span>−{formatCents(amounts.officeDiscountCents!)}</span>
+              </div>
+            )}
+            {(amounts.patientCreditCents ?? 0) > 0 && (
+              <div className="fof-row">
+                <span>Patient Current Credit</span>
+                <span>−{formatCents(amounts.patientCreditCents!)}</span>
+              </div>
+            )}
+            {(amounts.membershipCoveredCents ?? 0) > 0 && (
+              <div className="fof-row">
+                <span>Included with Membership</span>
+                <span>−{formatCents(amounts.membershipCoveredCents!)}</span>
+              </div>
+            )}
+            {amounts.autoDiscount && amounts.autoDiscount.cents > 0 && (
+              <div className="fof-row">
+                <span>{amounts.autoDiscount.label}</span>
+                <span>−{formatCents(amounts.autoDiscount.cents)}</span>
+              </div>
+            )}
+            {template.showInsuranceEstimate && (amounts.insuranceEstimateCents ?? 0) > 0 && (
+              <div className="fof-row">
+                <span>Estimated Insurance Payment</span>
+                <span>−{formatCents(amounts.insuranceEstimateCents ?? 0)}</span>
+              </div>
+            )}
+            {template.showWriteOff && (amounts.writeOffCents ?? 0) > 0 && (
+              <div className="fof-row">
+                <span>Estimated Insurance Write-Off</span>
+                <span>−{formatCents(amounts.writeOffCents ?? 0)}</span>
+              </div>
+            )}
+            <div className="fof-row fof-row-total">
+              <span>Patient Portion</span>
+              <span>{formatCents(effective.patientPortionCents)}</span>
+            </div>
+            {template.showPrepayOption && (
+              <div className="fof-row">
+                <span>Prepay in Full ({template.discountLabel || 'discount'})</span>
+                <span>{formatCents(effective.prepayTotalCents)}</span>
+              </div>
+            )}
+          </div>
+          {template.showInstallmentOption && (
+            <div className="fof-office-col">
+              <div className="fof-card-title">Payment Schedule</div>
+              {installmentCells.map((cell, i) => (
+                <div className="fof-row" key={i}>
+                  <span>{cell.label}</span>
+                  <span>{formatCents(cell.cents)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <p className="fof-office-note">
+          File this page with the signed Financial Options Form. Internal record of the
+          codes and amounts behind the patient-facing summary — not for distribution.
+        </p>
+      </div>
+    )}
+    </>
   );
 }

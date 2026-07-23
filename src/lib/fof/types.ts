@@ -84,6 +84,22 @@ export interface FofAmounts {
   prepayDiscountBaseCents?: Cents | null;
 }
 
+/**
+ * Office-copy line detail for the auto-printed second page (exact codes
+ * and amounts behind the FOF). Memory-only like all patient fields.
+ */
+export interface FofOfficeLine {
+  code: string;
+  tooth: string;
+  visit: string;
+  category: string;
+  description: string;
+  officeFeeCents: Cents;
+  allowableCents: Cents | null;
+  insPaysCents: Cents;
+  writeOffCents: Cents;
+}
+
 /** Manual overrides of computed values. Memory-only — never persisted. */
 export interface FofOverrides {
   patientPortionCents?: Cents;

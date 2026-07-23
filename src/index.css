@@ -944,6 +944,104 @@
   white-space: nowrap;
 }
 
+/* Office copy: plain second page with the exact codes/amounts */
+.fof-office-page {
+  page-break-before: always;
+  min-height: 0;
+  justify-content: flex-start;
+  margin-top: 12pt;
+  border-top: 2pt solid var(--fof-line);
+}
+
+.fof-office-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10pt;
+  border-bottom: 1.25pt solid var(--fof-navy);
+  padding-bottom: 6pt;
+  margin-bottom: 8pt;
+}
+
+.fof-office-title {
+  font-size: 12pt;
+  font-weight: 800;
+  color: var(--fof-navy);
+}
+
+.fof-office-sub {
+  font-size: 8pt;
+  color: var(--fof-muted);
+  margin-top: 2pt;
+}
+
+.fof-office-stamp {
+  border: 1.25pt solid var(--fof-navy);
+  border-radius: 4pt;
+  color: var(--fof-navy);
+  font-size: 8pt;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3.5pt 7pt;
+  white-space: nowrap;
+}
+
+.fof-office-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 7.6pt;
+  margin-bottom: 10pt;
+}
+
+.fof-office-table th,
+.fof-office-table td {
+  border: 0.5pt solid #c9c3d4;
+  padding: 2.5pt 4pt;
+  text-align: left;
+  vertical-align: top;
+}
+
+.fof-office-table th {
+  background: var(--fof-tint);
+  color: var(--fof-navy);
+  font-size: 7pt;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.fof-office-table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.fof-office-totals td {
+  font-weight: 800;
+  background: #faf9fc;
+}
+
+.fof-office-summary {
+  display: flex;
+  gap: 14pt;
+  align-items: flex-start;
+  margin-bottom: 8pt;
+}
+
+.fof-office-col {
+  flex: 1;
+  border: 0.75pt solid var(--fof-line);
+  border-radius: 5pt;
+  padding: 6pt 9pt;
+}
+
+.fof-office-note {
+  font-size: 7.2pt;
+  color: var(--fof-muted);
+  margin: 0;
+}
+
 @page fof {
   size: letter;
   margin: 0.5in;
