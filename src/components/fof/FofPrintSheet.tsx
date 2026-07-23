@@ -31,6 +31,19 @@ interface FofPrintSheetProps {
    * codes/fees behind the patient-facing summary. Memory-only.
    */
   officeLines?: FofOfficeLine[];
+  /** Signed-in staff member's name for the office copy's created-by line. */
+  createdBy?: string;
+  /** Marked on the office copy when rows came from a PMS screenshot import. */
+  importedFromScreenshot?: boolean;
+}
+
+function formatNow(): string {
+  const d = new Date();
+  let h = d.getHours();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()} ${h}:${mm} ${ampm}`;
 }
 
 function formatDateMDY(iso: string): string {
@@ -144,6 +157,8 @@ export default function FofPrintSheet({
   amounts,
   computation,
   officeLines,
+  createdBy,
+  importedFromScreenshot,
 }: FofPrintSheetProps) {
   const { effective } = computation;
   const totalCents = amounts.totalCents ?? 0;
@@ -535,6 +550,18 @@ export default function FofPrintSheet({
               Patient: {patient.patientName || '—'} · Date:{' '}
               {patient.dateISO ? formatDateMDY(patient.dateISO) : '—'} · Template:{' '}
               {template.name}
+              {createdBy?.trim() ? (
+                <>
+                  <br />
+                  Created by {createdBy} on {formatNow()}
+                  {importedFromScreenshot ? ' · Procedures imported from a PMS screenshot' : ''}
+                </>
+              ) : importedFromScreenshot ? (
+                <>
+                  <br />
+                  Procedures imported from a PMS screenshot
+                </>
+              ) : null}
             </div>
           </div>
           <div className="fof-office-stamp">Office Use Only</div>
@@ -548,6 +575,7 @@ export default function FofPrintSheet({
               <th>Visit</th>
               <th>Category</th>
               <th>Description</th>
+              {officeLines.some(l => l.entryDate) && <th>Entry Date</th>}
               <th className="num">Fee</th>
               <th className="num">Allowable</th>
               <th className="num">Ins Pays</th>
@@ -562,6 +590,7 @@ export default function FofPrintSheet({
                 <td>{l.visit}</td>
                 <td>{l.category}</td>
                 <td>{l.description}</td>
+                {officeLines.some(x => x.entryDate) && <td>{l.entryDate}</td>}
                 <td className="num">{formatCents(l.officeFeeCents)}</td>
                 <td className="num">
                   {l.allowableCents !== null ? formatCents(l.allowableCents) : '—'}
@@ -571,7 +600,7 @@ export default function FofPrintSheet({
               </tr>
             ))}
             <tr className="fof-office-totals">
-              <td colSpan={5}>Totals</td>
+              <td colSpan={officeLines.some(l => l.entryDate) ? 6 : 5}>Totals</td>
               <td className="num">
                 {formatCents(officeLines.reduce((s, l) => s + l.officeFeeCents, 0))}
               </td>

@@ -94,6 +94,8 @@ export interface FofOfficeLine {
   visit: string;
   category: string;
   description: string;
+  /** PMS entry date carried over from an imported screenshot, if any. */
+  entryDate: string;
   officeFeeCents: Cents;
   allowableCents: Cents | null;
   insPaysCents: Cents;
