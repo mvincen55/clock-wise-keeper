@@ -84,10 +84,15 @@ Deno.serve(async (req) => {
     if (Array.isArray(visits) && visits.length > MAX_VISITS) {
       return json({ error: "Bad request" }, 400);
     }
+    // Empty = no specific doctor: the summary is written in the
+    // practice's collective voice ("We'll…") instead of a name.
     const doctor =
       typeof doctorName === "string" && doctorName.trim().length > 0 && doctorName.length <= 40
         ? doctorName.replace(/\s+/g, " ").trim()
-        : "The doctor";
+        : "";
+    const voiceRule = doctor
+      ? `written in third person using the doctor's name (the doctor is ${JSON.stringify(doctor)})`
+      : "written in the practice's warm collective voice — 'We'll splint the loose teeth…', 'our team' — with NO doctor name";
     const visitLines = (Array.isArray(visits) ? visits : [])
       .map((v, i) => {
         const procedures = (Array.isArray(v?.procedures) ? v.procedures : [])
@@ -110,7 +115,7 @@ Deno.serve(async (req) => {
               "You are the treatment coordinator at a dental office — a warm, confident closer who makes patients feel great about saying yes to the care they need. You word the Financial Options Form. You get the clinical visits (with their procedures, some annotated with tooth numbers) and the current payment slot labels in order. " +
               'Reply with ONLY a JSON object: {"names": string[], "treatment": string}. ' +
               "names: rewrite each slot label, short (2-5 words), specific and timing-first so the patient knows WHEN it's due and what it's for. Name each visit after its most significant procedure that day: 'At the Extraction Visit', 'At Crown Prep', 'At Implant Surgery', 'On Partial Delivery' — never a vague label like 'Diagnostic Visit' or 'Treatment Visit' when real work happens that day. A surgical guide is never 'delivered' — it's simply used on implant surgery day, so name a records/guide visit for what the patient experiences ('At the Records Visit'), never 'Guide Delivery'. The office's word for receiving any finished lab-made piece is ALWAYS 'Delivery' — 'On Crown Delivery', 'On Denture Delivery', 'On Partial Delivery', and for implant restorations specifically 'On Implant Crown Delivery' — NEVER 'seating', 'seat', 'insertion', 'placement', or 'cementation' for the finished piece. Scheduling payments keep 'Upon Scheduling' (optionally + what's being scheduled). A payment may prepay later work — never name it after work that happens at a different visit, and NEVER invent visits or stages not in the list. No 'Visit 1/2/3' numbering, codes, or prices. Exactly one name per slot, same order. " +
-              `treatment: 2-3 clean sentences summarizing the whole plan, written in third person using the doctor's name (the doctor is ${JSON.stringify(doctor)}). RULES: ` +
+              `treatment: 2-3 clean sentences summarizing the whole plan, ${voiceRule}. RULES: ` +
               "(1) Describe the actual procedures in plain concrete verbs — 'splint the loose teeth', 'remove tooth #24', 'place porcelain crowns on teeth #22 and #27'. NEVER vague clinical filler like 'stabilize initial symptoms', 'address concerns', or 'comprehensive treatment'. " +
               "(2) Every tooth number provided in the visit list MUST appear next to its procedure. EXCEPTION: dentures and partials get arch wording only ('a new lower partial denture') — never tooth numbers or ranges for a denture, even if teeth are listed. " +
               "(3) Never promise or guarantee results. Frame outcomes as the goal: 'designed to restore comfortable chewing', 'to help rebuild a strong, functional bite'. BANNED: 'full function', 'complete', 'perfect', 'permanent', 'guaranteed', 'will restore', 'pain-free', and any absolute promise. " +

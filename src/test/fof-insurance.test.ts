@@ -236,8 +236,10 @@ describe('estimateInsurance', () => {
     expect(result.perLine[1].writeOffCents).toBe(20_000);
   });
 
-  it('downgrade: pays from the amalgam benefit basis while write-off uses the actual allowed', () => {
+  it('downgrade: pays from the amalgam basis, patient owes up to the OFFICE fee (no write-off)', () => {
     // D2392 posterior composite downgraded to the D2150 amalgam allowance
+    // (e.g. Altus): the plan pays on the amalgam fee and the patient is
+    // responsible for the difference up to the office fee.
     const result = estimateInsurance(
       [
         line({
@@ -252,8 +254,9 @@ describe('estimateInsurance', () => {
     );
     // Insurance pays 80% of the amalgam basis, not the composite allowed
     expect(result.perLine[0].insurancePaysCents).toBe(12_000);
-    // Write-off still comes from the actual procedure: office − composite allowed
-    expect(result.perLine[0].writeOffCents).toBe(6_000);
+    // No write-off protects the downgraded line — office fee stands
+    expect(result.perLine[0].writeOffCents).toBe(0);
+    expect(result.perLine[0].allowedCents).toBe(30_000);
   });
 
   it('downgrade: deductible applies against the benefit basis', () => {

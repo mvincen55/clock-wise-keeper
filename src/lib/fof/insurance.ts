@@ -205,8 +205,14 @@ export function estimateInsurance(
       line.category !== 'workup' &&
       (fixedPay !== null ? fixedPay > 0 : pct > 0) &&
       !revertedToOfficeFee;
+    // Alternate-benefit downgrades (e.g. Altus): the plan pays on the
+    // amalgam fee and the patient is responsible for the difference up
+    // to the OFFICE fee — no write-off protects the downgraded line.
+    const downgraded = line.benefitBasisCents != null && line.benefitBasisCents < allowed;
     const writeOff =
-      plan.writeoffApplies && covered ? Math.max(0, line.officeFeeCents - allowed) : 0;
+      plan.writeoffApplies && covered && !downgraded
+        ? Math.max(0, line.officeFeeCents - allowed)
+        : 0;
 
     let deductibleApplied = 0;
     let insurancePays = 0;
@@ -244,8 +250,9 @@ export function estimateInsurance(
     perLine.push({
       officeFeeCents: line.officeFeeCents,
       // Uncovered lines (and lines reverted after the max) fall back to
-      // the office fee — the negotiated allowed fee doesn't apply.
-      allowedCents: covered ? allowed : line.officeFeeCents,
+      // the office fee — the negotiated allowed fee doesn't apply. Same
+      // for downgraded lines: the patient owes up to the office fee.
+      allowedCents: covered && !downgraded ? allowed : line.officeFeeCents,
       writeOffCents: writeOff,
       deductibleAppliedCents: deductibleApplied,
       insurancePaysCents: insurancePays,
