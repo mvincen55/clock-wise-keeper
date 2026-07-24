@@ -960,7 +960,9 @@
 /* Footer pinned to the page bottom */
 /* Solid brand footer bar — degrades to a dark gray band in grayscale */
 .fof-footer {
-  margin-top: auto;
+  /* No margin-top:auto — it would swallow ALL leftover space and defeat
+     the sheet's space-between distribution; as the last flex child the
+     footer still lands at the bottom of the page. */
   /* Slimmer band — the footer anchors the page, it doesn't compete. */
   padding: 4.5pt 10pt;
   border-radius: 5pt;
