@@ -20,6 +20,14 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
+      // The app is online-only (all data lives in Supabase), so the
+      // offline-precache service worker only ever caused harm: browsers
+      // kept serving weeks-old builds ("why is the FOF missing?").
+      // selfDestroying ships a replacement worker that unregisters the
+      // old one, clears its caches, and reloads — every stale client
+      // heals itself on its next visit. Install-to-desktop still works
+      // via the manifest.
+      selfDestroying: true,
       includeAssets: ["favicon.ico", "robots.txt"],
       workbox: {
         navigateFallbackDenylist: [/^\/~oauth/],
