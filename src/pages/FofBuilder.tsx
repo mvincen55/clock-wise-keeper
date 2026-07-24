@@ -116,7 +116,7 @@ const DOWNGRADE_MAP: Record<string, string> = {
 // Printed on the form only when a filling actually gets downgraded, so the
 // patient sees why the insurance estimate is lower than expected.
 const DOWNGRADE_NOTE =
-  'Your dental plan applies an "alternate benefit" to tooth-colored (composite) fillings on back teeth: insurance pays as if a silver (amalgam) filling were placed. You still receive the tooth-colored filling; the fee difference is included in your portion.';
+  'Your dental plan applies an "alternate benefit" to tooth-colored (composite) fillings on back teeth: insurance pays as if a silver (amalgam) filling were placed. You still receive the tooth-colored filling; the difference up to our standard fee is included in your portion.';
 
 // Printed when this treatment plan uses up the patient's annual max, so
 // they aren't surprised when later visits aren't covered.
@@ -136,6 +136,9 @@ const NO_PREPAY_CODES = new Set(['D5982']);
 
 // Doctors the treatment wording can be attributed to.
 const FOF_DOCTORS = ['Dr. Scott', 'Dr. Jennie', 'Dr. Robert', 'Dr. Nicole', 'Dr. Natalie'];
+/** Dropdown option when treatment isn't tied to one doctor — the AI
+ * writes in the practice's collective voice ("We'll…") instead. */
+const FOF_NO_DOCTOR = 'No specific doctor';
 
 // Procedures the Illumitrac membership plans include at no charge (per the
 // office Policy Handbook / 2025 flyer): cleanings (adult/child/perio),
@@ -190,7 +193,10 @@ interface BuilderLine {
   entryDate: string;
   /** Warning when an imported fee differs from the fees on file. */
   feeFlag: string;
-  /** '' = downgrade applies (default for D2391–D2394), 'off' = plan pays composite rates. */
+  /**
+   * '' = plan pays composite rates (the default — most plans don't
+   * downgrade), 'yes' = alternate-benefit downgrade applies (e.g. Altus).
+   */
   downgrade: string;
 }
 
@@ -693,7 +699,7 @@ export default function FofBuilder() {
         .map(l => {
           const code = l.code.trim().toUpperCase();
           // Downgrades are decided per line (default on for D2391–D2394).
-          const downgradeCode = l.downgrade !== 'off' ? DOWNGRADE_MAP[code] : undefined;
+          const downgradeCode = l.downgrade === 'yes' ? DOWNGRADE_MAP[code] : undefined;
           return {
             key: l.key,
             visit: effectiveVisit(l),
@@ -1096,7 +1102,12 @@ export default function FofBuilder() {
     const autoSlots =
       safeSchedule?.labels ?? rawVisitPlan?.labels ?? computation.installmentLabels;
     const { data, error } = await supabase.functions.invoke('name-visits', {
-      body: { ...buildNameVisitsPayload(visitEntries, autoSlots), wantTreatment, doctorName },
+      body: {
+        ...buildNameVisitsPayload(visitEntries, autoSlots),
+        wantTreatment,
+        // "No specific doctor" → empty name; the AI writes as "we".
+        doctorName: doctorName === FOF_NO_DOCTOR ? '' : doctorName,
+      },
     });
     if (error) throw new Error(error.message);
     return { data, slotCount: autoSlots.length };
@@ -1413,7 +1424,7 @@ export default function FofBuilder() {
       computation={computation}
       officeLines={officeLines}
       createdBy={createdBy}
-      doctorName={doctorName}
+      doctorName={doctorName === FOF_NO_DOCTOR ? '' : doctorName}
       importedFromScreenshot={state.importUsed === 'yes'}
     />
   );
@@ -1499,6 +1510,7 @@ export default function FofBuilder() {
                         {FOF_DOCTORS.map(d => (
                           <SelectItem key={d} value={d}>{d}</SelectItem>
                         ))}
+                        <SelectItem value={FOF_NO_DOCTOR}>{FOF_NO_DOCTOR}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1757,17 +1769,17 @@ export default function FofBuilder() {
                         <div className="flex items-center gap-2">
                           <Switch
                             id={`fof-dg-${line.key}`}
-                            checked={line.downgrade !== 'off'}
+                            checked={line.downgrade === 'yes'}
                             onCheckedChange={v =>
-                              dispatch({ type: 'setLine', index: i, patch: { downgrade: v ? '' : 'off' } })
+                              dispatch({ type: 'setLine', index: i, patch: { downgrade: v ? 'yes' : '' } })
                             }
                           />
                           <Label
                             htmlFor={`fof-dg-${line.key}`}
                             className="text-xs text-muted-foreground font-normal"
                           >
-                            Downgrades to amalgam benefit ({downgradeTo}) — turn off if this plan
-                            pays composite rates
+                            Plan downgrades to the amalgam benefit ({downgradeTo}) — most plans
+                            pay composite rates; turn on for plans like Altus
                           </Label>
                         </div>
                       )}
