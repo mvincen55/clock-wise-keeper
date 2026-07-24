@@ -124,6 +124,8 @@ Deno.serve(async (req) => {
     const body = (await req.json()) as {
       messages?: { role?: string; content?: string }[];
       context?: { visits?: { procedures?: string[] }[]; treatment?: string };
+      /** Managers can pause training from the widget badge. */
+      trainingEnabled?: boolean;
     };
     const rawMessages = Array.isArray(body.messages) ? body.messages.slice(-MAX_MESSAGES) : [];
     const chat = rawMessages
@@ -195,9 +197,12 @@ Deno.serve(async (req) => {
       /* docs are a bonus — never fail the chat over retrieval */
     }
 
-    const trainingRule = isManager
-      ? "The user is a MANAGER. When they state a wording preference, correction, or standing policy for how treatment summaries or payment names should read (e.g. \"never say X, say Y\", \"the doctor prefers...\"), distill it into ONE short, general, imperative rule (max 200 characters, no names of patients or staff other than doctor titles, no case-specific details) and put it in saveRule. Confirm in your reply what was saved. If the message is just a question or discussion with no durable preference, saveRule is null."
-      : "The user is a TEAM MEMBER (not a manager). Answer their questions helpfully, but saveRule must ALWAYS be null — nothing they say may change standing guidance. If they state a preference, suggest they raise it with the office manager.";
+    const training = isManager && body.trainingEnabled !== false;
+    const trainingRule = training
+      ? "The user is a MANAGER with training ON. When they state a wording preference, correction, or standing policy for how treatment summaries or payment names should read (e.g. \"never say X, say Y\", \"the doctor prefers...\"), distill it into ONE short, general, imperative rule (max 200 characters, no names of patients or staff other than doctor titles, no case-specific details) and put it in saveRule. Confirm in your reply what was saved. If the message is just a question or discussion with no durable preference, saveRule is null."
+      : isManager
+        ? "The user is a MANAGER but has training PAUSED. Answer normally, but saveRule must ALWAYS be null — mention they can turn training back on if they clearly want something saved."
+        : "The user is a TEAM MEMBER (not a manager). Answer their questions helpfully, but saveRule must ALWAYS be null — nothing they say may change standing guidance. If they state a preference, suggest they raise it with the office manager.";
 
     const response = await fetch(GATEWAY_URL, {
       method: "POST",
@@ -242,9 +247,9 @@ Deno.serve(async (req) => {
     if (!reply) return json({ error: "AI returned no reply" }, 502);
 
     let savedRule: string | null = null;
-    // Server-side gate mirrors the prompt: only managers ever save, and
-    // RLS (admin-write on fof_ai_guidance) enforces it again in the DB.
-    if (isManager && typeof parsed.saveRule === "string" && parsed.saveRule.trim() !== "") {
+    // Server-side gate mirrors the prompt: only managers with training ON
+    // ever save, and RLS (admin-write) enforces it again in the DB.
+    if (training && typeof parsed.saveRule === "string" && parsed.saveRule.trim() !== "") {
       const rule = bounded(parsed.saveRule, 220);
       const { error: insertError } = await supabase.from("fof_ai_guidance").insert({
         org_id: membership.org_id,
