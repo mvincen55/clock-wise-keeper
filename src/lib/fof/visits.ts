@@ -18,6 +18,13 @@ export interface VisitPlan {
 /** Portions under this default to a single day-of-service payment. */
 export const DAY_OF_SERVICE_THRESHOLD_CENTS = 100_000;
 
+/**
+ * Payments smaller than this never stand alone in a schedule — a lone
+ * $47 line looks silly, so it folds into the previous payment (collected
+ * a little earlier, never later, so the patient stays covered ahead).
+ */
+export const MIN_STANDALONE_PAYMENT_CENTS = 10_000;
+
 /** Split by weights; remainder cents go to the EARLIEST payments. */
 export function splitCentsWeighted(total: Cents, weights: number[]): Cents[] {
   if (weights.length === 0) return [];
@@ -212,6 +219,14 @@ export function buildVisitSchedule(
   });
   const ahead = alloc.map((a, i) => a - dueAt[i]);
 
+  // Office policy: a first visit under the day-of-service threshold needs
+  // no payment before it — that money is simply collected at the visit,
+  // and "Upon Scheduling" (for the rest of the treatment) moves after it.
+  if (ahead[0] > 0 && ahead[0] < DAY_OF_SERVICE_THRESHOLD_CENTS) {
+    dueAt[0] += ahead[0];
+    ahead[0] = 0;
+  }
+
   // Payment names read like the appointment itself ("Dental Implant
   // Surgery", "Crown Impressions") — no "At Visit N" prefix.
   const visitLabel = (i: number) =>
@@ -247,6 +262,17 @@ export function buildVisitSchedule(
   }
 
   if (trailingLabel) labels[labels.length - 1] = trailingLabel;
+
+  // No silly little payments: anything under the standalone minimum folds
+  // into the payment before it (left-to-right, so a run of tiny payments
+  // accumulates into the earliest real one). The freed slot shows $0.00 —
+  // "nothing due that day" — unless the zero-slot filter drops it below.
+  for (let i = 1; i < payments.length; i++) {
+    if (payments[i] > 0 && payments[i] < MIN_STANDALONE_PAYMENT_CENTS) {
+      payments[i - 1] += payments[i];
+      payments[i] = 0;
+    }
+  }
 
   // Keep zero-due visit slots — the final Delivery visit showing $0.00
   // tells the patient it's already paid. Only an empty Upon Scheduling

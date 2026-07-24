@@ -134,24 +134,56 @@ describe('visitSegmentsForCode', () => {
 });
 
 describe('buildVisitSchedule — a full visit ahead, real payment at the last visit', () => {
-  it('single visit is half at scheduling, half at the appointment', () => {
+  it('a single visit under $1k is simply paid at the appointment', () => {
     const plan = buildVisitSchedule(80_000, [{ label: 'Filling', feeCents: 80_000 }]);
-    expect(plan!.weights).toEqual([40_000, 40_000]);
-    expect(plan!.labels).toEqual(['Upon Scheduling', 'Filling']);
+    expect(plan!.weights).toEqual([80_000]);
+    expect(plan!.labels).toEqual(['Filling']);
   });
 
-  it('scheduling covers visit 1 and each visit covers the next; nothing left at the last', () => {
-    // Visits allocated 40k / 60k / 100k of a 200k portion
+  it('a single visit of $1k+ is half at scheduling, half at the appointment', () => {
+    const plan = buildVisitSchedule(180_000, [{ label: 'Crown', feeCents: 180_000 }]);
+    expect(plan!.weights).toEqual([90_000, 90_000]);
+    expect(plan!.labels).toEqual(['Upon Scheduling', 'Crown']);
+  });
+
+  it('a first visit under $1k needs no payment before it; scheduling moves after', () => {
+    // Visits allocated 40k / 60k / 100k of a 200k portion — visit 1 is
+    // under the day-of-service threshold, so its 40k is collected AT the
+    // visit and "Upon Scheduling" (covering visit 2) follows it.
     const plan = buildVisitSchedule(200_000, [
       { label: 'Surgery', feeCents: 40_000 },
       { label: 'Placement', feeCents: 60_000 },
       { label: 'Crown', feeCents: 100_000 },
     ]);
-    // Scheduling: v1 (40k); Visit 1: v2 (60k); Visit 2: half of v3
-    // (50k); Visit 3: the other half on delivery (50k)
     expect(plan!.weights).toEqual([40_000, 60_000, 50_000, 50_000]);
     expect(plan!.weights.reduce((a, b) => a + b, 0)).toBe(200_000);
-    expect(plan!.labels).toEqual(['Upon Scheduling', 'Surgery', 'Placement', 'Crown']);
+    expect(plan!.labels).toEqual(['Surgery', 'Upon Scheduling', 'Placement', 'Crown']);
+  });
+
+  it('a first visit of $1k+ still collects Upon Scheduling first', () => {
+    const plan = buildVisitSchedule(400_000, [
+      { label: 'Surgery', feeCents: 200_000 },
+      { label: 'Crown', feeCents: 200_000 },
+    ]);
+    expect(plan!.labels[0]).toBe('Upon Scheduling');
+    expect(plan!.weights).toEqual([200_000, 100_000, 100_000]);
+  });
+
+  it('tiny payments fold into the previous one instead of standing alone', () => {
+    // A $47 x-ray visit between big visits: its prepay would be a silly
+    // standalone line, so it folds into the prior payment and the visit
+    // shows $0.00 due.
+    const plan = buildVisitSchedule(404_700, [
+      { label: 'Surgery', feeCents: 200_000 },
+      { label: 'X-Ray', feeCents: 4_700 },
+      { label: 'Crown', feeCents: 200_000 },
+    ])!;
+    expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(404_700);
+    expect(plan.weights).not.toContain(4_700);
+    // Every payment is either $0 (nothing due that day) or a real amount.
+    for (const w of plan.weights) {
+      expect(w === 0 || w >= 10_000).toBe(true);
+    }
   });
 
   it('allocates the portion proportionally to visit fees', () => {
@@ -228,15 +260,16 @@ describe('buildVisitSchedule — a full visit ahead, real payment at the last vi
   it('scales due-at-visit fees when insurance covers part of the portion', () => {
     // Fees 200k (guide 100k of it) + 100k, but the patient only owes 150k:
     // the due-at-visit share scales with the allocation and the schedule
-    // still sums exactly to the portion.
+    // still sums exactly to the portion. Visit 1's scaled ahead share
+    // (50k) is under the day-of threshold, so it's collected at the visit
+    // and Upon Scheduling follows.
     const plan = buildVisitSchedule(150_000, [
       { label: 'Surgery', feeCents: 200_000, dueAtVisitCents: 100_000 },
       { label: 'Delivery', feeCents: 100_000 },
     ])!;
     expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(150_000);
-    // Visit 1 allocation 100k → 50k ahead (scheduling) + 50k at the visit.
-    expect(plan.weights[0]).toBe(50_000);
-    expect(plan.labels[0]).toBe('Upon Scheduling');
+    expect(plan.weights).toEqual([100_000, 25_000, 25_000]);
+    expect(plan.labels).toEqual(['Surgery', 'Upon Scheduling', 'Delivery']);
   });
 
   it('trailing zero-fee delivery visits relabel (and collect) the final half', () => {
