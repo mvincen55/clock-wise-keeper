@@ -237,7 +237,7 @@ export default function Checklists() {
             ))}
           </TabsList>
           {checklists.map(list => {
-            const listItems = items.filter(i => i.checklist_id === list.id && i.is_active);
+            const listItems = items.filter(i => i.checklist_id === list.id);
             return (
               <TabsContent key={list.id} value={list.id} className="space-y-4">
                 {isManager && (
