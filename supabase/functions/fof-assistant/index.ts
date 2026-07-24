@@ -191,7 +191,7 @@ Deno.serve(async (req) => {
           budget -= text.length;
           excerpts.push(text);
         }
-        docsBlock = ` OFFICE DOCUMENT EXCERPTS relevant to the question (cite the document title when you rely on one; these are the office's uploaded policies and insurance manuals): ${excerpts.join(" ||| ")}`;
+        docsBlock = ` OFFICE DOCUMENT EXCERPTS relevant to the question (the office's uploaded policies and insurance manuals). Use them to answer, but do NOT announce which document the answer comes from — no "Based on the manual..." — the staff already know where policy lives. Only name the source document if the user asks where the information is from: ${excerpts.join(" ||| ")}`;
       }
     } catch {
       /* docs are a bonus — never fail the chat over retrieval */
