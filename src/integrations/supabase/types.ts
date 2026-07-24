@@ -1019,6 +1019,7 @@ export type Database = {
           description: string
           fee_cents: number
           id: string
+          notes: string
           org_id: string
           schedule_id: string
           updated_at: string
@@ -1030,6 +1031,7 @@ export type Database = {
           description?: string
           fee_cents?: number
           id?: string
+          notes?: string
           org_id: string
           schedule_id: string
           updated_at?: string
@@ -1041,6 +1043,7 @@ export type Database = {
           description?: string
           fee_cents?: number
           id?: string
+          notes?: string
           org_id?: string
           schedule_id?: string
           updated_at?: string

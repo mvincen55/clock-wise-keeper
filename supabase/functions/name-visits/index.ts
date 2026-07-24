@@ -12,6 +12,7 @@
 // so it can never be used as an open relay to the (non-BAA) AI gateway.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { loadProcedureNotes } from "../_shared/procedure-notes.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -83,6 +84,13 @@ Deno.serve(async (req) => {
         ? ` OFFICE WORDING RULES (follow every one strictly; they override earlier style guidance on conflict): ${guidance.map((g, i) => `(${i + 1}) ${g}`).join(" ")}`
         : "";
 
+    // Per-procedure notes managers set on the office fee schedule.
+    const procedureNotes = await loadProcedureNotes(supabase);
+    const notesBlock =
+      procedureNotes.length > 0
+        ? ` PER-PROCEDURE OFFICE NOTES (authoritative wording/policy for specific procedures — apply the ones matching procedures in this plan, silently ignore the rest): ${procedureNotes.map((n, i) => `(${i + 1}) ${n}`).join(" ")}`
+        : "";
+
     const { slots, visits, wantTreatment, doctorName } = (await req.json()) as {
       /** Current payment slot labels, in order (e.g. "Upon Scheduling", "Crown Prep"). */
       slots: string[];
@@ -139,7 +147,8 @@ Deno.serve(async (req) => {
               "(3) Never promise or guarantee results. Frame outcomes as the goal: 'designed to restore comfortable chewing', 'to help rebuild a strong, functional bite'. BANNED: 'full function', 'complete', 'perfect', 'permanent', 'guaranteed', 'will restore', 'pain-free', and any absolute promise. " +
               "(4) End on the goal of the plan (comfort, function, or the finished smile) — as an aim, not a promise. " +
               "No codes, no prices, no per-visit breakdown, no hype words; 420 characters max." +
-              guidanceBlock,
+              guidanceBlock +
+              notesBlock,
           },
           {
             role: "user",

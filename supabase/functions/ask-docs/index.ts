@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { loadProcedureNotes } from "../_shared/procedure-notes.ts";
 
 // AI assistant over the office knowledge base (policies, HR info,
 // insurance handbooks). Two-step retrieval: an AI call first turns the
@@ -209,9 +210,17 @@ Deno.serve(async (req) => {
     }
     kept.sort((a, b) => a.title.localeCompare(b.title) || a.chunk_index - b.chunk_index);
 
-    const excerpts = kept
+    let excerpts = kept
       .map((m) => `[${m.title} — section ${m.chunk_index}] (${m.category})\n${m.content}`)
       .join("\n\n---\n\n");
+
+    // Per-procedure notes managers keep on the office fee schedule count
+    // as office policy too — always in scope, they're small and bounded.
+    const procedureNotes = await loadProcedureNotes(supabase);
+    if (procedureNotes.length > 0) {
+      const notesExcerpt = `[Procedure guidance — office fee schedule] (policy)\n${procedureNotes.join("\n")}`;
+      excerpts = excerpts ? `${excerpts}\n\n---\n\n${notesExcerpt}` : notesExcerpt;
+    }
 
     const catalog = docs.map((d) => `- ${d.title} (${d.category})`).join("\n");
 

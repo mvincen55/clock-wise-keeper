@@ -1,5 +1,5 @@
 /**
- * Fee schedule management for the FOF builder: office UCR + carrier
+ * Fee schedule management for the FOF builder: the office fee schedule + carrier
  * allowed-fee schedules with spreadsheet import. Insurance specifics
  * (coverage %s, benefits) are entered per form in the builder.
  * De-identified configuration only — no patient data on this page.
@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { ArrowLeft, Copy, Download, FileSpreadsheet, Loader2, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import FeeImportDialog from '@/components/fof/FeeImportDialog';
@@ -69,6 +70,7 @@ function ItemEditorDialog({
   const [description, setDescription] = useState(item?.description ?? '');
   const [fee, setFee] = useState(item ? formatCents(item.feeCents) : '');
   const [category, setCategory] = useState<FeeCategory>(item?.category ?? 'other');
+  const [notes, setNotes] = useState(item?.notes ?? '');
 
   // Re-sync when a different item opens
   const [lastKey, setLastKey] = useState('');
@@ -79,6 +81,7 @@ function ItemEditorDialog({
     setDescription(item?.description ?? '');
     setFee(item ? formatCents(item.feeCents) : '');
     setCategory(item?.category ?? 'other');
+    setNotes(item?.notes ?? '');
   }
 
   const feeCents = parseCurrencyInput(fee);
@@ -137,6 +140,20 @@ function ItemEditorDialog({
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="item-notes">Wording & policy notes</Label>
+            <Textarea
+              id="item-notes"
+              rows={3}
+              placeholder="How we talk about this procedure, office policy details, insurance quirks…"
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              The whole team sees these — and the AI follows them, both in the FOF's
+              wording and in Ask AI answers.
+            </p>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
@@ -151,6 +168,7 @@ function ItemEditorDialog({
                   description: description.trim(),
                   feeCents: feeCents ?? 0,
                   category,
+                  notes: notes.trim(),
                 },
                 {
                   onSuccess: () => { toast.success('Saved'); onClose(); },
@@ -193,9 +211,10 @@ function ScheduleItemsCard({ schedule, isManager }: { schedule: FeeSchedule; isM
       Description: i.description,
       Category: CATEGORY_LABELS[i.category],
       Fee: i.feeCents / 100,
+      Notes: i.notes,
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch: 8 }, { wch: 44 }, { wch: 24 }, { wch: 10 }];
+    ws['!cols'] = [{ wch: 8 }, { wch: 44 }, { wch: 24 }, { wch: 10 }, { wch: 50 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Fees');
     const safeName = schedule.name.replace(/[^A-Za-z0-9 _()-]+/g, '').trim() || 'Fee Schedule';
@@ -205,9 +224,9 @@ function ScheduleItemsCard({ schedule, isManager }: { schedule: FeeSchedule; isM
 
   const copyAll = async () => {
     const lines = [
-      ['Code', 'Description', 'Category', 'Fee'].join('\t'),
+      ['Code', 'Description', 'Category', 'Fee', 'Notes'].join('\t'),
       ...(items ?? []).map(i =>
-        [i.code, oneLine(i.description), CATEGORY_LABELS[i.category], (i.feeCents / 100).toFixed(2)].join('\t')
+        [i.code, oneLine(i.description), CATEGORY_LABELS[i.category], (i.feeCents / 100).toFixed(2), oneLine(i.notes)].join('\t')
       ),
     ];
     try {
@@ -264,7 +283,14 @@ function ScheduleItemsCard({ schedule, isManager }: { schedule: FeeSchedule; isM
               {filtered.slice(0, 100).map(item => (
                 <tr key={item.id} className="border-b last:border-0">
                   <td className="p-2 font-mono">{item.code}</td>
-                  <td className="p-2 max-w-64 truncate">{item.description}</td>
+                  <td className="p-2 max-w-64">
+                    <div className="truncate">{item.description}</div>
+                    {item.notes && (
+                      <div className="truncate text-xs text-muted-foreground" title={item.notes}>
+                        {item.notes}
+                      </div>
+                    )}
+                  </td>
                   <td className="p-2 text-muted-foreground">{CATEGORY_LABELS[item.category]}</td>
                   <td className="p-2 text-right">{formatCents(item.feeCents)}</td>
                   {isManager && (
@@ -347,7 +373,7 @@ export default function FofFees() {
                     </button>
                     <Badge variant={schedule.kind === 'office' ? 'default' : 'secondary'}>
                       {schedule.kind === 'office'
-                        ? 'Office UCR'
+                        ? 'Office Fee Schedule'
                         : schedule.kind === 'payment'
                           ? 'Payment table'
                           : 'Carrier'}

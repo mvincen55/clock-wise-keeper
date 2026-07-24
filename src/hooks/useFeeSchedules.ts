@@ -30,6 +30,8 @@ export interface FeeScheduleItem {
   description: string;
   feeCents: Cents;
   category: FeeCategory;
+  /** Wording & policy notes for the team and the AI (FOF + Ask AI). */
+  notes: string;
 }
 
 export interface InsurancePlan extends PlanRules {
@@ -63,6 +65,7 @@ function mapItem(row: Tables<'fee_schedule_items'>): FeeScheduleItem {
     description: row.description,
     feeCents: row.fee_cents,
     category: (row.category as FeeCategory) ?? 'other',
+    notes: row.notes ?? '',
   };
 }
 
@@ -107,7 +110,7 @@ export function useFeeSchedules() {
         const { data: seeded, error: seedError } = await supabase
           .from('fee_schedules')
           .insert([
-            { org_id: ctx.org_id, name: 'Office Fee Schedule (UCR)', kind: 'office', sort_order: 0 },
+            { org_id: ctx.org_id, name: 'Office Fee Schedule', kind: 'office', sort_order: 0 },
             { org_id: ctx.org_id, name: 'Delta Dental MA', kind: 'carrier', sort_order: 1 },
           ])
           .select('*');
@@ -235,6 +238,7 @@ export function useUpsertFeeScheduleItem() {
           description: item.description ?? '',
           fee_cents: item.feeCents ?? 0,
           category: item.category ?? 'other',
+          ...(item.notes !== undefined ? { notes: item.notes } : {}),
         },
         { onConflict: 'schedule_id,code' }
       );

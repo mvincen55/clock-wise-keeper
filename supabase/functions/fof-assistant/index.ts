@@ -13,6 +13,7 @@
 // active org membership, and hard-caps every input.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { loadProcedureNotes } from "../_shared/procedure-notes.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -163,6 +164,9 @@ Deno.serve(async (req) => {
       .map((g) => bounded(g.content, 240))
       .filter(Boolean);
 
+    // Per-procedure notes managers set on the office fee schedule.
+    const procedureNotes = await loadProcedureNotes(supabase);
+
     // Office knowledge base: search the uploaded docs (office policies,
     // Delta Dental manuals, etc.) for the latest question — same
     // RLS-scoped retrieval as the Ask AI page.
@@ -218,6 +222,9 @@ Deno.serve(async (req) => {
               " " +
               (guidance.length > 0
                 ? `STANDING WORDING RULES already in effect (from past training): ${guidance.map((g, i) => `(${i + 1}) ${g}`).join(" ")} `
+                : "") +
+              (procedureNotes.length > 0
+                ? `PER-PROCEDURE OFFICE NOTES (wording/policy managers set per procedure on the fee schedule — authoritative for those procedures): ${procedureNotes.map((n, i) => `(${i + 1}) ${n}`).join(" ")} `
                 : "") +
               (visits ? `The current form's procedures (de-identified, by visit):\n${visits}\n` : "") +
               (treatment ? `The current AI-written treatment summary: "${treatment}" ` : "") +
