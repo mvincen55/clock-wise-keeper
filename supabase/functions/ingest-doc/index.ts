@@ -10,7 +10,7 @@ async function extractPdfTextViaAI(base64: string, filename: string): Promise<st
     body: JSON.stringify({
       model: "google/gemini-2.5-flash",
       messages: [
-        { role: "system", content: "Extract all readable text from the provided PDF. Return plain text only, preserving paragraph breaks. No commentary, no markdown." },
+        { role: "system", content: "Transcribe the provided PDF into clean, well-structured Markdown. Merge hard-wrapped lines back into full paragraphs. Use #/##/### headings matching the document's own hierarchy, - for bullet points (keep each bullet's wrapped lines on one line), and 1. for numbered lists. Preserve reading order and ALL substantive text verbatim. Drop page numbers, repeated page headers/footers, and stray artifacts. No commentary, no code fences — output only the Markdown document." },
         { role: "user", content: [
           { type: "file", file: { filename, file_data: `data:application/pdf;base64,${base64}` } },
           { type: "text", text: "Extract the full text of this document." },
