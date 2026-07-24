@@ -5,13 +5,15 @@
  * names, no account numbers.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Banknote, ChevronLeft, ChevronRight, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Banknote, ChevronLeft, ChevronRight, Loader2, Plus, Printer, Trash2 } from 'lucide-react';
+import DepositPrintSheet from '@/components/DepositPrintSheet';
 import { getToday } from '@/lib/time-utils';
 import { formatCents, parseCurrencyInput } from '@/lib/money';
 import {
@@ -50,6 +52,16 @@ interface FormState {
 }
 
 const centsToInput = (cents: number): string => (cents > 0 ? (cents / 100).toFixed(2) : '');
+
+/** "Jane Berry" → "JB" for the printed Initials line. */
+const initialsOf = (name: string): string =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(w => w[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 4);
 
 export default function DepositLog() {
   const [date, setDate] = useState(getToday());
@@ -282,14 +294,43 @@ export default function DepositLog() {
                   Last saved by {log.prepared_by_name}
                 </p>
               ) : <span />}
-              <Button onClick={handleSave} disabled={save.isPending}>
-                {save.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Save Deposit Log
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => window.print()}>
+                  <Printer className="h-4 w-4 mr-2" />
+                  Print Both Copies
+                </Button>
+                <Button onClick={handleSave} disabled={save.isPending}>
+                  {save.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Save Deposit Log
+                </Button>
+              </div>
             </div>
+            <p className="text-xs text-muted-foreground text-right">
+              Prints the Office Copy and the Bank Copy, one page each. Save first to stamp
+              your initials.
+            </p>
           </div>
         </div>
       )}
+
+      {/* Print-only: the two paper copies, portaled so printing shows
+          nothing but the sheets (same mechanism as the FOF). */}
+      {totals &&
+        createPortal(
+          <div className="deposit-print-root">
+            <DepositPrintSheet
+              date={date}
+              cashCents={totals.cash}
+              checksCents={totals.checkAmounts.filter(c => c > 0)}
+              insCcCents={totals.insCc}
+              ptCcCents={totals.ptCc}
+              illumitracCents={totals.illumitrac}
+              outsideFinancingCents={totals.financing}
+              initials={initialsOf(log?.prepared_by_name ?? '')}
+            />
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

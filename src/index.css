@@ -147,6 +147,142 @@
   display: none;
 }
 
+/* Printable Deposit Log (Office Copy + Bank Copy). Hidden on screen;
+   shown only when printing from the Deposit Log page. Mimics the paper
+   sheet: numbered check lines in two columns, totals blocks, envelope
+   note, initials. */
+.deposit-print-root {
+  display: none;
+}
+
+.dep-sheet {
+  width: 7.5in;
+  margin: 0 auto;
+  padding: 0.25in 0;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 10pt;
+  color: black;
+  page-break-after: always;
+}
+
+.dep-sheet:last-child {
+  page-break-after: auto;
+}
+
+.dep-date {
+  font-size: 10pt;
+  margin-bottom: 6pt;
+}
+
+.dep-title {
+  text-align: center;
+  font-size: 14pt;
+  font-weight: 700;
+  border-top: 1.5pt solid black;
+  border-bottom: 1.5pt solid black;
+  padding: 4pt 0;
+  margin-bottom: 10pt;
+}
+
+.dep-cash {
+  display: flex;
+  justify-content: space-between;
+  width: 3.4in;
+  border-bottom: 1pt solid black;
+  font-weight: 700;
+  padding: 2pt 4pt;
+  margin-bottom: 8pt;
+}
+
+.dep-columns {
+  display: flex;
+  gap: 0.5in;
+}
+
+.dep-checks {
+  width: 3.4in;
+  border-collapse: collapse;
+}
+
+.dep-checks th {
+  text-align: left;
+  font-weight: 700;
+  border-bottom: 1.5pt solid black;
+  padding: 2pt 4pt;
+}
+
+.dep-checks td {
+  border-bottom: 0.5pt solid #999;
+  padding: 1.5pt 4pt;
+  height: 13pt;
+}
+
+.dep-checks .dep-line {
+  width: 0.4in;
+  color: #444;
+}
+
+.dep-num {
+  text-align: right;
+}
+
+.dep-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-top: 12pt;
+  gap: 0.5in;
+}
+
+.dep-footer-left,
+.dep-footer-right {
+  width: 3.4in;
+}
+
+.dep-total-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2pt 4pt;
+  border-bottom: 0.5pt solid #999;
+}
+
+.dep-total-grand {
+  font-weight: 700;
+  font-size: 11pt;
+  border-bottom: 1.5pt solid black;
+  border-top: 1.5pt solid black;
+}
+
+.dep-envelope {
+  font-weight: 700;
+  letter-spacing: 0.5pt;
+  margin-top: 10pt;
+  padding: 3pt 4pt;
+  border: 1.5pt solid black;
+  text-align: center;
+}
+
+.dep-account {
+  font-weight: 700;
+  padding: 2pt 4pt;
+}
+
+.dep-initials {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8pt;
+  margin-top: 8pt;
+  padding-right: 4pt;
+}
+
+.dep-initials-value {
+  min-width: 0.6in;
+  border-bottom: 1pt solid black;
+  text-align: center;
+  font-weight: 700;
+  white-space: pre;
+}
+
 .fof-sheet {
   --fof-navy: #53406e; /* office deep purple */
   --fof-ink: #2b2733;
@@ -1106,6 +1242,30 @@
 
   .fof-print-root {
     display: block !important;
+  }
+
+  /* Same for the Deposit Log's two printed copies. */
+  body:has(.deposit-print-root) #root {
+    display: none !important;
+  }
+
+  .deposit-print-root {
+    display: block !important;
+  }
+
+  /* The deposit sheet draws its own rules — exempt it from the generic
+     print table borders below. */
+  .dep-sheet th,
+  .dep-sheet td {
+    border: none;
+  }
+
+  .dep-checks th {
+    border-bottom: 1.5pt solid black;
+  }
+
+  .dep-checks td {
+    border-bottom: 0.5pt solid #999;
   }
 
   .fof-print-root .fof-sheet {
