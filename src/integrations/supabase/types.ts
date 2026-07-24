@@ -1106,44 +1106,6 @@ export type Database = {
           },
         ]
       }
-      fof_procedure_bundles: {
-        Row: {
-          codes: Json
-          created_at: string
-          id: string
-          name: string
-          org_id: string
-          sort_order: number
-          updated_at: string
-        }
-        Insert: {
-          codes?: Json
-          created_at?: string
-          id?: string
-          name: string
-          org_id: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Update: {
-          codes?: Json
-          created_at?: string
-          id?: string
-          name?: string
-          org_id?: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fof_procedure_bundles_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "orgs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       fof_ai_guidance: {
         Row: {
           content: string
@@ -1175,6 +1137,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "fof_ai_guidance_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fof_procedure_bundles: {
+        Row: {
+          codes: Json
+          created_at: string
+          id: string
+          name: string
+          org_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          codes?: Json
+          created_at?: string
+          id?: string
+          name: string
+          org_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          codes?: Json
+          created_at?: string
+          id?: string
+          name?: string
+          org_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fof_procedure_bundles_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
