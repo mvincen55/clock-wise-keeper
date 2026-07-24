@@ -883,7 +883,11 @@ export default function FofBuilder() {
     // lab segments ("Crown Prep", "Denture Impressions"), surgical codes
     // get a "Surgery" suffix, and an all-workup visit is the Work Up Visit.
     const nounOf = (label: string) => {
-      const words = label.replace(/\(.*?\)/g, '').trim().split(/\s+/);
+      const clean = label.replace(/\(.*?\)/g, '').trim();
+      // "Implant Crown" stays a compound — the office says "Implant Crown
+      // Delivery", never just "Crown Delivery" for implant restorations.
+      if (/implant crown/i.test(clean)) return 'Implant Crown';
+      const words = clean.split(/\s+/);
       return words[words.length - 1] || label;
     };
     const isSurgical = (code: string) => {
