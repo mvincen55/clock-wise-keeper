@@ -34,6 +34,9 @@ export default function FofAssistantWidget({ context }: Props) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  // Managers can pause training (click the badge) — chat keeps working,
+  // nothing gets saved as a rule while it's off.
+  const [training, setTraining] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -53,6 +56,7 @@ export default function FofAssistantWidget({ context }: Props) {
         body: {
           messages: next.slice(-10).map(m => ({ role: m.role, content: m.content })),
           context: context ?? undefined,
+          trainingEnabled: training,
         },
       });
       if (error) throw new Error(error.message);
@@ -79,12 +83,29 @@ export default function FofAssistantWidget({ context }: Props) {
           <div className="flex items-center gap-2 border-b bg-primary px-4 py-3 text-primary-foreground">
             <Sparkles className="h-4 w-4" />
             <span className="text-sm font-semibold">FOF Assistant</span>
-            <Badge
-              variant="secondary"
-              className="ml-1 text-[10px] font-medium"
-            >
-              {isManager ? 'Training mode' : 'Q&A'}
-            </Badge>
+            {isManager ? (
+              <button
+                type="button"
+                onClick={() => setTraining(t => !t)}
+                title={training ? 'Click to pause training' : 'Click to resume training'}
+                className="ml-1"
+              >
+                <Badge
+                  variant="secondary"
+                  className={
+                    training
+                      ? 'cursor-pointer text-[10px] font-medium'
+                      : 'cursor-pointer bg-white/20 text-[10px] font-medium text-white/50'
+                  }
+                >
+                  {training ? 'Training mode' : 'Training off'}
+                </Badge>
+              </button>
+            ) : (
+              <Badge variant="secondary" className="ml-1 text-[10px] font-medium">
+                Q&A
+              </Badge>
+            )}
             <button
               className="ml-auto rounded p-1 hover:bg-white/15"
               onClick={() => setOpen(false)}
@@ -98,7 +119,9 @@ export default function FofAssistantWidget({ context }: Props) {
             {messages.length === 0 && (
               <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
                 {isManager
-                  ? 'Discuss the treatment wording or ask about the form. When you state a preference ("never say X — say Y"), I save it as a standing rule every future form follows.'
+                  ? training
+                    ? 'Discuss the treatment wording or ask about the form. When you state a preference ("never say X — say Y"), I save it as a standing rule every future form follows. Click "Training mode" above to pause saving.'
+                    : 'Training is paused — I\'ll answer questions but save nothing. Click "Training off" above to resume.'
                   : 'Ask me anything about this form, the payment schedule, or office policy. Wording preferences need a manager.'}
                 <div className="mt-2 font-medium text-foreground/70">
                   Never include patient names — I only see the procedures, not the patient.
