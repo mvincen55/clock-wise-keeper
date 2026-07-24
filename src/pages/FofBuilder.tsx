@@ -469,7 +469,12 @@ export default function FofBuilder() {
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [feeScheduleId, setFeeScheduleId] = useState<string>(NO_SCHEDULE);
   // Collapsible builder sections (UI-only; patient data untouched).
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // Discounts & Credits and Amounts & Payment Plan start closed — their
+  // header summaries carry the numbers until staff need the detail.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({
+    discounts: true,
+    amounts: true,
+  });
   const toggleSection = (key: string) =>
     setCollapsed(c => ({ ...c, [key]: !c[key] }));
   // Table-of-allowance plans: a second schedule holding the set dollar
