@@ -148,20 +148,39 @@
 }
 
 /* Printable Deposit Log (Office Copy + Bank Copy). Hidden on screen;
-   shown only when printing from the Deposit Log page. Mimics the paper
-   sheet: numbered check lines in two columns, totals blocks, envelope
-   note, initials. */
+   shown only when printing from the Deposit Log page. Styled in the
+   practice's document language (deep purple on white, grayscale-safe),
+   one letter page per copy. */
 .deposit-print-root {
   display: none;
 }
 
+@page deposit {
+  size: letter;
+  margin: 0.45in;
+}
+
 .dep-sheet {
-  width: 7.5in;
+  --dep-navy: #53406e; /* office deep purple */
+  --dep-ink: #2b2733;
+  --dep-muted: #6b6577;
+  --dep-line: #d5cfe0;
+  --dep-tint: #f3f0f8;
+  page: deposit;
+  width: 7.6in;
+  /* Letter page minus 0.45in margins; flex pushes the footer to the true
+     bottom so both copies read as full, composed pages. */
+  min-height: 10in;
+  display: flex;
+  flex-direction: column;
   margin: 0 auto;
-  padding: 0.25in 0;
-  font-family: Arial, Helvetica, sans-serif;
-  font-size: 10pt;
-  color: black;
+  background: white;
+  color: var(--dep-ink);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 9pt;
+  line-height: 1.35;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
   page-break-after: always;
 }
 
@@ -169,118 +188,212 @@
   page-break-after: auto;
 }
 
-.dep-date {
-  font-size: 10pt;
-  margin-bottom: 6pt;
+.dep-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.4in;
+  padding-bottom: 8pt;
+  border-bottom: 1.5pt solid var(--dep-navy);
+  margin-bottom: 10pt;
+}
+
+.dep-logo {
+  height: 0.52in;
+  width: auto;
+}
+
+.dep-head-meta {
+  text-align: right;
+}
+
+.dep-kicker {
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dep-navy);
 }
 
 .dep-title {
-  text-align: center;
-  font-size: 14pt;
+  font-size: 16pt;
   font-weight: 700;
-  border-top: 1.5pt solid black;
-  border-bottom: 1.5pt solid black;
-  padding: 4pt 0;
-  margin-bottom: 10pt;
+  color: var(--dep-ink);
+  line-height: 1.15;
+}
+
+.dep-subtitle {
+  font-size: 8.5pt;
+  color: var(--dep-muted);
 }
 
 .dep-cash {
   display: flex;
   justify-content: space-between;
-  width: 3.4in;
-  border-bottom: 1pt solid black;
+  align-items: baseline;
+  width: 3.55in;
+  background: var(--dep-tint);
+  border: 0.75pt solid var(--dep-line);
+  border-radius: 3pt;
   font-weight: 700;
-  padding: 2pt 4pt;
+  padding: 3.5pt 8pt;
   margin-bottom: 8pt;
 }
 
 .dep-columns {
   display: flex;
+  justify-content: space-between;
   gap: 0.5in;
 }
 
 .dep-checks {
-  width: 3.4in;
+  width: 3.55in;
   border-collapse: collapse;
 }
 
 .dep-checks th {
   text-align: left;
+  font-size: 7pt;
   font-weight: 700;
-  border-bottom: 1.5pt solid black;
-  padding: 2pt 4pt;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dep-navy);
+  border-bottom: 1.25pt solid var(--dep-navy);
+  padding: 2pt 6pt 3pt;
 }
 
 .dep-checks td {
-  border-bottom: 0.5pt solid #999;
-  padding: 1.5pt 4pt;
-  height: 13pt;
+  border-bottom: 0.5pt solid var(--dep-line);
+  padding: 1.5pt 6pt;
+  height: 11.5pt;
+  font-variant-numeric: tabular-nums;
 }
 
 .dep-checks .dep-line {
   width: 0.4in;
-  color: #444;
+  color: var(--dep-muted);
+  font-size: 8pt;
 }
 
 .dep-num {
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .dep-footer {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
-  margin-top: 12pt;
+  align-items: flex-start;
   gap: 0.5in;
+  margin-top: 12pt;
 }
 
 .dep-footer-left,
 .dep-footer-right {
-  width: 3.4in;
+  width: 3.55in;
 }
 
-.dep-total-row {
+.dep-box {
+  border: 0.75pt solid var(--dep-line);
+  border-radius: 3pt;
+  overflow: hidden;
+}
+
+.dep-box-title {
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dep-navy);
+  background: var(--dep-tint);
+  padding: 3pt 8pt;
+  border-bottom: 0.75pt solid var(--dep-line);
+}
+
+.dep-sum-row {
   display: flex;
   justify-content: space-between;
-  padding: 2pt 4pt;
-  border-bottom: 0.5pt solid #999;
+  padding: 2.5pt 8pt;
+  border-bottom: 0.5pt solid var(--dep-line);
 }
 
-.dep-total-grand {
-  font-weight: 700;
-  font-size: 11pt;
-  border-bottom: 1.5pt solid black;
-  border-top: 1.5pt solid black;
+.dep-sum-row:last-child {
+  border-bottom: none;
 }
 
-.dep-envelope {
+.dep-sum-grand {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  background: var(--dep-navy);
+  color: white;
   font-weight: 700;
-  letter-spacing: 0.5pt;
-  margin-top: 10pt;
-  padding: 3pt 4pt;
-  border: 1.5pt solid black;
-  text-align: center;
+  font-size: 10.5pt;
+  padding: 4pt 8pt;
 }
 
 .dep-account {
   font-weight: 700;
-  padding: 2pt 4pt;
+  padding: 4pt 8pt;
+}
+
+.dep-envelope {
+  margin-top: 8pt;
+  border: 1.25pt solid var(--dep-navy);
+  border-radius: 3pt;
+  color: var(--dep-navy);
+  font-weight: 700;
+  font-size: 8.5pt;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 4pt 8pt;
 }
 
 .dep-initials {
   display: flex;
-  justify-content: flex-end;
-  gap: 8pt;
-  margin-top: 8pt;
-  padding-right: 4pt;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 10pt;
+  margin-top: 9pt;
+  padding: 0 2pt;
+}
+
+.dep-initials-label {
+  font-size: 8.5pt;
+  color: var(--dep-muted);
+}
+
+.dep-initials-slot {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .dep-initials-value {
-  min-width: 0.6in;
-  border-bottom: 1pt solid black;
+  min-width: 0.7in;
+  border-bottom: 1pt solid var(--dep-ink);
   text-align: center;
   font-weight: 700;
-  white-space: pre;
+  min-height: 11pt;
+}
+
+.dep-initials-caption {
+  font-size: 6.5pt;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dep-muted);
+  margin-top: 1.5pt;
+}
+
+.dep-page-footer {
+  margin-top: auto;
+  padding-top: 10pt;
+  border-top: 0.75pt solid var(--dep-line);
+  font-size: 7pt;
+  letter-spacing: 0.06em;
+  color: var(--dep-muted);
+  text-align: center;
 }
 
 .fof-sheet {
@@ -1254,18 +1367,18 @@
   }
 
   /* The deposit sheet draws its own rules — exempt it from the generic
-     print table borders below. */
+     print table borders below, then restate its own. */
   .dep-sheet th,
   .dep-sheet td {
     border: none;
   }
 
   .dep-checks th {
-    border-bottom: 1.5pt solid black;
+    border-bottom: 1.25pt solid #53406e;
   }
 
   .dep-checks td {
-    border-bottom: 0.5pt solid #999;
+    border-bottom: 0.5pt solid #d5cfe0;
   }
 
   .fof-print-root .fof-sheet {

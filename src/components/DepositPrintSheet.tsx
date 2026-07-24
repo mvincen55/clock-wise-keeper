@@ -1,11 +1,14 @@
 import { formatCents } from '@/lib/money';
+import logoUrl from '@/assets/harelick-logo.png';
 
 /**
- * Printable Deposit Log — reproduces the office's paper sheet: an Office
- * Copy (full breakdown, both banks) and a Bank Copy (cash + checks with
- * the deposit account), each on its own page. Pure props → JSX; rendered
- * via portal only while printing (.deposit-print-root in index.css).
- * Amounts only — the payer names stay on the physical checks.
+ * Printable Deposit Log — the office's daily deposit sheet as a designed
+ * document in the practice's FOF visual language (deep purple on white,
+ * grayscale-safe). Two copies, one letter page each: the Office Copy
+ * (full breakdown, both banks) and the Bank Copy (cash + checks with the
+ * deposit account). Pure props → JSX; rendered via portal only while
+ * printing (.deposit-print-root in index.css). Amounts only — payer
+ * names stay on the physical checks.
  */
 
 const CHECK_LINES = 46;
@@ -24,22 +27,27 @@ export interface DepositPrintProps {
   ptCcCents: number;
   illumitracCents: number;
   outsideFinancingCents: number;
-  /** Initials of whoever prepared the deposit ('' = hand-write). */
+  /** Who prepared the deposit (from the saved record). */
+  preparedBy: string;
   initials: string;
 }
 
-const mdy = (iso: string): string => {
-  const [y, m, d] = iso.split('-');
-  return `${m}/${d}/${y}`;
+const longDate = (iso: string): string => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
 };
 
 function CheckColumn({
-  title,
   start,
   count,
   checks,
 }: {
-  title: string;
   start: number;
   count: number;
   checks: number[];
@@ -48,7 +56,7 @@ function CheckColumn({
     <table className="dep-checks">
       <thead>
         <tr>
-          <th>{title}</th>
+          <th>Checks {start}–{start + count - 1}</th>
           <th className="dep-num">Amount</th>
         </tr>
       </thead>
@@ -59,7 +67,9 @@ function CheckColumn({
           return (
             <tr key={line}>
               <td className="dep-line">{line}</td>
-              <td className="dep-num">{cents !== undefined && cents > 0 ? formatCents(cents) : ''}</td>
+              <td className="dep-num">
+                {cents !== undefined && cents > 0 ? formatCents(cents) : ''}
+              </td>
             </tr>
           );
         })}
@@ -68,11 +78,11 @@ function CheckColumn({
   );
 }
 
-function TotalRow({ label, cents, bold }: { label: string; cents: number; bold?: boolean }) {
+function SummaryRow({ label, cents }: { label: string; cents: number }) {
   return (
-    <div className={`dep-total-row${bold ? ' dep-total-grand' : ''}`}>
+    <div className="dep-sum-row">
       <span>{label}</span>
-      <span>{formatCents(cents)}</span>
+      <span className="dep-num">{formatCents(cents)}</span>
     </div>
   );
 }
@@ -86,8 +96,10 @@ function CopyPage({
   ptCcCents,
   illumitracCents,
   outsideFinancingCents,
+  preparedBy,
   initials,
 }: DepositPrintProps & { variant: 'office' | 'bank' }) {
+  const checkCount = checksCents.filter(c => c > 0).length;
   const checksTotal = checksCents.reduce((a, b) => a + b, 0);
   const bankTotal = cashCents + checksTotal;
   const cardsTotal = insCcCents + ptCcCents;
@@ -95,10 +107,16 @@ function CopyPage({
 
   return (
     <div className="dep-sheet">
-      <div className="dep-date">Date: {mdy(date)}</div>
-      <div className="dep-title">
-        Deposit Log ({variant === 'office' ? 'Office Copy' : 'Bank Copy'})
-      </div>
+      <header className="dep-head">
+        <img className="dep-logo" src={logoUrl} alt="Harelick Dental Associates" />
+        <div className="dep-head-meta">
+          <div className="dep-kicker">Daily Deposit</div>
+          <div className="dep-title">Deposit Log</div>
+          <div className="dep-subtitle">
+            {variant === 'office' ? 'Office Copy' : 'Bank Copy'} · {longDate(date)}
+          </div>
+        </div>
+      </header>
 
       <div className="dep-cash">
         <span>Cash</span>
@@ -106,47 +124,66 @@ function CopyPage({
       </div>
 
       <div className="dep-columns">
-        <CheckColumn title="Checks" start={1} count={LEFT_LINES} checks={checksCents} />
-        <CheckColumn
-          title="Checks (Cont.)"
-          start={LEFT_LINES + 1}
-          count={CHECK_LINES - LEFT_LINES}
-          checks={checksCents}
-        />
+        <CheckColumn start={1} count={LEFT_LINES} checks={checksCents} />
+        <CheckColumn start={LEFT_LINES + 1} count={CHECK_LINES - LEFT_LINES} checks={checksCents} />
       </div>
 
       <div className="dep-footer">
         <div className="dep-footer-left">
           {variant === 'office' ? (
-            <>
-              <TotalRow label="BC Bank" cents={bankTotal} />
-              <TotalRow label="F Bank" cents={cardsTotal} />
-            </>
+            <div className="dep-box">
+              <div className="dep-box-title">Bank Split</div>
+              <SummaryRow label="BC Bank — cash & checks" cents={bankTotal} />
+              <SummaryRow label="F Bank — card deposits" cents={cardsTotal} />
+            </div>
           ) : (
-            <div className="dep-account">{BANK_COPY_ACCOUNT}</div>
+            <div className="dep-box">
+              <div className="dep-box-title">Deposit To</div>
+              <div className="dep-account">{BANK_COPY_ACCOUNT}</div>
+            </div>
           )}
-          <div className="dep-envelope">PURPLE ENVELOPE — NO TAPE</div>
+          <div className="dep-envelope">Purple envelope — no tape</div>
         </div>
+
         <div className="dep-footer-right">
-          <TotalRow label="Total Cash" cents={cashCents} />
-          <TotalRow label="Total Checks" cents={checksTotal} />
-          {variant === 'office' ? (
-            <>
-              <TotalRow label="Ins Credit Cards" cents={insCcCents} />
-              <TotalRow label="Total Pt Credit Cards" cents={ptCcCents} />
-              <TotalRow label="Illumitrac" cents={illumitracCents} />
-              <TotalRow label="Outside Financing" cents={outsideFinancingCents} />
-              <TotalRow label="TOTAL:" cents={grandTotal} bold />
-            </>
-          ) : (
-            <TotalRow label="BC BANK TOTAL:" cents={bankTotal} bold />
-          )}
+          <div className="dep-box">
+            <div className="dep-box-title">Deposit Summary</div>
+            <SummaryRow label="Total Cash" cents={cashCents} />
+            <SummaryRow
+              label={checkCount > 0 ? `Total Checks (${checkCount})` : 'Total Checks'}
+              cents={checksTotal}
+            />
+            {variant === 'office' && (
+              <>
+                <SummaryRow label="Ins Credit Cards" cents={insCcCents} />
+                <SummaryRow label="Total Pt Credit Cards" cents={ptCcCents} />
+                <SummaryRow label="Illumitrac" cents={illumitracCents} />
+                <SummaryRow label="Outside Financing" cents={outsideFinancingCents} />
+              </>
+            )}
+            <div className="dep-sum-grand">
+              <span>{variant === 'office' ? 'Total' : 'BC Bank Total'}</span>
+              <span className="dep-num">
+                {formatCents(variant === 'office' ? grandTotal : bankTotal)}
+              </span>
+            </div>
+          </div>
           <div className="dep-initials">
-            <span>Initials</span>
-            <span className="dep-initials-value">{initials || '      '}</span>
+            <span className="dep-initials-label">
+              Prepared by {preparedBy || '________________'}
+            </span>
+            <span className="dep-initials-slot">
+              <span className="dep-initials-value">{initials}</span>
+              <span className="dep-initials-caption">Initials</span>
+            </span>
           </div>
         </div>
       </div>
+
+      <footer className="dep-page-footer">
+        Harelick Dental Associates, LLC · Daily Deposit Log ·{' '}
+        {variant === 'office' ? 'Office Copy — file with the day sheet' : 'Bank Copy — goes in the envelope'}
+      </footer>
     </div>
   );
 }

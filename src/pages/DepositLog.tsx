@@ -69,6 +69,9 @@ export default function DepositLog() {
   const save = useSaveDepositLog();
 
   const [form, setForm] = useState<FormState | null>(null);
+  // Unsaved edits block printing: the printed sheets always come from the
+  // saved record, so what's on paper is exactly what's on file.
+  const [dirty, setDirty] = useState(false);
 
   // Re-seed the form whenever a different day's record arrives.
   useEffect(() => {
@@ -85,7 +88,13 @@ export default function DepositLog() {
       outsideFinancing: centsToInput(log?.outside_financing_cents ?? 0),
       notes: log?.notes ?? '',
     });
+    setDirty(false);
   }, [log, isLoading, date]);
+
+  const updateForm = (updater: (f: FormState) => FormState) => {
+    setForm(f => (f ? updater(f) : f));
+    setDirty(true);
+  };
 
   const totals = useMemo(() => {
     if (!form) return null;
@@ -112,7 +121,7 @@ export default function DepositLog() {
   }, [form]);
 
   const setField = (field: keyof Omit<FormState, 'checks'>) => (value: string) =>
-    setForm(f => (f ? { ...f, [field]: value } : f));
+    updateForm(f => ({ ...f, [field]: value }));
 
   const handleSave = () => {
     if (!form || !totals) return;
@@ -194,8 +203,7 @@ export default function DepositLog() {
                         placeholder="$0.00"
                         value={check}
                         onChange={e =>
-                          setForm(f => {
-                            if (!f) return f;
+                          updateForm(f => {
                             const checks = [...f.checks];
                             checks[i] = e.target.value;
                             return { ...f, checks };
@@ -207,9 +215,7 @@ export default function DepositLog() {
                         size="icon"
                         className="h-8 w-8 text-destructive shrink-0"
                         onClick={() =>
-                          setForm(f =>
-                            f ? { ...f, checks: f.checks.filter((_, idx) => idx !== i) } : f
-                          )
+                          updateForm(f => ({ ...f, checks: f.checks.filter((_, idx) => idx !== i) }))
                         }
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -219,7 +225,7 @@ export default function DepositLog() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setForm(f => (f ? { ...f, checks: [...f.checks, ''] } : f))}
+                    onClick={() => updateForm(f => ({ ...f, checks: [...f.checks, ''] }))}
                   >
                     <Plus className="h-3.5 w-3.5 mr-1.5" />
                     Add Check
@@ -295,38 +301,48 @@ export default function DepositLog() {
                 </p>
               ) : <span />}
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => window.print()}>
+                <Button
+                  variant="outline"
+                  disabled={!log || dirty}
+                  title={!log || dirty ? 'Save the deposit log first' : undefined}
+                  onClick={() => window.print()}
+                >
                   <Printer className="h-4 w-4 mr-2" />
                   Print Both Copies
                 </Button>
-                <Button onClick={handleSave} disabled={save.isPending}>
+                <Button onClick={handleSave} disabled={save.isPending || (!dirty && !!log)}>
                   {save.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                   Save Deposit Log
                 </Button>
               </div>
             </div>
             <p className="text-xs text-muted-foreground text-right">
-              Prints the Office Copy and the Bank Copy, one page each. Save first to stamp
-              your initials.
+              {!log
+                ? 'Save the deposit log to enable printing.'
+                : dirty
+                  ? 'Unsaved changes — save to enable printing.'
+                  : 'Prints the Office Copy and the Bank Copy, one page each, initialed by whoever saved.'}
             </p>
           </div>
         </div>
       )}
 
-      {/* Print-only: the two paper copies, portaled so printing shows
-          nothing but the sheets (same mechanism as the FOF). */}
-      {totals &&
+      {/* Print-only: the two paper copies, fed from the SAVED record so
+          what's on paper is exactly what's on file. Portaled so printing
+          shows nothing but the sheets (same mechanism as the FOF). */}
+      {log && !dirty &&
         createPortal(
           <div className="deposit-print-root">
             <DepositPrintSheet
               date={date}
-              cashCents={totals.cash}
-              checksCents={totals.checkAmounts.filter(c => c > 0)}
-              insCcCents={totals.insCc}
-              ptCcCents={totals.ptCc}
-              illumitracCents={totals.illumitrac}
-              outsideFinancingCents={totals.financing}
-              initials={initialsOf(log?.prepared_by_name ?? '')}
+              cashCents={log.cash_cents}
+              checksCents={depositChecks(log)}
+              insCcCents={log.ins_cc_cents}
+              ptCcCents={log.pt_cc_cents}
+              illumitracCents={log.illumitrac_cents}
+              outsideFinancingCents={log.outside_financing_cents}
+              preparedBy={log.prepared_by_name}
+              initials={initialsOf(log.prepared_by_name)}
             />
           </div>,
           document.body
