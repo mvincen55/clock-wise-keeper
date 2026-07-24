@@ -9,6 +9,13 @@ describe('categorizeCdtCode', () => {
     expect(categorizeCdtCode('D1206')).toBe('preventive'); // fluoride
   });
 
+  it('never-covered codes categorize as other regardless of their CDT range', () => {
+    expect(categorizeCdtCode('D4265')).toBe('other'); // bio material
+    expect(categorizeCdtCode('D4268')).toBe('other');
+    expect(categorizeCdtCode('D5982')).toBe('other'); // surgical guide
+    expect(categorizeCdtCode('D7953')).toBe('other'); // site preservation
+  });
+
   it('maps diagnostic work-up codes to workup (billed at visit, no coverage)', () => {
     expect(categorizeCdtCode('D0367')).toBe('workup'); // CT scan
     expect(categorizeCdtCode('D0470')).toBe('workup'); // diagnostic models
