@@ -182,7 +182,7 @@ function CopyPage({
 
       <footer className="dep-page-footer">
         Harelick Dental Associates, LLC · Daily Deposit Log ·{' '}
-        {variant === 'office' ? 'Office Copy — file with the day sheet' : 'Bank Copy — goes in the envelope'}
+        {variant === 'office' ? 'Office Copy — file with the day sheet' : 'Bank Copy'}
       </footer>
     </div>
   );
