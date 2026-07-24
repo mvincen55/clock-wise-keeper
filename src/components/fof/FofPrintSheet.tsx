@@ -387,8 +387,9 @@ export default function FofPrintSheet({
               </div>
               <div className="fof-option-body">
                 {installmentCells.map((cell, i) => (
-                  <div className="fof-row" key={i}>
+                  <div className="fof-row fof-leaders" key={i}>
                     <span>{cell.label}</span>
+                    <span className="fof-dots" aria-hidden="true" />
                     <span>{formatCents(cell.cents)}</span>
                   </div>
                 ))}
