@@ -17,7 +17,7 @@ export const SUGGESTED_SECTIONS = [
   'DEA Numbers',
   'License Numbers',
   'Doctor Phones',
-  'Staff Phones',
+  'Team Members',
   'Vendors',
   'Labs',
   'Delivery',
