@@ -19,6 +19,7 @@ import {
   type OfficeDoc,
   type OfficeDocCategory,
 } from '@/hooks/useOfficeDocs';
+import { parseDocBlocks } from '@/lib/doc-format';
 
 const CATEGORY_ORDER: OfficeDocCategory[] = ['policy', 'hr', 'insurance', 'other'];
 
@@ -45,8 +46,47 @@ function DocReader({ doc, onBack }: { doc: OfficeDoc; onBack: () => void }) {
           </div>
         ) : (
           <ScrollArea className="h-[65vh] pr-4">
-            <div className="whitespace-pre-wrap text-sm leading-relaxed">
-              {content || 'This document has no readable text.'}
+            <div className="max-w-prose">
+              {content ? (
+                parseDocBlocks(content).map((block, i) => {
+                  switch (block.type) {
+                    case 'heading':
+                      return block.level <= 2 ? (
+                        <h2 key={i} className="text-lg font-semibold mt-6 mb-2 first:mt-0">
+                          {block.text}
+                        </h2>
+                      ) : (
+                        <h3 key={i} className="text-base font-semibold mt-5 mb-1.5 first:mt-0">
+                          {block.text}
+                        </h3>
+                      );
+                    case 'bullets':
+                      return (
+                        <ul key={i} className="list-disc pl-5 space-y-1.5 mb-3 text-sm leading-relaxed">
+                          {block.items.map((item, j) => (
+                            <li key={j}>{item}</li>
+                          ))}
+                        </ul>
+                      );
+                    case 'numbered':
+                      return (
+                        <ol key={i} className="list-decimal pl-5 space-y-1.5 mb-3 text-sm leading-relaxed">
+                          {block.items.map((item, j) => (
+                            <li key={j}>{item}</li>
+                          ))}
+                        </ol>
+                      );
+                    default:
+                      return (
+                        <p key={i} className="text-sm leading-relaxed mb-3">
+                          {block.text}
+                        </p>
+                      );
+                  }
+                })
+              ) : (
+                'This document has no readable text.'
+              )}
             </div>
           </ScrollArea>
         )}
