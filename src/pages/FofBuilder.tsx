@@ -125,6 +125,11 @@ const MAXED_NOTE =
 const MAXED_NOTE_PREV_EXEMPT =
   "This treatment is expected to use the remainder of your dental plan's annual maximum. Preventive care does not count toward your maximum, so hygiene (cleaning) visits remain covered; other services will be your responsibility until your benefits renew.";
 
+// Printed when part of the insurance estimate is paid from NEXT year's
+// benefits (treatment continues past the benefit-year renewal).
+const RENEWAL_NOTE =
+  "Because this treatment continues into your next insurance benefit year, part of the estimate is paid from next year's renewed benefits: your annual maximum starts over for the visits after renewal, and your deductible applies again. If your coverage changes at renewal, this estimate may change as well.";
+
 // Fees billed AT their visit with no half-ahead prepay in the installment
 // schedule — per office policy the surgical guide isn't prepaid.
 const NO_PREPAY_CODES = new Set(['D5982']);
@@ -988,6 +993,11 @@ export default function FofBuilder() {
   if (downgradeApplied) extraFootnotes.push(DOWNGRADE_NOTE);
   if (maxedOut) {
     extraFootnotes.push(state.prevExemptState === 'yes' ? MAXED_NOTE_PREV_EXEMPT : MAXED_NOTE);
+  }
+  // Next-year benefits in play: say so on the form so the patient
+  // understands why insurance keeps paying after this year's max.
+  if (insuranceActive && state.spans2Years === 'yes' && estimate.renewalPaysCents > 0) {
+    extraFootnotes.push(RENEWAL_NOTE);
   }
   // Tell the patient which listed procedures their membership covers.
   const membershipFreeLabels = [
