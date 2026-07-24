@@ -1371,6 +1371,41 @@ export type Database = {
           },
         ]
       }
+      important_number_tabs: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          org_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          org_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          org_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "important_number_tabs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       important_numbers: {
         Row: {
           created_at: string
@@ -1380,6 +1415,7 @@ export type Database = {
           org_id: string
           section: string
           sort_order: number
+          tab: string
           updated_at: string
           value: string
         }
@@ -1391,6 +1427,7 @@ export type Database = {
           org_id: string
           section?: string
           sort_order?: number
+          tab?: string
           updated_at?: string
           value?: string
         }
@@ -1402,6 +1439,7 @@ export type Database = {
           org_id?: string
           section?: string
           sort_order?: number
+          tab?: string
           updated_at?: string
           value?: string
         }
