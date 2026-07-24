@@ -1427,13 +1427,20 @@ export default function FofBuilder() {
     .map(l => {
       const code = l.code.trim().toUpperCase();
       const per = perLineByKey.get(l.key);
+      // Fillings never show surface detail \u2014 office copy included. A raw
+      // PMS description ("Composite - 2 srf, ant") collapses to the
+      // friendly name; other codes keep whatever staff typed.
+      const fillMatch = /^D2(1[4-6]\d|3[0-9]\d)$/.exec(code);
+      const description = fillMatch
+        ? friendlyCdtName(code) || l.description.trim()
+        : l.description.trim();
       return {
         code,
         tooth: l.tooth.trim(),
         visit: String(effectiveVisit(l)),
         category:
           CATEGORY_SHORT[l.category] + (l.workupFlag === 'yes' ? ' \u00b7 Work Up' : ''),
-        description: l.description.trim(),
+        description,
         officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
         // No-coverage lines print no allowable — a carrier fee is
         // meaningless (and misleading) on a line insurance won't touch.
