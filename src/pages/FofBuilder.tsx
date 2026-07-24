@@ -1417,11 +1417,14 @@ export default function FofBuilder() {
           CATEGORY_SHORT[l.category] + (l.workupFlag === 'yes' ? ' \u00b7 Work Up' : ''),
         description: l.description.trim(),
         officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
-        allowableCents: insuranceActive
-          ? l.allowedInput.trim()
-            ? parseCurrencyInput(l.allowedInput)
-            : allowedByCode.get(code) ?? null
-          : null,
+        // No-coverage lines print no allowable — a carrier fee is
+        // meaningless (and misleading) on a line insurance won't touch.
+        allowableCents:
+          insuranceActive && l.category !== 'other'
+            ? l.allowedInput.trim()
+              ? parseCurrencyInput(l.allowedInput)
+              : allowedByCode.get(code) ?? null
+            : null,
         entryDate: l.entryDate,
         insPaysCents: per?.insurancePaysCents ?? 0,
         writeOffCents: per?.writeOffCents ?? 0,
