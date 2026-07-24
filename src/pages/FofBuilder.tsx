@@ -951,7 +951,7 @@ export default function FofBuilder() {
       });
     }
     const distinct = [...new Set(entries.map(e => e.raw))].sort((a, b) => a - b);
-    return distinct.map(v => {
+    const visitsOut = distinct.map(v => {
       const group = entries.filter(e => e.raw === v);
       const top = group.reduce((best, e) => (e.feeCents > best.feeCents ? e : best), group[0]);
       const allWorkup = group.every(e => e.workup);
@@ -960,6 +960,24 @@ export default function FofBuilder() {
         safeLabel: allWorkup ? 'Work Up Visit' : top.safeLabel,
         feeCents: group.reduce((sum, e) => sum + e.feeCents, 0),
         dueAtVisitCents: group.reduce((sum, e) => sum + (e.dueAtVisit ? e.feeCents : 0), 0),
+      };
+    });
+    // Two visits with the same kind of work would produce two identical
+    // payment names ("At the Extraction Visit" twice) — confusing on the
+    // schedule. Repeats get First/Second/... prefixes.
+    const ORDINALS = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth'];
+    const labelCounts = new Map<string, number>();
+    for (const v of visitsOut) labelCounts.set(v.label, (labelCounts.get(v.label) ?? 0) + 1);
+    const seen = new Map<string, number>();
+    return visitsOut.map(v => {
+      if ((labelCounts.get(v.label) ?? 0) < 2 || !v.label) return v;
+      const idx = seen.get(v.label) ?? 0;
+      seen.set(v.label, idx + 1);
+      const ord = ORDINALS[idx] ?? `${idx + 1}th`;
+      return {
+        ...v,
+        label: `${ord} ${v.label}`,
+        safeLabel: v.safeLabel ? `${ord} ${v.safeLabel}` : v.safeLabel,
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -972,8 +990,21 @@ export default function FofBuilder() {
     projectedPortion > 0 && projectedPortion < DAY_OF_SERVICE_THRESHOLD_CENTS
       ? VISIT_PLANS.dayOfService
       : scheduleFromVisits ?? treatmentVisitPlan;
+  const forcedPlan =
+    overrideCount >= 1 && overrideCount <= 4 ? planForCount(overrideCount) : null;
+  // Office policy holds in EVERY plan shape: under $1,000 nothing is due
+  // before the first visit — a forced payment count (or generic plan)
+  // that opens with "Upon Scheduling" collects that payment at the first
+  // visit instead. (The visit-schedule builder already handles this.)
+  const basePlan = forcedPlan ?? autoVisitPlan;
   const rawVisitPlan =
-    overrideCount >= 1 && overrideCount <= 4 ? planForCount(overrideCount) : autoVisitPlan;
+    basePlan &&
+    basePlan.key !== 'visitSchedule' &&
+    projectedPortion > 0 &&
+    projectedPortion < DAY_OF_SERVICE_THRESHOLD_CENTS &&
+    /scheduling/i.test(basePlan.labels[0] ?? '')
+      ? { ...basePlan, labels: ['At the First Visit', ...basePlan.labels.slice(1)] }
+      : basePlan;
   // Staff-edited payment names take over the auto visit labels.
   const visitPlan = rawVisitPlan
     ? {
@@ -1404,11 +1435,14 @@ export default function FofBuilder() {
           CATEGORY_SHORT[l.category] + (l.workupFlag === 'yes' ? ' \u00b7 Work Up' : ''),
         description: l.description.trim(),
         officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
-        allowableCents: insuranceActive
-          ? l.allowedInput.trim()
-            ? parseCurrencyInput(l.allowedInput)
-            : allowedByCode.get(code) ?? null
-          : null,
+        // No-coverage lines print no allowable — a carrier fee is
+        // meaningless (and misleading) on a line insurance won't touch.
+        allowableCents:
+          insuranceActive && l.category !== 'other'
+            ? l.allowedInput.trim()
+              ? parseCurrencyInput(l.allowedInput)
+              : allowedByCode.get(code) ?? null
+            : null,
         entryDate: l.entryDate,
         insPaysCents: per?.insurancePaysCents ?? 0,
         writeOffCents: per?.writeOffCents ?? 0,
@@ -1582,6 +1616,222 @@ export default function FofBuilder() {
                 )}
               </CardContent>
             </Card>
+
+            {insuranceEnabled && (
+              <Card>
+                <SectionHeader
+                  title="Insurance"
+                  open={!collapsed.insurance}
+                  onToggle={() => toggleSection('insurance')}
+                  summary={
+                    !insuranceActive
+                      ? 'No carrier selected'
+                      : feeScheduleId === MANUAL_SCHEDULE
+                        ? 'Out of network — manual'
+                        : selectedSchedule?.name
+                  }
+                />
+                <CardContent className={collapsed.insurance ? 'hidden' : 'space-y-3'}>
+                  <div className="space-y-1.5">
+                    <Label>Carrier Fee Schedule</Label>
+                    <Select value={feeScheduleId} onValueChange={handleScheduleChange}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_SCHEDULE}>None — no insurance on this form</SelectItem>
+                        <SelectItem value={MANUAL_SCHEDULE}>
+                          Out of network — no fee schedule (enter amounts manually)
+                        </SelectItem>
+                        {(schedules ?? []).filter(sch => sch.kind === 'carrier' && sch.isActive).map(sch => (
+                          <SelectItem key={sch.id} value={sch.id}>{sch.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {insuranceActive && (
+                    <>
+                      {(schedules ?? []).some(sch => sch.kind === 'payment' && sch.isActive) && (
+                        <div className="space-y-1.5">
+                          <Label>Plan Payment Table (fee-schedule plans — optional)</Label>
+                          <Select value={payScheduleId} onValueChange={setPayScheduleId}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NO_SCHEDULE}>
+                                None — plan pays category percentages
+                              </SelectItem>
+                              {(schedules ?? [])
+                                .filter(sch => sch.kind === 'payment' && sch.isActive)
+                                .map(sch => (
+                                  <SelectItem key={sch.id} value={sch.id}>{sch.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            For plans that pay a set dollar amount per code: the plan pays
+                            its table amount and the patient owes the difference up to the
+                            {' '}{selectedSchedule?.name ?? 'carrier'} fee. Payment tables
+                            are imported on the Fee Schedules page.
+                          </p>
+                        </div>
+                      )}
+                      {!payActive && (
+                        <div className="grid gap-3 grid-cols-3">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="fof-pct-prev">Preventive %</Label>
+                            <Input
+                              id="fof-pct-prev"
+                              inputMode="numeric"
+                              autoComplete="off"
+                              value={state.pctPrev}
+                              onChange={setField('pctPrev')}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="fof-pct-basic">Basic %</Label>
+                            <Input
+                              id="fof-pct-basic"
+                              inputMode="numeric"
+                              autoComplete="off"
+                              value={state.pctBasic}
+                              onChange={setField('pctBasic')}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="fof-pct-major">Major %</Label>
+                            <Input
+                              id="fof-pct-major"
+                              inputMode="numeric"
+                              autoComplete="off"
+                              value={state.pctMajor}
+                              onChange={setField('pctMajor')}
+                            />
+                          </div>
+                        </div>
+                      )}
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="fof-ded">Patient's Remaining Deductible</Label>
+                          <Input
+                            id="fof-ded"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            value={state.deductibleInput}
+                            onChange={setField('deductibleInput')}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="fof-max">Patient's Remaining Annual Max</Label>
+                          <Input
+                            id="fof-max"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            value={state.annualMaxInput}
+                            onChange={setField('annualMaxInput')}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="fof-spans2"
+                          checked={state.spans2Years === 'yes'}
+                          onCheckedChange={v =>
+                            dispatch({ type: 'set', field: 'spans2Years', value: v ? 'yes' : '' })
+                          }
+                        />
+                        <Label htmlFor="fof-spans2">
+                          Treatment spans 2 benefit years (plan renews mid-treatment)
+                        </Label>
+                      </div>
+                      {state.spans2Years === 'yes' && (
+                        <>
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            <div className="space-y-1.5">
+                              <Label htmlFor="fof-next-max">Next Year's Annual Max</Label>
+                              <Input
+                                id="fof-next-max"
+                                inputMode="decimal"
+                                autoComplete="off"
+                                value={state.nextMaxInput}
+                                onChange={setField('nextMaxInput')}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor="fof-next-ded">Next Year's Deductible</Label>
+                              <Input
+                                id="fof-next-ded"
+                                inputMode="decimal"
+                                autoComplete="off"
+                                value={state.nextDedInput}
+                                onChange={setField('nextDedInput')}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor="fof-renewal-visit">New Year Starts at Visit #</Label>
+                              <Input
+                                id="fof-renewal-visit"
+                                inputMode="numeric"
+                                autoComplete="off"
+                                placeholder="e.g. 3"
+                                value={state.renewalVisitInput}
+                                onChange={setField('renewalVisitInput')}
+                              />
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Visits at or after that number use next year's max and
+                            deductible; earlier visits can only draw on what's left this
+                            year. Left blank, the renewal kicks in whenever this year's
+                            max runs out.
+                          </p>
+                        </>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="fof-aftermax"
+                          checked={state.afterMaxState === 'yes'}
+                          onCheckedChange={v =>
+                            dispatch({ type: 'set', field: 'afterMaxState', value: v ? 'yes' : '' })
+                          }
+                        />
+                        <Label htmlFor="fof-aftermax">
+                          Reverts to office fees when maxed out (e.g. Altus, some DD plans)
+                        </Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="fof-prev-exempt"
+                          checked={state.prevExemptState === 'yes'}
+                          onCheckedChange={v =>
+                            dispatch({ type: 'set', field: 'prevExemptState', value: v ? 'yes' : '' })
+                          }
+                        />
+                        <Label htmlFor="fof-prev-exempt">
+                          Preventive doesn't count toward the annual max
+                        </Label>
+                      </div>
+                      {state.annualMaxInput.trim() !== '' && (
+                        <p className="text-xs font-medium">
+                          {estimate.maxedOut
+                            ? 'This treatment uses up the patient’s annual max — the form will say so.'
+                            : `${formatCents(estimate.remainingMaxCents)} of the patient’s annual max is left after this treatment.`}
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Write-offs {writeoffsApplied ? 'apply on this form' : "don't apply on this form"} —
+                        they follow the carrier's "In network" marker on the Fee Schedules page.
+                        Allowed fees auto-fill from the selected schedule; type in the Allowed
+                        column to override a line. If this treatment maxes the patient out, the
+                        form automatically explains that later visits (including hygiene) are out
+                        of pocket. None of these patient numbers are saved.
+                      </p>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <SectionHeader
@@ -1989,222 +2239,6 @@ export default function FofBuilder() {
                 </p>
               </CardContent>
             </Card>
-
-            {insuranceEnabled && (
-              <Card>
-                <SectionHeader
-                  title="Insurance"
-                  open={!collapsed.insurance}
-                  onToggle={() => toggleSection('insurance')}
-                  summary={
-                    !insuranceActive
-                      ? 'No carrier selected'
-                      : feeScheduleId === MANUAL_SCHEDULE
-                        ? 'Out of network — manual'
-                        : selectedSchedule?.name
-                  }
-                />
-                <CardContent className={collapsed.insurance ? 'hidden' : 'space-y-3'}>
-                  <div className="space-y-1.5">
-                    <Label>Carrier Fee Schedule</Label>
-                    <Select value={feeScheduleId} onValueChange={handleScheduleChange}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={NO_SCHEDULE}>None — no insurance on this form</SelectItem>
-                        <SelectItem value={MANUAL_SCHEDULE}>
-                          Out of network — no fee schedule (enter amounts manually)
-                        </SelectItem>
-                        {(schedules ?? []).filter(sch => sch.kind === 'carrier' && sch.isActive).map(sch => (
-                          <SelectItem key={sch.id} value={sch.id}>{sch.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {insuranceActive && (
-                    <>
-                      {(schedules ?? []).some(sch => sch.kind === 'payment' && sch.isActive) && (
-                        <div className="space-y-1.5">
-                          <Label>Plan Payment Table (fee-schedule plans — optional)</Label>
-                          <Select value={payScheduleId} onValueChange={setPayScheduleId}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={NO_SCHEDULE}>
-                                None — plan pays category percentages
-                              </SelectItem>
-                              {(schedules ?? [])
-                                .filter(sch => sch.kind === 'payment' && sch.isActive)
-                                .map(sch => (
-                                  <SelectItem key={sch.id} value={sch.id}>{sch.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
-                          <p className="text-xs text-muted-foreground">
-                            For plans that pay a set dollar amount per code: the plan pays
-                            its table amount and the patient owes the difference up to the
-                            {' '}{selectedSchedule?.name ?? 'carrier'} fee. Payment tables
-                            are imported on the Fee Schedules page.
-                          </p>
-                        </div>
-                      )}
-                      {!payActive && (
-                        <div className="grid gap-3 grid-cols-3">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="fof-pct-prev">Preventive %</Label>
-                            <Input
-                              id="fof-pct-prev"
-                              inputMode="numeric"
-                              autoComplete="off"
-                              value={state.pctPrev}
-                              onChange={setField('pctPrev')}
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor="fof-pct-basic">Basic %</Label>
-                            <Input
-                              id="fof-pct-basic"
-                              inputMode="numeric"
-                              autoComplete="off"
-                              value={state.pctBasic}
-                              onChange={setField('pctBasic')}
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor="fof-pct-major">Major %</Label>
-                            <Input
-                              id="fof-pct-major"
-                              inputMode="numeric"
-                              autoComplete="off"
-                              value={state.pctMajor}
-                              onChange={setField('pctMajor')}
-                            />
-                          </div>
-                        </div>
-                      )}
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-1.5">
-                          <Label htmlFor="fof-ded">Patient's Remaining Deductible</Label>
-                          <Input
-                            id="fof-ded"
-                            inputMode="decimal"
-                            autoComplete="off"
-                            value={state.deductibleInput}
-                            onChange={setField('deductibleInput')}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="fof-max">Patient's Remaining Annual Max</Label>
-                          <Input
-                            id="fof-max"
-                            inputMode="decimal"
-                            autoComplete="off"
-                            value={state.annualMaxInput}
-                            onChange={setField('annualMaxInput')}
-                          />
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          id="fof-spans2"
-                          checked={state.spans2Years === 'yes'}
-                          onCheckedChange={v =>
-                            dispatch({ type: 'set', field: 'spans2Years', value: v ? 'yes' : '' })
-                          }
-                        />
-                        <Label htmlFor="fof-spans2">
-                          Treatment spans 2 benefit years (plan renews mid-treatment)
-                        </Label>
-                      </div>
-                      {state.spans2Years === 'yes' && (
-                        <>
-                          <div className="grid gap-3 sm:grid-cols-3">
-                            <div className="space-y-1.5">
-                              <Label htmlFor="fof-next-max">Next Year's Annual Max</Label>
-                              <Input
-                                id="fof-next-max"
-                                inputMode="decimal"
-                                autoComplete="off"
-                                value={state.nextMaxInput}
-                                onChange={setField('nextMaxInput')}
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label htmlFor="fof-next-ded">Next Year's Deductible</Label>
-                              <Input
-                                id="fof-next-ded"
-                                inputMode="decimal"
-                                autoComplete="off"
-                                value={state.nextDedInput}
-                                onChange={setField('nextDedInput')}
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label htmlFor="fof-renewal-visit">New Year Starts at Visit #</Label>
-                              <Input
-                                id="fof-renewal-visit"
-                                inputMode="numeric"
-                                autoComplete="off"
-                                placeholder="e.g. 3"
-                                value={state.renewalVisitInput}
-                                onChange={setField('renewalVisitInput')}
-                              />
-                            </div>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            Visits at or after that number use next year's max and
-                            deductible; earlier visits can only draw on what's left this
-                            year. Left blank, the renewal kicks in whenever this year's
-                            max runs out.
-                          </p>
-                        </>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          id="fof-aftermax"
-                          checked={state.afterMaxState === 'yes'}
-                          onCheckedChange={v =>
-                            dispatch({ type: 'set', field: 'afterMaxState', value: v ? 'yes' : '' })
-                          }
-                        />
-                        <Label htmlFor="fof-aftermax">
-                          Reverts to office fees when maxed out (e.g. Altus, some DD plans)
-                        </Label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          id="fof-prev-exempt"
-                          checked={state.prevExemptState === 'yes'}
-                          onCheckedChange={v =>
-                            dispatch({ type: 'set', field: 'prevExemptState', value: v ? 'yes' : '' })
-                          }
-                        />
-                        <Label htmlFor="fof-prev-exempt">
-                          Preventive doesn't count toward the annual max
-                        </Label>
-                      </div>
-                      {state.annualMaxInput.trim() !== '' && (
-                        <p className="text-xs font-medium">
-                          {estimate.maxedOut
-                            ? 'This treatment uses up the patient’s annual max — the form will say so.'
-                            : `${formatCents(estimate.remainingMaxCents)} of the patient’s annual max is left after this treatment.`}
-                        </p>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        Write-offs {writeoffsApplied ? 'apply on this form' : "don't apply on this form"} —
-                        they follow the carrier's "In network" marker on the Fee Schedules page.
-                        Allowed fees auto-fill from the selected schedule; type in the Allowed
-                        column to override a line. If this treatment maxes the patient out, the
-                        form automatically explains that later visits (including hygiene) are out
-                        of pocket. None of these patient numbers are saved.
-                      </p>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            )}
 
             {computation && (
               <Card>

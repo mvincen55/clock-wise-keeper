@@ -159,6 +159,10 @@
   min-height: 10in;
   display: flex;
   flex-direction: column;
+  /* Leftover height distributes BETWEEN sections at every density, so
+     the form always fills the whole page instead of pooling one big gap
+     above the footer. (The office copy overrides back to flex-start.) */
+  justify-content: space-between;
   background: white;
   color: var(--fof-ink);
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -807,7 +811,6 @@
 /* Sparse forms: roomier type and spacing, with leftover height
    distributed between sections so the page always looks fully used. */
 .fof-roomy {
-  justify-content: space-between;
   font-size: 9.5pt;
 }
 
