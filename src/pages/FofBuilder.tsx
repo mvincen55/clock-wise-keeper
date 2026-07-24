@@ -951,7 +951,7 @@ export default function FofBuilder() {
       });
     }
     const distinct = [...new Set(entries.map(e => e.raw))].sort((a, b) => a - b);
-    return distinct.map(v => {
+    const visitsOut = distinct.map(v => {
       const group = entries.filter(e => e.raw === v);
       const top = group.reduce((best, e) => (e.feeCents > best.feeCents ? e : best), group[0]);
       const allWorkup = group.every(e => e.workup);
@@ -960,6 +960,24 @@ export default function FofBuilder() {
         safeLabel: allWorkup ? 'Work Up Visit' : top.safeLabel,
         feeCents: group.reduce((sum, e) => sum + e.feeCents, 0),
         dueAtVisitCents: group.reduce((sum, e) => sum + (e.dueAtVisit ? e.feeCents : 0), 0),
+      };
+    });
+    // Two visits with the same kind of work would produce two identical
+    // payment names ("At the Extraction Visit" twice) — confusing on the
+    // schedule. Repeats get First/Second/... prefixes.
+    const ORDINALS = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth'];
+    const labelCounts = new Map<string, number>();
+    for (const v of visitsOut) labelCounts.set(v.label, (labelCounts.get(v.label) ?? 0) + 1);
+    const seen = new Map<string, number>();
+    return visitsOut.map(v => {
+      if ((labelCounts.get(v.label) ?? 0) < 2 || !v.label) return v;
+      const idx = seen.get(v.label) ?? 0;
+      seen.set(v.label, idx + 1);
+      const ord = ORDINALS[idx] ?? `${idx + 1}th`;
+      return {
+        ...v,
+        label: `${ord} ${v.label}`,
+        safeLabel: v.safeLabel ? `${ord} ${v.safeLabel}` : v.safeLabel,
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
