@@ -459,8 +459,10 @@
 
 .fof-option .fof-save-chip {
   margin-top: auto;
-  font-size: 9.5pt;
-  padding: 4pt 7pt;
+  /* Sized so the sentence stays on ONE line inside the half-width card. */
+  font-size: 8.6pt;
+  padding: 4pt 6pt;
+  gap: 5pt;
 }
 
 .fof-or {
@@ -494,8 +496,10 @@
   border: 0.75pt solid #a4cdb2;
   color: #14532d;
   border-radius: 4pt;
-  /* The savings line fills its box — it's the sales pitch, not fine print. */
+  /* The savings line fills its box — it's the sales pitch, not fine
+     print — and never wraps to a second line. */
   font-size: 9.5pt;
+  white-space: nowrap;
   padding: 4pt 7pt;
   text-align: left;
   print-color-adjust: exact;
