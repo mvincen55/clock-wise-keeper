@@ -6,6 +6,7 @@
  */
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,7 +28,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { ArrowLeft, FileSpreadsheet, Loader2, Pencil, Plus, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, Copy, Download, FileSpreadsheet, Loader2, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import FeeImportDialog from '@/components/fof/FeeImportDialog';
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
 import { categorizeCdtCode } from '@/lib/fof/cdt';
@@ -183,14 +184,57 @@ function ScheduleItemsCard({ schedule, isManager }: { schedule: FeeSchedule; isM
     );
   }, [items, search]);
 
+  // One line per code, single-line text so tabs/newlines can't break rows.
+  const oneLine = (text: string) => text.replace(/[\t\n\r]+/g, ' ').trim();
+
+  const exportExcel = () => {
+    const rows = (items ?? []).map(i => ({
+      Code: i.code,
+      Description: i.description,
+      Category: CATEGORY_LABELS[i.category],
+      Fee: i.feeCents / 100,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{ wch: 8 }, { wch: 44 }, { wch: 24 }, { wch: 10 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Fees');
+    const safeName = schedule.name.replace(/[^A-Za-z0-9 _()-]+/g, '').trim() || 'Fee Schedule';
+    XLSX.writeFile(wb, `${safeName}.xlsx`);
+    toast.success(`Exported ${rows.length} codes to Excel`);
+  };
+
+  const copyAll = async () => {
+    const lines = [
+      ['Code', 'Description', 'Category', 'Fee'].join('\t'),
+      ...(items ?? []).map(i =>
+        [i.code, oneLine(i.description), CATEGORY_LABELS[i.category], (i.feeCents / 100).toFixed(2)].join('\t')
+      ),
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      toast.success(`Copied ${items?.length ?? 0} codes — paste straight into Excel or Sheets`);
+    } catch {
+      toast.error('Could not access the clipboard — try again in this tab');
+    }
+  };
+
   return (
     <div className="space-y-3">
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Input
+          className="flex-1 min-w-48"
           placeholder="Search code or description…"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
+        <Button variant="outline" disabled={(items ?? []).length === 0} onClick={exportExcel}>
+          <Download className="h-4 w-4 mr-1.5" />
+          Export Excel
+        </Button>
+        <Button variant="outline" disabled={(items ?? []).length === 0} onClick={copyAll}>
+          <Copy className="h-4 w-4 mr-1.5" />
+          Copy All
+        </Button>
         {isManager && (
           <Button variant="outline" onClick={() => { setEditing(null); setEditorOpen(true); }}>
             <Plus className="h-4 w-4 mr-1.5" />
