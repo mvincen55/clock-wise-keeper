@@ -1,5 +1,9 @@
 # Genericization Pass — Phase 0 Inventory
 
+> **Status: APPROVED (2026-07-24 review) — greenlit for Phase 1.** Decisions on the four
+> open items are recorded in [Review decisions](#review-decisions-2026-07-24) below and
+> folded into the affected rows.
+
 **Audit only — no code was changed.** Every hardcoded office-specific value found in the
 tree (src, supabase functions, migrations, seeds, edge-function prompts), with file/line
 and a proposed destination. Line numbers are as of commit `a9b5da8`.
@@ -34,10 +38,10 @@ Risk tier: 💰 = changes dollar output (server-side validation with bounds requ
 | 1.8 | `src/components/DepositPrintSheet.tsx:184` | Print footer literal: "Harelick Dental Associates, LLC · Daily Deposit Log · …" | **Branding**: footer text from org_branding (deposit sheet takes no practice props today — needs them) |
 | 1.9 | `src/index.css:164` (`--dep-navy`) and `:400-404` (`--fof-navy`, `--fof-tint`) | `#53406e` "office deep purple", `#f3f0f8` "office light purple" (plus derived `--dep/fof-ink/muted/line` shades) | **Branding**: brand color in org_branding, injected as CSS custom property at render; Harelick seeded `#53406e`. Derived shades: compute or store alongside |
 | 1.10 | `src/pages/PTO.tsx:115,495` | "Harelick Dental — Combined PTO Bank", "Harelick Dental Accrual Tiers" headings | **Branding** (display-name interpolation) |
-| 1.11 | `src/hooks/usePtoEngine.ts:6-13` | Header comment "Harelick Dental PTO Policy" + `PTO_TIERS` accrual rates/caps (0.0576/2.30 … 0.1009/4.00) | **Setting** 💰 (payroll-adjacent): tiers are Harelick's PTO policy, hardcoded for all users. Candidate org-scoped `pto_accrual_tiers`; larger than this pass's FOF focus — flag for a decision (could be deferred like deposit layout, but it IS an office-specific money value) |
-| 1.12 | `src/hooks/useAuth.tsx:5` | `ALLOWED_EMAILS = ['meganvincent43@gmail.com', 'mvincent@drharelick.com']` client-side gate | **Seed/legacy**: predates orgs; personal + office emails in code. Should be retired in favor of `allowed_users` table / org membership (already exists). Flag for review — auth change, not print-path |
+| 1.11 | `src/hooks/usePtoEngine.ts:6-13` | Header comment "Harelick Dental PTO Policy" + `PTO_TIERS` accrual rates/caps (0.0576/2.30 … 0.1009/4.00) | **Rule** 💰 — **DECIDED: in scope.** Org-scoped policy parameters, same pattern as discount rules. Own PR at the end of Phase 2, with the invariant extended to a PTO ledger snapshot (these move accrual math) |
+| 1.12 | `src/hooks/useAuth.tsx:5` | `ALLOWED_EMAILS = ['meganvincent43@gmail.com', 'mvincent@drharelick.com']` client-side gate | **DECIDED: retire in Phase 1**, conditional on confirming the server-side `allowed_users` check gates every auth path. Client-side list goes away entirely |
 | 1.13 | `supabase/migrations/20260217234928…​.sql:20`, `20260610173334…​.sql:1` | `allowed_users` seeds: meganvincent43@gmail.com, mvincent@drharelick.com | **Seed default** (already rows — fine); note only that migrations carry personal emails |
-| 1.14 | `supabase/functions/google-calendar-events/index.ts:3-4` | `OFFICE_CALENDAR_ID = 'c_ec5a…@group.calendar.google.com'` ("HDA - Fairhaven office calendar") | **Setting** 🖨: org-scoped calendar ID (function already accepts `?calendarId=` — the hardcode is only the fallback). Companion comment `src/pages/OfficeCalendar.tsx:155` |
+| 1.14 | `supabase/functions/google-calendar-events/index.ts:3-4` | `OFFICE_CALENDAR_ID = 'c_ec5a…@group.calendar.google.com'` ("HDA - Fairhaven office calendar") | **Setting** 🖨 — **DECIDED: becomes an org-level setting/secret in Phase 1**, not just noted. Companion comment `src/pages/OfficeCalendar.tsx:155` |
 | 1.15 | `supabase/functions/auth-email-hook/index.ts:47-50` | `SITE_NAME "clock-wise-keeper"`, sender domains `timekeepers.me` / `notify.timekeepers.me` | **Product**: platform email identity (Lovable-scaffolded), not office identity. If org-branded auth emails are wanted later, sender *display name* could read from org_branding — not required by this pass |
 | 1.16 | `src/test/doc-format.test.ts:7-9,37` | "Harelick Dental Associates, LLC Fairhaven, MA" as test fixtures | **Product** (test data): rename to a neutral fixture practice during Phase 1 cleanup (no runtime effect) |
 | 1.17 | `src/components/AppLayout.tsx:27` + `useAuth.tsx:7` | "TimeVault" brand / `timevault_session_timeout_minutes` storage key | **Product**: app brand, not office-specific. No action |
@@ -47,7 +51,7 @@ Risk tier: 💰 = changes dollar output (server-side validation with bounds requ
 | # | File:line | Value | Destination |
 |---|---|---|---|
 | 2.1 | `src/components/DepositPrintSheet.tsx:145` | "Purple envelope — no tape" callout (printed on both copies) | **Setting** 🖨: addressable free-text slot (per copy, per position), snapshotted onto the saved deposit record at save time; Harelick default = current text |
-| 2.2 | `src/components/DepositPrintSheet.tsx:17-18` | `BANK_COPY_ACCOUNT = 'Bay Coast Account #841845805'` — real bank + account number in source | **Setting** 🖨 (and a mild security smell — an account number in a public repo): org-scoped deposit settings; snapshot onto saved records |
+| 2.2 | `src/components/DepositPrintSheet.tsx:17-18` | `BANK_COPY_ACCOUNT = 'Bay Coast Account #841845805'` — real bank + account number in source | **Setting** 🖨 — **DECIDED: treat as exposed.** Literal removed in Phase 1 (moves to org deposit settings); git history NOT rewritten — mitigation at the bank + Lovable project flipping to private. A full-tree sweep found no other literal account/routing numbers |
 | 2.3 | `src/components/DepositPrintSheet.tsx:136-137,165` | Bank names in labels: "BC Bank — cash & checks", "F Bank — card deposits", "BC Bank Total" | **Setting** 🖨: bank display names as org settings. (Bank *count/split structure* is Out of scope — future build; only the names move now) |
 | 2.4 | `src/components/DepositPrintSheet.tsx:185` | "Office Copy — file with the day sheet" filing instruction | **Setting** 🖨 (addressable note slot) or Seed default — low priority, review |
 
@@ -85,7 +89,7 @@ All get `fof_settings`-style org rows with type + server-validated bounds; shipp
 | 5.2 | `src/pages/FofBuilder.tsx:139` | `FOF_DOCTORS = ['Dr. Scott', 'Dr. Jennie', 'Dr. Robert', 'Dr. Nicole', 'Dr. Natalie']` dropdown | **Setting** 🖨: org-scoped doctor list (new small table or settings array); Harelick seeded with these five |
 | 5.3 | `supabase/migrations/20260723034500_fof_doctor_name.sql:4` | `fof_templates.doctor_name` DEFAULT 'Dr. Scott' | **Seed default** → change column default to '' once org doctor list exists; Harelick rows keep their value |
 | 5.4 | `supabase/migrations/20260724220000_important_numbers_tabs.sql:37-43,50-57` | Tab seeds (Office/Team/Referrals/Labs/Insurance Companies/Other) + section→tab mapping (Doctor Phones, Oral Surgery, …) | **Seed default** — already per-org rows, manager-renamable. Generic; keep |
-| 5.5 | `src/lib/checklist-defaults.ts:24-168` | Factory checklists transcribed from Harelick's Drive sheets — office-specific vocabulary throughout: Dentrix, RM, HCF/HCU, PB, QB, Keurig, "Move Documents to Attic", "Numbers in Breakroom", Vac-U-Sol, IOS laptop… | **Seed default** (already seeded-then-editable rows). Review call: ship as-is ("~80% right" argument is weak here — many items are Harelick-house-specific) vs. trim to a generic dental core. **Recommend human decision** |
+| 5.5 | `src/lib/checklist-defaults.ts:24-168` | Factory checklists transcribed from Harelick's Drive sheets — office-specific vocabulary throughout: Dentrix, RM, HCF/HCU, PB, QB, Keurig, "Move Documents to Attic", "Numbers in Breakroom", Vac-U-Sol, IOS laptop… | **Seed default** — **DECIDED: checklist system stays fully intact; Harelick's checklists remain as org data** (already seeded rows). Fresh-install seeds are rewritten as generic dental-office versions — no Harelick-specific names or operational quirks pre-loaded for other orgs |
 | 5.6 | `src/pages/MorningHuddle.tsx:10-48` | Huddle agenda mirroring the office's "Morning Huddle Info" doc (stores nothing) | **Seed default**: generic dental content; fine to ship as the default agenda. Future: org-editable rows (new feature — out of scope) |
 | 5.7 | `src/lib/fof/defaults.ts:98,109` | Template name "In-House Membership (Illumitrac)" + Illumitrac footnote | **Seed default** (org rows) + membership display name setting (3.8) |
 
@@ -126,12 +130,27 @@ schedule with an under-$1k first visit, a never-covered code, the "You save" chi
 (FofPrintSheet.tsx:373), and the benefit-year renewal note (`RENEWAL_NOTE`, FofBuilder.tsx:131);
 and (b) a saved Deposit Log, Office + Bank copies. These land as snapshot tests in the Phase 1 PR.
 
+## Review decisions (2026-07-24)
+
+1. **Bank account number (2.2):** treat as exposed. Remove the literal in Phase 1 — it moves
+   to org deposit settings. Do **not** rewrite git history; mitigation is happening at the
+   bank and the Lovable project is being flipped to private. Sweep result: no other literal
+   account/routing numbers exist in the tree.
+2. **PTO accrual tiers (1.11):** in scope — same pattern as discount rules (org policy
+   parameters). Own PR at the end of Phase 2, with the invariant extended to a PTO ledger
+   snapshot, since these move accrual math.
+3. **Email allowlist (1.12):** retire in Phase 1, conditional on confirming the server-side
+   `allowed_users` check gates every auth path. The client-side list goes away entirely.
+4. **Checklist seeds (5.5):** checklist system stays fully intact; Harelick's checklists
+   remain as org data. Fresh-install seeds become generic dental-office versions — no
+   Harelick-specific names or operational quirks pre-loaded for other orgs.
+5. **Google Calendar ID (1.14):** becomes an org-level setting/secret in Phase 1, not just noted.
+
 ## Summary counts
 
-- **Branding (Phase 1):** 11 items (1.1–1.10, 1.14 partially)
+- **Branding (Phase 1):** 11 items (1.1–1.10) + 1.14 (calendar ID setting), 1.12 (allowlist retirement), 2.2 (deposit account line), 5.5 (generic fresh-install checklist seeds)
 - **Settings 2a (money thresholds):** 3.1, 3.2 (+ downgrade default confirmation 3.5)
-- **Rules 2b:** 3.3, 3.4, 3.6, 3.7 (+ template percent refs 3.8)
-- **Settings 2c / printed-text slots:** 2.1–2.4, 4.4, 4.5, 5.2
+- **Rules 2b:** 3.3, 3.4, 3.6, 3.7 (+ template percent refs 3.8); PTO tiers (1.11) as their own PR at the end of Phase 2
+- **Settings 2c / printed-text slots:** 2.1, 2.3, 2.4, 4.4, 4.5, 5.2
 - **Prompt migrations (with Phase 2/3):** 6.1, 6.2, 6.4, 6.5, 6.7
-- **Human decisions requested:** 1.11 (PTO tiers in/out of scope), 1.12 (retire client email allowlist), 5.5 (checklist seeds as-is vs trimmed), 2.2 (account number in repo history)
 - **Out of scope confirmed:** deposit layout/bank-count structure (4.1–4.3)
