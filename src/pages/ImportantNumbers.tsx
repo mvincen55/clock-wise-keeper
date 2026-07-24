@@ -1,15 +1,16 @@
 /**
- * Important Numbers — the office directory, credentials-first.
+ * Important Numbers — the office directory, credentials-first, styled
+ * after the printed FOF (deep purple accents, tinted hero, kicker
+ * headings, quiet cards).
  *
- * Tabs (Office, Team, Referrals, Labs, Insurance Companies, Other —
- * manager-renamable) under a global search. The Office tab leads with
- * the practice's identifiers: Practice IDs as a hero card, then NPI /
- * License / DEA side by side, then everything else.
+ * First open shows EVERYTHING: Practice IDs hero, NPI/License/DEA trio,
+ * then every tab's sections under elegant group headers. The pills at
+ * the top (All, Office, Team, Referrals, Labs, Insurance Companies,
+ * Other — manager-renamable) filter the same content.
  *
  * Permissions: everyone reads and can ADD entries or add NOTES to an
  * entry; only owners/managers change names/numbers or delete (enforced
- * in the database, not just the UI). Manager editing lives behind one
- * Edit button — per-entry controls only appear in edit mode.
+ * in the database). Manager editing lives behind one Edit button.
  */
 import { useMemo, useState } from 'react';
 import {
@@ -22,7 +23,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -71,9 +71,17 @@ import {
 const looksLikePhone = (value: string) => /^[\d\s().+x-]{7,}$/i.test(value.trim());
 const telHref = (value: string) => `tel:${value.replace(/[^\d+]/g, '')}`;
 
-// Sections that get the credentials treatment on the first tab.
+// The FOF print palette, carried onto the screen.
+const INK = 'text-[#53406e]';
+const KICKER = `text-[11px] font-bold uppercase tracking-[0.14em] ${INK}`;
+const KICKER_MUTED = 'text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground';
+const CARD = 'rounded-xl border-[#e2dcec] shadow-sm';
+const RULE = 'h-px flex-1 bg-[#ddd5e6]';
+
+// Sections that get the credentials treatment up top.
 const HERO_SECTION = 'Practice IDs';
 const CREDENTIAL_SECTIONS = ['NPI Numbers', 'License Numbers', 'DEA Numbers'];
+const FILTER_ALL = 'All';
 
 const EMPTY_FORM: ImportantNumberUpsert = { tab: 'Office', section: '', label: '', value: '', notes: '' };
 
@@ -82,7 +90,7 @@ function CopyButton({ value }: { value: string }) {
   return (
     <button
       type="button"
-      className="rounded p-1 text-muted-foreground/60 hover:bg-muted hover:text-foreground"
+      className="rounded p-1 text-muted-foreground/50 hover:bg-muted hover:text-foreground"
       title="Copy"
       onClick={() => {
         navigator.clipboard?.writeText(value).then(() => {
@@ -101,7 +109,7 @@ function ValueText({ value, large }: { value: string; large?: boolean }) {
   if (looksLikePhone(value)) {
     return (
       <a
-        className={`${large ? 'text-lg font-semibold' : 'text-sm'} text-primary hover:underline`}
+        className={`${large ? `text-xl font-bold tracking-tight ${INK}` : `text-sm font-medium ${INK}`} hover:underline`}
         href={telHref(value)}
       >
         {value}
@@ -110,7 +118,13 @@ function ValueText({ value, large }: { value: string; large?: boolean }) {
   }
   return (
     <span className="inline-flex items-center gap-1">
-      <span className={`font-mono ${large ? 'text-lg font-semibold tracking-tight' : 'text-sm'}`}>
+      <span
+        className={
+          large
+            ? `font-mono text-xl font-bold tracking-tight ${INK}`
+            : 'font-mono text-sm'
+        }
+      >
         {value}
       </span>
       <CopyButton value={value} />
@@ -225,6 +239,7 @@ function EntryDialog({
             Cancel
           </Button>
           <Button
+            className="bg-[#53406e] hover:bg-[#453759]"
             disabled={saving || !form.label.trim() || !form.tab.trim()}
             onClick={() => onSave(form)}
           >
@@ -253,7 +268,7 @@ export default function ImportantNumbers() {
   );
 
   const [query, setQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState(FILTER_ALL);
   const [editMode, setEditMode] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ImportantNumberUpsert>(EMPTY_FORM);
@@ -263,7 +278,7 @@ export default function ImportantNumbers() {
   const [tabsDialogOpen, setTabsDialogOpen] = useState(false);
   const [tabDrafts, setTabDrafts] = useState<Record<string, string>>({});
 
-  const currentTab = activeTab && tabs.includes(activeTab) ? activeTab : tabs[0];
+  const currentTab = activeTab !== FILTER_ALL && tabs.includes(activeTab) ? activeTab : FILTER_ALL;
   const searching = query.trim() !== '';
 
   const visibleEntries = useMemo(() => {
@@ -278,33 +293,43 @@ export default function ImportantNumbers() {
           e.tab.toLowerCase().includes(q)
         );
       }
-      return e.tab === currentTab;
+      return currentTab === FILTER_ALL || e.tab === currentTab;
     });
   }, [entries, query, currentTab]);
 
-  const bySection = useMemo(() => {
-    const map = new Map<string, ImportantNumber[]>();
+  // tab -> section -> rows, in tab order.
+  const grouped = useMemo(() => {
+    const byTab = new Map<string, Map<string, ImportantNumber[]>>();
     for (const entry of visibleEntries) {
+      const tabKey = tabs.includes(entry.tab) ? entry.tab : tabs[tabs.length - 1] ?? 'Other';
+      const sections = byTab.get(tabKey) ?? new Map<string, ImportantNumber[]>();
       const key = entry.section || 'General';
-      map.set(key, [...(map.get(key) ?? []), entry]);
+      sections.set(key, [...(sections.get(key) ?? []), entry]);
+      byTab.set(tabKey, sections);
     }
-    return map;
-  }, [visibleEntries]);
+    return byTab;
+  }, [visibleEntries, tabs]);
 
-  // Office-tab layout: Practice IDs hero, credentials trio, then the rest.
-  const heroRows = !searching && currentTab === tabs[0] ? bySection.get(HERO_SECTION) ?? [] : [];
-  const credentialCards =
-    !searching && currentTab === tabs[0]
-      ? CREDENTIAL_SECTIONS.map(name => [name, bySection.get(name) ?? []] as const).filter(
-          ([, rows]) => rows.length > 0
-        )
-      : [];
-  const regularSections = [...bySection.entries()].filter(
-    ([name]) =>
-      searching ||
-      currentTab !== tabs[0] ||
-      (name !== HERO_SECTION && !CREDENTIAL_SECTIONS.includes(name))
-  );
+  // Credentials always lead (on All and on the Office tab).
+  const officeSections = grouped.get(tabs[0]) ?? new Map<string, ImportantNumber[]>();
+  const showCredentials = !searching && (currentTab === FILTER_ALL || currentTab === tabs[0]);
+  const heroRows = showCredentials ? officeSections.get(HERO_SECTION) ?? [] : [];
+  const credentialCards = showCredentials
+    ? CREDENTIAL_SECTIONS.map(name => [name, officeSections.get(name) ?? []] as const).filter(
+        ([, rows]) => rows.length > 0
+      )
+    : [];
+
+  /** Section cards for one tab, minus any promoted to the credential area. */
+  const sectionsForTab = (tab: string): [string, ImportantNumber[]][] => {
+    const sections = grouped.get(tab) ?? new Map<string, ImportantNumber[]>();
+    return [...sections.entries()].filter(
+      ([name]) =>
+        !(showCredentials && tab === tabs[0] && (name === HERO_SECTION || CREDENTIAL_SECTIONS.includes(name)))
+    );
+  };
+
+  const tabsToRender = searching || currentTab === FILTER_ALL ? tabs : [currentTab];
 
   const sectionSuggestions = useMemo(
     () => [...new Set((entries ?? []).map(e => e.section).filter(Boolean))].sort(),
@@ -312,7 +337,7 @@ export default function ImportantNumbers() {
   );
 
   const openNew = () => {
-    setEditing({ ...EMPTY_FORM, tab: currentTab ?? 'Other' });
+    setEditing({ ...EMPTY_FORM, tab: currentTab === FILTER_ALL ? tabs[0] ?? 'Other' : currentTab });
     setDialogOpen(true);
   };
   const openEdit = (entry: ImportantNumber) => {
@@ -336,8 +361,38 @@ export default function ImportantNumbers() {
     });
   };
 
+  const entryControls = (entry: ImportantNumber) =>
+    isManager && editMode ? (
+      <div className="flex shrink-0">
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(entry)}>
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-destructive"
+          onClick={() => setDeleting(entry)}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    ) : !isManager ? (
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+        title={entry.notes ? 'Edit note' : 'Add note'}
+        onClick={() => {
+          setNoteEntry(entry);
+          setNoteDraft(entry.notes);
+        }}
+      >
+        <StickyNote className="h-3.5 w-3.5" />
+      </Button>
+    ) : null;
+
   const renderEntry = (entry: ImportantNumber) => (
-    <div key={entry.id} className="group flex items-start gap-2 border-b py-2 last:border-0">
+    <div key={entry.id} className="group flex items-start gap-2 border-b border-[#efeaf4] py-2 last:border-0">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-2">
           <span className="text-sm font-medium">{entry.label}</span>
@@ -347,45 +402,16 @@ export default function ImportantNumbers() {
           <p className="mt-0.5 whitespace-pre-wrap text-xs text-muted-foreground">{entry.notes}</p>
         )}
       </div>
-      <div className="flex shrink-0 items-center">
-        {isManager && editMode ? (
-          <>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(entry)}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-destructive"
-              onClick={() => setDeleting(entry)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </>
-        ) : !isManager ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
-            title={entry.notes ? 'Edit note' : 'Add note'}
-            onClick={() => {
-              setNoteEntry(entry);
-              setNoteDraft(entry.notes);
-            }}
-          >
-            <StickyNote className="h-3.5 w-3.5" />
-          </Button>
-        ) : null}
-      </div>
+      {entryControls(entry)}
     </div>
   );
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 p-4 md:p-6">
+    <div className="mx-auto max-w-5xl space-y-5 p-4 md:p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold">
-            <Phone className="h-6 w-6" />
+            <Phone className={`h-6 w-6 ${INK}`} />
             Important Numbers
           </h1>
           <p className="text-sm text-muted-foreground">
@@ -399,6 +425,7 @@ export default function ImportantNumbers() {
           </Button>
           {isManager && (
             <Button
+              className={editMode ? 'bg-[#53406e] hover:bg-[#453759]' : ''}
               variant={editMode ? 'default' : 'outline'}
               onClick={() => setEditMode(e => !e)}
             >
@@ -412,7 +439,7 @@ export default function ImportantNumbers() {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          className="pl-9"
+          className="rounded-full border-[#e2dcec] pl-9"
           placeholder="Search names, numbers, notes…"
           value={query}
           onChange={e => setQuery(e.target.value)}
@@ -421,15 +448,15 @@ export default function ImportantNumbers() {
 
       {!searching && (
         <div className="flex flex-wrap items-center gap-1.5">
-          {tabs.map(tab => (
+          {[FILTER_ALL, ...tabs].map(tab => (
             <button
               key={tab}
               type="button"
               onClick={() => setActiveTab(tab)}
               className={
-                tab === currentTab
-                  ? 'rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground shadow-sm'
-                  : 'rounded-full border bg-card px-4 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground'
+                tab === (currentTab === FILTER_ALL ? FILTER_ALL : currentTab)
+                  ? 'rounded-full bg-[#53406e] px-4 py-1.5 text-sm font-medium text-white shadow-sm'
+                  : 'rounded-full border border-[#e2dcec] bg-card px-4 py-1.5 text-sm text-muted-foreground transition-colors hover:border-[#c9bedb] hover:text-[#53406e]'
               }
             >
               {tab}
@@ -439,7 +466,7 @@ export default function ImportantNumbers() {
             <Button
               variant="ghost"
               size="sm"
-              className="ml-1 h-8 text-muted-foreground"
+              className={`ml-1 h-8 ${INK}`}
               onClick={() => {
                 setTabDrafts(Object.fromEntries((tabRows ?? []).map(t => [t.id, t.name])));
                 setTabsDialogOpen(true);
@@ -454,32 +481,32 @@ export default function ImportantNumbers() {
 
       {isLoading ? (
         <div className="flex justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          <Loader2 className={`h-6 w-6 animate-spin ${INK}`} />
         </div>
       ) : visibleEntries.length === 0 ? (
-        <Card>
+        <Card className={CARD}>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
             {searching
               ? 'Nothing matches that search.'
-              : `Nothing under ${currentTab} yet — use Add Number to start this tab.`}
+              : currentTab === FILTER_ALL
+                ? 'No entries yet — use Add Number to bring the breakroom sheet in.'
+                : `Nothing under ${currentTab} yet — use Add Number to start this tab.`}
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {/* Practice IDs hero — the numbers the office reaches for most. */}
+        <div className="space-y-6">
+          {/* Practice credentials — the numbers the office reaches for most. */}
           {heroRows.length > 0 && (
-            <Card className="border-primary/25 bg-primary/[0.04]">
+            <Card className="rounded-xl border-[1.5px] border-[#53406e]/30 bg-[#f6f3fa] shadow-sm">
               <CardHeader className="pb-2">
-                <CardTitle className="text-xs font-semibold uppercase tracking-widest text-primary">
-                  {HERO_SECTION}
-                </CardTitle>
+                <CardTitle className={KICKER}>{HERO_SECTION}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
                   {heroRows.map(entry => (
                     <div key={entry.id} className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                           {entry.label}
                         </div>
                         <ValueText value={entry.value} large />
@@ -516,13 +543,11 @@ export default function ImportantNumbers() {
 
           {/* NPI / License / DEA side by side. */}
           {credentialCards.length > 0 && (
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid items-start gap-4 md:grid-cols-3">
               {credentialCards.map(([name, rows]) => (
-                <Card key={name}>
+                <Card key={name} className={CARD}>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                      {name}
-                    </CardTitle>
+                    <CardTitle className={KICKER}>{name}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-0.5">{rows.map(renderEntry)}</CardContent>
                 </Card>
@@ -530,26 +555,31 @@ export default function ImportantNumbers() {
             </div>
           )}
 
-          {/* Everything else. */}
-          {regularSections.length > 0 && (
-            <div className="grid items-start gap-4 md:grid-cols-2">
-              {regularSections.map(([section, rows]) => (
-                <Card key={section}>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                      {section}
-                      {searching && rows[0] && (
-                        <Badge variant="outline" className="text-[10px] font-normal normal-case">
-                          {rows[0].tab}
-                        </Badge>
-                      )}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-0.5">{rows.map(renderEntry)}</CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+          {/* Every tab's sections, under FOF-style group headers. */}
+          {tabsToRender.map(tab => {
+            const sections = sectionsForTab(tab);
+            if (sections.length === 0) return null;
+            return (
+              <section key={tab} className="space-y-3">
+                {(searching || currentTab === FILTER_ALL) && (
+                  <div className="flex items-center gap-3 pt-1">
+                    <span className={KICKER}>{tab}</span>
+                    <span className={RULE} />
+                  </div>
+                )}
+                <div className="grid items-start gap-4 md:grid-cols-2">
+                  {sections.map(([section, rows]) => (
+                    <Card key={section} className={CARD}>
+                      <CardHeader className="pb-2">
+                        <CardTitle className={KICKER_MUTED}>{section}</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-0.5">{rows.map(renderEntry)}</CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
 
@@ -571,7 +601,7 @@ export default function ImportantNumbers() {
             <DialogTitle>Note on {noteEntry?.label}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="rounded-md bg-muted px-3 py-2 text-sm">
+            <div className="rounded-md bg-[#f6f3fa] px-3 py-2 text-sm">
               <span className="font-medium">{noteEntry?.label}</span>
               {noteEntry?.value && <span className="ml-2 font-mono">{noteEntry.value}</span>}
             </div>
@@ -591,6 +621,7 @@ export default function ImportantNumbers() {
               Cancel
             </Button>
             <Button
+              className="bg-[#53406e] hover:bg-[#453759]"
               disabled={updateNotes.isPending}
               onClick={() => {
                 if (!noteEntry) return;
@@ -636,6 +667,7 @@ export default function ImportantNumbers() {
               Cancel
             </Button>
             <Button
+              className="bg-[#53406e] hover:bg-[#453759]"
               disabled={renameTab.isPending}
               onClick={async () => {
                 const changed = (tabRows ?? []).filter(
