@@ -278,37 +278,37 @@ export default function FofPrintSheet({
           {(amounts.officeDiscountCents ?? 0) > 0 && (
             <div className="fof-row">
               <span>{amounts.officeDiscountLabel?.trim() || 'Office Discount'}</span>
-              <span>—{formatCents(amounts.officeDiscountCents!)}</span>
+              <span>−{formatCents(amounts.officeDiscountCents!)}</span>
             </div>
           )}
           {(amounts.patientCreditCents ?? 0) > 0 && (
             <div className="fof-row">
               <span>Patient Current Credit</span>
-              <span>—{formatCents(amounts.patientCreditCents!)}</span>
+              <span>−{formatCents(amounts.patientCreditCents!)}</span>
             </div>
           )}
           {(amounts.membershipCoveredCents ?? 0) > 0 && (
             <div className="fof-row">
               <span>Included with Illumitrac Membership</span>
-              <span>—{formatCents(amounts.membershipCoveredCents!)}</span>
+              <span>−{formatCents(amounts.membershipCoveredCents!)}</span>
             </div>
           )}
           {amounts.autoDiscount && amounts.autoDiscount.cents > 0 && (
             <div className="fof-row">
               <span>{amounts.autoDiscount.label}</span>
-              <span>—{formatCents(amounts.autoDiscount.cents)}</span>
+              <span>−{formatCents(amounts.autoDiscount.cents)}</span>
             </div>
           )}
           {template.showInsuranceEstimate && (amounts.insuranceEstimateCents ?? 0) > 0 && (
             <div className="fof-row">
               <span>Estimated Insurance Payment{insuranceMark}</span>
-              <span>—{formatCents(amounts.insuranceEstimateCents ?? 0)}</span>
+              <span>−{formatCents(amounts.insuranceEstimateCents ?? 0)}</span>
             </div>
           )}
           {template.showWriteOff && (amounts.writeOffCents ?? 0) > 0 && (
             <div className="fof-row">
               <span>Estimated Insurance Write-Off{insuranceMark}</span>
-              <span>—{formatCents(amounts.writeOffCents ?? 0)}</span>
+              <span>−{formatCents(amounts.writeOffCents ?? 0)}</span>
             </div>
           )}
           <div className="fof-row fof-row-total">
@@ -357,7 +357,7 @@ export default function FofPrintSheet({
                       {template.discountLabel}
                       {prepayMark}
                     </span>
-                    <span>—{formatCents(effective.discountCents)}</span>
+                    <span>−{formatCents(effective.discountCents)}</span>
                   </div>
                 )}
                 <div className="fof-row fof-row-total">
@@ -415,7 +415,7 @@ export default function FofPrintSheet({
                   {template.discountLabel}
                   {prepayMark}
                 </div>
-                <div className="fof-cell-amount">—{formatCents(effective.discountCents)}</div>
+                <div className="fof-cell-amount">−{formatCents(effective.discountCents)}</div>
               </div>
             )}
             <div className="fof-cell fof-cell-total">
@@ -630,37 +630,37 @@ export default function FofPrintSheet({
             {(amounts.officeDiscountCents ?? 0) > 0 && (
               <div className="fof-row">
                 <span>{amounts.officeDiscountLabel?.trim() || 'Office Discount'}</span>
-                <span>—{formatCents(amounts.officeDiscountCents!)}</span>
+                <span>−{formatCents(amounts.officeDiscountCents!)}</span>
               </div>
             )}
             {(amounts.patientCreditCents ?? 0) > 0 && (
               <div className="fof-row">
                 <span>Patient Current Credit</span>
-                <span>—{formatCents(amounts.patientCreditCents!)}</span>
+                <span>−{formatCents(amounts.patientCreditCents!)}</span>
               </div>
             )}
             {(amounts.membershipCoveredCents ?? 0) > 0 && (
               <div className="fof-row">
                 <span>Included with Membership</span>
-                <span>—{formatCents(amounts.membershipCoveredCents!)}</span>
+                <span>−{formatCents(amounts.membershipCoveredCents!)}</span>
               </div>
             )}
             {amounts.autoDiscount && amounts.autoDiscount.cents > 0 && (
               <div className="fof-row">
                 <span>{amounts.autoDiscount.label}</span>
-                <span>—{formatCents(amounts.autoDiscount.cents)}</span>
+                <span>−{formatCents(amounts.autoDiscount.cents)}</span>
               </div>
             )}
             {template.showInsuranceEstimate && (amounts.insuranceEstimateCents ?? 0) > 0 && (
               <div className="fof-row">
                 <span>Estimated Insurance Payment</span>
-                <span>—{formatCents(amounts.insuranceEstimateCents ?? 0)}</span>
+                <span>−{formatCents(amounts.insuranceEstimateCents ?? 0)}</span>
               </div>
             )}
             {template.showWriteOff && (amounts.writeOffCents ?? 0) > 0 && (
               <div className="fof-row">
                 <span>Estimated Insurance Write-Off</span>
-                <span>—{formatCents(amounts.writeOffCents ?? 0)}</span>
+                <span>−{formatCents(amounts.writeOffCents ?? 0)}</span>
               </div>
             )}
             <div className="fof-row fof-row-total">

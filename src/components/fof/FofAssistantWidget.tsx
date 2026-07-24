@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, MessageCircle, Send, Sparkles, X } from 'lucide-react';
+import { Loader2, MessageCircle, Minus, Send, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
 
@@ -109,9 +109,9 @@ export default function FofAssistantWidget({ context }: Props) {
             <button
               className="ml-auto rounded p-1 hover:bg-white/15"
               onClick={() => setOpen(false)}
-              aria-label="Close assistant"
+              aria-label="Minimize assistant"
             >
-              <X className="h-4 w-4" />
+              <Minus className="h-4 w-4" />
             </button>
           </div>
 
