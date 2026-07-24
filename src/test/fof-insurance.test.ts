@@ -203,6 +203,18 @@ describe('estimateInsurance', () => {
     // Line 2: renewal kicks in — deductible 50 re-applies, then 50% of the rest
     expect(result.perLine[1].deductibleAppliedCents).toBe(5_000);
     expect(result.perLine[1].insurancePaysCents).toBe(47_500);
+    // Everything line 2 pays comes from NEXT year's benefits — reported
+    // so the printed form can explain it to the patient.
+    expect(result.renewalPaysCents).toBe(47_500);
+  });
+
+  it('renewalPaysCents is zero when no renewal is in play', () => {
+    const result = estimateInsurance(
+      [line({ category: 'major', officeFeeCents: 100_000, allowedCents: 100_000 })],
+      plan,
+      { remainingDeductibleCents: 0, remainingAnnualMaxCents: 200_000, renewal: null }
+    );
+    expect(result.renewalPaysCents).toBe(0);
   });
 
   it('office-fees-after-max only applies once the renewal is also spent', () => {

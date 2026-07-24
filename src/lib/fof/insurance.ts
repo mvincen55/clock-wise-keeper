@@ -115,6 +115,12 @@ export interface InsuranceEstimate {
   maxedOut: boolean;
   /** What's left of the (current) annual max after this treatment. */
   remainingMaxCents: Cents;
+  /**
+   * Insurance dollars paid from the NEXT benefit year (after the renewal
+   * switched in). >0 means the estimate leans on next year's benefits —
+   * the printed form explains that to the patient.
+   */
+  renewalPaysCents: Cents;
   perLine: LineEstimate[];
 }
 
@@ -153,6 +159,7 @@ export function estimateInsurance(
       deductibleUsedCents: 0,
       maxedOut: false,
       remainingMaxCents: Math.max(0, benefits.remainingAnnualMaxCents),
+      renewalPaysCents: 0,
       perLine: lines.map(line => ({
         officeFeeCents: line.officeFeeCents,
         allowedCents: line.allowedCents ?? line.officeFeeCents,
@@ -166,6 +173,8 @@ export function estimateInsurance(
   let remainingDeductible = Math.max(0, benefits.remainingDeductibleCents);
   let remainingMax = Math.max(0, benefits.remainingAnnualMaxCents);
   let renewal = benefits.renewal ?? null;
+  let inNewYear = false;
+  let renewalPays = 0;
   const perLine: LineEstimate[] = [];
   // When any line is marked as falling in the new benefit year, the
   // renewal is calendar-driven: it switches in at that line, and year-1
@@ -180,6 +189,7 @@ export function estimateInsurance(
       remainingMax = Math.max(0, renewal.annualMaxCents);
       remainingDeductible = Math.max(0, renewal.deductibleCents);
       renewal = null;
+      inNewYear = true;
     }
     const allowed = line.allowedCents ?? line.officeFeeCents;
     const pct = categoryPct(line.category, plan);
@@ -229,6 +239,8 @@ export function estimateInsurance(
       }
     }
 
+    if (inNewYear) renewalPays += insurancePays;
+
     perLine.push({
       officeFeeCents: line.officeFeeCents,
       // Uncovered lines (and lines reverted after the max) fall back to
@@ -249,6 +261,7 @@ export function estimateInsurance(
     // renewal year means benefits are still available.
     maxedOut: remainingMax <= 0 && !renewal,
     remainingMaxCents: remainingMax,
+    renewalPaysCents: renewalPays,
     perLine,
   };
 }
