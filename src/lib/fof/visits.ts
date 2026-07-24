@@ -77,7 +77,7 @@ export const VISIT_PLANS: Record<string, VisitPlan> = {
   },
   implant3: {
     key: 'implant3',
-    labels: ['Upon Scheduling', 'At Placement Surgery', 'At Restoration/Delivery'],
+    labels: ['Upon Scheduling', 'At Placement Surgery', 'On Implant Crown Delivery'],
     weights: [50, 25, 25],
   },
   frontloaded4: {
