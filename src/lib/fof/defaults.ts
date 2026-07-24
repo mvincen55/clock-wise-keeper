@@ -1,18 +1,20 @@
 import type { FofPracticeInfo, FofTemplate } from './types';
 
 /**
- * Factory template content reproducing the office's existing FOF sheet
- * variants. Used to seed an org that has no templates yet and to power
- * "Restore default templates". De-identified configuration only.
+ * Factory template content — the shipped FOF variants. Used to seed an
+ * org that has no templates yet and to power "Restore default
+ * templates". De-identified configuration only; practice identity comes
+ * from org_branding rows, never from code.
  */
 
 export const DEFAULT_PRACTICE_INFO: FofPracticeInfo = {
-  practiceName: 'Harelick Dental Associates, LLC',
-  addressLine1: '278 Alden Road',
-  addressLine2: 'Fairhaven, MA 02719',
-  phone: '(508) 993-0515',
-  website: 'drharelick.com',
-  doctorName: 'Dr. Scott',
+  practiceName: '',
+  addressLine1: '',
+  addressLine2: '',
+  phone: '',
+  website: '',
+  doctorName: '',
+  logoUrl: '',
 };
 
 export const DEFAULT_SIGNATURE_INTRO =
@@ -27,8 +29,25 @@ export const DEFAULT_PREPAY_NOTE =
 export const DEFAULT_INSURANCE_NOTE =
   'Please note that the calculated insurance payment, including any write-offs, is only an estimate. While we have made every effort to calculate this amount accurately, any insurance underpayment will remain your responsibility. If you believe there has been a change to your insurance coverage, please notify us as soon as possible.';
 
-export const DEFAULT_CONTACT_NOTE =
-  "Questions about this form, or interested in another payment arrangement such as outside financing? Call us at (508) 993-0515 — we're happy to help. Please mail your signed copy, along with your payment, to Harelick Dental Associates, LLC, 278 Alden Road, Fairhaven, MA 02719.";
+/**
+ * Contact footnote generated from the org's branding at template-seed
+ * time, so a new office's forms carry its own phone and mailing address.
+ * (Existing template rows keep whatever text they were saved with.)
+ */
+export function buildDefaultContactNote(practice: {
+  practiceName: string;
+  addressLine1: string;
+  addressLine2: string;
+  phone: string;
+}): string {
+  const call = practice.phone.trim() ? ` Call us at ${practice.phone.trim()} — we're happy to help.` : '';
+  const mailTo = [practice.practiceName, practice.addressLine1, practice.addressLine2]
+    .map(part => part.trim())
+    .filter(Boolean)
+    .join(', ');
+  const mail = mailTo ? ` Please mail your signed copy, along with your payment, to ${mailTo}.` : '';
+  return `Questions about this form, or interested in another payment arrangement such as outside financing?${call}${mail}`;
+}
 
 const DEFAULT_INSTALLMENT_LABELS = [
   'Visit 1 (Upon scheduling)',
@@ -43,7 +62,8 @@ const BASE_SEED = {
   installmentCount: 3,
   installmentLabels: DEFAULT_INSTALLMENT_LABELS,
   validityNote: DEFAULT_VALIDITY_NOTE,
-  contactNote: DEFAULT_CONTACT_NOTE,
+  // Interpolated from org_branding at seed time (buildDefaultContactNote).
+  contactNote: '',
   footnotes: [] as string[],
   signatureIntro: DEFAULT_SIGNATURE_INTRO,
   showInstallmentOption: true,
@@ -95,7 +115,7 @@ export const DEFAULT_TEMPLATES: FofTemplateSeed[] = [
   },
   {
     ...BASE_SEED,
-    name: 'In-House Membership (Illumitrac)',
+    name: 'In-House Membership',
     sortOrder: 3,
     discountPercent: 0,
     discountLabel: '',
@@ -106,7 +126,7 @@ export const DEFAULT_TEMPLATES: FofTemplateSeed[] = [
     insuranceNote: '',
     membershipDiscountPercent: 10,
     seniorDiscountApplies: true,
-    footnotes: ['Membership pricing per the Illumitrac plan; some exclusions may apply.'],
+    footnotes: ['Membership pricing per the in-house membership plan; some exclusions may apply.'],
   },
   {
     ...BASE_SEED,

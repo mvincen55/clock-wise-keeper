@@ -8,6 +8,7 @@ import {
 } from '@/hooks/usePtoEngine';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import { useOrgBranding } from '@/hooks/useOrgBranding';
 import { useDaysOff, useUpdateDayOffHours } from '@/hooks/useDaysOff';
 import { useMyPtoRequests, useCancelPtoRequest, PtoRequest } from '@/hooks/usePtoRequests';
 import { PtoRequestModal } from '@/components/PtoRequestModal';
@@ -26,6 +27,7 @@ import { useToast } from '@/hooks/use-toast';
 export default function PTO() {
   const { user } = useAuth();
   const { data: ctx } = useOrgContext();
+  const { data: branding } = useOrgBranding();
   const { toast } = useToast();
   const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [correctionTarget, setCorrectionTarget] = useState<{ request: PtoRequest; mode: 'cancel' | 'correct' } | null>(null);
@@ -112,7 +114,9 @@ export default function PTO() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">PTO</h1>
-          <p className="text-muted-foreground">Harelick Dental — Combined PTO Bank</p>
+          <p className="text-muted-foreground">
+            {branding?.displayName ? `${branding.displayName} — Combined PTO Bank` : 'Combined PTO Bank'}
+          </p>
         </div>
         <Button onClick={handleRecalc} disabled={recalc.isPending} variant="secondary" size="sm">
           {recalc.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
@@ -492,7 +496,7 @@ export default function PTO() {
               </div>
 
               <div className="p-3 rounded-lg bg-muted/50">
-                <h4 className="font-medium text-sm mb-2">Harelick Dental Accrual Tiers</h4>
+                <h4 className="font-medium text-sm mb-2">Office Accrual Tiers</h4>
                 <div className="space-y-1 text-xs text-muted-foreground">
                   {PTO_TIERS.map((t, i) => (
                     <div key={i} className="flex justify-between">

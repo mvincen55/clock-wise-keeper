@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { Banknote, ChevronLeft, ChevronRight, Loader2, Plus, Printer, Trash2 } from 'lucide-react';
 import DepositPrintSheet from '@/components/DepositPrintSheet';
+import BrandPrintStyle from '@/components/BrandPrintStyle';
 import { getToday } from '@/lib/time-utils';
 import { formatCents, parseCurrencyInput } from '@/lib/money';
 import {
@@ -21,6 +22,9 @@ import {
   useDepositLog,
   useSaveDepositLog,
 } from '@/hooks/useDepositLog';
+import { useOrgBranding, useOrgDepositSettings } from '@/hooks/useOrgBranding';
+import DepositSettingsCard from '@/components/DepositSettingsCard';
+import { useOrgContext } from '@/hooks/useOrgContext';
 
 function shiftDate(date: string, delta: number): string {
   const [y, m, d] = date.split('-').map(Number);
@@ -67,6 +71,10 @@ export default function DepositLog() {
   const [date, setDate] = useState(getToday());
   const { data: log, isLoading } = useDepositLog(date);
   const save = useSaveDepositLog();
+  const { data: branding } = useOrgBranding();
+  const { data: depositSettings } = useOrgDepositSettings();
+  const { data: orgCtx } = useOrgContext();
+  const isManager = orgCtx?.role === 'owner' || orgCtx?.role === 'manager';
 
   const [form, setForm] = useState<FormState | null>(null);
   // Unsaved edits block printing: the printed sheets always come from the
@@ -327,12 +335,16 @@ export default function DepositLog() {
         </div>
       )}
 
+      {isManager && <DepositSettingsCard />}
+
       {/* Print-only: the two paper copies, fed from the SAVED record so
           what's on paper is exactly what's on file. Portaled so printing
-          shows nothing but the sheets (same mechanism as the FOF). */}
-      {log && !dirty &&
+          shows nothing but the sheets (same mechanism as the FOF).
+          Identity and printed wording come from the org rows. */}
+      {log && !dirty && branding && depositSettings &&
         createPortal(
           <div className="deposit-print-root">
+            <BrandPrintStyle branding={branding} />
             <DepositPrintSheet
               date={date}
               cashCents={log.cash_cents}
@@ -343,6 +355,8 @@ export default function DepositLog() {
               outsideFinancingCents={log.outside_financing_cents}
               preparedBy={log.prepared_by_name}
               initials={initialsOf(log.prepared_by_name)}
+              branding={branding}
+              settings={depositSettings}
             />
           </div>,
           document.body

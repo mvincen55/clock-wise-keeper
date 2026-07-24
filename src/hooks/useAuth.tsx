@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef, ty
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
-const ALLOWED_EMAILS = ['meganvincent43@gmail.com', 'mvincent@drharelick.com'];
 const DEFAULT_TIMEOUT_MINUTES = 0; // 0 = never auto-logout
 const TIMEOUT_STORAGE_KEY = 'timevault_session_timeout_minutes';
 
@@ -31,8 +30,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const checkAllowed = (u: User | null): boolean => {
-    return !!u?.email && ALLOWED_EMAILS.includes(u.email.toLowerCase());
+  // Access is decided server-side: the allowed_users table (maintained by
+  // the invite flow) via the SECURITY DEFINER is_allowed_user(), the same
+  // check RLS applies to every table. No emails live in client code.
+  const checkAllowed = async (u: User | null): Promise<boolean> => {
+    if (!u) return false;
+    const { data, error } = await supabase.rpc('is_allowed_user');
+    return !error && data === true;
   };
 
   const clearInactivityTimer = useCallback(() => {
@@ -76,47 +80,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, isAllowed, resetInactivityTimer, clearInactivityTimer]);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    let cancelled = false;
+
+    const evaluate = (session: Session | null) => {
       setSession(session);
       const u = session?.user ?? null;
       setUser(u);
-      const allowed = checkAllowed(u);
-      setIsAllowed(allowed);
-
-      // If user logged in but not allowed, immediately sign out
-      if (u && !allowed) {
-        await supabase.auth.signOut();
-        setUser(null);
-        setSession(null);
+      if (!u) {
         setIsAllowed(false);
+        setLoading(false);
+        return;
       }
-      setLoading(false);
+      // The allowlist check hits the server; defer it out of the auth
+      // callback (supabase-js deadlocks on awaited calls inside it).
+      setTimeout(async () => {
+        const allowed = await checkAllowed(u);
+        if (cancelled) return;
+        setIsAllowed(allowed);
+        // Logged in but not allowed: immediately sign out.
+        if (!allowed) {
+          await supabase.auth.signOut();
+          if (cancelled) return;
+          setUser(null);
+          setSession(null);
+        }
+        setLoading(false);
+      }, 0);
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      evaluate(session);
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      const u = session?.user ?? null;
-      setUser(u);
-      const allowed = checkAllowed(u);
-      setIsAllowed(allowed);
-      if (u && !allowed) {
-        supabase.auth.signOut();
-        setUser(null);
-        setSession(null);
-        setIsAllowed(false);
-      }
-      setLoading(false);
-    });
+    supabase.auth.getSession().then(({ data: { session } }) => evaluate(session));
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    if (!ALLOWED_EMAILS.includes(email.toLowerCase())) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error };
+    // Same server-side gate RLS uses; deny and sign out non-allowlisted
+    // accounts right here so the form shows a clear message.
+    const allowed = await checkAllowed(data.user);
+    if (!allowed) {
+      await supabase.auth.signOut();
       return { error: { message: 'Access denied.' } };
     }
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error };
+    return { error: null };
   };
 
   const privacyLock = async () => {

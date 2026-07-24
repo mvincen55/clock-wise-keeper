@@ -3,7 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useMemo } from 'react';
 
-/* ───────── Harelick Dental PTO Policy ───────── */
+/* ───────── Office PTO Policy ─────────
+   Accrual tiers are still hardcoded office policy; they move to
+   org-scoped rows in the genericization pass (own PR at the end of
+   Phase 2, with a PTO ledger snapshot guarding the math). */
 
 export const PTO_TIERS = [
   { minYears: 0, maxYears: 1, rate: 0.0576, weeklyCap: 2.30, label: 'Year 1' },

@@ -1889,6 +1889,115 @@ export type Database = {
           },
         ]
       }
+      org_branding: {
+        Row: {
+          address_line1: string
+          address_line2: string
+          brand_color: string
+          brand_tint: string
+          created_at: string
+          display_name: string
+          email_sender_name: string
+          google_calendar_id: string
+          id: string
+          legal_name: string
+          logo_url: string
+          org_id: string
+          phone: string
+          updated_at: string
+          website: string
+        }
+        Insert: {
+          address_line1?: string
+          address_line2?: string
+          brand_color?: string
+          brand_tint?: string
+          created_at?: string
+          display_name?: string
+          email_sender_name?: string
+          google_calendar_id?: string
+          id?: string
+          legal_name?: string
+          logo_url?: string
+          org_id: string
+          phone?: string
+          updated_at?: string
+          website?: string
+        }
+        Update: {
+          address_line1?: string
+          address_line2?: string
+          brand_color?: string
+          brand_tint?: string
+          created_at?: string
+          display_name?: string
+          email_sender_name?: string
+          google_calendar_id?: string
+          id?: string
+          legal_name?: string
+          logo_url?: string
+          org_id?: string
+          phone?: string
+          updated_at?: string
+          website?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_branding_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_deposit_settings: {
+        Row: {
+          account_line: string
+          bank_split_cards_label: string
+          bank_split_cash_label: string
+          bank_total_label: string
+          created_at: string
+          envelope_note: string
+          id: string
+          office_copy_note: string
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_line?: string
+          bank_split_cards_label?: string
+          bank_split_cash_label?: string
+          bank_total_label?: string
+          created_at?: string
+          envelope_note?: string
+          id?: string
+          office_copy_note?: string
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          account_line?: string
+          bank_split_cards_label?: string
+          bank_split_cash_label?: string
+          bank_total_label?: string
+          created_at?: string
+          envelope_note?: string
+          id?: string
+          office_copy_note?: string
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_deposit_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_members: {
         Row: {
           created_at: string

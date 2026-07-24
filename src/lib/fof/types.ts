@@ -16,8 +16,10 @@ export interface FofPracticeInfo {
   addressLine2: string;
   phone: string;
   website: string;
-  /** Used by the AI treatment wording ("Dr. Scott will..."). */
+  /** Used by the AI treatment wording ("Dr. Smith will..."). */
   doctorName: string;
+  /** Org logo (storage URL or data: URI); empty = no logo printed. */
+  logoUrl: string;
 }
 
 export interface FofTemplate {

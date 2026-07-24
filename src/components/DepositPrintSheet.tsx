@@ -1,21 +1,20 @@
 import { formatCents } from '@/lib/money';
-import logoUrl from '@/assets/harelick-logo.png';
+import type { OrgBranding, OrgDepositSettings } from '@/hooks/useOrgBranding';
 
 /**
  * Printable Deposit Log — the office's daily deposit sheet as a designed
- * document in the practice's FOF visual language (deep purple on white,
+ * document in the practice's document language (brand accent on white,
  * grayscale-safe). Two copies, one letter page each: the Office Copy
  * (full breakdown, both banks) and the Bank Copy (cash + checks with the
- * deposit account). Pure props → JSX; rendered via portal only while
- * printing (.deposit-print-root in index.css). Amounts only — payer
- * names stay on the physical checks.
+ * deposit account). Practice identity and printed wording come from
+ * org_branding / org_deposit_settings rows — nothing office-specific in
+ * code. Pure props → JSX; rendered via portal only while printing
+ * (.deposit-print-root in index.css). Amounts only — payer names stay on
+ * the physical checks.
  */
 
 const CHECK_LINES = 46;
 const LEFT_LINES = 23;
-
-// Pre-printed on the paper bank copy (the deposit envelope's account).
-const BANK_COPY_ACCOUNT = 'Bay Coast Account #841845805';
 
 export interface DepositPrintProps {
   /** ET date 'YYYY-MM-DD'. */
@@ -30,6 +29,10 @@ export interface DepositPrintProps {
   /** Who prepared the deposit (from the saved record). */
   preparedBy: string;
   initials: string;
+  /** Practice identity (logo, names) from org_branding. */
+  branding: Pick<OrgBranding, 'displayName' | 'legalName' | 'logoUrl'>;
+  /** Office-specific printed wording from org_deposit_settings. */
+  settings: OrgDepositSettings;
 }
 
 const longDate = (iso: string): string => {
@@ -98,6 +101,8 @@ function CopyPage({
   outsideFinancingCents,
   preparedBy,
   initials,
+  branding,
+  settings,
 }: DepositPrintProps & { variant: 'office' | 'bank' }) {
   const checkCount = checksCents.filter(c => c > 0).length;
   const checksTotal = checksCents.reduce((a, b) => a + b, 0);
@@ -108,7 +113,9 @@ function CopyPage({
   return (
     <div className="dep-sheet">
       <header className="dep-head">
-        <img className="dep-logo" src={logoUrl} alt="Harelick Dental Associates" />
+        {branding.logoUrl !== '' && (
+          <img className="dep-logo" src={branding.logoUrl} alt={branding.displayName} />
+        )}
         <div className="dep-head-meta">
           <div className="dep-kicker">Daily Deposit</div>
           <div className="dep-title">Deposit Log</div>
@@ -133,16 +140,20 @@ function CopyPage({
           {variant === 'office' ? (
             <div className="dep-box">
               <div className="dep-box-title">Bank Split</div>
-              <SummaryRow label="BC Bank — cash & checks" cents={bankTotal} />
-              <SummaryRow label="F Bank — card deposits" cents={cardsTotal} />
+              <SummaryRow label={settings.bankSplitCashLabel} cents={bankTotal} />
+              <SummaryRow label={settings.bankSplitCardsLabel} cents={cardsTotal} />
             </div>
           ) : (
             <div className="dep-box">
               <div className="dep-box-title">Deposit To</div>
-              <div className="dep-account">{BANK_COPY_ACCOUNT}</div>
+              {settings.accountLine !== '' && (
+                <div className="dep-account">{settings.accountLine}</div>
+              )}
             </div>
           )}
-          <div className="dep-envelope">Purple envelope — no tape</div>
+          {settings.envelopeNote !== '' && (
+            <div className="dep-envelope">{settings.envelopeNote}</div>
+          )}
         </div>
 
         <div className="dep-footer-right">
@@ -162,7 +173,7 @@ function CopyPage({
               </>
             )}
             <div className="dep-sum-grand">
-              <span>{variant === 'office' ? 'Total' : 'BC Bank Total'}</span>
+              <span>{variant === 'office' ? 'Total' : settings.bankTotalLabel}</span>
               <span className="dep-num">
                 {formatCents(variant === 'office' ? grandTotal : bankTotal)}
               </span>
@@ -181,8 +192,8 @@ function CopyPage({
       </div>
 
       <footer className="dep-page-footer">
-        Harelick Dental Associates, LLC · Daily Deposit Log ·{' '}
-        {variant === 'office' ? 'Office Copy — file with the day sheet' : 'Bank Copy'}
+        {branding.legalName} · Daily Deposit Log ·{' '}
+        {variant === 'office' ? settings.officeCopyNote : 'Bank Copy'}
       </footer>
     </div>
   );

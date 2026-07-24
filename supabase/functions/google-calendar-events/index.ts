@@ -1,7 +1,8 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
-// HDA - Fairhaven office calendar
-const OFFICE_CALENDAR_ID = 'c_ec5ac0a6b393eee3385575b2d90f671996c7cf900cbf54cb7618dc37b63f3a1e@group.calendar.google.com';
+// The office calendar id is org configuration (org_branding row), looked
+// up per caller — nothing office-specific in code.
 const GATEWAY = 'https://connector-gateway.lovable.dev/google_calendar/calendar/v3';
 
 function json(body: unknown, status = 200) {
@@ -34,8 +35,39 @@ Deno.serve(async (req) => {
       return json({ error: 'Google Calendar connection not configured' }, 500);
     }
 
+    // Resolve the caller's org calendar. The platform gateway verifies
+    // the JWT; the user-scoped client re-checks it and RLS scopes the
+    // branding row to the caller's own org.
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) return json({ error: 'Missing authorization' }, 401);
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return json({ error: 'Unauthorized' }, 401);
+
+    const { data: membership } = await supabase
+      .from('org_members')
+      .select('org_id')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .limit(1)
+      .maybeSingle();
+    if (!membership) return json({ error: 'Unauthorized' }, 403);
+
+    const { data: brandingRow } = await supabase
+      .from('org_branding')
+      .select('google_calendar_id')
+      .eq('org_id', membership.org_id)
+      .maybeSingle();
+    const calendarId = brandingRow?.google_calendar_id?.trim() ?? '';
+    if (calendarId === '') {
+      return json({ error: 'No office calendar configured' }, 404);
+    }
+
     const url = new URL(req.url);
-    const calendarId = url.searchParams.get('calendarId') || OFFICE_CALENDAR_ID;
     const gwHeaders = {
       Authorization: `Bearer ${lovableKey}`,
       'X-Connection-Api-Key': connKey,

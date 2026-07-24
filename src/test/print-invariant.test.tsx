@@ -33,7 +33,12 @@ afterAll(() => {
   vi.useRealTimers();
 });
 
-/** Harelick's live practice configuration (fof_settings row). */
+/**
+ * Harelick's live practice configuration (org_branding / fof_settings
+ * rows). logoUrl pins the value the original bundled asset resolved to
+ * in this test environment, keeping the reference DOM byte-identical;
+ * in production the same PNG now comes from the org's branding row.
+ */
 const PRACTICE: FofPracticeInfo = {
   practiceName: 'Harelick Dental Associates, LLC',
   addressLine1: '278 Alden Road',
@@ -41,6 +46,7 @@ const PRACTICE: FofPracticeInfo = {
   phone: '(508) 993-0515',
   website: 'drharelick.com',
   doctorName: 'Dr. Scott',
+  logoUrl: '/src/assets/harelick-logo.png',
 };
 
 /**
@@ -199,7 +205,8 @@ describe('print invariant — reference output must never change', () => {
   });
 
   it('Deposit Log office copy + bank copy render byte-for-byte identically', () => {
-    // Mirrors the saved 2026-07-24 deposit record.
+    // Mirrors the saved 2026-07-24 deposit record; branding and printed
+    // wording carry the org's live row values (formerly code literals).
     const html = renderToStaticMarkup(
       <DepositPrintSheet
         date="2026-07-24"
@@ -211,6 +218,19 @@ describe('print invariant — reference output must never change', () => {
         outsideFinancingCents={0}
         preparedBy="Megan Vincent"
         initials="MV"
+        branding={{
+          displayName: 'Harelick Dental Associates',
+          legalName: 'Harelick Dental Associates, LLC',
+          logoUrl: '/src/assets/harelick-logo.png',
+        }}
+        settings={{
+          accountLine: 'Bay Coast Account #841845805',
+          bankSplitCashLabel: 'BC Bank — cash & checks',
+          bankSplitCardsLabel: 'F Bank — card deposits',
+          bankTotalLabel: 'BC Bank Total',
+          envelopeNote: 'Purple envelope — no tape',
+          officeCopyNote: 'Office Copy — file with the day sheet',
+        }}
       />
     );
     expect(html).toContain('Bay Coast Account #841845805');
