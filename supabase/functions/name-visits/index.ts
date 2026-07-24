@@ -59,12 +59,29 @@ Deno.serve(async (req) => {
     // Only active org members may spend AI credits.
     const { data: membership } = await supabase
       .from("org_members")
-      .select("id")
+      .select("org_id")
       .eq("user_id", user.id)
       .eq("status", "active")
       .limit(1)
       .maybeSingle();
     if (!membership) return json({ error: "Unauthorized" }, 403);
+
+    // Standing wording rules taught through the FOF assistant widget —
+    // de-identified office preferences that shape every summary.
+    const { data: guidanceRows } = await supabase
+      .from("fof_ai_guidance")
+      .select("content")
+      .eq("org_id", membership.org_id)
+      .eq("is_active", true)
+      .order("created_at", { ascending: true })
+      .limit(30);
+    const guidance = (guidanceRows ?? [])
+      .map((g) => (typeof g.content === "string" ? g.content.replace(/\s+/g, " ").trim().slice(0, 240) : ""))
+      .filter(Boolean);
+    const guidanceBlock =
+      guidance.length > 0
+        ? ` OFFICE WORDING RULES (follow every one strictly; they override earlier style guidance on conflict): ${guidance.map((g, i) => `(${i + 1}) ${g}`).join(" ")}`
+        : "";
 
     const { slots, visits, wantTreatment, doctorName } = (await req.json()) as {
       /** Current payment slot labels, in order (e.g. "Upon Scheduling", "Crown Prep"). */
@@ -121,7 +138,8 @@ Deno.serve(async (req) => {
               "(2) Every tooth number provided in the visit list MUST appear next to its procedure. EXCEPTION: dentures and partials get arch wording only ('a new lower partial denture') — never tooth numbers or ranges for a denture, even if teeth are listed. For fillings, never mention surfaces or surface counts — just 'a composite filling on tooth #3'. " +
               "(3) Never promise or guarantee results. Frame outcomes as the goal: 'designed to restore comfortable chewing', 'to help rebuild a strong, functional bite'. BANNED: 'full function', 'complete', 'perfect', 'permanent', 'guaranteed', 'will restore', 'pain-free', and any absolute promise. " +
               "(4) End on the goal of the plan (comfort, function, or the finished smile) — as an aim, not a promise. " +
-              "No codes, no prices, no per-visit breakdown, no hype words; 420 characters max.",
+              "No codes, no prices, no per-visit breakdown, no hype words; 420 characters max." +
+              guidanceBlock,
           },
           {
             role: "user",
