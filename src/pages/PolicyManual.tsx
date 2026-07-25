@@ -19,14 +19,21 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
+  AlarmClock,
   ArrowLeft,
+  BadgeDollarSign,
   BookOpen,
+  CalendarOff,
   ChevronRight,
+  ClipboardCheck,
   FileText,
+  HeartPulse,
   Loader2,
+  RotateCcw,
   Search,
   ShieldCheck,
   Sparkles,
+  Stethoscope,
   Users,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -52,6 +59,29 @@ const CATEGORY_ICONS: Record<OfficeDocCategory, typeof FileText> = {
 const INK = 'text-[#53406e]';
 const KICKER = `text-[11px] font-bold uppercase tracking-[0.14em] ${INK}`;
 const CARD = 'rounded-xl border-[#e2dcec] shadow-sm';
+
+// "Find it fast" tiles — each fires a full-text search into the manual.
+const TOPICS: { label: string; query: string; icon: typeof FileText; tint: string }[] = [
+  { label: 'Late & No-Shows', query: 'late arrival', icon: AlarmClock, tint: 'bg-[#efe9f7]' },
+  { label: 'Time Off & PTO', query: 'time off', icon: CalendarOff, tint: 'bg-[#e9eef7]' },
+  { label: 'Refunds & Credits', query: 'refund', icon: RotateCcw, tint: 'bg-[#f7efe9] '},
+  { label: 'Payments & Discounts', query: 'discount', icon: BadgeDollarSign, tint: 'bg-[#eaf3ec]' },
+  { label: 'Insurance Claims', query: 'claim', icon: ShieldCheck, tint: 'bg-[#e9eef7]' },
+  { label: 'Crown & Lab Remakes', query: 'remake', icon: Stethoscope, tint: 'bg-[#efe9f7]' },
+  { label: 'Emergencies', query: 'emergency', icon: HeartPulse, tint: 'bg-[#f7e9ec]' },
+  { label: 'Daily Duties', query: 'checklist', icon: ClipboardCheck, tint: 'bg-[#eaf3ec]' },
+];
+
+// Category "cover" art for the document cards.
+const CATEGORY_COVER: Record<OfficeDocCategory, string> = {
+  policy: 'from-[#53406e] to-[#7c5fa3]',
+  hr: 'from-[#3f5d7a] to-[#6d8fae]',
+  insurance: 'from-[#42625a] to-[#6f978c]',
+  other: 'from-[#6b6577] to-[#948ba1]',
+};
+
+type SortMode = 'az' | 'newest';
+
 
 interface SearchHit {
   doc_id: string;
@@ -136,6 +166,41 @@ export default function PolicyManual() {
   const [openDoc, setOpenDoc] = useState<OfficeDoc | null>(null);
   const [jumpTo, setJumpTo] = useState<string>('');
   const { data: content, isLoading: contentLoading } = useOfficeDocContent(openDoc?.id ?? null);
+  const [sortMode, setSortMode] = useState<SortMode>('az');
+  const [filterCat, setFilterCat] = useState<OfficeDocCategory | 'all'>('all');
+  const [jumpToId, setJumpToId] = useState('');
+
+  // One fetch of every chunk builds a section outline for EVERY document
+  // — that's what makes the covers and section chips possible. Cached
+  // hard; the library only changes when a manager uploads.
+  const { data: allOutlines } = useQuery({
+    queryKey: ['policy-manual-outlines'],
+    staleTime: 10 * 60 * 1000,
+    queryFn: async (): Promise<Map<string, { text: string; id: string }[]>> => {
+      const { data, error } = await supabase
+        .from('office_doc_chunks')
+        .select('doc_id, chunk_index, content')
+        .order('doc_id')
+        .order('chunk_index');
+      if (error) throw error;
+      const byDoc = new Map<string, string[]>();
+      for (const chunk of data ?? []) {
+        byDoc.set(chunk.doc_id, [...(byDoc.get(chunk.doc_id) ?? []), chunk.content]);
+      }
+      const outlines = new Map<string, { text: string; id: string }[]>();
+      for (const [docId, parts] of byDoc) {
+        const docBlocks = parseDocBlocks(parts.join('\n\n'));
+        outlines.set(
+          docId,
+          docBlocks
+            .map((b, i) => ({ b, i }))
+            .filter(({ b }) => b.type === 'heading')
+            .map(({ b, i }) => ({ text: (b as { text: string }).text, id: `pm-block-${i}` }))
+        );
+      }
+      return outlines;
+    },
+  });
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query.trim()), 350);
@@ -216,6 +281,22 @@ export default function PolicyManual() {
     setDebounced('');
     window.scrollTo({ top: 0 });
   };
+
+  /** Open a document directly at one of its sections. */
+  const openSection = (doc: OfficeDoc, blockId: string) => {
+    openPlain(doc);
+    setJumpToId(blockId);
+  };
+
+  useEffect(() => {
+    if (!jumpToId || blocks.length === 0) return;
+    const id = jumpToId;
+    setJumpToId('');
+    setTimeout(
+      () => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      150
+    );
+  }, [jumpToId, blocks]);
 
   const grouped = useMemo(
     () =>
@@ -431,54 +512,122 @@ export default function PolicyManual() {
                 </CardContent>
               </Card>
             ) : (
-              /* Landing: category overview cards */
-              <div className="space-y-4">
-                <Card className="rounded-xl border-[1.5px] border-[#53406e]/30 bg-[#f6f3fa] shadow-sm">
-                  <CardContent className="flex items-center gap-4 py-5">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#53406e] text-white">
-                      <BookOpen className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <div className={`text-sm font-bold ${INK}`}>How to use the manual</div>
-                      <p className="text-xs leading-relaxed text-muted-foreground">
-                        Search finds passages <em>inside</em> the documents — try “late arrival” or
-                        “crown remake”. Or pick a document from the left and jump around with its
-                        section outline.
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
+              /* Landing: topic tiles + sortable document covers */
+              <div className="space-y-5">
+                {/* Find it fast — one tap drops you on the answer. */}
+                <div>
+                  <div className="mb-2 flex items-center gap-3">
+                    <span className={KICKER}>Find It Fast</span>
+                    <span className="h-px flex-1 bg-[#ddd5e6]" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {TOPICS.map(topic => {
+                      const Icon = topic.icon;
+                      return (
+                        <button
+                          key={topic.label}
+                          type="button"
+                          onClick={() => setQuery(topic.query)}
+                          className="group flex flex-col items-start gap-2 rounded-xl border border-[#e2dcec] bg-card p-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#c9bedb] hover:shadow-md"
+                        >
+                          <span
+                            className={`flex h-8 w-8 items-center justify-center rounded-lg ${topic.tint.trim()} ${INK}`}
+                          >
+                            <Icon className="h-4 w-4" />
+                          </span>
+                          <span className="text-xs font-semibold leading-tight">{topic.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Browse the shelf — filter, sort, open at any section. */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className={KICKER}>Browse</span>
+                  <span className="mx-1 h-px w-6 bg-[#ddd5e6]" />
+                  {(['all', ...CATEGORY_ORDER] as const).map(cat => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setFilterCat(cat)}
+                      className={
+                        filterCat === cat
+                          ? 'rounded-full bg-[#53406e] px-3 py-1 text-xs font-medium text-white'
+                          : 'rounded-full border border-[#e2dcec] bg-card px-3 py-1 text-xs text-muted-foreground hover:border-[#c9bedb] hover:text-[#53406e]'
+                      }
+                    >
+                      {cat === 'all' ? 'All' : DOC_CATEGORY_LABELS[cat]}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setSortMode(m => (m === 'az' ? 'newest' : 'az'))}
+                    className="ml-auto rounded-full border border-[#e2dcec] bg-card px-3 py-1 text-xs text-muted-foreground hover:text-[#53406e]"
+                  >
+                    Sort: {sortMode === 'az' ? 'A–Z' : 'Newest'}
+                  </button>
+                </div>
+
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {grouped.map(group => {
-                    const Icon = CATEGORY_ICONS[group.category];
-                    return (
-                      <Card key={group.category} className={CARD}>
-                        <CardContent className="space-y-2 py-4">
-                          <div className="flex items-center gap-2">
-                            <Icon className={`h-4 w-4 ${INK}`} />
-                            <span className={KICKER}>{DOC_CATEGORY_LABELS[group.category]}</span>
-                            <span className="ml-auto text-xs text-muted-foreground">
-                              {group.docs.length}
+                  {(docs ?? [])
+                    .filter(d => filterCat === 'all' || d.category === filterCat)
+                    .sort((a, b) =>
+                      sortMode === 'az'
+                        ? a.title.localeCompare(b.title)
+                        : b.created_at.localeCompare(a.created_at)
+                    )
+                    .map(doc => {
+                      const category = (doc.category as OfficeDocCategory) ?? 'other';
+                      const Icon = CATEGORY_ICONS[category];
+                      const docOutline = allOutlines?.get(doc.id) ?? [];
+                      return (
+                        <Card key={doc.id} className={`${CARD} overflow-hidden`}>
+                          {/* Cover band */}
+                          <button
+                            type="button"
+                            onClick={() => openPlain(doc)}
+                            className={`flex w-full items-center gap-3 bg-gradient-to-r ${CATEGORY_COVER[category]} px-4 py-3 text-left text-white transition-opacity hover:opacity-95`}
+                          >
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15">
+                              <Icon className="h-5 w-5" />
                             </span>
-                          </div>
-                          <div className="space-y-0.5">
-                            {group.docs.map(doc => (
-                              <button
-                                key={doc.id}
-                                type="button"
-                                onClick={() => openPlain(doc)}
-                                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-[#f6f3fa] hover:text-[#53406e]"
-                              >
-                                <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                                <span className="min-w-0 flex-1 truncate">{doc.title}</span>
-                                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
-                              </button>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-bold">{doc.title}</span>
+                              <span className="block text-[11px] uppercase tracking-widest text-white/70">
+                                {DOC_CATEGORY_LABELS[category]}
+                                {docOutline.length > 0 && ` · ${docOutline.length} sections`}
+                              </span>
+                            </span>
+                            <ChevronRight className="h-4 w-4 shrink-0 text-white/70" />
+                          </button>
+                          {/* Section chips — open the doc AT the section. */}
+                          {docOutline.length > 0 && (
+                            <CardContent className="flex flex-wrap gap-1.5 py-3">
+                              {docOutline.slice(0, 8).map(item => (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => openSection(doc, item.id)}
+                                  className="max-w-full truncate rounded-full border border-[#e2dcec] px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-[#c9bedb] hover:bg-[#f6f3fa] hover:text-[#53406e]"
+                                >
+                                  {item.text}
+                                </button>
+                              ))}
+                              {docOutline.length > 8 && (
+                                <button
+                                  type="button"
+                                  onClick={() => openPlain(doc)}
+                                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${INK} hover:underline`}
+                                >
+                                  +{docOutline.length - 8} more…
+                                </button>
+                              )}
+                            </CardContent>
+                          )}
+                        </Card>
+                      );
+                    })}
                 </div>
               </div>
             )}
