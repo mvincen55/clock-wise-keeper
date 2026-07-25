@@ -1185,6 +1185,82 @@ export type Database = {
           },
         ]
       }
+      fof_code_rules: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          kind: string
+          org_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          kind: string
+          org_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fof_code_rules_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fof_discount_rules: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          extra_percent: number
+          id: string
+          org_id: string
+          percent: number
+          rule_key: string
+          threshold_cents: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          extra_percent?: number
+          id?: string
+          org_id: string
+          percent?: number
+          rule_key: string
+          threshold_cents?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          extra_percent?: number
+          id?: string
+          org_id?: string
+          percent?: number
+          rule_key?: string
+          threshold_cents?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fof_discount_rules_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fof_settings: {
         Row: {
           address_line1: string

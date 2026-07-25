@@ -35,6 +35,8 @@ import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
 import { categorizeCdtCode } from '@/lib/fof/cdt';
 import type { FeeCategory } from '@/lib/fof/insurance';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import { DEFAULT_CODE_RULES, useFofCodeRules } from '@/hooks/useFofRules';
+import FofCodeRulesCard from '@/components/FofCodeRulesCard';
 import {
   useDeleteFeeSchedule,
   useDeleteFeeScheduleItem,
@@ -66,6 +68,8 @@ function ItemEditorDialog({
   onClose: () => void;
 }) {
   const upsert = useUpsertFeeScheduleItem();
+  const { data: codeRulesData } = useFofCodeRules();
+  const neverCovered = codeRulesData?.neverCovered ?? DEFAULT_CODE_RULES.neverCovered;
   const [code, setCode] = useState(item?.code ?? '');
   const [description, setDescription] = useState(item?.description ?? '');
   const [fee, setFee] = useState(item ? formatCents(item.feeCents) : '');
@@ -104,7 +108,7 @@ function ItemEditorDialog({
                 onChange={e => {
                   const next = e.target.value.toUpperCase();
                   setCode(next);
-                  if (!item) setCategory(categorizeCdtCode(next));
+                  if (!item) setCategory(categorizeCdtCode(next, neverCovered));
                 }}
                 disabled={!!item}
               />
@@ -487,6 +491,7 @@ export default function FofFees() {
             </CardContent>
           </Card>
 
+          {isManager && <FofCodeRulesCard />}
         </>
       )}
 

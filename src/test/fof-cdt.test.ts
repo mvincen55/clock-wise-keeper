@@ -59,3 +59,16 @@ describe('categorizeCdtCode', () => {
     expect(categorizeCdtCode(' d1110 ')).toBe('preventive');
   });
 });
+
+describe('categorizeCdtCode — org-scoped never-covered list (Phase 2b)', () => {
+  it('a custom list replaces the shipped one', () => {
+    const custom = new Set(['D2740']);
+    expect(categorizeCdtCode('D2740', custom)).toBe('other'); // now never covered
+    expect(categorizeCdtCode('D4265', custom)).toBe('basic'); // back to its CDT range
+    expect(categorizeCdtCode('D5982', custom)).toBe('major'); // prosthodontic range
+  });
+
+  it('an empty list means only CDT ranges decide', () => {
+    expect(categorizeCdtCode('D4265', new Set())).toBe('basic');
+  });
+});

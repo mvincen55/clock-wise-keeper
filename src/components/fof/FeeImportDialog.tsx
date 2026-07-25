@@ -23,6 +23,7 @@ import { parseCurrencyInput, formatCents } from '@/lib/fof/money';
 import { categorizeCdtCode } from '@/lib/fof/cdt';
 import type { FeeCategory } from '@/lib/fof/insurance';
 import { useImportFeeScheduleItems, type ImportRow } from '@/hooks/useFeeSchedules';
+import { DEFAULT_CODE_RULES, useFofCodeRules } from '@/hooks/useFofRules';
 
 // Spreadsheet import for fee schedules: parse CSV/XLSX in the browser,
 // map columns, preview, bulk upsert. Fee schedules are de-identified
@@ -59,6 +60,8 @@ function detectCategory(value: string): FeeCategory | undefined {
 }
 
 export default function FeeImportDialog({ open, scheduleId, scheduleName, onClose }: FeeImportDialogProps) {
+  const { data: codeRulesData } = useFofCodeRules();
+  const neverCovered = codeRulesData?.neverCovered ?? DEFAULT_CODE_RULES.neverCovered;
   const importItems = useImportFeeScheduleItems();
   const [grid, setGrid] = useState<Grid>([]);
   const [fileName, setFileName] = useState('');
@@ -141,11 +144,11 @@ export default function FeeImportDialog({ open, scheduleId, scheduleName, onClos
         // CDT code range (consistent across carriers).
         category:
           (catCol !== NONE ? detectCategory(cellString(row[Number(catCol)])) : undefined) ??
-          categorizeCdtCode(code),
+          categorizeCdtCode(code, neverCovered),
       });
     }
     return rows;
-  }, [dataRows, codeCol, descCol, feeCol, catCol]);
+  }, [dataRows, codeCol, descCol, feeCol, catCol, neverCovered]);
 
   const submit = () => {
     if (!scheduleId) return;
