@@ -24,7 +24,7 @@ export default function FofDiscountRulesCard() {
   const upsert = useUpsertFofDiscountRule();
   const [form, setForm] = useState<{
     senior: { enabled: boolean; percent: string; threshold: string };
-    courtesy: { enabled: boolean; percent: string };
+    prepay: { enabled: boolean; percent: string };
     membership: { enabled: boolean; percent: string; extra: string };
   } | null>(null);
 
@@ -36,7 +36,7 @@ export default function FofDiscountRulesCard() {
           percent: String(rules.senior.percent),
           threshold: (rules.senior.thresholdCents / 100).toFixed(2),
         },
-        courtesy: { enabled: rules.courtesy.enabled, percent: String(rules.courtesy.percent) },
+        prepay: { enabled: rules.prepay.enabled, percent: String(rules.prepay.percent) },
         membership: {
           enabled: rules.membership.enabled,
           percent: String(rules.membership.percent),
@@ -63,11 +63,11 @@ export default function FofDiscountRulesCard() {
 
   const handleSave = async () => {
     const seniorPct = parsePct(form.senior.percent);
-    const courtesyPct = parsePct(form.courtesy.percent);
+    const prepayPct = parsePct(form.prepay.percent);
     const membershipPct = parsePct(form.membership.percent);
     const extraPct = parsePct(form.membership.extra);
     const thresholdCents = parseCurrencyInput(form.senior.threshold);
-    if (seniorPct === null || courtesyPct === null || membershipPct === null || extraPct === null) {
+    if (seniorPct === null || prepayPct === null || membershipPct === null || extraPct === null) {
       toast.error('Percents must be between 0 and 100');
       return;
     }
@@ -89,9 +89,9 @@ export default function FofDiscountRulesCard() {
         thresholdCents,
       });
       await upsert.mutateAsync({
-        ruleKey: 'courtesy',
-        enabled: form.courtesy.enabled,
-        percent: courtesyPct,
+        ruleKey: 'prepay',
+        enabled: form.prepay.enabled,
+        percent: prepayPct,
       });
       await upsert.mutateAsync({
         ruleKey: 'membership',
@@ -157,17 +157,17 @@ export default function FofDiscountRulesCard() {
           </>
         )}
         {ruleRow(
-          'Courtesy prepay (under 65)',
+          'Prepay (under 65)',
           'Earned by prepay-in-full on treatment at the senior threshold or more.',
-          form.courtesy.enabled,
-          v => setForm(f => f && { ...f, courtesy: { ...f.courtesy, enabled: v } }),
+          form.prepay.enabled,
+          v => setForm(f => f && { ...f, prepay: { ...f.prepay, enabled: v } }),
           <div className="space-y-1.5">
-            <Label htmlFor="rule-courtesy-pct">Percent (0–100)</Label>
+            <Label htmlFor="rule-prepay-pct">Percent (0–100)</Label>
             <Input
-              id="rule-courtesy-pct"
+              id="rule-prepay-pct"
               inputMode="decimal"
-              value={form.courtesy.percent}
-              onChange={e => setForm(f => f && { ...f, courtesy: { ...f.courtesy, percent: e.target.value } })}
+              value={form.prepay.percent}
+              onChange={e => setForm(f => f && { ...f, prepay: { ...f.prepay, percent: e.target.value } })}
             />
           </div>
         )}
