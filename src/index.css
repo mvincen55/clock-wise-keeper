@@ -1,0 +1,1419 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+@layer base {
+  :root {
+    --background: 220 20% 97%;
+    --foreground: 220 25% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 10%;
+
+    --primary: 35 92% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 15% 92%;
+    --secondary-foreground: 220 25% 15%;
+
+    --muted: 220 15% 94%;
+    --muted-foreground: 220 10% 45%;
+
+    --accent: 200 80% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 35 92% 50%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 220 20% 14%;
+    --sidebar-foreground: 220 10% 85%;
+    --sidebar-primary: 35 92% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 20% 20%;
+    --sidebar-accent-foreground: 220 10% 85%;
+    --sidebar-border: 220 20% 22%;
+    --sidebar-ring: 35 92% 50%;
+
+    /* Custom tokens */
+    --success: 145 63% 42%;
+    --success-foreground: 0 0% 100%;
+    --warning: 35 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --clock-bg: 220 25% 12%;
+    --clock-fg: 35 92% 55%;
+    --break-bg: 200 80% 45%;
+    --break-fg: 0 0% 100%;
+  }
+
+  .dark {
+    --background: 220 25% 8%;
+    --foreground: 220 10% 92%;
+
+    --card: 220 25% 12%;
+    --card-foreground: 220 10% 92%;
+
+    --popover: 220 25% 12%;
+    --popover-foreground: 220 10% 92%;
+
+    --primary: 35 92% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 20% 18%;
+    --secondary-foreground: 220 10% 85%;
+
+    --muted: 220 20% 16%;
+    --muted-foreground: 220 10% 55%;
+
+    --accent: 200 80% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 40%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 20% 20%;
+    --input: 220 20% 20%;
+    --ring: 35 92% 50%;
+
+    --sidebar-background: 220 25% 6%;
+    --sidebar-foreground: 220 10% 85%;
+    --sidebar-primary: 35 92% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 25% 14%;
+    --sidebar-accent-foreground: 220 10% 85%;
+    --sidebar-border: 220 25% 14%;
+    --sidebar-ring: 35 92% 50%;
+
+    --success: 145 63% 42%;
+    --success-foreground: 0 0% 100%;
+    --warning: 35 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --clock-bg: 220 25% 12%;
+    --clock-fg: 35 92% 55%;
+    --break-bg: 200 80% 45%;
+    --break-fg: 0 0% 100%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  h1, h2, h3 {
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer utilities {
+  .font-mono-display {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .time-display {
+    font-family: 'JetBrains Mono', monospace;
+    @apply tabular-nums tracking-wider;
+  }
+
+  .punch-glow {
+    box-shadow: 0 0 20px hsl(35 92% 50% / 0.3), 0 0 60px hsl(35 92% 50% / 0.1);
+  }
+
+  .card-elevated {
+    box-shadow: 0 1px 3px hsl(220 25% 10% / 0.06), 0 8px 24px hsl(220 25% 10% / 0.04);
+  }
+}
+
+/* ---- Financial Options Form (FOF) print sheet ---- */
+/* Hidden on screen except inside the preview card; becomes the only
+   visible content when printing from the FOF builder. Card-based layout:
+   navy accents on white, tuned to degrade cleanly in grayscale. */
+.fof-print-root {
+  display: none;
+}
+
+/* Printable Deposit Log (Office Copy + Bank Copy). Hidden on screen;
+   shown only when printing from the Deposit Log page. Styled in the
+   practice's document language (deep purple on white, grayscale-safe),
+   one letter page per copy. */
+.deposit-print-root {
+  display: none;
+}
+
+@page deposit {
+  size: letter;
+  margin: 0.45in;
+}
+
+.dep-sheet {
+  --dep-navy: #53406e; /* office deep purple */
+  --dep-ink: #2b2733;
+  --dep-muted: #6b6577;
+  --dep-line: #d5cfe0;
+  --dep-tint: #f3f0f8;
+  page: deposit;
+  width: 7.6in;
+  /* Letter page minus 0.45in margins; flex pushes the footer to the true
+     bottom so both copies read as full, composed pages. */
+  min-height: 10in;
+  display: flex;
+  flex-direction: column;
+  margin: 0 auto;
+  background: white;
+  color: var(--dep-ink);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 9pt;
+  line-height: 1.35;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+  page-break-after: always;
+}
+
+.dep-sheet:last-child {
+  page-break-after: auto;
+}
+
+.dep-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.4in;
+  padding-bottom: 8pt;
+  border-bottom: 1.5pt solid var(--dep-navy);
+  margin-bottom: 10pt;
+}
+
+.dep-logo {
+  height: 0.52in;
+  width: auto;
+}
+
+.dep-head-meta {
+  text-align: right;
+}
+
+.dep-kicker {
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dep-navy);
+}
+
+.dep-title {
+  font-size: 16pt;
+  font-weight: 700;
+  color: var(--dep-ink);
+  line-height: 1.15;
+}
+
+.dep-subtitle {
+  font-size: 8.5pt;
+  color: var(--dep-muted);
+}
+
+.dep-cash {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  width: 3.55in;
+  background: var(--dep-tint);
+  border: 0.75pt solid var(--dep-line);
+  border-radius: 3pt;
+  font-weight: 700;
+  padding: 3.5pt 8pt;
+  margin-bottom: 8pt;
+}
+
+.dep-columns {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5in;
+}
+
+.dep-checks {
+  width: 3.55in;
+  border-collapse: collapse;
+}
+
+.dep-checks th {
+  text-align: left;
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dep-navy);
+  border-bottom: 1.25pt solid var(--dep-navy);
+  padding: 2pt 6pt 3pt;
+}
+
+.dep-checks td {
+  border-bottom: 0.5pt solid var(--dep-line);
+  padding: 1.5pt 6pt;
+  height: 11.5pt;
+  font-variant-numeric: tabular-nums;
+}
+
+.dep-checks .dep-line {
+  width: 0.4in;
+  color: var(--dep-muted);
+  font-size: 8pt;
+}
+
+.dep-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.dep-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5in;
+  margin-top: 12pt;
+}
+
+.dep-footer-left,
+.dep-footer-right {
+  width: 3.55in;
+}
+
+.dep-box {
+  border: 0.75pt solid var(--dep-line);
+  border-radius: 3pt;
+  overflow: hidden;
+}
+
+.dep-box-title {
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dep-navy);
+  background: var(--dep-tint);
+  padding: 3pt 8pt;
+  border-bottom: 0.75pt solid var(--dep-line);
+}
+
+.dep-sum-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2.5pt 8pt;
+  border-bottom: 0.5pt solid var(--dep-line);
+}
+
+.dep-sum-row:last-child {
+  border-bottom: none;
+}
+
+.dep-sum-grand {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  background: var(--dep-navy);
+  color: white;
+  font-weight: 700;
+  font-size: 10.5pt;
+  padding: 4pt 8pt;
+}
+
+.dep-account {
+  font-weight: 700;
+  padding: 4pt 8pt;
+}
+
+.dep-envelope {
+  margin-top: 8pt;
+  border: 1.25pt solid var(--dep-navy);
+  border-radius: 3pt;
+  color: var(--dep-navy);
+  font-weight: 700;
+  font-size: 8.5pt;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 4pt 8pt;
+}
+
+.dep-initials {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 10pt;
+  margin-top: 9pt;
+  padding: 0 2pt;
+}
+
+.dep-initials-label {
+  font-size: 8.5pt;
+  color: var(--dep-muted);
+}
+
+.dep-initials-slot {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.dep-initials-value {
+  min-width: 0.7in;
+  border-bottom: 1pt solid var(--dep-ink);
+  text-align: center;
+  font-weight: 700;
+  min-height: 11pt;
+}
+
+.dep-initials-caption {
+  font-size: 6.5pt;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dep-muted);
+  margin-top: 1.5pt;
+}
+
+.dep-page-footer {
+  margin-top: auto;
+  padding-top: 10pt;
+  border-top: 0.75pt solid var(--dep-line);
+  font-size: 7pt;
+  letter-spacing: 0.06em;
+  color: var(--dep-muted);
+  text-align: center;
+}
+
+.fof-sheet {
+  --fof-navy: #53406e; /* office deep purple */
+  --fof-ink: #2b2733;
+  --fof-muted: #6b6577;
+  --fof-line: #d5cfe0;
+  --fof-tint: #f3f0f8; /* office light purple */
+  width: 7.5in;
+  /* Letter page minus 0.5in margins; flex column pushes the footer to the
+     true bottom of the page in both preview and print. */
+  min-height: 10in;
+  display: flex;
+  flex-direction: column;
+  /* Leftover height distributes BETWEEN sections at every density, so
+     the form always fills the whole page instead of pooling one big gap
+     above the footer. (The office copy overrides back to flex-start.) */
+  justify-content: space-between;
+  background: white;
+  color: var(--fof-ink);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 9pt;
+  line-height: 1.4;
+  padding: 0.25in;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.fof-kicker {
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fof-navy);
+}
+
+/* Header: logo left, date/patient right */
+.fof-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16pt;
+  border-bottom: 1.25pt solid var(--fof-navy);
+  padding-bottom: 8pt;
+  margin-bottom: 10pt;
+}
+
+.fof-logo {
+  display: block;
+  height: 1.3in;
+  width: auto;
+}
+
+.fof-head-meta {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 3pt;
+}
+
+.fof-meta-key {
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fof-muted);
+  margin-right: 5pt;
+}
+
+.fof-meta-value {
+  font-size: 10pt;
+  font-weight: 700;
+}
+
+/* Hero: treatment left, total cost card right */
+.fof-hero {
+  display: flex;
+  gap: 12pt;
+  align-items: stretch;
+  margin-bottom: 10pt;
+}
+
+.fof-hero-treatment {
+  flex: 1.2;
+  padding-top: 4pt;
+  /* Short treatment text centers beside the cost card instead of
+     leaving an awkward blank block underneath. */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.fof-treatment-text {
+  font-size: 12.5pt;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 3pt;
+}
+
+.fof-hero-card {
+  flex: 1;
+  /* The primary card on the page — slightly heavier border than the
+     secondary cards so the eye lands here first. */
+  border: 1.5pt solid var(--fof-navy);
+  border-radius: 5pt;
+  background: var(--fof-tint);
+  text-align: center;
+  padding: 8pt 10pt;
+  /* Content centers vertically even when the treatment text runs long. */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.fof-hero-amount {
+  font-size: 24pt;
+  font-weight: 800;
+  color: var(--fof-navy);
+  line-height: 1.15;
+  margin: 2pt 0;
+}
+
+.fof-hero-sub {
+  font-size: 7.5pt;
+  color: var(--fof-muted);
+}
+
+/* Breakdown + callout cards */
+.fof-cards {
+  display: flex;
+  gap: 12pt;
+  align-items: stretch;
+  margin-bottom: 10pt;
+}
+
+.fof-card {
+  border: 0.75pt solid var(--fof-line);
+  border-radius: 5pt;
+  padding: 7pt 10pt;
+}
+
+.fof-breakdown {
+  flex: 1.25;
+}
+
+.fof-card-title {
+  font-size: 7.5pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fof-navy);
+  margin-bottom: 4pt;
+}
+
+.fof-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8pt;
+  padding: 2pt 0;
+  border-bottom: 0.5pt solid #e6eaef;
+}
+
+.fof-row:last-child {
+  border-bottom: none;
+}
+
+/* Payment-schedule rows use dotted leaders instead of solid dividers —
+   "At Crown Prep ......... $1,534" reads like a clean itinerary. */
+.fof-row.fof-leaders {
+  border-bottom: none;
+}
+
+.fof-dots {
+  flex: 1 1 auto;
+  min-width: 10pt;
+  border-bottom: 1pt dotted #b9b2c6;
+  margin: 0 2pt;
+  transform: translateY(-2.5pt);
+}
+
+.fof-row-total {
+  font-weight: 800;
+  font-size: 10pt;
+  color: var(--fof-navy);
+  border-top: 1.25pt solid var(--fof-navy);
+  margin-top: 2pt;
+  padding-top: 3.5pt;
+}
+
+.fof-callout {
+  flex: 1;
+  /* Information card: soft background, no outline — visually quieter
+     than the money cards. */
+  background: var(--fof-tint);
+  border-color: transparent;
+}
+
+.fof-callout p {
+  margin: 0;
+  font-size: 7.5pt;
+  line-height: 1.45;
+  color: #3d3749;
+}
+
+/* Inline icons */
+.fof-icon {
+  width: 8.5pt;
+  height: 8.5pt;
+  flex: 0 0 auto;
+}
+
+.fof-meta-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4pt;
+  color: var(--fof-navy);
+}
+
+.fof-callout .fof-card-title {
+  display: flex;
+  align-items: center;
+  gap: 4pt;
+}
+
+.fof-icon-bubble {
+  width: 18pt;
+  height: 18pt;
+  border-radius: 50%;
+  background: #e7e1f2;
+  color: var(--fof-navy);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.fof-icon-bubble .fof-icon {
+  width: 9.5pt;
+  height: 9.5pt;
+}
+
+/* White chip holding the icon in an option title band */
+.fof-option-icon {
+  width: 15pt;
+  height: 15pt;
+  border-radius: 3.5pt;
+  background: white;
+  color: var(--fof-navy);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.fof-option-icon .fof-icon {
+  width: 10pt;
+  height: 10pt;
+}
+
+/* Payment options: side-by-side cards joined by an OR badge */
+.fof-options {
+  margin-bottom: 8pt;
+  page-break-inside: avoid;
+}
+
+.fof-options-head {
+  display: flex;
+  align-items: center;
+  gap: 8pt;
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fof-navy);
+  margin-bottom: 8pt;
+}
+
+.fof-options-head::before,
+.fof-options-head::after {
+  content: '';
+  flex: 1;
+  border-top: 0.75pt solid var(--fof-line);
+}
+
+.fof-options-row {
+  display: flex;
+  gap: 6pt;
+  align-items: stretch;
+}
+
+.fof-option {
+  flex: 1;
+  border: 0.9pt solid var(--fof-navy);
+  border-radius: 5pt;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.fof-option-title {
+  font-size: 7.4pt;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4pt;
+  color: white;
+  background: var(--fof-navy);
+  padding: 3.5pt 4pt;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.fof-option-body {
+  padding: 6pt 9pt 7pt;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+/* The prepay card has fewer rows than the installment list — taller rows,
+   a bigger total, and the savings chip pinned to the bottom give it equal
+   visual weight. */
+.fof-option .fof-row {
+  padding: 3pt 0;
+}
+
+.fof-option .fof-row-total {
+  font-size: 11.5pt;
+  padding-top: 5pt;
+}
+
+.fof-option .fof-save-chip {
+  margin-top: auto;
+  /* Sized so the sentence stays on ONE line inside the half-width card. */
+  font-size: 8.6pt;
+  padding: 4pt 6pt;
+  gap: 5pt;
+}
+
+.fof-or {
+  align-self: center;
+  flex: 0 0 auto;
+  width: 16pt;
+  height: 16pt;
+  border-radius: 50%;
+  background: var(--fof-navy);
+  color: white;
+  font-size: 6.5pt;
+  font-weight: 800;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+/* "You save $X" banner: solid green with white text so it POPS — and
+   prints as a dark band with white text on a black-and-white printer. */
+.fof-save-chip {
+  margin-top: 4pt;
+  display: flex;
+  align-items: center;
+  gap: 6pt;
+  /* Light chip + dark text; the solid green seal carries the pop so the
+     banner no longer dominates the page. */
+  background: #ddefe3;
+  border: 0.75pt solid #a4cdb2;
+  color: #14532d;
+  border-radius: 4pt;
+  /* The savings line fills its box — it's the sales pitch, not fine
+     print — and never wraps to a second line. */
+  font-size: 9.5pt;
+  white-space: nowrap;
+  padding: 4pt 7pt;
+  text-align: left;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.fof-save-chip strong {
+  font-weight: 800;
+}
+
+.fof-save-seal {
+  /* Solid green seal with a white dollar sign on the light chip. */
+  color: #1d6f3d;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.fof-save-seal .fof-icon {
+  width: 17pt;
+  height: 17pt;
+}
+
+/* Agreement cards: title band + horizontal payment cells */
+.fof-agreement {
+  border: 0.75pt solid var(--fof-navy);
+  border-radius: 5pt;
+  overflow: hidden;
+  margin-bottom: 8pt;
+  page-break-inside: avoid;
+}
+
+.fof-agreement-title {
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--fof-navy);
+  background: var(--fof-tint);
+  border-bottom: 0.75pt solid var(--fof-navy);
+  padding: 3.5pt 8pt;
+}
+
+.fof-cells {
+  display: flex;
+  align-items: stretch;
+}
+
+.fof-cell {
+  flex: 1;
+  text-align: center;
+  padding: 6pt 6pt 7pt;
+  border-right: 0.5pt solid var(--fof-line);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 1pt;
+}
+
+.fof-cell:last-child {
+  border-right: none;
+}
+
+.fof-cell-head {
+  font-size: 7.2pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fof-muted);
+}
+
+.fof-cell-label {
+  font-size: 7.5pt;
+  color: var(--fof-muted);
+}
+
+.fof-cell-amount {
+  font-size: 11pt;
+  font-weight: 700;
+  margin-top: auto;
+}
+
+.fof-cell-total {
+  background: var(--fof-navy);
+  color: white;
+}
+
+.fof-cell-total .fof-cell-head {
+  color: #d8d0e6;
+}
+
+.fof-cell-total .fof-cell-amount {
+  color: white;
+  font-weight: 800;
+}
+
+/* Contact band */
+.fof-band {
+  background: var(--fof-tint);
+  border-radius: 5pt;
+  padding: 6pt 10pt;
+  font-size: 7.5pt;
+  line-height: 1.45;
+  color: #3d3749;
+  margin-bottom: 8pt;
+}
+
+/* Contact band: financing and mailing stacked (side-by-side felt busy) */
+.fof-band-split {
+  display: flex;
+  flex-direction: column;
+  gap: 5pt;
+}
+
+.fof-band-cell {
+  display: flex;
+  gap: 6pt;
+  align-items: flex-start;
+}
+
+.fof-band-cell + .fof-band-cell {
+  border-top: 0.75pt solid var(--fof-line);
+  padding-top: 5pt;
+}
+
+.fof-band-title {
+  font-size: 7.6pt;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fof-navy);
+  margin-bottom: 1.5pt;
+}
+
+.fof-band-cell p {
+  margin: 0;
+}
+
+.fof-footnotes {
+  display: flex;
+  gap: 6pt;
+  align-items: flex-start;
+  /* Information card: soft gray background instead of an outline. */
+  background: #f4f3f7;
+  border-radius: 5pt;
+  padding: 5pt 8pt;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+  font-size: 7.4pt;
+  line-height: 1.35;
+  color: var(--fof-muted);
+  margin-bottom: 8pt;
+}
+
+.fof-info-badge {
+  color: var(--fof-navy);
+  display: flex;
+  flex: 0 0 auto;
+  margin-top: 0.5pt;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.fof-info-badge .fof-icon {
+  width: 11pt;
+  height: 11pt;
+}
+
+.fof-footnotes-list {
+  flex: 1;
+  min-width: 0;
+}
+
+.fof-footnotes p {
+  margin: 0 0 2.5pt;
+}
+
+/* Signature block */
+/* The boxed fine print above provides the visual break — no rule needed. */
+.fof-signatures {
+  page-break-inside: avoid;
+  padding-top: 10pt;
+}
+
+/* Reads as one sentence on one line: the write-on blank stretches to
+   push the sentence flush right, ending with "plan:" at the line's end.
+   The caption sits centered under the blank. */
+.fof-sig-ack {
+  display: flex;
+  align-items: flex-end;
+  gap: 6pt;
+  margin: 0 0 14pt;
+  font-size: 8.5pt;
+  line-height: 1.5;
+}
+
+.fof-sig-ack-blank {
+  flex: 1;
+  position: relative;
+}
+
+.fof-sig-ack-line {
+  display: block;
+  height: 0.9em;
+  border-bottom: 0.75pt solid var(--fof-ink);
+}
+
+.fof-sig-ack-caption {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 1pt;
+  font-size: 6.5pt;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fof-muted);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.fof-sig-ack-text {
+  white-space: nowrap;
+}
+
+.fof-sig-caption {
+  font-size: 7pt;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fof-muted);
+  margin-top: 1.5pt;
+  margin-bottom: 5pt;
+}
+
+.fof-choices {
+  display: flex;
+  gap: 0.4in;
+  margin: 6pt 0 14pt;
+  /* Centered under the acknowledgment sentence. */
+  justify-content: center;
+}
+
+.fof-choice {
+  display: flex;
+  align-items: center;
+  gap: 6pt;
+  font-weight: 700;
+  font-size: 9pt;
+  color: var(--fof-navy);
+}
+
+.fof-checkbox {
+  display: inline-block;
+  width: 10pt;
+  height: 10pt;
+  border: 1.1pt solid var(--fof-navy);
+  border-radius: 2pt;
+}
+
+.fof-sig-row {
+  display: flex;
+  gap: 0.4in;
+  align-items: flex-end;
+}
+
+.fof-sig-field {
+  flex: 1;
+}
+
+.fof-sig-wide {
+  flex: 2.5;
+}
+
+.fof-sig-line {
+  border-bottom: 0.75pt solid var(--fof-ink);
+  height: 19pt;
+}
+
+/* Sparse forms: roomier type and spacing, with leftover height
+   distributed between sections so the page always looks fully used. */
+.fof-roomy {
+  font-size: 9.5pt;
+}
+
+.fof-roomy .fof-head {
+  padding-bottom: 12pt;
+  margin-bottom: 14pt;
+}
+
+.fof-roomy .fof-treatment-text {
+  font-size: 14pt;
+}
+
+.fof-roomy .fof-hero-amount {
+  font-size: 28pt;
+}
+
+.fof-roomy .fof-hero,
+.fof-roomy .fof-cards,
+.fof-roomy .fof-options,
+.fof-roomy .fof-agreement,
+.fof-roomy .fof-band {
+  margin-bottom: 14pt;
+}
+
+.fof-roomy .fof-card {
+  padding: 10pt 12pt;
+}
+
+.fof-roomy .fof-row {
+  padding: 3.5pt 0;
+}
+
+.fof-roomy .fof-option-body {
+  padding: 9pt 11pt 10pt;
+}
+
+.fof-roomy .fof-footnotes {
+  padding: 8pt 10pt;
+  font-size: 7.8pt;
+  margin-bottom: 14pt;
+}
+
+.fof-roomy .fof-sig-ack {
+  margin-bottom: 20pt;
+}
+
+.fof-roomy .fof-choices {
+  margin: 10pt 0 18pt;
+}
+
+.fof-roomy .fof-sig-line {
+  height: 24pt;
+}
+
+.fof-roomy .fof-signatures {
+  padding-top: 14pt;
+}
+
+/* Content-aware density: tighter spacing/type when the form is full */
+.fof-dense {
+  font-size: 8.5pt;
+}
+
+.fof-dense .fof-head {
+  padding-bottom: 6pt;
+  margin-bottom: 7pt;
+}
+
+.fof-dense .fof-logo {
+  height: 1.05in;
+}
+
+.fof-dense .fof-hero {
+  margin-bottom: 7pt;
+}
+
+.fof-dense .fof-treatment-text {
+  font-size: 10.5pt;
+}
+
+.fof-dense .fof-hero-amount {
+  font-size: 20pt;
+}
+
+.fof-dense .fof-cards {
+  margin-bottom: 7pt;
+}
+
+.fof-dense .fof-agreement {
+  margin-bottom: 6pt;
+}
+
+.fof-dense .fof-band {
+  margin-bottom: 6pt;
+  padding: 4.5pt 8pt;
+}
+
+.fof-dense .fof-options {
+  margin-bottom: 6pt;
+}
+
+.fof-dense .fof-option-body {
+  padding: 4pt 6pt 5pt;
+}
+
+.fof-denser .fof-option-title {
+  font-size: 6.8pt;
+}
+
+.fof-dense .fof-footnotes {
+  margin-bottom: 6pt;
+}
+
+.fof-dense .fof-choices {
+  margin: 5pt 0 10pt;
+}
+
+.fof-dense .fof-signatures {
+  padding-top: 8pt;
+}
+
+.fof-denser .fof-logo {
+  height: 0.9in;
+}
+
+.fof-denser .fof-treatment-text {
+  font-size: 9.5pt;
+}
+
+.fof-denser .fof-hero-amount {
+  font-size: 17pt;
+}
+
+.fof-denser .fof-callout p,
+.fof-denser .fof-band {
+  font-size: 7pt;
+}
+
+.fof-denser .fof-footnotes {
+  font-size: 7pt;
+}
+
+.fof-denser .fof-cell-amount {
+  font-size: 10pt;
+}
+
+/* Footer pinned to the page bottom */
+/* Solid brand footer bar — degrades to a dark gray band in grayscale */
+.fof-footer {
+  /* No margin-top:auto — it would swallow ALL leftover space and defeat
+     the sheet's space-between distribution; as the last flex child the
+     footer still lands at the bottom of the page. */
+  /* Slimmer band — the footer anchors the page, it doesn't compete. */
+  padding: 4.5pt 10pt;
+  border-radius: 5pt;
+  background: var(--fof-navy);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12pt;
+  font-size: 7pt;
+  letter-spacing: 0.02em;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.fof-footer-item {
+  display: flex;
+  align-items: center;
+  gap: 4pt;
+  white-space: nowrap;
+}
+
+/* Office copy: plain second page with the exact codes/amounts */
+.fof-office-page {
+  page-break-before: always;
+  min-height: 0;
+  justify-content: flex-start;
+  margin-top: 12pt;
+  border-top: 2pt solid var(--fof-line);
+}
+
+.fof-office-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10pt;
+  border-bottom: 1.25pt solid var(--fof-navy);
+  padding-bottom: 6pt;
+  margin-bottom: 8pt;
+}
+
+.fof-office-title {
+  font-size: 12pt;
+  font-weight: 800;
+  color: var(--fof-navy);
+}
+
+.fof-office-sub {
+  font-size: 8pt;
+  color: var(--fof-muted);
+  margin-top: 2pt;
+}
+
+.fof-office-stamp {
+  border: 1.25pt solid var(--fof-navy);
+  border-radius: 4pt;
+  color: var(--fof-navy);
+  font-size: 8pt;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3.5pt 7pt;
+  white-space: nowrap;
+}
+
+.fof-office-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 7.6pt;
+  margin-bottom: 10pt;
+}
+
+.fof-office-table th,
+.fof-office-table td {
+  border: 0.5pt solid #c9c3d4;
+  padding: 2.5pt 4pt;
+  text-align: left;
+  vertical-align: top;
+}
+
+.fof-office-table th {
+  background: var(--fof-tint);
+  color: var(--fof-navy);
+  font-size: 7pt;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.fof-office-table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.fof-office-totals td {
+  font-weight: 800;
+  background: #faf9fc;
+}
+
+.fof-office-summary {
+  display: flex;
+  gap: 14pt;
+  align-items: flex-start;
+  margin-bottom: 8pt;
+}
+
+.fof-office-col {
+  flex: 1;
+  border: 0.75pt solid var(--fof-line);
+  border-radius: 5pt;
+  padding: 6pt 9pt;
+}
+
+.fof-office-note {
+  font-size: 7.2pt;
+  color: var(--fof-muted);
+  margin: 0;
+}
+
+@page fof {
+  size: letter;
+  margin: 0.5in;
+}
+
+.fof-sheet {
+  page: fof;
+}
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt;
+  }
+
+  /* When the FOF builder is printing, show only the portaled sheet. */
+  body:has(.fof-print-root) #root {
+    display: none !important;
+  }
+
+  .fof-print-root {
+    display: block !important;
+  }
+
+  /* Same for the Deposit Log's two printed copies. */
+  body:has(.deposit-print-root) #root {
+    display: none !important;
+  }
+
+  .deposit-print-root {
+    display: block !important;
+  }
+
+  /* The deposit sheet draws its own rules — exempt it from the generic
+     print table borders below, then restate its own. */
+  .dep-sheet th,
+  .dep-sheet td {
+    border: none;
+  }
+
+  .dep-checks th {
+    border-bottom: 1.25pt solid #53406e;
+  }
+
+  .dep-checks td {
+    border-bottom: 0.5pt solid #d5cfe0;
+  }
+
+  .fof-print-root .fof-sheet {
+    width: 100%;
+    padding: 0;
+  }
+
+  /* The FOF sheet uses its own layout — exempt it from the generic
+     print table borders below. */
+  .fof-sheet th,
+  .fof-sheet td {
+    border: none;
+    padding: 0;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .print-break {
+    page-break-before: always;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  th, td {
+    border: 1px solid #ccc;
+    padding: 4px 8px;
+    text-align: left;
+  }
+}
