@@ -3,9 +3,10 @@ import {
   usePtoSettings, useUpsertPtoSettings,
   usePtoSnapshots, useUpsertPtoSnapshot,
   usePtoLedger, useRecalculatePto,
-  useCurrentPtoBalance, PTO_TIERS, getTierForDate,
+  useCurrentPtoBalance, usePtoAccrualTiers, PTO_TIERS, getTierForDate,
   PtoLedgerWeek,
 } from '@/hooks/usePtoEngine';
+import PtoTiersCard from '@/components/PtoTiersCard';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useOrgBranding } from '@/hooks/useOrgBranding';
@@ -37,6 +38,7 @@ export default function PTO() {
   const [tab, setTab] = useState('overview');
 
   const { data: settings, isLoading: settingsLoading } = usePtoSettings();
+  const { data: orgTiers } = usePtoAccrualTiers();
   const { data: snapshots } = usePtoSnapshots();
   const { data: ledger } = usePtoLedger();
   const { data: daysOff } = useDaysOff();
@@ -99,8 +101,8 @@ export default function PTO() {
   };
 
   const currentTier = settings
-    ? getTierForDate(settings.hire_date, new Date().toISOString().split('T')[0])
-    : PTO_TIERS[0];
+    ? getTierForDate(settings.hire_date, new Date().toISOString().split('T')[0], orgTiers ?? PTO_TIERS)
+    : (orgTiers ?? PTO_TIERS)[0];
 
   // PTO usage entries
   const ptoEntries = (daysOff || [])
@@ -495,17 +497,7 @@ export default function PTO() {
                 </Button>
               </div>
 
-              <div className="p-3 rounded-lg bg-muted/50">
-                <h4 className="font-medium text-sm mb-2">Office Accrual Tiers</h4>
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  {PTO_TIERS.map((t, i) => (
-                    <div key={i} className="flex justify-between">
-                      <span>{t.label}</span>
-                      <span className="font-semibold">{(t.rate * 100).toFixed(2)}% (max {t.weeklyCap}h/wk)</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <PtoTiersCard />
             </CardContent>
           </Card>
         </TabsContent>
