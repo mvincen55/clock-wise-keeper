@@ -27,6 +27,7 @@ import FofTemplateEditor from '@/components/fof/FofTemplateEditor';
 import OrgBrandingCard from '@/components/OrgBrandingCard';
 import FofMoneySettingsCard from '@/components/FofMoneySettingsCard';
 import FofDiscountRulesCard from '@/components/FofDiscountRulesCard';
+import FofVocabularyCard from '@/components/FofVocabularyCard';
 import {
   useDeleteFofTemplate,
   useFofTemplates,
@@ -93,6 +94,7 @@ export default function FofTemplates() {
       <OrgBrandingCard isManager={isManager} />
       {isManager && <FofMoneySettingsCard />}
       {isManager && <FofDiscountRulesCard />}
+      {isManager && <FofVocabularyCard />}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-16">

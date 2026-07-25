@@ -47,6 +47,8 @@ const PRACTICE: FofPracticeInfo = {
   website: 'drharelick.com',
   doctorName: 'Dr. Scott',
   logoUrl: '/src/assets/harelick-logo.png',
+  doctorNames: ['Dr. Scott', 'Dr. Jennie', 'Dr. Robert', 'Dr. Nicole', 'Dr. Natalie'],
+  membershipPlanName: 'Illumitrac',
 };
 
 /**
@@ -231,6 +233,7 @@ describe('print invariant — reference output must never change', () => {
           envelopeNote: 'Purple envelope — no tape',
           officeCopyNote: 'Office Copy — file with the day sheet',
         }}
+        membershipLabel="Illumitrac"
       />
     );
     expect(html).toContain('Bay Coast Account #841845805');

@@ -144,10 +144,9 @@ const MAXED_NOTE_PREV_EXEMPT =
 const RENEWAL_NOTE =
   "Because this treatment continues into your next insurance benefit year, part of the estimate is paid from next year's renewed benefits: your annual maximum starts over for the visits after renewal, and your deductible applies again. If your coverage changes at renewal, this estimate may change as well.";
 
-// Doctors the treatment wording can be attributed to.
-const FOF_DOCTORS = ['Dr. Scott', 'Dr. Jennie', 'Dr. Robert', 'Dr. Nicole', 'Dr. Natalie'];
 /** Dropdown option when treatment isn't tied to one doctor — the AI
- * writes in the practice's collective voice ("We'll…") instead. */
+ * writes in the practice's collective voice ("We'll…") instead. The
+ * doctors themselves are org configuration (fof_settings.doctor_names). */
 const FOF_NO_DOCTOR = 'No specific doctor';
 
 const CATEGORY_SHORT: Record<FeeCategory, string> = {
@@ -493,7 +492,11 @@ export default function FofBuilder() {
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
   const [bundleName, setBundleName] = useState('');
   const [aiNaming, setAiNaming] = useState(false);
-  const [doctorName, setDoctorName] = useState(FOF_DOCTORS[0]);
+  // Doctor dropdown: org-configured names; default to the first. The
+  // staff's explicit pick sticks even if the org list changes mid-form.
+  const [doctorChoice, setDoctorChoice] = useState<string | null>(null);
+  const doctorOptions = practice?.doctorNames ?? [];
+  const doctorName = doctorChoice ?? doctorOptions[0] ?? FOF_NO_DOCTOR;
   const [importing, setImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   // In-app confirm dialog (native confirm() shows ugly browser chrome).
@@ -1076,8 +1079,9 @@ export default function FofBuilder() {
     ),
   ];
   if (membershipFreeLabels.length > 0) {
+    const planName = practice?.membershipPlanName?.trim() ?? '';
     extraFootnotes.push(
-      `Included at no charge with your Illumitrac membership: ${membershipFreeLabels.join(', ')}.`
+      `Included at no charge with your ${planName !== '' ? `${planName} ` : ''}membership: ${membershipFreeLabels.join(', ')}.`
     );
   }
   const effectiveTemplate: FofTemplate | undefined = template
@@ -1131,7 +1135,7 @@ export default function FofBuilder() {
   // request is built ONLY from CDT codes, code-derived labels, and
   // strictly-validated tooth numbers (src/lib/fof/ai.ts) — staff-typed
   // descriptions, edited labels, patient fields, and dollar amounts never
-  // leave the browser. The doctor name comes from the fixed FOF_DOCTORS
+  // leave the browser. The doctor name comes from the org-configured
   // dropdown, never free text.
   const aiCall = async (wantTreatment: boolean) => {
     if (!computation) return null;
@@ -1157,7 +1161,11 @@ export default function FofBuilder() {
               label: v.safeLabel,
               feeCents: v.feeCents,
               dueAtVisitCents: v.dueAtVisitCents,
-            }))
+            })),
+            {
+              dayOfServiceThresholdCents: money.dayOfServiceThresholdCents,
+              minStandalonePaymentCents: money.minStandalonePaymentCents,
+            }
           )
         : null;
     const autoSlots =
@@ -1598,12 +1606,12 @@ export default function FofBuilder() {
                   </div>
                   <div className="space-y-1.5">
                     <Label>Doctor</Label>
-                    <Select value={doctorName} onValueChange={setDoctorName}>
+                    <Select value={doctorName} onValueChange={setDoctorChoice}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {FOF_DOCTORS.map(d => (
+                        {doctorOptions.map(d => (
                           <SelectItem key={d} value={d}>{d}</SelectItem>
                         ))}
                         <SelectItem value={FOF_NO_DOCTOR}>{FOF_NO_DOCTOR}</SelectItem>
@@ -2111,8 +2119,8 @@ export default function FofBuilder() {
                             htmlFor={`fof-mem-${line.key}`}
                             className="text-xs text-muted-foreground font-normal"
                           >
-                            Included with Illumitrac — no charge (turn off if this year's
-                            allowance is used up)
+                            Included with {practice?.membershipPlanName?.trim() || 'membership'} — no
+                            charge (turn off if this year's allowance is used up)
                           </Label>
                         </div>
                       )}

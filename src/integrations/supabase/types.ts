@@ -832,6 +832,7 @@ export type Database = {
           outside_financing_cents: number
           prepared_by: string | null
           prepared_by_name: string
+          print_snapshot: Json | null
           pt_cc_cents: number
           updated_at: string
         }
@@ -848,6 +849,7 @@ export type Database = {
           outside_financing_cents?: number
           prepared_by?: string | null
           prepared_by_name?: string
+          print_snapshot?: Json | null
           pt_cc_cents?: number
           updated_at?: string
         }
@@ -864,6 +866,7 @@ export type Database = {
           outside_financing_cents?: number
           prepared_by?: string | null
           prepared_by_name?: string
+          print_snapshot?: Json | null
           pt_cc_cents?: number
           updated_at?: string
         }
@@ -1268,8 +1271,10 @@ export type Database = {
           created_at: string
           day_of_service_threshold_cents: number
           doctor_name: string
+          doctor_names: Json
           downgrade_default_on: boolean
           id: string
+          membership_plan_name: string
           min_standalone_payment_cents: number
           org_id: string
           phone: string
@@ -1283,8 +1288,10 @@ export type Database = {
           created_at?: string
           day_of_service_threshold_cents?: number
           doctor_name?: string
+          doctor_names?: Json
           downgrade_default_on?: boolean
           id?: string
+          membership_plan_name?: string
           min_standalone_payment_cents?: number
           org_id: string
           phone?: string
@@ -1298,8 +1305,10 @@ export type Database = {
           created_at?: string
           day_of_service_threshold_cents?: number
           doctor_name?: string
+          doctor_names?: Json
           downgrade_default_on?: boolean
           id?: string
+          membership_plan_name?: string
           min_standalone_payment_cents?: number
           org_id?: string
           phone?: string

@@ -20,6 +20,10 @@ export interface FofPracticeInfo {
   doctorName: string;
   /** Org logo (storage URL or data: URI); empty = no logo printed. */
   logoUrl: string;
+  /** Doctors offered in the builder's treatment-wording dropdown. */
+  doctorNames: string[];
+  /** In-house membership plan display name; empty = plain "Membership". */
+  membershipPlanName: string;
 }
 
 export interface FofTemplate {
