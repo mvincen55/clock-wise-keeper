@@ -66,7 +66,12 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import FofAssistantWidget from '@/components/fof/FofAssistantWidget';
 import FofPrintSheet from '@/components/fof/FofPrintSheet';
-import { useFofSettings, useFofTemplates } from '@/hooks/useFofTemplates';
+import {
+  DEFAULT_MONEY_SETTINGS,
+  useFofMoneySettings,
+  useFofSettings,
+  useFofTemplates,
+} from '@/hooks/useFofTemplates';
 import {
   useDeleteProcedureBundle,
   useFeeScheduleItems,
@@ -197,8 +202,9 @@ interface BuilderLine {
   /** Warning when an imported fee differs from the fees on file. */
   feeFlag: string;
   /**
-   * '' = plan pays composite rates (the default — most plans don't
-   * downgrade), 'yes' = alternate-benefit downgrade applies (e.g. Altus).
+   * '' = unset, follows the org's downgrade default (off unless
+   * configured — most plans pay composite rates); 'yes' = alternate-
+   * benefit downgrade applies (e.g. Altus); 'no' = explicitly off.
    */
   downgrade: string;
 }
@@ -467,6 +473,10 @@ export default function FofBuilder() {
   const { data: practice } = useFofSettings();
   const { data: branding } = useOrgBranding();
   const { data: schedules } = useFeeSchedules();
+  // Org money settings (thresholds + downgrade default); shipped defaults
+  // until the row loads.
+  const { data: moneySettings } = useFofMoneySettings();
+  const money = moneySettings ?? DEFAULT_MONEY_SETTINGS;
 
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [templateId, setTemplateId] = useState<string | null>(null);
@@ -707,8 +717,11 @@ export default function FofBuilder() {
         .filter(l => l.code.trim() !== '' || l.description.trim() !== '' || l.feeInput.trim() !== '')
         .map(l => {
           const code = l.code.trim().toUpperCase();
-          // Downgrades are decided per line (default on for D2391–D2394).
-          const downgradeCode = l.downgrade === 'yes' ? DOWNGRADE_MAP[code] : undefined;
+          // Downgrades are decided per line; an unset line follows the
+          // org's downgrade default (off unless configured otherwise).
+          const downgradeOn =
+            l.downgrade === 'yes' || (l.downgrade === '' && money.downgradeDefaultOn);
+          const downgradeCode = downgradeOn ? DOWNGRADE_MAP[code] : undefined;
           return {
             key: l.key,
             visit: effectiveVisit(l),
@@ -741,7 +754,7 @@ export default function FofBuilder() {
         // in visit order even if the list hasn't been re-sorted yet.
         .sort((a, b) => a.visit - b.visit),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state.lines, allowedByCode, payActive, payByCode, renewalVisit, membershipActive]
+    [state.lines, allowedByCode, payActive, payByCode, renewalVisit, membershipActive, money.downgradeDefaultOn]
   );
   const feeLines: FofLine[] = useMemo(
     () => feeLineEntries.map(entry => entry.line),
@@ -993,10 +1006,15 @@ export default function FofBuilder() {
   }, [state.lines, membershipActive]);
 
   const schedulePortion = parseOverride(state.portionOverride) ?? projectedPortion;
-  const scheduleFromVisits = visitWork ? buildVisitSchedule(schedulePortion, visitWork) : null;
+  const scheduleFromVisits = visitWork
+    ? buildVisitSchedule(schedulePortion, visitWork, {
+        dayOfServiceThresholdCents: money.dayOfServiceThresholdCents,
+        minStandalonePaymentCents: money.minStandalonePaymentCents,
+      })
+    : null;
 
   const autoVisitPlan =
-    projectedPortion > 0 && projectedPortion < DAY_OF_SERVICE_THRESHOLD_CENTS
+    projectedPortion > 0 && projectedPortion < money.dayOfServiceThresholdCents
       ? VISIT_PLANS.dayOfService
       : scheduleFromVisits ?? treatmentVisitPlan;
   const forcedPlan =
@@ -1010,7 +1028,7 @@ export default function FofBuilder() {
     basePlan &&
     basePlan.key !== 'visitSchedule' &&
     projectedPortion > 0 &&
-    projectedPortion < DAY_OF_SERVICE_THRESHOLD_CENTS &&
+    projectedPortion < money.dayOfServiceThresholdCents &&
     /scheduling/i.test(basePlan.labels[0] ?? '')
       ? { ...basePlan, labels: ['At the First Visit', ...basePlan.labels.slice(1)] }
       : basePlan;
@@ -2060,9 +2078,12 @@ export default function FofBuilder() {
                         <div className="flex items-center gap-2">
                           <Switch
                             id={`fof-dg-${line.key}`}
-                            checked={line.downgrade === 'yes'}
+                            checked={
+                              line.downgrade === 'yes' ||
+                              (line.downgrade === '' && money.downgradeDefaultOn)
+                            }
                             onCheckedChange={v =>
-                              dispatch({ type: 'setLine', index: i, patch: { downgrade: v ? 'yes' : '' } })
+                              dispatch({ type: 'setLine', index: i, patch: { downgrade: v ? 'yes' : 'no' } })
                             }
                           />
                           <Label

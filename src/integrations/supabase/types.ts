@@ -1190,8 +1190,11 @@ export type Database = {
           address_line1: string
           address_line2: string
           created_at: string
+          day_of_service_threshold_cents: number
           doctor_name: string
+          downgrade_default_on: boolean
           id: string
+          min_standalone_payment_cents: number
           org_id: string
           phone: string
           practice_name: string
@@ -1202,8 +1205,11 @@ export type Database = {
           address_line1?: string
           address_line2?: string
           created_at?: string
+          day_of_service_threshold_cents?: number
           doctor_name?: string
+          downgrade_default_on?: boolean
           id?: string
+          min_standalone_payment_cents?: number
           org_id: string
           phone?: string
           practice_name?: string
@@ -1214,8 +1220,11 @@ export type Database = {
           address_line1?: string
           address_line2?: string
           created_at?: string
+          day_of_service_threshold_cents?: number
           doctor_name?: string
+          downgrade_default_on?: boolean
           id?: string
+          min_standalone_payment_cents?: number
           org_id?: string
           phone?: string
           practice_name?: string
