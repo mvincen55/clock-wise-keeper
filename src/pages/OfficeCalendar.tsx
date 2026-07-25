@@ -152,7 +152,7 @@ export default function OfficeCalendar() {
   const addClosure = useAddClosure();
   const addDayOff = useAddDayOff();
 
-  // Pull Google "HDA - Fairhaven" calendar events for the visible month
+  // Pull the org's office Google Calendar events for the visible month
   const { data: gcalEvents } = useQuery({
     queryKey: ['gcal-office', year, month],
     queryFn: async () => {

@@ -161,7 +161,7 @@
 }
 
 .dep-sheet {
-  --dep-navy: #53406e; /* office deep purple */
+  --dep-navy: #53406e; /* brand accent default; org_branding overrides */
   --dep-ink: #2b2733;
   --dep-muted: #6b6577;
   --dep-line: #d5cfe0;
@@ -397,11 +397,11 @@
 }
 
 .fof-sheet {
-  --fof-navy: #53406e; /* office deep purple */
+  --fof-navy: #53406e; /* brand accent default; org_branding overrides */
   --fof-ink: #2b2733;
   --fof-muted: #6b6577;
   --fof-line: #d5cfe0;
-  --fof-tint: #f3f0f8; /* office light purple */
+  --fof-tint: #f3f0f8; /* brand tint default; org_branding overrides */
   width: 7.5in;
   /* Letter page minus 0.5in margins; flex column pushes the footer to the
      true bottom of the page in both preview and print. */

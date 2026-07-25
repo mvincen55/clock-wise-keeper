@@ -97,6 +97,8 @@ import {
   visitSegmentsForCode,
 } from '@/lib/fof/visits';
 import { DEFAULT_PRACTICE_INFO } from '@/lib/fof/defaults';
+import BrandPrintStyle from '@/components/BrandPrintStyle';
+import { useOrgBranding } from '@/hooks/useOrgBranding';
 import type { Cents, FofAmounts, FofOverrides, FofTemplate } from '@/lib/fof/types';
 
 const NO_SCHEDULE = '__none__';
@@ -463,6 +465,7 @@ function OverrideRow({ label, computedCents, value, overridden, onChange }: Over
 export default function FofBuilder() {
   const { data: templates, isLoading: templatesLoading } = useFofTemplates();
   const { data: practice } = useFofSettings();
+  const { data: branding } = useOrgBranding();
   const { data: schedules } = useFeeSchedules();
 
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
@@ -2532,6 +2535,9 @@ export default function FofBuilder() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Brand accent for the preview and printed sheets (org rows). */}
+      {branding && <BrandPrintStyle branding={branding} />}
 
       {/* Hidden print copy, portaled outside #root so print CSS can show
           only the sheet. Same props as the preview — cannot diverge. */}

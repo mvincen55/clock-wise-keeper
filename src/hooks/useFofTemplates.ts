@@ -5,6 +5,7 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import type { Tables, TablesInsert } from '@/integrations/supabase/types';
 import type { FofPracticeInfo, FofTemplate } from '@/lib/fof/types';
 import {
+  buildDefaultContactNote,
   DEFAULT_PRACTICE_INFO,
   DEFAULT_TEMPLATES,
   type FofTemplateSeed,
@@ -12,9 +13,13 @@ import {
 
 // De-identified template configuration only — no patient data ever flows
 // through this hook (see src/lib/fof/types.ts for the HIPAA boundary).
+//
+// Practice identity (name, address, phone, website, logo) lives on
+// org_branding; fof_settings keeps only FOF-specific fields (doctor_name).
+// The identity columns still on fof_settings are deprecated and unread.
 
 type TemplateRow = Tables<'fof_templates'>;
-type SettingsRow = Tables<'fof_settings'>;
+type BrandingRow = Tables<'org_branding'>;
 
 function mapTemplateRow(row: TemplateRow): FofTemplate {
   return {
@@ -44,15 +49,28 @@ function mapTemplateRow(row: TemplateRow): FofTemplate {
   };
 }
 
-function mapSettingsRow(row: SettingsRow): FofPracticeInfo {
+function composePracticeInfo(branding: BrandingRow | null, doctorName: string): FofPracticeInfo {
+  if (!branding) return { ...DEFAULT_PRACTICE_INFO, doctorName };
   return {
-    practiceName: row.practice_name,
-    addressLine1: row.address_line1,
-    addressLine2: row.address_line2,
-    phone: row.phone,
-    website: row.website,
-    doctorName: row.doctor_name,
+    practiceName: branding.legal_name,
+    addressLine1: branding.address_line1,
+    addressLine2: branding.address_line2,
+    phone: branding.phone,
+    website: branding.website,
+    doctorName,
+    logoUrl: branding.logo_url,
   };
+}
+
+/** The org's branding row (null when none exists yet). */
+async function fetchBrandingRow(orgId: string): Promise<BrandingRow | null> {
+  const { data, error } = await supabase
+    .from('org_branding')
+    .select('*')
+    .eq('org_id', orgId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
 }
 
 function seedToInsert(seed: FofTemplateSeed, orgId: string, userId?: string): TablesInsert<'fof_templates'> {
@@ -107,7 +125,18 @@ export function useFofTemplates() {
         if (!isAdmin) {
           return DEFAULT_TEMPLATES.map((t, i) => ({ ...t, id: `default-${i}` }));
         }
-        const inserts = DEFAULT_TEMPLATES.map(t => seedToInsert(t, ctx.org_id, user?.id));
+        // Contact wording carries the org's own identity, interpolated
+        // from org_branding at seed time.
+        const branding = await fetchBrandingRow(ctx.org_id);
+        const contactNote = buildDefaultContactNote({
+          practiceName: branding?.legal_name ?? '',
+          addressLine1: branding?.address_line1 ?? '',
+          addressLine2: branding?.address_line2 ?? '',
+          phone: branding?.phone ?? '',
+        });
+        const inserts = DEFAULT_TEMPLATES.map(t =>
+          seedToInsert({ ...t, contactNote }, ctx.org_id, user?.id)
+        );
         const { data: seeded, error: seedError } = await supabase
           .from('fof_templates')
           .insert(inserts)
@@ -130,24 +159,25 @@ export function useFofSettings() {
     enabled: !!user && !!ctx,
     queryFn: async (): Promise<FofPracticeInfo> => {
       if (!ctx) return DEFAULT_PRACTICE_INFO;
-      const { data, error } = await supabase
-        .from('fof_settings')
-        .select('*')
-        .eq('org_id', ctx.org_id)
-        .maybeSingle();
-      if (error) throw error;
-      if (data) return mapSettingsRow(data);
+      const [branding, settingsResult] = await Promise.all([
+        fetchBrandingRow(ctx.org_id),
+        supabase.from('fof_settings').select('doctor_name').eq('org_id', ctx.org_id).maybeSingle(),
+      ]);
+      if (settingsResult.error) throw settingsResult.error;
+      if (settingsResult.data) {
+        return composePracticeInfo(branding, settingsResult.data.doctor_name);
+      }
 
       // fof_settings is admin-write; employees print with the defaults
       // until an admin's first visit creates the row.
-      if (!isAdmin) return DEFAULT_PRACTICE_INFO;
+      if (!isAdmin) return composePracticeInfo(branding, '');
       const { data: created, error: createError } = await supabase
         .from('fof_settings')
         .insert({ org_id: ctx.org_id })
-        .select('*')
+        .select('doctor_name')
         .single();
       if (createError) throw createError;
-      return mapSettingsRow(created);
+      return composePracticeInfo(branding, created.doctor_name);
     },
   });
 }
@@ -159,21 +189,33 @@ export function useUpsertFofSettings() {
   return useMutation({
     mutationFn: async (updates: Partial<FofPracticeInfo>) => {
       if (!ctx) throw new Error('Not authenticated');
-      const { error } = await supabase.from('fof_settings').upsert(
-        {
-          org_id: ctx.org_id,
-          ...(updates.practiceName !== undefined && { practice_name: updates.practiceName }),
-          ...(updates.addressLine1 !== undefined && { address_line1: updates.addressLine1 }),
-          ...(updates.addressLine2 !== undefined && { address_line2: updates.addressLine2 }),
-          ...(updates.phone !== undefined && { phone: updates.phone }),
-          ...(updates.website !== undefined && { website: updates.website }),
-          ...(updates.doctorName !== undefined && { doctor_name: updates.doctorName }),
-        },
-        { onConflict: 'org_id' }
-      );
-      if (error) throw error;
+      // Identity fields live on org_branding; fof_settings keeps only
+      // the FOF-specific doctor name.
+      const brandingPatch = {
+        ...(updates.practiceName !== undefined && { legal_name: updates.practiceName }),
+        ...(updates.addressLine1 !== undefined && { address_line1: updates.addressLine1 }),
+        ...(updates.addressLine2 !== undefined && { address_line2: updates.addressLine2 }),
+        ...(updates.phone !== undefined && { phone: updates.phone }),
+        ...(updates.website !== undefined && { website: updates.website }),
+        ...(updates.logoUrl !== undefined && { logo_url: updates.logoUrl }),
+      };
+      if (Object.keys(brandingPatch).length > 0) {
+        const { error } = await supabase
+          .from('org_branding')
+          .upsert({ org_id: ctx.org_id, ...brandingPatch }, { onConflict: 'org_id' });
+        if (error) throw error;
+      }
+      if (updates.doctorName !== undefined) {
+        const { error } = await supabase
+          .from('fof_settings')
+          .upsert({ org_id: ctx.org_id, doctor_name: updates.doctorName }, { onConflict: 'org_id' });
+        if (error) throw error;
+      }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['fof-settings'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fof-settings'] });
+      qc.invalidateQueries({ queryKey: ['org-branding'] });
+    },
   });
 }
 
@@ -224,7 +266,16 @@ export function useRestoreDefaultFofTemplates() {
         .delete()
         .eq('org_id', ctx.org_id);
       if (deleteError) throw deleteError;
-      const inserts = DEFAULT_TEMPLATES.map(t => seedToInsert(t, ctx.org_id, user?.id));
+      const branding = await fetchBrandingRow(ctx.org_id);
+      const contactNote = buildDefaultContactNote({
+        practiceName: branding?.legal_name ?? '',
+        addressLine1: branding?.address_line1 ?? '',
+        addressLine2: branding?.address_line2 ?? '',
+        phone: branding?.phone ?? '',
+      });
+      const inserts = DEFAULT_TEMPLATES.map(t =>
+        seedToInsert({ ...t, contactNote }, ctx.org_id, user?.id)
+      );
       const { error } = await supabase.from('fof_templates').insert(inserts);
       if (error) throw error;
     },

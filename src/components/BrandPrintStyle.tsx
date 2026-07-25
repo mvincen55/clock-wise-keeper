@@ -1,0 +1,17 @@
+import type { OrgBranding } from '@/hooks/useOrgBranding';
+
+/**
+ * Injects the org's brand accent into the print/preview sheets by
+ * overriding the CSS custom properties the .fof-sheet / .dep-sheet rules
+ * are written against. Rendered as a sibling of the sheets so the sheet
+ * DOM itself stays byte-identical regardless of branding.
+ */
+export default function BrandPrintStyle({
+  branding,
+}: {
+  branding: Pick<OrgBranding, 'brandColor' | 'brandTint'>;
+}) {
+  const css = `.fof-sheet{--fof-navy:${branding.brandColor};--fof-tint:${branding.brandTint}}
+.dep-sheet{--dep-navy:${branding.brandColor};--dep-tint:${branding.brandTint}}`;
+  return <style>{css}</style>;
+}

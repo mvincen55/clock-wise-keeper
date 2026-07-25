@@ -13,7 +13,6 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
 import {
-  DEFAULT_CONTACT_NOTE,
   DEFAULT_PREPAY_NOTE,
   DEFAULT_SIGNATURE_INTRO,
   DEFAULT_VALIDITY_NOTE,
@@ -65,7 +64,9 @@ const NEW_TEMPLATE: EditorState = {
   validityNote: DEFAULT_VALIDITY_NOTE,
   prepayNote: DEFAULT_PREPAY_NOTE,
   insuranceNote: '',
-  contactNote: DEFAULT_CONTACT_NOTE,
+  // Left blank on new templates; the seeded templates carry a contact
+  // note generated from the org's branding.
+  contactNote: '',
   extraNotes: '',
   signatureIntro: DEFAULT_SIGNATURE_INTRO,
   membershipDiscountPercent: '0',

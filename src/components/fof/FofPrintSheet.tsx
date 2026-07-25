@@ -7,7 +7,6 @@ import type {
   FofTemplate,
 } from '@/lib/fof/types';
 import { formatCents } from '@/lib/fof/money';
-import logoUrl from '@/assets/harelick-logo.png';
 
 /**
  * The paper Financial Options Form — card-based layout: logo + date/patient
@@ -235,7 +234,9 @@ export default function FofPrintSheet({
     <>
     <div className={`fof-sheet${densityClass}`}>
       <header className="fof-head">
-        <img className="fof-logo" src={logoUrl} alt={practice.practiceName} />
+        {practice.logoUrl !== '' && (
+          <img className="fof-logo" src={practice.logoUrl} alt={practice.practiceName} />
+        )}
         <div className="fof-head-meta">
           <div className="fof-meta-item">
             <CalendarIcon />

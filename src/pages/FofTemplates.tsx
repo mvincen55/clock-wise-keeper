@@ -4,7 +4,7 @@
  * on this page or in these tables; see src/pages/FofBuilder.tsx for the
  * HIPAA boundary.
  */
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertDialog,
@@ -19,95 +19,21 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { ArrowLeft, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import FofTemplateEditor from '@/components/fof/FofTemplateEditor';
+import OrgBrandingCard from '@/components/OrgBrandingCard';
 import {
   useDeleteFofTemplate,
-  useFofSettings,
   useFofTemplates,
   useRestoreDefaultFofTemplates,
-  useUpsertFofSettings,
   useUpsertFofTemplate,
   type FofTemplateUpsert,
 } from '@/hooks/useFofTemplates';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import type { FofPracticeInfo, FofTemplate } from '@/lib/fof/types';
-
-function HeaderSettingsCard({ isManager }: { isManager: boolean }) {
-  const { data: settings, isLoading } = useFofSettings();
-  const upsert = useUpsertFofSettings();
-  const [form, setForm] = useState<FofPracticeInfo | null>(null);
-
-  useEffect(() => {
-    if (settings && !form) setForm(settings);
-  }, [settings, form]);
-
-  if (isLoading || !form) {
-    return (
-      <Card>
-        <CardContent className="py-8 flex justify-center">
-          <Loader2 className="h-5 w-5 animate-spin text-primary" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const set = (field: keyof FofPracticeInfo) =>
-    (e: React.ChangeEvent<HTMLInputElement>) =>
-      setForm(f => (f ? { ...f, [field]: e.target.value } : f));
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Form Header (Practice Info)</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="hdr-name">Practice Name</Label>
-            <Input id="hdr-name" value={form.practiceName} onChange={set('practiceName')} disabled={!isManager} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="hdr-phone">Phone</Label>
-            <Input id="hdr-phone" value={form.phone} onChange={set('phone')} disabled={!isManager} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="hdr-addr1">Address Line 1</Label>
-            <Input id="hdr-addr1" value={form.addressLine1} onChange={set('addressLine1')} disabled={!isManager} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="hdr-addr2">Address Line 2</Label>
-            <Input id="hdr-addr2" value={form.addressLine2} onChange={set('addressLine2')} disabled={!isManager} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="hdr-website">Website</Label>
-            <Input id="hdr-website" value={form.website} onChange={set('website')} disabled={!isManager} />
-          </div>
-        </div>
-        {isManager && (
-          <div className="flex justify-end">
-            <Button
-              disabled={upsert.isPending}
-              onClick={() =>
-                upsert.mutate(form, {
-                  onSuccess: () => toast.success('Practice info saved'),
-                  onError: err => toast.error(`Save failed: ${err.message}`),
-                })
-              }
-            >
-              {upsert.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Save Header
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
+import type { FofTemplate } from '@/lib/fof/types';
 
 export default function FofTemplates() {
   const { data: templates, isLoading } = useFofTemplates();
@@ -162,7 +88,7 @@ export default function FofTemplates() {
         )}
       </div>
 
-      <HeaderSettingsCard isManager={isManager} />
+      <OrgBrandingCard isManager={isManager} />
 
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
