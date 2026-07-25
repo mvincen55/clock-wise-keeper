@@ -290,7 +290,9 @@ export default function FofPrintSheet({
           )}
           {(amounts.membershipCoveredCents ?? 0) > 0 && (
             <div className="fof-row">
-              <span>Included with Illumitrac Membership</span>
+              <span>
+                Included with {practice.membershipPlanName.trim() !== '' ? `${practice.membershipPlanName} ` : ''}Membership
+              </span>
               <span>−{formatCents(amounts.membershipCoveredCents!)}</span>
             </div>
           )}

@@ -33,6 +33,8 @@ export interface DepositPrintProps {
   branding: Pick<OrgBranding, 'displayName' | 'legalName' | 'logoUrl'>;
   /** Office-specific printed wording from org_deposit_settings. */
   settings: OrgDepositSettings;
+  /** Membership plan display name for the summary row (fof_settings). */
+  membershipLabel: string;
 }
 
 const longDate = (iso: string): string => {
@@ -103,6 +105,7 @@ function CopyPage({
   initials,
   branding,
   settings,
+  membershipLabel,
 }: DepositPrintProps & { variant: 'office' | 'bank' }) {
   const checkCount = checksCents.filter(c => c > 0).length;
   const checksTotal = checksCents.reduce((a, b) => a + b, 0);
@@ -168,7 +171,7 @@ function CopyPage({
               <>
                 <SummaryRow label="Ins Credit Cards" cents={insCcCents} />
                 <SummaryRow label="Total Pt Credit Cards" cents={ptCcCents} />
-                <SummaryRow label="Illumitrac" cents={illumitracCents} />
+                <SummaryRow label={membershipLabel} cents={illumitracCents} />
                 <SummaryRow label="Outside Financing" cents={outsideFinancingCents} />
               </>
             )}

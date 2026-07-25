@@ -19,9 +19,12 @@ import { getToday } from '@/lib/time-utils';
 import { formatCents, parseCurrencyInput } from '@/lib/money';
 import {
   depositChecks,
+  parseDepositPrintSnapshot,
   useDepositLog,
   useSaveDepositLog,
+  type DepositPrintSnapshot,
 } from '@/hooks/useDepositLog';
+import { useFofSettings } from '@/hooks/useFofTemplates';
 import { useOrgBranding, useOrgDepositSettings } from '@/hooks/useOrgBranding';
 import DepositSettingsCard from '@/components/DepositSettingsCard';
 import { useOrgContext } from '@/hooks/useOrgContext';
@@ -73,6 +76,8 @@ export default function DepositLog() {
   const save = useSaveDepositLog();
   const { data: branding } = useOrgBranding();
   const { data: depositSettings } = useOrgDepositSettings();
+  const { data: practice } = useFofSettings();
+  const membershipLabel = practice?.membershipPlanName?.trim() || 'Membership';
   const { data: orgCtx } = useOrgContext();
   const isManager = orgCtx?.role === 'owner' || orgCtx?.role === 'manager';
 
@@ -133,6 +138,21 @@ export default function DepositLog() {
 
   const handleSave = () => {
     if (!form || !totals) return;
+    // Capture the printed wording onto the record so later settings or
+    // branding edits never change what this day's saved sheet says.
+    const printSnapshot: DepositPrintSnapshot | null =
+      branding && depositSettings
+        ? {
+            v: 1,
+            branding: {
+              displayName: branding.displayName,
+              legalName: branding.legalName,
+              logoUrl: branding.logoUrl,
+            },
+            settings: { ...depositSettings },
+            membershipLabel,
+          }
+        : null;
     save.mutate(
       {
         depositDate: date,
@@ -143,6 +163,7 @@ export default function DepositLog() {
         illumitracCents: totals.illumitrac,
         outsideFinancingCents: totals.financing,
         notes: form.notes,
+        printSnapshot,
       },
       {
         onSuccess: () => toast.success('Deposit log saved'),
@@ -257,7 +278,7 @@ export default function DepositLog() {
                     <Input id="dep-ptcc" inputMode="decimal" placeholder="$0.00" value={form.ptCc} onChange={e => setField('ptCc')(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="dep-illumitrac">Illumitrac</Label>
+                    <Label htmlFor="dep-illumitrac">{membershipLabel}</Label>
                     <Input id="dep-illumitrac" inputMode="decimal" placeholder="$0.00" value={form.illumitrac} onChange={e => setField('illumitrac')(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
@@ -286,7 +307,7 @@ export default function DepositLog() {
                 </div>
                 <div className="flex justify-between"><span>Insurance Credit Cards</span><span>{formatCents(totals.insCc)}</span></div>
                 <div className="flex justify-between"><span>Patient Credit Cards</span><span>{formatCents(totals.ptCc)}</span></div>
-                <div className="flex justify-between"><span>Illumitrac</span><span>{formatCents(totals.illumitrac)}</span></div>
+                <div className="flex justify-between"><span>{membershipLabel}</span><span>{formatCents(totals.illumitrac)}</span></div>
                 <div className="flex justify-between"><span>Outside Financing</span><span>{formatCents(totals.financing)}</span></div>
                 <div className="border-t pt-1.5 mt-1.5 space-y-1.5">
                   <div className="flex justify-between text-muted-foreground">
@@ -342,25 +363,31 @@ export default function DepositLog() {
           shows nothing but the sheets (same mechanism as the FOF).
           Identity and printed wording come from the org rows. */}
       {log && !dirty && branding && depositSettings &&
-        createPortal(
-          <div className="deposit-print-root">
-            <BrandPrintStyle branding={branding} />
-            <DepositPrintSheet
-              date={date}
-              cashCents={log.cash_cents}
-              checksCents={depositChecks(log)}
-              insCcCents={log.ins_cc_cents}
-              ptCcCents={log.pt_cc_cents}
-              illumitracCents={log.illumitrac_cents}
-              outsideFinancingCents={log.outside_financing_cents}
-              preparedBy={log.prepared_by_name}
-              initials={initialsOf(log.prepared_by_name)}
-              branding={branding}
-              settings={depositSettings}
-            />
-          </div>,
-          document.body
-        )}
+        (() => {
+          // Reprints honor the wording captured when the record was
+          // saved; records from before snapshots print with live settings.
+          const snap = parseDepositPrintSnapshot(log.print_snapshot);
+          return createPortal(
+            <div className="deposit-print-root">
+              <BrandPrintStyle branding={branding} />
+              <DepositPrintSheet
+                date={date}
+                cashCents={log.cash_cents}
+                checksCents={depositChecks(log)}
+                insCcCents={log.ins_cc_cents}
+                ptCcCents={log.pt_cc_cents}
+                illumitracCents={log.illumitrac_cents}
+                outsideFinancingCents={log.outside_financing_cents}
+                preparedBy={log.prepared_by_name}
+                initials={initialsOf(log.prepared_by_name)}
+                branding={snap?.branding ?? branding}
+                settings={snap?.settings ?? depositSettings}
+                membershipLabel={snap?.membershipLabel ?? membershipLabel}
+              />
+            </div>,
+            document.body
+          );
+        })()}
     </div>
   );
 }

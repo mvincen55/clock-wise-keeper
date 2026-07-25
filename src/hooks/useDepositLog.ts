@@ -33,6 +33,32 @@ export function useDepositLog(date: string) {
   });
 }
 
+/**
+ * Printed wording captured onto the record at save time (Phase 2c), so
+ * a later settings/branding edit never changes what a historical
+ * printed document said. Null on records saved before this existed.
+ */
+export interface DepositPrintSnapshot {
+  v: 1;
+  branding: { displayName: string; legalName: string; logoUrl: string };
+  settings: {
+    accountLine: string;
+    bankSplitCashLabel: string;
+    bankSplitCardsLabel: string;
+    bankTotalLabel: string;
+    envelopeNote: string;
+    officeCopyNote: string;
+  };
+  membershipLabel: string;
+}
+
+export function parseDepositPrintSnapshot(value: unknown): DepositPrintSnapshot | null {
+  if (!value || typeof value !== 'object') return null;
+  const snap = value as Partial<DepositPrintSnapshot>;
+  if (snap.v !== 1 || !snap.branding || !snap.settings) return null;
+  return snap as DepositPrintSnapshot;
+}
+
 export interface DepositLogSave {
   depositDate: string;
   cashCents: number;
@@ -42,6 +68,7 @@ export interface DepositLogSave {
   illumitracCents: number;
   outsideFinancingCents: number;
   notes: string;
+  printSnapshot: DepositPrintSnapshot | null;
 }
 
 export function useSaveDepositLog() {
@@ -71,6 +98,8 @@ export function useSaveDepositLog() {
           notes: input.notes.trim(),
           prepared_by: user.id,
           prepared_by_name: employee?.display_name || user.email || '',
+          // JSON-serializable by construction; cast for the generated type.
+          print_snapshot: input.printSnapshot as unknown as Tables<'deposit_logs'>['print_snapshot'],
         },
         { onConflict: 'org_id,deposit_date' }
       );

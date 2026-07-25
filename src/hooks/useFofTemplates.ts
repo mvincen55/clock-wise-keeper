@@ -49,16 +49,37 @@ function mapTemplateRow(row: TemplateRow): FofTemplate {
   };
 }
 
-function composePracticeInfo(branding: BrandingRow | null, doctorName: string): FofPracticeInfo {
-  if (!branding) return { ...DEFAULT_PRACTICE_INFO, doctorName };
+interface FofSettingsVocab {
+  doctorName: string;
+  doctorNames: string[];
+  membershipPlanName: string;
+}
+
+function composePracticeInfo(branding: BrandingRow | null, vocab: FofSettingsVocab): FofPracticeInfo {
+  const base = branding
+    ? {
+        practiceName: branding.legal_name,
+        addressLine1: branding.address_line1,
+        addressLine2: branding.address_line2,
+        phone: branding.phone,
+        website: branding.website,
+        logoUrl: branding.logo_url,
+      }
+    : DEFAULT_PRACTICE_INFO;
+  return { ...base, ...vocab };
+}
+
+function mapVocab(row: {
+  doctor_name: string;
+  doctor_names: unknown;
+  membership_plan_name: string;
+} | null): FofSettingsVocab {
   return {
-    practiceName: branding.legal_name,
-    addressLine1: branding.address_line1,
-    addressLine2: branding.address_line2,
-    phone: branding.phone,
-    website: branding.website,
-    doctorName,
-    logoUrl: branding.logo_url,
+    doctorName: row?.doctor_name ?? '',
+    doctorNames: Array.isArray(row?.doctor_names)
+      ? (row!.doctor_names as unknown[]).filter((d): d is string => typeof d === 'string')
+      : [],
+    membershipPlanName: row?.membership_plan_name ?? '',
   };
 }
 
@@ -161,23 +182,27 @@ export function useFofSettings() {
       if (!ctx) return DEFAULT_PRACTICE_INFO;
       const [branding, settingsResult] = await Promise.all([
         fetchBrandingRow(ctx.org_id),
-        supabase.from('fof_settings').select('doctor_name').eq('org_id', ctx.org_id).maybeSingle(),
+        supabase
+          .from('fof_settings')
+          .select('doctor_name, doctor_names, membership_plan_name')
+          .eq('org_id', ctx.org_id)
+          .maybeSingle(),
       ]);
       if (settingsResult.error) throw settingsResult.error;
       if (settingsResult.data) {
-        return composePracticeInfo(branding, settingsResult.data.doctor_name);
+        return composePracticeInfo(branding, mapVocab(settingsResult.data));
       }
 
       // fof_settings is admin-write; employees print with the defaults
       // until an admin's first visit creates the row.
-      if (!isAdmin) return composePracticeInfo(branding, '');
+      if (!isAdmin) return composePracticeInfo(branding, mapVocab(null));
       const { data: created, error: createError } = await supabase
         .from('fof_settings')
         .insert({ org_id: ctx.org_id })
-        .select('doctor_name')
+        .select('doctor_name, doctor_names, membership_plan_name')
         .single();
       if (createError) throw createError;
-      return composePracticeInfo(branding, created.doctor_name);
+      return composePracticeInfo(branding, mapVocab(created));
     },
   });
 }
@@ -297,10 +322,17 @@ export function useUpsertFofSettings() {
           .upsert({ org_id: ctx.org_id, ...brandingPatch }, { onConflict: 'org_id' });
         if (error) throw error;
       }
-      if (updates.doctorName !== undefined) {
+      const settingsPatch = {
+        ...(updates.doctorName !== undefined && { doctor_name: updates.doctorName }),
+        ...(updates.doctorNames !== undefined && { doctor_names: updates.doctorNames }),
+        ...(updates.membershipPlanName !== undefined && {
+          membership_plan_name: updates.membershipPlanName,
+        }),
+      };
+      if (Object.keys(settingsPatch).length > 0) {
         const { error } = await supabase
           .from('fof_settings')
-          .upsert({ org_id: ctx.org_id, doctor_name: updates.doctorName }, { onConflict: 'org_id' });
+          .upsert({ org_id: ctx.org_id, ...settingsPatch }, { onConflict: 'org_id' });
         if (error) throw error;
       }
     },
