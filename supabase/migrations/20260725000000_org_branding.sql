@@ -131,7 +131,15 @@ ALTER TABLE public.fof_settings
 
 -- 4) Org-scoped logo storage: public read (logos print on documents),
 -- admin-managed, foldered by org id like office-docs.
-INSERT INTO storage.buckets (id, name, public) VALUES ('org-branding', 'org-branding', true);
+-- Public read (logos print on documents and are already on every form);
+-- writes are admin-only via the policies below, and the bucket itself
+-- only accepts images up to 2 MB.
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'org-branding', 'org-branding', true,
+  2097152,
+  ARRAY['image/png','image/jpeg','image/svg+xml','image/webp']
+);
 
 CREATE POLICY "Org admins upload branding assets" ON storage.objects
 FOR INSERT TO authenticated WITH CHECK (
