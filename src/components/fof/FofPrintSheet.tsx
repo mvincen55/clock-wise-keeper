@@ -7,6 +7,7 @@ import type {
   FofTemplate,
 } from '@/lib/fof/types';
 import { formatCents } from '@/lib/fof/money';
+import { formShortName } from '@/lib/fof/defaults';
 
 /**
  * The paper Financial Options Form — card-based layout: logo + date/patient
@@ -552,7 +553,9 @@ export default function FofPrintSheet({
       <div className="fof-sheet fof-office-page">
         <div className="fof-office-head">
           <div>
-            <div className="fof-office-title">Office Copy — FOF Detail</div>
+            <div className="fof-office-title">
+              Office Copy — {formShortName(practice.printFormTitle)} Detail
+            </div>
             <div className="fof-office-sub">
               Patient: {patient.patientName || '—'} · Date:{' '}
               {patient.dateISO ? formatDateMDY(patient.dateISO) : '—'}
@@ -625,7 +628,9 @@ export default function FofPrintSheet({
 
         <div className="fof-office-summary">
           <div className="fof-office-col">
-            <div className="fof-card-title">As Printed on the FOF</div>
+            <div className="fof-card-title">
+              As Printed on the {formShortName(practice.printFormTitle)}
+            </div>
             <div className="fof-row">
               <span>Total (Estimated) Cost</span>
               <span>{formatCents(totalCents)}</span>
@@ -691,7 +696,7 @@ export default function FofPrintSheet({
         </div>
 
         <p className="fof-office-note">
-          File this page with the signed Financial Options Form. Internal record of the
+          File this page with the signed {practice.printFormTitle}. Internal record of the
           codes and amounts behind the patient-facing summary — not for distribution.
         </p>
       </div>

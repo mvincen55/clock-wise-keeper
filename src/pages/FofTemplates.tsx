@@ -28,6 +28,8 @@ import OrgBrandingCard from '@/components/OrgBrandingCard';
 import FofMoneySettingsCard from '@/components/FofMoneySettingsCard';
 import FofDiscountRulesCard from '@/components/FofDiscountRulesCard';
 import FofVocabularyCard from '@/components/FofVocabularyCard';
+import SettingsSection from '@/components/SettingsSection';
+import { useFofSettings } from '@/hooks/useFofTemplates';
 import {
   useDeleteFofTemplate,
   useFofTemplates,
@@ -40,6 +42,8 @@ import type { FofTemplate } from '@/lib/fof/types';
 
 export default function FofTemplates() {
   const { data: templates, isLoading } = useFofTemplates();
+  const { data: practice } = useFofSettings();
+  const featureName = practice?.featureDisplayName?.trim() || 'Treatment Estimator';
   const upsert = useUpsertFofTemplate();
   const remove = useDeleteFofTemplate();
   const restore = useRestoreDefaultFofTemplates();
@@ -75,7 +79,7 @@ export default function FofTemplates() {
           <Button variant="ghost" size="icon" asChild>
             <Link to="/fof"><ArrowLeft className="h-4 w-4" /></Link>
           </Button>
-          <h1 className="text-2xl font-bold">FOF Templates</h1>
+          <h1 className="text-2xl font-bold">{featureName} Templates</h1>
         </div>
         {isManager && (
           <div className="flex gap-2">
@@ -91,10 +95,25 @@ export default function FofTemplates() {
         )}
       </div>
 
-      <OrgBrandingCard isManager={isManager} />
-      {isManager && <FofMoneySettingsCard />}
-      {isManager && <FofDiscountRulesCard />}
-      {isManager && <FofVocabularyCard />}
+      {/* Org settings, sectioned by the registry's onboarding groups. */}
+      <SettingsSection groupId="identity_branding">
+        <OrgBrandingCard isManager={isManager} />
+      </SettingsSection>
+      {isManager && (
+        <SettingsSection groupId="documents_wording">
+          <FofVocabularyCard />
+        </SettingsSection>
+      )}
+      {isManager && (
+        <SettingsSection groupId="money_thresholds">
+          <FofMoneySettingsCard />
+        </SettingsSection>
+      )}
+      {isManager && (
+        <SettingsSection groupId="discounts_rules">
+          <FofDiscountRulesCard />
+        </SettingsSection>
+      )}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-16">

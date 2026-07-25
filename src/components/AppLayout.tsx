@@ -6,6 +6,7 @@ import { Clock, Table2, CalendarDays, FileText, LogOut, Menu, X, Settings, Shiel
 import { useOrgContext } from '@/hooks/useOrgContext';
 import NotificationBell from '@/components/NotificationBell';
 import { useApprovalCounts } from '@/hooks/useApprovalCounts';
+import { useFofSettings } from '@/hooks/useFofTemplates';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface NavItem {
@@ -39,7 +40,9 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Patient Forms',
-    items: [{ to: '/fof', icon: ReceiptText, label: 'Financial Options Form' }],
+    // Label is org wording (fof_settings.feature_display_name), swapped
+    // in at render; the route stays /fof.
+    items: [{ to: '/fof', icon: ReceiptText, label: 'Treatment Estimator' }],
   },
   {
     label: 'Office Forms',
@@ -79,7 +82,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { data: approvalCounts } = useApprovalCounts();
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
-  const groups = NAV_GROUPS.filter(g => !g.managerOnly || isManager);
+  // The estimator feature's nav label is org wording.
+  const { data: practice } = useFofSettings();
+  const groups = NAV_GROUPS.filter(g => !g.managerOnly || isManager).map(g => ({
+    ...g,
+    items: g.items.map(item =>
+      item.to === '/fof' && practice?.featureDisplayName?.trim()
+        ? { ...item, label: practice.featureDisplayName }
+        : item
+    ),
+  }));
 
   // Sub-routes keep their section lit (/team/:id, /fof/templates, …).
   const isActive = (to: string) =>

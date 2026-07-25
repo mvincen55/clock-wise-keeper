@@ -1273,12 +1273,14 @@ export type Database = {
           doctor_name: string
           doctor_names: Json
           downgrade_default_on: boolean
+          feature_display_name: string
           id: string
           membership_plan_name: string
           min_standalone_payment_cents: number
           org_id: string
           phone: string
           practice_name: string
+          print_form_title: string
           updated_at: string
           website: string
         }
@@ -1290,12 +1292,14 @@ export type Database = {
           doctor_name?: string
           doctor_names?: Json
           downgrade_default_on?: boolean
+          feature_display_name?: string
           id?: string
           membership_plan_name?: string
           min_standalone_payment_cents?: number
           org_id: string
           phone?: string
           practice_name?: string
+          print_form_title?: string
           updated_at?: string
           website?: string
         }
@@ -1307,12 +1311,14 @@ export type Database = {
           doctor_name?: string
           doctor_names?: Json
           downgrade_default_on?: boolean
+          feature_display_name?: string
           id?: string
           membership_plan_name?: string
           min_standalone_payment_cents?: number
           org_id?: string
           phone?: string
           practice_name?: string
+          print_form_title?: string
           updated_at?: string
           website?: string
         }

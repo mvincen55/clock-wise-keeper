@@ -24,6 +24,10 @@ export interface FofPracticeInfo {
   doctorNames: string[];
   /** In-house membership plan display name; empty = plain "Membership". */
   membershipPlanName: string;
+  /** What the feature is called in the nav and page headers. */
+  featureDisplayName: string;
+  /** How the printed form names itself (initials label the office copy). */
+  printFormTitle: string;
 }
 
 export interface FofTemplate {
