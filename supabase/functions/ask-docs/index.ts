@@ -61,11 +61,11 @@ async function generateSearchQueries(
     const response = await callGateway(apiKey, [
       {
         role: "system",
-        content: `You convert a dental office staff question into search queries for a full-text (keyword AND) search over office documents: policies, HR materials, and insurance manuals (e.g. Delta Dental processing/provider manuals).
+        content: `You convert a dental office staff question into search queries for a full-text (keyword AND) search over office documents: policies, HR materials, and insurance carrier processing/provider manuals.
 
 Return ONLY a JSON array of 4 to 6 query strings. Each query must be 1 to 3 words. Rules:
 - Use precise terms likely to appear in formal documents, not conversational phrasing.
-- Expand shorthand: "pt" → patient, "DD MA" → Delta Dental, "perio" → periodontal, tooth numbers stay as-is.
+- Expand shorthand: "pt" → patient, "perio" → periodontal; spell out carrier-name abbreviations in full; tooth numbers stay as-is.
 - Include the underlying policy/insurance concepts, e.g. "crown replacement", "frequency limitation", "missing tooth", "implant coverage", "prior authorization", "PTO accrual".
 - No duplicates, no filler words.`,
       },
