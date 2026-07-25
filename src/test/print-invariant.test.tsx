@@ -49,6 +49,8 @@ const PRACTICE: FofPracticeInfo = {
   logoUrl: '/src/assets/harelick-logo.png',
   doctorNames: ['Dr. Scott', 'Dr. Jennie', 'Dr. Robert', 'Dr. Nicole', 'Dr. Natalie'],
   membershipPlanName: 'Illumitrac',
+  featureDisplayName: 'Financial Options Form',
+  printFormTitle: 'Financial Options Form',
 };
 
 /**

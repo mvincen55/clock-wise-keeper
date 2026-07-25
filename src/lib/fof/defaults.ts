@@ -17,7 +17,23 @@ export const DEFAULT_PRACTICE_INFO: FofPracticeInfo = {
   logoUrl: '',
   doctorNames: [],
   membershipPlanName: '',
+  featureDisplayName: 'Treatment Estimator',
+  printFormTitle: 'Treatment Estimate',
 };
+
+/**
+ * Initials of the printed form title, used where the office copy names
+ * the form compactly ("FOF Detail", "As Printed on the FOF").
+ */
+export function formShortName(printFormTitle: string): string {
+  const initials = printFormTitle
+    .split(/\s+/)
+    .map(w => w[0])
+    .filter(c => c && /[A-Za-z]/.test(c))
+    .join('')
+    .toUpperCase();
+  return initials || 'Form';
+}
 
 export const DEFAULT_SIGNATURE_INTRO =
   'has read this Financial Options Form in its entirety and agrees to the following plan:';
@@ -58,6 +74,23 @@ const DEFAULT_INSTALLMENT_LABELS = [
 ];
 
 export type FofTemplateSeed = Omit<FofTemplate, 'id'>;
+
+/**
+ * Seed wording names the form with the org's own printed title. The
+ * shipped texts carry the historical name; seeding swaps it for the
+ * org's print_form_title so a new office's templates read naturally.
+ */
+export function applyFormTitle<T extends FofTemplateSeed>(seed: T, printFormTitle: string): T {
+  const title = printFormTitle.trim();
+  if (title === '') return seed;
+  const swap = (text: string) => text.split('Financial Options Form').join(title);
+  return {
+    ...seed,
+    validityNote: swap(seed.validityNote),
+    prepayNote: swap(seed.prepayNote),
+    signatureIntro: swap(seed.signatureIntro),
+  };
+}
 
 const BASE_SEED = {
   isActive: true,

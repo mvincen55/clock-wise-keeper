@@ -5,6 +5,7 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import type { Tables, TablesInsert } from '@/integrations/supabase/types';
 import type { FofPracticeInfo, FofTemplate } from '@/lib/fof/types';
 import {
+  applyFormTitle,
   buildDefaultContactNote,
   DEFAULT_PRACTICE_INFO,
   DEFAULT_TEMPLATES,
@@ -53,7 +54,12 @@ interface FofSettingsVocab {
   doctorName: string;
   doctorNames: string[];
   membershipPlanName: string;
+  featureDisplayName: string;
+  printFormTitle: string;
 }
+
+const VOCAB_COLUMNS =
+  'doctor_name, doctor_names, membership_plan_name, feature_display_name, print_form_title';
 
 function composePracticeInfo(branding: BrandingRow | null, vocab: FofSettingsVocab): FofPracticeInfo {
   const base = branding
@@ -73,6 +79,8 @@ function mapVocab(row: {
   doctor_name: string;
   doctor_names: unknown;
   membership_plan_name: string;
+  feature_display_name: string;
+  print_form_title: string;
 } | null): FofSettingsVocab {
   return {
     doctorName: row?.doctor_name ?? '',
@@ -80,6 +88,8 @@ function mapVocab(row: {
       ? (row!.doctor_names as unknown[]).filter((d): d is string => typeof d === 'string')
       : [],
     membershipPlanName: row?.membership_plan_name ?? '',
+    featureDisplayName: row?.feature_display_name ?? DEFAULT_PRACTICE_INFO.featureDisplayName,
+    printFormTitle: row?.print_form_title ?? DEFAULT_PRACTICE_INFO.printFormTitle,
   };
 }
 
@@ -146,9 +156,15 @@ export function useFofTemplates() {
         if (!isAdmin) {
           return DEFAULT_TEMPLATES.map((t, i) => ({ ...t, id: `default-${i}` }));
         }
-        // Contact wording carries the org's own identity, interpolated
-        // from org_branding at seed time.
-        const branding = await fetchBrandingRow(ctx.org_id);
+        // Contact wording carries the org's own identity, and the seed
+        // texts name the form with the org's printed title — both
+        // interpolated at seed time.
+        const [branding, titleRow] = await Promise.all([
+          fetchBrandingRow(ctx.org_id),
+          supabase.from('fof_settings').select('print_form_title').eq('org_id', ctx.org_id).maybeSingle(),
+        ]);
+        const printTitle =
+          titleRow.data?.print_form_title ?? DEFAULT_PRACTICE_INFO.printFormTitle;
         const contactNote = buildDefaultContactNote({
           practiceName: branding?.legal_name ?? '',
           addressLine1: branding?.address_line1 ?? '',
@@ -156,7 +172,7 @@ export function useFofTemplates() {
           phone: branding?.phone ?? '',
         });
         const inserts = DEFAULT_TEMPLATES.map(t =>
-          seedToInsert({ ...t, contactNote }, ctx.org_id, user?.id)
+          seedToInsert(applyFormTitle({ ...t, contactNote }, printTitle), ctx.org_id, user?.id)
         );
         const { data: seeded, error: seedError } = await supabase
           .from('fof_templates')
@@ -184,7 +200,7 @@ export function useFofSettings() {
         fetchBrandingRow(ctx.org_id),
         supabase
           .from('fof_settings')
-          .select('doctor_name, doctor_names, membership_plan_name')
+          .select(VOCAB_COLUMNS)
           .eq('org_id', ctx.org_id)
           .maybeSingle(),
       ]);
@@ -199,7 +215,7 @@ export function useFofSettings() {
       const { data: created, error: createError } = await supabase
         .from('fof_settings')
         .insert({ org_id: ctx.org_id })
-        .select('doctor_name, doctor_names, membership_plan_name')
+        .select(VOCAB_COLUMNS)
         .single();
       if (createError) throw createError;
       return composePracticeInfo(branding, mapVocab(created));
@@ -328,6 +344,12 @@ export function useUpsertFofSettings() {
         ...(updates.membershipPlanName !== undefined && {
           membership_plan_name: updates.membershipPlanName,
         }),
+        ...(updates.featureDisplayName !== undefined && {
+          feature_display_name: updates.featureDisplayName,
+        }),
+        ...(updates.printFormTitle !== undefined && {
+          print_form_title: updates.printFormTitle,
+        }),
       };
       if (Object.keys(settingsPatch).length > 0) {
         const { error } = await supabase
@@ -390,7 +412,12 @@ export function useRestoreDefaultFofTemplates() {
         .delete()
         .eq('org_id', ctx.org_id);
       if (deleteError) throw deleteError;
-      const branding = await fetchBrandingRow(ctx.org_id);
+      const [branding, titleRow] = await Promise.all([
+        fetchBrandingRow(ctx.org_id),
+        supabase.from('fof_settings').select('print_form_title').eq('org_id', ctx.org_id).maybeSingle(),
+      ]);
+      const printTitle =
+        titleRow.data?.print_form_title ?? DEFAULT_PRACTICE_INFO.printFormTitle;
       const contactNote = buildDefaultContactNote({
         practiceName: branding?.legal_name ?? '',
         addressLine1: branding?.address_line1 ?? '',
@@ -398,7 +425,7 @@ export function useRestoreDefaultFofTemplates() {
         phone: branding?.phone ?? '',
       });
       const inserts = DEFAULT_TEMPLATES.map(t =>
-        seedToInsert({ ...t, contactNote }, ctx.org_id, user?.id)
+        seedToInsert(applyFormTitle({ ...t, contactNote }, printTitle), ctx.org_id, user?.id)
       );
       const { error } = await supabase.from('fof_templates').insert(inserts);
       if (error) throw error;

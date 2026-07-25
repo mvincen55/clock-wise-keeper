@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, MessageCircle, Minus, Send, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import { useFofSettings } from '@/hooks/useFofTemplates';
+import { formShortName } from '@/lib/fof/defaults';
 
 /**
  * Floating FOF assistant (bottom-right). Managers train the AI's
@@ -29,6 +31,10 @@ interface Props {
 }
 
 export default function FofAssistantWidget({ context }: Props) {
+  // Short label from the org's feature name ("FOF" for "Financial
+  // Options Form", "TE" for "Treatment Estimator").
+  const { data: practice } = useFofSettings();
+  const shortLabel = formShortName(practice?.featureDisplayName || 'Treatment Estimator');
   const { data: ctx } = useOrgContext();
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
   const [open, setOpen] = useState(false);
@@ -82,7 +88,7 @@ export default function FofAssistantWidget({ context }: Props) {
         <div className="flex h-[28rem] w-96 max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-xl border bg-card shadow-2xl">
           <div className="flex items-center gap-2 border-b bg-primary px-4 py-3 text-primary-foreground">
             <Sparkles className="h-4 w-4" />
-            <span className="text-sm font-semibold">FOF Assistant</span>
+            <span className="text-sm font-semibold">{shortLabel} Assistant</span>
             {isManager ? (
               <button
                 type="button"
@@ -177,7 +183,7 @@ export default function FofAssistantWidget({ context }: Props) {
           onClick={() => setOpen(true)}
         >
           <MessageCircle className="h-5 w-5" />
-          FOF Assistant
+          {shortLabel} Assistant
         </Button>
       )}
     </div>
