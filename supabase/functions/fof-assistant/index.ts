@@ -62,7 +62,7 @@ async function searchQueries(apiKey: string, question: string): Promise<string[]
           {
             role: "system",
             content:
-              "Convert a dental office staff question into search queries for a keyword AND search over office documents (policies, HR, insurance manuals like Delta Dental). Return ONLY a JSON array of 3 to 5 query strings, each 1-3 precise words. Expand shorthand (DD MA -> Delta Dental, pt -> patient).",
+              "Convert a dental office staff question into search queries for a keyword AND search over office documents (policies, HR, insurance carrier manuals). Return ONLY a JSON array of 3 to 5 query strings, each 1-3 precise words. Expand shorthand (pt -> patient) and spell out carrier-name abbreviations in full.",
           },
           { role: "user", content: question },
         ],
@@ -93,8 +93,62 @@ async function searchQueries(apiKey: string, question: string): Promise<string[]
   return fallback.length ? fallback : [question.slice(0, 60)];
 }
 
-const POLICY_SUMMARY =
-  "Office FOF policy facts you may explain: prepay-in-full earns the prepay discount (10% standard; Illumitrac seniors +5%); patient portions under $1,000 are simply paid at the visit (nothing due at scheduling); larger plans collect a full visit ahead so the patient never carries a balance, with the final visit split half ahead / half at the visit; work-up procedures and surgical guides are billed at their visit, never prepaid; most plans pay composite rates — downgrades are off by default and only turned on for plans like Altus, which pay on the amalgam fee with the patient responsible up to the office fee; finished lab work is always 'delivered' (Crown Delivery, Denture Delivery, Implant Crown Delivery — never 'seating'); fillings are described without surfaces; D4265, D4268, D5982, and D7953 are never insurance-covered.";
+// Shipped defaults for the policy facts, used only until an org's
+// settings rows exist. The live values come from fof_settings,
+// fof_discount_rules, and fof_code_rules so the assistant always
+// explains the org's CURRENT policy, never stale prose. Office VOICE
+// (wording preferences) lives in fof_ai_guidance rows, not here.
+interface PolicyConfig {
+  thresholdCents: number;
+  seniorPct: number;
+  courtesyPct: number;
+  membershipExtraPct: number;
+  membershipEnabled: boolean;
+  membershipPlanName: string;
+  downgradeDefaultOn: boolean;
+  neverCovered: string[];
+  noPrepay: string[];
+}
+
+const DEFAULT_POLICY: PolicyConfig = {
+  thresholdCents: 100_000,
+  seniorPct: 10,
+  courtesyPct: 5,
+  membershipExtraPct: 5,
+  membershipEnabled: true,
+  membershipPlanName: "",
+  downgradeDefaultOn: false,
+  neverCovered: ["D4265", "D4268", "D5982", "D7953"],
+  noPrepay: ["D5982"],
+};
+
+const dollars = (cents: number) => `$${(cents / 100).toLocaleString("en-US")}`;
+
+function buildPolicySummary(cfg: PolicyConfig): string {
+  const plan = cfg.membershipPlanName.trim() !== "" ? `${cfg.membershipPlanName} ` : "";
+  const membershipBit = cfg.membershipEnabled
+    ? `; ${plan}membership seniors add ${cfg.membershipExtraPct}% by prepay-in-full`
+    : "";
+  const downgradeBit = cfg.downgradeDefaultOn
+    ? "downgrades are ON by default for posterior composites and turned off per line for plans that pay composite rates"
+    : "most plans pay composite rates — downgrades are off by default and only turned on per line for plans that pay on the amalgam fee, with the patient responsible up to the office fee";
+  const neverBit =
+    cfg.neverCovered.length > 0
+      ? `; ${cfg.neverCovered.join(", ")} ${cfg.neverCovered.length === 1 ? "is" : "are"} never insurance-covered`
+      : "";
+  const noPrepayBit =
+    cfg.noPrepay.length > 0 ? ` (${cfg.noPrepay.join(", ")})` : "";
+  return (
+    `Office FOF policy facts you may explain (these are the org's LIVE configured values): ` +
+    `prepay-in-full earns the prepay discount (${cfg.seniorPct}% for patients 65+, ${cfg.courtesyPct}% under 65${membershipBit}); ` +
+    `patient portions under ${dollars(cfg.thresholdCents)} are simply paid at the visit (nothing due at scheduling); ` +
+    `larger plans collect a full visit ahead so the patient never carries a balance, with the final visit split half ahead / half at the visit; ` +
+    `work-up procedures and no-prepay codes${noPrepayBit} are billed at their visit, never prepaid; ` +
+    downgradeBit +
+    neverBit +
+    "."
+  );
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -151,6 +205,49 @@ Deno.serve(async (req) => {
       )
       .join("\n");
     const treatment = bounded(body.context?.treatment, MAX_TREATMENT_CHARS);
+
+    // The org's live policy configuration: the assistant explains CURRENT
+    // values, not prose baked at deploy time.
+    const [settingsRes, rulesRes, codesRes] = await Promise.all([
+      supabase
+        .from("fof_settings")
+        .select("day_of_service_threshold_cents, downgrade_default_on, membership_plan_name")
+        .eq("org_id", membership.org_id)
+        .maybeSingle(),
+      supabase
+        .from("fof_discount_rules")
+        .select("rule_key, enabled, percent, extra_percent, threshold_cents")
+        .eq("org_id", membership.org_id),
+      supabase
+        .from("fof_code_rules")
+        .select("kind, code")
+        .eq("org_id", membership.org_id),
+    ]);
+    const senior = (rulesRes.data ?? []).find((r) => r.rule_key === "senior");
+    const courtesy = (rulesRes.data ?? []).find((r) => r.rule_key === "courtesy");
+    const membershipRule = (rulesRes.data ?? []).find((r) => r.rule_key === "membership");
+    const codeRows = codesRes.data ?? [];
+    const policy = buildPolicySummary({
+      thresholdCents:
+        settingsRes.data?.day_of_service_threshold_cents ?? DEFAULT_POLICY.thresholdCents,
+      seniorPct: senior?.enabled === false ? 0 : Number(senior?.percent ?? DEFAULT_POLICY.seniorPct),
+      courtesyPct:
+        courtesy?.enabled === false ? 0 : Number(courtesy?.percent ?? DEFAULT_POLICY.courtesyPct),
+      membershipExtraPct: Number(membershipRule?.extra_percent ?? DEFAULT_POLICY.membershipExtraPct),
+      membershipEnabled: membershipRule?.enabled ?? DEFAULT_POLICY.membershipEnabled,
+      membershipPlanName:
+        settingsRes.data?.membership_plan_name ?? DEFAULT_POLICY.membershipPlanName,
+      downgradeDefaultOn:
+        settingsRes.data?.downgrade_default_on ?? DEFAULT_POLICY.downgradeDefaultOn,
+      neverCovered:
+        codeRows.length > 0
+          ? codeRows.filter((c) => c.kind === "never_covered").map((c) => c.code)
+          : DEFAULT_POLICY.neverCovered,
+      noPrepay:
+        codeRows.length > 0
+          ? codeRows.filter((c) => c.kind === "no_prepay").map((c) => c.code)
+          : DEFAULT_POLICY.noPrepay,
+    });
 
     // Standing wording rules — what past manager chats have taught.
     const { data: guidanceRows } = await supabase
@@ -218,8 +315,8 @@ Deno.serve(async (req) => {
             role: "system",
             content:
               "You are the FOF Assistant inside a dental office's Financial Options Form builder — a sharp, friendly treatment-coordination colleague. You help staff with the form's wording, payment schedules, and office policy questions, and you help refine how AI-written treatment summaries read. " +
-              "CAPABILITIES — BE HONEST ABOUT THEM: the only things you can actually do are (a) answer questions and (b) save standing WORDING rules when training is on. You CANNOT change the app itself — fee schedules, prices, which procedures a membership includes at no charge, templates, discounts, and calculations are configuration you have no access to. NEVER claim you fixed, removed, updated, or changed any of those; if asked to, say plainly that you can't, and point them to the right place (managers: the Fee Schedules page for codes/fees/notes, the Templates page for form wording — or the app's developer for membership-inclusion rules). Only say a rule was saved when you actually set saveRule, and be clear a saved rule shapes AI wording only — it never changes pricing or what's included. " +
-              POLICY_SUMMARY +
+              "CAPABILITIES — BE HONEST ABOUT THEM: the only things you can actually do are (a) answer questions and (b) save standing WORDING rules when training is on. You CANNOT change the app itself — fee schedules, prices, which procedures a membership includes at no charge, templates, discounts, and calculations are configuration you have no access to. NEVER claim you fixed, removed, updated, or changed any of those; if asked to, say plainly that you can't, and point them to the right place (managers: the Fee Schedules page for codes/fees/notes and the Coverage Code Rules card for never-covered/no-prepay/membership-included lists, the Templates page for form wording plus the Payment Policy, Discount Programs, and Office Vocabulary cards for thresholds, rates, and names). Only say a rule was saved when you actually set saveRule, and be clear a saved rule shapes AI wording only — it never changes pricing or what's included. " +
+              policy +
               " " +
               (guidance.length > 0
                 ? `STANDING WORDING RULES already in effect (from past training): ${guidance.map((g, i) => `(${i + 1}) ${g}`).join(" ")} `
