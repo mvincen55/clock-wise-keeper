@@ -89,6 +89,12 @@ import {
   type PlanRules,
 } from '@/lib/fof/insurance';
 import { categorizeCdtCode } from '@/lib/fof/cdt';
+import { DEFAULT_DISCOUNT_RULES } from '@/lib/fof/discounts';
+import {
+  DEFAULT_CODE_RULES,
+  useFofCodeRules,
+  useFofDiscountRules,
+} from '@/hooks/useFofRules';
 import { friendlyCdtName } from '@/lib/fof/cdt-names';
 import { computeFofDiscounts } from '@/lib/fof/discounts';
 import { buildNameVisitsPayload, safeProcedureLabel } from '@/lib/fof/ai';
@@ -138,26 +144,11 @@ const MAXED_NOTE_PREV_EXEMPT =
 const RENEWAL_NOTE =
   "Because this treatment continues into your next insurance benefit year, part of the estimate is paid from next year's renewed benefits: your annual maximum starts over for the visits after renewal, and your deductible applies again. If your coverage changes at renewal, this estimate may change as well.";
 
-// Fees billed AT their visit with no half-ahead prepay in the installment
-// schedule — per office policy the surgical guide isn't prepaid.
-const NO_PREPAY_CODES = new Set(['D5982']);
-
 // Doctors the treatment wording can be attributed to.
 const FOF_DOCTORS = ['Dr. Scott', 'Dr. Jennie', 'Dr. Robert', 'Dr. Nicole', 'Dr. Natalie'];
 /** Dropdown option when treatment isn't tied to one doctor — the AI
  * writes in the practice's collective voice ("We'll…") instead. */
 const FOF_NO_DOCTOR = 'No specific doctor';
-
-// Procedures the Illumitrac membership plans include at no charge (per the
-// office Policy Handbook / 2025 flyer): cleanings (adult/child/perio),
-// exams, emergency exam, needed X-rays (CBCT D0367 excluded), fluoride and
-// sealants (child plan). Per-line toggle covers used-up yearly allowances.
-const ILLUMITRAC_INCLUDED = new Set([
-  'D0120', 'D0140', 'D0150', // exams + emergency exam
-  'D0210', 'D0220', 'D0230', 'D0272', 'D0274', 'D0330', // X-rays (no CBCT)
-  'D1110', 'D1120', 'D4910', // cleanings incl. perio maintenance
-  'D1206', 'D1208', 'D1351', // fluoride + sealant (child plan)
-]);
 
 const CATEGORY_SHORT: Record<FeeCategory, string> = {
   preventive: 'Preventive',
@@ -477,6 +468,12 @@ export default function FofBuilder() {
   // until the row loads.
   const { data: moneySettings } = useFofMoneySettings();
   const money = moneySettings ?? DEFAULT_MONEY_SETTINGS;
+  // Org discount rules and code lists (never-covered / no-prepay /
+  // membership-included); shipped defaults until the rows load.
+  const { data: discountRulesData } = useFofDiscountRules();
+  const discountRules = discountRulesData ?? DEFAULT_DISCOUNT_RULES;
+  const { data: codeRulesData } = useFofCodeRules();
+  const codeRules = codeRulesData ?? DEFAULT_CODE_RULES;
 
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [templateId, setTemplateId] = useState<string | null>(null);
@@ -585,7 +582,10 @@ export default function FofBuilder() {
             feeInput: formatCents(match.feeCents),
             ...resolveCategory(match.category),
           }
-        : { code: rawCode, ...resolveCategory(categorizeCdtCode(rawCode.trim().toUpperCase())) },
+        : {
+            code: rawCode,
+            ...resolveCategory(categorizeCdtCode(rawCode.trim().toUpperCase(), codeRules.neverCovered)),
+          },
     });
   };
 
@@ -650,7 +650,9 @@ export default function FofBuilder() {
         ? friendlyCdtName(match.code) || match.description
         : friendlyCdtName(rawCode.toUpperCase()) || '',
       feeInput: match ? formatCents(match.feeCents) : '',
-      ...resolveCategory(match?.category ?? categorizeCdtCode(rawCode.toUpperCase())),
+      ...resolveCategory(
+        match?.category ?? categorizeCdtCode(rawCode.toUpperCase(), codeRules.neverCovered)
+      ),
     };
   };
 
@@ -702,13 +704,14 @@ export default function FofBuilder() {
       ? renewalVisitRaw
       : null;
 
-  // Illumitrac membership templates include certain procedures at no
-  // charge — those lines cost $0 (still listed for the patient) unless
-  // the per-line switch says the year's allowance is used up.
+  // Membership templates include certain procedures at no charge (the
+  // org's membership_included code list) — those lines cost $0 (still
+  // listed for the patient) unless the per-line switch says the year's
+  // allowance is used up.
   const membershipActive = (template?.membershipDiscountPercent ?? 0) > 0;
   const freeUnderMembership = (l: BuilderLine) =>
     membershipActive &&
-    ILLUMITRAC_INCLUDED.has(l.code.trim().toUpperCase()) &&
+    codeRules.membershipIncluded.has(l.code.trim().toUpperCase()) &&
     l.membershipFree !== 'off';
 
   const feeLineEntries = useMemo(
@@ -888,10 +891,10 @@ export default function FofBuilder() {
   const discounts = useMemo(
     () =>
       discountRulesTemplate
-        ? computeFofDiscounts(discountRulesTemplate, isSenior, portionBeforeAutoDiscount)
+        ? computeFofDiscounts(discountRulesTemplate, isSenior, portionBeforeAutoDiscount, discountRules)
         : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [template, prepayForcedOn, isSenior, portionBeforeAutoDiscount]
+    [template, prepayForcedOn, isSenior, portionBeforeAutoDiscount, discountRules]
   );
 
   // Portions under $1,000 default to a single "Due at Time of Service"
@@ -954,7 +957,7 @@ export default function FofBuilder() {
       const workup = l.workupFlag === 'yes';
       // Work-up procedures (and the surgical guide) are billed at their
       // visit, never prepaid ahead.
-      const dueAtVisit = NO_PREPAY_CODES.has(l.code.trim().toUpperCase()) || workup;
+      const dueAtVisit = codeRules.noPrepay.has(l.code.trim().toUpperCase()) || workup;
       const typed = parseInt(l.visit, 10);
       if (typed >= 1) {
         entries.push({ raw: typed, feeCents: fee, label: lineLabel, safeLabel: safeLineLabel, dueAtVisit, workup });
@@ -2095,7 +2098,7 @@ export default function FofBuilder() {
                           </Label>
                         </div>
                       )}
-                      {membershipActive && ILLUMITRAC_INCLUDED.has(lineCode) && (
+                      {membershipActive && codeRules.membershipIncluded.has(lineCode) && (
                         <div className="flex items-center gap-2">
                           <Switch
                             id={`fof-mem-${line.key}`}
@@ -2115,7 +2118,7 @@ export default function FofBuilder() {
                       )}
                       {(line.workupFlag === 'yes' ||
                         line.category === 'other' ||
-                        categorizeCdtCode(lineCode) === 'workup') && (
+                        categorizeCdtCode(lineCode, codeRules.neverCovered) === 'workup') && (
                         <div className="flex items-center gap-2">
                           <Switch
                             id={`fof-wu-${line.key}`}
