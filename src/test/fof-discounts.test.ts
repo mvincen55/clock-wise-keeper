@@ -21,7 +21,7 @@ describe('computeFofDiscounts — standard (Self-Pay / OON)', () => {
   it('under 65 at $1,000+: 5% prepay discount only', () => {
     const result = computeFofDiscounts(standard, false, 150_000);
     expect(result.autoDiscount).toBeNull();
-    expect(result.prepayDiscountPercent).toBe(DEFAULT_DISCOUNT_RULES.courtesy.percent);
+    expect(result.prepayDiscountPercent).toBe(DEFAULT_DISCOUNT_RULES.prepay.percent);
     expect(result.prepayDiscountLabel).toBe('Prepay Discount (5%)');
   });
 
@@ -101,13 +101,13 @@ describe('computeFofDiscounts — org-scoped rules (Phase 2b)', () => {
     expect(under.prepayDiscountPercent).toBe(0);
     // …and above the threshold earns only the under-65 courtesy rate.
     const above = computeFofDiscounts(standard, true, 150_000, rules);
-    expect(above.prepayDiscountPercent).toBe(DEFAULT_DISCOUNT_RULES.courtesy.percent);
+    expect(above.prepayDiscountPercent).toBe(DEFAULT_DISCOUNT_RULES.prepay.percent);
   });
 
-  it('disabling the courtesy rule removes the under-65 prepay credit', () => {
+  it('disabling the prepay program removes the under-65 prepay credit', () => {
     const rules = {
       ...DEFAULT_DISCOUNT_RULES,
-      courtesy: { ...DEFAULT_DISCOUNT_RULES.courtesy, enabled: false },
+      prepay: { ...DEFAULT_DISCOUNT_RULES.prepay, enabled: false },
     };
     const result = computeFofDiscounts(standard, false, 150_000, rules);
     expect(result.prepayDiscountPercent).toBe(0);
@@ -126,14 +126,14 @@ describe('computeFofDiscounts — org-scoped rules (Phase 2b)', () => {
     });
   });
 
-  it('disabling membership falls back to the senior/courtesy program', () => {
+  it('disabling membership falls back to the senior/prepay program', () => {
     const rules = {
       ...DEFAULT_DISCOUNT_RULES,
       membership: { ...DEFAULT_DISCOUNT_RULES.membership, enabled: false },
     };
     const result = computeFofDiscounts(membership, false, 200_000, rules);
     expect(result.autoDiscount).toBeNull();
-    expect(result.prepayDiscountPercent).toBe(DEFAULT_DISCOUNT_RULES.courtesy.percent);
+    expect(result.prepayDiscountPercent).toBe(DEFAULT_DISCOUNT_RULES.prepay.percent);
   });
 
   it('a changed senior threshold moves the automatic/prepay pivot', () => {

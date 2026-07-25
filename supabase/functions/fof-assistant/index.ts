@@ -101,7 +101,7 @@ async function searchQueries(apiKey: string, question: string): Promise<string[]
 interface PolicyConfig {
   thresholdCents: number;
   seniorPct: number;
-  courtesyPct: number;
+  prepayProgramPct: number;
   membershipExtraPct: number;
   membershipEnabled: boolean;
   membershipPlanName: string;
@@ -113,7 +113,7 @@ interface PolicyConfig {
 const DEFAULT_POLICY: PolicyConfig = {
   thresholdCents: 100_000,
   seniorPct: 10,
-  courtesyPct: 5,
+  prepayProgramPct: 5,
   membershipExtraPct: 5,
   membershipEnabled: true,
   membershipPlanName: "",
@@ -140,7 +140,7 @@ function buildPolicySummary(cfg: PolicyConfig): string {
     cfg.noPrepay.length > 0 ? ` (${cfg.noPrepay.join(", ")})` : "";
   return (
     `Office FOF policy facts you may explain (these are the org's LIVE configured values): ` +
-    `prepay-in-full earns the prepay discount (${cfg.seniorPct}% for patients 65+, ${cfg.courtesyPct}% under 65${membershipBit}); ` +
+    `prepay-in-full earns the prepay discount (${cfg.seniorPct}% for patients 65+, ${cfg.prepayProgramPct}% under 65${membershipBit}); ` +
     `patient portions under ${dollars(cfg.thresholdCents)} are simply paid at the visit (nothing due at scheduling); ` +
     `larger plans collect a full visit ahead so the patient never carries a balance, with the final visit split half ahead / half at the visit; ` +
     `work-up procedures and no-prepay codes${noPrepayBit} are billed at their visit, never prepaid; ` +
@@ -224,15 +224,17 @@ Deno.serve(async (req) => {
         .eq("org_id", membership.org_id),
     ]);
     const senior = (rulesRes.data ?? []).find((r) => r.rule_key === "senior");
-    const courtesy = (rulesRes.data ?? []).find((r) => r.rule_key === "courtesy");
+    const prepayRule = (rulesRes.data ?? []).find((r) => r.rule_key === "prepay");
     const membershipRule = (rulesRes.data ?? []).find((r) => r.rule_key === "membership");
     const codeRows = codesRes.data ?? [];
     const policy = buildPolicySummary({
       thresholdCents:
         settingsRes.data?.day_of_service_threshold_cents ?? DEFAULT_POLICY.thresholdCents,
       seniorPct: senior?.enabled === false ? 0 : Number(senior?.percent ?? DEFAULT_POLICY.seniorPct),
-      courtesyPct:
-        courtesy?.enabled === false ? 0 : Number(courtesy?.percent ?? DEFAULT_POLICY.courtesyPct),
+      prepayProgramPct:
+        prepayRule?.enabled === false
+          ? 0
+          : Number(prepayRule?.percent ?? DEFAULT_POLICY.prepayProgramPct),
       membershipExtraPct: Number(membershipRule?.extra_percent ?? DEFAULT_POLICY.membershipExtraPct),
       membershipEnabled: membershipRule?.enabled ?? DEFAULT_POLICY.membershipEnabled,
       membershipPlanName:

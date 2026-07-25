@@ -2282,6 +2282,53 @@ export type Database = {
         }
         Relationships: []
       }
+      pto_accrual_tiers: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          max_years: number
+          min_years: number
+          org_id: string
+          rate: number
+          sort_order: number
+          updated_at: string
+          weekly_cap: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label?: string
+          max_years: number
+          min_years: number
+          org_id: string
+          rate: number
+          sort_order?: number
+          updated_at?: string
+          weekly_cap: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          max_years?: number
+          min_years?: number
+          org_id?: string
+          rate?: number
+          sort_order?: number
+          updated_at?: string
+          weekly_cap?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pto_accrual_tiers_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pto_ledger_weeks: {
         Row: {
           accrual_credited: number

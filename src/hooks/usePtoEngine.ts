@@ -1,25 +1,87 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrgContext } from '@/hooks/useOrgContext';
 import { useMemo } from 'react';
+import {
+  computePtoLedger,
+  DEFAULT_PTO_TIERS,
+  getTierForDate as getTierForDateLib,
+  type PtoTier as PtoTierType,
+} from '@/lib/pto';
 
 /* ───────── Office PTO Policy ─────────
-   Accrual tiers are still hardcoded office policy; they move to
-   org-scoped rows in the genericization pass (own PR at the end of
-   Phase 2, with a PTO ledger snapshot guarding the math). */
+   Accrual tiers are org rows (pto_accrual_tiers), read through
+   usePtoAccrualTiers; the pure math lives in src/lib/pto.ts under the
+   ledger snapshot invariant. Shipped defaults cover an unseeded org. */
 
-export const PTO_TIERS = [
-  { minYears: 0, maxYears: 1, rate: 0.0576, weeklyCap: 2.30, label: 'Year 1' },
-  { minYears: 1, maxYears: 5, rate: 0.0769, weeklyCap: 3.08, label: 'Years 2–5' },
-  { minYears: 5, maxYears: 11, rate: 0.0962, weeklyCap: 3.85, label: 'Year 6–11' },
-  { minYears: 11, maxYears: 999, rate: 0.1009, weeklyCap: 4.00, label: 'Year 12+' },
-];
+export { DEFAULT_PTO_TIERS as PTO_TIERS, getTierForDate, type PtoTier } from '@/lib/pto';
 
-export function getTierForDate(hireDate: string, checkDate: string) {
-  const hire = new Date(hireDate + 'T00:00:00');
-  const check = new Date(checkDate + 'T00:00:00');
-  const years = (check.getTime() - hire.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
-  return PTO_TIERS.find(t => years >= t.minYears && years < t.maxYears) || PTO_TIERS[0];
+export function usePtoAccrualTiers() {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+
+  return useQuery({
+    queryKey: ['pto-accrual-tiers', ctx?.org_id],
+    enabled: !!user && !!ctx,
+    queryFn: async (): Promise<PtoTierType[]> => {
+      if (!ctx) return DEFAULT_PTO_TIERS;
+      const { data, error } = await supabase
+        .from('pto_accrual_tiers')
+        .select('min_years, max_years, rate, weekly_cap, label, sort_order')
+        .eq('org_id', ctx.org_id)
+        .order('sort_order');
+      if (error) throw error;
+      if (!data || data.length === 0) return DEFAULT_PTO_TIERS;
+      return data.map(row => ({
+        minYears: Number(row.min_years),
+        maxYears: Number(row.max_years),
+        rate: Number(row.rate),
+        weeklyCap: Number(row.weekly_cap),
+        label: row.label,
+      }));
+    },
+  });
+}
+
+/** Replace the org's tier table wholesale (admin RLS enforces who). */
+export function useSavePtoAccrualTiers() {
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (tiers: PtoTierType[]) => {
+      if (!ctx) throw new Error('Not authenticated');
+      if (tiers.length === 0) throw new Error('At least one tier is required');
+      for (const t of tiers) {
+        if (!(t.minYears >= 0) || !(t.maxYears > t.minYears)) {
+          throw new Error('Tier year ranges must be increasing');
+        }
+        if (!(t.rate >= 0 && t.rate <= 1)) throw new Error('Rates must be between 0 and 1');
+        if (!(t.weeklyCap >= 0 && t.weeklyCap <= 40)) {
+          throw new Error('Weekly caps must be between 0 and 40 hours');
+        }
+      }
+      const { error: deleteError } = await supabase
+        .from('pto_accrual_tiers')
+        .delete()
+        .eq('org_id', ctx.org_id);
+      if (deleteError) throw deleteError;
+      const { error } = await supabase.from('pto_accrual_tiers').insert(
+        tiers.map((t, i) => ({
+          org_id: ctx.org_id,
+          min_years: t.minYears,
+          max_years: t.maxYears,
+          rate: t.rate,
+          weekly_cap: t.weeklyCap,
+          label: t.label,
+          sort_order: i,
+        }))
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pto-accrual-tiers'] }),
+  });
 }
 
 /* ───────── Types ───────── */
@@ -233,77 +295,64 @@ export function useRecalculatePto() {
         .gte('date_start', snap.snapshot_date)
         .order('date_start');
 
-      // 5. Build weekly periods from snapshot date (Sun-Sat)
-      const snapDate = new Date(snap.snapshot_date + 'T00:00:00');
-      // Align to next Sunday (week start = 0 for Sunday)
-      const firstSunday = new Date(snapDate);
-      while (firstSunday.getDay() !== 0) firstSunday.setDate(firstSunday.getDate() + 1);
+      // 5. Load the org's accrual tiers (shipped defaults if unseeded)
+      const { data: tierRows } = await supabase
+        .from('pto_accrual_tiers')
+        .select('min_years, max_years, rate, weekly_cap, label, sort_order')
+        .eq('org_id', orgId)
+        .order('sort_order');
+      const tiers: PtoTierType[] =
+        tierRows && tierRows.length > 0
+          ? tierRows.map(row => ({
+              minYears: Number(row.min_years),
+              maxYears: Number(row.max_years),
+              rate: Number(row.rate),
+              weeklyCap: Number(row.weekly_cap),
+              label: row.label,
+            }))
+          : DEFAULT_PTO_TIERS;
 
-      const today = new Date();
-      today.setHours(23, 59, 59, 999);
-
-      const weeks: { start: string; end: string }[] = [];
-      const cur = new Date(firstSunday);
-      while (cur <= today) {
-        const end = new Date(cur);
-        end.setDate(end.getDate() + 6);
-        weeks.push({
-          start: cur.toISOString().split('T')[0],
-          end: end.toISOString().split('T')[0],
-        });
-        cur.setDate(cur.getDate() + 7);
-      }
-
-      // 6. For each week, compute worked hours and PTO taken
-      let runningBalance = Number(snap.snapshot_balance_hours);
-      const ledgerRows: any[] = [];
-
-      for (const week of weeks) {
-        // Worked hours from time_entries in this week
-        const workedMinutes = (entries || [])
-          .filter(e => e.entry_date >= week.start && e.entry_date <= week.end)
-          .reduce((sum, e) => sum + (e.total_minutes || 0), 0);
-        const workedHoursRaw = workedMinutes / 60;
-        const workedHoursCapped = Math.min(workedHoursRaw, Number(s.worked_hours_cap_weekly));
-
-        // PTO taken from days_off in this week
-        const ptoTaken = (daysOff || [])
-          .filter(d => d.date_start >= week.start && d.date_start <= week.end && d.type !== 'office_closed')
-          .reduce((sum, d) => sum + (d.hours != null ? Number(d.hours) : 8), 0);
-
-        // Determine tier for this week
-        const tier = getTierForDate(s.hire_date, week.start);
-
-        // Calculate accrual: rate * (capped worked + PTO taken)
-        const basisHours = workedHoursCapped + ptoTaken;
-        const calculatedAccrual = parseFloat((tier.rate * basisHours).toFixed(4));
-        const cappedAccrual = Math.min(calculatedAccrual, tier.weeklyCap);
-
-        // Check max balance cap
-        let accrualCredited = cappedAccrual;
-        if (runningBalance + accrualCredited > Number(s.max_balance)) {
-          accrualCredited = Math.max(0, Number(s.max_balance) - runningBalance);
-        }
-        accrualCredited = parseFloat(accrualCredited.toFixed(2));
-
-        runningBalance = parseFloat((runningBalance + accrualCredited - ptoTaken).toFixed(2));
-
-        ledgerRows.push({
-          user_id: user.id,
-          org_id: orgId,
-          employee_id: employeeId,
-          period_start: week.start,
-          period_end: week.end,
-          worked_hours_raw: parseFloat(workedHoursRaw.toFixed(2)),
-          worked_hours_capped: parseFloat(workedHoursCapped.toFixed(2)),
-          pto_taken_hours: parseFloat(ptoTaken.toFixed(2)),
-          tier_rate: tier.rate,
-          calculated_accrual: parseFloat(calculatedAccrual.toFixed(2)),
-          weekly_cap: tier.weeklyCap,
-          accrual_credited: accrualCredited,
-          running_balance: runningBalance,
-        });
-      }
+      // 6. Pure accrual math (src/lib/pto.ts — ledger snapshot invariant)
+      // Local calendar date (matching the original engine's local "today").
+      const now = new Date();
+      const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+      const computed = computePtoLedger({
+        snapshotDate: snap.snapshot_date,
+        snapshotBalanceHours: Number(snap.snapshot_balance_hours),
+        hireDate: s.hire_date,
+        workedHoursCapWeekly: Number(s.worked_hours_cap_weekly),
+        maxBalanceHours: Number(s.max_balance),
+        entries: (entries || []).map(e => ({
+          entryDate: e.entry_date,
+          totalMinutes: e.total_minutes || 0,
+        })),
+        daysOff: (daysOff || []).map(d => ({
+          dateStart: d.date_start,
+          hours: d.hours != null ? Number(d.hours) : null,
+          type: d.type,
+        })),
+        todayISO: today.toISOString().split('T')[0],
+        tiers,
+      });
+      const runningBalance =
+        computed.length > 0
+          ? computed[computed.length - 1].runningBalance
+          : Number(snap.snapshot_balance_hours);
+      const ledgerRows = computed.map(row => ({
+        user_id: user.id,
+        org_id: orgId,
+        employee_id: employeeId,
+        period_start: row.periodStart,
+        period_end: row.periodEnd,
+        worked_hours_raw: row.workedHoursRaw,
+        worked_hours_capped: row.workedHoursCapped,
+        pto_taken_hours: row.ptoTakenHours,
+        tier_rate: row.tierRate,
+        calculated_accrual: row.calculatedAccrual,
+        weekly_cap: row.weeklyCap,
+        accrual_credited: row.accrualCredited,
+        running_balance: row.runningBalance,
+      }));
 
       // 7. Clear old ledger and insert new
       await supabase
@@ -334,29 +383,33 @@ export function useCurrentPtoBalance() {
   const { data: ledger } = usePtoLedger();
   const { data: snapshots } = usePtoSnapshots();
   const { data: settings } = usePtoSettings();
+  const { data: orgTiers } = usePtoAccrualTiers();
+  const tiers = orgTiers ?? DEFAULT_PTO_TIERS;
 
   return useMemo(() => {
     if (!ledger?.length && snapshots?.length) {
       return {
         balance: Number(snapshots[0].snapshot_balance_hours),
-        tier: settings ? getTierForDate(settings.hire_date, new Date().toISOString().split('T')[0]) : PTO_TIERS[0],
+        tier: settings
+          ? getTierForDateLib(settings.hire_date, new Date().toISOString().split('T')[0], tiers)
+          : tiers[0],
         lastWeek: null,
         currentWeek: null,
       };
     }
     if (!ledger?.length) {
-      return { balance: 0, tier: PTO_TIERS[0], lastWeek: null, currentWeek: null };
+      return { balance: 0, tier: tiers[0], lastWeek: null, currentWeek: null };
     }
     const last = ledger[ledger.length - 1];
     const prev = ledger.length > 1 ? ledger[ledger.length - 2] : null;
     const tier = settings
-      ? getTierForDate(settings.hire_date, new Date().toISOString().split('T')[0])
-      : PTO_TIERS[0];
+      ? getTierForDateLib(settings.hire_date, new Date().toISOString().split('T')[0], tiers)
+      : tiers[0];
     return {
       balance: last.running_balance,
       tier,
       currentWeek: last,
       lastWeek: prev,
     };
-  }, [ledger, snapshots, settings]);
+  }, [ledger, snapshots, settings, tiers]);
 }

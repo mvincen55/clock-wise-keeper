@@ -28,8 +28,8 @@ import { percentOfCents } from './money';
 export interface FofDiscountRules {
   /** 65+ program: automatic under the threshold, prepay-earned above. */
   senior: { enabled: boolean; percent: number; thresholdCents: Cents };
-  /** Under-65 prepay-in-full courtesy credit. */
-  courtesy: { enabled: boolean; percent: number };
+  /** Prepay program: the under-65 prepay-in-full credit. */
+  prepay: { enabled: boolean; percent: number };
   /**
    * In-house membership: percent applies automatically on membership
    * templates; extraPercent is the 65+ prepay-in-full add-on taken off
@@ -41,7 +41,7 @@ export interface FofDiscountRules {
 /** Shipped defaults — the original office's proven program values. */
 export const DEFAULT_DISCOUNT_RULES: FofDiscountRules = {
   senior: { enabled: true, percent: 10, thresholdCents: 100_000 as Cents },
-  courtesy: { enabled: true, percent: 5 },
+  prepay: { enabled: true, percent: 5 },
   membership: { enabled: true, percent: 10, extraPercent: 5 },
 };
 
@@ -65,6 +65,16 @@ type TemplateRules = Pick<
   'discountPercent' | 'discountLabel' | 'membershipDiscountPercent' | 'seniorDiscountApplies'
 >;
 
+/**
+ * Program GRAMMAR lives here; program VALUES live on org rows. The one
+ * cross-program relationship — the membership extra is a senior-gated
+ * prepay add-on — is grammar: whether it applies is decided entirely by
+ * org rows (the membership row's extraPercent, the senior row's enabled
+ * flag, the template's opt-in flags) plus the patient's 65+ status.
+ * Nothing office-specific is hardcoded; disabling the senior program
+ * row turns the extra off org-wide because the extra is BY DEFINITION
+ * a senior benefit.
+ */
 export function computeFofDiscounts(
   template: TemplateRules,
   isSenior: boolean,
@@ -80,7 +90,7 @@ export function computeFofDiscounts(
     template.membershipDiscountPercent > 0 && rules.membership.enabled
       ? rules.membership.percent
       : 0;
-  const courtesyPct = rules.courtesy.enabled ? rules.courtesy.percent : 0;
+  const prepayPct = rules.prepay.enabled ? rules.prepay.percent : 0;
 
   if (membershipPct > 0) {
     if (seniorEligible && underThreshold) {
@@ -132,7 +142,7 @@ export function computeFofDiscounts(
         prepayDiscountBase: 'portion',
       };
     }
-    const pct = seniorEligible ? rules.senior.percent : courtesyPct;
+    const pct = seniorEligible ? rules.senior.percent : prepayPct;
     return {
       autoDiscount: null,
       prepayDiscountPercent: pct,

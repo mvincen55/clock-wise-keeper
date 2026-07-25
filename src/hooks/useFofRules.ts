@@ -55,7 +55,7 @@ export function useFofDiscountRules() {
       if (error) throw error;
       const byKey = new Map((data ?? []).map(r => [r.rule_key, r]));
       const senior = byKey.get('senior');
-      const courtesy = byKey.get('courtesy');
+      const prepay = byKey.get('prepay');
       const membership = byKey.get('membership');
       return {
         senior: senior
@@ -65,9 +65,9 @@ export function useFofDiscountRules() {
               thresholdCents: senior.threshold_cents,
             }
           : DEFAULT_DISCOUNT_RULES.senior,
-        courtesy: courtesy
-          ? { enabled: courtesy.enabled, percent: Number(courtesy.percent) }
-          : DEFAULT_DISCOUNT_RULES.courtesy,
+        prepay: prepay
+          ? { enabled: prepay.enabled, percent: Number(prepay.percent) }
+          : DEFAULT_DISCOUNT_RULES.prepay,
         membership: membership
           ? {
               enabled: membership.enabled,
@@ -81,7 +81,7 @@ export function useFofDiscountRules() {
 }
 
 export interface DiscountRuleUpdate {
-  ruleKey: 'senior' | 'courtesy' | 'membership';
+  ruleKey: 'senior' | 'prepay' | 'membership';
   enabled: boolean;
   percent: number;
   extraPercent?: number;

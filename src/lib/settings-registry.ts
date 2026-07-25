@@ -121,7 +121,7 @@ export const SETTINGS_REGISTRY: SettingDef[] = [
 
   // ── Discounts & Rules ────────────────────────────────────────────
   { key: 'rules.senior', group: 'discounts_rules', label: 'Senior 65+ program', description: 'Automatic under the threshold; earned by prepay-in-full above it.', type: 'percent', tier: 'money', bounds: { min: 0, max: 100 }, source: { table: 'fof_discount_rules' } },
-  { key: 'rules.courtesy', group: 'discounts_rules', label: 'Courtesy prepay (under 65)', description: 'Earned by prepay-in-full at the senior threshold or more.', type: 'percent', tier: 'money', bounds: { min: 0, max: 100 }, source: { table: 'fof_discount_rules' } },
+  { key: 'rules.prepay', group: 'discounts_rules', label: 'Prepay (under 65)', description: 'Earned by prepay-in-full at the senior threshold or more.', type: 'percent', tier: 'money', bounds: { min: 0, max: 100 }, source: { table: 'fof_discount_rules' } },
   { key: 'rules.membership', group: 'discounts_rules', label: 'In-house membership program', description: 'Automatic on membership templates; the extra percent is the 65+ prepay add-on.', type: 'percent', tier: 'money', bounds: { min: 0, max: 100 }, source: { table: 'fof_discount_rules' } },
   { key: 'codes.never_covered', group: 'discounts_rules', label: 'Never covered by insurance', description: 'Codes that always land in “No Coverage” regardless of CDT range.', type: 'code_list', tier: 'money', source: { table: 'fof_code_rules' } },
   { key: 'codes.no_prepay', group: 'discounts_rules', label: 'Billed at the visit (no prepay)', description: 'Fees collected at their visit, never in the half-ahead schedule.', type: 'code_list', tier: 'money', source: { table: 'fof_code_rules' } },
