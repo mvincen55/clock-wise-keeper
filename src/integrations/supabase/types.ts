@@ -832,6 +832,7 @@ export type Database = {
           outside_financing_cents: number
           prepared_by: string | null
           prepared_by_name: string
+          print_snapshot: Json | null
           pt_cc_cents: number
           updated_at: string
         }
@@ -848,6 +849,7 @@ export type Database = {
           outside_financing_cents?: number
           prepared_by?: string | null
           prepared_by_name?: string
+          print_snapshot?: Json | null
           pt_cc_cents?: number
           updated_at?: string
         }
@@ -864,6 +866,7 @@ export type Database = {
           outside_financing_cents?: number
           prepared_by?: string | null
           prepared_by_name?: string
+          print_snapshot?: Json | null
           pt_cc_cents?: number
           updated_at?: string
         }
@@ -1147,6 +1150,82 @@ export type Database = {
           },
         ]
       }
+      fof_code_rules: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          kind: string
+          org_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          kind: string
+          org_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fof_code_rules_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fof_discount_rules: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          extra_percent: number
+          id: string
+          org_id: string
+          percent: number
+          rule_key: string
+          threshold_cents: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          extra_percent?: number
+          id?: string
+          org_id: string
+          percent?: number
+          rule_key: string
+          threshold_cents?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          extra_percent?: number
+          id?: string
+          org_id?: string
+          percent?: number
+          rule_key?: string
+          threshold_cents?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fof_discount_rules_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fof_procedure_bundles: {
         Row: {
           codes: Json
@@ -1190,11 +1269,18 @@ export type Database = {
           address_line1: string
           address_line2: string
           created_at: string
+          day_of_service_threshold_cents: number
           doctor_name: string
+          doctor_names: Json
+          downgrade_default_on: boolean
+          feature_display_name: string
           id: string
+          membership_plan_name: string
+          min_standalone_payment_cents: number
           org_id: string
           phone: string
           practice_name: string
+          print_form_title: string
           updated_at: string
           website: string
         }
@@ -1202,11 +1288,18 @@ export type Database = {
           address_line1?: string
           address_line2?: string
           created_at?: string
+          day_of_service_threshold_cents?: number
           doctor_name?: string
+          doctor_names?: Json
+          downgrade_default_on?: boolean
+          feature_display_name?: string
           id?: string
+          membership_plan_name?: string
+          min_standalone_payment_cents?: number
           org_id: string
           phone?: string
           practice_name?: string
+          print_form_title?: string
           updated_at?: string
           website?: string
         }
@@ -1214,11 +1307,18 @@ export type Database = {
           address_line1?: string
           address_line2?: string
           created_at?: string
+          day_of_service_threshold_cents?: number
           doctor_name?: string
+          doctor_names?: Json
+          downgrade_default_on?: boolean
+          feature_display_name?: string
           id?: string
+          membership_plan_name?: string
+          min_standalone_payment_cents?: number
           org_id?: string
           phone?: string
           practice_name?: string
+          print_form_title?: string
           updated_at?: string
           website?: string
         }
@@ -1848,47 +1948,6 @@ export type Database = {
           },
         ]
       }
-      org_invites: {
-        Row: {
-          accepted_at: string | null
-          created_at: string
-          email: string
-          expires_at: string
-          id: string
-          org_id: string
-          role: Database["public"]["Enums"]["app_org_role"]
-          token: string
-        }
-        Insert: {
-          accepted_at?: string | null
-          created_at?: string
-          email: string
-          expires_at?: string
-          id?: string
-          org_id: string
-          role?: Database["public"]["Enums"]["app_org_role"]
-          token?: string
-        }
-        Update: {
-          accepted_at?: string | null
-          created_at?: string
-          email?: string
-          expires_at?: string
-          id?: string
-          org_id?: string
-          role?: Database["public"]["Enums"]["app_org_role"]
-          token?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "org_invites_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "orgs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       org_branding: {
         Row: {
           address_line1: string
@@ -1993,6 +2052,47 @@ export type Database = {
             foreignKeyName: "org_deposit_settings_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_invites: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          org_id: string
+          role: Database["public"]["Enums"]["app_org_role"]
+          token: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          org_id: string
+          role?: Database["public"]["Enums"]["app_org_role"]
+          token?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          org_id?: string
+          role?: Database["public"]["Enums"]["app_org_role"]
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_invites_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
             referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
@@ -2181,6 +2281,53 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      pto_accrual_tiers: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          max_years: number
+          min_years: number
+          org_id: string
+          rate: number
+          sort_order: number
+          updated_at: string
+          weekly_cap: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label?: string
+          max_years: number
+          min_years: number
+          org_id: string
+          rate: number
+          sort_order?: number
+          updated_at?: string
+          weekly_cap: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          max_years?: number
+          min_years?: number
+          org_id?: string
+          rate?: number
+          sort_order?: number
+          updated_at?: string
+          weekly_cap?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pto_accrual_tiers_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pto_ledger_weeks: {
         Row: {
