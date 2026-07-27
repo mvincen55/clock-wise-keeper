@@ -151,7 +151,70 @@ interface Variant {
   brand?: { brandColor: string; brandTint: string };
   template: FofTemplate;
   filled?: boolean;
+  extreme?: boolean;
 }
+
+// Extreme dense-path case modeled on a real large treatment plan: a
+// long multi-procedure narrative, an appended footnote, both payment
+// options, custom installment labels, and a 14-line office copy with
+// the Entry Date column active (PMS screenshot import).
+const EXTREME_TEMPLATE: FofTemplate = {
+  ...LIVE_TEMPLATES[0], // Self-Pay
+  discountPercent: 5,
+  footnotes: [
+    'Provisional (temporary) restorations and dentures are included with the final prosthesis fee; adjustments to the partial denture are included for six months after delivery.',
+  ],
+};
+const EXTREME_PATIENT = {
+  patientName: 'Layout Stress Case',
+  dateISO: '2026-07-27',
+  treatment:
+    'Dr. Scott will extract tooth #24, place composite fillings on teeth #22, #26, and #27, complete provisional splinting on teeth #23 and #26, and fabricate a lower partial denture replacing teeth #19 and #30, including bite rims, wax try-in, framework try-in, and delivery visits, designed to help rebuild a strong, functional bite you can rely on for years to come.',
+};
+const EXTREME_AMOUNTS: FofAmounts = { ...BLANK_AMOUNTS, totalCents: 615_700 };
+const EXTREME_COMPUTATION: FofComputation = {
+  ...BLANK_COMPUTATION,
+  computed: {
+    patientPortionCents: 615_700,
+    discountCents: 30_785,
+    prepayTotalCents: 584_915,
+    installmentsCents: [285_300, 165_200, 165_200],
+  },
+  effective: {
+    patientPortionCents: 615_700,
+    discountCents: 30_785,
+    prepayTotalCents: 584_915,
+    installmentsCents: [285_300, 165_200, 165_200],
+  },
+  installmentLabels: ['Upon Scheduling', 'At the Extraction Visit', 'On Partial Delivery'],
+};
+const EXTREME_LINES = [
+  ['D2331', '22', '1', 'Basic', 'Composite Filling', 30_300],
+  ['D4320', '23', '1', 'Basic', 'Provisional Splinting', 85_900],
+  ['D7140', '24', '1', 'Basic', 'Tooth Extraction', 0],
+  ['D2331', '26', '1', 'Basic', 'Composite Filling', 30_300],
+  ['D4320', '26', '1', 'Basic', 'Provisional Splinting', 85_900],
+  ['D2330', '27', '1', 'Basic', 'Composite Filling', 22_600],
+  ['D2331', '27', '1', 'Basic', 'Composite Filling', 30_300],
+  ['5005', '', '2', 'No Coverage', 'PrtDntCzn', 39_500],
+  ['5011', '', '2', 'No Coverage', 'DentLab', 41_700],
+  ['D5214', '19+30', '2', 'Major', 'Lower Partial Denture', 249_200],
+  ['5001', '19+31', '2', 'No Coverage', 'Fimp Dent', 0],
+  ['5002', '19+31', '3', 'No Coverage', 'BiteRims', 0],
+  ['5004', '21', '3', 'No Coverage', 'PFrTryin', 0],
+  ['5008', '19+31', '5', 'No Coverage', 'Dent Del', 0],
+].map(([code, tooth, visit, category, description, fee]) => ({
+  code: code as string,
+  tooth: tooth as string,
+  visit: visit as string,
+  category: category as string,
+  description: description as string,
+  entryDate: '6/30/2026',
+  officeFeeCents: fee as number,
+  allowableCents: null,
+  insPaysCents: 0,
+  writeOffCents: 0,
+}));
 
 const variants: Variant[] = [
   ...LIVE_TEMPLATES.flatMap(t => [
@@ -160,6 +223,14 @@ const variants: Variant[] = [
   ]),
   { name: 'blank-self-pay-no-logo', logoUrl: '', template: LIVE_TEMPLATES[0] },
   { name: 'filled-oon-default-brand', logoUrl: wideLogo, template: FILLED_TEMPLATE, filled: true },
+  {
+    name: 'filled-extreme-test-brand',
+    logoUrl: squareLogo,
+    brand: LIVE_BRAND,
+    template: EXTREME_TEMPLATE,
+    filled: true,
+    extreme: true,
+  },
 ];
 
 for (const v of variants) {
@@ -168,12 +239,13 @@ for (const v of variants) {
     <FofPrintSheet
       practice={practice}
       template={v.template}
-      patient={v.filled ? FILLED_PATIENT : BLANK_PATIENT}
-      amounts={v.filled ? FILLED_AMOUNTS : BLANK_AMOUNTS}
-      computation={v.filled ? FILLED_COMPUTATION : BLANK_COMPUTATION}
-      officeLines={v.filled ? FILLED_LINES : []}
+      patient={v.extreme ? EXTREME_PATIENT : v.filled ? FILLED_PATIENT : BLANK_PATIENT}
+      amounts={v.extreme ? EXTREME_AMOUNTS : v.filled ? FILLED_AMOUNTS : BLANK_AMOUNTS}
+      computation={v.extreme ? EXTREME_COMPUTATION : v.filled ? FILLED_COMPUTATION : BLANK_COMPUTATION}
+      officeLines={v.extreme ? EXTREME_LINES : v.filled ? FILLED_LINES : []}
       createdBy="Megan Vincent"
       doctorName={v.filled ? 'Dr. Scott' : ''}
+      importedFromScreenshot={v.extreme}
     />
   );
   const body = renderToStaticMarkup(
