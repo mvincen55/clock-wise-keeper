@@ -23,15 +23,24 @@ export interface AskSource {
   category: string;
 }
 
+/** Something the assistant actually did this turn (memory save, commit, PR). */
+export interface AskAction {
+  type: string;
+  summary: string;
+  url?: string;
+}
+
 export interface AskResult {
   answer: string;
   sources: AskSource[];
+  actions: AskAction[];
 }
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   sources?: AskSource[];
+  actions?: AskAction[];
 }
 
 export function useOfficeDocs() {
@@ -133,18 +142,30 @@ export function useDeleteOfficeDoc() {
   });
 }
 
+/**
+ * Ask AI chat — Kimi (via OpenRouter) through the kimi-agent edge
+ * function. Beyond answering from the knowledge base, managers can have
+ * it remember office/site facts and make code changes to the app itself.
+ */
 export function useAskDocs() {
   return useMutation({
     mutationFn: async (input: { question: string; history: ChatMessage[] }): Promise<AskResult> => {
-      const { data, error } = await supabase.functions.invoke('ask-docs', {
+      const { data, error } = await supabase.functions.invoke('kimi-agent', {
         body: {
-          question: input.question,
-          history: input.history.map(m => ({ role: m.role, content: m.content })),
+          mode: 'ask',
+          messages: [
+            ...input.history.slice(-12).map(m => ({ role: m.role, content: m.content })),
+            { role: 'user', content: input.question },
+          ],
         },
       });
       if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.error);
-      return data as AskResult;
+      return {
+        answer: data?.reply ?? '',
+        sources: Array.isArray(data?.sources) ? data.sources : [],
+        actions: Array.isArray(data?.actions) ? data.actions : [],
+      };
     },
   });
 }
