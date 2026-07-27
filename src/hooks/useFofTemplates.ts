@@ -182,6 +182,98 @@ export function useFofSettings() {
   });
 }
 
+/**
+ * Org money settings (Phase 2a): values that shape dollar output, stored
+ * on fof_settings with server-side CHECK bounds. Shipped defaults are
+ * the original office's proven values.
+ */
+export interface FofMoneySettings {
+  dayOfServiceThresholdCents: number;
+  minStandalonePaymentCents: number;
+  downgradeDefaultOn: boolean;
+}
+
+/** Server-enforced bounds (mirrored client-side for friendly errors). */
+export const MONEY_SETTING_BOUNDS = {
+  dayOfServiceThresholdCents: { min: 0, max: 500_000 },
+  minStandalonePaymentCents: { min: 0, max: 100_000 },
+} as const;
+
+export const DEFAULT_MONEY_SETTINGS: FofMoneySettings = {
+  dayOfServiceThresholdCents: 100_000,
+  minStandalonePaymentCents: 10_000,
+  downgradeDefaultOn: false,
+};
+
+export function useFofMoneySettings() {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+
+  return useQuery({
+    queryKey: ['fof-money-settings', ctx?.org_id],
+    enabled: !!user && !!ctx,
+    queryFn: async (): Promise<FofMoneySettings> => {
+      if (!ctx) return DEFAULT_MONEY_SETTINGS;
+      const { data, error } = await supabase
+        .from('fof_settings')
+        .select('day_of_service_threshold_cents, min_standalone_payment_cents, downgrade_default_on')
+        .eq('org_id', ctx.org_id)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return DEFAULT_MONEY_SETTINGS;
+      return {
+        dayOfServiceThresholdCents: data.day_of_service_threshold_cents,
+        minStandalonePaymentCents: data.min_standalone_payment_cents,
+        downgradeDefaultOn: data.downgrade_default_on,
+      };
+    },
+  });
+}
+
+export function useUpsertFofMoneySettings() {
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (updates: Partial<FofMoneySettings>) => {
+      if (!ctx) throw new Error('Not authenticated');
+      // Client-side clamp mirrors the DB CHECK constraints; the database
+      // remains the authority (a bypassed client still cannot exceed the
+      // bounds).
+      const bounded = (value: number, key: keyof typeof MONEY_SETTING_BOUNDS) => {
+        const { min, max } = MONEY_SETTING_BOUNDS[key];
+        if (!Number.isInteger(value) || value < min || value > max) {
+          throw new Error(`Value must be between ${min / 100} and ${max / 100} dollars`);
+        }
+        return value;
+      };
+      const { error } = await supabase.from('fof_settings').upsert(
+        {
+          org_id: ctx.org_id,
+          ...(updates.dayOfServiceThresholdCents !== undefined && {
+            day_of_service_threshold_cents: bounded(
+              updates.dayOfServiceThresholdCents,
+              'dayOfServiceThresholdCents'
+            ),
+          }),
+          ...(updates.minStandalonePaymentCents !== undefined && {
+            min_standalone_payment_cents: bounded(
+              updates.minStandalonePaymentCents,
+              'minStandalonePaymentCents'
+            ),
+          }),
+          ...(updates.downgradeDefaultOn !== undefined && {
+            downgrade_default_on: updates.downgradeDefaultOn,
+          }),
+        },
+        { onConflict: 'org_id' }
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['fof-money-settings'] }),
+  });
+}
+
 export function useUpsertFofSettings() {
   const { data: ctx } = useOrgContext();
   const qc = useQueryClient();

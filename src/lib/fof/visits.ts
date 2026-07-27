@@ -15,15 +15,27 @@ export interface VisitPlan {
   weights: number[];
 }
 
-/** Portions under this default to a single day-of-service payment. */
+/**
+ * Shipped default: portions under this default to a single day-of-service
+ * payment. Org-configurable via fof_settings.day_of_service_threshold_cents
+ * (server-bounded $0–$5,000); this constant is the fallback default.
+ */
 export const DAY_OF_SERVICE_THRESHOLD_CENTS = 100_000;
 
 /**
- * Payments smaller than this never stand alone in a schedule — a lone
- * $47 line looks silly, so it folds into the previous payment (collected
- * a little earlier, never later, so the patient stays covered ahead).
+ * Shipped default: payments smaller than this never stand alone in a
+ * schedule — a lone $47 line looks silly, so it folds into the previous
+ * payment (collected a little earlier, never later, so the patient stays
+ * covered ahead). Org-configurable via
+ * fof_settings.min_standalone_payment_cents (server-bounded $0–$1,000).
  */
 export const MIN_STANDALONE_PAYMENT_CENTS = 10_000;
+
+/** Org money settings consumed by the schedule builder. */
+export interface VisitScheduleOptions {
+  dayOfServiceThresholdCents?: Cents;
+  minStandalonePaymentCents?: Cents;
+}
 
 /** Split by weights; remainder cents go to the EARLIEST payments. */
 export function splitCentsWeighted(total: Cents, weights: number[]): Cents[] {
@@ -194,8 +206,13 @@ export function suggestVisitStage(code: string): number {
  */
 export function buildVisitSchedule(
   portionCents: Cents,
-  allVisits: { label: string; feeCents: Cents; dueAtVisitCents?: Cents }[]
+  allVisits: { label: string; feeCents: Cents; dueAtVisitCents?: Cents }[],
+  opts: VisitScheduleOptions = {}
 ): VisitPlan | null {
+  const dayOfServiceThresholdCents =
+    opts.dayOfServiceThresholdCents ?? DAY_OF_SERVICE_THRESHOLD_CENTS;
+  const minStandalonePaymentCents =
+    opts.minStandalonePaymentCents ?? MIN_STANDALONE_PAYMENT_CENTS;
   // Zero-fee visits (e.g. a no-charge seat appointment) create no payment.
   const visits = allVisits.filter(v => v.feeCents > 0);
   if (visits.length === 0) return null;
@@ -222,7 +239,7 @@ export function buildVisitSchedule(
   // Office policy: a first visit under the day-of-service threshold needs
   // no payment before it — that money is simply collected at the visit,
   // and "Upon Scheduling" (for the rest of the treatment) moves after it.
-  if (ahead[0] > 0 && ahead[0] < DAY_OF_SERVICE_THRESHOLD_CENTS) {
+  if (ahead[0] > 0 && ahead[0] < dayOfServiceThresholdCents) {
     dueAt[0] += ahead[0];
     ahead[0] = 0;
   }
@@ -268,7 +285,7 @@ export function buildVisitSchedule(
   // accumulates into the earliest real one). The freed slot shows $0.00 —
   // "nothing due that day" — unless the zero-slot filter drops it below.
   for (let i = 1; i < payments.length; i++) {
-    if (payments[i] > 0 && payments[i] < MIN_STANDALONE_PAYMENT_CENTS) {
+    if (payments[i] > 0 && payments[i] < minStandalonePaymentCents) {
       payments[i - 1] += payments[i];
       payments[i] = 0;
     }

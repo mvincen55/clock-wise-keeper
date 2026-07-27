@@ -354,3 +354,83 @@ describe('friendlyCdtName', () => {
     expect(friendlyCdtName('9999')).toBeNull();
   });
 });
+
+describe('buildVisitSchedule — org-configurable thresholds (Phase 2a)', () => {
+  it('defaults match the shipped constants (no opts = same schedule)', () => {
+    const visits = [
+      { label: 'Surgery', feeCents: 40_000 },
+      { label: 'Placement', feeCents: 60_000 },
+      { label: 'Crown', feeCents: 100_000 },
+    ];
+    const explicit = buildVisitSchedule(200_000, visits, {
+      dayOfServiceThresholdCents: 100_000,
+      minStandalonePaymentCents: 10_000,
+    });
+    const implicit = buildVisitSchedule(200_000, visits);
+    expect(explicit).toEqual(implicit);
+  });
+
+  it('a lower day-of-service threshold keeps the first-visit prepay', () => {
+    // With the threshold lowered to $300, the $400 first visit is no
+    // longer "under threshold": Upon Scheduling collects it up front.
+    const plan = buildVisitSchedule(
+      200_000,
+      [
+        { label: 'Surgery', feeCents: 40_000 },
+        { label: 'Placement', feeCents: 60_000 },
+        { label: 'Crown', feeCents: 100_000 },
+      ],
+      { dayOfServiceThresholdCents: 30_000 }
+    )!;
+    expect(plan.labels[0]).toBe('Upon Scheduling');
+    expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(200_000);
+  });
+
+  it('a higher threshold folds a bigger first visit into day-of-service', () => {
+    const plan = buildVisitSchedule(
+      400_000,
+      [
+        { label: 'Surgery', feeCents: 200_000 },
+        { label: 'Crown', feeCents: 200_000 },
+      ],
+      { dayOfServiceThresholdCents: 300_000 }
+    )!;
+    // First visit's 200k is under the raised threshold: collected at the
+    // visit, scheduling moves after it.
+    expect(plan.labels[0]).toBe('Surgery');
+    expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(400_000);
+  });
+
+  it('a higher standalone minimum folds mid-size payments', () => {
+    const plan = buildVisitSchedule(
+      404_700,
+      [
+        { label: 'Surgery', feeCents: 200_000 },
+        { label: 'X-Ray', feeCents: 24_700 },
+        { label: 'Crown', feeCents: 180_000 },
+      ],
+      { minStandalonePaymentCents: 30_000 }
+    )!;
+    expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(404_700);
+    // Every non-zero payment respects the raised floor... except the
+    // first, which is never folded (it has no earlier payment).
+    for (let i = 1; i < plan.weights.length; i++) {
+      expect(plan.weights[i] === 0 || plan.weights[i] >= 30_000).toBe(true);
+    }
+  });
+
+  it('a zero standalone minimum keeps every payment standalone', () => {
+    const plan = buildVisitSchedule(
+      404_700,
+      [
+        { label: 'Surgery', feeCents: 200_000 },
+        { label: 'X-Ray', feeCents: 4_700 },
+        { label: 'Crown', feeCents: 200_000 },
+      ],
+      { minStandalonePaymentCents: 0 }
+    )!;
+    expect(plan.weights.reduce((a, b) => a + b, 0)).toBe(404_700);
+    // The tiny x-ray prepay survives as its own line.
+    expect(plan.weights.some(w => w > 0 && w < 10_000)).toBe(true);
+  });
+});
