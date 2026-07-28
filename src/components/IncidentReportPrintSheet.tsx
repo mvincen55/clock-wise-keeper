@@ -7,6 +7,7 @@ import {
   STATUS_LABELS,
   TREATMENT_LABELS,
   formatClockTime,
+  formatSignedAt,
   labelFor,
 } from '@/lib/incidents';
 
@@ -36,6 +37,10 @@ const longDate = (iso: string): string => {
   });
 };
 
+/** The role that countersigned, as it reads on paper. */
+const roleWord = (role: string): string =>
+  role === 'owner' ? 'Owner' : role === 'manager' ? 'Manager' : role;
+
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="inc-field">
@@ -50,6 +55,39 @@ function Block({ label, value }: { label: string; value: string }) {
     <div className="inc-block">
       <p className="inc-block-label">{label}</p>
       <p className="inc-block-value">{value || '—'}</p>
+    </div>
+  );
+}
+
+/**
+ * One signature slot. A signature given in the app prints as the typed
+ * name over the rule with the stamped time under it; an unsigned slot
+ * prints the empty rule, so the same sheet works on paper when someone
+ * signs in ink instead.
+ */
+function Signature({
+  label,
+  name,
+  signedAt,
+  note,
+}: {
+  label: string;
+  name: string;
+  signedAt: string | null;
+  note?: string;
+}) {
+  const stamped = formatSignedAt(signedAt);
+  return (
+    <div className="inc-sign">
+      <div className="inc-sign-line">
+        {stamped && <span className="inc-sign-name">{name}</span>}
+      </div>
+      <p className="inc-sign-label">{label}</p>
+      {stamped ? (
+        <p className="inc-sign-meta">Signed electronically · {stamped}{note ? ` · ${note}` : ''}</p>
+      ) : (
+        <p className="inc-sign-meta">Not signed</p>
+      )}
     </div>
   );
 }
@@ -117,14 +155,21 @@ export default function IncidentReportPrintSheet({
       </div>
 
       <div className="inc-signatures">
-        <div className="inc-sign">
-          <div className="inc-sign-line" />
-          <p className="inc-sign-label">Employee signature / date</p>
-        </div>
-        <div className="inc-sign">
-          <div className="inc-sign-line" />
-          <p className="inc-sign-label">Manager signature / date</p>
-        </div>
+        <Signature
+          label="Employee signature / date"
+          name={report.employee_signature}
+          signedAt={report.employee_signed_at}
+        />
+        <Signature
+          label={
+            report.countersign_role === 'owner'
+              ? 'Owner signature / date'
+              : 'Manager or owner signature / date'
+          }
+          name={report.manager_signature}
+          signedAt={report.manager_signed_at}
+          note={report.manager_signed_role ? roleWord(report.manager_signed_role) : ''}
+        />
       </div>
 
       <p className="inc-foot">

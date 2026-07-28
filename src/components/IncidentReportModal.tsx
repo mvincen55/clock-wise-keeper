@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -76,6 +77,7 @@ const blankForm = (employeeId: string): IncidentReportInput => ({
   medicalTreatment: 'none',
   workRelated: true,
   daysAway: 0,
+  signature: '',
 });
 
 const formFromReport = (r: IncidentReport): IncidentReportInput => ({
@@ -95,6 +97,8 @@ const formFromReport = (r: IncidentReport): IncidentReportInput => ({
   medicalTreatment: r.medical_treatment,
   workRelated: r.work_related,
   daysAway: r.days_away,
+  // Signing is its own act on the filed report, never part of an edit.
+  signature: '',
 });
 
 export default function IncidentReportModal({
@@ -113,6 +117,7 @@ export default function IncidentReportModal({
   const [form, setForm] = useState<IncidentReportInput>(() =>
     blankForm(defaultEmployeeId || ctx?.employee_id || '')
   );
+  const [attested, setAttested] = useState(false);
 
   // Reset every time the dialog opens so a half-typed report never leaks
   // into the next one.
@@ -123,6 +128,7 @@ export default function IncidentReportModal({
         ? formFromReport(report)
         : blankForm(defaultEmployeeId || ctx?.employee_id || '')
     );
+    setAttested(false);
   }, [open, report, defaultEmployeeId, ctx?.employee_id]);
 
   const set = <K extends keyof IncidentReportInput>(key: K, value: IncidentReportInput[K]) =>
@@ -132,7 +138,22 @@ export default function IncidentReportModal({
   const subjectName =
     employees?.find(e => e.id === form.employeeId)?.display_name || 'this employee';
   const aboutSomeoneElse = !!ctx && form.employeeId !== ctx.employee_id;
-  const isValid = !!form.employeeId && !!form.incidentDate && form.description.trim().length > 0;
+
+  // Only the person a report is about can sign it, so the sign-as-you-file
+  // box is offered on a new report about yourself and nowhere else. Anyone
+  // who skips it signs later from the filed report.
+  const canSignNow = !report && !aboutSomeoneElse;
+  // Editing the facts of a signed report retires its signatures (the
+  // database does that) — say so before the change is made, not after.
+  const editingSigned = !!report && (!!report.employee_signed_at || !!report.manager_signed_at);
+
+  const isValid =
+    !!form.employeeId &&
+    !!form.incidentDate &&
+    form.description.trim().length > 0 &&
+    // Ticking "sign it now" without typing a name would file the report
+    // and then fail at the signature — ask for the name first.
+    (!(attested && canSignNow) || (form.signature || '').trim().length > 1);
 
   const handleSubmit = async () => {
     if (!isValid) return;
@@ -348,6 +369,47 @@ export default function IncidentReportModal({
               </div>
             </div>
           </div>
+
+          {canSignNow && (
+            <div className="space-y-2 rounded-lg border p-3">
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="ir-attest"
+                  checked={attested}
+                  onCheckedChange={v => {
+                    const on = v === true;
+                    setAttested(on);
+                    if (!on) set('signature', '');
+                  }}
+                  className="mt-0.5"
+                />
+                <Label htmlFor="ir-attest" className="text-xs font-normal leading-snug">
+                  Sign it now — I confirm this is an accurate account of what happened.
+                  Signing sends it to a manager or owner to sign off on.
+                </Label>
+              </div>
+              {attested && (
+                <Input
+                  id="ir-signature"
+                  value={form.signature || ''}
+                  onChange={e => set('signature', e.target.value)}
+                  placeholder="Type your full name"
+                  className="max-w-[260px] font-medium"
+                  autoComplete="off"
+                />
+              )}
+              <p className="text-xs text-muted-foreground">
+                You can skip this and sign the filed report later.
+              </p>
+            </div>
+          )}
+
+          {editingSigned && (
+            <p className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
+              This report is signed. Saving a change to what happened clears both
+              signatures — it has to be signed again afterward.
+            </p>
+          )}
         </div>
 
         <DialogFooter>

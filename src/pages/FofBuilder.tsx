@@ -11,7 +11,7 @@
  * network. Keep it that way — the practice has no BAA covering patient
  * data in this app.
  */
-import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -99,6 +99,7 @@ import {
 } from '@/lib/fof/visits';
 import { DEFAULT_PRACTICE_INFO } from '@/lib/fof/defaults';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
+import ScaledPrintPreview from '@/components/ScaledPrintPreview';
 import { useOrgBranding } from '@/hooks/useOrgBranding';
 import type { Cents, FofAmounts, FofOverrides, FofTemplate } from '@/lib/fof/types';
 
@@ -362,44 +363,6 @@ function reducer(state: BuilderState, action: BuilderAction): BuilderState {
 function parseOverride(input: string): Cents | undefined {
   if (!input.trim()) return undefined;
   return parseCurrencyInput(input) ?? undefined;
-}
-
-/** Scales the fixed-width print sheet to fit its container. */
-function ScaledPreview({ children }: { children: React.ReactNode }) {
-  const outerRef = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
-  const [layout, setLayout] = useState({ scale: 1, height: 0 });
-
-  useLayoutEffect(() => {
-    const outer = outerRef.current;
-    const inner = innerRef.current;
-    if (!outer || !inner) return;
-    const update = () => {
-      const available = outer.clientWidth;
-      const natural = inner.scrollWidth;
-      const scale = natural > 0 ? Math.min(1, available / natural) : 1;
-      setLayout({ scale, height: inner.scrollHeight * scale });
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(outer);
-    observer.observe(inner);
-    return () => observer.disconnect();
-  }, []);
-
-  return (
-    <div ref={outerRef} className="w-full overflow-hidden">
-      <div style={{ height: layout.height || undefined }}>
-        <div
-          ref={innerRef}
-          style={{ transform: `scale(${layout.scale})`, transformOrigin: 'top left', width: 'fit-content' }}
-          className="border shadow-sm"
-        >
-          {children}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 interface SectionHeaderProps {
@@ -2459,7 +2422,7 @@ export default function FofBuilder() {
               <CardTitle className="text-base">Print Preview</CardTitle>
             </CardHeader>
             <CardContent>
-              <ScaledPreview>{sheet}</ScaledPreview>
+              <ScaledPrintPreview>{sheet}</ScaledPrintPreview>
             </CardContent>
           </Card>
         </div>

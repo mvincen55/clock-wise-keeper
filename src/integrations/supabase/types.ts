@@ -1610,11 +1610,15 @@ export type Database = {
         Row: {
           body_part: string
           category: string
+          countersign_role: string
           created_at: string
           days_away: number
           description: string
           device_involved: string
           employee_id: string
+          employee_signature: string
+          employee_signed_at: string | null
+          employee_signed_by: string | null
           follow_up_notes: string
           follow_up_required: boolean
           id: string
@@ -1622,6 +1626,10 @@ export type Database = {
           incident_date: string
           incident_time: string | null
           location: string
+          manager_signature: string
+          manager_signed_at: string | null
+          manager_signed_by: string | null
+          manager_signed_role: string
           medical_treatment: string
           org_id: string
           ppe_worn: string
@@ -1641,11 +1649,15 @@ export type Database = {
         Insert: {
           body_part?: string
           category?: string
+          countersign_role?: string
           created_at?: string
           days_away?: number
           description: string
           device_involved?: string
           employee_id: string
+          employee_signature?: string
+          employee_signed_at?: string | null
+          employee_signed_by?: string | null
           follow_up_notes?: string
           follow_up_required?: boolean
           id?: string
@@ -1653,6 +1665,10 @@ export type Database = {
           incident_date: string
           incident_time?: string | null
           location?: string
+          manager_signature?: string
+          manager_signed_at?: string | null
+          manager_signed_by?: string | null
+          manager_signed_role?: string
           medical_treatment?: string
           org_id: string
           ppe_worn?: string
@@ -1672,11 +1688,15 @@ export type Database = {
         Update: {
           body_part?: string
           category?: string
+          countersign_role?: string
           created_at?: string
           days_away?: number
           description?: string
           device_involved?: string
           employee_id?: string
+          employee_signature?: string
+          employee_signed_at?: string | null
+          employee_signed_by?: string | null
           follow_up_notes?: string
           follow_up_required?: boolean
           id?: string
@@ -1684,6 +1704,10 @@ export type Database = {
           incident_date?: string
           incident_time?: string | null
           location?: string
+          manager_signature?: string
+          manager_signed_at?: string | null
+          manager_signed_by?: string | null
+          manager_signed_role?: string
           medical_treatment?: string
           org_id?: string
           ppe_worn?: string
@@ -3475,6 +3499,48 @@ export type Database = {
         Returns: undefined
       }
       can_access_employee: { Args: { _employee_id: string }; Returns: boolean }
+      countersign_incident_report: {
+        Args: { _report_id: string; _typed_name: string }
+        Returns: {
+          body_part: string
+          category: string
+          countersign_role: string
+          created_at: string
+          days_away: number
+          description: string
+          device_involved: string
+          employee_id: string
+          employee_signature: string
+          employee_signed_at: string | null
+          employee_signed_by: string | null
+          follow_up_notes: string
+          follow_up_required: boolean
+          id: string
+          immediate_action: string
+          incident_date: string
+          incident_time: string | null
+          location: string
+          manager_signature: string
+          manager_signed_at: string | null
+          manager_signed_by: string | null
+          manager_signed_role: string
+          medical_treatment: string
+          org_id: string
+          ppe_worn: string
+          reported_by: string
+          reported_by_employee_id: string | null
+          reported_by_name: string
+          review_notes: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_by_name: string
+          severity: string
+          status: string
+          updated_at: string
+          witnesses: string
+          work_related: boolean
+        }
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -3510,6 +3576,10 @@ export type Database = {
         }[]
       }
       get_user_timezone: { Args: { p_user_id: string }; Returns: string }
+      incident_countersign_role: {
+        Args: { _employee_id: string }
+        Returns: string
+      }
       is_allowed_user: { Args: never; Returns: boolean }
       is_org_admin: { Args: { _org_id: string }; Returns: boolean }
       is_org_member: { Args: { _org_id: string }; Returns: boolean }
@@ -3544,6 +3614,48 @@ export type Database = {
           rank: number
           title: string
         }[]
+      }
+      sign_incident_report_employee: {
+        Args: { _report_id: string; _typed_name: string }
+        Returns: {
+          body_part: string
+          category: string
+          countersign_role: string
+          created_at: string
+          days_away: number
+          description: string
+          device_involved: string
+          employee_id: string
+          employee_signature: string
+          employee_signed_at: string | null
+          employee_signed_by: string | null
+          follow_up_notes: string
+          follow_up_required: boolean
+          id: string
+          immediate_action: string
+          incident_date: string
+          incident_time: string | null
+          location: string
+          manager_signature: string
+          manager_signed_at: string | null
+          manager_signed_by: string | null
+          manager_signed_role: string
+          medical_treatment: string
+          org_id: string
+          ppe_worn: string
+          reported_by: string
+          reported_by_employee_id: string | null
+          reported_by_name: string
+          review_notes: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_by_name: string
+          severity: string
+          status: string
+          updated_at: string
+          witnesses: string
+          work_related: boolean
+        }
       }
       sweep_attendance: { Args: { p_days?: number }; Returns: string }
       user_owns_import: { Args: { _import_id: string }; Returns: boolean }
