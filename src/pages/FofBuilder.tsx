@@ -550,12 +550,22 @@ export default function FofBuilder() {
 
   const allowedByCode = useMemo(() => {
     const map = new Map<string, Cents>();
-    for (const item of carrierItems ?? []) map.set(item.code.toUpperCase(), item.feeCents);
+    for (const item of carrierItems ?? []) {
+      // A row marked as the office fee is not a rate the carrier agreed
+      // to, so it is not an allowable. Leaving it out lets the estimate
+      // fall back to the CURRENT office fee (allowedCents ?? officeFee in
+      // lib/fof/insurance.ts) and keeps the write-off at zero, instead of
+      // inventing one the day the office raises that fee.
+      if (item.isOfficeFee) continue;
+      map.set(item.code.toUpperCase(), item.feeCents);
+    }
     return map;
   }, [carrierItems]);
 
   const payByCode = useMemo(() => {
     const map = new Map<string, Cents>();
+    // Unlike the allowable map, a missing entry here means a benefit basis
+    // of 0, not the office fee — so office-fee rows keep their number.
     for (const item of payItems ?? []) map.set(item.code.toUpperCase(), item.feeCents);
     return map;
   }, [payItems]);

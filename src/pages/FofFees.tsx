@@ -211,10 +211,11 @@ function ScheduleItemsCard({ schedule, isManager }: { schedule: FeeSchedule; isM
       Description: i.description,
       Category: CATEGORY_LABELS[i.category],
       Fee: i.feeCents / 100,
+      Source: i.isOfficeFee ? 'Office fee' : 'Contracted',
       Notes: i.notes,
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch: 8 }, { wch: 44 }, { wch: 24 }, { wch: 10 }, { wch: 50 }];
+    ws['!cols'] = [{ wch: 8 }, { wch: 44 }, { wch: 24 }, { wch: 10 }, { wch: 12 }, { wch: 50 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Fees');
     const safeName = schedule.name.replace(/[^A-Za-z0-9 _()-]+/g, '').trim() || 'Fee Schedule';
@@ -224,9 +225,16 @@ function ScheduleItemsCard({ schedule, isManager }: { schedule: FeeSchedule; isM
 
   const copyAll = async () => {
     const lines = [
-      ['Code', 'Description', 'Category', 'Fee', 'Notes'].join('\t'),
+      ['Code', 'Description', 'Category', 'Fee', 'Source', 'Notes'].join('\t'),
       ...(items ?? []).map(i =>
-        [i.code, oneLine(i.description), CATEGORY_LABELS[i.category], (i.feeCents / 100).toFixed(2), oneLine(i.notes)].join('\t')
+        [
+          i.code,
+          oneLine(i.description),
+          CATEGORY_LABELS[i.category],
+          (i.feeCents / 100).toFixed(2),
+          i.isOfficeFee ? 'Office fee' : 'Contracted',
+          oneLine(i.notes),
+        ].join('\t')
       ),
     ];
     try {
@@ -292,7 +300,17 @@ function ScheduleItemsCard({ schedule, isManager }: { schedule: FeeSchedule; isM
                     )}
                   </td>
                   <td className="p-2 text-muted-foreground">{CATEGORY_LABELS[item.category]}</td>
-                  <td className="p-2 text-right">{formatCents(item.feeCents)}</td>
+                  <td className="p-2 text-right whitespace-nowrap">
+                    {formatCents(item.feeCents)}
+                    {item.isOfficeFee && (
+                      <span
+                        className="ml-1.5 text-xs text-muted-foreground"
+                        title="No contracted rate for this code — this is the office fee, so there is no write-off. Estimates follow the current office fee."
+                      >
+                        office fee
+                      </span>
+                    )}
+                  </td>
                   {isManager && (
                     <td className="p-2 text-right whitespace-nowrap">
                       <Button
