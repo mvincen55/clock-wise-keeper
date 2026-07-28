@@ -3543,6 +3543,12 @@ export type Database = {
           witnesses: string
           work_related: boolean
         }
+        SetofOptions: {
+          from: "*"
+          to: "incident_reports"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       delete_email: {
         Args: { message_id: number; queue_name: string }
@@ -3658,6 +3664,12 @@ export type Database = {
           updated_at: string
           witnesses: string
           work_related: boolean
+        }
+        SetofOptions: {
+          from: "*"
+          to: "incident_reports"
+          isOneToOne: true
+          isSetofReturn: false
         }
       }
       sweep_attendance: { Args: { p_days?: number }; Returns: string }
