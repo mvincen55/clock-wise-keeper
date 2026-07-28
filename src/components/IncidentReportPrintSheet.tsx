@@ -22,7 +22,10 @@ export interface IncidentPrintProps {
   report: IncidentReport;
   /** Who the report is about. */
   employeeName: string;
-  branding: Pick<OrgBranding, 'displayName' | 'legalName' | 'addressLine1' | 'addressLine2' | 'phone' | 'logoUrl'>;
+  branding: Pick<
+    OrgBranding,
+    'displayName' | 'legalName' | 'addressLine1' | 'addressLine2' | 'phone' | 'website' | 'logoUrl'
+  >;
 }
 
 const longDate = (iso: string): string => {
@@ -101,29 +104,35 @@ export default function IncidentReportPrintSheet({
 
   return (
     <div className="inc-sheet">
-      <div className="inc-head">
-        <div>
-          {branding.logoUrl ? (
-            <img src={branding.logoUrl} alt={branding.displayName} className="inc-logo" />
-          ) : (
-            <p className="inc-practice">{branding.displayName || branding.legalName}</p>
-          )}
-          <p className="inc-practice-sub">
-            {[branding.addressLine1, branding.addressLine2, branding.phone]
-              .filter(Boolean)
-              .join(' · ')}
-          </p>
-        </div>
-        <div className="inc-head-right">
+      {/* Letterhead in the FOF's language: the office logo carries the
+          page, the document's own facts sit opposite it. */}
+      <header className="inc-head">
+        {branding.logoUrl ? (
+          <img src={branding.logoUrl} alt={branding.displayName} className="inc-logo" />
+        ) : (
+          <p className="inc-practice">{branding.displayName || branding.legalName}</p>
+        )}
+        <div className="inc-head-meta">
           <p className="inc-title">Incident Report</p>
-          <p className="inc-status">{labelFor(STATUS_LABELS, report.status)}</p>
+          <div className="inc-meta-item">
+            <span className="inc-meta-key">Employee</span>
+            <span className="inc-meta-value">{employeeName}</span>
+          </div>
+          <div className="inc-meta-item">
+            <span className="inc-meta-key">Date</span>
+            <span className="inc-meta-value">
+              {longDate(report.incident_date)}
+              {time ? ` · ${time}` : ''}
+            </span>
+          </div>
+          <div className="inc-meta-item">
+            <span className="inc-meta-key">Status</span>
+            <span className="inc-meta-value">{labelFor(STATUS_LABELS, report.status)}</span>
+          </div>
         </div>
-      </div>
+      </header>
 
       <div className="inc-grid">
-        <Field label="Employee" value={employeeName} />
-        <Field label="Date of incident" value={longDate(report.incident_date)} />
-        <Field label="Time" value={time || 'Not recorded'} />
         <Field label="Type" value={labelFor(CATEGORY_LABELS, report.category)} />
         <Field label="Severity" value={labelFor(SEVERITY_LABELS, report.severity)} />
         <Field label="Location" value={report.location} />
@@ -176,6 +185,17 @@ export default function IncidentReportPrintSheet({
         Filed by {report.reported_by_name || '—'} · {branding.legalName || branding.displayName}
         {' · '}Workplace safety record — retain per OSHA recordkeeping requirements.
       </p>
+
+      {/* The same brand band that anchors the FOF. */}
+      <footer className="inc-footer">
+        {(branding.addressLine1 || branding.addressLine2) && (
+          <span className="inc-footer-item">
+            {[branding.addressLine1, branding.addressLine2].filter(Boolean).join(', ')}
+          </span>
+        )}
+        {branding.phone && <span className="inc-footer-item">{branding.phone}</span>}
+        {branding.website && <span className="inc-footer-item">{branding.website}</span>}
+      </footer>
     </div>
   );
 }
