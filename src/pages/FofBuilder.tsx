@@ -77,6 +77,7 @@ import {
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { computeFof } from '@/lib/fof/compute';
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
+import { resolveImportedFee } from '@/lib/fof/import-fee';
 import {
   estimateInsurance,
   type FeeCategory,
@@ -1296,47 +1297,49 @@ export default function FofBuilder() {
         .map(r => r.visit)
         .filter((v): v is number => typeof v === 'number' && isFinite(v));
       const minVisit = visitNumbers.length > 0 ? Math.min(...visitNumbers) : null;
-      let flagged = 0;
+      let differed = 0;
+      let unpriced = 0;
       const lines = rows.map(r => {
         const base = lineFromCode(r.code);
         const code = r.code.trim().toUpperCase();
-        const contractedFee = r.fee !== null ? Math.round(r.fee * 100) : null;
-        const pmsOfficeFee = r.officeFee !== null ? Math.round(r.officeFee * 100) : null;
-        const onFileFee = officeByCode.get(code)?.feeCents ?? null;
-        // The PMS OFFICE column is the office's current fee — it wins.
-        // Our schedule fee backs it up, and the contracted "Fee" column is
-        // only a last resort. Disagreements with our schedule get flagged.
-        let feeFlag = '';
-        if (pmsOfficeFee !== null && onFileFee !== null && pmsOfficeFee !== onFileFee) {
-          feeFlag = `PMS office fee ${formatCents(pmsOfficeFee)} differs from our fee schedule ${formatCents(onFileFee)} — using the PMS office fee`;
-        } else if (
-          pmsOfficeFee === null &&
-          contractedFee !== null &&
-          onFileFee !== null &&
-          contractedFee !== onFileFee
-        ) {
-          feeFlag = `PMS shows ${formatCents(contractedFee)} — using our office fee ${formatCents(onFileFee)}`;
-        }
-        if (feeFlag) flagged++;
-        const fee = pmsOfficeFee ?? onFileFee ?? contractedFee;
+        // OFFICE column → our own fee schedule → the plain "Fee" column,
+        // which may be a carrier's contracted rate. See resolveImportedFee.
+        const resolved = resolveImportedFee({
+          code,
+          pmsOfficeFeeCents: r.officeFee !== null ? Math.round(r.officeFee * 100) : null,
+          onFileFeeCents: officeByCode.get(code)?.feeCents ?? null,
+          contractedFeeCents: r.fee !== null ? Math.round(r.fee * 100) : null,
+        });
+        if (resolved.unpriced) unpriced++;
+        else if (resolved.flag) differed++;
         return {
           ...base,
           tooth: r.tooth,
           description: base.description || r.description,
-          feeInput: fee !== null ? formatCents(fee) : base.feeInput,
+          feeInput:
+            resolved.feeCents !== null ? formatCents(resolved.feeCents) : base.feeInput,
           entryDate: r.entryDate,
           visit:
             r.visit !== null && minVisit !== null ? String(r.visit - minVisit + 1) : base.visit,
-          feeFlag,
+          feeFlag: resolved.flag,
         };
       });
       dispatch({ type: 'addLines', lines });
       dispatch({ type: 'set', field: 'importUsed', value: 'yes' });
-      toast.success(
-        `Imported ${lines.length} procedure${lines.length === 1 ? '' : 's'}${
-          flagged ? ` — ${flagged} fee difference${flagged === 1 ? '' : 's'} flagged` : ''
-        }. Estimates come from your fee schedules, not the screenshot.`
-      );
+      const notes: string[] = [];
+      if (differed > 0) {
+        notes.push(`${differed} fee difference${differed === 1 ? '' : 's'} flagged`);
+      }
+      if (unpriced > 0) {
+        notes.push(`${unpriced} with no office fee on file`);
+      }
+      const summary = `Imported ${lines.length} procedure${lines.length === 1 ? '' : 's'}${
+        notes.length ? ` — ${notes.join(', ')}` : ''
+      }. Estimates come from your fee schedules, not the screenshot.`;
+      // A row priced off the screenshot needs a look before it prints, so
+      // it does not get a green tick.
+      if (unpriced > 0) toast.warning(summary);
+      else toast.success(summary);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Screenshot import failed');
     } finally {
