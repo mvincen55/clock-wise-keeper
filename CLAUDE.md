@@ -65,6 +65,18 @@ with `SET LOCAL ROLE NONE` to read results. Grant the temp results table to
   when no Supabase access token was available. Verify it against the live
   schema rather than trusting it.
 
+## Decisions already made (don't "fix" these)
+
+- **A sole owner cannot sign off on their own incident report, and that is
+  intentional.** Nobody signs off on their own report; when the owner is the
+  only admin there is no one left, so the sign-off line prints blank and gets
+  signed in ink. It resolves by itself once a second admin exists. Do not add
+  a self-countersign path.
+- **Employees without a login sign on paper.** Only the person a report is
+  about can sign it electronically, so staff with no user account leave that
+  slot empty and sign the printout. The fix is inviting them (Team → Invite),
+  not a workaround in code.
+
 ## House style
 
 Match the surrounding code. Comments in this repo explain *why* a rule exists
