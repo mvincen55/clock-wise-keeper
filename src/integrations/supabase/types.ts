@@ -1022,6 +1022,7 @@ export type Database = {
           description: string
           fee_cents: number
           id: string
+          is_office_fee: boolean
           notes: string
           org_id: string
           schedule_id: string
@@ -1034,6 +1035,7 @@ export type Database = {
           description?: string
           fee_cents?: number
           id?: string
+          is_office_fee?: boolean
           notes?: string
           org_id: string
           schedule_id: string
@@ -1046,6 +1048,7 @@ export type Database = {
           description?: string
           fee_cents?: number
           id?: string
+          is_office_fee?: boolean
           notes?: string
           org_id?: string
           schedule_id?: string

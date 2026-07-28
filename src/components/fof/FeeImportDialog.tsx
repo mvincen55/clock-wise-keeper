@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
-import { parseCurrencyInput, formatCents } from '@/lib/fof/money';
+import { parseScheduleFee, formatCents, type ScheduleFee } from '@/lib/fof/money';
 import { categorizeCdtCode } from '@/lib/fof/cdt';
 import type { FeeCategory } from '@/lib/fof/insurance';
 import { useImportFeeScheduleItems, type ImportRow } from '@/hooks/useFeeSchedules';
@@ -43,9 +43,12 @@ function cellString(value: string | number | null | undefined): string {
   return value === null || value === undefined ? '' : String(value).trim();
 }
 
-function cellFee(value: string | number | null | undefined): number | null {
-  if (typeof value === 'number' && isFinite(value)) return Math.round(value * 100);
-  return parseCurrencyInput(cellString(value));
+function cellFee(value: string | number | null | undefined): ScheduleFee | null {
+  // A numeric cell can't carry the asterisk, so it is always a real fee.
+  if (typeof value === 'number' && isFinite(value)) {
+    return { cents: Math.round(value * 100), isOfficeFee: false };
+  }
+  return parseScheduleFee(cellString(value));
 }
 
 function detectCategory(value: string): FeeCategory | undefined {
@@ -136,7 +139,8 @@ export default function FeeImportDialog({ open, scheduleId, scheduleName, onClos
       rows.push({
         code,
         description: descCol !== NONE ? cellString(row[Number(descCol)]) : '',
-        feeCents: fee,
+        feeCents: fee.cents,
+        isOfficeFee: fee.isOfficeFee,
         // Explicit category column wins; otherwise auto-categorize from the
         // CDT code range (consistent across carriers).
         category:
@@ -252,6 +256,7 @@ export default function FeeImportDialog({ open, scheduleId, scheduleName, onClos
                         <th className="text-left p-2">Code</th>
                         <th className="text-left p-2">Description</th>
                         <th className="text-right p-2">Fee</th>
+                        <th className="text-left p-2">Source</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -260,6 +265,9 @@ export default function FeeImportDialog({ open, scheduleId, scheduleName, onClos
                           <td className="p-2 font-mono">{row.code}</td>
                           <td className="p-2 truncate max-w-52">{row.description}</td>
                           <td className="p-2 text-right">{formatCents(row.feeCents)}</td>
+                          <td className="p-2 text-xs text-muted-foreground">
+                            {row.isOfficeFee ? 'Office fee (*)' : 'Contracted'}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
