@@ -28,9 +28,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Pencil, Printer, Trash2 } from 'lucide-react';
+import { ChevronDown, Loader2, Pencil, Printer, Trash2 } from 'lucide-react';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
 import IncidentReportPrintSheet from '@/components/IncidentReportPrintSheet';
+import IncidentSignaturePanel from '@/components/IncidentSignaturePanel';
+import ScaledPrintPreview from '@/components/ScaledPrintPreview';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useOrgBranding } from '@/hooks/useOrgBranding';
@@ -48,9 +50,12 @@ import {
   STATUSES,
   STATUS_CLASSES,
   STATUS_LABELS,
+  SIGNATURE_CLASSES,
+  SIGNATURE_LABELS,
   TREATMENT_LABELS,
   formatClockTime,
   labelFor,
+  signatureState,
   type IncidentSeverity,
   type IncidentStatus,
 } from '@/lib/incidents';
@@ -102,14 +107,19 @@ export default function IncidentReportDetail({
   const [followUpRequired, setFollowUpRequired] = useState(false);
   const [followUpNotes, setFollowUpNotes] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
+  // Re-sync when a different report opens, and again whenever the row
+  // itself moves — signing off bumps an untouched report to under review,
+  // and the panel has to say so rather than offer to set it back.
   useEffect(() => {
     if (!report) return;
     setStatus(report.status);
     setReviewNotes(report.review_notes);
     setFollowUpRequired(report.follow_up_required);
     setFollowUpNotes(report.follow_up_notes);
-  }, [report]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [report?.id, report?.updated_at]);
 
   if (!report) return null;
 
@@ -149,6 +159,13 @@ export default function IncidentReportDetail({
               >
                 {labelFor(STATUS_LABELS, report.status)}
               </span>
+              <span
+                className={`text-xs px-2 py-0.5 rounded font-medium ${
+                  SIGNATURE_CLASSES[signatureState(report)]
+                }`}
+              >
+                {SIGNATURE_LABELS[signatureState(report)]}
+              </span>
             </DialogTitle>
             <DialogDescription>
               {employeeName} · {formatDate(report.incident_date)}
@@ -185,6 +202,8 @@ export default function IncidentReportDetail({
             {!report.work_related && (
               <p className="text-xs text-muted-foreground">Marked as not work related.</p>
             )}
+
+            <IncidentSignaturePanel report={report} employeeName={employeeName} />
 
             <div className="rounded-lg border p-3 space-y-3">
               <div className="flex items-center justify-between">
@@ -278,6 +297,34 @@ export default function IncidentReportDetail({
                       Not reviewed yet. Your managers have been notified.
                     </p>
                   )}
+                </div>
+              )}
+            </div>
+
+            {/* The printed page, on screen. Same component the printer
+                gets, so the preview cannot drift from the paper. */}
+            <div className="rounded-lg border">
+              <button
+                type="button"
+                onClick={() => setShowPreview(v => !v)}
+                className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium"
+              >
+                Print preview
+                <ChevronDown
+                  className={`h-4 w-4 text-muted-foreground transition-transform ${
+                    showPreview ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+              {showPreview && branding && (
+                <div className="border-t p-3">
+                  <ScaledPrintPreview>
+                    <IncidentReportPrintSheet
+                      report={report}
+                      employeeName={employeeName}
+                      branding={branding}
+                    />
+                  </ScaledPrintPreview>
                 </div>
               )}
             </div>

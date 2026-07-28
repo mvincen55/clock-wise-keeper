@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, Check, CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +9,7 @@ import { formatDistanceToNow } from 'date-fns';
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
   const ref = useRef<HTMLDivElement>(null);
   const { data: notifications } = useNotifications();
   const unreadCount = useUnreadCount();
@@ -32,7 +34,17 @@ export default function NotificationBell() {
     change_request_new: '📋',
     change_request_approved: '✅',
     change_request_denied: '❌',
+    incident_report_new: '⚠️',
+    incident_report_signature_needed: '✍️',
+    incident_report_signed: '✅',
+    incident_report_closed: '✅',
   };
+
+  /** Notifications that point at a row we can open from here. */
+  const linkFor = (n: { related_table: string | null; related_id: string | null }) =>
+    n.related_table === 'incident_reports' && n.related_id
+      ? `/incident-reports?report=${n.related_id}`
+      : null;
 
   return (
     <div className="relative" ref={ref}>
@@ -68,6 +80,11 @@ export default function NotificationBell() {
                   }`}
                   onClick={() => {
                     if (!n.is_read) markRead.mutate(n.id);
+                    const to = linkFor(n);
+                    if (to) {
+                      setOpen(false);
+                      navigate(to);
+                    }
                   }}
                 >
                   <div className="flex items-start gap-2">

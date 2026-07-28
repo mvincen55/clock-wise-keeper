@@ -311,12 +311,29 @@
 .inc-sign-line {
   border-bottom: 0.75pt solid var(--inc-ink);
   height: 22pt;
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: 2pt;
+}
+
+/* A typed signature sits on the rule the way an ink one would. */
+.inc-sign-name {
+  font-family: 'Snell Roundhand', 'Apple Chancery', 'Segoe Script', cursive;
+  font-size: 14pt;
+  line-height: 1;
+  color: var(--inc-ink);
 }
 
 .inc-sign-label {
   font-size: 7.5pt;
   color: var(--inc-muted);
   margin-top: 3pt;
+}
+
+.inc-sign-meta {
+  font-size: 6.5pt;
+  color: var(--inc-muted);
+  margin-top: 1pt;
 }
 
 .inc-foot {

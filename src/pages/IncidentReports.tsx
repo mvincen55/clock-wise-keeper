@@ -6,7 +6,8 @@
  * list shows is decided by RLS, not by this page: employees see their own
  * reports, owners and managers see the whole office.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -32,11 +33,14 @@ import {
   INCIDENT_CATEGORIES,
   SEVERITY_CLASSES,
   SEVERITY_LABELS,
+  SIGNATURE_CLASSES,
+  SIGNATURE_LABELS,
   STATUSES,
   STATUS_CLASSES,
   STATUS_LABELS,
   formatClockTime,
   labelFor,
+  signatureState,
   type IncidentSeverity,
   type IncidentStatus,
 } from '@/lib/incidents';
@@ -53,10 +57,35 @@ export default function IncidentReports() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<IncidentReport | null>(null);
-  const [selected, setSelected] = useState<IncidentReportWithEmployee | null>(null);
+  // The open report is held by id, not by value: signing and reviewing
+  // refetch the list, and the dialog has to show what came back.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>(ALL);
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL);
   const [employeeFilter, setEmployeeFilter] = useState<string>(ALL);
+
+  const selected = useMemo<IncidentReportWithEmployee | null>(
+    () => (reports || []).find(r => r.id === selectedId) ?? null,
+    [reports, selectedId]
+  );
+
+  // A notification about one report links straight to it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedId = searchParams.get('report');
+
+  useEffect(() => {
+    if (!linkedId) return;
+    setSelectedId(linkedId);
+    // Opened — drop the parameter so closing the dialog is the end of it.
+    setSearchParams(
+      prev => {
+        const next = new URLSearchParams(prev);
+        next.delete('report');
+        return next;
+      },
+      { replace: true }
+    );
+  }, [linkedId, setSearchParams]);
 
   const roster = useMemo(
     () => (employees || []).map(e => ({ id: e.id, display_name: e.display_name })),
@@ -87,7 +116,7 @@ export default function IncidentReports() {
   };
 
   const startEdit = (report: IncidentReport) => {
-    setSelected(null);
+    setSelectedId(null);
     setEditing(report);
     setFormOpen(true);
   };
@@ -208,7 +237,7 @@ export default function IncidentReports() {
                 return (
                   <button
                     key={report.id}
-                    onClick={() => setSelected(report)}
+                    onClick={() => setSelectedId(report.id)}
                     className="w-full px-4 py-3 text-left transition-colors hover:bg-muted/50"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -235,6 +264,14 @@ export default function IncidentReports() {
                           }`}
                         >
                           {labelFor(STATUS_LABELS, report.status)}
+                        </span>
+                        {/* Who the report is still waiting on. */}
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded font-medium ${
+                            SIGNATURE_CLASSES[signatureState(report)]
+                          }`}
+                        >
+                          {SIGNATURE_LABELS[signatureState(report)]}
                         </span>
                       </div>
                     </div>
@@ -265,7 +302,7 @@ export default function IncidentReports() {
       <IncidentReportDetail
         report={selected}
         employeeName={selected ? nameFor(selected) : ''}
-        onClose={() => setSelected(null)}
+        onClose={() => setSelectedId(null)}
         onEdit={startEdit}
       />
     </div>

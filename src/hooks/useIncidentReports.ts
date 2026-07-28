@@ -20,6 +20,34 @@ import type { Tables } from '@/integrations/supabase/types';
 
 export type IncidentReport = Tables<'incident_reports'>;
 
+/** An active owner or manager — the pool a report can be signed off from. */
+export type OrgAdmin = { user_id: string; role: 'owner' | 'manager' };
+
+/**
+ * The org's owners and managers. Every member may read these rows (RLS
+ * allows active admin memberships org-wide) — the sign-off panel needs
+ * them to know whether an owner is available to countersign.
+ */
+export function useOrgAdmins() {
+  const { data: ctx } = useOrgContext();
+
+  return useQuery({
+    queryKey: ['org-admins', ctx?.org_id],
+    enabled: !!ctx?.org_id,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<OrgAdmin[]> => {
+      const { data, error } = await supabase
+        .from('org_members')
+        .select('user_id, role')
+        .eq('org_id', ctx!.org_id)
+        .in('role', ['owner', 'manager'])
+        .eq('status', 'active');
+      if (error) throw error;
+      return (data || []) as OrgAdmin[];
+    },
+  });
+}
+
 /** A report with the subject's name resolved for display. */
 export type IncidentReportWithEmployee = IncidentReport & {
   employee: { display_name: string } | null;
@@ -66,6 +94,60 @@ export function useEmployeeIncidentReports(employeeId: string | undefined) {
   });
 }
 
+/**
+ * The sign functions return the row they stamped. PostgREST hands a
+ * composite-returning function back as an object; take either shape so a
+ * wrapped row cannot quietly cost someone their notification.
+ */
+function signedRow(data: unknown): IncidentReport {
+  return (Array.isArray(data) ? data[0] : data) as IncidentReport;
+}
+
+/**
+ * Tell whoever can sign off that a report is waiting on them. Mirrors
+ * the server's rule in countersign_incident_report(): a report about a
+ * manager or an owner goes up to an owner, it never goes to the person
+ * it is about, and if the subject was the org's only owner it falls back
+ * to whoever is left rather than reaching nobody.
+ */
+async function notifyCountersigners(params: {
+  orgId: string;
+  actorUserId: string;
+  reportId: string;
+  countersignRole: string;
+  subjectUserId: string | null;
+  /** How the message names the subject: 'Dana Reyes' or 'You'. */
+  subjectName: string;
+  incidentDate: string;
+}) {
+  const { data: admins } = await supabase
+    .from('org_members')
+    .select('user_id, role')
+    .eq('org_id', params.orgId)
+    .in('role', ['owner', 'manager'])
+    .eq('status', 'active');
+
+  const pool = (admins || []).filter(
+    a => a.user_id !== params.subjectUserId && a.user_id !== params.actorUserId
+  );
+  const owners = pool.filter(a => a.role === 'owner');
+  const recipients =
+    params.countersignRole === 'owner' && owners.length > 0 ? owners : pool;
+
+  for (const admin of recipients) {
+    await createNotification({
+      org_id: params.orgId,
+      recipient_user_id: admin.user_id,
+      actor_user_id: params.actorUserId,
+      notification_type: 'incident_report_signature_needed',
+      title: 'Incident Report Needs Your Signature',
+      message: `${params.subjectName} signed the incident report from ${params.incidentDate}. It needs your sign-off.`,
+      related_table: 'incident_reports',
+      related_id: params.reportId,
+    });
+  }
+}
+
 export interface IncidentReportInput {
   /** Who it happened to. Employees may only pass their own employee id. */
   employeeId: string;
@@ -84,6 +166,12 @@ export interface IncidentReportInput {
   medicalTreatment: string;
   workRelated: boolean;
   daysAway: number;
+  /**
+   * Typed full name, when someone files their own report and signs it in
+   * the same breath. Only the person a report is about can sign, so the
+   * form only offers this when they are the subject.
+   */
+  signature?: string;
 }
 
 /**
@@ -130,7 +218,7 @@ export function useFileIncidentReport() {
           work_related: input.workRelated,
           days_away: input.daysAway,
         })
-        .select('id, employee_id')
+        .select('id, employee_id, countersign_role')
         .single();
       if (error) throw error;
 
@@ -142,6 +230,29 @@ export function useFileIncidentReport() {
         .maybeSingle();
       const subjectName = subject?.display_name || 'a team member';
       const aboutSelf = input.employeeId === ctx.employee_id;
+
+      // Filing your own report and signing it is one motion. The
+      // signature carries its own notification — an actionable one — so
+      // it stands in for the generic "new report" note to the admins.
+      const signature = aboutSelf ? (input.signature || '').trim() : '';
+      if (signature) {
+        const { error: signError } = await supabase.rpc('sign_incident_report_employee', {
+          _report_id: report.id,
+          _typed_name: signature,
+        });
+        if (signError) throw signError;
+
+        await notifyCountersigners({
+          orgId: ctx.org_id,
+          actorUserId: user.id,
+          reportId: report.id,
+          countersignRole: report.countersign_role,
+          subjectUserId: subject?.user_id ?? null,
+          subjectName: reporterName,
+          incidentDate: input.incidentDate,
+        });
+        return report;
+      }
 
       // Owners and managers hear about every incident.
       const { data: admins } = await supabase
@@ -177,7 +288,7 @@ export function useFileIncidentReport() {
           actor_user_id: user.id,
           notification_type: 'incident_report_new',
           title: 'Incident Report Filed',
-          message: `${reporterName} filed an incident report in your record for ${input.incidentDate}.`,
+          message: `${reporterName} filed an incident report in your record for ${input.incidentDate}. Open it to read and sign.`,
           related_table: 'incident_reports',
           related_id: report.id,
         });
@@ -230,6 +341,102 @@ export function useUpdateIncidentReport() {
       toast.success('Incident report updated');
     },
     onError: (e: Error) => toast.error(e.message || 'Could not update the report'),
+  });
+}
+
+/**
+ * The employee's signature. Only the person the report is about can give
+ * it — the database checks that, not this hook — and giving it puts the
+ * report in front of whoever has to sign off on it.
+ *
+ * Correcting a signed report clears its signatures (the guard trigger
+ * does that), so a signature always covers the account as it read when
+ * it was signed.
+ */
+export function useSignIncidentReport() {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, typedName }: { id: string; typedName: string }) => {
+      if (!ctx || !user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase.rpc('sign_incident_report_employee', {
+        _report_id: id,
+        _typed_name: typedName,
+      });
+      if (error) throw error;
+      const signed = signedRow(data);
+
+      await notifyCountersigners({
+        orgId: ctx.org_id,
+        actorUserId: user.id,
+        reportId: signed.id,
+        countersignRole: signed.countersign_role,
+        subjectUserId: user.id,
+        subjectName: signed.employee_signature,
+        incidentDate: signed.incident_date,
+      });
+
+      return signed;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['incident-reports'] });
+      toast.success('Signed — your managers have been notified');
+    },
+    onError: (e: Error) => toast.error(e.message || 'Could not sign the report'),
+  });
+}
+
+/**
+ * The countersignature. An owner or manager, never the person the report
+ * is about, and an owner specifically when the report is about a manager
+ * or an owner — countersign_incident_report() enforces all of it.
+ */
+export function useCountersignIncidentReport() {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, typedName }: { id: string; typedName: string }) => {
+      if (!ctx || !user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase.rpc('countersign_incident_report', {
+        _report_id: id,
+        _typed_name: typedName,
+      });
+      if (error) throw error;
+      const signed = signedRow(data);
+
+      // The person it happened to hears that the loop is closed.
+      const { data: subject } = await supabase
+        .from('employees')
+        .select('user_id')
+        .eq('id', signed.employee_id)
+        .maybeSingle();
+
+      if (subject?.user_id && subject.user_id !== user.id) {
+        await createNotification({
+          org_id: ctx.org_id,
+          recipient_user_id: subject.user_id,
+          actor_user_id: user.id,
+          notification_type: 'incident_report_signed',
+          title: 'Incident Report Signed',
+          message: `${signed.manager_signature} signed off on your incident report from ${signed.incident_date}.`,
+          related_table: 'incident_reports',
+          related_id: signed.id,
+        });
+      }
+
+      return signed;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['incident-reports'] });
+      toast.success('Signed off');
+    },
+    onError: (e: Error) => toast.error(e.message || 'Could not sign the report'),
   });
 }
 

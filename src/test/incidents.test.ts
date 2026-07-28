@@ -8,14 +8,21 @@ import {
   SEVERITIES,
   SEVERITY_CLASSES,
   SEVERITY_LABELS,
+  SIGNATURE_CLASSES,
+  SIGNATURE_LABELS,
+  SIGNATURE_STATES,
   STATUSES,
   STATUS_CLASSES,
   STATUS_LABELS,
   TREATMENTS,
   TREATMENT_LABELS,
+  countersignEligibility,
   formatClockTime,
+  formatSignedAt,
   labelFor,
+  signatureState,
   yesterdayKey,
+  type CountersignContext,
 } from "@/lib/incidents";
 
 // The database stores these as plain text with CHECK constraints, so the
@@ -38,6 +45,12 @@ describe("label coverage", () => {
     for (const s of STATUSES) {
       expect(STATUS_LABELS[s]).toBeTruthy();
       expect(STATUS_CLASSES[s]).toBeTruthy();
+    }
+  });
+  it("labels and styles every signature state", () => {
+    for (const s of SIGNATURE_STATES) {
+      expect(SIGNATURE_LABELS[s]).toBeTruthy();
+      expect(SIGNATURE_CLASSES[s]).toBeTruthy();
     }
   });
   it("labels every PPE and treatment option", () => {
@@ -79,6 +92,83 @@ describe("formatClockTime", () => {
     expect(formatClockTime(null)).toBe("");
     expect(formatClockTime("")).toBe("");
     expect(formatClockTime("not a time")).toBe("");
+  });
+});
+
+describe("signatureState", () => {
+  it("starts at the employee's signature", () => {
+    expect(signatureState({ employee_signed_at: null, manager_signed_at: null }))
+      .toBe("awaiting_employee");
+  });
+  it("moves to the sign-off once the employee signs", () => {
+    expect(signatureState({ employee_signed_at: "2026-07-28T18:00:00Z", manager_signed_at: null }))
+      .toBe("awaiting_countersign");
+  });
+  it("is complete on the countersignature, signed employee or not", () => {
+    const at = "2026-07-28T19:00:00Z";
+    expect(signatureState({ employee_signed_at: at, manager_signed_at: at })).toBe("complete");
+    // A manager may sign off on a report the employee never signed —
+    // someone who left, or was out for weeks. The loop still closes.
+    expect(signatureState({ employee_signed_at: null, manager_signed_at: at })).toBe("complete");
+  });
+});
+
+describe("countersignEligibility", () => {
+  // Mirrors countersign_incident_report() in the database. The server
+  // decides; this decides what the panel draws.
+  const base: CountersignContext = {
+    countersignRole: "manager",
+    viewerRole: "manager",
+    viewerIsSubject: false,
+    alreadySigned: false,
+    otherOwnerCount: 1,
+  };
+
+  it("lets any admin sign off on an employee's report", () => {
+    expect(countersignEligibility(base).canSign).toBe(true);
+    expect(countersignEligibility({ ...base, viewerRole: "owner" }).canSign).toBe(true);
+  });
+
+  it("keeps employees out of the sign-off", () => {
+    const v = countersignEligibility({ ...base, viewerRole: "employee" });
+    expect(v.canSign).toBe(false);
+    expect(v.reason).toMatch(/owner or manager/i);
+  });
+
+  it("never lets anyone sign off on their own report", () => {
+    const v = countersignEligibility({ ...base, viewerRole: "owner", viewerIsSubject: true });
+    expect(v.canSign).toBe(false);
+    expect(v.reason).toMatch(/about you/i);
+  });
+
+  it("sends a manager's own report up to an owner", () => {
+    const v = countersignEligibility({ ...base, countersignRole: "owner" });
+    expect(v.canSign).toBe(false);
+    expect(v.reason).toMatch(/owner has to sign/i);
+    expect(countersignEligibility({ ...base, countersignRole: "owner", viewerRole: "owner" }).canSign)
+      .toBe(true);
+  });
+
+  it("falls back to any admin when the subject was the only owner", () => {
+    expect(
+      countersignEligibility({ ...base, countersignRole: "owner", otherOwnerCount: 0 }).canSign
+    ).toBe(true);
+  });
+
+  it("offers nothing once it is signed off", () => {
+    expect(countersignEligibility({ ...base, alreadySigned: true }).canSign).toBe(false);
+  });
+});
+
+describe("formatSignedAt", () => {
+  it("stamps the signature in office time", () => {
+    // 18:30 UTC on a July day is 2:30 PM in New York.
+    expect(formatSignedAt("2026-07-28T18:30:00Z")).toBe("Jul 28, 2026 at 2:30 PM");
+  });
+  it("is empty for an unsigned slot", () => {
+    expect(formatSignedAt(null)).toBe("");
+    expect(formatSignedAt("")).toBe("");
+    expect(formatSignedAt("not a time")).toBe("");
   });
 });
 
