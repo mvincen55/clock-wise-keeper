@@ -155,6 +155,179 @@
   display: none;
 }
 
+/* Printable Incident Report — one letter page for the safety binder and
+   the OSHA sharps log. Hidden on screen; shown only when printing from an
+   open report. Same document language as the deposit sheet. */
+.incident-print-root {
+  display: none;
+}
+
+@page incident {
+  size: letter;
+  margin: 0.5in;
+}
+
+.inc-sheet {
+  --inc-navy: #53406e; /* brand accent default; org_branding overrides */
+  --inc-ink: #2b2733;
+  --inc-muted: #6b6577;
+  --inc-line: #d5cfe0;
+  --inc-tint: #f3f0f8;
+  page: incident;
+  width: 7.5in;
+  min-height: 10in;
+  display: flex;
+  flex-direction: column;
+  margin: 0 auto;
+  background: white;
+  color: var(--inc-ink);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 9.5pt;
+  line-height: 1.4;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.inc-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.4in;
+  padding-bottom: 8pt;
+  border-bottom: 1.5pt solid var(--inc-navy);
+  margin-bottom: 12pt;
+}
+
+.inc-logo {
+  max-height: 44pt;
+  max-width: 2.4in;
+  object-fit: contain;
+}
+
+.inc-practice {
+  font-size: 13pt;
+  font-weight: 700;
+  color: var(--inc-navy);
+}
+
+.inc-practice-sub {
+  font-size: 8pt;
+  color: var(--inc-muted);
+  margin-top: 2pt;
+}
+
+.inc-head-right {
+  text-align: right;
+}
+
+.inc-title {
+  font-size: 15pt;
+  font-weight: 700;
+  letter-spacing: 0.5pt;
+  color: var(--inc-navy);
+}
+
+.inc-status {
+  font-size: 8pt;
+  text-transform: uppercase;
+  letter-spacing: 0.6pt;
+  color: var(--inc-muted);
+}
+
+.inc-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8pt 14pt;
+  margin-bottom: 12pt;
+}
+
+.inc-grid-tight {
+  grid-template-columns: repeat(2, 1fr);
+  margin-bottom: 6pt;
+}
+
+.inc-field {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 0.5pt solid var(--inc-line);
+  padding-bottom: 3pt;
+}
+
+.inc-field-label {
+  font-size: 7pt;
+  text-transform: uppercase;
+  letter-spacing: 0.5pt;
+  color: var(--inc-muted);
+}
+
+.inc-field-value {
+  font-size: 9.5pt;
+}
+
+.inc-block {
+  margin-bottom: 10pt;
+}
+
+.inc-block-label {
+  font-size: 7.5pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5pt;
+  color: var(--inc-navy);
+  margin-bottom: 3pt;
+}
+
+.inc-block-value {
+  white-space: pre-wrap;
+  border-bottom: 0.5pt solid var(--inc-line);
+  padding-bottom: 4pt;
+  min-height: 22pt;
+}
+
+.inc-review {
+  background: var(--inc-tint);
+  border: 0.5pt solid var(--inc-line);
+  border-radius: 3pt;
+  padding: 8pt 10pt;
+  margin-bottom: 14pt;
+}
+
+.inc-review .inc-block-value {
+  border-bottom: none;
+  min-height: 18pt;
+}
+
+.inc-signatures {
+  display: flex;
+  gap: 0.5in;
+  margin-top: auto;
+  padding-top: 24pt;
+}
+
+.inc-sign {
+  flex: 1;
+}
+
+.inc-sign-line {
+  border-bottom: 0.75pt solid var(--inc-ink);
+  height: 22pt;
+}
+
+.inc-sign-label {
+  font-size: 7.5pt;
+  color: var(--inc-muted);
+  margin-top: 3pt;
+}
+
+.inc-foot {
+  font-size: 7pt;
+  color: var(--inc-muted);
+  text-align: center;
+  margin-top: 10pt;
+  padding-top: 6pt;
+  border-top: 0.5pt solid var(--inc-line);
+}
+
 @page deposit {
   size: letter;
   margin: 0.45in;
@@ -1363,6 +1536,15 @@
   }
 
   .deposit-print-root {
+    display: block !important;
+  }
+
+  /* Same for an open incident report. */
+  body:has(.incident-print-root) #root {
+    display: none !important;
+  }
+
+  .incident-print-root {
     display: block !important;
   }
 
