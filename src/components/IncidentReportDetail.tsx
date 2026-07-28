@@ -329,9 +329,9 @@ export default function IncidentReportDetail({
               )}
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => window.print()}>
-                <Printer className="mr-2 h-4 w-4" /> Print
+                <Printer className="mr-2 h-4 w-4" /> Print / Save as PDF
               </Button>
               {canEdit && onEdit && (
                 <Button variant="outline" size="sm" onClick={() => onEdit(report)}>
@@ -348,6 +348,9 @@ export default function IncidentReportDetail({
                   <Trash2 className="mr-2 h-4 w-4" /> Delete
                 </Button>
               )}
+              <span className="text-xs text-muted-foreground">
+                Choose “Save as PDF” as the destination to file it digitally.
+              </span>
             </div>
           </div>
         </DialogContent>
