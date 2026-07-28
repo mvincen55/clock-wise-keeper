@@ -27,6 +27,7 @@ import PolicyManual from "@/pages/PolicyManual";
 import ImportantNumbers from "@/pages/ImportantNumbers";
 import Checklists from "@/pages/Checklists";
 import DepositLog from "@/pages/DepositLog";
+import IncidentReports from "@/pages/IncidentReports";
 import MorningHuddle from "@/pages/MorningHuddle";
 import AcceptInvite from "@/pages/AcceptInvite";
 import NotFound from "@/pages/NotFound";
@@ -76,6 +77,7 @@ const App = () => (
             <Route path="/important-numbers" element={<ProtectedRoute><ImportantNumbers /></ProtectedRoute>} />
             <Route path="/checklists" element={<ProtectedRoute><Checklists /></ProtectedRoute>} />
             <Route path="/deposit-log" element={<ProtectedRoute><DepositLog /></ProtectedRoute>} />
+            <Route path="/incident-reports" element={<ProtectedRoute><IncidentReports /></ProtectedRoute>} />
             <Route path="/morning-huddle" element={<ProtectedRoute><MorningHuddle /></ProtectedRoute>} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />

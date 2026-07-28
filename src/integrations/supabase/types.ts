@@ -1606,6 +1606,124 @@ export type Database = {
           },
         ]
       }
+      incident_reports: {
+        Row: {
+          body_part: string
+          category: string
+          created_at: string
+          days_away: number
+          description: string
+          device_involved: string
+          employee_id: string
+          follow_up_notes: string
+          follow_up_required: boolean
+          id: string
+          immediate_action: string
+          incident_date: string
+          incident_time: string | null
+          location: string
+          medical_treatment: string
+          org_id: string
+          ppe_worn: string
+          reported_by: string
+          reported_by_employee_id: string | null
+          reported_by_name: string
+          review_notes: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_by_name: string
+          severity: string
+          status: string
+          updated_at: string
+          witnesses: string
+          work_related: boolean
+        }
+        Insert: {
+          body_part?: string
+          category?: string
+          created_at?: string
+          days_away?: number
+          description: string
+          device_involved?: string
+          employee_id: string
+          follow_up_notes?: string
+          follow_up_required?: boolean
+          id?: string
+          immediate_action?: string
+          incident_date: string
+          incident_time?: string | null
+          location?: string
+          medical_treatment?: string
+          org_id: string
+          ppe_worn?: string
+          reported_by: string
+          reported_by_employee_id?: string | null
+          reported_by_name?: string
+          review_notes?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_by_name?: string
+          severity?: string
+          status?: string
+          updated_at?: string
+          witnesses?: string
+          work_related?: boolean
+        }
+        Update: {
+          body_part?: string
+          category?: string
+          created_at?: string
+          days_away?: number
+          description?: string
+          device_involved?: string
+          employee_id?: string
+          follow_up_notes?: string
+          follow_up_required?: boolean
+          id?: string
+          immediate_action?: string
+          incident_date?: string
+          incident_time?: string | null
+          location?: string
+          medical_treatment?: string
+          org_id?: string
+          ppe_worn?: string
+          reported_by?: string
+          reported_by_employee_id?: string | null
+          reported_by_name?: string
+          review_notes?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_by_name?: string
+          severity?: string
+          status?: string
+          updated_at?: string
+          witnesses?: string
+          work_related?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "incident_reports_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "incident_reports_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "incident_reports_reported_by_employee_id_fkey"
+            columns: ["reported_by_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       insurance_plans: {
         Row: {
           annual_max_cents: number
