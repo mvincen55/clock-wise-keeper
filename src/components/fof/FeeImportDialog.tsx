@@ -43,6 +43,26 @@ function cellString(value: string | number | null | undefined): string {
   return value === null || value === undefined ? '' : String(value).trim();
 }
 
+/**
+ * A procedure code read from a spreadsheet cell.
+ *
+ * A NUMERIC cell has already lost everything that is not a digit: Excel
+ * stores CDT D0120 as the number 120. That is exactly how the Altus
+ * schedule arrived holding 693 codes that matched nothing — the FOF
+ * resolves allowables by exact code, so 'D0120' never found '120', and
+ * the handful that did collide hit the office's own custom numeric codes
+ * (Altus 9110 palliative treatment against the office's HIPAA Ack).
+ *
+ * Zero-padding is always safe on a code column. Adding the D is the
+ * caller's call, since custom office codes are genuinely bare numbers.
+ */
+function cellCode(value: string | number | null | undefined, cdtPrefix: boolean): string {
+  const numeric =
+    typeof value === 'number' && isFinite(value) && Number.isInteger(value) && value > 0 && value < 10000;
+  const text = numeric ? String(value).padStart(4, '0') : cellString(value).toUpperCase();
+  return cdtPrefix && /^\d{4}$/.test(text) ? `D${text}` : text;
+}
+
 function cellFee(value: string | number | null | undefined): ScheduleFee | null {
   // A numeric cell can't carry the asterisk, so it is always a real fee.
   if (typeof value === 'number' && isFinite(value)) {
@@ -70,6 +90,8 @@ export default function FeeImportDialog({ open, scheduleId, scheduleName, onClos
   const [feeCol, setFeeCol] = useState<string>(NONE);
   const [catCol, setCatCol] = useState<string>(NONE);
   const [hasHeader, setHasHeader] = useState(true);
+  // Turned on automatically when a file's codes arrive as bare numbers.
+  const [cdtPrefix, setCdtPrefix] = useState(false);
 
   const reset = () => {
     setGrid([]);
@@ -115,6 +137,15 @@ export default function FeeImportDialog({ open, scheduleId, scheduleName, onClos
       setCodeCol(code);
       setDescCol(desc);
       setFeeCol(fee);
+      // If the code column came through as bare numbers, this file lost
+      // its D prefixes on the way out of Excel. Offer to put them back.
+      if (code !== NONE) {
+        const codes = sample.map(r => r[Number(code)]).filter(v => v !== null && v !== undefined && v !== '');
+        const bare = codes.filter(
+          v => typeof v === 'number' || /^\d{1,4}$/.test(cellString(v))
+        ).length;
+        setCdtPrefix(codes.length > 0 && bare > codes.length * 0.8);
+      }
     } catch (error) {
       toast.error(`Could not read file: ${error instanceof Error ? error.message : 'unknown error'}`);
     }
@@ -133,7 +164,7 @@ export default function FeeImportDialog({ open, scheduleId, scheduleName, onClos
     if (codeCol === NONE || feeCol === NONE) return [];
     const rows: ImportRow[] = [];
     for (const row of dataRows) {
-      const code = cellString(row[Number(codeCol)]).toUpperCase();
+      const code = cellCode(row[Number(codeCol)], cdtPrefix);
       const fee = cellFee(row[Number(feeCol)]);
       if (!code || fee === null) continue;
       rows.push({
@@ -149,7 +180,7 @@ export default function FeeImportDialog({ open, scheduleId, scheduleName, onClos
       });
     }
     return rows;
-  }, [dataRows, codeCol, descCol, feeCol, catCol]);
+  }, [dataRows, codeCol, descCol, feeCol, catCol, cdtPrefix]);
 
   const submit = () => {
     if (!scheduleId) return;
@@ -246,6 +277,24 @@ export default function FeeImportDialog({ open, scheduleId, scheduleName, onClos
                   onChange={e => setHasHeader(e.target.checked)}
                 />
                 <Label htmlFor="has-header">First row is a header</Label>
+              </div>
+
+              <div className="flex items-start gap-2">
+                <input
+                  id="cdt-prefix"
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4"
+                  checked={cdtPrefix}
+                  onChange={e => setCdtPrefix(e.target.checked)}
+                />
+                <Label htmlFor="cdt-prefix" className="font-normal leading-snug">
+                  Codes are CDT without the D
+                  <span className="block text-xs text-muted-foreground">
+                    Saves 120 as D0120. Spreadsheets drop the D and the leading zeros on a
+                    number column, and a code that doesn’t match your office schedule can’t
+                    produce a write-off. Leave this off for custom office codes.
+                  </span>
+                </Label>
               </div>
 
               {mappedRows.length > 0 ? (
