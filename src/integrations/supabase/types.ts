@@ -1238,6 +1238,44 @@ export type Database = {
           },
         ]
       }
+      fof_code_names: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          id: string
+          org_id: string
+          patient_name: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          org_id: string
+          patient_name: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          org_id?: string
+          patient_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fof_code_names_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fof_ai_guidance: {
         Row: {
           content: string

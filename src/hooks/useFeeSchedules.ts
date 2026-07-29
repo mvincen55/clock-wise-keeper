@@ -336,6 +336,64 @@ export function useDeleteInsurancePlan() {
   });
 }
 
+// Office overrides for the patient-facing name of a code — what prints on
+// the form. Owners/managers edit them; everyone can read them (RLS).
+
+/**
+ * Overrides keyed by uppercase code, ready for resolvePatientName.
+ * Absent overrides simply fall back to the built-in CDT names.
+ */
+export function useCodeNames() {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+
+  return useQuery({
+    queryKey: ['fof-code-names', ctx?.org_id],
+    enabled: !!user && !!ctx,
+    queryFn: async (): Promise<Record<string, string>> => {
+      const { data, error } = await supabase.from('fof_code_names').select('code, patient_name');
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      for (const row of data ?? []) {
+        const name = (row.patient_name ?? '').trim();
+        if (name) map[row.code.trim().toUpperCase()] = name;
+      }
+      return map;
+    },
+  });
+}
+
+export function useUpsertCodeName() {
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ code, patientName }: { code: string; patientName: string }) => {
+      if (!ctx) throw new Error('Not authenticated');
+      const key = code.trim().toUpperCase();
+      if (!key) throw new Error('Missing code');
+      const name = patientName.trim();
+      // Clearing the field means "go back to the built-in name", not
+      // "print an empty label".
+      if (name === '') {
+        const { error } = await supabase
+          .from('fof_code_names')
+          .delete()
+          .eq('org_id', ctx.org_id)
+          .eq('code', key);
+        if (error) throw error;
+        return;
+      }
+      const { error } = await supabase.from('fof_code_names').upsert(
+        { org_id: ctx.org_id, code: key, patient_name: name },
+        { onConflict: 'org_id,code' }
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['fof-code-names'] }),
+  });
+}
+
 // Named procedure bundles ("Implant", "Denture"...) — reusable groups of
 // codes that expand into builder lines with current fees.
 

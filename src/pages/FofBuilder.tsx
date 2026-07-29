@@ -69,6 +69,7 @@ import FofPrintSheet from '@/components/fof/FofPrintSheet';
 import { useFofSettings, useFofTemplates } from '@/hooks/useFofTemplates';
 import {
   useDeleteProcedureBundle,
+  useCodeNames,
   useFeeScheduleItems,
   useFeeSchedules,
   useProcedureBundles,
@@ -85,7 +86,7 @@ import {
   type PlanRules,
 } from '@/lib/fof/insurance';
 import { categorizeCdtCode } from '@/lib/fof/cdt';
-import { friendlyCdtName } from '@/lib/fof/cdt-names';
+import { resolvePatientName } from '@/lib/fof/cdt-names';
 import { computeFofDiscounts } from '@/lib/fof/discounts';
 import { buildNameVisitsPayload, safeProcedureLabel } from '@/lib/fof/ai';
 import {
@@ -431,6 +432,9 @@ export default function FofBuilder() {
   const { data: practice } = useFofSettings();
   const { data: branding } = useOrgBranding();
   const { data: schedules } = useFeeSchedules();
+  // Office wording for what patients see. Display and print only —
+  // the AI payload stays code-derived (see safeProcedureLabel).
+  const { data: codeNames } = useCodeNames();
 
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [templateId, setTemplateId] = useState<string | null>(null);
@@ -545,7 +549,7 @@ export default function FofBuilder() {
             code: match.code,
             // Auto-fill with the patient-friendly wording that prints on
             // the form (schedule description as fallback).
-            description: friendlyCdtName(match.code) || match.description,
+            description: resolvePatientName(match.code, codeNames) || match.description,
             feeInput: formatCents(match.feeCents),
             ...resolveCategory(match.category),
           }
@@ -589,7 +593,7 @@ export default function FofBuilder() {
     const items = officeItems ?? [];
     const matchesText = (it: (typeof items)[number]) =>
       it.description.toLowerCase().includes(q) ||
-      (friendlyCdtName(it.code) || '').toLowerCase().includes(q);
+      (resolvePatientName(it.code, codeNames) || '').toLowerCase().includes(q);
     const byCode = items.filter(it => it.code.toLowerCase().startsWith(q));
     const byDesc = items.filter(it => !it.code.toLowerCase().startsWith(q) && matchesText(it));
     return [...byCode, ...byDesc].slice(0, 6);
@@ -611,8 +615,8 @@ export default function FofBuilder() {
       ...newLine(),
       code: match?.code ?? rawCode.toUpperCase(),
       description: match
-        ? friendlyCdtName(match.code) || match.description
-        : friendlyCdtName(rawCode.toUpperCase()) || '',
+        ? resolvePatientName(match.code, codeNames) || match.description
+        : resolvePatientName(rawCode.toUpperCase(), codeNames) || '',
       feeInput: match ? formatCents(match.feeCents) : '',
       ...resolveCategory(match?.category ?? categorizeCdtCode(rawCode.toUpperCase())),
     };
@@ -902,7 +906,7 @@ export default function FofBuilder() {
     for (const l of active) {
       // Membership-covered procedures owe nothing at their visit.
       const fee = freeUnderMembership(l) ? 0 : parseCurrencyInput(l.feeInput) ?? 0;
-      const base = friendlyCdtName(l.code) || l.description.trim();
+      const base = resolvePatientName(l.code, codeNames) || l.description.trim();
       const lineLabel =
         isSurgical(l.code) && !/surger/i.test(base) ? `${base} Surgery` : base;
       // Parallel label built from the code alone: typed descriptions may
@@ -1441,7 +1445,7 @@ export default function FofBuilder() {
       // friendly name; other codes keep whatever staff typed.
       const fillMatch = /^D2(1[4-6]\d|3[0-9]\d)$/.exec(code);
       const description = fillMatch
-        ? friendlyCdtName(code) || l.description.trim()
+        ? resolvePatientName(code, codeNames) || l.description.trim()
         : l.description.trim();
       return {
         code,
