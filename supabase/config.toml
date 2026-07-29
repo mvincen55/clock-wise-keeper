@@ -29,3 +29,5 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = true
   [functions.process-location-event]
     verify_jwt = false
+  [functions.send-org-invite]
+    verify_jwt = true
