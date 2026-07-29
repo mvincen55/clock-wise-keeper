@@ -51,6 +51,8 @@ import {
   type OfficeDocCategory,
 } from '@/hooks/useOfficeDocs';
 import { ActionChips } from '@/components/fof/FofAssistantWidget';
+import AssistantMemoryPanel from '@/components/AssistantMemoryPanel';
+import { useAssistantMemories, useAuditFindings } from '@/hooks/useAssistantMemory';
 import { useOrgContext } from '@/hooks/useOrgContext';
 
 const SUGGESTED_QUESTIONS = [
@@ -395,6 +397,13 @@ function DocsPanel() {
 }
 
 export default function Assistant() {
+  // Badge the tab when something is genuinely waiting on a person:
+  // contradictions held out of answers, plus open auditor findings.
+  const { data: memories } = useAssistantMemories();
+  const { data: findings } = useAuditFindings();
+  const pendingCount =
+    (memories ?? []).filter(m => m.status === 'pending').length + (findings ?? []).length;
+
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-4xl mx-auto">
       <div className="flex items-center gap-2">
@@ -406,12 +415,23 @@ export default function Assistant() {
         <TabsList>
           <TabsTrigger value="chat">Chat</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="memory" className="gap-1.5">
+            Memory &amp; Audit
+            {pendingCount > 0 && (
+              <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">
+                {pendingCount}
+              </Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="chat">
           <ChatPanel />
         </TabsContent>
         <TabsContent value="documents">
           <DocsPanel />
+        </TabsContent>
+        <TabsContent value="memory">
+          <AssistantMemoryPanel />
         </TabsContent>
       </Tabs>
     </div>

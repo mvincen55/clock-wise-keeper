@@ -31,7 +31,7 @@
 //   GITHUB_BRANCH       optional — Lovable-synced branch, default main
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { loadProcedureNotes } from "../_shared/procedure-notes.ts";
+import { formatCodeNote, loadCodeNotes, type CodeNote } from "../_shared/procedure-notes.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -47,6 +47,7 @@ const json = (body: unknown, status = 200) =>
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_MODEL = "moonshotai/kimi-k3";
+const DEFAULT_CHECK_MODEL = "moonshotai/kimi-k2.6";
 const GITHUB_API = "https://api.github.com";
 
 const MAX_MESSAGES = 16;
@@ -378,6 +379,185 @@ async function githubOpenPr(
 }
 
 // ---------------------------------------------------------------------------
+// Contradiction gate
+// ---------------------------------------------------------------------------
+
+interface MemoryRow {
+  id: string;
+  kind: string;
+  content: string;
+}
+
+/**
+ * Second opinion before anything enters memory. The main model is told to
+ * watch for clashes, but a model that has just been persuaded of a new
+ * fact is exactly the wrong judge of whether it contradicts an old one —
+ * so a separate, cheap call re-checks every write against what is already
+ * known. Returns the memory it clashes with, or null.
+ *
+ * Fails OPEN on any error: a checker outage must not block the office
+ * from teaching the assistant. Errors are logged, not surfaced.
+ */
+async function findContradiction(
+  apiKey: string,
+  model: string,
+  newFact: string,
+  memories: MemoryRow[]
+): Promise<{ conflictsWith: MemoryRow; explanation: string } | null> {
+  if (memories.length === 0) return null;
+  const numbered = memories
+    .map((m, i) => `${i + 1}. ${m.content}`)
+    .join("\n");
+  try {
+    const response = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://github.com/mvincen55/clock-wise-keeper",
+        "X-Title": "TimeVault Memory Auditor",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 400,
+        temperature: 0,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You check whether a NEW fact about a dental office contradicts any EXISTING fact. " +
+              "A contradiction means both cannot be true at once — a changed number, time, price, rule, " +
+              "person, or a direct reversal (\"we do X\" vs \"we never do X\"). " +
+              "These are NOT contradictions: extra detail that refines an existing fact; a fact about a " +
+              "different subject; a narrower case of a general rule; rewording of the same fact. " +
+              "Be conservative — only report a real, direct clash. " +
+              'Reply with ONLY JSON: {"index": <1-based number of the contradicted fact, or 0 if none>, ' +
+              '"explanation": "<one sentence naming what disagrees, or empty>"}',
+          },
+          { role: "user", content: `EXISTING FACTS:\n${numbered}\n\nNEW FACT:\n${newFact}` },
+        ],
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const raw: string = data?.choices?.[0]?.message?.content ?? "";
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    const parsed = JSON.parse(match[0]) as { index?: unknown; explanation?: unknown };
+    const index = typeof parsed.index === "number" ? parsed.index : Number(parsed.index);
+    if (!Number.isInteger(index) || index < 1 || index > memories.length) return null;
+    return {
+      conflictsWith: memories[index - 1],
+      explanation: bounded(parsed.explanation, 400) || "These two statements disagree.",
+    };
+  } catch (err) {
+    console.error("contradiction check failed (failing open):", err);
+    return null;
+  }
+}
+
+/** Stable key so a nightly re-audit doesn't re-report a known problem. */
+function fingerprint(parts: string[]): string {
+  const joined = parts.join("|").toLowerCase();
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193;
+  for (let i = 0; i < joined.length; i++) {
+    const c = joined.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ c, 0x85ebca6b) >>> 0;
+  }
+  return `${h1.toString(16)}${h2.toString(16)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Code notes — knowledge filed against a procedure code
+// ---------------------------------------------------------------------------
+
+/**
+ * Write a note onto a code's fee-schedule row. Universal guidance goes on
+ * the OFFICE schedule (applies to every patient); insurance-specific
+ * guidance goes on that carrier's schedule (applies only when billing
+ * that code to that carrier).
+ *
+ * Never invents a fee row: this is a fee schedule for a payroll-grade
+ * app, and a phantom $0 code could end up on a patient's form. If the
+ * code isn't on the schedule, it says so.
+ */
+// deno-lint-ignore no-explicit-any
+async function saveCodeNote(
+  supabase: any,
+  input: { code: string; note: string; scheduleName: string; mode: string },
+  actions: AgentAction[]
+): Promise<string> {
+  const code = input.code.trim().toUpperCase();
+  if (!code) return "ERROR: save_code_note needs a procedure code.";
+  const note = input.note.trim();
+  if (!note) return "ERROR: save_code_note needs note text.";
+
+  const { data: schedules, error: schedErr } = await supabase
+    .from("fee_schedules")
+    .select("id, name, kind")
+    .eq("is_active", true);
+  if (schedErr) return `ERROR: could not read fee schedules: ${schedErr.message}`;
+  const all = (schedules ?? []) as { id: string; name: string; kind: string }[];
+  if (all.length === 0) return "ERROR: no fee schedules exist yet.";
+
+  // No schedule named → universal guidance → the office schedule.
+  const wanted = input.scheduleName.trim().toLowerCase();
+  let target: { id: string; name: string; kind: string } | undefined;
+  if (!wanted || wanted === "office") {
+    target = all.find((s) => s.kind === "office");
+    if (!target) return "ERROR: this org has no office fee schedule.";
+  } else {
+    target =
+      all.find((s) => s.name.toLowerCase() === wanted) ??
+      all.find((s) => s.name.toLowerCase().includes(wanted));
+    if (!target) {
+      return `ERROR: no fee schedule matches "${input.scheduleName}". Available: ${all
+        .map((s) => `${s.name} (${s.kind})`)
+        .join(", ")}.`;
+    }
+  }
+
+  const { data: row, error: rowErr } = await supabase
+    .from("fee_schedule_items")
+    .select("id, notes, description")
+    .eq("schedule_id", target.id)
+    .eq("code", code)
+    .maybeSingle();
+  if (rowErr) return `ERROR: could not read ${code}: ${rowErr.message}`;
+  if (!row) {
+    return `ERROR: ${code} is not on the "${target.name}" schedule, so there is no row to annotate. A manager must add the code (with its fee) on the Fee Schedules page first — I will not create a fee row, because an invented fee could reach a patient's form.`;
+  }
+
+  const existing = typeof row.notes === "string" ? row.notes.trim() : "";
+  const replacing = input.mode === "replace";
+  const next = replacing || !existing ? note : `${existing}\n${note}`;
+  if (next.length > 2000) {
+    return `ERROR: that would make ${code}'s notes longer than 2000 characters. Tighten it, or use mode "replace".`;
+  }
+
+  const { error: updateErr } = await supabase
+    .from("fee_schedule_items")
+    .update({ notes: next })
+    .eq("id", row.id);
+  if (updateErr) return `ERROR: could not save the note: ${updateErr.message}`;
+
+  const scope =
+    target.kind === "office"
+      ? "applies to ALL patients regardless of insurance"
+      : `applies ONLY when billing to ${target.name}`;
+  actions.push({
+    type: "code_note_saved",
+    summary: `${code} note ${replacing ? "replaced" : "added"} on ${target.name} — ${scope}`,
+  });
+  return `Saved. ${code} on "${target.name}" (${target.kind}) — this note ${scope}.${
+    existing && !replacing ? " Appended below the existing note." : ""
+  }${replacing && existing ? ` Replaced: "${existing.slice(0, 200)}"` : ""}`;
+}
+
+// ---------------------------------------------------------------------------
 // Prompt assembly
 // ---------------------------------------------------------------------------
 
@@ -394,7 +574,8 @@ interface PromptContext {
   githubReady: boolean;
   memories: { id: string; kind: string; content: string }[];
   guidance: string[];
-  procedureNotes: string[];
+  codeNotes: CodeNote[];
+  schedules: { name: string; kind: string }[];
   visits: string;
   treatment: string;
   docCount: number;
@@ -419,6 +600,9 @@ function buildSystemPrompt(ctx: PromptContext): string {
   if (ctx.isManager) {
     capabilities.push(
       "save durable memories with save_memory (kind 'office' for practice facts, 'site' for app/build facts) and retire wrong ones with forget_memory"
+    );
+    capabilities.push(
+      "file knowledge about a procedure code onto that code's fee-schedule row with save_code_note"
     );
     if (ctx.mode === "fof" && ctx.training) {
       capabilities.push("save standing FOF wording rules with save_wording_rule");
@@ -446,6 +630,12 @@ function buildSystemPrompt(ctx: PromptContext): string {
     parts.push(
       "MEMORY — remember as we go: when the user states a durable fact, preference, or decision about the office (people, policies, how they like things) or about the site (product decisions, todos, how something is built), save it with save_memory without being asked — one crisp fact per memory, general wording, max 300 characters, and NEVER a patient detail. Confirm in your reply what you remembered. Use forget_memory (by id) when the user retracts or corrects one. Do not save trivia, one-off questions, or anything about a patient."
     );
+    parts.push(
+      "CONTRADICTIONS — NEVER SILENTLY OVERWRITE: before saving, check the new fact against STANDING MEMORY above. If it clashes with something you were already told, do NOT just add it and do NOT pick a winner yourself — say plainly what you were told before, what you are being told now, and ask the owner or manager which is correct. Every save is independently re-checked server-side too: if that check finds a clash, the fact is held as PENDING (never used in answers) and the tool result will tell you so — when that happens, relay the conflict and ask them to decide. A fact that merely ADDS detail to an existing one is not a contradiction; save it normally."
+    );
+    parts.push(
+      "WHERE KNOWLEDGE GOES — file it in the right place, this matters: (a) knowledge about a PROCEDURE CODE belongs on that code's fee-schedule row via save_code_note, NOT in chat memory. There are two homes and picking right is the whole point: put it on the OFFICE schedule when the guidance is true for every patient no matter their insurance (how the office words it, what it includes, sequencing, lab policy), and on a specific CARRIER's schedule when it only applies to billing that code to that insurance (downgrades, narrative requirements, frequency limits, that carrier's quirks). If the user says something like \"for Delta Dental this one downgrades\", that is a Delta Dental note, not an office note. If they say \"we always call this delivery, never seating\", that is an office note. When it's genuinely ambiguous, ask which it is rather than guessing. (b) Office-wide policy that isn't code-specific goes in save_memory. (c) Long formal documents belong in the knowledge base — tell them to upload it on the Ask AI Documents tab. Office notes are loaded for EVERY patient regardless of carrier; carrier notes only when that carrier is in play."
+    );
   } else {
     parts.push(
       "The user is a TEAM MEMBER (not a manager): answer questions helpfully, but you have no build, memory, or training tools for them — nothing they say changes standing knowledge or the app. If they state a preference or want something built, suggest they raise it with the office manager."
@@ -464,9 +654,28 @@ function buildSystemPrompt(ctx: PromptContext): string {
       }${site.length ? ` SITE: ${fmt(site)}` : ""}`
     );
   }
-  if (ctx.procedureNotes.length > 0) {
+  if (ctx.codeNotes.length > 0) {
+    const universal = ctx.codeNotes.filter((n) => n.scheduleKind === "office");
+    const perCarrier = ctx.codeNotes.filter((n) => n.scheduleKind !== "office");
     parts.push(
-      `PER-PROCEDURE OFFICE NOTES (wording/policy managers set per procedure on the fee schedule — authoritative for those procedures): ${ctx.procedureNotes.map((n, i) => `(${i + 1}) ${n}`).join(" ")}`
+      "CODE NOTES (what the office has written about specific procedure codes — authoritative for those codes). " +
+        (universal.length > 0
+          ? `UNIVERSAL — these apply to EVERY patient, whatever insurance they have: ${universal
+              .map((n) => formatCodeNote(n))
+              .join(" || ")} `
+          : "") +
+        (perCarrier.length > 0
+          ? `INSURANCE-SPECIFIC — each of these applies ONLY when billing that code to the named carrier; do not apply one carrier's note to a different carrier's patient: ${perCarrier
+              .map((n) => formatCodeNote(n))
+              .join(" || ")}`
+          : "")
+    );
+  }
+  if (ctx.schedules.length > 0) {
+    parts.push(
+      `FEE SCHEDULES available to save_code_note (pass the name exactly): ${ctx.schedules
+        .map((s) => `"${s.name}" (${s.kind === "office" ? "office — universal notes" : `${s.kind} — notes apply to this insurance only`})`)
+        .join(", ")}.`
     );
   }
 
@@ -559,6 +768,32 @@ function buildTools(ctx: { isManager: boolean; training: boolean; mode: string; 
           type: "object",
           properties: { memory_id: { type: "string", description: "Full or 8-char id from the memory list." } },
           required: ["memory_id"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "save_code_note",
+        description:
+          "File knowledge about a procedure code onto that code's fee-schedule row — the right home for anything code-specific. Choose the schedule deliberately: omit `schedule` (or pass \"office\") for guidance true for EVERY patient regardless of insurance; pass a carrier's exact name for guidance that applies ONLY when billing that code to that insurance. The code must already exist on that schedule.",
+        parameters: {
+          type: "object",
+          properties: {
+            code: { type: "string", description: 'CDT code, e.g. "D2740".' },
+            note: { type: "string", description: "The guidance, in the office's own words. No patient details." },
+            schedule: {
+              type: "string",
+              description:
+                'Exact fee schedule name for insurance-specific guidance (e.g. "Delta Dental MA", "BCBS"). Omit or "office" for universal guidance.',
+            },
+            mode: {
+              type: "string",
+              enum: ["append", "replace"],
+              description: "append (default) keeps what's there; replace overwrites the whole note.",
+            },
+          },
+          required: ["code", "note"],
         },
       },
     }
@@ -674,6 +909,9 @@ Deno.serve(async (req) => {
       });
     }
     const model = Deno.env.get("OPENROUTER_MODEL") ?? DEFAULT_MODEL;
+    // Contradiction checking is a small, strict classification — a cheaper
+    // model does it well and keeps memory saves fast.
+    const checkerModel = Deno.env.get("OPENROUTER_CHECK_MODEL") ?? DEFAULT_CHECK_MODEL;
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return json({ error: "Missing authorization" }, 401);
@@ -728,12 +966,15 @@ Deno.serve(async (req) => {
     const treatment = bounded(body.context?.treatment, MAX_TREATMENT_CHARS);
 
     // Standing knowledge, all under the caller's JWT so RLS scopes the org.
-    const [memoriesRes, guidanceRes, docsRes, procedureNotes] = await Promise.all([
+    const [memoriesRes, guidanceRes, docsRes, codeNotes, schedulesRes] = await Promise.all([
       supabase
         .from("assistant_memories")
         .select("id, kind, content")
         .eq("org_id", membership.org_id)
         .eq("is_active", true)
+        // Pending facts are contradictions awaiting an owner's decision —
+        // they must never reach a prompt or shape an answer.
+        .eq("status", "active")
         .order("created_at", { ascending: true })
         .limit(MAX_MEMORIES_IN_PROMPT),
       mode === "fof"
@@ -746,7 +987,8 @@ Deno.serve(async (req) => {
             .limit(30)
         : Promise.resolve({ data: [] }),
       supabase.from("office_docs").select("id").limit(200),
-      loadProcedureNotes(supabase),
+      loadCodeNotes(supabase),
+      supabase.from("fee_schedules").select("name, kind").eq("is_active", true).order("sort_order"),
     ]);
     const memories = ((memoriesRes.data ?? []) as { id: string; kind: string; content: string }[]).map(
       (m) => ({ id: m.id, kind: m.kind, content: bounded(m.content, MAX_MEMORY_CHARS) })
@@ -764,7 +1006,11 @@ Deno.serve(async (req) => {
       githubReady,
       memories,
       guidance,
-      procedureNotes,
+      codeNotes,
+      schedules: ((schedulesRes.data ?? []) as { name: string; kind: string }[]).map((s) => ({
+        name: bounded(s.name, 60),
+        kind: bounded(s.kind, 20),
+      })),
       visits,
       treatment,
       docCount: docsRes.data?.length ?? 0,
@@ -785,16 +1031,71 @@ Deno.serve(async (req) => {
           const kind = args?.kind === "site" ? "site" : args?.kind === "office" ? "office" : null;
           const content = boundedText(args?.content, MAX_MEMORY_CHARS);
           if (!kind || !content) return "ERROR: save_memory needs kind ('office'|'site') and content.";
+
+          // A new fact NEVER quietly overwrites an old one. An independent
+          // check (the persuaded model is the wrong judge of its own new
+          // belief) decides whether this clashes with standing memory; a
+          // clash is stored 'pending' — out of every prompt — until an
+          // owner/manager rules on it.
+          const clash = await findContradiction(apiKey, checkerModel, content, memories);
+          const conflictNote = clash
+            ? `New: "${content}" — Existing: "${clash.conflictsWith.content}" — ${clash.explanation}`
+            : "";
           const { data, error } = await supabase
             .from("assistant_memories")
-            .insert({ org_id: membership.org_id, kind, content, created_by: user.id })
+            .insert({
+              org_id: membership.org_id,
+              kind,
+              content,
+              created_by: user.id,
+              status: clash ? "pending" : "active",
+              supersedes_id: clash ? clash.conflictsWith.id : null,
+              conflict_note: conflictNote,
+            })
             .select("id")
             .single();
           if (error) return `ERROR: could not save memory: ${error.message}`;
+          const newId = String(data.id);
+
+          if (clash) {
+            await supabase.from("assistant_audit_findings").insert({
+              org_id: membership.org_id,
+              kind: "memory_contradiction",
+              severity: "high",
+              title: `New fact contradicts what you told me before`,
+              detail: conflictNote,
+              memory_id: newId,
+              fingerprint: fingerprint(["contradiction", clash.conflictsWith.id, content]),
+              suggested_action: {
+                type: "resolve_memory_conflict",
+                pending_id: newId,
+                existing_id: clash.conflictsWith.id,
+              },
+            });
+            actions.push({
+              type: "memory_conflict",
+              summary: `Held for your decision — conflicts with: ${bounded(clash.conflictsWith.content, 70)}`,
+            });
+            return `NOT SAVED AS FACT — CONTRADICTION DETECTED. Held as pending, and it will not be used in any answer until an owner or manager decides. You were previously told: "${clash.conflictsWith.content}". You are now being told: "${content}". Conflict: ${clash.explanation}. Do NOT pick a winner yourself — tell the user both versions plainly and ask which is correct. They can also settle it on the Ask AI → Memory & Audit tab.`;
+          }
+
           // Keep the in-turn list current so a same-turn forget can find it.
-          memories.push({ id: String(data.id), kind, content });
+          memories.push({ id: newId, kind, content });
           actions.push({ type: "memory_saved", summary: `Remembered (${kind}): ${bounded(content, 80)}` });
-          return `Saved ${kind} memory [${String(data.id).slice(0, 8)}]: ${content}`;
+          return `Saved ${kind} memory [${newId.slice(0, 8)}]: ${content}`;
+        }
+        case "save_code_note": {
+          if (!isManager) return "ERROR: only managers can file code notes.";
+          return await saveCodeNote(
+            supabase,
+            {
+              code: bounded(args?.code, 12),
+              note: boundedText(args?.note, 1000),
+              scheduleName: bounded(args?.schedule, 60),
+              mode: args?.mode === "replace" ? "replace" : "append",
+            },
+            actions
+          );
         }
         case "forget_memory": {
           if (!isManager) return "ERROR: only managers can retire memories.";

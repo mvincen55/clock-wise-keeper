@@ -3,10 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
+  AlertTriangle,
+  BookOpen,
   ExternalLink,
   GitCommitHorizontal,
   Loader2,
   MessageCircle,
+  MessageSquare,
   Minus,
   Send,
   Sparkles,
@@ -14,6 +17,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import CodeNotesPanel from '@/components/fof/CodeNotesPanel';
 
 /**
  * Floating FOF assistant (bottom-right), powered by Kimi (via OpenRouter)
@@ -52,30 +56,43 @@ export function ActionChips({ actions }: { actions: AgentAction[] }) {
   if (actions.length === 0) return null;
   return (
     <div className="mt-2 space-y-1">
-      {actions.map((action, i) => (
-        <div
-          key={i}
-          className="flex items-center gap-1.5 rounded-md border border-sky-300 bg-sky-50 px-2 py-1 text-[11px] text-sky-900"
-        >
-          {action.type.startsWith('github') ? (
-            <GitCommitHorizontal className="h-3 w-3 shrink-0" />
-          ) : (
-            <Wrench className="h-3 w-3 shrink-0" />
-          )}
-          <span className="min-w-0 flex-1 truncate">{action.summary}</span>
-          {action.url && (
-            <a
-              href={action.url}
-              target="_blank"
-              rel="noreferrer"
-              className="shrink-0 underline decoration-dotted"
-              aria-label="Open on GitHub"
-            >
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          )}
-        </div>
-      ))}
+      {actions.map((action, i) => {
+        // A conflict isn't an accomplishment — it's a question for the
+        // manager, so it reads as a warning rather than a done-chip.
+        const isConflict = action.type === 'memory_conflict';
+        return (
+          <div
+            key={i}
+            className={
+              isConflict
+                ? 'flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900'
+                : 'flex items-center gap-1.5 rounded-md border border-sky-300 bg-sky-50 px-2 py-1 text-[11px] text-sky-900'
+            }
+          >
+            {isConflict ? (
+              <AlertTriangle className="h-3 w-3 shrink-0" />
+            ) : action.type.startsWith('github') ? (
+              <GitCommitHorizontal className="h-3 w-3 shrink-0" />
+            ) : (
+              <Wrench className="h-3 w-3 shrink-0" />
+            )}
+            <span className="min-w-0 flex-1 truncate" title={action.summary}>
+              {action.summary}
+            </span>
+            {action.url && (
+              <a
+                href={action.url}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 underline decoration-dotted"
+                aria-label="Open on GitHub"
+              >
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -90,6 +107,9 @@ export default function FofAssistantWidget({ context }: Props) {
   // nothing gets saved as a rule while it's off.
   const [training, setTraining] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Managers can flip to the code notes while training, to see everything
+  // already written about the codes.
+  const [view, setView] = useState<'chat' | 'notes'>('chat');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -169,8 +189,23 @@ export default function FofAssistantWidget({ context }: Props) {
                 Q&A
               </Badge>
             )}
+            {isManager && (
+              <button
+                type="button"
+                className="ml-auto rounded p-1 hover:bg-white/15"
+                onClick={() => setView(v => (v === 'chat' ? 'notes' : 'chat'))}
+                title={view === 'chat' ? 'Show what I know about the codes' : 'Back to chat'}
+                aria-label={view === 'chat' ? 'Show code notes' : 'Back to chat'}
+              >
+                {view === 'chat' ? (
+                  <BookOpen className="h-4 w-4" />
+                ) : (
+                  <MessageSquare className="h-4 w-4" />
+                )}
+              </button>
+            )}
             <button
-              className="ml-auto rounded p-1 hover:bg-white/15"
+              className={isManager ? 'rounded p-1 hover:bg-white/15' : 'ml-auto rounded p-1 hover:bg-white/15'}
               onClick={() => setOpen(false)}
               aria-label="Minimize assistant"
             >
@@ -178,6 +213,11 @@ export default function FofAssistantWidget({ context }: Props) {
             </button>
           </div>
 
+          {view === 'notes' ? (
+            <div className="flex-1 overflow-y-auto p-3">
+              <CodeNotesPanel />
+            </div>
+          ) : (
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-3">
             {messages.length === 0 && (
               <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
@@ -219,11 +259,13 @@ export default function FofAssistantWidget({ context }: Props) {
               </div>
             )}
           </div>
+          )}
 
           <div className="flex items-center gap-2 border-t p-2">
             <Input
               value={input}
               autoComplete="off"
+              onFocus={() => setView('chat')}
               placeholder={isManager ? 'Teach me, ask me, or have me build…' : 'Ask a question…'}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => {

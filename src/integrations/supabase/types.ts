@@ -215,8 +215,75 @@ export type Database = {
         }
         Relationships: []
       }
+      assistant_audit_findings: {
+        Row: {
+          created_at: string
+          detail: string
+          fingerprint: string
+          id: string
+          kind: string
+          memory_id: string | null
+          org_id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          status: string
+          suggested_action: Json | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: string
+          fingerprint: string
+          id?: string
+          kind: string
+          memory_id?: string | null
+          org_id: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          status?: string
+          suggested_action?: Json | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          detail?: string
+          fingerprint?: string
+          id?: string
+          kind?: string
+          memory_id?: string | null
+          org_id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          status?: string
+          suggested_action?: Json | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_audit_findings_memory_id_fkey"
+            columns: ["memory_id"]
+            isOneToOne: false
+            referencedRelation: "assistant_memories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assistant_audit_findings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assistant_memories: {
         Row: {
+          conflict_note: string
           content: string
           created_at: string
           created_by: string | null
@@ -224,9 +291,12 @@ export type Database = {
           is_active: boolean
           kind: string
           org_id: string
+          status: string
+          supersedes_id: string | null
           updated_at: string
         }
         Insert: {
+          conflict_note?: string
           content: string
           created_at?: string
           created_by?: string | null
@@ -234,9 +304,12 @@ export type Database = {
           is_active?: boolean
           kind: string
           org_id: string
+          status?: string
+          supersedes_id?: string | null
           updated_at?: string
         }
         Update: {
+          conflict_note?: string
           content?: string
           created_at?: string
           created_by?: string | null
@@ -244,6 +317,8 @@ export type Database = {
           is_active?: boolean
           kind?: string
           org_id?: string
+          status?: string
+          supersedes_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -252,6 +327,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assistant_memories_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "assistant_memories"
             referencedColumns: ["id"]
           },
         ]
