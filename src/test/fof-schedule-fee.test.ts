@@ -97,3 +97,50 @@ describe("an office-fee row produces no write-off", () => {
     expect(result.writeOffCents).toBe(8139);
   });
 });
+
+// A spreadsheet's number column eats everything that is not a digit:
+// Excel stores CDT D0120 as 120. That is how the Altus schedule arrived
+// with 693 codes the FOF could never resolve — and with a few that
+// collided with the office's own custom numeric codes, applying one
+// procedure's allowable to a different procedure entirely.
+
+/** Mirrors cellCode() in FeeImportDialog. */
+const cellCode = (value: string | number | null | undefined, cdtPrefix: boolean): string => {
+  const numeric =
+    typeof value === "number" && isFinite(value) && Number.isInteger(value) && value > 0 && value < 10000;
+  const text =
+    numeric ? String(value).padStart(4, "0") : String(value ?? "").trim().toUpperCase();
+  return cdtPrefix && /^\d{4}$/.test(text) ? `D${text}` : text;
+};
+
+describe("importing a code column that lost its D", () => {
+  it("rebuilds the CDT code from a bare number", () => {
+    expect(cellCode(120, true)).toBe("D0120");
+    expect(cellCode(7140, true)).toBe("D7140");
+    expect(cellCode(9110, true)).toBe("D9110");
+  });
+
+  it("zero-pads even when the D is not wanted", () => {
+    expect(cellCode(120, false)).toBe("0120");
+  });
+
+  it("leaves codes that already carry the D alone", () => {
+    expect(cellCode("D0120", true)).toBe("D0120");
+    expect(cellCode("d7140", true)).toBe("D7140");
+  });
+
+  it("never prefixes a code that is not four digits", () => {
+    // Custom office codes keep their own shape.
+    expect(cellCode("111B", true)).toBe("111B");
+    expect(cellCode("CADCAMSI", true)).toBe("CADCAMSI");
+    expect(cellCode("XX232", true)).toBe("XX232");
+    expect(cellCode(15010, true)).toBe("15010");
+  });
+
+  it("keeps the office's custom numbers distinct from CDT when off", () => {
+    // The collision that made Altus wrong: the office's 9110 is a HIPAA
+    // acknowledgement, CDT D9110 is palliative treatment.
+    expect(cellCode(9110, false)).toBe("9110");
+    expect(cellCode(9110, true)).toBe("D9110");
+  });
+});
