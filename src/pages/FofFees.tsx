@@ -33,6 +33,8 @@ import { ArrowLeft, Copy, Download, FileSpreadsheet, Loader2, Pencil, Plus, Tras
 import FeeImportDialog from '@/components/fof/FeeImportDialog';
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
 import { categorizeCdtCode } from '@/lib/fof/cdt';
+import { friendlyCdtName } from '@/lib/fof/cdt-names';
+import { useCodeKnowledge } from '@/hooks/useAssistantMemory';
 import type { FeeCategory } from '@/lib/fof/insurance';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import {
@@ -86,6 +88,10 @@ function ItemEditorDialog({
 
   const feeCents = parseCurrencyInput(fee);
   const canSave = code.trim() !== '' && feeCents !== null;
+  const patientName = friendlyCdtName(code);
+  // What the assistant already follows for this code, so nothing it has
+  // been taught is invisible from the place you'd look for it.
+  const { data: knowledge } = useCodeKnowledge(code, scheduleId);
 
   return (
     <Dialog open={open} onOpenChange={isOpen => !isOpen && onClose()}>
@@ -128,6 +134,21 @@ function ItemEditorDialog({
               value={description}
               onChange={e => setDescription(e.target.value)}
             />
+            {/* The description is usually practice-management shorthand
+                ("CrnAllCer"); this is the wording a patient actually reads
+                on the printed form. */}
+            {patientName ? (
+              <p className="text-xs text-muted-foreground">
+                Patients see: <span className="font-medium text-foreground">{patientName}</span>
+              </p>
+            ) : (
+              code.trim() !== '' && (
+                <p className="text-xs text-muted-foreground">
+                  No patient-friendly name for this code — the form falls back to the
+                  description above, so keep it readable.
+                </p>
+              )
+            )}
           </div>
           <div className="space-y-1.5">
             <Label>Coverage Category</Label>
@@ -154,6 +175,46 @@ function ItemEditorDialog({
               wording and in Ask AI answers.
             </p>
           </div>
+
+          {(knowledge?.elsewhere.length || knowledge?.wordingRules.length) ? (
+            <div className="space-y-2 rounded-md border bg-muted/40 p-2.5">
+              <p className="text-xs font-semibold">What the AI already follows here</p>
+
+              {(knowledge?.elsewhere ?? []).length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground">
+                    This code also has notes on another schedule:
+                  </p>
+                  {knowledge!.elsewhere.map((note, i) => (
+                    <div key={i} className="rounded border bg-background px-2 py-1">
+                      <Badge variant={note.isUniversal ? 'default' : 'secondary'} className="text-[10px] font-normal">
+                        {note.isUniversal ? 'All patients' : note.scheduleName}
+                      </Badge>
+                      <p className="mt-1 whitespace-pre-wrap text-xs text-foreground/80">{note.notes}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {(knowledge?.wordingRules ?? []).length > 0 && (
+                <div className="space-y-1">
+                  {/* Standing rules are global — taught through the FOF
+                      assistant, not attached to any one code — so say so
+                      rather than implying they were set here. */}
+                  <p className="text-[11px] text-muted-foreground">
+                    Standing wording rules (from training — these apply to every code):
+                  </p>
+                  <ul className="space-y-0.5">
+                    {knowledge!.wordingRules.map((rule, i) => (
+                      <li key={i} className="text-xs text-foreground/80">
+                        • {rule}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>

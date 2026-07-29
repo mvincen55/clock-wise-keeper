@@ -163,6 +163,71 @@ export function useCodeNotes() {
   });
 }
 
+export interface CodeKnowledge {
+  /** Standing FOF wording rules — global, they shape every code's wording. */
+  wordingRules: string[];
+  /** This same code's notes on OTHER schedules, so nothing is invisible. */
+  elsewhere: { scheduleName: string; isUniversal: boolean; notes: string }[];
+}
+
+/**
+ * What the assistant already follows for one code — surfaced while editing
+ * it, so knowledge is never invisible at the place you'd look for it.
+ *
+ * Two sources, because a code's guidance can live in either: standing
+ * wording rules (global, taught through FOF training) and notes on the
+ * same code under a different schedule (e.g. the Delta Dental row while
+ * you're editing the office row).
+ */
+export function useCodeKnowledge(code: string, currentScheduleId: string | null) {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+  const trimmed = code.trim().toUpperCase();
+
+  return useQuery({
+    queryKey: ['code-knowledge', ctx?.org_id, trimmed, currentScheduleId],
+    enabled: !!user && !!ctx && trimmed !== '',
+    queryFn: async (): Promise<CodeKnowledge> => {
+      const [rulesRes, notesRes] = await Promise.all([
+        supabase
+          .from('fof_ai_guidance')
+          .select('content')
+          .eq('is_active', true)
+          .order('created_at'),
+        supabase
+          .from('fee_schedule_items')
+          .select('notes, schedule_id, fee_schedules!inner(name, kind)')
+          .eq('code', trimmed)
+          .neq('notes', ''),
+      ]);
+      if (rulesRes.error) throw rulesRes.error;
+      if (notesRes.error) throw notesRes.error;
+
+      type NoteRow = {
+        notes: string | null;
+        schedule_id: string;
+        fee_schedules: { name: string; kind: string } | { name: string; kind: string }[] | null;
+      };
+      const elsewhere = ((notesRes.data ?? []) as NoteRow[])
+        .filter(row => row.schedule_id !== currentScheduleId)
+        .map(row => {
+          const schedule = Array.isArray(row.fee_schedules) ? row.fee_schedules[0] : row.fee_schedules;
+          return {
+            scheduleName: schedule?.name ?? 'Unnamed schedule',
+            isUniversal: (schedule?.kind ?? 'carrier') === 'office',
+            notes: (row.notes ?? '').trim(),
+          };
+        })
+        .filter(n => n.notes !== '');
+
+      return {
+        wordingRules: (rulesRes.data ?? []).map(r => r.content).filter(Boolean),
+        elsewhere,
+      };
+    },
+  });
+}
+
 /** Accept a pending fact (replacing what it contradicts) or reject it. */
 export function useResolveMemoryConflict() {
   const qc = useQueryClient();
