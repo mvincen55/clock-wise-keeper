@@ -3,6 +3,8 @@ project_id = "lfiplzmxpmybtbzhmnkp"
 [functions]
   [functions.accept-invite]
     verify_jwt = false
+  [functions.assistant-auditor]
+    verify_jwt = true
   [functions.ask-docs]
     verify_jwt = false
   [functions.ingest-doc]
