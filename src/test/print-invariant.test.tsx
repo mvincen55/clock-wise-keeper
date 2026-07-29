@@ -15,6 +15,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import FofPrintSheet from '@/components/fof/FofPrintSheet';
 import DepositPrintSheet from '@/components/DepositPrintSheet';
+import IncidentReportPrintSheet from '@/components/IncidentReportPrintSheet';
 import type {
   FofAmounts,
   FofComputation,
@@ -236,6 +237,66 @@ describe('print invariant — reference output must never change', () => {
     expect(html).toContain('Bay Coast Account #841845805');
     expect(html).toContain('Purple envelope — no tape');
     expect(html).toContain('Harelick Dental Associates, LLC · Daily Deposit Log');
+    expect(html).toMatchSnapshot();
+  });
+
+  it('Incident report sheet renders byte-for-byte identically', () => {
+    // The filed safety record: letterhead with the office logo, the
+    // incident grid, the narrative blocks, the review card, and both
+    // signatures. Any diff here changed what goes in the binder.
+    const report = {
+      id: 'incident-fixture',
+      org_id: 'org',
+      employee_id: 'emp',
+      reported_by: 'user',
+      reported_by_employee_id: 'emp',
+      reported_by_name: 'Megan Vincent',
+      incident_date: '2026-07-27',
+      incident_time: '14:45:00',
+      category: 'sharps_injury',
+      severity: 'moderate',
+      location: 'Operatory 2',
+      description: 'Stuck on an instrument while cleaning up after an extraction.',
+      body_part: 'Left index finger',
+      device_involved: 'Hu-Friedy scaler',
+      ppe_worn: 'yes',
+      witnesses: 'Dr. Harelick',
+      immediate_action: 'Washed with soap and water, reported to the doctor immediately.',
+      medical_treatment: 'first_aid',
+      follow_up_required: true,
+      follow_up_notes: 'Bloodwork scheduled; source evaluation requested.',
+      work_related: true,
+      days_away: 0,
+      status: 'closed',
+      reviewed_by: 'user',
+      reviewed_by_name: 'Megan Vincent',
+      reviewed_at: '2026-07-28T18:00:00Z',
+      review_notes: 'Reviewed with the team; sharps container relocated to the counter.',
+      employee_signature: 'Test Employee',
+      employee_signed_at: '2026-07-28T17:00:00Z',
+      manager_signature: 'Megan Vincent',
+      manager_signed_at: '2026-07-28T21:16:00Z',
+      manager_signed_role: 'owner',
+      countersign_role: 'manager',
+      created_at: '2026-07-28T16:00:00Z',
+      updated_at: '2026-07-28T21:16:00Z',
+    } as never;
+
+    const html = renderToStaticMarkup(
+      <IncidentReportPrintSheet
+        report={report}
+        employeeName="Test Employee"
+        branding={{
+          displayName: 'Harelick Dental Associates',
+          legalName: 'Harelick Dental Associates, LLC',
+          addressLine1: '278 Alden Road',
+          addressLine2: 'Fairhaven, MA 02719',
+          phone: '(508) 993-0515',
+          website: 'drharelick.com',
+          logoUrl: 'https://example.invalid/logo.png',
+        }}
+      />
+    );
     expect(html).toMatchSnapshot();
   });
 });

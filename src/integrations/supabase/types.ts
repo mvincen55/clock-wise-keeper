@@ -873,6 +873,7 @@ export type Database = {
           outside_financing_cents: number
           prepared_by: string | null
           prepared_by_name: string
+          print_snapshot: Json | null
           pt_cc_cents: number
           updated_at: string
         }
@@ -889,6 +890,7 @@ export type Database = {
           outside_financing_cents?: number
           prepared_by?: string | null
           prepared_by_name?: string
+          print_snapshot?: Json | null
           pt_cc_cents?: number
           updated_at?: string
         }
@@ -905,6 +907,7 @@ export type Database = {
           outside_financing_cents?: number
           prepared_by?: string | null
           prepared_by_name?: string
+          print_snapshot?: Json | null
           pt_cc_cents?: number
           updated_at?: string
         }
@@ -1060,6 +1063,7 @@ export type Database = {
           description: string
           fee_cents: number
           id: string
+          is_office_fee: boolean
           notes: string
           org_id: string
           schedule_id: string
@@ -1072,6 +1076,7 @@ export type Database = {
           description?: string
           fee_cents?: number
           id?: string
+          is_office_fee?: boolean
           notes?: string
           org_id: string
           schedule_id: string
@@ -1084,6 +1089,7 @@ export type Database = {
           description?: string
           fee_cents?: number
           id?: string
+          is_office_fee?: boolean
           notes?: string
           org_id?: string
           schedule_id?: string
@@ -1188,6 +1194,82 @@ export type Database = {
           },
         ]
       }
+      fof_code_rules: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          kind: string
+          org_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          kind: string
+          org_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fof_code_rules_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fof_discount_rules: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          extra_percent: number
+          id: string
+          org_id: string
+          percent: number
+          rule_key: string
+          threshold_cents: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          extra_percent?: number
+          id?: string
+          org_id: string
+          percent?: number
+          rule_key: string
+          threshold_cents?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          extra_percent?: number
+          id?: string
+          org_id?: string
+          percent?: number
+          rule_key?: string
+          threshold_cents?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fof_discount_rules_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fof_procedure_bundles: {
         Row: {
           codes: Json
@@ -1231,11 +1313,18 @@ export type Database = {
           address_line1: string
           address_line2: string
           created_at: string
+          day_of_service_threshold_cents: number
           doctor_name: string
+          doctor_names: Json
+          downgrade_default_on: boolean
+          feature_display_name: string
           id: string
+          membership_plan_name: string
+          min_standalone_payment_cents: number
           org_id: string
           phone: string
           practice_name: string
+          print_form_title: string
           updated_at: string
           website: string
         }
@@ -1243,11 +1332,18 @@ export type Database = {
           address_line1?: string
           address_line2?: string
           created_at?: string
+          day_of_service_threshold_cents?: number
           doctor_name?: string
+          doctor_names?: Json
+          downgrade_default_on?: boolean
+          feature_display_name?: string
           id?: string
+          membership_plan_name?: string
+          min_standalone_payment_cents?: number
           org_id: string
           phone?: string
           practice_name?: string
+          print_form_title?: string
           updated_at?: string
           website?: string
         }
@@ -1255,11 +1351,18 @@ export type Database = {
           address_line1?: string
           address_line2?: string
           created_at?: string
+          day_of_service_threshold_cents?: number
           doctor_name?: string
+          doctor_names?: Json
+          downgrade_default_on?: boolean
+          feature_display_name?: string
           id?: string
+          membership_plan_name?: string
+          min_standalone_payment_cents?: number
           org_id?: string
           phone?: string
           practice_name?: string
+          print_form_title?: string
           updated_at?: string
           website?: string
         }
@@ -1543,6 +1646,148 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      incident_reports: {
+        Row: {
+          body_part: string
+          category: string
+          countersign_role: string
+          created_at: string
+          days_away: number
+          description: string
+          device_involved: string
+          employee_id: string
+          employee_signature: string
+          employee_signed_at: string | null
+          employee_signed_by: string | null
+          follow_up_notes: string
+          follow_up_required: boolean
+          id: string
+          immediate_action: string
+          incident_date: string
+          incident_time: string | null
+          location: string
+          manager_signature: string
+          manager_signed_at: string | null
+          manager_signed_by: string | null
+          manager_signed_role: string
+          medical_treatment: string
+          org_id: string
+          ppe_worn: string
+          reported_by: string
+          reported_by_employee_id: string | null
+          reported_by_name: string
+          review_notes: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_by_name: string
+          severity: string
+          status: string
+          updated_at: string
+          witnesses: string
+          work_related: boolean
+        }
+        Insert: {
+          body_part?: string
+          category?: string
+          countersign_role?: string
+          created_at?: string
+          days_away?: number
+          description: string
+          device_involved?: string
+          employee_id: string
+          employee_signature?: string
+          employee_signed_at?: string | null
+          employee_signed_by?: string | null
+          follow_up_notes?: string
+          follow_up_required?: boolean
+          id?: string
+          immediate_action?: string
+          incident_date: string
+          incident_time?: string | null
+          location?: string
+          manager_signature?: string
+          manager_signed_at?: string | null
+          manager_signed_by?: string | null
+          manager_signed_role?: string
+          medical_treatment?: string
+          org_id: string
+          ppe_worn?: string
+          reported_by: string
+          reported_by_employee_id?: string | null
+          reported_by_name?: string
+          review_notes?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_by_name?: string
+          severity?: string
+          status?: string
+          updated_at?: string
+          witnesses?: string
+          work_related?: boolean
+        }
+        Update: {
+          body_part?: string
+          category?: string
+          countersign_role?: string
+          created_at?: string
+          days_away?: number
+          description?: string
+          device_involved?: string
+          employee_id?: string
+          employee_signature?: string
+          employee_signed_at?: string | null
+          employee_signed_by?: string | null
+          follow_up_notes?: string
+          follow_up_required?: boolean
+          id?: string
+          immediate_action?: string
+          incident_date?: string
+          incident_time?: string | null
+          location?: string
+          manager_signature?: string
+          manager_signed_at?: string | null
+          manager_signed_by?: string | null
+          manager_signed_role?: string
+          medical_treatment?: string
+          org_id?: string
+          ppe_worn?: string
+          reported_by?: string
+          reported_by_employee_id?: string | null
+          reported_by_name?: string
+          review_notes?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_by_name?: string
+          severity?: string
+          status?: string
+          updated_at?: string
+          witnesses?: string
+          work_related?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "incident_reports_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "incident_reports_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "incident_reports_reported_by_employee_id_fkey"
+            columns: ["reported_by_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]
@@ -1889,47 +2134,6 @@ export type Database = {
           },
         ]
       }
-      org_invites: {
-        Row: {
-          accepted_at: string | null
-          created_at: string
-          email: string
-          expires_at: string
-          id: string
-          org_id: string
-          role: Database["public"]["Enums"]["app_org_role"]
-          token: string
-        }
-        Insert: {
-          accepted_at?: string | null
-          created_at?: string
-          email: string
-          expires_at?: string
-          id?: string
-          org_id: string
-          role?: Database["public"]["Enums"]["app_org_role"]
-          token?: string
-        }
-        Update: {
-          accepted_at?: string | null
-          created_at?: string
-          email?: string
-          expires_at?: string
-          id?: string
-          org_id?: string
-          role?: Database["public"]["Enums"]["app_org_role"]
-          token?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "org_invites_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "orgs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       org_branding: {
         Row: {
           address_line1: string
@@ -2034,6 +2238,47 @@ export type Database = {
             foreignKeyName: "org_deposit_settings_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_invites: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          org_id: string
+          role: Database["public"]["Enums"]["app_org_role"]
+          token: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          org_id: string
+          role?: Database["public"]["Enums"]["app_org_role"]
+          token?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          org_id?: string
+          role?: Database["public"]["Enums"]["app_org_role"]
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_invites_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
             referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
@@ -2222,6 +2467,53 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      pto_accrual_tiers: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          max_years: number
+          min_years: number
+          org_id: string
+          rate: number
+          sort_order: number
+          updated_at: string
+          weekly_cap: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label?: string
+          max_years: number
+          min_years: number
+          org_id: string
+          rate: number
+          sort_order?: number
+          updated_at?: string
+          weekly_cap: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          max_years?: number
+          min_years?: number
+          org_id?: string
+          rate?: number
+          sort_order?: number
+          updated_at?: string
+          weekly_cap?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pto_accrual_tiers_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pto_ledger_weeks: {
         Row: {
@@ -3251,6 +3543,54 @@ export type Database = {
         Returns: undefined
       }
       can_access_employee: { Args: { _employee_id: string }; Returns: boolean }
+      countersign_incident_report: {
+        Args: { _report_id: string; _typed_name: string }
+        Returns: {
+          body_part: string
+          category: string
+          countersign_role: string
+          created_at: string
+          days_away: number
+          description: string
+          device_involved: string
+          employee_id: string
+          employee_signature: string
+          employee_signed_at: string | null
+          employee_signed_by: string | null
+          follow_up_notes: string
+          follow_up_required: boolean
+          id: string
+          immediate_action: string
+          incident_date: string
+          incident_time: string | null
+          location: string
+          manager_signature: string
+          manager_signed_at: string | null
+          manager_signed_by: string | null
+          manager_signed_role: string
+          medical_treatment: string
+          org_id: string
+          ppe_worn: string
+          reported_by: string
+          reported_by_employee_id: string | null
+          reported_by_name: string
+          review_notes: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_by_name: string
+          severity: string
+          status: string
+          updated_at: string
+          witnesses: string
+          work_related: boolean
+        }
+        SetofOptions: {
+          from: "*"
+          to: "incident_reports"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -3286,6 +3626,10 @@ export type Database = {
         }[]
       }
       get_user_timezone: { Args: { p_user_id: string }; Returns: string }
+      incident_countersign_role: {
+        Args: { _employee_id: string }
+        Returns: string
+      }
       is_allowed_user: { Args: never; Returns: boolean }
       is_org_admin: { Args: { _org_id: string }; Returns: boolean }
       is_org_member: { Args: { _org_id: string }; Returns: boolean }
@@ -3320,6 +3664,54 @@ export type Database = {
           rank: number
           title: string
         }[]
+      }
+      sign_incident_report_employee: {
+        Args: { _report_id: string; _typed_name: string }
+        Returns: {
+          body_part: string
+          category: string
+          countersign_role: string
+          created_at: string
+          days_away: number
+          description: string
+          device_involved: string
+          employee_id: string
+          employee_signature: string
+          employee_signed_at: string | null
+          employee_signed_by: string | null
+          follow_up_notes: string
+          follow_up_required: boolean
+          id: string
+          immediate_action: string
+          incident_date: string
+          incident_time: string | null
+          location: string
+          manager_signature: string
+          manager_signed_at: string | null
+          manager_signed_by: string | null
+          manager_signed_role: string
+          medical_treatment: string
+          org_id: string
+          ppe_worn: string
+          reported_by: string
+          reported_by_employee_id: string | null
+          reported_by_name: string
+          review_notes: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_by_name: string
+          severity: string
+          status: string
+          updated_at: string
+          witnesses: string
+          work_related: boolean
+        }
+        SetofOptions: {
+          from: "*"
+          to: "incident_reports"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       sweep_attendance: { Args: { p_days?: number }; Returns: string }
       user_owns_import: { Args: { _import_id: string }; Returns: boolean }

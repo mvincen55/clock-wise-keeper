@@ -30,6 +30,13 @@ export interface FeeScheduleItem {
   description: string;
   feeCents: Cents;
   category: FeeCategory;
+  /**
+   * Carrier schedules only: this row is the office's own fee, not a rate
+   * the carrier negotiated (Dentrix prints those with a trailing '*').
+   * The FOF treats it as "no allowable" so the estimate follows the
+   * current office fee instead of a copy that goes stale.
+   */
+  isOfficeFee: boolean;
   /** Wording & policy notes for the team and the AI (FOF + Ask AI). */
   notes: string;
 }
@@ -65,6 +72,7 @@ function mapItem(row: Tables<'fee_schedule_items'>): FeeScheduleItem {
     description: row.description,
     feeCents: row.fee_cents,
     category: (row.category as FeeCategory) ?? 'other',
+    isOfficeFee: row.is_office_fee ?? false,
     notes: row.notes ?? '',
   };
 }
@@ -190,6 +198,8 @@ export interface ImportRow {
   description: string;
   feeCents: Cents;
   category?: FeeCategory;
+  /** Fee carried a trailing '*': the office fee, not a contracted rate. */
+  isOfficeFee?: boolean;
 }
 
 /** Bulk upsert of imported/edited rows into a schedule (matched on code). */
@@ -208,6 +218,7 @@ export function useImportFeeScheduleItems() {
         description: row.description,
         fee_cents: row.feeCents,
         category: row.category ?? 'other',
+        is_office_fee: row.isOfficeFee ?? false,
       }));
       // Chunk inserts to stay under request limits on big schedules.
       for (let i = 0; i < payload.length; i += 500) {
@@ -238,6 +249,9 @@ export function useUpsertFeeScheduleItem() {
           description: item.description ?? '',
           fee_cents: item.feeCents ?? 0,
           category: item.category ?? 'other',
+          // Conditional like notes: editing a fee by hand must not clear
+          // the office-fee marker that came in from the import.
+          ...(item.isOfficeFee !== undefined ? { is_office_fee: item.isOfficeFee } : {}),
           ...(item.notes !== undefined ? { notes: item.notes } : {}),
         },
         { onConflict: 'schedule_id,code' }

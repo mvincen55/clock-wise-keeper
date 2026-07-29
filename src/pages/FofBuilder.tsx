@@ -11,7 +11,7 @@
  * network. Keep it that way — the practice has no BAA covering patient
  * data in this app.
  */
-import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -77,6 +77,7 @@ import {
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { computeFof } from '@/lib/fof/compute';
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
+import { resolveImportedFee } from '@/lib/fof/import-fee';
 import {
   estimateInsurance,
   type FeeCategory,
@@ -98,6 +99,7 @@ import {
 } from '@/lib/fof/visits';
 import { DEFAULT_PRACTICE_INFO } from '@/lib/fof/defaults';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
+import ScaledPrintPreview from '@/components/ScaledPrintPreview';
 import { useOrgBranding } from '@/hooks/useOrgBranding';
 import type { Cents, FofAmounts, FofOverrides, FofTemplate } from '@/lib/fof/types';
 
@@ -363,44 +365,6 @@ function parseOverride(input: string): Cents | undefined {
   return parseCurrencyInput(input) ?? undefined;
 }
 
-/** Scales the fixed-width print sheet to fit its container. */
-function ScaledPreview({ children }: { children: React.ReactNode }) {
-  const outerRef = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
-  const [layout, setLayout] = useState({ scale: 1, height: 0 });
-
-  useLayoutEffect(() => {
-    const outer = outerRef.current;
-    const inner = innerRef.current;
-    if (!outer || !inner) return;
-    const update = () => {
-      const available = outer.clientWidth;
-      const natural = inner.scrollWidth;
-      const scale = natural > 0 ? Math.min(1, available / natural) : 1;
-      setLayout({ scale, height: inner.scrollHeight * scale });
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(outer);
-    observer.observe(inner);
-    return () => observer.disconnect();
-  }, []);
-
-  return (
-    <div ref={outerRef} className="w-full overflow-hidden">
-      <div style={{ height: layout.height || undefined }}>
-        <div
-          ref={innerRef}
-          style={{ transform: `scale(${layout.scale})`, transformOrigin: 'top left', width: 'fit-content' }}
-          className="border shadow-sm"
-        >
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 interface SectionHeaderProps {
   title: string;
   open: boolean;
@@ -549,12 +513,22 @@ export default function FofBuilder() {
 
   const allowedByCode = useMemo(() => {
     const map = new Map<string, Cents>();
-    for (const item of carrierItems ?? []) map.set(item.code.toUpperCase(), item.feeCents);
+    for (const item of carrierItems ?? []) {
+      // A row marked as the office fee is not a rate the carrier agreed
+      // to, so it is not an allowable. Leaving it out lets the estimate
+      // fall back to the CURRENT office fee (allowedCents ?? officeFee in
+      // lib/fof/insurance.ts) and keeps the write-off at zero, instead of
+      // inventing one the day the office raises that fee.
+      if (item.isOfficeFee) continue;
+      map.set(item.code.toUpperCase(), item.feeCents);
+    }
     return map;
   }, [carrierItems]);
 
   const payByCode = useMemo(() => {
     const map = new Map<string, Cents>();
+    // Unlike the allowable map, a missing entry here means a benefit basis
+    // of 0, not the office fee — so office-fee rows keep their number.
     for (const item of payItems ?? []) map.set(item.code.toUpperCase(), item.feeCents);
     return map;
   }, [payItems]);
@@ -1296,47 +1270,49 @@ export default function FofBuilder() {
         .map(r => r.visit)
         .filter((v): v is number => typeof v === 'number' && isFinite(v));
       const minVisit = visitNumbers.length > 0 ? Math.min(...visitNumbers) : null;
-      let flagged = 0;
+      let differed = 0;
+      let unpriced = 0;
       const lines = rows.map(r => {
         const base = lineFromCode(r.code);
         const code = r.code.trim().toUpperCase();
-        const contractedFee = r.fee !== null ? Math.round(r.fee * 100) : null;
-        const pmsOfficeFee = r.officeFee !== null ? Math.round(r.officeFee * 100) : null;
-        const onFileFee = officeByCode.get(code)?.feeCents ?? null;
-        // The PMS OFFICE column is the office's current fee — it wins.
-        // Our schedule fee backs it up, and the contracted "Fee" column is
-        // only a last resort. Disagreements with our schedule get flagged.
-        let feeFlag = '';
-        if (pmsOfficeFee !== null && onFileFee !== null && pmsOfficeFee !== onFileFee) {
-          feeFlag = `PMS office fee ${formatCents(pmsOfficeFee)} differs from our fee schedule ${formatCents(onFileFee)} — using the PMS office fee`;
-        } else if (
-          pmsOfficeFee === null &&
-          contractedFee !== null &&
-          onFileFee !== null &&
-          contractedFee !== onFileFee
-        ) {
-          feeFlag = `PMS shows ${formatCents(contractedFee)} — using our office fee ${formatCents(onFileFee)}`;
-        }
-        if (feeFlag) flagged++;
-        const fee = pmsOfficeFee ?? onFileFee ?? contractedFee;
+        // OFFICE column → our own fee schedule → the plain "Fee" column,
+        // which may be a carrier's contracted rate. See resolveImportedFee.
+        const resolved = resolveImportedFee({
+          code,
+          pmsOfficeFeeCents: r.officeFee !== null ? Math.round(r.officeFee * 100) : null,
+          onFileFeeCents: officeByCode.get(code)?.feeCents ?? null,
+          contractedFeeCents: r.fee !== null ? Math.round(r.fee * 100) : null,
+        });
+        if (resolved.unpriced) unpriced++;
+        else if (resolved.flag) differed++;
         return {
           ...base,
           tooth: r.tooth,
           description: base.description || r.description,
-          feeInput: fee !== null ? formatCents(fee) : base.feeInput,
+          feeInput:
+            resolved.feeCents !== null ? formatCents(resolved.feeCents) : base.feeInput,
           entryDate: r.entryDate,
           visit:
             r.visit !== null && minVisit !== null ? String(r.visit - minVisit + 1) : base.visit,
-          feeFlag,
+          feeFlag: resolved.flag,
         };
       });
       dispatch({ type: 'addLines', lines });
       dispatch({ type: 'set', field: 'importUsed', value: 'yes' });
-      toast.success(
-        `Imported ${lines.length} procedure${lines.length === 1 ? '' : 's'}${
-          flagged ? ` — ${flagged} fee difference${flagged === 1 ? '' : 's'} flagged` : ''
-        }. Estimates come from your fee schedules, not the screenshot.`
-      );
+      const notes: string[] = [];
+      if (differed > 0) {
+        notes.push(`${differed} fee difference${differed === 1 ? '' : 's'} flagged`);
+      }
+      if (unpriced > 0) {
+        notes.push(`${unpriced} with no office fee on file`);
+      }
+      const summary = `Imported ${lines.length} procedure${lines.length === 1 ? '' : 's'}${
+        notes.length ? ` — ${notes.join(', ')}` : ''
+      }. Estimates come from your fee schedules, not the screenshot.`;
+      // A row priced off the screenshot needs a look before it prints, so
+      // it does not get a green tick.
+      if (unpriced > 0) toast.warning(summary);
+      else toast.success(summary);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Screenshot import failed');
     } finally {
@@ -2456,7 +2432,7 @@ export default function FofBuilder() {
               <CardTitle className="text-base">Print Preview</CardTitle>
             </CardHeader>
             <CardContent>
-              <ScaledPreview>{sheet}</ScaledPreview>
+              <ScaledPrintPreview>{sheet}</ScaledPrintPreview>
             </CardContent>
           </Card>
         </div>

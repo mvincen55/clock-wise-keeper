@@ -155,6 +155,246 @@
   display: none;
 }
 
+/* Printable Incident Report — one letter page for the safety binder and
+   the OSHA sharps log. Hidden on screen; shown only when printing from an
+   open report. Same document language as the deposit sheet. */
+.incident-print-root {
+  display: none;
+}
+
+@page incident {
+  size: letter;
+  margin: 0.5in;
+}
+
+.inc-sheet {
+  --inc-navy: #53406e; /* brand accent default; org_branding overrides */
+  --inc-ink: #2b2733;
+  --inc-muted: #6b6577;
+  --inc-line: #d5cfe0;
+  --inc-tint: #f3f0f8;
+  page: incident;
+  width: 7.5in;
+  min-height: 10in;
+  display: flex;
+  flex-direction: column;
+  margin: 0 auto;
+  background: white;
+  color: var(--inc-ink);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 9.5pt;
+  line-height: 1.4;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+/* Letterhead built like the FOF's: the logo carries the page, the
+   document's own facts sit opposite it, over a brand rule. */
+.inc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16pt;
+  padding-bottom: 8pt;
+  border-bottom: 1.25pt solid var(--inc-navy);
+  margin-bottom: 10pt;
+}
+
+.inc-logo {
+  display: block;
+  height: 1.3in;
+  width: auto;
+}
+
+/* Fallback when the org has no logo on file. */
+.inc-practice {
+  font-size: 15pt;
+  font-weight: 700;
+  color: var(--inc-navy);
+}
+
+.inc-head-meta {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 3pt;
+}
+
+.inc-title {
+  font-size: 15pt;
+  font-weight: 700;
+  letter-spacing: 0.5pt;
+  color: var(--inc-navy);
+  margin-bottom: 1pt;
+}
+
+.inc-meta-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 5pt;
+}
+
+.inc-meta-key {
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--inc-muted);
+}
+
+.inc-meta-value {
+  font-size: 10pt;
+  font-weight: 700;
+}
+
+.inc-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8pt 14pt;
+  margin-bottom: 12pt;
+}
+
+.inc-grid-tight {
+  grid-template-columns: repeat(2, 1fr);
+  margin-bottom: 6pt;
+}
+
+.inc-field {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 0.5pt solid var(--inc-line);
+  padding-bottom: 3pt;
+}
+
+.inc-field-label {
+  font-size: 7pt;
+  text-transform: uppercase;
+  letter-spacing: 0.5pt;
+  color: var(--inc-muted);
+}
+
+.inc-field-value {
+  font-size: 9.5pt;
+}
+
+/* The narrative blocks absorb whatever height is left over, so a short
+   report reads as a form with room to write rather than a paragraph
+   followed by a void. Long content simply fills them instead. */
+.inc-block {
+  margin-bottom: 10pt;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.inc-block-label {
+  font-size: 7.5pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5pt;
+  color: var(--inc-navy);
+  margin-bottom: 3pt;
+}
+
+.inc-block-value {
+  white-space: pre-wrap;
+  border-bottom: 0.5pt solid var(--inc-line);
+  padding-bottom: 4pt;
+  min-height: 22pt;
+  flex: 1;
+}
+
+.inc-review {
+  background: var(--inc-tint);
+  border: 0.5pt solid var(--inc-line);
+  border-radius: 3pt;
+  padding: 8pt 10pt;
+  margin-bottom: 14pt;
+}
+
+/* Inside the review card the blocks are plain text again — they must
+   not grow, or the card would swallow the page. */
+.inc-review .inc-block-value {
+  border-bottom: none;
+  min-height: 18pt;
+  flex: 0 0 auto;
+}
+
+.inc-review .inc-block {
+  flex: 0 0 auto;
+}
+
+.inc-signatures {
+  display: flex;
+  gap: 0.5in;
+  margin-top: auto;
+  padding-top: 24pt;
+}
+
+.inc-sign {
+  flex: 1;
+}
+
+.inc-sign-line {
+  border-bottom: 0.75pt solid var(--inc-ink);
+  height: 22pt;
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: 2pt;
+}
+
+/* A typed signature sits on the rule the way an ink one would. */
+.inc-sign-name {
+  font-family: 'Snell Roundhand', 'Apple Chancery', 'Segoe Script', cursive;
+  font-size: 14pt;
+  line-height: 1;
+  color: var(--inc-ink);
+}
+
+.inc-sign-label {
+  font-size: 7.5pt;
+  color: var(--inc-muted);
+  margin-top: 3pt;
+}
+
+.inc-sign-meta {
+  font-size: 6.5pt;
+  color: var(--inc-muted);
+  margin-top: 1pt;
+}
+
+.inc-foot {
+  font-size: 7pt;
+  color: var(--inc-muted);
+  text-align: center;
+  margin-top: 10pt;
+  padding-top: 6pt;
+  padding-bottom: 6pt;
+  border-top: 0.5pt solid var(--inc-line);
+}
+
+/* Same brand band that anchors the FOF. Last flex child, so it lands at
+   the bottom of the page without swallowing the leftover space. */
+.inc-footer {
+  padding: 4.5pt 10pt;
+  border-radius: 5pt;
+  background: var(--inc-navy);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12pt;
+  font-size: 7pt;
+  letter-spacing: 0.02em;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.inc-footer-item {
+  white-space: nowrap;
+}
+
 @page deposit {
   size: letter;
   margin: 0.45in;
@@ -1348,21 +1588,21 @@
     font-size: 11pt;
   }
 
-  /* When the FOF builder is printing, show only the portaled sheet. */
-  body:has(.fof-print-root) #root {
+  /* Printing shows the portaled sheet and nothing else.
+     Hiding #root is not enough: Radix dialogs, popovers, and toasts
+     portal to <body> as SIBLINGS of #root, so a sheet printed from an
+     open dialog printed the dialog too — its scroll container, its
+     buttons, and the on-screen ScaledPrintPreview copy of the very same
+     sheet. Hiding every body child except the print root covers both. */
+  body:has(.fof-print-root) > *:not(.fof-print-root),
+  body:has(.deposit-print-root) > *:not(.deposit-print-root),
+  body:has(.incident-print-root) > *:not(.incident-print-root) {
     display: none !important;
   }
 
-  .fof-print-root {
-    display: block !important;
-  }
-
-  /* Same for the Deposit Log's two printed copies. */
-  body:has(.deposit-print-root) #root {
-    display: none !important;
-  }
-
-  .deposit-print-root {
+  .fof-print-root,
+  .deposit-print-root,
+  .incident-print-root {
     display: block !important;
   }
 

@@ -22,6 +22,31 @@ export function formatCents(cents: Cents): string {
   return CURRENCY_FORMAT.format(cents / 100);
 }
 
+export interface ScheduleFee {
+  cents: Cents;
+  /**
+   * True when the spreadsheet marked this fee with a trailing asterisk.
+   * On a carrier schedule Dentrix writes "520.00*" to say there is no
+   * negotiated fee for the code and the number shown is the office's own
+   * fee — not something the carrier agreed to.
+   */
+  isOfficeFee: boolean;
+}
+
+/**
+ * Parse a fee cell from a fee-schedule export, keeping the asterisk that
+ * marks an office fee. Returns null for anything that is not an amount,
+ * the same as parseCurrencyInput — which deliberately rejects the
+ * asterisk, since a person typing a fee should never include one.
+ */
+export function parseScheduleFee(input: string): ScheduleFee | null {
+  const trimmed = input.trim();
+  const isOfficeFee = trimmed.endsWith('*');
+  const cents = parseCurrencyInput(isOfficeFee ? trimmed.slice(0, -1) : trimmed);
+  if (cents === null) return null;
+  return { cents, isOfficeFee };
+}
+
 export function percentOfCents(cents: Cents, percent: number): Cents {
   return Math.round((cents * percent) / 100);
 }
