@@ -2,15 +2,27 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, MessageCircle, Minus, Send, Sparkles } from 'lucide-react';
+import {
+  ExternalLink,
+  GitCommitHorizontal,
+  Loader2,
+  MessageCircle,
+  Minus,
+  Send,
+  Sparkles,
+  Wrench,
+} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
 
 /**
- * Floating FOF assistant (bottom-right). Managers train the AI's
- * treatment wording as they chat — stated preferences become standing
- * rules every future form follows. Team members can ask questions, but
- * nothing they say is saved or trains anything.
+ * Floating FOF assistant (bottom-right), powered by Kimi (via OpenRouter)
+ * through the kimi-agent edge function. Managers train the AI's treatment
+ * wording as they chat — stated preferences become standing rules every
+ * future form follows — and can also ask it to remember office/site facts
+ * or make code changes to the app itself (committed to GitHub, where
+ * Lovable syncs them). Team members can ask questions, but nothing they
+ * say is saved or trains anything.
  *
  * HIPAA boundary: the request carries ONLY the de-identified context
  * passed in (code-derived procedure wording + AI-generated treatment
@@ -18,14 +30,54 @@ import { useOrgContext } from '@/hooks/useOrgContext';
  * included, and chat history lives in component memory only.
  */
 
+export interface AgentAction {
+  type: string;
+  summary: string;
+  url?: string;
+}
+
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
-  savedRule?: string;
+  savedRules?: string[];
+  actions?: AgentAction[];
 }
 
 interface Props {
   context: { visits: { procedures: string[] }[]; treatment: string } | null;
+}
+
+/** Chips for what the assistant actually did this turn (saves, commits, PRs). */
+export function ActionChips({ actions }: { actions: AgentAction[] }) {
+  if (actions.length === 0) return null;
+  return (
+    <div className="mt-2 space-y-1">
+      {actions.map((action, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-1.5 rounded-md border border-sky-300 bg-sky-50 px-2 py-1 text-[11px] text-sky-900"
+        >
+          {action.type.startsWith('github') ? (
+            <GitCommitHorizontal className="h-3 w-3 shrink-0" />
+          ) : (
+            <Wrench className="h-3 w-3 shrink-0" />
+          )}
+          <span className="min-w-0 flex-1 truncate">{action.summary}</span>
+          {action.url && (
+            <a
+              href={action.url}
+              target="_blank"
+              rel="noreferrer"
+              className="shrink-0 underline decoration-dotted"
+              aria-label="Open on GitHub"
+            >
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export default function FofAssistantWidget({ context }: Props) {
@@ -52,24 +104,35 @@ export default function FofAssistantWidget({ context }: Props) {
     setInput('');
     setBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke('fof-assistant', {
+      const { data, error } = await supabase.functions.invoke('kimi-agent', {
         body: {
+          mode: 'fof',
           messages: next.slice(-10).map(m => ({ role: m.role, content: m.content })),
           context: context ?? undefined,
           trainingEnabled: training,
         },
       });
       if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
       const reply: string = data?.reply ?? '';
       if (!reply) throw new Error('No reply');
       setMessages(m => [
         ...m,
-        { role: 'assistant', content: reply, savedRule: data?.savedRule ?? undefined },
+        {
+          role: 'assistant',
+          content: reply,
+          savedRules: Array.isArray(data?.savedRules) ? data.savedRules : undefined,
+          actions: Array.isArray(data?.actions) ? data.actions : undefined,
+        },
       ]);
-    } catch {
+    } catch (err) {
+      const detail = err instanceof Error && err.message !== 'No reply' ? ` (${err.message})` : '';
       setMessages(m => [
         ...m,
-        { role: 'assistant', content: "Sorry — I couldn't reach the assistant. Try again in a moment." },
+        {
+          role: 'assistant',
+          content: `Sorry — I couldn't reach the assistant. Try again in a moment.${detail}`,
+        },
       ]);
     } finally {
       setBusy(false);
@@ -120,8 +183,8 @@ export default function FofAssistantWidget({ context }: Props) {
               <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
                 {isManager
                   ? training
-                    ? 'Discuss the treatment wording or ask about the form. When you state a preference ("never say X — say Y"), I save it as a standing rule every future form follows. Click "Training mode" above to pause saving.'
-                    : 'Training is paused — I\'ll answer questions but save nothing. Click "Training off" above to resume.'
+                    ? 'Discuss the treatment wording or ask about the form — when you state a preference ("never say X — say Y"), I save it as a standing rule. I can also remember office facts and, if you ask, change the app itself (code goes to GitHub and Lovable picks it up). Click "Training mode" above to pause rule-saving.'
+                    : 'Training is paused — I\'ll answer questions but save no wording rules. Click "Training off" above to resume. Memory and build requests still work.'
                   : 'Ask me anything about this form, the payment schedule, or office policy. Wording preferences need a manager.'}
                 <div className="mt-2 font-medium text-foreground/70">
                   Never include patient names — I only see the procedures, not the patient.
@@ -138,11 +201,15 @@ export default function FofAssistantWidget({ context }: Props) {
                   }
                 >
                   <div className="whitespace-pre-wrap">{m.content}</div>
-                  {m.savedRule && (
-                    <div className="mt-2 rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-800">
-                      ✓ Saved wording rule: {m.savedRule}
+                  {(m.savedRules ?? []).map((rule, j) => (
+                    <div
+                      key={j}
+                      className="mt-2 rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-800"
+                    >
+                      ✓ Saved wording rule: {rule}
                     </div>
-                  )}
+                  ))}
+                  <ActionChips actions={m.actions ?? []} />
                 </div>
               </div>
             ))}
@@ -157,7 +224,7 @@ export default function FofAssistantWidget({ context }: Props) {
             <Input
               value={input}
               autoComplete="off"
-              placeholder={isManager ? 'Teach me or ask me anything…' : 'Ask a question…'}
+              placeholder={isManager ? 'Teach me, ask me, or have me build…' : 'Ask a question…'}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey) {

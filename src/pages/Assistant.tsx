@@ -1,9 +1,11 @@
 /**
- * Ask AI — chat over the office knowledge base (policies, HR info,
- * insurance handbooks). Answers come from an edge function that retrieves
- * matching document excerpts and cites its sources. Conversation lives in
- * memory only. The knowledge base is for internal business documents —
- * the UI reminds staff not to upload patient records.
+ * Ask AI — chat with Kimi (via OpenRouter) over the office knowledge base
+ * (policies, HR info, insurance handbooks) and the assistant's standing
+ * memory. Answers cite the documents they came from. Managers can also
+ * have it remember office/site facts and build on the app itself — code
+ * changes are committed to GitHub, where Lovable syncs them into the app.
+ * Conversation lives in memory only. The knowledge base is for internal
+ * business documents — the UI reminds staff not to upload patient records.
  */
 import { useRef, useState } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -48,6 +50,7 @@ import {
   type OfficeDoc,
   type OfficeDocCategory,
 } from '@/hooks/useOfficeDocs';
+import { ActionChips } from '@/components/fof/FofAssistantWidget';
 import { useOrgContext } from '@/hooks/useOrgContext';
 
 const SUGGESTED_QUESTIONS = [
@@ -61,6 +64,8 @@ function ChatPanel() {
   const [input, setInput] = useState('');
   const ask = useAskDocs();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { data: ctx } = useOrgContext();
+  const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
   const send = (question: string) => {
     const trimmed = question.trim();
@@ -74,7 +79,12 @@ function ChatPanel() {
         onSuccess: result => {
           setMessages(prev => [
             ...prev,
-            { role: 'assistant', content: result.answer, sources: result.sources },
+            {
+              role: 'assistant',
+              content: result.answer,
+              sources: result.sources,
+              actions: result.actions,
+            },
           ]);
           requestAnimationFrame(() =>
             scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -99,6 +109,14 @@ function ChatPanel() {
             <div className="text-muted-foreground text-sm max-w-md">
               Ask anything covered by the office's policies, HR documents, or insurance
               handbooks. Answers cite the document they came from.
+              {isManager && (
+                <>
+                  {' '}
+                  You can also tell me things to remember about the office or the site, and
+                  ask me to build changes to this app — code I write is pushed to GitHub and
+                  Lovable picks it up.
+                </>
+              )}
             </div>
             <div className="flex flex-wrap justify-center gap-2">
               {SUGGESTED_QUESTIONS.map(q => (
@@ -132,6 +150,7 @@ function ChatPanel() {
                     ))}
                   </div>
                 )}
+                <ActionChips actions={message.actions ?? []} />
               </div>
             </div>
           ))
@@ -164,8 +183,8 @@ function ChatPanel() {
         </div>
         {/* Questions go to an external AI service (no BAA) — keep them generic. */}
         <p className="text-xs text-muted-foreground">
-          Answers come from an external AI service. Ask in general terms — never include a
-          patient's name or details.
+          Answers come from an external AI service (Kimi, via OpenRouter). Ask in general
+          terms — never include a patient's name or details.
         </p>
       </div>
     </Card>
