@@ -16,6 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Gift, Plus, Sparkles, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import { useOrgEmployees } from '@/hooks/useEmployees';
+import SprintVerifyDialog from '@/components/SprintVerifyDialog';
 import {
   useBumpSprint,
   useCancelSprint,
@@ -23,8 +25,12 @@ import {
   useDismissSuggestion,
   useSprintSuggestion,
   useTeamGoals,
+  type SprintDepartment,
   type SprintPeriod,
+  type SprintScope,
+  type SprintVerification,
 } from '@/hooks/useTeamGoals';
+
 import { getToday } from '@/lib/time-utils';
 
 /** Days between two "YYYY-MM-DD" dates, Eastern calendar. */
