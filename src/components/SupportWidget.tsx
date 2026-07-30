@@ -333,8 +333,9 @@ export default function SupportWidget() {
     const { data, error } = await supabase
       .from('support_tickets')
       .select(
-        'id, title, status, tier, category, severity, page_path, created_at, escalated_at, resolved_at',
+        'id, title, status, tier, category, severity, page_path, context_path, context_label, created_at, escalated_at, resolved_at',
       )
+
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(25);
