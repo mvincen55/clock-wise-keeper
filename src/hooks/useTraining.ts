@@ -63,7 +63,9 @@ export type AttemptSummary = {
   user_id: string;
   score: number;
   passed: boolean;
+  type: string | null;
   completed_at: string;
+
 };
 
 export const PASS_MARK = 80;
