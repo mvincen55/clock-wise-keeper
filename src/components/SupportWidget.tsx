@@ -177,11 +177,6 @@ export default function SupportWidget() {
     setRangeEnd(to || isoDay(today));
   }, [open, ticketId, location.pathname, location.search]);
 
-  // Keep the list of past reports current whenever the panel is open.
-  useEffect(() => {
-    if (open && view === 'history') void loadHistory();
-  }, [open, view, loadHistory]);
-
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [bubbles, busy]);
@@ -387,6 +382,11 @@ export default function SupportWidget() {
       setLoadingThread(false);
     }
   }, []);
+
+  // Keep the list of past reports current whenever the panel is open.
+  useEffect(() => {
+    if (open && view === 'history') void loadHistory();
+  }, [open, view, loadHistory]);
 
   /** Turn a raw storage/network failure into something a human can act on. */
   const plainError = (e: unknown, what: string): string => {
