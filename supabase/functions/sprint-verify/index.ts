@@ -118,10 +118,8 @@ Deno.serve(async (req) => {
     const note = typeof body.note === "string" ? body.note.trim() : "";
     const docPath = typeof body.doc_path === "string" ? body.doc_path : "";
 
-    if (!goalId || !["approve", "decline", "document", "override"].includes(action)) {
-      return json({ error: "Tell me which sprint and what decision." }, 400);
-    }
-
+    // Who is asking comes before what they asked. An unauthenticated caller
+    // should learn nothing about this endpoint's expected shape.
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader) return json({ error: "Sign in to verify a sprint." }, 401);
 
@@ -133,6 +131,10 @@ Deno.serve(async (req) => {
     const { data: auth } = await asUser.auth.getUser();
     const user = auth?.user;
     if (!user) return json({ error: "Sign in to verify a sprint." }, 401);
+
+    if (!goalId || !["approve", "decline", "document", "override"].includes(action)) {
+      return json({ error: "Tell me which sprint and what decision." }, 400);
+    }
 
     const db = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
       auth: { persistSession: false },

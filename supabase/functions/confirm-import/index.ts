@@ -22,8 +22,16 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
+    // Refuse in the caller's own terms. Throwing here fell into the catch
+    // below and came back as a 500, which reads like a broken import rather
+    // than a closed door.
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) throw new Error("Unauthorized");
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Sign in to confirm an import." }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const rawBody = await req.json();
     const { import_id, strategy } = validateConfirmImportInput(rawBody);
