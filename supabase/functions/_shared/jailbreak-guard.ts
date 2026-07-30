@@ -87,14 +87,17 @@ export function supabaseIntegrityStore(): IntegrityStore {
         });
       }
     },
-    async countEmailedToday(orgId: string, day: string) {
+    async countEmailedToday(orgId: string, _day: string) {
+      // Rolling 24h window — close enough to "today" for a cap, and immune to
+      // the Eastern/UTC midnight seam.
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { count } = await db
         .from("security_events")
         .select("id", { count: "exact", head: true })
         .eq("org_id", orgId)
         .eq("severity", "elevated")
         .eq("detail->>alert_emailed", "true")
-        .gte("created_at", `${day}T00:00:00Z`);
+        .gte("created_at", since);
       return count ?? 0;
     },
     async markEmailed(eventId: string) {
