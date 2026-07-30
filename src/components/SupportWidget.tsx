@@ -23,6 +23,14 @@ import { downloadSupportPdf } from '@/lib/support-pdf';
 import TicketTimeline, { stageFromTicket } from '@/components/support/TicketTimeline';
 import { redactScreenshot } from '@/lib/redact-image';
 import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 
 type Bubble = {
   id: string;
@@ -42,6 +50,37 @@ type Attachment = {
   masked: number;
   working: boolean;
 };
+
+const CATEGORIES = [
+  { value: 'time_clock', label: 'Clock in / out' },
+  { value: 'timesheet', label: 'Timesheet or hours' },
+  { value: 'pto', label: 'PTO or time off' },
+  { value: 'schedule', label: 'Schedule' },
+  { value: 'payroll', label: 'Payroll numbers' },
+  { value: 'access', label: 'Login or access' },
+  { value: 'display', label: 'Something looks wrong' },
+  { value: 'other', label: 'Something else' },
+];
+
+const SEVERITIES = [
+  { value: 'low', label: 'Minor — annoying' },
+  { value: 'medium', label: 'Slowing me down' },
+  { value: 'high', label: "Can't finish my work" },
+  { value: 'critical', label: 'Pay or records are wrong' },
+];
+
+/** Best guess at what this page is about, so nobody has to think about it. */
+function guessCategory(path: string): string {
+  if (path.startsWith('/timesheet')) return 'timesheet';
+  if (path.startsWith('/pto') || path.includes('time-off')) return 'pto';
+  if (path.startsWith('/schedule')) return 'schedule';
+  if (path.startsWith('/reports') || path.includes('payroll')) return 'payroll';
+  if (path === '/' || path.startsWith('/dashboard')) return 'time_clock';
+  if (path.startsWith('/auth') || path.startsWith('/login')) return 'access';
+  return 'other';
+}
+
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_FILES = 5;
@@ -67,6 +106,10 @@ export default function SupportWidget() {
   const [text, setText] = useState('');
   const [files, setFiles] = useState<Attachment[]>([]);
   const [redactOn, setRedactOn] = useState(true);
+  const [category, setCategory] = useState('other');
+  const [severity, setSeverity] = useState('medium');
+  const [rangeStart, setRangeStart] = useState('');
+  const [rangeEnd, setRangeEnd] = useState('');
   const [busy, setBusy] = useState(false);
   const [tier, setTier] = useState<'standard' | 'senior'>('standard');
   const [suggested, setSuggested] = useState<string | null>(null);
@@ -81,6 +124,20 @@ export default function SupportWidget() {
     if (open) setTimeout(() => textRef.current?.focus(), 60);
   }, [open]);
 
+  // Prefill from wherever they are: the page decides the category, and any date
+  // range already on screen (?from=&to=) carries over so nobody retypes it.
+  useEffect(() => {
+    if (!open || ticketId) return;
+    const params = new URLSearchParams(location.search);
+    const from = params.get('from') ?? params.get('start') ?? '';
+    const to = params.get('to') ?? params.get('end') ?? '';
+    const today = new Date();
+    const weekAgo = new Date(today.getTime() - 6 * 86400000);
+    setCategory(guessCategory(location.pathname));
+    setRangeStart(from || isoDay(weekAgo));
+    setRangeEnd(to || isoDay(today));
+  }, [open, ticketId, location.pathname, location.search]);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [bubbles, busy]);
@@ -93,6 +150,8 @@ export default function SupportWidget() {
     setTier('standard');
     setSuggested(null);
     setResolved(false);
+    setCategory('other');
+    setSeverity('medium');
   }, []);
 
   /**
@@ -173,6 +232,10 @@ export default function SupportWidget() {
             user_id: user.id,
             page_path: location.pathname,
             title: (body || 'Screenshot report').slice(0, 80),
+            category,
+            severity,
+            range_start: rangeStart || null,
+            range_end: rangeEnd || null,
           })
           .select('id')
           .single();
@@ -536,6 +599,72 @@ export default function SupportWidget() {
                       aria-label="Hide names, times and IDs in screenshots"
                     />
                   </div>
+                </div>
+              )}
+
+              {!ticketId && (
+                <div className="space-y-2 rounded-md border border-border/60 bg-muted/30 p-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium text-muted-foreground">
+                        What's it about
+                      </label>
+                      <Select value={category} onValueChange={setCategory}>
+                        <SelectTrigger className="h-7 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="z-[60]">
+                          {CATEGORIES.map(c => (
+                            <SelectItem key={c.value} value={c.value} className="text-xs">
+                              {c.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium text-muted-foreground">
+                        How bad
+                      </label>
+                      <Select value={severity} onValueChange={setSeverity}>
+                        <SelectTrigger className="h-7 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="z-[60]">
+                          {SEVERITIES.map(sv => (
+                            <SelectItem key={sv.value} value={sv.value} className="text-xs">
+                              {sv.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-medium text-muted-foreground">
+                      Dates involved
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="date"
+                        value={rangeStart}
+                        onChange={e => setRangeStart(e.target.value)}
+                        className="h-7 text-xs"
+                        aria-label="Start of the date range this problem covers"
+                      />
+                      <span className="text-[10px] text-muted-foreground">to</span>
+                      <Input
+                        type="date"
+                        value={rangeEnd}
+                        onChange={e => setRangeEnd(e.target.value)}
+                        className="h-7 text-xs"
+                        aria-label="End of the date range this problem covers"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Prefilled from {location.pathname} — change anything that's off.
+                  </p>
                 </div>
               )}
 
