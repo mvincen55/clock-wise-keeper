@@ -460,6 +460,7 @@ export default function ReportsAnalyst({
                         </div>
                       </div>
                     )}
+                    {t.audit && <AuditPanel audit={t.audit} />}
                   </div>
                 ),
               )}
