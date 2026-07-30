@@ -86,7 +86,15 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
     return true;
   });
 
+  /**
+   * One file for the whole filtered set — every closed record in the selected
+   * range and kind, not a download per card.
+   */
   const exportCsv = () => {
+    if (closed.length === 0) {
+      toast.error('Nothing to export in this range.');
+      return;
+    }
     const cell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const header = [
       'Team member',
@@ -120,16 +128,19 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
         .map(cell)
         .join(','),
     );
-    const blob = new Blob([[header.map(cell).join(','), ...rows].join('\n')], {
+    // BOM so Excel opens accented names correctly.
+    const blob = new Blob(['\uFEFF' + [header.map(cell).join(','), ...rows].join('\n')], {
       type: 'text/csv;charset=utf-8;',
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `accountability-records-${from || 'all'}-${to || 'all'}.csv`;
+    a.download = `accountability-records-${kind}-${from || 'start'}-to-${to || 'today'}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    toast.success(`Exported ${closed.length} record${closed.length === 1 ? '' : 's'}`);
   };
+
 
   return (
     <Card className="card-elevated">
