@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Loader2, Target, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { callPathfinder, useCreateGoal } from '@/hooks/useGoals';
+import SmartChips, { type SmartRead } from '@/components/goals/SmartChips';
 
 /**
  * Set this month's goal. Pathfinder polishes the raw wording into one clear
@@ -20,6 +21,8 @@ export default function SetGoalCard({ month }: { month: string }) {
   const [description, setDescription] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
   const [polishing, setPolishing] = useState(false);
+  const [target, setTarget] = useState('');
+  const [smart, setSmart] = useState<SmartRead | null>(null);
 
   const polish = async () => {
     const raw = title.trim();
@@ -30,11 +33,14 @@ export default function SetGoalCard({ month }: { month: string }) {
         mode: 'polish_goal',
         title: raw,
         description: description.trim() || undefined,
+        month,
       });
       if (result.title && result.title !== raw) {
         setOriginal(raw);
         setTitle(result.title);
       }
+      if (result.target) setTarget(result.target);
+      if (result.smart) setSmart(result.smart);
     } catch {
       // Polishing is a nicety — never block saving a goal.
     } finally {
@@ -48,11 +54,14 @@ export default function SetGoalCard({ month }: { month: string }) {
       await createGoal.mutateAsync({
         title: title.trim(),
         description: description.trim() || undefined,
+        smartTarget: target.trim() || null,
         month,
         visibility: isPrivate ? 'private' : 'team',
       });
       setTitle('');
       setOriginal(null);
+      setTarget('');
+      setSmart(null);
       setDescription('');
       setIsPrivate(false);
       toast.success('Goal set — good luck this month.');
@@ -84,6 +93,10 @@ export default function SetGoalCard({ month }: { month: string }) {
             onBlur={() => void polish()}
             placeholder="e.g. Get faster and more confident at scheduling follow-ups"
           />
+          <p className="text-xs text-muted-foreground">
+            Great goals are SMART: specific, measurable, achievable, relevant to your role, and
+            bound to this month.
+          </p>
           {polishing && (
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" /> Tidying up the wording…
@@ -100,12 +113,25 @@ export default function SetGoalCard({ month }: { month: string }) {
                 onClick={() => {
                   setTitle(original);
                   setOriginal(null);
+                  setSmart(null);
                 }}
               >
                 <Undo2 className="mr-1 h-3 w-3" /> Restore
               </Button>
             </div>
           )}
+        </div>
+
+        {smart && <SmartChips smart={smart} />}
+
+        <div className="space-y-1.5">
+          <Label htmlFor="goal-target">How you'll measure it (optional)</Label>
+          <Input
+            id="goal-target"
+            value={target}
+            onChange={e => setTarget(e.target.value)}
+            placeholder="e.g. 4 feedback asks"
+          />
         </div>
 
         <div className="space-y-1.5">
