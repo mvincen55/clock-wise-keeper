@@ -279,10 +279,21 @@ export default function Training() {
                     </div>
                     <div className="flex items-center gap-2">
                       {overdue && <Badge className="bg-warning text-warning-foreground">Overdue</Badge>}
+                      {assignment.status !== 'completed' && (
+                        <AddToMyListButton
+                          surface="training"
+                          title={`Finish training: ${module.title}`}
+                          firstStep="Open the module and read the first section."
+                          dueDate={assignment.due_date ?? today}
+                          label="Add to my list"
+                          variant="ghost"
+                        />
+                      )}
                       <Button size="sm" onClick={() => setOpenModuleId(module.id)}>
                         {assignment.status === 'completed' ? 'Review' : 'Start'}
                       </Button>
                     </div>
+
                   </CardContent>
                 </Card>
               );
