@@ -269,7 +269,14 @@ export function useRecordAttempt() {
       });
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['training-attempts'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['training-attempts'] });
+      qc.invalidateQueries({ queryKey: ['training-assignments'] });
+      // A passing attempt checks off any plan task linked to this module,
+      // database-side. Refetch goals so the tick shows up straight away.
+      qc.invalidateQueries({ queryKey: ['goals'] });
+      qc.invalidateQueries({ queryKey: ['goals-team'] });
+    },
   });
 }
 
