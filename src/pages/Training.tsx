@@ -110,7 +110,7 @@ export default function Training() {
           )}
         </div>
 
-        <Tabs defaultValue="library">
+        <Tabs defaultValue={new URLSearchParams(window.location.search).get('tab') === 'mine' ? 'mine' : 'library'}>
           <TabsList>
             <TabsTrigger value="library">Library</TabsTrigger>
             <TabsTrigger value="mine">
