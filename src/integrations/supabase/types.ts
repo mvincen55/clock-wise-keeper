@@ -671,6 +671,57 @@ export type Database = {
           },
         ]
       }
+      checklist_bypasses: {
+        Row: {
+          bypassed_at: string
+          checklist_date: string
+          created_at: string
+          employee_id: string
+          escalation_level: number
+          id: string
+          incomplete_count: number
+          org_id: string
+          reason: string | null
+          reason_submitted_at: string | null
+          resolved: boolean
+          resolved_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bypassed_at?: string
+          checklist_date: string
+          created_at?: string
+          employee_id: string
+          escalation_level?: number
+          id?: string
+          incomplete_count?: number
+          org_id: string
+          reason?: string | null
+          reason_submitted_at?: string | null
+          resolved?: boolean
+          resolved_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bypassed_at?: string
+          checklist_date?: string
+          created_at?: string
+          employee_id?: string
+          escalation_level?: number
+          id?: string
+          incomplete_count?: number
+          org_id?: string
+          reason?: string | null
+          reason_submitted_at?: string | null
+          resolved?: boolean
+          resolved_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       checklist_completions: {
         Row: {
           completed_at: string
