@@ -35,3 +35,5 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = false
   [functions.send-org-invite]
     verify_jwt = true
+  [functions.training-builder]
+    verify_jwt = true

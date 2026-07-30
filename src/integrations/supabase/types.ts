@@ -3656,6 +3656,165 @@ export type Database = {
           },
         ]
       }
+      training_assignments: {
+        Row: {
+          assigned_by: string
+          assigned_to: string
+          completed_at: string | null
+          created_at: string
+          due_date: string | null
+          id: string
+          module_id: string
+          org_id: string
+          status: string
+        }
+        Insert: {
+          assigned_by: string
+          assigned_to: string
+          completed_at?: string | null
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          module_id: string
+          org_id: string
+          status?: string
+        }
+        Update: {
+          assigned_by?: string
+          assigned_to?: string
+          completed_at?: string | null
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          module_id?: string
+          org_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_assignments_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "training_modules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_assignments_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_attempts: {
+        Row: {
+          answers: Json
+          completed_at: string
+          id: string
+          module_id: string
+          org_id: string
+          passed: boolean
+          score: number
+          user_id: string
+        }
+        Insert: {
+          answers?: Json
+          completed_at?: string
+          id?: string
+          module_id: string
+          org_id: string
+          passed?: boolean
+          score?: number
+          user_id: string
+        }
+        Update: {
+          answers?: Json
+          completed_at?: string
+          id?: string
+          module_id?: string
+          org_id?: string
+          passed?: boolean
+          score?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_attempts_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "training_modules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_attempts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_modules: {
+        Row: {
+          audience_tags: string[]
+          content: Json
+          created_at: string
+          created_by: string
+          id: string
+          org_id: string
+          origin_goal_id: string | null
+          source: string
+          status: string
+          summary: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          audience_tags?: string[]
+          content?: Json
+          created_at?: string
+          created_by: string
+          id?: string
+          org_id: string
+          origin_goal_id?: string | null
+          source?: string
+          status?: string
+          summary?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          audience_tags?: string[]
+          content?: Json
+          created_at?: string
+          created_by?: string
+          id?: string
+          org_id?: string
+          origin_goal_id?: string | null
+          source?: string
+          status?: string
+          summary?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_modules_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_modules_origin_goal_id_fkey"
+            columns: ["origin_goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       work_schedule: {
         Row: {
           apply_to_remote: boolean
@@ -4086,6 +4245,18 @@ export type Database = {
         }
       }
       sweep_attendance: { Args: { p_days?: number }; Returns: string }
+      training_attempt_summaries: {
+        Args: { _org_id: string }
+        Returns: {
+          completed_at: string
+          id: string
+          module_id: string
+          org_id: string
+          passed: boolean
+          score: number
+          user_id: string
+        }[]
+      }
       user_owns_import: { Args: { _import_id: string }; Returns: boolean }
       user_owns_schedule_version: {
         Args: { _version_id: string }
