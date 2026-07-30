@@ -17,6 +17,8 @@ import {
   CheckCircle2,
   Download,
   EyeOff,
+  AlertTriangle,
+  RotateCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadSupportPdf } from '@/lib/support-pdf';
@@ -32,6 +34,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 
 type Bubble = {
   id: string;
@@ -54,6 +57,10 @@ type Attachment = {
   text: string;
   /** Text read off the file with nothing hidden. */
   rawText: string;
+  /** Set once the file has landed in storage, so a retry never re-uploads it. */
+  uploadedPath?: string | null;
+  /** Last upload problem for this specific file. */
+  uploadError?: string | null;
 };
 
 const CATEGORIES = [
@@ -116,6 +123,12 @@ export default function SupportWidget() {
   const [rangeStart, setRangeStart] = useState('');
   const [rangeEnd, setRangeEnd] = useState('');
   const [dragging, setDragging] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number; name: string } | null>(
+    null,
+  );
+  const [sendError, setSendError] = useState<
+    { message: string; kind: 'send' | 'agent'; tier: 'standard' | 'senior' } | null
+  >(null);
   const dragDepth = useRef(0);
   const [busy, setBusy] = useState(false);
   const [tier, setTier] = useState<'standard' | 'senior'>('standard');
@@ -280,11 +293,51 @@ export default function SupportWidget() {
     addFiles(usable);
   };
 
+  /** Turn a raw storage/network failure into something a human can act on. */
+  const plainError = (e: unknown, what: string): string => {
+    const raw = e instanceof Error ? e.message : String(e ?? '');
+    const low = raw.toLowerCase();
+    if (!navigator.onLine || low.includes('failed to fetch') || low.includes('network')) {
+      return `${what} didn't go through — you look offline. Reconnect and hit Retry.`;
+    }
+    if (low.includes('exceeded') || low.includes('too large') || low.includes('payload')) {
+      return `${what} is too big to upload. Remove it and try a smaller screenshot.`;
+    }
+    if (low.includes('timeout') || low.includes('timed out')) {
+      return `${what} timed out. Nothing was lost — hit Retry.`;
+    }
+    if (low.includes('permission') || low.includes('policy') || low.includes('unauthorized')) {
+      return `${what} was blocked — you may have been signed out. Refresh and try again.`;
+    }
+    return raw ? `${what} failed: ${raw}` : `${what} failed.`;
+  };
+
+  /** Ask the help desk agent for an answer. Split out so retry can redo just this. */
+  const runAgent = async (id: string, asTier: 'standard' | 'senior') => {
+    const { data, error } = await supabase.functions.invoke('support-agent', {
+      body: { ticket_id: id, tier: asTier },
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+
+    setBubbles(prev => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: String(data.answer ?? ''),
+        tier: data.tier,
+      },
+    ]);
+    if (data.escalate && asTier === 'standard') setSuggested(String(data.escalate));
+  };
+
   const send = async (asTier: 'standard' | 'senior' = tier) => {
     const body = text.trim();
     if ((!body && files.length === 0) || busy || !user || !orgId) return;
     setBusy(true);
     setSuggested(null);
+    setSendError(null);
 
     try {
       let id = ticketId;
@@ -309,20 +362,38 @@ export default function SupportWidget() {
       }
 
       const uploaded: { path: string; file: File; text: string }[] = [];
-      for (const a of files) {
+      const total = files.length;
+      for (let i = 0; i < files.length; i += 1) {
+        const a = files[i];
         // Send the scrubbed copy whenever we have one and redaction is on.
         const f = redactOn && a.redacted ? a.redacted : a.original;
+        setProgress({ done: i, total, name: a.original.name });
+
+        // Same version of the text as the file: scrubbed image, scrubbed text.
+        const text = redactOn && a.redacted ? a.text : a.rawText || a.text;
+
+        // A retry after a half-finished send picks up where it left off.
+        if (a.uploadedPath) {
+          uploaded.push({ path: a.uploadedPath, file: f, text });
+          continue;
+        }
+
         const ext = f.name.split('.').pop()?.toLowerCase() || 'png';
         const path = `${orgId}/${id}/${crypto.randomUUID()}.${ext}`;
         const { error: upErr } = await supabase.storage
           .from('support-attachments')
           .upload(path, f, { contentType: f.type });
-        if (upErr) throw upErr;
-        // Send the same version of the text we're sending of the file: if the
-        // screenshot is scrubbed, the quoted text is scrubbed too.
-        const text = redactOn && a.redacted ? a.text : a.rawText || a.text;
+        if (upErr) {
+          const msg = plainError(upErr, a.original.name);
+          setFiles(prev => prev.map(x => (x.key === a.key ? { ...x, uploadError: msg } : x)));
+          throw new Error(msg);
+        }
+        setFiles(prev =>
+          prev.map(x => (x.key === a.key ? { ...x, uploadedPath: path, uploadError: null } : x)),
+        );
         uploaded.push({ path, file: f, text });
       }
+      if (total > 0) setProgress({ done: total, total, name: 'Sending…' });
 
       // One row per attachment so the agent sees each file; the first row
       // carries the typed message.
@@ -349,7 +420,7 @@ export default function SupportWidget() {
             ];
 
       const { error: msgErr } = await supabase.from('support_messages').insert(rows);
-      if (msgErr) throw msgErr;
+      if (msgErr) throw new Error(plainError(msgErr, 'Your report'));
 
       setBubbles(prev => [
         ...prev,
@@ -365,29 +436,46 @@ export default function SupportWidget() {
       ]);
       setText('');
       setFiles([]);
+      setProgress(null);
 
-
-      const { data, error } = await supabase.functions.invoke('support-agent', {
-        body: { ticket_id: id, tier: asTier },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-
-      setBubbles(prev => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: String(data.answer ?? ''),
-          tier: data.tier,
-        },
-      ]);
-      if (data.escalate && asTier === 'standard') setSuggested(String(data.escalate));
+      // From here on the report is safely saved — a retry only re-asks the agent.
+      try {
+        await runAgent(id, asTier);
+      } catch (e) {
+        setSendError({
+          message: plainError(e, 'The answer'),
+          kind: 'agent',
+          tier: asTier,
+        });
+      }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not send that.');
+      const message = e instanceof Error ? e.message : 'Could not send that.';
+      setSendError({ message, kind: 'send', tier: asTier });
+      toast.error(message);
     } finally {
+      setProgress(null);
       setBusy(false);
       setTimeout(() => textRef.current?.focus(), 40);
+    }
+  };
+
+  /** One button: redo whichever step actually failed. */
+  const retrySend = async () => {
+    if (!sendError || busy) return;
+    const { kind, tier: failedTier } = sendError;
+    setSendError(null);
+    if (kind === 'send') {
+      void send(failedTier);
+      return;
+    }
+    if (!ticketId) return;
+    setBusy(true);
+    try {
+      await runAgent(ticketId, failedTier);
+    } catch (e) {
+      setSendError({ message: plainError(e, 'The answer'), kind: 'agent', tier: failedTier });
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -587,11 +675,43 @@ export default function SupportWidget() {
               ),
             )}
 
-            {busy && (
+            {busy && progress && (
+              <div className="space-y-1">
+                <p className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span className="truncate">Uploading {progress.name}</span>
+                  <span className="shrink-0 tabular-nums">
+                    {progress.done}/{progress.total}
+                  </span>
+                </p>
+                <Progress
+                  value={progress.total ? (progress.done / progress.total) * 100 : 0}
+                  className="h-1.5"
+                />
+              </div>
+            )}
+
+            {busy && !progress && (
               <p className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 {tier === 'senior' ? 'Digging into it…' : 'Looking at it…'}
               </p>
+            )}
+
+            {sendError && !busy && (
+              <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-2">
+                <p className="flex items-start gap-2 text-xs text-foreground">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+                  <span>{sendError.message}</span>
+                </p>
+                {sendError.kind === 'send' && (
+                  <p className="pl-[22px] text-[10px] text-muted-foreground">
+                    Nothing already uploaded will be sent twice.
+                  </p>
+                )}
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={retrySend}>
+                  <RotateCw className="mr-1 h-3 w-3" /> Retry
+                </Button>
+              </div>
             )}
 
             {suggested && !busy && (
@@ -627,7 +747,10 @@ export default function SupportWidget() {
                       return (
                         <div
                           key={a.key}
-                          className="relative h-16 w-16 overflow-hidden rounded border bg-muted"
+                          className={`relative h-16 w-16 overflow-hidden rounded border bg-muted ${
+                            a.uploadError ? 'border-destructive' : ''
+                          }`}
+                          title={a.uploadError ?? a.original.name}
                         >
                           {shown.type.startsWith('image/') ? (
                             <img
@@ -643,6 +766,16 @@ export default function SupportWidget() {
                           {a.working && (
                             <span className="absolute inset-0 flex items-center justify-center bg-background/70">
                               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            </span>
+                          )}
+                          {a.uploadedPath && !a.working && (
+                            <span className="absolute bottom-0 left-0 rounded-tr bg-background/90 p-0.5">
+                              <CheckCircle2 className="h-3 w-3 text-primary" />
+                            </span>
+                          )}
+                          {a.uploadError && !a.working && (
+                            <span className="absolute bottom-0 left-0 rounded-tr bg-background/90 p-0.5">
+                              <AlertTriangle className="h-3 w-3 text-destructive" />
                             </span>
                           )}
                           <button
