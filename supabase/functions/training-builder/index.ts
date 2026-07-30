@@ -158,6 +158,10 @@ Deno.serve(async (req) => {
       ? body.audience.map((a: unknown) => text(a, 60)).filter(Boolean).slice(0, 8)
       : [];
     const originGoalId = typeof body?.origin_goal_id === "string" ? body.origin_goal_id : null;
+    const styleIn = text(body?.learning_style, 20).toLowerCase();
+    const learningStyle = ["visual", "auditory", "reading", "kinesthetic"].includes(styleIn)
+      ? styleIn
+      : "mixed";
     if (!topic) return json({ error: "A topic is required" }, 400);
 
     // Caller's org + role (RLS-scoped read).
@@ -234,6 +238,25 @@ Deno.serve(async (req) => {
       1
     ).slice(0, 3000);
 
+    const STYLE_RULES: Record<string, string> = {
+      visual: `LEARNER STYLE: VISUAL.
+- Teach through things the person can SEE. Every section must include 1-2 "visuals": a diagram, a whiteboard/board layout, a storyboard, or a visual checklist they can sketch or post at their station.
+- "kind" is one of diagram | board | storyboard | checklist. "steps" are the labelled boxes/frames/rows, in order. "prompt" describes the layout in one or two sentences so it can be drawn or generated as an image.
+- Never make a visual learner rely on audio-only practice (no "say it out loud" drills as the main exercise). Their "try_it" should produce or use something visual.
+- The quiz should lean on scenarios described spatially ("the schedule shows...", "the board reads..."), and at least one question should ask them to read a described layout.`,
+      auditory: `LEARNER STYLE: AUDITORY.
+- Teach through dialogue and script. Give word-for-word phrasing they can hear and repeat, and "try_it" actions that are spoken (a real conversation on their next shift).
+- "visuals" may be an empty array.`,
+      reading: `LEARNER STYLE: READING/WRITING.
+- Teach through clear structure: crisp definitions, short numbered rules, written examples. "try_it" actions involve writing something down (a note, a template, a log entry).
+- "visuals" may be an empty array.`,
+      kinesthetic: `LEARNER STYLE: HANDS-ON.
+- Teach through doing: walkthroughs, rehearsals at the operatory or front desk, step-by-step runs. "try_it" is always a physical run-through on their next shift.
+- "visuals" may include a simple step board when it helps the run-through.`,
+      mixed: `LEARNER STYLE: MIXED.
+- Balance a short script, a written rule, and one simple visual per module. "visuals" may be an empty array on sections that do not need one.`,
+    };
+
     const system = `You write short, excellent, practical training modules for a dental practice's team.
 
 THE RULES OF THIS OFFICE ARE THE RULES OF THE WORLD.
@@ -247,13 +270,15 @@ WRITING RULES
 - Fictional scenarios ONLY. Invent patient names and situations. Never reference real patients or real patient data.
 - Warm, respectful, practical. Talk to a capable colleague, never down to them.
 - 3 to 5 sections. Each section body is 120-260 words and ends naturally; the "try_it" is one specific action the person can do on their very next shift.
+${STYLE_RULES[learningStyle]}
 - The quiz has 4-6 scenario questions (a short situation, then what should you do). Each has 3-4 options, exactly one best answer, and a "why" that teaches the reasoning — not just "correct".
 
 Return ONLY JSON in exactly this shape:
-{"title":"...","summary":"one sentence","outcome":"what the person can do after this module","sections":[{"heading":"...","body":"...","try_it":"..."}],"recap":"3-5 sentence recap","quiz":{"questions":[{"q":"...","options":["..."],"correct_index":0,"why":"..."}]}}`;
+{"title":"...","summary":"one sentence","outcome":"what the person can do after this module","sections":[{"heading":"...","body":"...","try_it":"...","visuals":[{"kind":"diagram|board|storyboard|checklist","title":"...","prompt":"...","steps":["..."]}]}],"recap":"3-5 sentence recap","quiz":{"questions":[{"q":"...","options":["..."],"correct_index":0,"why":"..."}]}}`;
 
     const userPrompt = `TOPIC: ${topic}
 AUDIENCE (positions this is for): ${audience.length ? audience.join(", ") : "all"}
+LEARNING STYLE TO WRITE FOR: ${learningStyle}
 
 STANDING OFFICE RULES (authoritative):
 ${memoryBlock || "(none recorded yet)"}
