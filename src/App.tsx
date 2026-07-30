@@ -29,6 +29,7 @@ import Checklists from "@/pages/Checklists";
 import DepositLog from "@/pages/DepositLog";
 import IncidentReports from "@/pages/IncidentReports";
 import MorningHuddle from "@/pages/MorningHuddle";
+import Goals from "@/pages/Goals";
 import AcceptInvite from "@/pages/AcceptInvite";
 import NotFound from "@/pages/NotFound";
 import OAuthConsent from "@/pages/OAuthConsent";
@@ -79,6 +80,7 @@ const App = () => (
             <Route path="/deposit-log" element={<ProtectedRoute><DepositLog /></ProtectedRoute>} />
             <Route path="/incident-reports" element={<ProtectedRoute><IncidentReports /></ProtectedRoute>} />
             <Route path="/morning-huddle" element={<ProtectedRoute><MorningHuddle /></ProtectedRoute>} />
+            <Route path="/goals" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
             <Route path="*" element={<Navigate to="/auth" replace />} />

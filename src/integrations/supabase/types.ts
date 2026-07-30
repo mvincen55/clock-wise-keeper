@@ -1238,44 +1238,6 @@ export type Database = {
           },
         ]
       }
-      fof_code_names: {
-        Row: {
-          code: string
-          created_at: string
-          created_by: string | null
-          id: string
-          org_id: string
-          patient_name: string
-          updated_at: string
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          org_id: string
-          patient_name: string
-          updated_at?: string
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          org_id?: string
-          patient_name?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fof_code_names_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "orgs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       fof_ai_guidance: {
         Row: {
           content: string
@@ -1622,6 +1584,136 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      goal_tasks: {
+        Row: {
+          created_at: string
+          done: boolean
+          done_at: string | null
+          due_date: string | null
+          goal_id: string
+          id: string
+          org_id: string
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          done?: boolean
+          done_at?: string | null
+          due_date?: string | null
+          goal_id: string
+          id?: string
+          org_id: string
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          done?: boolean
+          done_at?: string | null
+          due_date?: string | null
+          goal_id?: string
+          id?: string
+          org_id?: string
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_tasks_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goal_updates: {
+        Row: {
+          author_id: string
+          auto_drafted: boolean
+          content: string
+          created_at: string
+          goal_id: string
+          id: string
+          org_id: string
+          status: string
+        }
+        Insert: {
+          author_id: string
+          auto_drafted?: boolean
+          content: string
+          created_at?: string
+          goal_id: string
+          id?: string
+          org_id: string
+          status: string
+        }
+        Update: {
+          author_id?: string
+          auto_drafted?: boolean
+          content?: string
+          created_at?: string
+          goal_id?: string
+          id?: string
+          org_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_updates_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goals: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          month: string
+          org_id: string
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+          visibility: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          month: string
+          org_id: string
+          status?: string
+          title: string
+          updated_at?: string
+          user_id: string
+          visibility?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          month?: string
+          org_id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+          visibility?: string
+        }
+        Relationships: []
       }
       import_rows: {
         Row: {
@@ -3514,6 +3606,33 @@ export type Database = {
         }
         Relationships: []
       }
+      work_style_profiles: {
+        Row: {
+          answers: Json
+          created_at: string
+          id: string
+          org_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          answers?: Json
+          created_at?: string
+          id?: string
+          org_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          answers?: Json
+          created_at?: string
+          id?: string
+          org_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       work_zones: {
         Row: {
           created_at: string
@@ -3701,6 +3820,8 @@ export type Database = {
         Returns: undefined
       }
       can_access_employee: { Args: { _employee_id: string }; Returns: boolean }
+      can_manage_goal: { Args: { _goal_id: string }; Returns: boolean }
+      can_view_goal: { Args: { _goal_id: string }; Returns: boolean }
       countersign_incident_report: {
         Args: { _report_id: string; _typed_name: string }
         Returns: {
@@ -3800,6 +3921,7 @@ export type Database = {
         }
         Returns: number
       }
+      owns_goal: { Args: { _goal_id: string }; Returns: boolean }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
         Returns: {
