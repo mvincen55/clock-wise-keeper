@@ -281,7 +281,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <BypassReasonBanner />
 
           <main className="flex-1 overflow-auto">
-            {children}
+            {/* Keyed on the route so each page fades/slides in briefly. */}
+            <div key={location.pathname} className="page-enter">
+              {children}
+            </div>
           </main>
         </div>
       </div>
