@@ -9,12 +9,9 @@ export type ChecklistGating = {
   /** Per-person daily items still open for this member today. */
   incompleteCount: number;
   incompleteTitles: string[];
-  /** Per-person daily items in total today — the denominator for "N of M done". */
-  gatingTotal: number;
   /** Shared (team-wide) daily items still open — informational only. */
   openSharedCount: number;
 };
-
 
 /**
  * What gates clock-out: only daily, active, per-person items on checklists this
@@ -32,7 +29,7 @@ export function useChecklistGating() {
     enabled: !!user && !!ctx,
     staleTime: 30_000,
     queryFn: async (): Promise<ChecklistGating> => {
-      const empty: ChecklistGating = { incompleteCount: 0, incompleteTitles: [], gatingTotal: 0, openSharedCount: 0 };
+      const empty: ChecklistGating = { incompleteCount: 0, incompleteTitles: [], openSharedCount: 0 };
       if (!ctx || !user) return empty;
 
       const audiences = isAdmin ? ['all', 'manager'] : ['all'];
@@ -73,7 +70,6 @@ export function useChecklistGating() {
       return {
         incompleteCount: openGating.length,
         incompleteTitles: openGating.map(i => i.title),
-        gatingTotal: gating.length,
         openSharedCount: shared.filter(i => !anyone.has(i.id)).length,
       };
     },

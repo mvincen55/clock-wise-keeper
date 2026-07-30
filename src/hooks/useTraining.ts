@@ -288,3 +288,106 @@ export function useBuildModule() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['training-modules'] }),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Roleplay practice: live conversation with an AI persona, then a rubric-scored
+// debrief. The transcript never leaves the session — only the breakdown is kept.
+// ---------------------------------------------------------------------------
+
+export type RoleplayVerdict = 'met' | 'partial' | 'missed';
+
+export type RubricItem = {
+  criterion: string;
+  what_good_looks_like: string;
+  weight: number;
+  earned: number;
+  verdict: RoleplayVerdict;
+  feedback: string;
+  next_time: string;
+};
+
+export type RoleplayResult = {
+  rubric: RubricItem[];
+  headline: string;
+  strength: string;
+  focus: string;
+  gap_to_pass: string;
+  pass_mark: number;
+  score: number;
+  passed: boolean;
+};
+
+export type RoleplayMessage = { role: 'user' | 'assistant'; content: string };
+
+/** Defensive read of a stored debrief (jsonb). */
+export function readRoleplayResult(raw: unknown, score: number, passed: boolean): RoleplayResult | null {
+  const r = (raw ?? {}) as Partial<RoleplayResult>;
+  if (!Array.isArray(r.rubric) || r.rubric.length === 0) return null;
+  return {
+    rubric: r.rubric as RubricItem[],
+    headline: r.headline ?? '',
+    strength: r.strength ?? '',
+    focus: r.focus ?? '',
+    gap_to_pass: r.gap_to_pass ?? '',
+    pass_mark: typeof r.pass_mark === 'number' ? r.pass_mark : PASS_MARK,
+    score,
+    passed,
+  };
+}
+
+/** One persona turn in the practice conversation. */
+export function useRoleplayTurn() {
+  return useMutation({
+    mutationFn: async (input: { moduleId: string; messages: RoleplayMessage[] }) => {
+      const { data, error } = await supabase.functions.invoke('training-roleplay', {
+        body: { mode: 'chat', module_id: input.moduleId, messages: input.messages },
+      });
+      if (error) throw new Error(data?.error || error.message);
+      if (data?.error) throw new Error(data.error);
+      return data.reply as string;
+    },
+  });
+}
+
+/** Grade the conversation and store the item-by-item breakdown as an attempt. */
+export function useScoreRoleplay() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { moduleId: string; messages: RoleplayMessage[] }) => {
+      const { data, error } = await supabase.functions.invoke('training-roleplay', {
+        body: { mode: 'score', module_id: input.moduleId, messages: input.messages },
+      });
+      if (error) throw new Error(data?.error || error.message);
+      if (data?.error) throw new Error(data.error);
+      return data as RoleplayResult;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['training-attempts'] }),
+  });
+}
+
+/** My own past roleplay debriefs for a module, newest first. */
+export function useMyRoleplayAttempts(moduleId: string) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['roleplay-attempts', moduleId, user?.id],
+    enabled: !!user && !!moduleId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('training_attempts')
+        .select('id, score, passed, answers, completed_at')
+        .eq('module_id', moduleId)
+        .eq('user_id', user!.id)
+        .eq('type', 'roleplay')
+        .order('completed_at', { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      return (data ?? [])
+        .map(a => ({
+          id: a.id as string,
+          completed_at: a.completed_at as string,
+          result: readRoleplayResult(a.answers, a.score as number, a.passed as boolean),
+        }))
+        .filter(a => a.result);
+    },
+  });
+}
