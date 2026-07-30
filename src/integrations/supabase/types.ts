@@ -4397,12 +4397,16 @@ export type Database = {
       }
       support_tickets: {
         Row: {
+          category: string | null
           created_at: string
           escalated_at: string | null
           id: string
           org_id: string
           page_path: string | null
+          range_end: string | null
+          range_start: string | null
           resolved_at: string | null
+          severity: string | null
           status: string
           tier: string
           title: string
@@ -4410,12 +4414,16 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          category?: string | null
           created_at?: string
           escalated_at?: string | null
           id?: string
           org_id: string
           page_path?: string | null
+          range_end?: string | null
+          range_start?: string | null
           resolved_at?: string | null
+          severity?: string | null
           status?: string
           tier?: string
           title?: string
@@ -4423,12 +4431,16 @@ export type Database = {
           user_id: string
         }
         Update: {
+          category?: string | null
           created_at?: string
           escalated_at?: string | null
           id?: string
           org_id?: string
           page_path?: string | null
+          range_end?: string | null
+          range_start?: string | null
           resolved_at?: string | null
+          severity?: string | null
           status?: string
           tier?: string
           title?: string
