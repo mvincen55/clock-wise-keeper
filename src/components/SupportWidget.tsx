@@ -24,7 +24,9 @@ type Bubble = {
   content: string;
   tier?: string | null;
   previewUrls?: string[];
+  attachmentNames?: string[];
 };
+
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_FILES = 5;
