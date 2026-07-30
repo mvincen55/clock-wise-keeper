@@ -7,6 +7,8 @@
  */
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
+import { requireUser } from "../_shared/require-user.ts";
+import { logScrub, scrubFreeText } from "../_shared/phi-scrub.ts";
 
 const MODEL = "google/gemini-3.6-flash";
 
@@ -19,12 +21,18 @@ const json = (body: unknown, status = 200) =>
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  // This spends AI credits, so it belongs to signed-in members only.
+  const user = await requireUser(req);
+  if (!user) return json({ error: "Not authorized" }, 401);
+
   try {
     const key = Deno.env.get("LOVABLE_API_KEY");
     if (!key) return json({ capture: null });
 
     const body = await req.json().catch(() => ({}));
-    const message = typeof body?.message === "string" ? body.message.slice(0, 2000) : "";
+    const scrubbed = scrubFreeText(typeof body?.message === "string" ? body.message : "", 2000);
+    logScrub("commitment-listen.message", scrubbed);
+    const message = scrubbed.text;
     const today = typeof body?.today === "string" ? body.today : new Date().toISOString().slice(0, 10);
     if (!message.trim()) return json({ capture: null });
 

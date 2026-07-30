@@ -11,6 +11,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
+import { logScrub, scrubFreeText } from "../_shared/phi-scrub.ts";
+
 
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 // Document reading is the one place we spend on the strongest model available.
@@ -52,10 +54,14 @@ async function readDocument(
   const instruction =
     `This office ran a sprint: "${sprint.title}". What was being counted: ${sprint.metric}. ` +
     `The target was ${sprint.target_count}. The attached document is the outside report the office uses as the source of truth.\n\n` +
+    `HARD RULE: this office is bound by HIPAA and you are outside its BAA. Extract ONLY the single total for this metric. ` +
+    `Never read back, quote, summarise, or reference any person-level row — no patient names, dates of birth, chart numbers, phone numbers or addresses — even if the document contains them. ` +
+    `If the only way to answer would be to count or cite individual people, refuse: set supported to false, found_count to null, and say the export is person-level and a totals-only export is needed.\n\n` +
     `Read the document and answer with JSON only, no prose around it:\n` +
-    `{"supported": true|false, "found_count": <the number you actually found, or null>, "where": "<where in the document you found it — section, row, label, page>", "reasoning": "<one or two plain sentences>"}\n\n` +
+    `{"supported": true|false, "found_count": <the number you actually found, or null>, "where": "<where in the document you found it — section, row label, page. Never a person's name>", "reasoning": "<one or two plain sentences, no person-level detail>"}\n\n` +
     `supported = true only if the document itself shows a number for this metric that meets or beats ${sprint.target_count}. ` +
     `If the document does not clearly show this metric, set supported to false, found_count to null, and say so plainly in reasoning. Never estimate, never infer a number that is not printed.`;
+
 
   const res = await fetch(GATEWAY_URL, {
     method: "POST",
@@ -88,12 +94,18 @@ async function readDocument(
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("The document reader returned nothing usable. You can still approve or decline by hand.");
   const parsed = JSON.parse(match[0]);
+  // Nothing the model read is trusted back into the database unscrubbed.
+  const where = scrubFreeText(String(parsed.where ?? ""), 400);
+  const reasoning = scrubFreeText(String(parsed.reasoning ?? ""), 800);
+  logScrub("sprint-verify.verdict", where);
+  logScrub("sprint-verify.verdict", reasoning);
   return {
     supported: !!parsed.supported,
     found_count: typeof parsed.found_count === "number" ? parsed.found_count : null,
-    where: String(parsed.where ?? "").slice(0, 400),
-    reasoning: String(parsed.reasoning ?? "").slice(0, 800),
+    where: where.text,
+    reasoning: reasoning.text,
   };
+
 }
 
 Deno.serve(async (req) => {
@@ -181,23 +193,33 @@ Deno.serve(async (req) => {
     const mime = file.type || "application/octet-stream";
     const bytes = new Uint8Array(await file.arrayBuffer());
     if (bytes.byteLength > 15 * 1024 * 1024) {
+      await db.storage.from("sprint-verification").remove([docPath]);
       return json({ error: "That file is over 15MB — try a smaller export or a photo." }, 400);
     }
 
-    const verdict = await readDocument(
-      apiKey,
-      base64(bytes),
-      mime,
-      docPath.split("/").pop() ?? "report",
-      sprint,
-    );
+    let verdict: Verdict;
+    try {
+      verdict = await readDocument(
+        apiKey,
+        base64(bytes),
+        mime,
+        docPath.split("/").pop() ?? "report",
+        sprint,
+      );
+    } finally {
+      // The document never lives past the read. Only the number, the verdict
+      // and where it was found survive — the report itself is not ours to keep.
+      const { error: rmError } = await db.storage.from("sprint-verification").remove([docPath]);
+      if (rmError) console.error("sprint-verify: purge failed:", rmError.message);
+      else console.log("sprint-verify: verification document purged after read");
+    }
 
     const { data: updated, error } = await db
       .from("team_goals")
       .update({
         ...stamp,
         status: verdict.supported ? "won" : "missed",
-        verification_doc_path: docPath,
+        verification_doc_path: null,
         ai_verdict: verdict,
         verification_note: note || null,
       })
@@ -205,6 +227,7 @@ Deno.serve(async (req) => {
       .select("*")
       .single();
     if (error) throw error;
+
 
     return json({ ok: true, sprint: updated, verdict });
   } catch (e) {

@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import NoPhiNote from '@/components/NoPhiNote';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -152,6 +153,7 @@ export default function BuildModuleDialog({ open, onOpenChange }: Props) {
                   onChange={e => setTopic(e.target.value)}
                   placeholder="e.g. Presenting treatment plans and payment options at checkout"
                 />
+                <NoPhiNote what="This topic" />
               </div>
 
               <div className="space-y-2">

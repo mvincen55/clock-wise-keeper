@@ -5,6 +5,7 @@ import { Loader2, MessageCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useGoalMessages, useSendPathfinderMessage } from '@/hooks/useGoals';
+import NoPhiNote from '@/components/NoPhiNote';
 
 /** Persistent Pathfinder conversation for one goal — remembers everything. */
 export default function PathfinderChat({ goalId }: { goalId: string }) {
@@ -98,6 +99,8 @@ export default function PathfinderChat({ goalId }: { goalId: string }) {
               {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
             </Button>
           </div>
+
+          <NoPhiNote />
         </div>
       )}
     </div>

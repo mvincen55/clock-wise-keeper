@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import NoPhiNote from '@/components/NoPhiNote';
 import { Label } from '@/components/ui/label';
 import {
   Dialog,
@@ -124,6 +125,14 @@ export default function SprintVerifyDialog({
               {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
               {busy ? 'Reading the report…' : 'Upload the report (PDF or photo)'}
             </Button>
+
+            <NoPhiNote what="This report" />
+            <p className="text-xs text-muted-foreground">
+              Upload a totals-only export. The file is read once and deleted straight after —
+              only the number and where it was found are kept.
+            </p>
+
+
 
             {verdict && (
               <div className="rounded-md border bg-muted/40 p-3 space-y-2 text-sm">

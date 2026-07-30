@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Loader2, Sparkles } from 'lucide-react';
+import NoPhiNote from '@/components/NoPhiNote';
 import { toast } from 'sonner';
 import {
   callPathfinder,
@@ -124,6 +125,7 @@ export default function GoalUpdateModal({
               )}
               Redraft with my notes
             </Button>
+            <NoPhiNote what="Your notes and this goal" />
           </div>
 
           <div className="space-y-1.5">
