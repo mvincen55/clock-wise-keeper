@@ -281,7 +281,9 @@ export default function ReportsAnalyst({
           role: 'assistant',
           content: data.answer as string,
           citations: (data.citations ?? []) as AnalystCitation[],
+          concerns: (data.concerns ?? []) as AnalystConcern[],
         },
+
       ]);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'The analyst could not answer.');
