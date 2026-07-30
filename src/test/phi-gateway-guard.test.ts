@@ -26,6 +26,7 @@ const MUST_SCRUB = [
   'office-pulse',
   'sprint-verify',
   'commitment-listen',
+  'training-roleplay',
 ];
 
 /**
