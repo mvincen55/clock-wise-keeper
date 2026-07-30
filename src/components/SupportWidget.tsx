@@ -20,11 +20,13 @@ import {
   AlertTriangle,
   RotateCw,
   History,
+  Clock,
   Plus,
   ChevronLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadSupportPdf } from '@/lib/support-pdf';
+import { slaFor } from '@/lib/support-sla';
 import TicketTimeline, { stageFromTicket, type TicketStageTimes } from '@/components/support/TicketTimeline';
 import { redactScreenshot } from '@/lib/redact-image';
 import { extractPdfText } from '@/lib/extract-pdf-text';
@@ -801,6 +803,18 @@ export default function SupportWidget() {
                         </span>
                       )}
                     </div>
+                    {(() => {
+                      const sla = slaFor(t);
+                      return (
+                        <p
+                          className={`mt-1 text-[11px] ${
+                            sla.overdue ? 'font-medium text-destructive' : 'text-muted-foreground'
+                          }`}
+                        >
+                          {sla.label}
+                        </p>
+                      );
+                    })()}
                   </button>
                 ))}
               </div>
@@ -818,6 +832,30 @@ export default function SupportWidget() {
                 working={busy}
                 times={stageTimes}
               />
+              {(() => {
+                const sla = slaFor({
+                  status: resolved ? 'resolved' : tier === 'senior' ? 'escalated' : 'open',
+                  tier,
+                  severity,
+                  created_at: stageTimes.open ?? new Date().toISOString(),
+                  escalated_at: stageTimes.escalated ?? null,
+                  resolved_at: stageTimes.solved ?? null,
+                });
+                return (
+                  <p
+                    className={`mt-1.5 flex items-center gap-1 text-[10px] ${
+                      sla.overdue ? 'font-medium text-destructive' : 'text-muted-foreground'
+                    }`}
+                  >
+                    {sla.overdue ? (
+                      <AlertTriangle className="h-3 w-3" />
+                    ) : (
+                      <Clock className="h-3 w-3" />
+                    )}
+                    {sla.label}
+                  </p>
+                );
+              })()}
             </div>
           )}
 
