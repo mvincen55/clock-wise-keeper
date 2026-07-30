@@ -1,8 +1,9 @@
 # Office Intelligence — feature spec
 
-Status (2026-07-30): Prompt 16 pending. This is the layer that makes the app feel
-smart everywhere — proactive, grounded, learning — rather than smart only when
-tapped. Builds on data that already exists; the first refinement-era build.
+Status (2026-07-30): Prompts 16 + 19 pending. This layer makes the app feel smart
+everywhere — proactive, grounded, learning — rather than smart only when tapped.
+Pairs with `docs/messaging-spec.md` (16 is the brain, 17 the voice) and delivers
+reminders/sprint goals (19) through the same channels.
 
 ## Product decisions (the "why")
 
@@ -26,6 +27,20 @@ tapped. Builds on data that already exists; the first refinement-era build.
    never store or compute anything patient-related.
 7. **Suggestions propose, managers dispose.** Incident → training/checklist
    follow-through requires manager approval, never automatic.
+8. **THE OFFICE AI DOCTRINE (Prompt 19) applies to every AI surface**
+   (goal-assistant, training-builder, training-roleplay, office-insights, AI
+   channel): the mission in every system prompt is "make this office excellent
+   within the owner's vision, rules, policies, and actual structure." It
+   encourages and reminds EVERYONE — owners and managers included — with
+   "might not be a bad idea to…" framing. Never pushy, never shaming, receipts
+   cited, quiet when there's nothing.
+9. **Sprint goals are collective and honor-based** (Prompt 19): whole team vs the
+   number, reward-based (pizza, not payroll), any member can +1 the tally — fake
+   verification around pizza would be worse than trust. Metrics the system CAN
+   verify (checklist completions, modules passed) may count automatically.
+   The AI announces, tracks, nudges, and declares the result so the manager
+   "never has to say it out loud." It may also suggest ONE sprint per week to
+   managers (dismissible, feeds the dismissal loop).
 
 ## Prompt 16 — Office Intelligence layer (pending)
 
@@ -50,6 +65,20 @@ tapped. Builds on data that already exists; the first refinement-era build.
 >
 > When finished: deploy office-insights and confirm it responds.
 
+## Prompt 19 — Reminder hooks + team sprint goals + AI doctrine (pending)
+
+> Two additions: AI-triggered reminders, and team sprint goals the office AI runs. Apply the OFFICE AI DOCTRINE to every AI surface (goal-assistant, training-builder, training-roleplay, office-insights, the AI channel): the system prompt's mission is "make this office excellent within the owner's vision, rules, policies, and actual structure." It encourages and reminds EVERYONE including owners/managers ("might not be a bad idea to…") — never pushy, never shaming, receipts cited, quiet when there's nothing worth saying.
+>
+> 1) REMINDER HOOKS (scheduled AI follow-ups):
+> - New table reminder_hooks: id, org_id, user_id, kind ('goal_task_due' | 'training_due' | 'plan_stall' | 'checklist_gap' | 'sprint_progress' | 'follow_up'), ref_id nullable, fire_at, status ('pending' | 'sent' | 'cancelled'), created_at. org_id + RLS (member reads own).
+> - A scheduled job (extend office-insights or training-reminders) fires due hooks and delivers them as AI-channel messages (or notifications until messaging ships): goal task due tomorrow/today, training assignment approaching due date, a plan that's stalling ("nothing checked off this week — want to rescope or shrink it?"), a committed follow-up. Max one reminder per person per day, dismissal-learning applies, fail-open.
+>
+> 2) TEAM SPRINT GOALS (collective, reward-based, AI-run):
+> - New table team_goals: id, org_id, title, metric text (what's counted, e.g. "recall calls made"), target_count int, period ('week' | 'month'), starts_on, ends_on, reward text (e.g. "pizza Friday"), progress int default 0, status ('active' | 'won' | 'missed' | 'cancelled'), created_by, ai_suggested bool default false, created_at. org_id + RLS: everyone reads; any member can increment progress (honor tally — it's pizza, not payroll); owners/managers create/cancel.
+> - UI: a Sprint card on the dashboard (all roles) — metric, progress ring vs target, days left, the reward. Tapping "+1" logs progress. No rankings, it's the whole team against the number.
+> - THE AI RUNS IT: when a manager creates a sprint, the office AI announces it (announcement or AI channel — the manager never has to say a word out loud), nudges mid-period with actual progress ("6 days left, 40% there — a push gets pizza"), and declares the result at period end — celebration seal on a win, gracious "so close" on a miss.
+> - AI SUGGESTS SPRINTS: weekly, the office AI may suggest ONE sprint goal to each manager based on office data ("recall rate dipped — might not be a bad idea to run a calls sprint this month"). Dismissible, feeds the dismissal loop, marked ai_suggested when accepted.
+
 ## Known build risks
 
 - **Nagware drift.** If the dismissal loop isn't real (kinds never go quiet), the
@@ -58,4 +87,8 @@ tapped. Builds on data that already exists; the first refinement-era build.
   that says numbers it didn't compute is the trust-killer.
 - **Huddle leakage.** The context block must source from business tables only;
   anything patient-adjacent violates the page's founding constraint.
+- **Reminder delivery before messaging ships.** reminder_hooks must degrade to
+  plain notifications if the AI channel doesn't exist yet.
+- **Sprint tally abuse is self-limiting** (it's pizza) — but the won/missed
+  declaration must reconcile to the recorded tally, never a freshly invented number.
 - **office-insights must deploy** — probe per docs/runbook.md §1.
