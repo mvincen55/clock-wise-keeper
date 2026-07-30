@@ -27,7 +27,13 @@ import {
   Plus,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { useOrgEmployees } from '@/hooks/useEmployees';
+import MessageAttachments from '@/components/MessageAttachments';
+import {
+  useConversationAttachments,
+  validateAttachment,
+} from '@/hooks/useMessageAttachments';
 import {
   useConversations,
   useMessages,
