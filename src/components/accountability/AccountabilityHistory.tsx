@@ -352,6 +352,7 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
   );
 }
 
