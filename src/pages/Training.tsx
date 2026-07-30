@@ -50,6 +50,8 @@ export default function Training() {
   const { data: assignments = [] } = useTrainingAssignments();
   const { data: attempts = [] } = useAttemptSummaries();
   const { data: roster = [] } = useTeamRoster();
+  const { data: drafts = [] } = useDraftModules();
+  const draftCount = isAdmin ? drafts.length : 0;
 
   const [openModuleId, setOpenModuleId] = useState<string | null>(null);
   const [assignTarget, setAssignTarget] = useState<TrainingModule | null>(null);
