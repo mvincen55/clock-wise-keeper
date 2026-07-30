@@ -209,6 +209,7 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
 
 
   return (
+    <>
     <Card className="card-elevated">
       <CardHeader className="border-b">
         <CardTitle className="flex items-center gap-2">
