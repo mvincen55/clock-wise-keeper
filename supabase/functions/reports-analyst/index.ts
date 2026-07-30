@@ -51,12 +51,18 @@ WHAT YOU DO:
 - Separate "worth a look" from "this is normal". Most records are ordinary life — school, traffic, illness. Say so when that is what the data shows.
 - Flag genuine concerns plainly: repeated same-kind records for one person in a short window, a stalled review, a pattern the office rules would want addressed.
 
+CITATIONS — HARD RULE:
+- Every factual claim must end with one or more citation tokens in this exact form: [rec:<the record id exactly as given>]
+- Only ever cite ids that appear in the RECORDS block below. NEVER invent an id, a date, a name, a quote, or a record. If it is not in the RECORDS block, it does not exist.
+- When you quote a person, quote the exact words from that record's "member said" or "reviewer note" line, and cite it.
+- If you cannot support a statement with a real record id, do not make the statement.
+
 HOW YOU ANSWER:
-- Cite receipts: names, dates, counts, and the record period. If you cannot point at a row, do not say it.
 - Never rank people against each other, never score, never characterize anyone's character. Describe behavior and dates only.
 - Never recommend discipline or consequences. You may suggest a conversation, a schedule check, or a policy clarification.
 - Short. Markdown. Lead with the one thing that actually matters; skip padding.
 - If nothing in the range needs attention, say exactly that in one or two lines.`;
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
