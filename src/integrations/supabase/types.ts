@@ -1467,6 +1467,7 @@ export type Database = {
           display_name: string
           email: string | null
           employment_status: Database["public"]["Enums"]["employment_status"]
+          favorites: Json
           hire_date: string | null
           id: string
           learning_style: string | null
@@ -1483,6 +1484,7 @@ export type Database = {
           display_name: string
           email?: string | null
           employment_status?: Database["public"]["Enums"]["employment_status"]
+          favorites?: Json
           hire_date?: string | null
           id?: string
           learning_style?: string | null
@@ -1499,6 +1501,7 @@ export type Database = {
           display_name?: string
           email?: string | null
           employment_status?: Database["public"]["Enums"]["employment_status"]
+          favorites?: Json
           hire_date?: string | null
           id?: string
           learning_style?: string | null

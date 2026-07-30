@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Check, Loader2, Pencil, X } from 'lucide-react';
+import { Check, Gift, Loader2, Pencil, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   freeTag,
@@ -19,7 +19,19 @@ type Member = {
   display_name: string;
   preferred_name?: string | null;
   tag?: string | null;
+  /** Shared-by-choice fun facts, used for thank-yous and birthdays. */
+  favorites?: Record<string, string> | null;
 };
+
+const FAVORITE_LABELS: Record<string, string> = {
+  food: 'Food',
+  pizza: 'Pizza',
+  dessert: 'Dessert',
+  drink: 'Drink',
+  snack: 'Snack',
+  treat: 'Treat',
+};
+
 
 /**
  * Manager view of a member's tag and onboarding progress.
@@ -65,8 +77,11 @@ export default function MemberProfileRow({ employee }: { employee: Member }) {
     }
   };
 
+  const favorites = Object.entries(employee.favorites ?? {}).filter(([, v]) => v);
+
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+    <div className="mb-3 space-y-2">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
       {editing ? (
         <div className="flex items-center gap-1">
           <Input
@@ -114,6 +129,19 @@ export default function MemberProfileRow({ employee }: { employee: Member }) {
       ) : (
         <Badge variant="outline" className="text-muted-foreground">Not started</Badge>
       )}
+      </div>
+
+      {favorites.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Gift className="h-3 w-3 text-primary" />
+          {favorites.map(([key, value]) => (
+            <span key={key} className="rounded border px-1.5 py-0.5">
+              {FAVORITE_LABELS[key] ?? key}: <span className="text-foreground">{value}</span>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
+
 }

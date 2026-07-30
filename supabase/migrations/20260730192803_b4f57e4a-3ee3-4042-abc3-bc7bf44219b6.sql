@@ -1,0 +1,2 @@
+ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS favorites jsonb NOT NULL DEFAULT '{}'::jsonb;
+COMMENT ON COLUMN public.employees.favorites IS 'Shared-by-choice fun facts (favorite food, pizza, dessert, drink, snack). Visible to the office, used for thank-yous and celebrations. Never private work-style data.';
