@@ -1639,6 +1639,50 @@ export type Database = {
           },
         ]
       }
+      goal_events: {
+        Row: {
+          actor_id: string
+          created_at: string
+          goal_id: string
+          id: string
+          new_title: string | null
+          old_title: string
+          org_id: string
+          reason: string
+          type: string
+        }
+        Insert: {
+          actor_id: string
+          created_at?: string
+          goal_id: string
+          id?: string
+          new_title?: string | null
+          old_title: string
+          org_id: string
+          reason: string
+          type: string
+        }
+        Update: {
+          actor_id?: string
+          created_at?: string
+          goal_id?: string
+          id?: string
+          new_title?: string | null
+          old_title?: string
+          org_id?: string
+          reason?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_events_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goal_messages: {
         Row: {
           author: string
@@ -1774,6 +1818,8 @@ export type Database = {
       }
       goals: {
         Row: {
+          archived_at: string | null
+          archived_reason: string | null
           created_at: string
           created_by: string
           description: string | null
@@ -1788,6 +1834,8 @@ export type Database = {
           visibility: string
         }
         Insert: {
+          archived_at?: string | null
+          archived_reason?: string | null
           created_at?: string
           created_by: string
           description?: string | null
@@ -1802,6 +1850,8 @@ export type Database = {
           visibility?: string
         }
         Update: {
+          archived_at?: string | null
+          archived_reason?: string | null
           created_at?: string
           created_by?: string
           description?: string | null
@@ -3773,6 +3823,7 @@ export type Database = {
           org_id: string
           passed: boolean
           score: number
+          type: string
           user_id: string
         }
         Insert: {
@@ -3783,6 +3834,7 @@ export type Database = {
           org_id: string
           passed?: boolean
           score?: number
+          type?: string
           user_id: string
         }
         Update: {
@@ -3793,6 +3845,7 @@ export type Database = {
           org_id?: string
           passed?: boolean
           score?: number
+          type?: string
           user_id?: string
         }
         Relationships: [
@@ -4311,6 +4364,7 @@ export type Database = {
           org_id: string
           passed: boolean
           score: number
+          type: string
           user_id: string
         }[]
       }
