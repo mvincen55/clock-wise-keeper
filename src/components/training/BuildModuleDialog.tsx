@@ -22,6 +22,7 @@ import {
   type TrainingModule,
 } from '@/hooks/useTraining';
 import ModuleAuditPanel from '@/components/training/ModuleAuditPanel';
+import AuditPreviewDialog from '@/components/training/AuditPreviewDialog';
 import { toast } from 'sonner';
 
 const SUGGESTED = ['all', 'front desk', 'assistant', 'hygiene', 'manager'];
@@ -51,6 +52,7 @@ export default function BuildModuleDialog({ open, onOpenChange }: Props) {
   const [flagged, setFlagged] = useState<{ module: TrainingModule; audit: ModuleAudit } | null>(
     null
   );
+  const [previewModule, setPreviewModule] = useState<TrainingModule | null>(null);
   const build = useBuildModule();
   const publish = usePublishModule();
   const discard = useDiscardDraft();
@@ -208,6 +210,17 @@ export default function BuildModuleDialog({ open, onOpenChange }: Props) {
           </>
         )}
       </DialogContent>
+      <AuditPreviewDialog
+        module={previewModule}
+        open={!!previewModule}
+        onOpenChange={v => {
+          if (!v) {
+            setPreviewModule(null);
+            reset();
+            onOpenChange(false);
+          }
+        }}
+      />
     </Dialog>
   );
 }
