@@ -34,6 +34,7 @@ import { toast } from 'sonner';
 import { downloadSupportPdf } from '@/lib/support-pdf';
 import { slaFor, responseWindowLabel } from '@/lib/support-sla';
 import { useTick } from '@/hooks/useTick';
+import { filesFromDrop } from '@/lib/drop-files';
 import TicketTimeline, { stageFromTicket, type TicketStageTimes } from '@/components/support/TicketTimeline';
 import { redactScreenshot } from '@/lib/redact-image';
 import type { RedactionCategories } from '@/lib/redact-image';
@@ -311,15 +312,17 @@ export default function SupportWidget() {
     (incoming: File[]) => {
       if (incoming.length === 0) return;
       const queued: Attachment[] = [];
+      let tooBig = 0;
+      let overflow = 0;
       setFiles(prev => {
         const next = [...prev];
         for (const f of incoming) {
           if (next.length >= MAX_FILES) {
-            toast.error(`You can attach up to ${MAX_FILES} files.`);
-            break;
+            overflow += 1;
+            continue;
           }
           if (f.size > MAX_IMAGE_BYTES) {
-            toast.error(`${f.name} is over 8MB — try a smaller one.`);
+            tooBig += 1;
             continue;
           }
           const isImage = f.type.startsWith('image/');
@@ -338,6 +341,17 @@ export default function SupportWidget() {
         }
         return next;
       });
+      // One summary instead of a toast per file — a folder drop shouldn't
+      // bury the panel in warnings.
+      if (queued.length > 1) {
+        toast.success(`${queued.length} files added to this report.`);
+      }
+      if (tooBig > 0) {
+        toast.error(`${tooBig} file${tooBig === 1 ? ' was' : 's were'} over 8MB and skipped.`);
+      }
+      if (overflow > 0) {
+        toast.error(`Only ${MAX_FILES} files fit in one report — ${overflow} left out.`);
+      }
       for (const item of queued) {
         if (item.original.type === 'application/pdf') void readPdf(item.key, item.original);
         else void redactOne(item.key, item.original);
@@ -345,6 +359,7 @@ export default function SupportWidget() {
     },
     [redactOne, readPdf],
   );
+
 
   /** Paste screenshots straight into the box — the fastest way to report. */
   const onPaste = (e: React.ClipboardEvent) => {
@@ -375,20 +390,29 @@ export default function SupportWidget() {
   };
 
   const onDrop = (e: React.DragEvent) => {
-    const dropped = Array.from(e.dataTransfer.files ?? []);
-    if (dropped.length === 0) return;
+    if (!Array.from(e.dataTransfer.types).includes('Files')) return;
     e.preventDefault();
     dragDepth.current = 0;
     setDragging(false);
     if (resolved || busy) return;
-    const usable = dropped.filter(
-      f => f.type.startsWith('image/') || f.type === 'application/pdf',
-    );
-    if (usable.length === 0) {
-      toast.error('Images and PDFs only.');
-      return;
-    }
-    addFiles(usable);
+    // Read the whole drop first — several files, or a folder of them.
+    const dt = e.dataTransfer;
+    void filesFromDrop(dt).then(dropped => {
+      if (dropped.length === 0) return;
+      const usable = dropped.filter(
+        f => f.type.startsWith('image/') || f.type === 'application/pdf',
+      );
+      if (usable.length === 0) {
+        toast.error('Images and PDFs only.');
+        return;
+      }
+      const skipped = dropped.length - usable.length;
+      if (skipped > 0) {
+        toast.message(`${skipped} file${skipped === 1 ? '' : 's'} skipped — images and PDFs only.`);
+      }
+      addFiles(usable);
+    });
+
   };
 
   /** Every report this person has filed, newest first. */
@@ -781,7 +805,9 @@ export default function SupportWidget() {
             <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-primary bg-card/95">
               <ImagePlus className="h-6 w-6 text-primary" />
               <p className="text-sm font-medium text-foreground">Drop it here</p>
-              <p className="text-xs text-muted-foreground">Images or PDFs, up to {MAX_FILES}</p>
+              <p className="text-xs text-muted-foreground">
+                Drop several at once (or a folder) — up to {MAX_FILES} images or PDFs
+              </p>
             </div>
           )}
           <div className="flex items-center justify-between border-b px-3 py-2">
@@ -1089,6 +1115,10 @@ export default function SupportWidget() {
             <div className="space-y-2 border-t p-2">
               {files.length > 0 && (
                 <div className="space-y-2">
+                  <p className="text-[10px] text-muted-foreground">
+                    {files.length} file{files.length === 1 ? '' : 's'} attached — they go over as
+                    one report package.
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {files.map(a => {
                       const shown = redactOn
