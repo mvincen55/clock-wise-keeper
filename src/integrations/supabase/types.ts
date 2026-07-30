@@ -1242,6 +1242,41 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_tags: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          employee_id: string | null
+          id: string
+          org_id: string
+          tag: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          employee_id?: string | null
+          id?: string
+          org_id: string
+          tag: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          employee_id?: string | null
+          id?: string
+          org_id?: string
+          tag?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_tags_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           created_at: string
@@ -1252,6 +1287,8 @@ export type Database = {
           id: string
           learning_style: string | null
           org_id: string
+          preferred_name: string | null
+          tag: string | null
           team: string | null
           timezone: string
           updated_at: string
@@ -1266,6 +1303,8 @@ export type Database = {
           id?: string
           learning_style?: string | null
           org_id: string
+          preferred_name?: string | null
+          tag?: string | null
           team?: string | null
           timezone?: string
           updated_at?: string
@@ -1280,6 +1319,8 @@ export type Database = {
           id?: string
           learning_style?: string | null
           org_id?: string
+          preferred_name?: string | null
+          tag?: string | null
           team?: string | null
           timezone?: string
           updated_at?: string
@@ -2450,6 +2491,53 @@ export type Database = {
           },
         ]
       }
+      member_onboarding: {
+        Row: {
+          basics_done_at: string | null
+          completed_at: string | null
+          created_at: string
+          goal_done_at: string | null
+          id: string
+          org_id: string
+          terms_done_at: string | null
+          updated_at: string
+          user_id: string
+          work_style_done_at: string | null
+        }
+        Insert: {
+          basics_done_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          goal_done_at?: string | null
+          id?: string
+          org_id: string
+          terms_done_at?: string | null
+          updated_at?: string
+          user_id: string
+          work_style_done_at?: string | null
+        }
+        Update: {
+          basics_done_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          goal_done_at?: string | null
+          id?: string
+          org_id?: string
+          terms_done_at?: string | null
+          updated_at?: string
+          user_id?: string
+          work_style_done_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_onboarding_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           content: string
@@ -3135,6 +3223,44 @@ export type Database = {
           },
           {
             foreignKeyName: "payroll_summaries_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      policy_acknowledgments: {
+        Row: {
+          created_at: string
+          document: string
+          id: string
+          org_id: string
+          signed_at: string
+          signed_name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          document: string
+          id?: string
+          org_id: string
+          signed_at?: string
+          signed_name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          document?: string
+          id?: string
+          org_id?: string
+          signed_at?: string
+          signed_name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "policy_acknowledgments_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"

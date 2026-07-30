@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Loader2, Shield, Timer, CalendarDays, Plus, Trash2, DollarSign, RefreshCw, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/time-utils';
+import PrivacyTermsCard from '@/components/onboarding/PrivacyTermsCard';
 
 const WEEKDAY_OPTIONS = [
   { value: '0', label: 'Sunday' },
@@ -73,6 +74,8 @@ export default function Settings() {
         <h1 className="text-2xl md:text-3xl font-bold">Settings</h1>
         <p className="text-muted-foreground">Configure payroll, closures, and security</p>
       </div>
+
+      <PrivacyTermsCard />
 
       {/* Payroll Settings (manager only) */}
       {isManager && (
