@@ -101,13 +101,19 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       ? 'bg-primary/10 text-primary font-medium'
       : 'text-muted-foreground';
     const iconOnly = collapsed && !mobile;
-    const badge = item.to === '/approvals' && approvalCounts && approvalCounts.total > 0 && (
+    const badgeCount =
+      item.to === '/approvals'
+        ? approvalCounts?.total ?? 0
+        : item.to === '/messages'
+          ? unreadMessages
+          : 0;
+    const badge = badgeCount > 0 && (
       <span
         className={`flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1 ${
           iconOnly ? 'absolute -top-1 -right-1' : 'ml-auto'
         }`}
       >
-        {approvalCounts.total}
+        {badgeCount}
       </span>
     );
     const link = (
