@@ -474,12 +474,15 @@ export default function SupportWidget() {
     try {
       let id = ticketId;
       if (!id) {
+        const ctx = buildTicketContext(location.pathname, location.search, rangeStart, rangeEnd);
         const { data, error } = await supabase
           .from('support_tickets')
           .insert({
             org_id: orgId,
             user_id: user.id,
             page_path: location.pathname,
+            context_path: ctx.path,
+            context_label: ctx.label,
             title: (body || 'Screenshot report').slice(0, 80),
             category,
             severity,
@@ -491,8 +494,10 @@ export default function SupportWidget() {
         if (error) throw error;
         id = data.id;
         setTicketId(id);
+        setTicketContext(ctx);
         setStageTimes({ open: data.created_at ?? new Date().toISOString() });
       }
+
 
       const uploaded: { path: string; file: File; text: string }[] = [];
       const total = files.length;
