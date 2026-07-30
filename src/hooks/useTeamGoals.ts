@@ -63,11 +63,11 @@ export function useBumpSprint() {
   const mutation = useMutation({
     mutationFn: async ({ id, by = 1 }: { id: string; by?: number }) => {
       const { data, error } = await supabase.rpc('bump_team_goal', {
-        _team_goal_id: id,
-        _delta: by,
+        _goal_id: id,
+        _amount: by,
       });
       if (error) throw error;
-      return data as number;
+      return data as unknown as TeamGoal;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['team-goals'] }),
   });
