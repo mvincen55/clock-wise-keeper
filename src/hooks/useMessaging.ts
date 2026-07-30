@@ -121,7 +121,34 @@ export function useMessages(conversationId: string | null) {
   });
 }
 
+export interface ParticipantReceipt {
+  user_id: string;
+  last_read_at: string | null;
+}
+
+/**
+ * Read receipts for the open conversation, derived straight from each
+ * participant's `last_read_at`. RLS only lets participants read these rows.
+ */
+export function useConversationReceipts(conversationId: string | null) {
+  return useQuery({
+    queryKey: ['conversation-receipts', conversationId],
+    enabled: !!conversationId,
+    refetchInterval: 10000,
+    queryFn: async (): Promise<ParticipantReceipt[]> => {
+      const { data, error } = await supabase
+        .from('conversation_participants')
+        .select(sel('user_id, last_read_at'))
+        .eq('conversation_id', conversationId!)
+        .returns<ParticipantReceipt[]>();
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
 export interface MessageSearchFilters {
+
   query: string;
   /** Restrict to conversations of this type. */
   type?: ConversationType | 'all';
@@ -252,10 +279,15 @@ export function useMarkConversationRead() {
     mutationFn: async (conversationId: string) => {
       const { error } = await supabase.rpc('mark_conversation_read', { _conv: conversationId });
       if (error) throw error;
+      return conversationId;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['conversations'] }),
+    onSuccess: id => {
+      qc.invalidateQueries({ queryKey: ['conversations'] });
+      qc.invalidateQueries({ queryKey: ['conversation-receipts', id] });
+    },
   });
 }
+
 
 export function useEnsureDm() {
   const qc = useQueryClient();
