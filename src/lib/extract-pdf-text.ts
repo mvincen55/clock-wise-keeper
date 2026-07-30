@@ -34,7 +34,7 @@ export async function extractPdfText(file: File): Promise<string> {
       if (out.join('\n').length > MAX_CHARS) break;
     }
 
-    await doc.destroy();
+    doc.cleanup();
     return out.join('\n').slice(0, MAX_CHARS);
   } catch {
     // A scanned or locked PDF simply gives us nothing to quote — that's fine.
