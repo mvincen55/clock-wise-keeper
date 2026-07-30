@@ -30,6 +30,7 @@ import DepositLog from "@/pages/DepositLog";
 import IncidentReports from "@/pages/IncidentReports";
 import MorningHuddle from "@/pages/MorningHuddle";
 import Goals from "@/pages/Goals";
+import OfficeNudges from "@/pages/OfficeNudges";
 import Training from "@/pages/Training";
 import AcceptInvite from "@/pages/AcceptInvite";
 import Onboarding from "@/pages/Onboarding";
@@ -109,6 +110,7 @@ const App = () => (
             <Route path="/morning-huddle" element={<ProtectedRoute><MorningHuddle /></ProtectedRoute>} />
             <Route path="/goals" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
             <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
+            <Route path="/nudges" element={<ProtectedRoute><OfficeNudges /></ProtectedRoute>} />
             <Route path="/onboarding" element={<OnboardingRoute />} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />

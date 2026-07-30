@@ -137,11 +137,11 @@ async function deliver(
   await db.from("office_nudges").insert({
     org_id: opts.org_id,
     user_id: opts.user_id,
-    surface: "reminder",
+    surface: "dashboard",
     kind: opts.kind,
     content: opts.message,
     data_refs: opts.data_refs ?? {},
-    status: "open",
+    status: "new",
   });
 }
 
@@ -455,7 +455,7 @@ async function suggestSprints(db: Client, apiKey: string | undefined, orgId: str
         .select("id")
         .eq("user_id", a.user_id as string)
         .eq("kind", "sprint_suggestion")
-        .eq("status", "open")
+        .in("status", ["new", "shown"])
         .limit(1);
       if ((open?.length ?? 0) > 0) continue;
       await db.from("office_nudges").insert({
@@ -465,7 +465,7 @@ async function suggestSprints(db: Client, apiKey: string | undefined, orgId: str
         kind: "sprint_suggestion",
         content,
         data_refs: { generated_on: today },
-        status: "open",
+        status: "new",
       });
       made++;
     } catch (e) {

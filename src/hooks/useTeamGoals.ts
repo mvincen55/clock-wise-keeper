@@ -135,7 +135,7 @@ export function useSprintSuggestion() {
         .eq('org_id', ctx!.org_id)
         .eq('user_id', user!.id)
         .eq('kind', 'sprint_suggestion')
-        .eq('status', 'open')
+        .in('status', ['new', 'shown'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
