@@ -38,7 +38,7 @@ project_id = "lfiplzmxpmybtbzhmnkp"
   [functions.training-builder]
     verify_jwt = true
   [functions.accountability-engine]
-    verify_jwt = true
+    verify_jwt = false
   [functions.commitment-listen]
     verify_jwt = true
   [functions.google-calendar-events]

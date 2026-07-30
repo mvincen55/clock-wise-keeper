@@ -102,10 +102,11 @@ Deno.serve(async (req) => {
   }
   const action = body.action ?? "scan";
 
-  // Cron may call without a user; a signed-in caller must be an org admin.
+  // Cron proves itself with the service-role bearer and nothing else. A header
+  // like "Lovable-Context: cron" is trivially spoofable from outside, so it is
+  // not accepted as proof. A signed-in caller must be an org admin.
   const authHeader = req.headers.get("Authorization") ?? "";
-  const isCron = req.headers.get("Lovable-Context") === "cron" ||
-    authHeader === `Bearer ${serviceKey}`;
+  const isCron = authHeader === `Bearer ${serviceKey}`;
   let callerOrgIds: string[] | null = null;
 
   if (!isCron) {
