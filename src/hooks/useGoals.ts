@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { getToday } from '@/lib/time-utils';
+import { buildArchiveEvent } from '@/lib/goal-archive';
 
 // Goals: one encouraging, self-chosen monthly goal per person.
 // Not a scoreboard — progress is only "tasks done / total", never ranked.
