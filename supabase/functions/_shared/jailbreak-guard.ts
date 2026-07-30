@@ -87,8 +87,31 @@ export function supabaseIntegrityStore(): IntegrityStore {
         });
       }
     },
+    async countEmailedToday(orgId: string, day: string) {
+      const { count } = await db
+        .from("security_events")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", orgId)
+        .eq("severity", "elevated")
+        .eq("detail->>alert_emailed", "true")
+        .gte("created_at", `${day}T00:00:00Z`);
+      return count ?? 0;
+    },
+    async markEmailed(eventId: string) {
+      const { data } = await db
+        .from("security_events")
+        .select("detail")
+        .eq("id", eventId)
+        .maybeSingle();
+      const detail = (data?.detail as Record<string, unknown>) ?? {};
+      await db
+        .from("security_events")
+        .update({ detail: { ...detail, alert_emailed: true } })
+        .eq("id", eventId);
+    },
   };
 }
+
 
 /**
  * Scan + record in one call. Returns true when the caller should refuse.
