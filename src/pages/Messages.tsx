@@ -25,6 +25,7 @@ import {
   Users,
   MessageSquare,
   Plus,
+  Paperclip,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
