@@ -6,6 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useNotifications, useUnreadCount, useMarkNotificationRead, useMarkAllRead } from '@/hooks/useNotifications';
 import { formatDistanceToNow } from 'date-fns';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import TicketTimeline, { stageFromTicket } from '@/components/support/TicketTimeline';
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
@@ -15,6 +19,24 @@ export default function NotificationBell() {
   const unreadCount = useUnreadCount();
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllRead();
+  const { user } = useAuth();
+
+  // The problem reports this person filed — so they can see where each one stands
+  // without having to reopen the widget and ask.
+  const { data: tickets } = useQuery({
+    queryKey: ['my-support-tickets', user?.id],
+    enabled: !!user?.id && open,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('support_tickets')
+        .select('id, title, status, tier, created_at')
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -71,6 +93,20 @@ export default function NotificationBell() {
               </Button>
             )}
           </div>
+          {!!tickets?.length && (
+            <div className="border-b border-border px-4 py-3">
+              <h4 className="mb-2 text-xs font-medium text-muted-foreground">Your problem reports</h4>
+              <div className="space-y-3">
+                {tickets.map(t => (
+                  <div key={t.id} className="space-y-1.5">
+                    <p className="truncate text-xs text-foreground">{t.title}</p>
+                    <TicketTimeline stage={stageFromTicket(t.status, t.tier)} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <ScrollArea className="max-h-[400px]">
             {!notifications?.length ? (
               <p className="text-sm text-muted-foreground text-center py-8">No notifications</p>
