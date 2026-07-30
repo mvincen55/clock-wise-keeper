@@ -1517,10 +1517,22 @@ export default function FofBuilder() {
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
+      ) : !orgCtx ? (
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            You're not part of an office yet. Ask your office manager to resend your
+            invite, then open the invite link to join — the office's forms appear here
+            automatically once you're in.
+          </CardContent>
+        </Card>
       ) : !template ? (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
-            No active templates. <Link className="underline" to="/fof/templates">Create one</Link> to get started.
+            {isManager ? (
+              <>No active templates. <Link className="underline" to="/fof/templates">Create one</Link> to get started.</>
+            ) : (
+              <>No active forms yet. Your office manager sets these up on the Templates page.</>
+            )}
           </CardContent>
         </Card>
       ) : (
