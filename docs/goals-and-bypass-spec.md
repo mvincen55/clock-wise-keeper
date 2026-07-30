@@ -7,14 +7,22 @@ them current as things ship. Refinement pass starts with a spec-vs-built audit.
 First refinement item, BEFORE refactor: fix the `allowed_users` RLS recursion
 (runbook §6) — don't build on the crack.
 
+OPERATIONAL WARNING (2026-07-30): Lovable is committing from stale snapshots
+("Work in progress" commits interleaved with doc commits) and older versions of
+/goals have overwritten newer ones. Rules: ONE Lovable chat thread for Goals work,
+never use checkpoint Restore mid-sprint, verify /goals after every prompt. If the
+page drifts again, Prompt 10's feature-set list is the consolidation reference —
+re-send it. If docs/ files vanish or revert, re-push from the last doc commit.
+
 Build order / status: Prompt 1 (Goals) — sent · Prompt 3 (redesign) — sent ·
 Prompt 4 (brand pass) — sent · Prompt 2 (bypass, revised) — sent, implementing ·
 Training Library (`docs/training-library-spec.md`) — sent BEFORE Prompt 6 ·
 Prompt 6 (visuals + meetings + library hookup) — final version below ·
 Prompt 7 (edit/delete goals with accountability) — final version below, pending ·
 Prompt 8 (Goals Report print fix + polish enforcement) — final version below, pending ·
-Prompt 9 (hard SMART gate + team-page goals + read-aloud + roleplay) — final below, pending ·
-Prompt 5 (SMART) — SUPERSEDED by Prompt 9's hard gate; do not send.
+Prompt 9 (team-page goals + read-aloud + roleplay) — final below, pending ·
+Prompt 10 (CONSOLIDATION + S+M gate) — final below; supersedes Prompt 9 section 1
+and Prompt 8 line 5 · Prompt 5 (SMART) — SUPERSEDED, do not send.
 
 ## Product decisions (the "why")
 
@@ -44,16 +52,17 @@ Prompt 5 (SMART) — SUPERSEDED by Prompt 9's hard gate; do not send.
    always notifies manager AND owner (in-app + email), an unanswered bypass nags
    persistently, and repeat clock-outs escalate the wording and re-notify.
 8. **Polish never destroys the member's words** — but it is the DEFAULT (Prompt 8):
-   the polished SMART version is what gets saved unless the member explicitly taps
+   the polished version is what gets saved unless the member explicitly taps
    "Use my original words instead"; even then a light grammar cleanup (casing,
    punctuation) always applies. Original words stay restorable.
 9. **Pathfinder threads are visible only to the goal's owner** — even for team goals.
    People ask coaching questions more honestly when it isn't effectively cc'ing the boss.
-10. **SMART is a HARD GATE** (Prompt 9, superseding Prompt 5's soft version): a goal
-    cannot be saved until all five SMART chips pass — for creation AND edits. The
-    flow makes passing easy (polish proposes a fully-SMART version; chips update
-    live; hints by failing chips) rather than punitive. Watch for fake-round-number
-    goals in the first month — the known failure mode of hard gates.
+10. **HARD GATE = Specific + Measurable only** (Prompt 10, superseding Prompt 9's
+    all-five rule): a goal cannot be saved until it is specific AND measurable
+    (number, count, or clear done-state) — creation AND edits. Achievable / Relevant
+    / Time-bound are advisory chips, never blocking (T is inherent in a monthly
+    goal; A and R are judgment calls an AI shouldn't police). Polish proposes a
+    passing version so the gate is easy to clear. Watch for fake-round-number goals.
 11. **Training content lives in the central Training Library**
     (`docs/training-library-spec.md`) — goal resources link into it, never a parallel
     store. Grounding authority: assistant_memories > office docs > org config.
@@ -160,9 +169,10 @@ dates via `getToday()` in `src/lib/time-utils.ts`; checklist gate respects
 
 > Global rebrand pass, purely visual — no functionality changes. The product is Purple Envelope, not TimeVault. Replace the TimeVault name and orange clock mark in the app header/layout with "Purple Envelope" and a simple purple envelope mark. Switch the app's primary accent color from orange to #53406e everywhere it appears: buttons, links, active nav states, toggles, focus rings, badges — keeping text contrast accessible. Also update the PWA manifest name/theme color and any remaining "TimeVault"/"TimeKeeper" strings in nav labels and page titles. Leave printed-form footers alone for now; that's a separate pass.
 
-## Prompt 5 — SUPERSEDED by Prompt 9 (do not send)
+## Prompt 5 — SUPERSEDED by Prompt 10 (do not send)
 
-Prompt 9's hard SMART gate replaces the soft-gate approach. Kept for history only.
+Prompt 10's Specific+Measurable hard gate replaces both this and Prompt 9's
+all-five gate. Kept for history only.
 
 ## Prompt 6 — Always-on visuals + meeting awareness + Training Library hookup (FINAL, send AFTER Training Library)
 
@@ -227,18 +237,17 @@ training-builder; sending this first would recreate the silo).
 > 5. If the polished goal still misses a SMART element, the member CAN save — but only via an explicit "Save anyway" tap after the chips show what's missing. Never a silent bypass, never a hard block.
 > 6. Retroactive cleanup: any existing active goal whose title differs from what polish_goal produces gets a one-tap "Polish it" prompt on the goal card showing the improved version, original restorable.
 
-NOTE: Prompt 9 section 1 replaces Prompt 8 line 5 with a hard gate. If Prompt 8
-hasn't been sent yet, send it as-is and let Prompt 9 tighten it — or drop line 5
-from Prompt 8 and send Prompt 9 right after.
+NOTE: Prompt 10 item 2 replaces Prompt 8 line 5 with the Specific+Measurable hard
+gate. Send Prompt 8 as-is, then Prompt 10 tightens and consolidates.
 
-## Prompt 9 — Hard SMART gate + team-page goals + read-aloud + roleplay (FINAL, pending)
+## Prompt 9 — Team-page goals + read-aloud + roleplay (FINAL, pending)
+
+Section 1 (all-five SMART gate) is SUPERSEDED by Prompt 10 item 2. Sections 2–4
+stand as written.
 
 > Four upgrades: a hard SMART gate on goals, goals shown on the Team pages, read-aloud for training modules, and conversational roleplay assessments.
 >
-> 1) HARD SMART GATE (this REPLACES the soft "Save anyway" behavior):
-> - A goal cannot be saved until it meets ALL five SMART criteria. Make this easy, not annoying: polish_goal always proposes a fully-SMART version (grammar and wording fixed), the S/M/A/R/T chips update live as the member edits, and Save stays disabled until every chip passes — with a plain hint by the failing chip ("make it measurable — add a number or count"). No red error styling.
-> - Applies to goal creation AND edits. Existing raw goals still get the one-tap "Polish it" cleanup.
->
+> 1) HARD SMART GATE (SUPERSEDED — use Prompt 10 item 2 instead):
 > 2) GOALS ON THE TEAM PAGES (every role):
 > - Show each member's current-month TEAM goal — polished title, tasks done/total, latest status — on the Team page member cards and on the EmployeeDetail page. Visible to owners, managers, AND employees, same visibility as the Goals team grid. Private goals never appear here.
 >
@@ -255,6 +264,29 @@ from Prompt 8 and send Prompt 9 right after.
 >
 > When finished: redeploy the updated training-builder and goal-assistant edge functions and confirm both are live.
 
+## Prompt 10 — CONSOLIDATION + Specific/Measurable hard gate (FINAL — the anti-revert reference)
+
+Send this whenever /goals has drifted, and after any revert. Its feature list is
+the single source of truth for what the page must contain.
+
+> The /goals page has been reverting to older versions. Audit it against the FULL current spec below and build whatever is missing or outdated, working FORWARD from the current code. Never restore, revert, or resurrect an earlier version of this page — the list below is the single source of truth for what /goals must have.
+>
+> CURRENT /goals FEATURE SET (all must be present and working):
+> 1. Goal creation with polish_goal ALWAYS running; the polished version is the default; original words restorable only via an explicit "Use my original words instead" tap; light grammar cleanup always applies.
+> 2. HARD GATE on Specific + Measurable ONLY (this replaces the earlier all-five-SMART rule): Save stays disabled until the goal is specific AND has a measurable target (a number, count, or clear done-state), with a plain hint by whatever's missing ("make it measurable — add a number or count"). Achievable / Relevant / Time-bound appear as advisory chips but NEVER block — time-bound is inherent in a monthly goal. Applies to creation and edits.
+> 3. Pathfinder breakdown with schedule + next-team-meeting awareness; editable plan; "Accept plan" saves goal_tasks; per-task "Add to my checklist" toggle.
+> 4. Always-on month timeline (today + next team meeting markers), tasks-done progress meter, exactly one primary action per card state, no "0 of 0" states, full task titles on mobile.
+> 5. "Talk to Pathfinder" persistent thread per goal (goal_messages).
+> 6. "Share an update" with AI-drafted update (draft_update) reading tasks, checklist activity, and the thread; status tap On track / At risk / Done.
+> 7. Team grid + Meeting view with latest update per member; private goals excluded; "Changes since last meeting" fed by goal_events.
+> 8. Edit/delete own goals: archive with a REQUIRED reason (never hard-delete), goal_events recorded; editing a goal that has updates also requires a reason; only the goal's owner can edit or delete.
+> 9. Training Library links on goal cards with the member's state; completing a linked module checks off the attached plan task.
+> 10. Team Goals Report print built on the shared print architecture (footer pinned to page bottom, print-invariant snapshot tests).
+> 11. Current-month goal shown on Team page cards and EmployeeDetail for every role; private goals never shown there.
+> 12. Measurable target stored in goals.smart_target and shown on cards and the report.
+>
+> If anything in the current code contradicts this list — older behavior, older layout — replace it with the version above.
+
 ## Known build risks (check these when testing)
 
 - **Bypass depends on clock-out knowing checklist state.** Integration point is
@@ -268,6 +300,7 @@ from Prompt 8 and send Prompt 9 right after.
 - **New edge functions must actually deploy.** goal-assistant (Prompt 1),
   checklist-bypass (Prompt 2), training-builder (Training Library) — probe per
   `docs/runbook.md` §1 if the UI toasts "Failed to send a request to the Edge Function."
-- **Sprint-speed drift.** These bones were built fast by design; the refinement pass
-  audits spec-vs-built before any refactor. This file is the reference for
-  "intended" when something looks off.
+- **Sprint-speed drift + Lovable snapshot churn.** These bones were built fast by
+  design, and Lovable has already reverted /goals once from a stale snapshot. The
+  refinement pass audits spec-vs-built before any refactor; Prompt 10 is the
+  consolidation reference when the page drifts.
