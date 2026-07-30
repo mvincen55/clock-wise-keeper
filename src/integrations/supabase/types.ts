@@ -4351,6 +4351,92 @@ export type Database = {
           },
         ]
       }
+      support_messages: {
+        Row: {
+          attachment_path: string | null
+          author_user_id: string | null
+          content: string
+          created_at: string
+          id: string
+          org_id: string
+          role: string
+          ticket_id: string
+          tier: string | null
+        }
+        Insert: {
+          attachment_path?: string | null
+          author_user_id?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          org_id: string
+          role: string
+          ticket_id: string
+          tier?: string | null
+        }
+        Update: {
+          attachment_path?: string | null
+          author_user_id?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          org_id?: string
+          role?: string
+          ticket_id?: string
+          tier?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_tickets: {
+        Row: {
+          created_at: string
+          escalated_at: string | null
+          id: string
+          org_id: string
+          page_path: string | null
+          resolved_at: string | null
+          status: string
+          tier: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          escalated_at?: string | null
+          id?: string
+          org_id: string
+          page_path?: string | null
+          resolved_at?: string | null
+          status?: string
+          tier?: string
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          escalated_at?: string | null
+          id?: string
+          org_id?: string
+          page_path?: string | null
+          resolved_at?: string | null
+          status?: string
+          tier?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       suppressed_emails: {
         Row: {
           created_at: string
