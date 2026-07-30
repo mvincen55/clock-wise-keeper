@@ -7,6 +7,7 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import NotificationBell from '@/components/NotificationBell';
 import BypassReasonBanner from '@/components/BypassReasonBanner';
 import { useApprovalCounts } from '@/hooks/useApprovalCounts';
+import { useUnreadMessageCount } from '@/hooks/useMessaging';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface NavItem {
