@@ -116,7 +116,7 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <Button variant="ghost" size="sm" onClick={onBack} className="-ml-2">
+      <Button variant="ghost" size="sm" onClick={() => { speech.stop(); onBack(); }} className="-ml-2">
         <ArrowLeft className="mr-1.5 h-4 w-4" />
         Back to Training
       </Button>
