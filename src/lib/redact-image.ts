@@ -34,6 +34,25 @@ const SAFE_WORDS = new Set(
 
 export type RedactionLevel = 'off' | 'on';
 
+/** Which kinds of data get painted over. Each one can be turned off. */
+export interface RedactionCategories {
+  /** People's names — anything that looks like a person rather than app chrome. */
+  names: boolean;
+  /** Record IDs, long numbers, SSNs. */
+  ids: boolean;
+  /** Email addresses. */
+  emails: boolean;
+  /** Punch times and calendar dates. */
+  datesTimes: boolean;
+}
+
+export const ALL_REDACTION_CATEGORIES: RedactionCategories = {
+  names: true,
+  ids: true,
+  emails: true,
+  datesTimes: true,
+};
+
 export interface RedactionResult {
   file: File;
   previewUrl: string;
@@ -53,19 +72,24 @@ interface Line {
   words?: Word[];
 }
 
-function shouldMask(raw: string, knownNames: Set<string>): boolean {
+function shouldMask(
+  raw: string,
+  knownNames: Set<string>,
+  cats: RedactionCategories,
+): boolean {
   const t = raw.trim();
   if (t.length < 2) return false;
   const lower = t.toLowerCase();
   const stripped = t.replace(/[.,;:()[\]]/g, '');
 
-  if (knownNames.has(lower.replace(/[.,;:]/g, ''))) return true;
-  if (TIME.test(stripped) || CLOCK_WORD.test(stripped)) return true;
-  if (SSN.test(stripped) || LONG_NUMBER.test(stripped)) return true;
-  if (EMAIL.test(stripped)) return true;
-  if (UUID_CHUNK.test(stripped) && stripped.length >= 8) return true;
-  if (DATE.test(stripped)) return true;
-  if (CAPITALIZED.test(stripped) && !SAFE_WORDS.has(stripped.toLowerCase())) return true;
+  if (cats.names && knownNames.has(lower.replace(/[.,;:]/g, ''))) return true;
+  if (cats.datesTimes && (TIME.test(stripped) || CLOCK_WORD.test(stripped))) return true;
+  if (cats.ids && (SSN.test(stripped) || LONG_NUMBER.test(stripped))) return true;
+  if (cats.emails && EMAIL.test(stripped)) return true;
+  if (cats.ids && UUID_CHUNK.test(stripped) && stripped.length >= 8) return true;
+  if (cats.datesTimes && DATE.test(stripped)) return true;
+  if (cats.names && CAPITALIZED.test(stripped) && !SAFE_WORDS.has(stripped.toLowerCase()))
+    return true;
   return false;
 }
 
@@ -91,7 +115,9 @@ async function loadBitmap(file: File): Promise<HTMLImageElement> {
 export async function redactScreenshot(
   file: File,
   knownNames: string[] = [],
+  categories: RedactionCategories = ALL_REDACTION_CATEGORIES,
 ): Promise<RedactionResult> {
+  const cats = categories;
   const img = await loadBitmap(file);
   const canvas = document.createElement('canvas');
   canvas.width = img.naturalWidth;
@@ -127,7 +153,7 @@ export async function redactScreenshot(
 
   let maskedCount = 0;
   for (const w of words) {
-    if (!shouldMask(w.text ?? '', names)) continue;
+    if (!shouldMask(w.text ?? '', names, cats)) continue;
     const { x0, y0, x1, y1 } = w.bbox;
     const pad = 2;
     ctx.fillStyle = '#2b2433';
@@ -149,7 +175,7 @@ export async function redactScreenshot(
   const raw: string[] = [];
   for (const row of rows) {
     if (row.length === 0) continue;
-    masked.push(row.map(w => (shouldMask(w.text ?? '', names) ? '[hidden]' : w.text)).join(' ').trim());
+    masked.push(row.map(w => (shouldMask(w.text ?? '', names, cats) ? '[hidden]' : w.text)).join(' ').trim());
     raw.push(row.map(w => w.text).join(' ').trim());
   }
 
