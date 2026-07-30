@@ -2778,6 +2778,9 @@ export type Database = {
           id: string
           monthly_collections_target_cents: number | null
           org_id: string
+          roleplay_notes: string | null
+          roleplay_persona_style: string
+          roleplay_policy_tone: string
           updated_at: string
         }
         Insert: {
@@ -2786,6 +2789,9 @@ export type Database = {
           id?: string
           monthly_collections_target_cents?: number | null
           org_id: string
+          roleplay_notes?: string | null
+          roleplay_persona_style?: string
+          roleplay_policy_tone?: string
           updated_at?: string
         }
         Update: {
@@ -2794,6 +2800,9 @@ export type Database = {
           id?: string
           monthly_collections_target_cents?: number | null
           org_id?: string
+          roleplay_notes?: string | null
+          roleplay_persona_style?: string
+          roleplay_policy_tone?: string
           updated_at?: string
         }
         Relationships: [
