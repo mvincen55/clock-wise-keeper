@@ -19,6 +19,8 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = false
   [functions.fof-assistant]
     verify_jwt = true
+  [functions.goal-assistant]
+    verify_jwt = true
   [functions.kimi-agent]
     verify_jwt = true
   [functions.name-visits]
