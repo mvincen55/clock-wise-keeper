@@ -79,7 +79,9 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
   }
 
   async function finishReading() {
+    speech.stop();
     if (questions.length > 0) {
+
       if (assignment && assignment.status === 'assigned') {
         updateStatus.mutate({ id: assignment.id, status: 'in_progress' });
       }
