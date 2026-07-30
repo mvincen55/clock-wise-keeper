@@ -19,6 +19,10 @@ import {
   EyeOff,
   AlertTriangle,
   RotateCw,
+  History,
+  Plus,
+  ChevronLeft,
+  Paperclip,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadSupportPdf } from '@/lib/support-pdf';
@@ -45,6 +49,18 @@ type Bubble = {
   attachmentNames?: string[];
 };
 
+
+/** A report from before, as it appears in the history list. */
+type PastTicket = {
+  id: string;
+  title: string | null;
+  status: string | null;
+  tier: string | null;
+  category: string | null;
+  severity: string | null;
+  page_path: string | null;
+  created_at: string;
+};
 
 /** A file waiting to be sent, plus its scrubbed twin. */
 type Attachment = {
@@ -134,6 +150,9 @@ export default function SupportWidget() {
   const [tier, setTier] = useState<'standard' | 'senior'>('standard');
   const [suggested, setSuggested] = useState<string | null>(null);
   const [resolved, setResolved] = useState(false);
+  const [view, setView] = useState<'chat' | 'history'>('chat');
+  const [history, setHistory] = useState<PastTicket[] | null>(null);
+  const [loadingThread, setLoadingThread] = useState(false);
 
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -157,6 +176,11 @@ export default function SupportWidget() {
     setRangeStart(from || isoDay(weekAgo));
     setRangeEnd(to || isoDay(today));
   }, [open, ticketId, location.pathname, location.search]);
+
+  // Keep the list of past reports current whenever the panel is open.
+  useEffect(() => {
+    if (open && view === 'history') void loadHistory();
+  }, [open, view, loadHistory]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -292,6 +316,77 @@ export default function SupportWidget() {
     }
     addFiles(usable);
   };
+
+  /** Every report this person has filed, newest first. */
+  const loadHistory = useCallback(async () => {
+    if (!user) return;
+    const { data, error } = await supabase
+      .from('support_tickets')
+      .select('id, title, status, tier, category, severity, page_path, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(25);
+    if (error) {
+      toast.error('Could not load your past reports.');
+      setHistory([]);
+      return;
+    }
+    setHistory((data ?? []) as PastTicket[]);
+  }, [user]);
+
+  /**
+   * Reopen an old report exactly as it was: the whole back-and-forth plus the
+   * screenshots that were sent with it (fresh links, since the files are private).
+   */
+  const openTicket = useCallback(async (t: PastTicket) => {
+    setLoadingThread(true);
+    setView('chat');
+    setSendError(null);
+    setSuggested(null);
+    setFiles([]);
+    setText('');
+    setTicketId(t.id);
+    setTier(t.tier === 'senior' ? 'senior' : 'standard');
+    setResolved(t.status === 'resolved');
+    try {
+      const { data, error } = await supabase
+        .from('support_messages')
+        .select('id, role, content, attachment_path, created_at')
+        .eq('ticket_id', t.id)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+
+      const rows = data ?? [];
+      const restored: Bubble[] = [];
+      for (const m of rows) {
+        const path = m.attachment_path as string | null;
+        let previewUrls: string[] | undefined;
+        let attachmentNames: string[] | undefined;
+        if (path) {
+          const name = path.split('/').pop() ?? 'attachment';
+          attachmentNames = [name];
+          if (/\.(png|jpe?g|webp|gif|bmp|heic)$/i.test(path)) {
+            const { data: signed } = await supabase.storage
+              .from('support-attachments')
+              .createSignedUrl(path, 600);
+            if (signed?.signedUrl) previewUrls = [signed.signedUrl];
+          }
+        }
+        restored.push({
+          id: String(m.id),
+          role: m.role === 'assistant' ? 'assistant' : m.role === 'staff' ? 'staff' : 'user',
+          content: String(m.content ?? ''),
+          previewUrls,
+          attachmentNames,
+        });
+      }
+      setBubbles(restored);
+    } catch {
+      toast.error('Could not open that report.');
+    } finally {
+      setLoadingThread(false);
+    }
+  }, []);
 
   /** Turn a raw storage/network failure into something a human can act on. */
   const plainError = (e: unknown, what: string): string => {
