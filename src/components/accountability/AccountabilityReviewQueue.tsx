@@ -114,6 +114,7 @@ export default function AccountabilityReviewQueue() {
                 “{r.member_reason}” — {r.member_signed_name}
               </p>
             )}
+            <AccountabilityAuditTimeline report={r} />
             <ReviewForm report={r} />
           </div>
         ))}
