@@ -108,6 +108,11 @@ export default function Dashboard() {
         </Link>
       </div>
 
+      {/* One spotlight: your next thing. Everything else stays a tap away. */}
+      <TodayFocusCard />
+
+      <RescopeCard />
+
       {isManager && <OrgSnapshotPanel />}
 
       {isManager && <PracticeVitalsCard />}
@@ -117,6 +122,7 @@ export default function Dashboard() {
       <MyMomentumCard />
 
       <UserNotesBoard />
+
 
 
 
