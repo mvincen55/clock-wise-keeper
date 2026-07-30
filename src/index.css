@@ -16,7 +16,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 220 25% 10%;
 
-    --primary: 35 92% 50%;
+    --primary: 265 26% 34%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 220 15% 92%;
@@ -33,18 +33,18 @@
 
     --border: 220 15% 88%;
     --input: 220 15% 88%;
-    --ring: 35 92% 50%;
+    --ring: 265 26% 40%;
 
     --radius: 0.75rem;
 
     --sidebar-background: 220 20% 14%;
     --sidebar-foreground: 220 10% 85%;
-    --sidebar-primary: 35 92% 50%;
+    --sidebar-primary: 265 32% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 220 20% 20%;
     --sidebar-accent-foreground: 220 10% 85%;
     --sidebar-border: 220 20% 22%;
-    --sidebar-ring: 35 92% 50%;
+    --sidebar-ring: 265 32% 55%;
 
     /* Custom tokens */
     --success: 145 63% 42%;
@@ -52,7 +52,7 @@
     --warning: 35 92% 50%;
     --warning-foreground: 0 0% 100%;
     --clock-bg: 220 25% 12%;
-    --clock-fg: 35 92% 55%;
+    --clock-fg: 265 45% 72%;
     --break-bg: 200 80% 45%;
     --break-fg: 0 0% 100%;
   }
@@ -67,7 +67,7 @@
     --popover: 220 25% 12%;
     --popover-foreground: 220 10% 92%;
 
-    --primary: 35 92% 50%;
+    --primary: 265 26% 34%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 220 20% 18%;
@@ -84,23 +84,23 @@
 
     --border: 220 20% 20%;
     --input: 220 20% 20%;
-    --ring: 35 92% 50%;
+    --ring: 265 26% 40%;
 
     --sidebar-background: 220 25% 6%;
     --sidebar-foreground: 220 10% 85%;
-    --sidebar-primary: 35 92% 50%;
+    --sidebar-primary: 265 32% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 220 25% 14%;
     --sidebar-accent-foreground: 220 10% 85%;
     --sidebar-border: 220 25% 14%;
-    --sidebar-ring: 35 92% 50%;
+    --sidebar-ring: 265 32% 55%;
 
     --success: 145 63% 42%;
     --success-foreground: 0 0% 100%;
     --warning: 35 92% 50%;
     --warning-foreground: 0 0% 100%;
     --clock-bg: 220 25% 12%;
-    --clock-fg: 35 92% 55%;
+    --clock-fg: 265 45% 72%;
     --break-bg: 200 80% 45%;
     --break-fg: 0 0% 100%;
   }
@@ -131,7 +131,7 @@
   }
 
   .punch-glow {
-    box-shadow: 0 0 20px hsl(35 92% 50% / 0.3), 0 0 60px hsl(35 92% 50% / 0.1);
+    box-shadow: 0 0 20px hsl(265 45% 55% / 0.3), 0 0 60px hsl(265 45% 55% / 0.1);
   }
 
   .card-elevated {

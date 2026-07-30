@@ -88,10 +88,10 @@ export default function OAuthConsent() {
             <ShieldCheck className="h-7 w-7 text-primary-foreground" />
           </div>
           <CardTitle className="text-2xl">
-            Connect {details?.client?.name ?? "an app"} to TimeVault
+            Connect {details?.client?.name ?? "an app"} to Purple Envelope
           </CardTitle>
           <CardDescription>
-            {userEmail ? <>Signed in as <strong>{userEmail}</strong></> : "Authorize access to your TimeVault account"}
+            {userEmail ? <>Signed in as <strong>{userEmail}</strong></> : "Authorize access to your Purple Envelope account"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -110,10 +110,10 @@ export default function OAuthConsent() {
               <div className="rounded-lg border p-3 text-sm space-y-2">
                 <p>
                   <strong>{details.client?.name ?? "This app"}</strong> will be able to call
-                  TimeVault's enabled tools while you are signed in.
+                  Purple Envelope's enabled tools while you are signed in.
                 </p>
                 <p className="text-muted-foreground text-xs">
-                  This does not bypass TimeVault's permissions or backend policies.
+                  This does not bypass Purple Envelope's permissions or backend policies.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-2">

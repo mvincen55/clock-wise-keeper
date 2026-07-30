@@ -2,7 +2,7 @@ import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Clock, Table2, CalendarDays, FileText, LogOut, Menu, X, Settings, ShieldCheck, ShieldAlert, Send, CheckSquare, Users, Calendar, ReceiptText, Sparkles, BookOpen, Phone, ListChecks, Banknote, Sunrise, Target, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
+import { Clock, Table2, CalendarDays, FileText, LogOut, Menu, X, Settings, ShieldCheck, ShieldAlert, Send, CheckSquare, Users, Calendar, ReceiptText, Sparkles, BookOpen, Phone, ListChecks, Banknote, Sunrise, Target, Mail, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import NotificationBell from '@/components/NotificationBell';
 import { useApprovalCounts } from '@/hooks/useApprovalCounts';
@@ -24,7 +24,7 @@ interface NavGroup {
 // Grouped navigation. Planned sections (Communication, Training, Consent
 // Forms, Visit Flows) stay out of this list until their pages exist —
 // they appear here as each one ships. Dashboard has no item: the
-// TimeVault brand is the home link.
+// Purple Envelope brand is the home link.
 const NAV_GROUPS: NavGroup[] = [
   {
     label: null,
@@ -183,10 +183,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               title="Dashboard"
             >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary">
-                <Clock className="h-5 w-5 text-sidebar-primary-foreground" />
+                <Mail className="h-5 w-5 text-sidebar-primary-foreground" />
               </div>
               {!collapsed && (
-                <span className="text-lg font-semibold text-sidebar-primary-foreground">TimeVault</span>
+                <span className="text-lg font-semibold text-sidebar-primary-foreground">Purple Envelope</span>
               )}
             </Link>
             {!collapsed && <NotificationBell />}
@@ -255,9 +255,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <header className="md:hidden flex items-center justify-between px-4 py-3 border-b bg-card">
             <Link to="/" className="flex items-center gap-2" onClick={() => setMobileOpen(false)}>
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                <Clock className="h-4 w-4 text-primary-foreground" />
+                <Mail className="h-4 w-4 text-primary-foreground" />
               </div>
-              <span className="font-semibold">TimeVault</span>
+              <span className="font-semibold">Purple Envelope</span>
             </Link>
             <div className="flex items-center gap-1">
               <NotificationBell />
