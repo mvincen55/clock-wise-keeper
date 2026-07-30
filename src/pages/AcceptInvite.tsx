@@ -84,7 +84,11 @@ export default function AcceptInvite() {
       const { data, error } = await supabase.functions.invoke('accept-invite', {
         body: { token },
       });
-      if (error) throw error;
+      if (error) {
+        const details = 'context' in error ? await error.context.text() : '';
+        const parsed = details ? JSON.parse(details) : null;
+        throw new Error(parsed?.error || error.message);
+      }
       if (data?.error) throw new Error(data.error);
       setStep('success');
     } catch (e: any) {

@@ -189,6 +189,32 @@ Deno.serve(async (req) => {
     const base = ALLOWED_ORIGINS.includes(origin) ? origin : FALLBACK_ORIGIN;
     const link = `${base}/accept-invite?token=${token}`;
 
+    let unsubscribeToken = crypto.randomUUID();
+    const { data: existingUnsubscribeToken } = await supabaseAdmin
+      .from("email_unsubscribe_tokens")
+      .select("token")
+      .eq("email", rawEmail)
+      .maybeSingle();
+
+    if (existingUnsubscribeToken?.token) {
+      unsubscribeToken = existingUnsubscribeToken.token;
+    } else {
+      const { data: newUnsubscribeToken, error: unsubscribeTokenError } = await supabaseAdmin
+        .from("email_unsubscribe_tokens")
+        .insert({ email: rawEmail, token: unsubscribeToken })
+        .select("token")
+        .single();
+
+      if (unsubscribeTokenError || !newUnsubscribeToken?.token) {
+        console.error("Failed to create unsubscribe token", { error: unsubscribeTokenError, email: maskEmail(rawEmail) });
+        return new Response(
+          JSON.stringify({ success: true, emailed: false, link, warning: "Invite created but the email could not be prepared. Share the link manually." }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      unsubscribeToken = newUnsubscribeToken.token;
+    }
+
     // Enqueue onto the transactional queue; process-email-queue does the sending.
     const messageId = crypto.randomUUID();
     await supabaseAdmin.from("email_send_log").insert({
@@ -211,6 +237,7 @@ Deno.serve(async (req) => {
         text: inviteEmailText(orgName, role, link),
         purpose: "transactional",
         label: "org_invite",
+        unsubscribe_token: unsubscribeToken,
         queued_at: new Date().toISOString(),
       },
     });
