@@ -31,6 +31,8 @@ import GoalsPrintSheet, { type GoalsReportRow } from '@/components/goals/GoalsPr
 import BrandPrintStyle from '@/components/BrandPrintStyle';
 import { useOrgBranding } from '@/hooks/useOrgBranding';
 import {
+import NudgeLine from '@/components/NudgeLine';
+import { useSurfaceNudge } from '@/hooks/useOfficeInsights';
   currentMonth,
   monthElapsedFraction,
   monthLabel,
@@ -51,6 +53,7 @@ export default function Goals() {
   const { data, isLoading } = useGoalsMonth(month);
   const { data: team } = useActiveTeam();
   const { data: branding } = useOrgBranding();
+  const { nudge: goalsNudge } = useSurfaceNudge('goals');
   const createGoal = useCreateGoal();
   const { data: goalEvents = [] } = useGoalEvents(month);
   const linkReplacement = useLinkReplacementGoal();
@@ -256,6 +259,8 @@ export default function Goals() {
           </Button>
         </div>
       </header>
+
+      {goalsNudge && <NudgeLine nudge={goalsNudge} />}
 
       {!myTeamGoal && (
         <SetGoalCard
