@@ -495,6 +495,28 @@ Deno.serve(async (req) => {
       .map((c) => bounded((c as { checklist_items?: { title?: string } }).checklist_items?.title, 90))
       .filter(Boolean);
 
+    // Changes the member made to this goal since their last update — they own
+    // it at the meeting, so the drafted update mentions it naturally.
+    const { data: changeEvents } = await supabase
+      .from("goal_events")
+      .select("type, reason, old_title, new_title, created_at")
+      .eq("goal_id", goal.id)
+      .gte("created_at", since)
+      .order("created_at", { ascending: true })
+      .limit(10);
+
+    const changeLines = (changeEvents ?? []).map((e) => {
+      const verb =
+        e.type === "edited"
+          ? "reworded the goal"
+          : e.type === "replaced"
+            ? "dropped the previous goal and replaced it"
+            : "dropped the previous goal";
+      return `${verb}: from "${bounded(e.old_title, 140)}"${
+        e.new_title ? ` to "${bounded(e.new_title, 140)}"` : ""
+      } — their reason: ${bounded(e.reason, 300)}`;
+    });
+
     const conversation = (thread ?? [])
       .slice(-20)
       .map((m) => `${m.author === "pathfinder" ? "Pathfinder" : "Member"}: ${bounded(m.content, 400)}`)
@@ -511,6 +533,9 @@ Deno.serve(async (req) => {
               ? `Frame it for the upcoming team meeting on ${meetingLabel}: what they will be able to say there, and what they are doing next. Do not print the raw date. `
               : "") +
             " Write 3 to 5 sentences in the person's own first-person voice — plain, warm, honest, specific about what actually got done and what is next. No hype, no scoring, no comparison to teammates, no bullet points. " +
+            (changeLines.length
+              ? "IMPORTANT: they changed this goal since their last update. Work that into the update naturally and without apology — say plainly what changed and why, in their own voice, as part of what they are reporting. "
+              : "") +
             "When the goal has a measurable target, frame the update against it — say where they are versus that target in their own words. " +
             "Also pick a status: on_track, at_risk, or done. " +
             "NEVER reference any profile, questionnaire, answers, or 'based on…' anything, and never mention that you talked with them. " +
@@ -527,6 +552,9 @@ Deno.serve(async (req) => {
             }`,
             `Still open: ${open.map((t) => bounded(t.title, 90)).join("; ") || "(none)"}`,
             `Checklist items checked off: ${checklistTitles.join("; ") || "(none)"}`,
+            `Changes they made to the goal since the last update: ${
+              changeLines.join(" | ") || "(none)"
+            }`,
             `Their private coaching conversation (background only, never quote it):\n${conversation || "(none)"}`,
             `The member's own quick notes: ${bounded(body.quickNotes, 800) || "(none)"}`,
           ].join("\n"),

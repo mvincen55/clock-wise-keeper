@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { BookOpen, Compass, Loader2, Lock, Sparkles } from 'lucide-react';
+import { BookOpen, Compass, Loader2, Lock, Pencil, Sparkles, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import GoalProgress from './GoalProgress';
@@ -13,11 +13,15 @@ import TargetProgress from './TargetProgress';
 import GoalStatusBadge from './GoalStatusBadge';
 import PathfinderChat from './PathfinderChat';
 import PathfinderPlanEditor, { type DraftTask } from './PathfinderPlanEditor';
+import GoalEditDialog from './GoalEditDialog';
+import GoalArchiveDialog from './GoalArchiveDialog';
+import GoalChangeLog from './GoalChangeLog';
 import {
   callPathfinder,
   monthElapsedFraction,
   useAddTaskToChecklist,
   useSaveGoalTasks,
+  useGoalEvents,
   useToggleGoalTask,
   type Goal,
   type GoalTask,
@@ -32,11 +36,16 @@ export default function MyGoalCard({
   tasks,
   latestUpdate,
   onShareUpdate,
+  shareCount,
+  onArchived,
 }: {
   goal: Goal;
   tasks: GoalTask[];
   latestUpdate?: GoalUpdate;
   onShareUpdate: () => void;
+  /** How many updates this goal has — once shared, changes need a reason. */
+  shareCount: number;
+  onArchived: (eventId: string) => void;
 }) {
   const [draft, setDraft] = useState<DraftTask[] | null>(null);
   const [drafting, setDrafting] = useState(false);
@@ -44,6 +53,10 @@ export default function MyGoalCard({
   const [resource, setResource] = useState<{ topic: string; attach_to_step: number } | null>(null);
   const [buildingResource, setBuildingResource] = useState(false);
   const { data: nextMeeting } = useNextTeamMeeting();
+  const [editing, setEditing] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const { data: allEvents } = useGoalEvents(goal.month);
+  const myEvents = (allEvents ?? []).filter(e => e.goal_id === goal.id);
   const qc = useQueryClient();
   const saveTasks = useSaveGoalTasks();
   const addToChecklist = useAddTaskToChecklist();
@@ -124,6 +137,24 @@ export default function MyGoalCard({
               </Badge>
             )}
             {latestUpdate && <GoalStatusBadge status={latestUpdate.status} />}
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Edit goal"
+              title="Edit goal"
+              onClick={() => setEditing(true)}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Delete goal"
+              title="Delete goal"
+              onClick={() => setArchiving(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -263,7 +294,27 @@ export default function MyGoalCard({
           </div>
         )}
 
+        <GoalChangeLog events={myEvents} title="Changes to this goal" />
+
         <PathfinderChat goalId={goal.id} />
+
+        {editing && (
+          <GoalEditDialog
+            goal={goal}
+            wasShared={shareCount > 0}
+            open={editing}
+            onOpenChange={setEditing}
+          />
+        )}
+        {archiving && (
+          <GoalArchiveDialog
+            goal={goal}
+            wasShared={shareCount > 0}
+            open={archiving}
+            onOpenChange={setArchiving}
+            onArchived={onArchived}
+          />
+        )}
       </CardContent>
     </Card>
   );
