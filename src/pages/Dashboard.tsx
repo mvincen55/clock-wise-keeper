@@ -26,6 +26,8 @@ import MyMomentumCard from '@/components/MyMomentumCard';
 import SprintCard from '@/components/SprintCard';
 import UserNotesBoard from '@/components/UserNotesBoard';
 import TodayFocusCard from '@/components/copilot/TodayFocusCard';
+import MessagesCloseoutCard from '@/components/MessagesCloseoutCard';
+import DoctorBoardCard from '@/components/board/DoctorBoardCard';
 import RescopeCard from '@/components/copilot/RescopeCard';
 import { useClockInChase, useMiddayChase } from '@/hooks/useGentleChase';
 import MyAccountabilityCard from '@/components/accountability/MyAccountabilityCard';
@@ -121,6 +123,10 @@ export default function Dashboard() {
 
       {/* One spotlight: your next thing. Everything else stays a tap away. */}
       <TodayFocusCard />
+
+      <DoctorBoardCard />
+
+      <MessagesCloseoutCard />
 
       <RescopeCard />
 

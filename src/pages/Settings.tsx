@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/time-utils';
 import PrivacyTermsCard from '@/components/onboarding/PrivacyTermsCard';
 import EscalationPoliciesCard from '@/components/accountability/EscalationPoliciesCard';
+import MessagingSettingsCard from '@/components/settings/MessagingSettingsCard';
 
 const WEEKDAY_OPTIONS = [
   { value: '0', label: 'Sunday' },
@@ -82,6 +83,8 @@ export default function Settings() {
 
       {/* Payroll Settings (manager only) */}
       {isManager && (
+      <MessagingSettingsCard />
+
       <Card className="card-elevated">
         <CardHeader className="border-b">
           <CardTitle className="flex items-center gap-2">
