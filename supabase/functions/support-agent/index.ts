@@ -81,7 +81,7 @@ async function buildContext(
 
   const { data: employee } = await db
     .from("employees")
-    .select("id, first_name, last_name, position")
+    .select("id, display_name, preferred_name, team")
     .eq("org_id", orgId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -91,8 +91,8 @@ async function buildContext(
     return parts.join("\n");
   }
 
-  parts.push(`Reporter: ${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim());
-  if (employee.position) parts.push(`Position: ${employee.position}`);
+  parts.push(`Reporter: ${employee.preferred_name ?? employee.display_name ?? "unknown"}`);
+  if (employee.team) parts.push(`Team: ${employee.team}`);
 
   const east = (iso: string | null) =>
     iso
@@ -103,50 +103,67 @@ async function buildContext(
           hour: "numeric",
           minute: "2-digit",
         })
-      : "—";
+      : "\u2014";
 
   const { data: punches } = await db
     .from("punches")
-    .select("punch_type, punch_time, source, superseded_at")
+    .select("punch_type, punch_time, source, is_edited")
     .eq("employee_id", employee.id)
-    .is("superseded_at", null)
     .order("punch_time", { ascending: false })
     .limit(12);
 
   if (punches?.length) {
     parts.push(
-      "Recent punches (Eastern, newest first):\n" +
+      "Recent punches (shown in Eastern, stored UTC \u2014 newest first):\n" +
         punches
-          .map((p) => `  ${p.punch_type} ${east(p.punch_time as string)} (${p.source ?? "app"})`)
+          .map(
+            (p) =>
+              `  ${p.punch_type} ${east(p.punch_time as string)} (${p.source ?? "app"}${p.is_edited ? ", edited" : ""})`,
+          )
           .join("\n"),
     );
   }
 
   const { data: attendance } = await db
     .from("attendance_day_status")
-    .select("work_date, status, note")
+    .select("entry_date, status_code, is_late, minutes_late, is_absent, is_incomplete, office_closed")
     .eq("employee_id", employee.id)
-    .order("work_date", { ascending: false })
+    .order("entry_date", { ascending: false })
     .limit(7);
 
   if (attendance?.length) {
     parts.push(
       "Recent attendance days:\n" +
-        attendance.map((a) => `  ${a.work_date}: ${a.status}${a.note ? ` — ${a.note}` : ""}`).join("\n"),
+        attendance
+          .map((a) => {
+            const flags = [
+              a.is_late ? `late ${a.minutes_late ?? "?"}m` : null,
+              a.is_absent ? "absent" : null,
+              a.is_incomplete ? "incomplete punches" : null,
+              a.office_closed ? "office closed" : null,
+            ].filter(Boolean);
+            return `  ${a.entry_date}: ${a.status_code ?? "\u2014"}${flags.length ? ` (${flags.join(", ")})` : ""}`;
+          })
+          .join("\n"),
     );
   }
 
   const { data: pto } = await db
     .from("pto_requests")
-    .select("start_date, end_date, status, hours")
+    .select("start_date, end_date, status, hours_requested, pto_type")
     .eq("employee_id", employee.id)
     .order("start_date", { ascending: false })
     .limit(5);
 
   if (pto?.length) {
     parts.push(
-      "Recent PTO requests:\n" +
-        pto.map((p) => `  ${p.start_date} → ${p.end_date}: ${p.status} (${p.hours ?? "?"}h)`).join("\n"),
+      "Recent time-off requests:\n" +
+        pto
+          .map(
+            (p) =>
+              `  ${p.start_date} \u2192 ${p.end_date}: ${p.pto_type ?? "PTO"} \u2014 ${p.status} (${p.hours_requested ?? "?"}h)`,
+          )
+          .join("\n"),
     );
   }
 
