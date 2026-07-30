@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Loader2, Sparkles } from 'lucide-react';
+import GoalMonthTimeline from './GoalMonthTimeline';
+import { meetingCountdownLabel, useNextTeamMeeting } from '@/hooks/useOfficeEvents';
 import { toast } from 'sonner';
 import {
   callPathfinder,
@@ -12,7 +14,6 @@ import {
   type Goal,
   type UpdateStatus,
 } from '@/hooks/useGoals';
-import GoalMonthTimeline from './GoalMonthTimeline';
 
 const STATUSES: UpdateStatus[] = ['on_track', 'at_risk', 'done'];
 
@@ -33,11 +34,15 @@ export default function GoalUpdateModal({
   goal,
   open,
   onOpenChange,
+  tasks = [],
 }: {
   goal: Goal;
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  tasks?: { done: boolean }[];
 }) {
+  const { data: nextMeeting } = useNextTeamMeeting();
+  const meetingDate = nextMeeting?.event_date ?? null;
   const [notes, setNotes] = useState('');
   const [content, setContent] = useState('');
   const [draft, setDraft] = useState('');
@@ -97,11 +102,21 @@ export default function GoalUpdateModal({
           <DialogTitle>Share an update</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 p-3">
-            <p className="break-words text-sm font-medium">{goal.title}</p>
-            <GoalMonthTimeline month={goal.month} compact />
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+            <p className="mb-2 break-words text-sm font-medium">{goal.title}</p>
+            <GoalMonthTimeline
+              month={goal.month}
+              meetingDate={meetingDate}
+              done={tasks.filter(t => t.done).length}
+              total={tasks.length}
+              compact
+            />
+            <p className="mt-2 text-xs text-muted-foreground">
+              {meetingDate
+                ? `Pathfinder is framing this for the meeting — ${meetingCountdownLabel(meetingDate).toLowerCase()}.`
+                : 'Pathfinder drafts this from what you have actually finished.'}
+            </p>
           </div>
-
           <div className="space-y-1.5">
             <Label htmlFor="quick-notes">Quick notes (optional)</Label>
             <Textarea

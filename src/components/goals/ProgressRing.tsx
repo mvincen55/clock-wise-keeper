@@ -1,19 +1,19 @@
 import { cn } from '@/lib/utils';
 
 /**
- * A small purple ring showing plan progress. Amber when the work badly
- * trails the calendar. Quiet by design — no gamification.
+ * A small ring showing steps done vs total. Purple normally, amber when the
+ * work badly trails the calendar. Calm — no gamification, no confetti.
  */
 export default function ProgressRing({
   done,
   total,
-  monthElapsed,
+  monthElapsed = 0,
   size = 44,
   className,
 }: {
   done: number;
   total: number;
-  monthElapsed: number;
+  monthElapsed?: number;
   size?: number;
   className?: string;
 }) {
@@ -24,49 +24,38 @@ export default function ProgressRing({
   const c = 2 * Math.PI * r;
 
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox={`0 0 ${size} ${size}`}
-      className={cn('shrink-0', className)}
-      role="img"
-      aria-label={total > 0 ? `${done} of ${total} steps done` : 'No plan yet'}
-    >
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        strokeWidth={stroke}
-        className="stroke-muted"
-      />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        strokeDasharray={`${c * pct} ${c}`}
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        stroke={
-          total === 0
-            ? 'hsl(var(--muted-foreground) / 0.35)'
-            : behind
-              ? 'hsl(var(--goal-amber))'
-              : 'hsl(var(--goal-purple))'
-        }
-        className="transition-all"
-      />
-      <text
-        x="50%"
-        y="50%"
-        dominantBaseline="central"
-        textAnchor="middle"
-        className="fill-foreground text-[10px] font-medium"
-      >
-        {total > 0 ? `${done}/${total}` : '—'}
-      </text>
-    </svg>
+    <div className={cn('relative shrink-0', className)} style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          strokeWidth={stroke}
+          className="stroke-muted"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - pct)}
+          className={cn(
+            'transition-all',
+            total === 0
+              ? 'stroke-transparent'
+              : behind
+                ? 'stroke-[hsl(var(--goal-amber))]'
+                : 'stroke-[hsl(var(--goal-purple))]'
+          )}
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold tabular-nums">
+        {total === 0 ? '–' : `${Math.round(pct * 100)}%`}
+      </span>
+    </div>
   );
 }

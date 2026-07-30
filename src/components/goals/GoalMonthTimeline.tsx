@@ -1,122 +1,110 @@
 import { CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getToday } from '@/lib/time-utils';
-import { daysUntil, shortDate, useNextTeamMeeting } from '@/hooks/useOfficeEvents';
+import { meetingCountdownLabel } from '@/hooks/useOfficeEvents';
 
-function daysInMonth(month: string) {
+function daysInMonth(month: string): number {
   const [y, m] = month.split('-').map(Number);
   return new Date(Date.UTC(y, m, 0)).getUTCDate();
 }
 
-function dayOfMonth(dateStr: string) {
-  return Number(dateStr.slice(8, 10));
+/** Position (0-100) of a YYYY-MM-DD inside the month bar, or null if outside. */
+function posOf(month: string, date: string | null | undefined): number | null {
+  if (!date || date.slice(0, 7) !== month) return null;
+  const total = daysInMonth(month);
+  const day = Number(date.slice(8, 10));
+  return ((day - 0.5) / total) * 100;
 }
 
 /**
- * The month, always on screen — even before a plan exists.
- * A calm bar for the month with a marker for today and one for the next
- * team meeting, plus the plan progress laid over it once there is one.
+ * The always-on visual for a goal: a bar for the month with a marker for
+ * today and one for the next team meeting, plus the tasks-done fill once a
+ * plan exists. Renders in every state, plan or no plan.
  */
 export default function GoalMonthTimeline({
   month,
-  done = 0,
-  total = 0,
+  meetingDate,
+  done,
+  total,
   compact = false,
   className,
 }: {
   month: string;
-  done?: number;
-  total?: number;
+  meetingDate?: string | null;
+  done: number;
+  total: number;
   compact?: boolean;
   className?: string;
 }) {
-  const meeting = useNextTeamMeeting();
   const today = getToday();
-  const total_days = daysInMonth(month);
-
-  const inThisMonth = (d?: string | null) => !!d && d.slice(0, 7) === month;
-  const pos = (d: string) => Math.min(100, Math.max(0, ((dayOfMonth(d) - 0.5) / total_days) * 100));
-
-  const todayPct = inThisMonth(today) ? pos(today) : today.slice(0, 7) > month ? 100 : 0;
-  const meetingPct = inThisMonth(meeting?.event_date) ? pos(meeting!.event_date) : null;
-
-  const progress = total > 0 ? done / total : 0;
-  const monthElapsed = todayPct / 100;
-  const behind = total > 0 && progress + 0.25 < monthElapsed;
-
-  const until = meeting ? daysUntil(meeting.event_date) : null;
-  const countdown =
-    meeting == null
-      ? 'No team meeting on the calendar yet.'
-      : until === 0
-        ? `Team meeting today — ${shortDate(meeting.event_date)}.`
-        : until === 1
-          ? 'Team meeting tomorrow.'
-          : `Team meeting in ${until} days — ${shortDate(meeting.event_date)}.`;
+  const todayPos = posOf(month, today) ?? (today.slice(0, 7) > month ? 100 : 0);
+  const meetingPos = posOf(month, meetingDate);
+  const elapsed = todayPos / 100;
+  const pct = total > 0 ? done / total : 0;
+  const behind = total > 0 && pct + 0.25 < elapsed;
 
   return (
-    <div className={cn('space-y-1.5', className)}>
-      <div className="relative">
+    <div className={cn('space-y-2', className)}>
+      <div className="relative pt-4">
         {/* the month */}
-        <div className={cn('w-full rounded-full bg-muted', compact ? 'h-1.5' : 'h-2.5')} />
-
-        {/* elapsed */}
-        <div
-          className={cn(
-            'absolute inset-y-0 left-0 rounded-full bg-muted-foreground/20',
-            compact ? 'h-1.5' : 'h-2.5'
+        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+          {total > 0 && (
+            <div
+              className={cn(
+                'h-full rounded-full transition-all',
+                behind ? 'bg-[hsl(var(--goal-amber))]' : 'bg-[hsl(var(--goal-purple))]'
+              )}
+              style={{ width: `${Math.max(pct * 100, pct > 0 ? 4 : 0)}%` }}
+            />
           )}
-          style={{ width: `${todayPct}%` }}
-        />
+        </div>
 
-        {/* plan progress laid over the calendar */}
-        {total > 0 && (
-          <div
-            className={cn(
-              'absolute inset-y-0 left-0 rounded-full transition-all',
-              compact ? 'h-1.5' : 'h-2.5',
-              behind ? 'bg-[hsl(var(--goal-amber))]' : 'bg-[hsl(var(--goal-purple))]'
-            )}
-            style={{ width: `${Math.max(progress * 100, progress > 0 ? 3 : 0)}%` }}
-          />
-        )}
+        {/* elapsed hairline — the calendar's own pace */}
+        <div
+          className="pointer-events-none absolute left-0 top-[1.05rem] h-2 rounded-full border-r border-foreground/25"
+          style={{ width: `${todayPos}%` }}
+          aria-hidden
+        />
 
         {/* today */}
         <div
-          className={cn(
-            'absolute -translate-x-1/2 rounded-full bg-foreground',
-            compact ? '-top-0.5 h-2.5 w-[2px]' : '-top-1 h-4.5 w-[2px]'
-          )}
-          style={{ left: `${todayPct}%`, height: compact ? 10 : 18, top: compact ? -2 : -4 }}
-          aria-label="Today"
-        />
+          className="pointer-events-none absolute top-0 flex -translate-x-1/2 flex-col items-center"
+          style={{ left: `${todayPos}%` }}
+        >
+          <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+            Today
+          </span>
+          <span className="mt-0.5 h-4 w-px bg-foreground/40" />
+        </div>
 
         {/* next team meeting */}
-        {meetingPct !== null && (
+        {meetingPos !== null && (
           <div
-            className="absolute -translate-x-1/2"
-            style={{ left: `${meetingPct}%`, top: compact ? -5 : -7 }}
-            aria-label="Next team meeting"
+            className="pointer-events-none absolute top-0 flex -translate-x-1/2 flex-col items-center"
+            style={{ left: `${meetingPos}%` }}
           >
-            <span
-              className={cn(
-                'block rounded-full border-2 border-background bg-[hsl(var(--goal-purple))]',
-                compact ? 'h-2.5 w-2.5' : 'h-4 w-4'
-              )}
-            />
+            <span className="text-[9px] font-medium uppercase tracking-wide text-[hsl(var(--goal-purple))]">
+              Meeting
+            </span>
+            <span className="mt-0.5 h-4 w-px bg-[hsl(var(--goal-purple))]" />
           </div>
         )}
       </div>
 
-      <p
+      <div
         className={cn(
-          'flex items-center gap-1.5 text-muted-foreground',
+          'flex flex-wrap items-center justify-between gap-x-3 gap-y-1',
           compact ? 'text-[11px]' : 'text-xs'
         )}
       >
-        <CalendarDays className={compact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
-        {countdown}
-      </p>
+        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+          <CalendarDays className="h-3.5 w-3.5" />
+          {meetingCountdownLabel(meetingDate)}
+        </span>
+        <span className="text-muted-foreground">
+          {total > 0 ? `${done} of ${total} steps done` : 'No plan yet'}
+        </span>
+      </div>
     </div>
   );
 }

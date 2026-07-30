@@ -13,19 +13,20 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Lock, Loader2, Printer, Users } from 'lucide-react';
+import { CalendarDays, Lock, Loader2, Printer, Target, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import GoalUpdateModal from '@/components/goals/GoalUpdateModal';
 import GoalProgress from '@/components/goals/GoalProgress';
-import GoalMonthTimeline from '@/components/goals/GoalMonthTimeline';
-import ProgressRing from '@/components/goals/ProgressRing';
 import TargetProgress from '@/components/goals/TargetProgress';
 import GoalStatusBadge from '@/components/goals/GoalStatusBadge';
 import MyGoalCard from '@/components/goals/MyGoalCard';
 import SetGoalCard from '@/components/goals/SetGoalCard';
 import TeamGoalCard from '@/components/goals/TeamGoalCard';
+import GoalMonthTimeline from '@/components/goals/GoalMonthTimeline';
+import ProgressRing from '@/components/goals/ProgressRing';
+import { meetingCountdownLabel, useNextTeamMeeting } from '@/hooks/useOfficeEvents';
 import GoalsPrintSheet, { type GoalsReportRow } from '@/components/goals/GoalsPrintSheet';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
 import { useOrgBranding } from '@/hooks/useOrgBranding';
@@ -48,6 +49,8 @@ export default function Goals() {
   const { data, isLoading } = useGoalsMonth(month);
   const { data: team } = useActiveTeam();
   const { data: branding } = useOrgBranding();
+  const { data: nextMeeting } = useNextTeamMeeting();
+  const meetingDate = nextMeeting?.event_date ?? null;
   const createGoal = useCreateGoal();
 
   const [meetingView, setMeetingView] = useState(false);
@@ -149,6 +152,10 @@ export default function Goals() {
           <div>
             <h1 className="text-2xl font-semibold">Team meeting — {monthLabel(month)}</h1>
             <p className="text-sm text-muted-foreground">Where everyone is with their goal.</p>
+            <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <CalendarDays className="h-3.5 w-3.5" />
+              {meetingCountdownLabel(meetingDate)}
+            </p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => window.print()}>
@@ -162,7 +169,19 @@ export default function Goals() {
         </div>
 
         {teamGoals.length === 0 && (
-          <p className="text-sm text-muted-foreground">No goals shared with the team yet.</p>
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+              <Target className="h-7 w-7 text-[hsl(var(--goal-purple))]" />
+              <p className="text-sm font-medium">Nothing shared with the team yet</p>
+              <p className="max-w-sm text-xs text-muted-foreground">
+                As soon as someone sets a goal for {monthLabel(month)}, it shows up here ready for
+                the meeting.
+              </p>
+              <Button className="mt-2" onClick={() => setMeetingView(false)}>
+                Back to Goals
+              </Button>
+            </CardContent>
+          </Card>
         )}
 
         {teamGoals.map(goal => {
@@ -172,27 +191,26 @@ export default function Goals() {
             <Card key={goal.id}>
               <CardHeader className="pb-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <CardTitle className="text-base">{nameOf(goal.user_id)}</CardTitle>
+                  <span className="flex items-center gap-3">
+                    <ProgressRing
+                      done={t.filter(x => x.done).length}
+                      total={t.length}
+                      monthElapsed={monthElapsedFraction(goal.month)}
+                      size={38}
+                    />
+                    <CardTitle className="text-base">{nameOf(goal.user_id)}</CardTitle>
+                  </span>
                   {u && <GoalStatusBadge status={u.status} />}
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="break-words font-medium">{goal.title}</p>
-                <div className="flex items-start gap-4">
-                  <ProgressRing
-                    done={t.filter(x => x.done).length}
-                    total={t.length}
-                    monthElapsed={monthElapsedFraction(goal.month)}
-                    size={48}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <GoalMonthTimeline
-                      month={goal.month}
-                      done={t.filter(x => x.done).length}
-                      total={t.length}
-                    />
-                  </div>
-                </div>
+                <GoalMonthTimeline
+                  month={goal.month}
+                  meetingDate={meetingDate}
+                  done={t.filter(x => x.done).length}
+                  total={t.length}
+                />
                 <GoalProgress
                   done={t.filter(x => x.done).length}
                   total={t.length}
@@ -227,6 +245,10 @@ export default function Goals() {
           <h1 className="text-2xl font-semibold">Goals</h1>
           <p className="text-sm text-muted-foreground">
             One thing each of us is working on this month — {monthLabel(month)}.
+          </p>
+          <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <CalendarDays className="h-3.5 w-3.5" />
+            {meetingCountdownLabel(meetingDate)}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -266,6 +288,17 @@ export default function Goals() {
 
       <section className="space-y-4">
         <h2 className="text-lg font-semibold">The team this month</h2>
+        {(team ?? []).length === 0 && (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+              <Users className="h-7 w-7 text-[hsl(var(--goal-purple))]" />
+              <p className="text-sm font-medium">No active team members yet</p>
+              <p className="max-w-sm text-xs text-muted-foreground">
+                Once people are on the team, each of them gets a card here for {monthLabel(month)}.
+              </p>
+            </CardContent>
+          </Card>
+        )}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {(team ?? []).map(member => {
             const goal = goals.find(
@@ -278,6 +311,7 @@ export default function Goals() {
                 goal={goal}
                 tasks={goal ? tasksFor(goal.id) : []}
                 latestUpdate={goal ? latestUpdate(goal.id) : undefined}
+                meetingDate={meetingDate}
               />
             );
           })}
@@ -287,6 +321,7 @@ export default function Goals() {
       {updateGoal && (
         <GoalUpdateModal
           goal={updateGoal}
+          tasks={tasksFor(updateGoal.id)}
           open={!!updateGoal}
           onOpenChange={open => !open && setUpdateGoal(null)}
         />

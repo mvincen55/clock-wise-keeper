@@ -4,80 +4,97 @@ import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { getToday } from '@/lib/time-utils';
 
-// Office events live alongside closures and days off on the office calendar.
-// Today there is one category that matters to the rest of the app —
-// "team_meeting" — because goal plans are built around the next one.
+// Office events — reuses the existing office calendar. The category we care
+// about here is "team_meeting": the date the team gathers and shares goal
+// updates. Pathfinder paces plans toward it.
 
 export type OfficeEventCategory = 'team_meeting' | 'other';
 
 export type OfficeEvent = {
   id: string;
   org_id: string;
-  event_date: string;
   title: string;
-  category: OfficeEventCategory;
+  category: string;
+  event_date: string;
   start_time: string | null;
   notes: string | null;
   created_by: string | null;
   created_at: string;
 };
 
-export function useOfficeEvents() {
+/** Office events in a date window (inclusive), oldest first. */
+export function useOfficeEvents(start: string, end: string, category?: OfficeEventCategory) {
   const { data: ctx } = useOrgContext();
   return useQuery({
-    queryKey: ['office-events', ctx?.org_id],
+    queryKey: ['office-events', ctx?.org_id, start, end, category ?? 'all'],
     enabled: !!ctx,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('office_events')
         .select('*')
         .eq('org_id', ctx!.org_id)
+        .gte('event_date', start)
+        .lte('event_date', end)
         .order('event_date');
+      if (category) query = query.eq('category', category);
+      const { data, error } = await query;
       if (error) throw error;
       return (data ?? []) as OfficeEvent[];
     },
   });
 }
 
-/** The next team meeting on or after today, or null when none is scheduled. */
-export function useNextTeamMeeting(): OfficeEvent | null {
-  const { data } = useOfficeEvents();
+/** The next team meeting on or after today — or null when none is scheduled. */
+export function useNextTeamMeeting() {
+  const { data: ctx } = useOrgContext();
   const today = getToday();
-  return (
-    (data ?? []).find(e => e.category === 'team_meeting' && e.event_date >= today) ?? null
-  );
+  return useQuery({
+    queryKey: ['next-team-meeting', ctx?.org_id, today],
+    enabled: !!ctx,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('office_events')
+        .select('*')
+        .eq('org_id', ctx!.org_id)
+        .eq('category', 'team_meeting')
+        .gte('event_date', today)
+        .order('event_date')
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return (data ?? null) as OfficeEvent | null;
+    },
+  });
 }
 
-export function useSaveOfficeEvent() {
+export function useCreateOfficeEvent() {
   const { user } = useAuth();
   const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
-      id?: string;
-      event_date: string;
       title: string;
-      category: OfficeEventCategory;
+      event_date: string;
       start_time?: string | null;
       notes?: string | null;
+      category?: OfficeEventCategory;
     }) => {
       if (!ctx || !user) throw new Error('Not ready');
-      const row = {
+      const { error } = await supabase.from('office_events').insert({
         org_id: ctx.org_id,
-        event_date: input.event_date,
         title: input.title,
-        category: input.category,
+        event_date: input.event_date,
         start_time: input.start_time || null,
         notes: input.notes || null,
+        category: input.category ?? 'team_meeting',
         created_by: user.id,
-      };
-      const query = input.id
-        ? supabase.from('office_events').update(row).eq('id', input.id)
-        : supabase.from('office_events').insert(row);
-      const { error } = await query;
+      });
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['office-events'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['office-events'] });
+      qc.invalidateQueries({ queryKey: ['next-team-meeting'] });
+    },
   });
 }
 
@@ -88,31 +105,34 @@ export function useDeleteOfficeEvent() {
       const { error } = await supabase.from('office_events').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['office-events'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['office-events'] });
+      qc.invalidateQueries({ queryKey: ['next-team-meeting'] });
+    },
   });
 }
 
-/** "in 6 days" / "today" / "tomorrow" — plain, calm language. */
-export function daysUntil(dateStr: string): number {
-  const today = getToday();
-  const a = Date.UTC(
-    Number(today.slice(0, 4)),
-    Number(today.slice(5, 7)) - 1,
-    Number(today.slice(8, 10))
-  );
-  const b = Date.UTC(
-    Number(dateStr.slice(0, 4)),
-    Number(dateStr.slice(5, 7)) - 1,
-    Number(dateStr.slice(8, 10))
-  );
+/** Whole days from today to a date, Eastern. Negative when in the past. */
+export function daysUntil(date: string): number {
+  const a = new Date(`${getToday()}T12:00:00Z`).getTime();
+  const b = new Date(`${date}T12:00:00Z`).getTime();
   return Math.round((b - a) / 86400000);
 }
 
-export function shortDate(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', {
+export function shortDate(date: string): string {
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     timeZone: 'UTC',
   });
+}
+
+/** "Team meeting in 6 days" / "Team meeting today" / no meeting scheduled. */
+export function meetingCountdownLabel(date: string | null | undefined): string {
+  if (!date) return 'No team meeting on the calendar yet';
+  const d = daysUntil(date);
+  if (d === 0) return `Team meeting today (${shortDate(date)})`;
+  if (d === 1) return `Team meeting tomorrow (${shortDate(date)})`;
+  if (d < 0) return `Last team meeting was ${shortDate(date)}`;
+  return `Team meeting in ${d} days (${shortDate(date)})`;
 }

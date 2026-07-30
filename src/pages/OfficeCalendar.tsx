@@ -11,13 +11,13 @@ import { ChevronLeft, ChevronRight, Plus, Trash2, Printer, FileText, Loader2, Sh
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useOrgEmployees } from '@/hooks/useEmployees';
 import { useOfficeClosures, useAddClosure } from '@/hooks/useOfficeClosures';
-import { useOfficeEvents } from '@/hooks/useOfficeEvents';
-import TeamMeetingsCard from '@/components/calendar/TeamMeetingsCard';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAddDayOff } from '@/hooks/useDaysOff';
+import TeamMeetingsCard from '@/components/calendar/TeamMeetingsCard';
+import { useOfficeEvents } from '@/hooks/useOfficeEvents';
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -33,6 +33,7 @@ const eventColors: Record<string, string> = {
   medical: 'bg-warning text-warning-foreground border-warning',
   closure: 'bg-secondary text-secondary-foreground border-secondary-foreground/40',
   gcal: 'bg-accent text-accent-foreground border-accent-foreground/40',
+  meeting: 'bg-[hsl(var(--goal-purple))] text-primary-foreground border-[hsl(var(--goal-purple))]',
 };
 
 type GCalEvent = {
@@ -151,7 +152,6 @@ export default function OfficeCalendar() {
   });
 
   const { data: closures } = useOfficeClosures(year);
-  const { data: officeEvents } = useOfficeEvents();
   const addClosure = useAddClosure();
   const addDayOff = useAddDayOff();
 
@@ -410,6 +410,15 @@ export default function OfficeCalendar() {
   const firstDayOfMonth = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const todayStr = new Date().toISOString().split('T')[0];
+
+  // Team meetings live in office_events — Goals paces plans toward them.
+  const { data: teamMeetings } = useOfficeEvents(monthStart, monthEnd, 'team_meeting');
+  const meetingsByDay = new Map<string, { id: string; title: string }[]>();
+  for (const m of teamMeetings ?? []) {
+    const list = meetingsByDay.get(m.event_date) ?? [];
+    list.push({ id: m.id, title: m.title });
+    meetingsByDay.set(m.event_date, list);
+  }
 
   const weeks: (number | null)[][] = [];
   let week: (number | null)[] = [];
@@ -718,8 +727,6 @@ export default function OfficeCalendar() {
         </Button>
       </div>
 
-      <TeamMeetingsCard isManager={isManager} />
-
       {/* Calendar Grid */}
       <Card className="card-elevated overflow-hidden">
         <CardContent className="p-0">
@@ -756,17 +763,15 @@ export default function OfficeCalendar() {
                       </div>
                     </div>
                     <div className="space-y-0.5">
-                      {(officeEvents || [])
-                        .filter(e => e.event_date === dateStr && e.category === 'team_meeting')
-                        .map(e => (
-                          <div
-                            key={e.id}
-                            className="truncate rounded border border-primary/40 bg-primary/10 px-1 py-0.5 text-[10px] font-medium leading-tight text-primary"
-                            title={e.notes || e.title}
-                          >
-                            👥 {e.title}
-                          </div>
-                        ))}
+                      {(meetingsByDay.get(dateStr) || []).map(m => (
+                        <div
+                          key={m.id}
+                          className={`text-[10px] font-medium leading-tight px-1 py-0.5 rounded border truncate ${eventColors.meeting}`}
+                          title={m.title}
+                        >
+                          👥 {m.title}
+                        </div>
+                      ))}
                       {namedClosures.map((evt, ei) => (
                         <div
                           key={`c-${ei}`}
@@ -818,6 +823,13 @@ export default function OfficeCalendar() {
         </CardContent>
       </Card>
 
+      <TeamMeetingsCard
+        start={monthStart}
+        end={monthEnd}
+        isManager={isManager}
+        defaultDate={todayStr >= monthStart && todayStr <= monthEnd ? todayStr : monthStart}
+      />
+
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-xs">
         <div className="flex items-center gap-1.5">
@@ -835,6 +847,10 @@ export default function OfficeCalendar() {
         <div className="flex items-center gap-1.5">
           <div className={`w-3 h-3 rounded border ${eventColors.closure}`} />
           <span className="text-muted-foreground">Office Closed</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className={`w-3 h-3 rounded border ${eventColors.meeting}`} />
+          <span className="text-muted-foreground">👥 Team Meeting</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className={`w-3 h-3 rounded border ${eventColors.gcal}`} />

@@ -12,7 +12,6 @@ Prompt 4 (brand pass) — sent · Prompt 2 (bypass, revised) — sent, implement
 Training Library (`docs/training-library-spec.md`) — sent BEFORE Prompt 6 ·
 Prompt 6 (visuals + meetings + library hookup) — final version below ·
 Prompt 7 (edit/delete goals with accountability) — final version below, pending ·
-Prompt 8 (Goals Report print fix + polish enforcement) — final version below, pending ·
 Prompt 5 (SMART) — pending, independent, send anytime.
 
 ## Product decisions (the "why")
@@ -42,16 +41,13 @@ Prompt 5 (SMART) — pending, independent, send anytime.
    off the clock), never hard-block clock-out (emergencies are real) — but bypassing
    always notifies manager AND owner (in-app + email), an unanswered bypass nags
    persistently, and repeat clock-outs escalate the wording and re-notify.
-8. **Polish never destroys the member's words** — but it is the DEFAULT (Prompt 8):
-   the polished SMART version is what gets saved unless the member explicitly taps
-   "Use my original words instead"; even then a light grammar cleanup (casing,
-   punctuation) always applies. Original words stay restorable.
+8. **Polish never destroys the member's words:** Pathfinder's cleaned-up goal/task text
+   is always shown with the original restorable underneath.
 9. **Pathfinder threads are visible only to the goal's owner** — even for team goals.
    People ask coaching questions more honestly when it isn't effectively cc'ing the boss.
-10. **SMART goals are coaching, never a hard gate** (Prompts 5 + 8): polish rewrites
-    goals to be Specific/Measurable/Achievable/Relevant/Time-bound and chips teach
-    the framework. Saving a goal that misses a SMART element requires an explicit
-    "Save anyway" tap — never a silent bypass, never a hard block.
+10. **SMART goals are coaching, never a gate** (Prompt 5): polish rewrites goals to be
+    Specific/Measurable/Achievable/Relevant/Time-bound, chips teach the framework, but
+    nothing ever blocks a save.
 11. **Training content lives in the central Training Library**
     (`docs/training-library-spec.md`) — goal resources link into it, never a parallel
     store. Grounding authority: assistant_memories > office docs > org config.
@@ -61,10 +57,6 @@ Prompt 5 (SMART) — pending, independent, send anytime.
     hard-delete. Edits to never-shared goals are free; edits to shared goals require
     a reason. Every change becomes a `goal_events` row that surfaces in the next
     meeting view and in the member's drafted update.
-13. **Every printable surface uses the shared print architecture** (Prompt 8):
-    BrandPrintStyle, the hide-all-body-children-except-print-root rule, full-height
-    sheet with the footer pinned to the page bottom, and inclusion in the
-    print-invariant snapshot tests. FOF, Deposit Log, Incident Report, Goals Report.
 
 ## Prompt 1 — Goals (sent)
 
@@ -221,20 +213,6 @@ training-builder; sending this first would recreate the silo).
 > - goal-assistant "draft_update" mode: if the member's goal was edited or archived since their last update, the drafted update mentions the change and reason naturally — it's part of what they report.
 >
 > No other schema changes beyond goal_events and the archived_at / archived_reason columns on goals.
-
-## Prompt 8 — Goals Report print fix + polish enforcement (FINAL, pending)
-
-> Fix the Team Goals Report print layout and make goal polish impossible to silently skip.
->
-> PRINT (Team Goals Report):
-> 1. Rebuild it on the EXACT print architecture of the FOF / Deposit Log / Incident Report sheets: BrandPrintStyle, the @media print rule that hides every body child except the print root (Radix dialogs portal outside #root), and the same 7.5in × 10in page content area. Add the Goals Report to the print-invariant snapshot tests so it can't drift.
-> 2. Pin the footer to the BOTTOM of the printed page: the print sheet is a full-height flex column, content at top, footer band pinned at the bottom carrying "Org name · Monthly Goals Report · [Month] · Printed [date] by [name]". A short report leaves whitespace in the MIDDLE of the page — the footer never floats up under the content.
-> 3. Match the professional language of the other branded sheets: same letterhead, summary stat chips up top (goals set / on track / at risk / done), one clean section per member — polished goal title, SMART target when set, plan progress bar, latest check-in — and members with no goal listed plainly. Brand purple accents, real content only, no filler.
->
-> GOAL POLISH CAN'T BE SILENTLY SKIPPED:
-> 4. polish_goal ALWAYS runs when a goal is submitted, and the polished SMART version is the default — saving the raw text requires an explicit "Use my original words instead" tap. Even then, always apply a light grammar cleanup (capitalization, punctuation, obvious typos) without changing the meaning.
-> 5. If the polished goal still misses a SMART element, the member CAN save — but only via an explicit "Save anyway" tap after the chips show what's missing. Never a silent bypass, never a hard block.
-> 6. Retroactive cleanup: any existing active goal whose title differs from what polish_goal produces gets a one-tap "Polish it" prompt on the goal card showing the improved version, original restorable.
 
 ## Known build risks (check these when testing)
 
