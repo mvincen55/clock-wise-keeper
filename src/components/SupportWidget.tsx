@@ -311,15 +311,17 @@ export default function SupportWidget() {
     (incoming: File[]) => {
       if (incoming.length === 0) return;
       const queued: Attachment[] = [];
+      let tooBig = 0;
+      let overflow = 0;
       setFiles(prev => {
         const next = [...prev];
         for (const f of incoming) {
           if (next.length >= MAX_FILES) {
-            toast.error(`You can attach up to ${MAX_FILES} files.`);
-            break;
+            overflow += 1;
+            continue;
           }
           if (f.size > MAX_IMAGE_BYTES) {
-            toast.error(`${f.name} is over 8MB — try a smaller one.`);
+            tooBig += 1;
             continue;
           }
           const isImage = f.type.startsWith('image/');
@@ -338,6 +340,17 @@ export default function SupportWidget() {
         }
         return next;
       });
+      // One summary instead of a toast per file — a folder drop shouldn't
+      // bury the panel in warnings.
+      if (queued.length > 1) {
+        toast.success(`${queued.length} files added to this report.`);
+      }
+      if (tooBig > 0) {
+        toast.error(`${tooBig} file${tooBig === 1 ? ' was' : 's were'} over 8MB and skipped.`);
+      }
+      if (overflow > 0) {
+        toast.error(`Only ${MAX_FILES} files fit in one report — ${overflow} left out.`);
+      }
       for (const item of queued) {
         if (item.original.type === 'application/pdf') void readPdf(item.key, item.original);
         else void redactOne(item.key, item.original);
@@ -345,6 +358,7 @@ export default function SupportWidget() {
     },
     [redactOne, readPdf],
   );
+
 
   /** Paste screenshots straight into the box — the fastest way to report. */
   const onPaste = (e: React.ClipboardEvent) => {
