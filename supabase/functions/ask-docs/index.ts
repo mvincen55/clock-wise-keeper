@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadProcedureNotes } from "../_shared/procedure-notes.ts";
+import { withDoctrine } from "../_shared/office-doctrine.ts";
 
 // AI assistant over the office knowledge base (policies, HR info,
 // insurance handbooks). Two-step retrieval: an AI call first turns the
@@ -245,7 +246,7 @@ Rules:
 ${excerpts ? `Relevant excerpts:\n\n${excerpts}` : "No excerpts matched this question."}`;
 
     const aiResponse = await callGateway(LOVABLE_API_KEY, [
-      { role: "system", content: systemPrompt },
+      { role: "system", content: withDoctrine(systemPrompt) },
       ...history,
       { role: "user", content: question },
     ]);

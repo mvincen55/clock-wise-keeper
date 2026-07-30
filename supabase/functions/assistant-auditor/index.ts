@@ -30,6 +30,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadCodeNotes, type CodeNote } from "../_shared/procedure-notes.ts";
+import { withDoctrine } from "../_shared/office-doctrine.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -103,7 +104,7 @@ async function askChecker(
         max_tokens: maxTokens,
         temperature: 0,
         messages: [
-          { role: "system", content: system },
+          { role: "system", content: withDoctrine(system) },
           { role: "user", content: user },
         ],
       }),
