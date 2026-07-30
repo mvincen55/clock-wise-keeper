@@ -12,6 +12,7 @@
 // "try it today" action.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { guardAiInput, JAILBREAK_REFUSAL } from "../_shared/jailbreak-guard.ts";
 import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
 
 const corsHeaders = {
@@ -175,6 +176,20 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!membership) return json({ error: "No active organization" }, 403);
     const orgId = membership.org_id as string;
+
+    // Integrity: the topic and audience are author-supplied prompt text and are
+    // the roleplay surface's injection path. Signature check only — the text
+    // itself is never stored, and the refusal says nothing about the flag.
+    if (
+      await guardAiInput({
+        orgId,
+        actorUserId: user.id,
+        surface: "training-roleplay",
+        input: [topic, ...audience].join(" \n "),
+      })
+    ) {
+      return json({ error: JAILBREAK_REFUSAL }, 200);
+    }
 
     // ---- Grounding: standing office rules (authoritative) -------------------
     const { data: memories } = await supabase
