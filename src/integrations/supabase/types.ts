@@ -5126,6 +5126,8 @@ export type Database = {
           title: string
         }[]
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       sign_incident_report_employee: {
         Args: { _report_id: string; _typed_name: string }
         Returns: {

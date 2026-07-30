@@ -2,7 +2,7 @@ import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Clock, Table2, CalendarDays, FileText, LogOut, Menu, X, Settings, ShieldCheck, ShieldAlert, Send, CheckSquare, Users, Calendar, ReceiptText, Sparkles, BookOpen, Phone, ListChecks, Banknote, Sunrise, Target, GraduationCap, Mail, Inbox, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
+import { Clock, Table2, CalendarDays, FileText, LogOut, Menu, X, Settings, ShieldCheck, ShieldAlert, Send, CheckSquare, Users, Calendar, ReceiptText, Sparkles, BookOpen, Phone, ListChecks, Banknote, Sunrise, Target, GraduationCap, Mail, Inbox, MessageSquare, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import NotificationBell from '@/components/NotificationBell';
 import BypassReasonBanner from '@/components/BypassReasonBanner';
@@ -31,6 +31,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: null,
     items: [
       { to: '/assistant', icon: Sparkles, label: 'Ask AI' },
+      { to: '/messages', icon: MessageSquare, label: 'Messages' },
       { to: '/nudges', icon: Inbox, label: 'Nudges' },
       { to: '/office-calendar', icon: Calendar, label: 'Calendar' },
 
