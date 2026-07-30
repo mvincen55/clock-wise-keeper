@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { createNotification } from '@/hooks/useNotifications';
+import { fingerprintFindings, type ReviewSnapshot } from '@/lib/audit-diff';
+
 
 // Training Library — one central set of modules for the whole practice,
 // plus who has been assigned what. Quiz answers stay private to the person
