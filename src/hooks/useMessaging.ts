@@ -188,19 +188,58 @@ export function useSendMessage() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ conversationId, content }: { conversationId: string; content: string }) => {
+    mutationFn: async ({
+      conversationId,
+      content,
+      files = [],
+    }: {
+      conversationId: string;
+      content: string;
+      files?: File[];
+    }) => {
       if (!ctx || !user) throw new Error('Not ready');
-      const { error } = await supabase.from('messages').insert({
-        org_id: ctx.org_id,
-        conversation_id: conversationId,
-        sender_id: user.id,
-        sender_kind: 'member',
-        content: content.trim(),
-      });
+      const { data: msg, error } = await supabase
+        .from('messages')
+        .insert({
+          org_id: ctx.org_id,
+          conversation_id: conversationId,
+          sender_id: user.id,
+          sender_kind: 'member',
+          content: content.trim(),
+        })
+        .select('id')
+        .single();
       if (error) throw error;
+
+      for (const file of files) {
+        // Path is always <org_id>/<conversation_id>/<file> — storage RLS
+        // reads the conversation id out of the path and allows participants only.
+        const safe = file.name.replace(/[^\w.\-]+/g, '_').slice(-80);
+        const path = `${ctx.org_id}/${conversationId}/${crypto.randomUUID()}-${safe}`;
+        const up = await supabase.storage
+          .from('message-attachments')
+          .upload(path, file, { contentType: file.type, upsert: false });
+        if (up.error) throw up.error;
+
+        const { error: rowErr } = await supabase.from('message_attachments').insert({
+          org_id: ctx.org_id,
+          conversation_id: conversationId,
+          message_id: msg.id,
+          uploaded_by: user.id,
+          storage_path: path,
+          file_name: file.name,
+          mime_type: file.type,
+          size_bytes: file.size,
+        });
+        if (rowErr) {
+          await supabase.storage.from('message-attachments').remove([path]);
+          throw rowErr;
+        }
+      }
     },
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ['messages', vars.conversationId] });
+      qc.invalidateQueries({ queryKey: ['message-attachments', vars.conversationId] });
       qc.invalidateQueries({ queryKey: ['conversations'] });
     },
     onError: (e: Error) => toast({ title: 'Message not sent', description: e.message, variant: 'destructive' }),

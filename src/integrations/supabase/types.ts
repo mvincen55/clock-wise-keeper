@@ -2622,6 +2622,63 @@ export type Database = {
           },
         ]
       }
+      message_attachments: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          file_name: string
+          id: string
+          message_id: string
+          mime_type: string
+          org_id: string
+          size_bytes: number
+          storage_path: string
+          updated_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          file_name: string
+          id?: string
+          message_id: string
+          mime_type: string
+          org_id: string
+          size_bytes: number
+          storage_path: string
+          updated_at?: string
+          uploaded_by?: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          file_name?: string
+          id?: string
+          message_id?: string
+          mime_type?: string
+          org_id?: string
+          size_bytes?: number
+          storage_path?: string
+          updated_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_attachments_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_attachments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           content: string

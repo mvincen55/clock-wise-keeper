@@ -25,9 +25,16 @@ import {
   Users,
   MessageSquare,
   Plus,
+  Paperclip,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { useOrgEmployees } from '@/hooks/useEmployees';
+import MessageAttachments from '@/components/MessageAttachments';
+import {
+  useConversationAttachments,
+  validateAttachment,
+} from '@/hooks/useMessageAttachments';
 import {
   useConversations,
   useMessages,
@@ -107,11 +114,20 @@ export default function Messages() {
   const [scopeToThread, setScopeToThread] = useState(false);
   const [draft, setDraft] = useState('');
   const [newDmOpen, setNewDmOpen] = useState(false);
+  const [pending, setPending] = useState<File[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
 
+  const { toast } = useToast();
   const send = useSendMessage();
   const markRead = useMarkConversationRead();
   const ensureDm = useEnsureDm();
   const ensureAi = useEnsureAiConversation();
+  const { data: attachments = [] } = useConversationAttachments(activeId);
+  const attByMessage = useMemo(() => {
+    const m = new Map<string, typeof attachments>();
+    attachments.forEach(a => m.set(a.message_id, [...(m.get(a.message_id) ?? []), a]));
+    return m;
+  }, [attachments]);
 
   const nameByUserId = useMemo(() => {
     const m = new Map<string, string>();
@@ -205,11 +221,31 @@ export default function Messages() {
     setActiveId(id);
   };
 
+  const onPickFiles = (list: FileList | null) => {
+    if (!list) return;
+    const next: File[] = [];
+    for (const f of Array.from(list)) {
+      const err = validateAttachment(f);
+      if (err) {
+        toast({ title: 'File not attached', description: `${f.name}: ${err}`, variant: 'destructive' });
+        continue;
+      }
+      next.push(f);
+    }
+    setPending(p => [...p, ...next]);
+  };
+
   const submit = () => {
-    if (!activeId || !draft.trim()) return;
+    if (!activeId || (!draft.trim() && pending.length === 0)) return;
     send.mutate(
-      { conversationId: activeId, content: draft },
-      { onSuccess: () => setDraft('') },
+      { conversationId: activeId, content: draft, files: pending },
+      {
+        onSuccess: () => {
+          setDraft('');
+          setPending([]);
+          if (fileRef.current) fileRef.current.value = '';
+        },
+      },
     );
   };
 
@@ -459,7 +495,8 @@ export default function Messages() {
                                   : nameByUserId.get(m.sender_id ?? '') ?? 'Teammate'}
                               </p>
                             )}
-                            <p className="whitespace-pre-wrap">{m.content}</p>
+                            {m.content && <p className="whitespace-pre-wrap">{m.content}</p>}
+                            <MessageAttachments attachments={attByMessage.get(m.id) ?? []} />
                             <p className="mt-1 text-[10px] opacity-60">{timeLabel(m.created_at)}</p>
                           </div>
                         </div>
@@ -468,22 +505,60 @@ export default function Messages() {
                     <div ref={bottomRef} />
                   </div>
                 </ScrollArea>
-                <div className="flex items-end gap-2 border-t p-3">
-                  <Textarea
-                    value={draft}
-                    onChange={e => setDraft(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        submit();
-                      }
-                    }}
-                    placeholder="Write a message…"
-                    className="min-h-[44px] resize-none"
-                  />
-                  <Button onClick={submit} disabled={!draft.trim() || send.isPending}>
-                    {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  </Button>
+                <div className="space-y-2 border-t p-3">
+                  {pending.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {pending.map((f, i) => (
+                        <Badge key={`${f.name}-${i}`} variant="secondary" className="gap-1">
+                          <Paperclip className="h-3 w-3" />
+                          <span className="max-w-[160px] truncate">{f.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setPending(p => p.filter((_, j) => j !== i))}
+                            aria-label={`Remove ${f.name}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-end gap-2">
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      multiple
+                      accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"
+                      className="hidden"
+                      onChange={e => onPickFiles(e.target.files)}
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => fileRef.current?.click()}
+                      aria-label="Attach image or PDF"
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
+                    <Textarea
+                      value={draft}
+                      onChange={e => setDraft(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          submit();
+                        }
+                      }}
+                      placeholder="Write a message…"
+                      className="min-h-[44px] resize-none"
+                    />
+                    <Button
+                      onClick={submit}
+                      disabled={(!draft.trim() && pending.length === 0) || send.isPending}
+                    >
+                      {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
               </>
             ) : (
