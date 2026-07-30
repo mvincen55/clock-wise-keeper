@@ -15,7 +15,8 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 
 export default function MessagingSettingsCard() {
   const { data: ctx } = useOrgContext();
-  const { settings, save, canEdit } = useMessagingSettings();
+  const { settings, save } = useMessagingSettings();
+  const canEdit = ctx?.role === "owner" || ctx?.role === "manager";
   const { prefs, save: savePrefs } = useOwnerBoardPrefs();
   const isOwner = ctx?.role === 'owner';
 
