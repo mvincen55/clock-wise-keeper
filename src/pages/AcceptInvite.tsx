@@ -11,11 +11,23 @@ import { useToast } from '@/hooks/use-toast';
 
 type Step = 'loading' | 'signup' | 'accepting' | 'success' | 'error';
 
+const normalizeEmail = (value?: string | null) => value?.trim().toLowerCase() || '';
+
+const canonicalEmail = (value?: string | null) => {
+  const normalized = normalizeEmail(value);
+  const [local, domain] = normalized.split('@');
+  if (!local || !domain) return normalized;
+  if (domain === 'gmail.com' || domain === 'googlemail.com') {
+    return `${local.split('+')[0].replace(/\./g, '')}@gmail.com`;
+  }
+  return normalized;
+};
+
 export default function AcceptInvite() {
   const [params] = useSearchParams();
   const token = params.get('token');
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
   const [step, setStep] = useState<Step>('loading');
@@ -60,7 +72,9 @@ export default function AcceptInvite() {
       setOrgName((inv as any).orgs?.name || 'Organization');
 
       // If user is already logged in, go straight to accept
-      if (user && user.email?.toLowerCase() === inv.email.toLowerCase()) {
+      if (authLoading) {
+        setStep('loading');
+      } else if (user && canonicalEmail(user.email) === canonicalEmail(inv.email)) {
         acceptInvite();
       } else if (user) {
         setErrorMsg(`You're signed in as ${user.email} but this invite is for ${inv.email}. Please sign out first.`);
@@ -69,12 +83,17 @@ export default function AcceptInvite() {
         setStep('signup');
       }
     })();
-  }, [token]);
+  }, [token, user, authLoading]);
 
   // If user logs in after signup, auto-accept
   useEffect(() => {
     if (user && invite && step === 'signup') {
-      acceptInvite();
+      if (canonicalEmail(user.email) === canonicalEmail(invite.email)) {
+        acceptInvite();
+      } else {
+        setErrorMsg(`You're signed in as ${user.email} but this invite is for ${invite.email}. Please sign out first.`);
+        setStep('error');
+      }
     }
   }, [user, invite]);
 
@@ -86,11 +105,14 @@ export default function AcceptInvite() {
       });
       if (error) {
         const details = 'context' in error ? await error.context.text() : '';
-        let parsed: { error?: string } | null = null;
+        let parsed: { error?: string; code?: string; signedInEmail?: string; inviteEmail?: string } | null = null;
         try {
           parsed = details ? JSON.parse(details) : null;
         } catch {
           parsed = null;
+        }
+        if (parsed?.code === 'email_mismatch' && parsed.signedInEmail && parsed.inviteEmail) {
+          throw new Error(`You're signed in as ${parsed.signedInEmail} but this invite is for ${parsed.inviteEmail}. Please sign out first.`);
         }
         throw new Error(parsed?.error || error.message);
       }
