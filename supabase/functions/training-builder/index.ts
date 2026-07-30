@@ -35,12 +35,14 @@ const MAX_DOC_CHARS = 30000;
 
 type QuizQuestion = { q: string; options: string[]; correct_index: number; why: string };
 type Visual = { kind: string; title: string; prompt: string; steps: string[] };
+type Roleplay = { persona: string; scenario: string; rubric: string[] };
 type Section = { heading: string; body: string; try_it: string; visuals: Visual[] };
 type ModuleContent = {
   outcome: string;
   sections: Section[];
   recap: string;
   quiz: { questions: QuizQuestion[] } | null;
+  roleplay: Roleplay | null;
 };
 
 const text = (v: unknown, cap: number): string =>
@@ -111,11 +113,24 @@ function normalizeContent(raw: unknown): ModuleContent | null {
     if (questions.length > 0) quiz = { questions };
   }
 
+  // A conversational assessment, when the skill is interpersonal.
+  const rawRole = r.roleplay as Record<string, unknown> | null | undefined;
+  let roleplay: Roleplay | null = null;
+  if (rawRole && typeof rawRole === "object") {
+    const persona = text(rawRole.persona, 300);
+    const scenario = text(rawRole.scenario, 900);
+    const rubric = Array.isArray(rawRole.rubric)
+      ? (rawRole.rubric as unknown[]).map((x) => text(x, 200)).filter(Boolean).slice(0, 6)
+      : [];
+    if (persona && scenario && rubric.length >= 2) roleplay = { persona, scenario, rubric };
+  }
+
   return {
     outcome: text(r.outcome, 600),
     sections,
     recap: text(r.recap, 1500),
     quiz,
+    roleplay,
   };
 }
 
@@ -287,10 +302,11 @@ WRITING RULES
 - Warm, respectful, practical. Talk to a capable colleague, never down to them.
 - 3 to 5 sections. Each section body is 120-260 words and ends naturally; the "try_it" is one specific action the person can do on their very next shift.
 ${STYLE_RULES[learningStyle]}
+- If the skill is interpersonal (explaining treatment, insurance questions, front-desk or phone conversations), ALSO build a "roleplay": a named fictional person with a situation ("Dana Reyes, a patient who just heard her crown isn't fully covered"), the scenario in 2-3 sentences, and a 4-item rubric derived from the outcome (plain-language explanation, checked understanding, correct for THIS office's policy, tone). Insurance scenarios must be answerable the way this office actually answers. If the skill is not interpersonal, set "roleplay" to null.
 - The quiz has 4-6 scenario questions (a short situation, then what should you do). Each has 3-4 options, exactly one best answer, and a "why" that teaches the reasoning — not just "correct".
 
 Return ONLY JSON in exactly this shape:
-{"title":"...","summary":"one sentence","outcome":"what the person can do after this module","sections":[{"heading":"...","body":"...","try_it":"...","visuals":[{"kind":"diagram|board|storyboard|checklist","title":"...","prompt":"...","steps":["..."]}]}],"recap":"3-5 sentence recap","quiz":{"questions":[{"q":"...","options":["..."],"correct_index":0,"why":"..."}]}}`;
+{"title":"...","summary":"one sentence","outcome":"what the person can do after this module","sections":[{"heading":"...","body":"...","try_it":"...","visuals":[{"kind":"diagram|board|storyboard|checklist","title":"...","prompt":"...","steps":["..."]}]}],"recap":"3-5 sentence recap","quiz":{"questions":[{"q":"...","options":["..."],"correct_index":0,"why":"..."}]},"roleplay":{"persona":"...","scenario":"...","rubric":["..."]}|null}`;
 
     const userPrompt = `TOPIC: ${topic}
 AUDIENCE (positions this is for): ${audience.length ? audience.join(", ") : "all"}
