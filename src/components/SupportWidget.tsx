@@ -71,24 +71,43 @@ export default function SupportWidget() {
     setTicketId(null);
     setBubbles([]);
     setText('');
-    setFile(null);
+    setFiles([]);
     setTier('standard');
     setSuggested(null);
     setResolved(false);
   }, []);
 
-  /** Paste a screenshot straight into the box — the fastest way to report. */
+  const addFiles = useCallback((incoming: File[]) => {
+    if (incoming.length === 0) return;
+    setFiles(prev => {
+      const next = [...prev];
+      for (const f of incoming) {
+        if (next.length >= MAX_FILES) {
+          toast.error(`You can attach up to ${MAX_FILES} files.`);
+          break;
+        }
+        if (f.size > MAX_IMAGE_BYTES) {
+          toast.error(`${f.name} is over 8MB — try a smaller one.`);
+          continue;
+        }
+        next.push(f);
+      }
+      return next;
+    });
+  }, []);
+
+  /** Paste screenshots straight into the box — the fastest way to report. */
   const onPaste = (e: React.ClipboardEvent) => {
-    const img = Array.from(e.clipboardData.files).find(f => f.type.startsWith('image/'));
-    if (img) {
+    const imgs = Array.from(e.clipboardData.files).filter(f => f.type.startsWith('image/'));
+    if (imgs.length) {
       e.preventDefault();
-      setFile(img);
+      addFiles(imgs);
     }
   };
 
   const send = async (asTier: 'standard' | 'senior' = tier) => {
     const body = text.trim();
-    if ((!body && !file) || busy || !user || !orgId) return;
+    if ((!body && files.length === 0) || busy || !user || !orgId) return;
     setBusy(true);
     setSuggested(null);
 
@@ -110,36 +129,57 @@ export default function SupportWidget() {
         setTicketId(id);
       }
 
-      let attachmentPath: string | null = null;
-      let previewUrl: string | null = null;
-      if (file) {
-        if (file.size > MAX_IMAGE_BYTES) throw new Error('That image is over 8MB — try a smaller one.');
-        const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+      const uploaded: { path: string; file: File }[] = [];
+      for (const f of files) {
+        const ext = f.name.split('.').pop()?.toLowerCase() || 'png';
         const path = `${orgId}/${id}/${crypto.randomUUID()}.${ext}`;
         const { error: upErr } = await supabase.storage
           .from('support-attachments')
-          .upload(path, file, { contentType: file.type });
+          .upload(path, f, { contentType: f.type });
         if (upErr) throw upErr;
-        attachmentPath = path;
-        previewUrl = URL.createObjectURL(file);
+        uploaded.push({ path, file: f });
       }
 
-      const { error: msgErr } = await supabase.from('support_messages').insert({
-        ticket_id: id,
-        org_id: orgId,
-        role: 'user',
-        author_user_id: user.id,
-        content: body || '(screenshot)',
-        attachment_path: attachmentPath,
-      });
+      // One row per attachment so the agent sees each file; the first row
+      // carries the typed message.
+      const rows =
+        uploaded.length > 0
+          ? uploaded.map((u, i) => ({
+              ticket_id: id,
+              org_id: orgId,
+              role: 'user',
+              author_user_id: user.id,
+              content: i === 0 ? body || `(${u.file.name})` : `(${u.file.name})`,
+              attachment_path: u.path,
+            }))
+          : [
+              {
+                ticket_id: id,
+                org_id: orgId,
+                role: 'user',
+                author_user_id: user.id,
+                content: body,
+                attachment_path: null,
+              },
+            ];
+
+      const { error: msgErr } = await supabase.from('support_messages').insert(rows);
       if (msgErr) throw msgErr;
 
       setBubbles(prev => [
         ...prev,
-        { id: crypto.randomUUID(), role: 'user', content: body || '(screenshot)', previewUrl },
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: body || `${uploaded.length} file${uploaded.length === 1 ? '' : 's'} attached`,
+          previewUrls: uploaded
+            .filter(u => u.file.type.startsWith('image/'))
+            .map(u => URL.createObjectURL(u.file)),
+        },
       ]);
       setText('');
-      setFile(null);
+      setFiles([]);
+
 
       const { data, error } = await supabase.functions.invoke('support-agent', {
         body: { ticket_id: id, tier: asTier },
