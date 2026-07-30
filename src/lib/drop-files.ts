@@ -55,9 +55,10 @@ export async function filesFromDrop(dt: DataTransfer): Promise<File[]> {
   const items = Array.from(dt.items ?? []);
   const entries = items
     .map(i => (i.kind === 'file' && 'webkitGetAsEntry' in i
-      ? (i as DataTransferItem & { webkitGetAsEntry: () => FsEntry | null }).webkitGetAsEntry()
+      ? (i.webkitGetAsEntry() as unknown as FsEntry | null)
       : null))
     .filter((e): e is FsEntry => !!e);
+
 
   if (entries.length === 0) return Array.from(dt.files ?? []);
 
