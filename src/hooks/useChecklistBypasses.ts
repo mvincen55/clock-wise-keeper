@@ -54,15 +54,24 @@ export function useOrgBypasses(orgId?: string) {
   return useQuery({
     queryKey: ['checklist-bypasses', 'org', orgId],
     enabled: !!orgId,
-    queryFn: async () => {
+    queryFn: async (): Promise<(ChecklistBypass & { display_name: string })[]> => {
       const { data, error } = await supabase
         .from('checklist_bypasses')
-        .select('*, employees:employee_id(display_name)')
+        .select('*')
         .eq('org_id', orgId!)
         .order('checklist_date', { ascending: false })
         .limit(200);
       if (error) throw error;
-      return (data ?? []) as (ChecklistBypass & { employees: { display_name: string } | null })[];
+      const rows = data ?? [];
+      if (!rows.length) return [];
+
+      const { data: emps } = await supabase
+        .from('employees')
+        .select('id, display_name')
+        .in('id', Array.from(new Set(rows.map(r => r.employee_id))));
+      const names = new Map((emps ?? []).map(e => [e.id, e.display_name]));
+
+      return rows.map(r => ({ ...r, display_name: names.get(r.employee_id) || 'Team member' }));
     },
   });
 }
