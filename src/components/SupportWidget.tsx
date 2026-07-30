@@ -202,6 +202,8 @@ export default function SupportWidget() {
     setSuggested(null);
     setResolved(false);
     setStageTimes({});
+    setTicketContext(null);
+
     setCategory('other');
     setSeverity('medium');
   }, []);
