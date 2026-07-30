@@ -18,7 +18,7 @@ function q(sql: string): string {
 describe.runIf(hasPsql)("security_events RLS policies", () => {
   const policies = () =>
     q(
-      `select p.polname || '|' || p.polcmd || '|' || coalesce(pg_get_expr(p.polqual, p.polrelid), '') ||
+      `select p.polname || '|' || p.polcmd::text || '|' || coalesce(pg_get_expr(p.polqual, p.polrelid), '') ||
               '|' || coalesce(pg_get_expr(p.polwithcheck, p.polrelid), '') ||
               '|' || (select string_agg(r.rolname, ',') from pg_roles r where r.oid = any(p.polroles))
        from pg_policy p join pg_class c on c.oid = p.polrelid
