@@ -1,9 +1,9 @@
 # Messaging + Office AI Channel — feature spec
 
-Status (2026-07-30): Prompt 17 pending. Pairs with `docs/intelligence-spec.md`
+Status (2026-07-30): Prompts 17 + 18 pending. Pairs with `docs/intelligence-spec.md`
 (Prompt 16): 16 is the brain, 17 is the voice — office-insights delivers through
 the AI conversation instead of only cards. Takes "announcements system" OFF the
-deferred list (this is the real version).
+deferred list.
 
 ## Product decisions (the "why")
 
@@ -17,7 +17,7 @@ deferred list (this is the real version).
    This is the product promise and the UI says so.
 3. **One safety valve, recipient-controlled.** Any recipient can report a
    specific message to the owner; only that message, visibly marked. Default
-   always sealed. (Owner decision whether to keep the valve.)
+   always sealed.
 4. **The AI speaks the employee's language.** Messages are written to the
    individual: name, goal, checklist patterns, work-style profile (STEALTH —
    never revealed), office rules as the world. Receipts required; max 1
@@ -28,6 +28,11 @@ deferred list (this is the real version).
    sharpens training audience tags.
 6. **In-app only.** New messages badge the existing notification system +
    Messages nav badge; no email for messages.
+7. **The secrecy promise has exactly two exceptions, both written down**
+   (Prompt 18): (a) a recipient's own report of a specific message; (b) security
+   telemetry — attack patterns and record-level anomalies, METADATA never
+   content. Message bodies are never scanned for "suspicious meaning." The
+   policy manual states the integrity monitoring plainly.
 
 ## Prompt 17 — Messaging + announcements + AI channel (pending)
 
@@ -53,11 +58,33 @@ deferred list (this is the real version).
 >
 > When finished: confirm the messages, conversations, and participants tables all enforce participant-only reads in the dashboard (RLS probe as a second user).
 
+## Prompt 18 — Integrity & Safety layer (pending)
+
+> Build an Integrity & Safety layer: the system watches its own behavior and attack patterns — NEVER message content. Conventions: org_id everywhere, RLS, fail-open, fingerprinted dedupe (same pattern as assistant-auditor / training-auditor).
+>
+> NEW TABLE security_events: id, org_id, actor_user_id nullable, kind ('auth_abuse' | 'function_abuse' | 'ai_jailbreak' | 'time_anomaly' | 'deposit_discrepancy' | 'destructive_action'), detail jsonb, severity ('watch' | 'elevated'), status ('open' | 'reviewed' | 'dismissed'), fingerprint, created_at, reviewed_by nullable. RLS: owners/managers read and update; the actor can NEVER see their own events (no tip-offs). Member clients cannot insert — events are written only by edge functions with the service role.
+>
+> DETECTORS (system signals only):
+> 1. AI jailbreak/injection — goal-assistant, training-builder, training-roleplay, and office-insights detect instruction-override attempts: "ignore previous instructions", requests for other employees' data, attempts to inject patient data, attempts to make the AI contradict office rules or reveal its system prompt. On detection: the AI refuses politely and says nothing about the flag, and a security_event (kind 'ai_jailbreak') is logged with the ATTACK SIGNATURE (the pattern matched), never the conversation content.
+> 2. Time anomalies — GPS patterns that look spoofed (impossible consecutive locations, teleporting), punch edit sprees, repeated checklist-bypass farming patterns.
+> 3. Deposit discrepancies — vitals or deposit edits after day-close (already audit-logged; now they also raise a security_event).
+> 4. Destructive actions — WipeDataTool runs, mass deletes, after-hours admin changes.
+> 5. Auth abuse — repeated failed logins, repeated allowlist-bounced signups (someone probing the closed door).
+>
+> ELEVATION: severity 'elevated' → in-app alert + email to all owners (managers optional via a setting) via the transactional email queue (log email_send_log first, mask addresses in logs). A new "Integrity" review section for owners/managers (Settings or Team — pick the better fit) listing events with status, one-tap reviewed/dismissed. Fingerprints prevent re-reporting open/dismissed events.
+>
+> THE BOUNDARY, enforced in code and stated in the UI's privacy copy: private conversations and AI-channel content are NEVER scanned for "suspicious meaning." The secrecy promise stands. What the system monitors is system integrity: attack patterns, tamper signals, and anomalous record-level behavior. Add one honest line to the policy manual: "Purple Envelope monitors system security and data-integrity events (sign-in attempts, tamper signals, AI misuse attempts). It never reads your messages."
+
 ## Known build risks
 
 - **RLS is the whole promise.** A messaging system where a manager can
   accidentally read DMs is worse than none — the participant-only probe is
   mandatory before telling anyone it works.
+- **Actor blind-spot.** If an actor can query security_events for themselves,
+  the layer trains evasion — probe as the flagged user too.
+- **False-positive calibration.** Anomaly detectors that cry wolf teach owners
+  to dismiss everything; severity must start conservative ('watch' default,
+  'elevated' only on strong signals).
 - **AI channel without 16.** If office-insights isn't built yet, the AI channel
   needs a minimal reply path (answer with employee + office context) so it isn't
   an empty thread — sequence 16 first or build both together.
