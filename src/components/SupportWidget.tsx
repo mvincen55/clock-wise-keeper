@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadSupportPdf } from '@/lib/support-pdf';
+import TicketTimeline, { stageFromTicket } from '@/components/support/TicketTimeline';
 
 type Bubble = {
   id: string;
@@ -331,6 +332,19 @@ export default function SupportWidget() {
               </button>
             </div>
           </div>
+
+          {(ticketId || bubbles.length > 0) && (
+            <div className="border-b bg-muted/30 px-3 py-2">
+              <TicketTimeline
+                stage={stageFromTicket(
+                  resolved ? 'resolved' : tier === 'senior' ? 'escalated' : 'open',
+                  tier,
+                  bubbles.some(b => b.role !== 'user'),
+                )}
+                working={busy}
+              />
+            </div>
+          )}
 
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-3">
             {bubbles.length === 0 && (
