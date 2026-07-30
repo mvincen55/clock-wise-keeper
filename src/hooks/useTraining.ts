@@ -21,12 +21,26 @@ export type QuizQuestion = {
 
 export type ModuleSection = { heading: string; body: string; try_it: string };
 
+export type RubricItem = { criterion: string; weight: number; what_good_looks_like: string };
+
+/** A conversational assessment: chat with a grounded AI persona, then get scored. */
+export type ModuleRoleplay = {
+  persona: { name: string; role: string; situation: string; style: string };
+  scenario: string;
+  opening: string;
+  office_answers: string;
+  rubric: RubricItem[];
+};
+
+export type AttemptType = 'quiz' | 'roleplay';
+
 /** The one content shape every module follows. */
 export type ModuleContent = {
   outcome: string;
   sections: ModuleSection[];
   recap: string;
   quiz: { questions: QuizQuestion[] } | null;
+  roleplay: ModuleRoleplay | null;
 };
 
 export type TrainingModule = {
@@ -63,6 +77,7 @@ export type AttemptSummary = {
   user_id: string;
   score: number;
   passed: boolean;
+  type: AttemptType;
   completed_at: string;
 };
 
@@ -78,6 +93,10 @@ export function readContent(raw: unknown): ModuleContent {
     quiz:
       c.quiz && Array.isArray(c.quiz.questions) && c.quiz.questions.length > 0
         ? { questions: c.quiz.questions }
+        : null,
+    roleplay:
+      c.roleplay && typeof c.roleplay === 'object' && Array.isArray(c.roleplay.rubric)
+        ? (c.roleplay as ModuleRoleplay)
         : null,
   };
 }
@@ -256,7 +275,8 @@ export function useRecordAttempt() {
       moduleId: string;
       score: number;
       passed: boolean;
-      answers: number[];
+      answers: unknown;
+      type?: AttemptType;
     }) => {
       if (!ctx || !user) throw new Error('Not ready');
       const { error } = await supabase.from('training_attempts').insert({
@@ -265,6 +285,7 @@ export function useRecordAttempt() {
         user_id: user.id,
         score: input.score,
         passed: input.passed,
+        type: input.type ?? 'quiz',
         answers: input.answers as never,
       });
       if (error) throw error;
