@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ScrollText, Download } from 'lucide-react';
+import { ScrollText, Download, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDate } from '@/lib/time-utils';
 import { useOrgEmployees } from '@/hooks/useEmployees';
