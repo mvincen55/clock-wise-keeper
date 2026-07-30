@@ -205,10 +205,46 @@ Deno.serve(async (req) => {
     }
 
     const data = await res.json();
-    const answer = data?.choices?.[0]?.message?.content?.trim() ||
+    let answer = data?.choices?.[0]?.message?.content?.trim() ||
       "Nothing stood out in this range.";
 
-    return json({ answer, record_count: rows.length });
+    // Anti-hallucination: any cited id that is not a real row we handed the
+    // model gets stripped out. The AI never gets to invent an entry.
+    const realIds = new Set(rows.map((r: Row) => String(r.id)));
+    const cited = new Set<string>();
+    let dropped = 0;
+    answer = answer.replace(/\[rec:\s*([0-9a-fA-F-]{6,})\s*\]/g, (m: string, id: string) => {
+      if (realIds.has(id)) {
+        cited.add(id);
+        return `[rec:${id}]`;
+      }
+      dropped++;
+      return "";
+    });
+    if (dropped > 0) {
+      console.warn("reports-analyst dropped fabricated citations", dropped);
+      answer +=
+        "\n\n_Some citations pointed at records that do not exist and were removed._";
+    }
+
+    const citations = rows
+      .filter((r: Row) => cited.has(String(r.id)))
+      .map((r: Row) => ({
+        id: String(r.id),
+        who: nameByUser.get(String(r.subject_user_id ?? "")) ?? "Team member",
+        kind: String(r.kind),
+        kind_label: KIND_LABELS[String(r.kind)] ?? String(r.kind),
+        period_start: r.period_start,
+        period_end: r.period_end,
+        status: r.status,
+        summary: r.summary ?? "",
+        member_reason: r.member_reason ?? null,
+        manager_note: r.manager_note ?? null,
+        closed_at: r.closed_at ?? null,
+      }));
+
+    return json({ answer, citations, record_count: rows.length });
+
   } catch (e) {
     console.error("reports-analyst failed", e);
     return json({ error: "The analyst could not read the records just now." }, 500);
