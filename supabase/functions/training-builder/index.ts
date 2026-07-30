@@ -140,6 +140,9 @@ Deno.serve(async (req) => {
       ? body.audience.map((a: unknown) => text(a, 60)).filter(Boolean).slice(0, 8)
       : [];
     const originGoalId = typeof body?.origin_goal_id === "string" ? body.origin_goal_id : null;
+    const STYLES = ["visual", "auditory", "reading", "kinesthetic", "mixed"];
+    const requestedStyle = text(body?.learning_style, 20).toLowerCase();
+    const learningStyle = STYLES.includes(requestedStyle) ? requestedStyle : "mixed";
     if (!topic) return json({ error: "A topic is required" }, 400);
 
     // Caller's org + role (RLS-scoped read).
@@ -216,6 +219,19 @@ Deno.serve(async (req) => {
       1
     ).slice(0, 3000);
 
+    const styleGuide: Record<string, string> = {
+      visual:
+        "This person learns VISUALLY. Build the teaching around things they can see and draw: describe a simple diagram, a flow, a colour-coded checklist, or a layout they can sketch in 60 seconds. Every 'try_it' is a make-something task (sketch the flow, mark up the schedule, colour-code the tray). Quiz questions should describe what someone SEES (a screen, a schedule, a ledger, a chart note) and ask what it means or what to do next.",
+      auditory:
+        "This person learns by LISTENING and TALKING. Build the teaching around spoken scripts, phone and chairside dialogue, and phrases to say out loud. Every 'try_it' is a say-it-out-loud task (read the script aloud twice, rehearse the callback with a teammate). Quiz questions should quote what a patient SAYS and ask what you say back.",
+      reading:
+        "This person learns by READING and WRITING. Build the teaching around crisp written steps, short numbered checklists, and precise wording. Every 'try_it' is a write-it task (write the note, list the three steps, draft the message). Quiz questions should be precise, wording-focused, and definition- or policy-accurate.",
+      kinesthetic:
+        "This person learns HANDS-ON. Build the teaching around doing the thing: walk-throughs, practice reps, and physical or on-screen steps in order. Every 'try_it' is a do-it-now rep on their next shift. Quiz questions should put them mid-task and ask for the next physical or system action.",
+      mixed:
+        "Mix the modes: something to picture, something to say aloud, something to write, and something to do. Vary the 'try_it' tasks across those modes.",
+    };
+
     const system = `You write short, excellent, practical training modules for a dental practice's team.
 
 THE RULES OF THIS OFFICE ARE THE RULES OF THE WORLD.
@@ -231,11 +247,16 @@ WRITING RULES
 - 3 to 5 sections. Each section body is 120-260 words and ends naturally; the "try_it" is one specific action the person can do on their very next shift.
 - The quiz has 4-6 scenario questions (a short situation, then what should you do). Each has 3-4 options, exactly one best answer, and a "why" that teaches the reasoning — not just "correct".
 
+HOW THIS PERSON LEARNS
+${styleGuide[learningStyle] ?? styleGuide.mixed}
+Never mention the learning style itself — just teach and test that way.
+
 Return ONLY JSON in exactly this shape:
 {"title":"...","summary":"one sentence","outcome":"what the person can do after this module","sections":[{"heading":"...","body":"...","try_it":"..."}],"recap":"3-5 sentence recap","quiz":{"questions":[{"q":"...","options":["..."],"correct_index":0,"why":"..."}]}}`;
 
     const userPrompt = `TOPIC: ${topic}
 AUDIENCE (positions this is for): ${audience.length ? audience.join(", ") : "all"}
+LEARNING STYLE: ${learningStyle}
 
 STANDING OFFICE RULES (authoritative):
 ${memoryBlock || "(none recorded yet)"}
@@ -282,6 +303,100 @@ ${settingsBlock}`;
     const title = text(parsed.title, 200) || topic;
     const summary = text(parsed.summary, 400);
 
+    // ---- Auditor pass: a second, independent read before anyone is taught ----
+    // Checks the draft against the same authoritative sources for anything that
+    // contradicts office rules, is factually wrong, or is inappropriate.
+    const auditSystem = `You are the training auditor for a dental practice. You review a DRAFT training module before the team sees it.
+
+Check for, and only for:
+1. CONTRADICTION — anything that conflicts with the STANDING OFFICE RULES, the OFFICE DOCUMENTS, or the PRACTICE CONFIGURATION.
+2. INCORRECT — clinical, billing, insurance, or legal statements that are factually wrong or unsafe.
+3. INAPPROPRIATE — disrespectful, discriminatory, shaming, or unprofessional content; anything resembling real patient data (PHI); medical or legal advice beyond the team's scope.
+4. UNSUPPORTED — a policy stated as this office's policy that no source supports.
+
+Be strict but not pedantic. Style, tone, and wording preferences are NOT findings.
+Quote the offending text briefly and say exactly how to fix it.
+
+Return ONLY JSON:
+{"verdict":"clean|needs_review|blocked","summary":"one sentence","findings":[{"severity":"low|medium|high","kind":"contradiction|incorrect|inappropriate|unsupported","where":"section heading or 'quiz'","quote":"short quote","issue":"what is wrong","fix":"how to fix it"}]}
+"blocked" only when something is unsafe, contradicts an explicit office rule, or is inappropriate.`;
+
+    let audit: Record<string, unknown> = {
+      verdict: "unreviewed",
+      summary: "The auditor could not review this module.",
+      findings: [],
+      reviewed_at: new Date().toISOString(),
+      model: MODEL,
+    };
+
+    try {
+      const auditResponse = await fetch(GATEWAY_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: MODEL,
+          reasoning_effort: "none",
+          messages: [
+            { role: "system", content: auditSystem },
+            {
+              role: "user",
+              content: `STANDING OFFICE RULES (authoritative):
+${memoryBlock || "(none recorded yet)"}
+
+OFFICE DOCUMENTS (excerpts):
+${docBlock || "(no matching documents)"}
+
+PRACTICE CONFIGURATION:
+${settingsBlock}
+
+DRAFT MODULE:
+${JSON.stringify({ title, summary, ...content }).slice(0, 40000)}`,
+            },
+          ],
+        }),
+      });
+
+      if (auditResponse.ok) {
+        const auditData = await auditResponse.json();
+        const auditRaw = (auditData?.choices?.[0]?.message?.content as string | undefined) ?? "";
+        const auditParsed = parseJsonBlock<Record<string, unknown>>(auditRaw);
+        if (auditParsed) {
+          const verdict = text(auditParsed.verdict, 20);
+          const findings = Array.isArray(auditParsed.findings)
+            ? (auditParsed.findings as Record<string, unknown>[])
+                .map((f) => ({
+                  severity: text(f?.severity, 10) || "low",
+                  kind: text(f?.kind, 20) || "unsupported",
+                  where: text(f?.where, 160),
+                  quote: text(f?.quote, 400),
+                  issue: text(f?.issue, 600),
+                  fix: text(f?.fix, 600),
+                }))
+                .filter((f) => f.issue)
+                .slice(0, 20)
+            : [];
+          audit = {
+            verdict: ["clean", "needs_review", "blocked"].includes(verdict)
+              ? verdict
+              : findings.length
+              ? "needs_review"
+              : "clean",
+            summary: text(auditParsed.summary, 400),
+            findings,
+            reviewed_at: new Date().toISOString(),
+            model: MODEL,
+          };
+        }
+      } else {
+        console.error("auditor gateway error", auditResponse.status);
+      }
+    } catch (auditError) {
+      console.error("auditor pass failed", auditError);
+    }
+
+    // A blocked module is saved as a draft so a manager reviews it first.
+    const moduleStatus = audit.verdict === "blocked" ? "archived" : "published";
+
     const { data: saved, error: insertError } = await supabase
       .from("training_modules")
       .insert({
@@ -289,10 +404,12 @@ ${settingsBlock}`;
         title,
         summary,
         audience_tags: audience.length ? audience : ["all"],
+        learning_style: learningStyle,
         content,
+        audit,
         source: "pathfinder",
         origin_goal_id: originGoalId,
-        status: "published",
+        status: moduleStatus,
         created_by: user.id,
       })
       .select()
@@ -303,7 +420,7 @@ ${settingsBlock}`;
       return json({ error: "The module was written but could not be saved." }, 500);
     }
 
-    return json({ module: saved });
+    return json({ module: saved, audit });
   } catch (error) {
     console.error("training-builder failed:", error);
     return json({ error: "Something went wrong building the module." }, 500);

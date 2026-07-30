@@ -1152,6 +1152,7 @@ export type Database = {
           employment_status: Database["public"]["Enums"]["employment_status"]
           hire_date: string | null
           id: string
+          learning_style: string | null
           org_id: string
           timezone: string
           updated_at: string
@@ -1164,6 +1165,7 @@ export type Database = {
           employment_status?: Database["public"]["Enums"]["employment_status"]
           hire_date?: string | null
           id?: string
+          learning_style?: string | null
           org_id: string
           timezone?: string
           updated_at?: string
@@ -1176,6 +1178,7 @@ export type Database = {
           employment_status?: Database["public"]["Enums"]["employment_status"]
           hire_date?: string | null
           id?: string
+          learning_style?: string | null
           org_id?: string
           timezone?: string
           updated_at?: string
@@ -3912,10 +3915,12 @@ export type Database = {
       training_modules: {
         Row: {
           audience_tags: string[]
+          audit: Json | null
           content: Json
           created_at: string
           created_by: string
           id: string
+          learning_style: string | null
           org_id: string
           origin_goal_id: string | null
           source: string
@@ -3926,10 +3931,12 @@ export type Database = {
         }
         Insert: {
           audience_tags?: string[]
+          audit?: Json | null
           content?: Json
           created_at?: string
           created_by: string
           id?: string
+          learning_style?: string | null
           org_id: string
           origin_goal_id?: string | null
           source?: string
@@ -3940,10 +3947,12 @@ export type Database = {
         }
         Update: {
           audience_tags?: string[]
+          audit?: Json | null
           content?: Json
           created_at?: string
           created_by?: string
           id?: string
+          learning_style?: string | null
           org_id?: string
           origin_goal_id?: string | null
           source?: string

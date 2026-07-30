@@ -143,6 +143,8 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
         {module.summary && <p className="text-muted-foreground">{module.summary}</p>}
       </div>
 
+      {isAdmin && module.audit && <ModuleAuditPanel audit={module.audit} />}
+
       {phase === 'read' && (
         <div className="space-y-6">
           <ReadAloudControls speech={speech} />

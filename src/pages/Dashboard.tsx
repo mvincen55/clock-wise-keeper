@@ -21,6 +21,7 @@ import { useCurrentPtoBalance } from '@/hooks/usePtoEngine';
 import { Link } from 'react-router-dom';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { OrgSnapshotPanel } from '@/components/OrgSnapshotPanel';
+import UserNotesBoard from '@/components/UserNotesBoard';
 
 type ClockStatus = 'clocked_out' | 'clocked_in';
 
@@ -184,6 +185,8 @@ export default function Dashboard() {
       </Card>
 
       {autoClockEnabled && <LocationStatusPanel state={geoState} />}
+
+      <UserNotesBoard />
 
       <Card className="card-elevated">
         <CardHeader className="flex flex-row items-center justify-between">

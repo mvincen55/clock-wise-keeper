@@ -29,6 +29,35 @@ export type ModuleContent = {
   quiz: { questions: QuizQuestion[] } | null;
 };
 
+/** How a person takes information in — shapes how a module teaches and tests. */
+export type LearningStyle = 'visual' | 'auditory' | 'reading' | 'kinesthetic' | 'mixed';
+
+export const LEARNING_STYLES: { value: LearningStyle; label: string; hint: string }[] = [
+  { value: 'visual', label: 'Visual', hint: 'Diagrams, sketches, colour-coded checklists' },
+  { value: 'auditory', label: 'Listening', hint: 'Scripts and phrases said out loud' },
+  { value: 'reading', label: 'Reading & writing', hint: 'Written steps, notes, precise wording' },
+  { value: 'kinesthetic', label: 'Hands-on', hint: 'Do-it-now reps and walk-throughs' },
+  { value: 'mixed', label: 'A mix', hint: 'A little of each' },
+];
+
+/** The auditor's independent read of a module before the team is taught from it. */
+export type ModuleAuditFinding = {
+  severity: 'low' | 'medium' | 'high';
+  kind: 'contradiction' | 'incorrect' | 'inappropriate' | 'unsupported';
+  where: string;
+  quote: string;
+  issue: string;
+  fix: string;
+};
+
+export type ModuleAudit = {
+  verdict: 'clean' | 'needs_review' | 'blocked' | 'unreviewed';
+  summary: string;
+  findings: ModuleAuditFinding[];
+  reviewed_at: string;
+  model?: string;
+};
+
 export type TrainingModule = {
   id: string;
   org_id: string;
@@ -36,6 +65,8 @@ export type TrainingModule = {
   summary: string;
   audience_tags: string[];
   content: ModuleContent;
+  learning_style: LearningStyle | null;
+  audit: ModuleAudit | null;
   source: ModuleSource;
   origin_goal_id: string | null;
   status: ModuleStatus;
@@ -279,9 +310,13 @@ export function useRecordAttempt() {
 export function useBuildModule() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { topic: string; audience: string[] }) => {
+    mutationFn: async (input: { topic: string; audience: string[]; learning_style?: LearningStyle }) => {
       const { data, error } = await supabase.functions.invoke('training-builder', {
-        body: { topic: input.topic, audience: input.audience },
+        body: {
+          topic: input.topic,
+          audience: input.audience,
+          learning_style: input.learning_style ?? 'mixed',
+        },
       });
       if (error) throw new Error(data?.error || error.message);
       if (data?.error) throw new Error(data.error);
