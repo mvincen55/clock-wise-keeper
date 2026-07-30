@@ -4,6 +4,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useMessagingSettings } from '@/hooks/useMessagingSettings';
 import { getToday, easternWallToUtcIso, hhmmToMinutes } from '@/lib/time-utils';
+import {
+  closeoutCutoffMinutes,
+  outstandingCloseoutMessages,
+} from '@/lib/messages-closeout';
 
 export interface CloseoutState {
   /** False means the item does not exist for this person today, at all. */
@@ -77,8 +81,8 @@ export function useMessagesCloseout(): CloseoutState & { isLoading: boolean } {
       if (!row) return off('not-scheduled');
 
       // Anything sent inside the cutoff rolls to the next working day.
-      const endMinutes = row.end_time ? hhmmToMinutes(row.end_time.slice(0, 5)) : 17 * 60;
-      const cutoffMinutes = Math.max(0, endMinutes - settings.closeout_cutoff_minutes);
+      const endMinutes = row.end_time ? hhmmToMinutes(row.end_time.slice(0, 5)) : null;
+      const cutoffMinutes = closeoutCutoffMinutes(endMinutes, settings.closeout_cutoff_minutes);
       const cutoffIso = easternWallToUtcIso(
         today,
         Math.floor(cutoffMinutes / 60),
@@ -112,21 +116,10 @@ export function useMessagesCloseout(): CloseoutState & { isLoading: boolean } {
         .gte('created_at', dayStart);
       const repliedTo = new Set((myReplies.data ?? []).map(r => r.request_id));
 
-      const outstanding = (received ?? [])
-        .filter(m => !clockedOutAt || m.created_at <= clockedOutAt)
-        .filter(m =>
-          m.needs_reply
-            ? // Opening is not reading: an actionable note clears by replying
-              // or by saying "got it", never by being scrolled past.
-              !m.acknowledged_at && !repliedTo.has(m.id)
-            : !m.first_seen_at,
-        )
-        .map(m => ({
-          id: m.id,
-          note: m.note,
-          needs_reply: m.needs_reply,
-          created_at: m.created_at,
-        }));
+      const outstanding = outstandingCloseoutMessages(received ?? [], {
+        clockedOutAt,
+        repliedTo: repliedTo,
+      });
 
       return { applies: true, outstanding, satisfied: outstanding.length === 0, label };
     },
