@@ -58,8 +58,16 @@ export function useMomentum() {
       const today = getToday();
       const start = shiftDate(today, -WINDOW_DAYS);
 
-      const [itemsRes, completionsRes, attendanceRes, meetingsRes, updatesRes, goalsRes] =
-        await Promise.all([
+      const [
+        itemsRes,
+        completionsRes,
+        attendanceRes,
+        meetingsRes,
+        updatesRes,
+        goalsRes,
+        ptoRes,
+        closuresRes,
+      ] = await Promise.all([
           supabase
             .from('checklist_items')
             .select('id, per_person, cadence, is_active')
@@ -96,64 +104,58 @@ export function useMomentum() {
             .select('title, status, updated_at')
             .eq('user_id', user!.id)
             .is('archived_at', null),
+          // Verified time off only — approved requests and recorded closures.
+          supabase
+            .from('pto_requests')
+            .select('start_date, end_date, status, user_id')
+            .eq('user_id', user!.id)
+            .eq('status', 'approved')
+            .lte('start_date', today)
+            .gte('end_date', start),
+          supabase
+            .from('office_closures')
+            .select('closure_date')
+            .eq('org_id', ctx!.org_id)
+            .gte('closure_date', start)
+            .lte('closure_date', today),
         ]);
 
       const dailyItems = itemsRes.data ?? [];
       const dailyItemIds = new Set(dailyItems.map((i) => i.id));
-      const doneByDate = new Map<string, Set<string>>();
+      const doneSets = new Map<string, Set<string>>();
       for (const c of completionsRes.data ?? []) {
         if (!dailyItemIds.has(c.item_id)) continue;
-        const set = doneByDate.get(c.period_key) ?? new Set<string>();
+        const set = doneSets.get(c.period_key) ?? new Set<string>();
         set.add(c.item_id);
-        doneByDate.set(c.period_key, set);
+        doneSets.set(c.period_key, set);
       }
+      const doneByDate = new Map(
+        [...doneSets.entries()].map(([date, set]) => [date, set.size] as const)
+      );
 
       const attendance = new Map(
         (attendanceRes.data ?? []).map((a) => [a.entry_date, a])
       );
 
-      const dayState = (date: string): StreakDay['state'] => {
-        const a = attendance.get(date);
-        // Pause: earned time off, office closed, or simply not a work day.
-        if (a && (a.office_closed || a.has_day_off || !a.is_scheduled_day)) return 'paused';
-        if (!a && !doneByDate.get(date)?.size) return 'paused';
-        if (dailyItems.length === 0) return 'paused';
-        const done = doneByDate.get(date)?.size ?? 0;
-        if (done >= dailyItems.length) return 'complete';
-        return date === today ? 'pending' : 'missed';
+      const ptoDates = new Set<string>();
+      for (const r of ptoRes.data ?? []) {
+        for (const d of expandDateRange(r.start_date, r.end_date)) ptoDates.add(d);
+      }
+      const closureDates = new Set((closuresRes.data ?? []).map((c) => c.closure_date));
+
+      const streakInput: StreakInput = {
+        today,
+        attendance,
+        ptoDates,
+        closureDates,
+        dailyItemCount: dailyItems.length,
+        doneByDate,
       };
 
-      // Current streak: walk back from today; pauses/pending are skipped.
-      let streak = 0;
-      for (let i = 0; i < WINDOW_DAYS; i++) {
-        const date = shiftDate(today, -i);
-        const s = dayState(date);
-        if (s === 'complete') streak++;
-        else if (s === 'paused' || (i === 0 && s === 'pending')) continue;
-        else break;
-      }
+      const streak = computeCurrentStreak(streakInput, WINDOW_DAYS);
+      const best = computeBestStreak(streakInput, WINDOW_DAYS);
+      const days = recentDays(streakInput, 14);
 
-      // Best streak in the window, same pause rules.
-      let best = 0;
-      let run = 0;
-      for (let i = WINDOW_DAYS; i >= 0; i--) {
-        const s = dayState(shiftDate(today, -i));
-        if (s === 'complete') {
-          run++;
-          best = Math.max(best, run);
-        } else if (s === 'paused' || s === 'pending') {
-          continue;
-        } else {
-          run = 0;
-        }
-      }
-      best = Math.max(best, streak);
-
-      const days: StreakDay[] = [];
-      for (let i = 13; i >= 0; i--) {
-        const date = shiftDate(today, -i);
-        days.push({ date, state: dayState(date) });
-      }
 
       // "Shared before the meeting": a goal update posted before the meeting
       // started (or before meeting day, when no time is set).
