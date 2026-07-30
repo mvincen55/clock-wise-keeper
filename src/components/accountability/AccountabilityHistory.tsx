@@ -40,6 +40,7 @@ import {
   type PolicyKind,
 } from '@/hooks/useAccountability';
 import AccountabilityAuditTimeline from './AccountabilityAuditTimeline';
+import ReportsAnalyst from './ReportsAnalyst';
 
 
 function RecordRow({ r, who }: { r: AccountabilityReport; who?: string }) {
@@ -296,6 +297,10 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
         )}
       </CardContent>
     </Card>
+
+      {isAdmin && (
+        <ReportsAnalyst from={from} to={to} kind={kind} recordCount={closed.length} />
+      )}
 
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-4xl">
