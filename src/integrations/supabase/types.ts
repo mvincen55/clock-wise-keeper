@@ -859,6 +859,89 @@ export type Database = {
           },
         ]
       }
+      conversation_participants: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          id: string
+          last_read_at: string | null
+          org_id: string
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          id?: string
+          last_read_at?: string | null
+          org_id: string
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          last_read_at?: string | null
+          org_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_participants_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_participants_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversations: {
+        Row: {
+          audience: string | null
+          created_at: string
+          created_by: string
+          id: string
+          org_id: string
+          title: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          audience?: string | null
+          created_at?: string
+          created_by: string
+          id?: string
+          org_id: string
+          title?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          audience?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          org_id?: string
+          title?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       correction_requests: {
         Row: {
           created_at: string
@@ -1169,6 +1252,7 @@ export type Database = {
           id: string
           learning_style: string | null
           org_id: string
+          team: string | null
           timezone: string
           updated_at: string
           user_id: string | null
@@ -1182,6 +1266,7 @@ export type Database = {
           id?: string
           learning_style?: string | null
           org_id: string
+          team?: string | null
           timezone?: string
           updated_at?: string
           user_id?: string | null
@@ -1195,6 +1280,7 @@ export type Database = {
           id?: string
           learning_style?: string | null
           org_id?: string
+          team?: string | null
           timezone?: string
           updated_at?: string
           user_id?: string | null
@@ -2360,6 +2446,57 @@ export type Database = {
             columns: ["zone_id"]
             isOneToOne: false
             referencedRelation: "work_zones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          org_id: string
+          reported_at: string | null
+          reported_by: string | null
+          sender_id: string | null
+          sender_kind: string
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          org_id: string
+          reported_at?: string | null
+          reported_by?: string | null
+          sender_id?: string | null
+          sender_kind?: string
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          org_id?: string
+          reported_at?: string | null
+          reported_by?: string | null
+          sender_id?: string | null
+          sender_kind?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
         ]
@@ -4404,7 +4541,10 @@ export type Database = {
       }
       can_access_employee: { Args: { _employee_id: string }; Returns: boolean }
       can_manage_goal: { Args: { _goal_id: string }; Returns: boolean }
+      can_read_conv: { Args: { _conv: string }; Returns: boolean }
       can_view_goal: { Args: { _goal_id: string }; Returns: boolean }
+      conv_created_by: { Args: { _conv: string }; Returns: string }
+      conv_type: { Args: { _conv: string }; Returns: string }
       countersign_incident_report: {
         Args: { _report_id: string; _typed_name: string }
         Returns: {
@@ -4462,6 +4602,8 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      ensure_ai_conversation: { Args: never; Returns: string }
+      ensure_dm: { Args: { _other_user: string }; Returns: string }
       get_employee_timezone: {
         Args: { p_employee_id: string }
         Returns: string
@@ -4493,8 +4635,11 @@ export type Database = {
         Returns: string
       }
       is_allowed_user: { Args: never; Returns: boolean }
+      is_conv_participant: { Args: { _conv: string }; Returns: boolean }
       is_org_admin: { Args: { _org_id: string }; Returns: boolean }
       is_org_member: { Args: { _org_id: string }; Returns: boolean }
+      is_org_owner: { Args: { _org_id: string }; Returns: boolean }
+      mark_conversation_read: { Args: { _conv: string }; Returns: undefined }
       move_to_dlq: {
         Args: {
           dlq_name: string
@@ -4504,6 +4649,7 @@ export type Database = {
         }
         Returns: number
       }
+      my_team: { Args: never; Returns: string }
       owns_goal: { Args: { _goal_id: string }; Returns: boolean }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
@@ -4524,6 +4670,10 @@ export type Database = {
           order_rev: number
           sort_order: number
         }[]
+      }
+      report_message: {
+        Args: { _message_id: string; _note?: string }
+        Returns: undefined
       }
       search_office_doc_chunks: {
         Args: { p_limit?: number; p_query: string }
