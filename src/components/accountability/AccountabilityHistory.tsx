@@ -85,6 +85,9 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [kind, setKind] = useState<'all' | PolicyKind>('all');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [pendingFormat, setPendingFormat] = useState<'csv' | 'xlsx' | null>(null);
+
 
   const nameByUser = useMemo(() => {
     const m = new Map<string, string>();
