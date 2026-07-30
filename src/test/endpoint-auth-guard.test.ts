@@ -36,8 +36,14 @@ const USER_ONLY = [
   { name: 'confirm-import', body: { import_id: '00000000-0000-0000-0000-000000000000' } },
   { name: 'ask-docs', body: { question: 'probe' } },
   { name: 'assistant-auditor', body: {} },
-  { name: 'accept-invite', body: {} },
 ];
+
+/**
+ * accept-invite is reachable without a session on purpose — that is the whole
+ * point of an invite link. What it must never do is act on a bad token, so the
+ * bar here is a refusal, not specifically a 401.
+ */
+const TOKEN_GATED = [{ name: 'accept-invite', body: { token: 'not-a-real-token' } }];
 
 async function probe(name: string, body: unknown, headers: Record<string, string> = {}) {
   const res = await fetch(`${BASE}/functions/v1/${name}`, {
@@ -78,6 +84,18 @@ describe.skipIf(!LIVE)('unauthorized callers are refused', () => {
           [401, 403],
           `${name} answered ${status}: ${text.slice(0, 200)}`,
         ).toContain(status);
+      },
+      30000,
+    );
+  }
+
+  for (const { name, body } of TOKEN_GATED) {
+    it(
+      `${name} refuses an invalid invite token`,
+      async () => {
+        const { status, text } = await probe(name, body);
+        expect(status).toBeGreaterThanOrEqual(400);
+        expect(text).not.toMatch(/org_id|user_id|@/i);
       },
       30000,
     );
