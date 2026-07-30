@@ -835,7 +835,31 @@ export default function SupportWidget() {
                         </p>
                       );
                     })()}
+                    {t.context_path && (
+                      <span
+                        role="link"
+                        tabIndex={0}
+                        onClick={e => {
+                          e.stopPropagation();
+                          navigate(t.context_path as string);
+                          setOpen(false);
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            navigate(t.context_path as string);
+                            setOpen(false);
+                          }
+                        }}
+                        className="mt-1 inline-flex cursor-pointer items-center gap-1 text-[11px] text-primary underline-offset-2 hover:underline"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Jump back to {t.context_label ?? 'what this was about'}
+                      </span>
+                    )}
                   </button>
+
                 ))}
               </div>
             </div>
