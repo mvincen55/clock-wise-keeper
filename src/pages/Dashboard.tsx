@@ -76,10 +76,15 @@ export default function Dashboard() {
   const { data: ctx } = useOrgContext();
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
+  // The gentle chase: one kind note at clock-in, one mid-day if untouched.
+  const chaseAtClockIn = useClockInChase();
+  useMiddayChase();
+
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
 
   const punches = todayEntry?.punches || [];
   const status = getStatus(punches);
