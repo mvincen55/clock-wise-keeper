@@ -3939,51 +3939,6 @@ export type Database = {
       }
     }
     Views: {
-      training_attempt_summary: {
-        Row: {
-          completed_at: string | null
-          id: string | null
-          module_id: string | null
-          org_id: string | null
-          passed: boolean | null
-          score: number | null
-          user_id: string | null
-        }
-        Insert: {
-          completed_at?: string | null
-          id?: string | null
-          module_id?: string | null
-          org_id?: string | null
-          passed?: boolean | null
-          score?: number | null
-          user_id?: string | null
-        }
-        Update: {
-          completed_at?: string | null
-          id?: string | null
-          module_id?: string | null
-          org_id?: string | null
-          passed?: boolean | null
-          score?: number | null
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "training_attempts_module_id_fkey"
-            columns: ["module_id"]
-            isOneToOne: false
-            referencedRelation: "training_modules"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "training_attempts_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "orgs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       v_audit_trail: {
         Row: {
           after_value: string | null
@@ -4290,6 +4245,18 @@ export type Database = {
         }
       }
       sweep_attendance: { Args: { p_days?: number }; Returns: string }
+      training_attempt_summaries: {
+        Args: { _org_id: string }
+        Returns: {
+          completed_at: string
+          id: string
+          module_id: string
+          org_id: string
+          passed: boolean
+          score: number
+          user_id: string
+        }[]
+      }
       user_owns_import: { Args: { _import_id: string }; Returns: boolean }
       user_owns_schedule_version: {
         Args: { _version_id: string }
