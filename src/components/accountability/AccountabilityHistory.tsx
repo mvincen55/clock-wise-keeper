@@ -225,8 +225,20 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
               title="Downloads every record in this range as one CSV"
             >
               <Download className="mr-2 h-4 w-4" />
-              Export all ({closed.length})
+              Export CSV ({closed.length})
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              disabled={closed.length === 0}
+              onClick={exportXlsx}
+              title="Downloads every record in this range as one Excel file"
+            >
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              Export XLSX ({closed.length})
+            </Button>
+
 
           </div>
         )}
