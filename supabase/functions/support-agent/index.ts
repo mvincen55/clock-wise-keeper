@@ -218,7 +218,7 @@ Deno.serve(async (req) => {
 
     const { data: rows } = await db
       .from("support_messages")
-      .select("role, content, attachment_path, created_at")
+      .select("role, content, attachment_path, ocr_text, created_at")
       .eq("ticket_id", ticketId)
       .order("created_at", { ascending: true })
       .limit(30);
@@ -275,11 +275,22 @@ Deno.serve(async (req) => {
       const path = m.role === "user" ? (m.attachment_path as string | null) : null;
       const isImage = !!path && /\.(png|jpe?g|webp|gif|bmp|heic)$/i.test(path);
       const shot = isImage ? await signedFor(path) : null;
+      // Text read off the file on the reporter's own device. It is the only
+      // wording you may quote from an attachment.
+      const read = String(m.ocr_text ?? "").trim();
+      const readBlock = read
+        ? "\n\nTEXT READ OFF THE ATTACHED FILE (quote only from this, never invent wording):\n---\n" +
+          read.slice(0, 6000) +
+          "\n---"
+        : path
+        ? "\n\n(No text could be read off the attached file - do not guess what it says.)"
+        : "";
+
       if (shot) {
         messages.push({
           role: "user",
           content: [
-            { type: "text", text: String(m.content ?? "(screenshot)") },
+            { type: "text", text: String(m.content ?? "(screenshot)") + readBlock },
             { type: "image_url", image_url: { url: shot } },
           ],
         });
@@ -287,7 +298,9 @@ Deno.serve(async (req) => {
         messages.push({
           role: m.role === "assistant" ? "assistant" : "user",
           content:
-            String(m.content ?? "") + (path && !isImage ? " (a non-image file was attached)" : ""),
+            String(m.content ?? "") +
+            (path && !isImage ? " (a non-image file was attached)" : "") +
+            readBlock,
         });
       }
     }
