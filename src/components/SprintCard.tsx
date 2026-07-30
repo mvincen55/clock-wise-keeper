@@ -234,7 +234,15 @@ function NewSprintDialog({
   );
 }
 
-/** The team sprint on the dashboard — everyone sees it, everyone can tally. */
+function scopeLabel(sprint: TeamGoal) {
+  if (sprint.scope === 'department') {
+    return sprint.scope_department === 'clerical' ? 'Clerical team' : 'Clinical team';
+  }
+  if (sprint.scope === 'individual') return 'Personal sprint';
+  return 'Whole team';
+}
+
+/** The sprint card — everyone in scope sees it, and the AI runs it end to end. */
 export default function SprintCard() {
   const { data: ctx } = useOrgContext();
   const { data } = useTeamGoals();
@@ -243,6 +251,7 @@ export default function SprintCard() {
   const cancel = useCancelSprint();
   const dismiss = useDismissSuggestion();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [verifyOpen, setVerifyOpen] = useState(false);
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
   const sprint = data?.active ?? null;
@@ -291,51 +300,80 @@ export default function SprintCard() {
 
   const pct = Math.round((sprint.progress / Math.max(1, sprint.target_count)) * 100);
   const left = daysLeft(sprint.ends_on);
+  const pending = sprint.status === 'pending_verification';
+  const canTally = sprint.verification === 'honor' && !pending;
 
   return (
-    <Card className="card-elevated overflow-hidden">
-      <CardContent className="p-4">
-        <div className="flex items-start gap-4">
-          <div className="relative">
-            <ProgressRing pct={pct} />
-            <span className="absolute inset-0 flex items-center justify-center text-sm font-semibold tabular-nums">
-              {sprint.progress}/{sprint.target_count}
-            </span>
-          </div>
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold truncate">{sprint.title}</span>
-              {sprint.ai_suggested && <Badge variant="secondary" className="text-[10px]">AI idea</Badge>}
+    <>
+      <Card className="card-elevated overflow-hidden">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-4">
+            <div className="relative">
+              <ProgressRing pct={pct} />
+              <span className="absolute inset-0 flex items-center justify-center text-sm font-semibold tabular-nums">
+                {sprint.progress}/{sprint.target_count}
+              </span>
             </div>
-            <p className="text-sm text-muted-foreground line-clamp-2">{sprint.metric}</p>
-            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-              <Gift className="h-3.5 w-3.5 text-primary" />
-              {sprint.reward}
-              <span className="mx-1">·</span>
-              {left > 0 ? `${left} day${left === 1 ? '' : 's'} left` : left === 0 ? 'last day' : 'wrapping up'}
-            </p>
-            <div className="flex gap-2 pt-1">
-              <Button
-                size="sm"
-                onClick={() =>
-                  bump.mutate(
-                    { id: sprint.id },
-                    { onSuccess: () => toast.success('Counted — thanks.') },
-                  )
-                }
-                disabled={!bump.isReady || bump.isPending}
-              >
-                <Plus className="mr-1 h-4 w-4" />1
-              </Button>
-              {isManager && (
-                <Button size="sm" variant="ghost" onClick={() => cancel.mutate(sprint.id)}>
-                  <X className="mr-1 h-4 w-4" />Cancel
-                </Button>
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold truncate">{sprint.title}</span>
+                <Badge variant="outline" className="text-[10px]">{scopeLabel(sprint)}</Badge>
+                {sprint.ai_suggested && <Badge variant="secondary" className="text-[10px]">AI idea</Badge>}
+              </div>
+              <p className="text-sm text-muted-foreground line-clamp-2">{sprint.metric}</p>
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                <Gift className="h-3.5 w-3.5 text-primary" />
+                {sprint.reward}
+                <span className="mx-1">·</span>
+                {pending
+                  ? 'waiting on verification'
+                  : left > 0
+                  ? `${left} day${left === 1 ? '' : 's'} left`
+                  : left === 0
+                  ? 'last day'
+                  : 'wrapping up'}
+              </p>
+              {sprint.verification !== 'honor' && !pending && (
+                <p className="text-xs text-muted-foreground">
+                  {sprint.verification === 'document'
+                    ? 'Verified at the end against the outside report.'
+                    : 'A manager confirms this one at the end.'}
+                </p>
               )}
+              <div className="flex gap-2 pt-1">
+                {canTally && (
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      bump.mutate(
+                        { id: sprint.id },
+                        { onSuccess: () => toast.success('Counted — thanks.') },
+                      )
+                    }
+                    disabled={!bump.isReady || bump.isPending}
+                  >
+                    <Plus className="mr-1 h-4 w-4" />1
+                  </Button>
+                )}
+                {isManager && pending && (
+                  <Button size="sm" onClick={() => setVerifyOpen(true)}>
+                    <ShieldCheck className="mr-1 h-4 w-4" />Verify
+                  </Button>
+                )}
+                {isManager && (
+                  <Button size="sm" variant="ghost" onClick={() => cancel.mutate(sprint.id)}>
+                    <X className="mr-1 h-4 w-4" />Cancel
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+      {isManager && (
+        <SprintVerifyDialog sprint={sprint} open={verifyOpen} onOpenChange={setVerifyOpen} />
+      )}
+    </>
   );
+
 }
