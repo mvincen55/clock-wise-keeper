@@ -241,6 +241,13 @@ export default function Training() {
               );
             })}
           </TabsContent>
+
+          {isAdmin && (
+            <TabsContent value="status" className="space-y-4 pt-4">
+              <RoleplaySettingsCard />
+              <TrainingStatusDashboard modules={modules} attempts={attempts} nameFor={nameFor} />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
 
