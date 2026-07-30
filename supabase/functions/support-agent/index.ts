@@ -263,7 +263,9 @@ Deno.serve(async (req) => {
     ];
 
     for (const m of history) {
-      const shot = m.role === "user" ? await signedFor(m.attachment_path as string | null) : null;
+      const path = m.role === "user" ? (m.attachment_path as string | null) : null;
+      const isImage = !!path && /\.(png|jpe?g|webp|gif|bmp|heic)$/i.test(path);
+      const shot = isImage ? await signedFor(path) : null;
       if (shot) {
         messages.push({
           role: "user",
@@ -275,10 +277,12 @@ Deno.serve(async (req) => {
       } else {
         messages.push({
           role: m.role === "assistant" ? "assistant" : "user",
-          content: String(m.content ?? ""),
+          content:
+            String(m.content ?? "") + (path && !isImage ? " (a non-image file was attached)" : ""),
         });
       }
     }
+
 
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!apiKey) return json({ error: "The help desk is not configured yet." }, 500);

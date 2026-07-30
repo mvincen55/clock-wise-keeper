@@ -23,10 +23,13 @@ type Bubble = {
   role: 'user' | 'assistant' | 'staff';
   content: string;
   tier?: string | null;
-  previewUrl?: string | null;
+  previewUrls?: string[];
 };
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_FILES = 5;
+const ACCEPTED = 'image/*,application/pdf';
+
 
 /**
  * "Report a problem" — the little life-ring in the corner of every page.
@@ -45,11 +48,12 @@ export default function SupportWidget() {
   const [ticketId, setTicketId] = useState<string | null>(null);
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [text, setText] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [tier, setTier] = useState<'standard' | 'senior'>('standard');
   const [suggested, setSuggested] = useState<string | null>(null);
   const [resolved, setResolved] = useState(false);
+
 
   const fileRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -67,24 +71,43 @@ export default function SupportWidget() {
     setTicketId(null);
     setBubbles([]);
     setText('');
-    setFile(null);
+    setFiles([]);
     setTier('standard');
     setSuggested(null);
     setResolved(false);
   }, []);
 
-  /** Paste a screenshot straight into the box — the fastest way to report. */
+  const addFiles = useCallback((incoming: File[]) => {
+    if (incoming.length === 0) return;
+    setFiles(prev => {
+      const next = [...prev];
+      for (const f of incoming) {
+        if (next.length >= MAX_FILES) {
+          toast.error(`You can attach up to ${MAX_FILES} files.`);
+          break;
+        }
+        if (f.size > MAX_IMAGE_BYTES) {
+          toast.error(`${f.name} is over 8MB — try a smaller one.`);
+          continue;
+        }
+        next.push(f);
+      }
+      return next;
+    });
+  }, []);
+
+  /** Paste screenshots straight into the box — the fastest way to report. */
   const onPaste = (e: React.ClipboardEvent) => {
-    const img = Array.from(e.clipboardData.files).find(f => f.type.startsWith('image/'));
-    if (img) {
+    const imgs = Array.from(e.clipboardData.files).filter(f => f.type.startsWith('image/'));
+    if (imgs.length) {
       e.preventDefault();
-      setFile(img);
+      addFiles(imgs);
     }
   };
 
   const send = async (asTier: 'standard' | 'senior' = tier) => {
     const body = text.trim();
-    if ((!body && !file) || busy || !user || !orgId) return;
+    if ((!body && files.length === 0) || busy || !user || !orgId) return;
     setBusy(true);
     setSuggested(null);
 
@@ -106,36 +129,57 @@ export default function SupportWidget() {
         setTicketId(id);
       }
 
-      let attachmentPath: string | null = null;
-      let previewUrl: string | null = null;
-      if (file) {
-        if (file.size > MAX_IMAGE_BYTES) throw new Error('That image is over 8MB — try a smaller one.');
-        const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+      const uploaded: { path: string; file: File }[] = [];
+      for (const f of files) {
+        const ext = f.name.split('.').pop()?.toLowerCase() || 'png';
         const path = `${orgId}/${id}/${crypto.randomUUID()}.${ext}`;
         const { error: upErr } = await supabase.storage
           .from('support-attachments')
-          .upload(path, file, { contentType: file.type });
+          .upload(path, f, { contentType: f.type });
         if (upErr) throw upErr;
-        attachmentPath = path;
-        previewUrl = URL.createObjectURL(file);
+        uploaded.push({ path, file: f });
       }
 
-      const { error: msgErr } = await supabase.from('support_messages').insert({
-        ticket_id: id,
-        org_id: orgId,
-        role: 'user',
-        author_user_id: user.id,
-        content: body || '(screenshot)',
-        attachment_path: attachmentPath,
-      });
+      // One row per attachment so the agent sees each file; the first row
+      // carries the typed message.
+      const rows =
+        uploaded.length > 0
+          ? uploaded.map((u, i) => ({
+              ticket_id: id,
+              org_id: orgId,
+              role: 'user',
+              author_user_id: user.id,
+              content: i === 0 ? body || `(${u.file.name})` : `(${u.file.name})`,
+              attachment_path: u.path,
+            }))
+          : [
+              {
+                ticket_id: id,
+                org_id: orgId,
+                role: 'user',
+                author_user_id: user.id,
+                content: body,
+                attachment_path: null,
+              },
+            ];
+
+      const { error: msgErr } = await supabase.from('support_messages').insert(rows);
       if (msgErr) throw msgErr;
 
       setBubbles(prev => [
         ...prev,
-        { id: crypto.randomUUID(), role: 'user', content: body || '(screenshot)', previewUrl },
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: body || `${uploaded.length} file${uploaded.length === 1 ? '' : 's'} attached`,
+          previewUrls: uploaded
+            .filter(u => u.file.type.startsWith('image/'))
+            .map(u => URL.createObjectURL(u.file)),
+        },
       ]);
       setText('');
-      setFile(null);
+      setFiles([]);
+
 
       const { data, error } = await supabase.functions.invoke('support-agent', {
         body: { ticket_id: id, tier: asTier },
@@ -272,13 +316,19 @@ export default function SupportWidget() {
                   <div className="rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
                     {b.content}
                   </div>
-                  {b.previewUrl && (
-                    <img
-                      src={b.previewUrl}
-                      alt="Screenshot attached to this problem report"
-                      className="ml-auto max-h-40 rounded-md border"
-                    />
+                  {!!b.previewUrls?.length && (
+                    <div className="flex flex-wrap justify-end gap-1">
+                      {b.previewUrls.map(u => (
+                        <img
+                          key={u}
+                          src={u}
+                          alt="Screenshot attached to this problem report"
+                          className="max-h-28 rounded-md border"
+                        />
+                      ))}
+                    </div>
                   )}
+
                 </div>
               ) : (
                 <div key={b.id} className="max-w-[92%] space-y-1">
@@ -326,14 +376,37 @@ export default function SupportWidget() {
 
           {!resolved && (
             <div className="space-y-2 border-t p-2">
-              {file && (
-                <div className="flex items-center justify-between rounded bg-muted px-2 py-1 text-xs">
-                  <span className="truncate">{file.name}</span>
-                  <button type="button" onClick={() => setFile(null)} aria-label="Remove screenshot">
-                    <X className="h-3 w-3" />
-                  </button>
+              {files.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {files.map((f, i) => (
+                    <div
+                      key={`${f.name}-${i}`}
+                      className="relative h-16 w-16 overflow-hidden rounded border bg-muted"
+                    >
+                      {f.type.startsWith('image/') ? (
+                        <img
+                          src={URL.createObjectURL(f)}
+                          alt={`Attachment preview: ${f.name}`}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center px-1 text-center text-[9px] leading-tight text-muted-foreground">
+                          {f.name}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))}
+                        aria-label={`Remove ${f.name}`}
+                        className="absolute right-0 top-0 rounded-bl bg-background/90 p-0.5"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
+
               <Textarea
                 ref={textRef}
                 value={text}
@@ -358,20 +431,25 @@ export default function SupportWidget() {
                   onClick={() => fileRef.current?.click()}
                   disabled={busy}
                 >
-                  <ImagePlus className="mr-1 h-3.5 w-3.5" /> Screenshot
+                  <ImagePlus className="mr-1 h-3.5 w-3.5" /> Attach
                 </Button>
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="image/*"
+                  accept={ACCEPTED}
+                  multiple
                   className="hidden"
-                  onChange={e => setFile(e.target.files?.[0] ?? null)}
+                  onChange={e => {
+                    addFiles(Array.from(e.target.files ?? []));
+                    e.target.value = '';
+                  }}
                 />
                 <Button
                   size="sm"
                   className="h-7"
                   onClick={() => send()}
-                  disabled={busy || (!text.trim() && !file)}
+                  disabled={busy || (!text.trim() && files.length === 0)}
+
                 >
                   <Send className="h-3.5 w-3.5" />
                 </Button>
