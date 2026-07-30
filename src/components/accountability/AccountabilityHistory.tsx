@@ -10,6 +10,7 @@ import {
   POLICY_LABELS,
   type AccountabilityReport,
 } from '@/hooks/useAccountability';
+import AccountabilityAuditTimeline from './AccountabilityAuditTimeline';
 
 function RecordRow({ r, who }: { r: AccountabilityReport; who?: string }) {
   return (
