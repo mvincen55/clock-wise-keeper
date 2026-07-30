@@ -47,6 +47,7 @@ export default function Training() {
   const { user } = useAuth();
   const { data: ctx } = useOrgContext();
   const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
+  const { nudge: trainingNudge } = useSurfaceNudge('training');
 
   const { data: modules = [], isLoading } = useTrainingModules();
   const { data: assignments = [] } = useTrainingAssignments();

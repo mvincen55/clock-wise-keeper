@@ -143,6 +143,7 @@ function CompletionNames({ completions }: { completions: ChecklistCompletion[] }
 export default function Checklists() {
   const { user } = useAuth();
   const { data, isLoading } = useChecklists();
+  const { nudge: checklistNudge } = useSurfaceNudge('checklists');
   const toggle = useToggleCompletion();
   const upsertItem = useUpsertChecklistItem();
   const deleteItem = useDeleteChecklistItem();
