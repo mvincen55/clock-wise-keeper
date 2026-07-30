@@ -32,7 +32,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadSupportPdf } from '@/lib/support-pdf';
-import { slaFor } from '@/lib/support-sla';
+import { slaFor, responseWindowLabel } from '@/lib/support-sla';
+import { useTick } from '@/hooks/useTick';
 import TicketTimeline, { stageFromTicket, type TicketStageTimes } from '@/components/support/TicketTimeline';
 import { redactScreenshot } from '@/lib/redact-image';
 import type { RedactionCategories } from '@/lib/redact-image';
@@ -166,6 +167,7 @@ export default function SupportWidget() {
   const redactPrefsRef = useRef<RedactionCategories>(redactPrefs);
   redactPrefsRef.current = redactPrefs;
   const [category, setCategory] = useState('other');
+  const now = useTick(1000);
   const [severity, setSeverity] = useState('medium');
   const [rangeStart, setRangeStart] = useState('');
   const [rangeEnd, setRangeEnd] = useState('');
@@ -888,7 +890,7 @@ export default function SupportWidget() {
                       )}
                     </div>
                     {(() => {
-                      const sla = slaFor(t);
+                      const sla = slaFor(t, now);
                       return (
                         <p
                           className={`mt-1 text-[11px] ${
@@ -951,7 +953,8 @@ export default function SupportWidget() {
                   created_at: stageTimes.open ?? new Date().toISOString(),
                   escalated_at: stageTimes.escalated ?? null,
                   resolved_at: stageTimes.solved ?? null,
-                });
+                  category,
+                }, now);
                 return (
                   <p
                     className={`mt-1.5 flex items-center gap-1 text-[10px] ${
@@ -1249,6 +1252,12 @@ export default function SupportWidget() {
                       </Select>
                     </div>
                   </div>
+                  <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <Clock className="h-3 w-3" />
+                    A person follows up {responseWindowLabel(severity, category)} — the agent
+                    answers right away.
+                  </p>
+
                   <div className="space-y-1">
                     <label className="text-[10px] font-medium text-muted-foreground">
                       Dates involved
