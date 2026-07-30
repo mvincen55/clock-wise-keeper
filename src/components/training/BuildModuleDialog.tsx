@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Sparkles } from 'lucide-react';
 import { useBuildModule } from '@/hooks/useTraining';
+import { useRunAudit } from '@/hooks/useTrainingAudit';
 import { toast } from 'sonner';
 
 const SUGGESTED = ['all', 'front desk', 'assistant', 'hygiene', 'manager'];
@@ -31,6 +32,7 @@ export default function BuildModuleDialog({ open, onOpenChange }: Props) {
   const [topic, setTopic] = useState('');
   const [audience, setAudience] = useState<string[]>(['all']);
   const build = useBuildModule();
+  const runAudit = useRunAudit();
 
   function toggleTag(tag: string) {
     setAudience(a => (a.includes(tag) ? a.filter(t => t !== tag) : [...a, tag]));
@@ -44,6 +46,8 @@ export default function BuildModuleDialog({ open, onOpenChange }: Props) {
         audience: audience.length ? audience : ['all'],
       });
       toast.success(`"${created.title}" is in the library.`);
+      // Second pair of eyes, in the background — never blocks the module.
+      void runAudit.mutateAsync(created.id).catch(() => undefined);
       setTopic('');
       onOpenChange(false);
     } catch (error) {

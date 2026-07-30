@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BookOpen, GraduationCap, Sparkles, UserPlus } from 'lucide-react';
+import { AlertTriangle, BookOpen, GraduationCap, Sparkles, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getToday } from '@/lib/time-utils';
 import {
@@ -19,6 +19,8 @@ import {
 import ModulePlayer from '@/components/training/ModulePlayer';
 import AssignModuleDialog, { type Assignee } from '@/components/training/AssignModuleDialog';
 import BuildModuleDialog from '@/components/training/BuildModuleDialog';
+import ModuleAuditPanel from '@/components/training/ModuleAuditPanel';
+import { useAuditFindings } from '@/hooks/useTrainingAudit';
 
 /** Active team members, used for the assignment picker and creator names. */
 function useTeamRoster() {
@@ -48,11 +50,16 @@ export default function Training() {
   const { data: assignments = [] } = useTrainingAssignments();
   const { data: attempts = [] } = useAttemptSummaries();
   const { data: roster = [] } = useTeamRoster();
+  const { data: auditFindings = [] } = useAuditFindings();
 
   const [openModuleId, setOpenModuleId] = useState<string | null>(null);
   const [assignTarget, setAssignTarget] = useState<TrainingModule | null>(null);
   const [buildOpen, setBuildOpen] = useState(false);
   const [tagFilter, setTagFilter] = useState<string>('all');
+  const [reviewModuleId, setReviewModuleId] = useState<string | null>(null);
+
+  const openFindingsFor = (moduleId: string) =>
+    auditFindings.filter(f => f.module_id === moduleId).length;
 
   const nameFor = useMemo(() => {
     const map = new Map(roster.map(m => [m.user_id, m.display_name]));
@@ -169,6 +176,12 @@ export default function Training() {
                             {tag}
                           </Badge>
                         ))}
+                        {isAdmin && openFindingsFor(module.id) > 0 && (
+                          <Badge variant="destructive" className="gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            Needs review
+                          </Badge>
+                        )}
                       </div>
                       <CardTitle className="text-base leading-snug">{module.title}</CardTitle>
                     </CardHeader>
@@ -190,7 +203,21 @@ export default function Training() {
                             Assign
                           </Button>
                         )}
+                        {isAdmin && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              setReviewModuleId(id => (id === module.id ? null : module.id))
+                            }
+                          >
+                            Review
+                          </Button>
+                        )}
                       </div>
+                      {isAdmin && reviewModuleId === module.id && (
+                        <ModuleAuditPanel moduleId={module.id} />
+                      )}
                     </CardContent>
                   </Card>
                 );
