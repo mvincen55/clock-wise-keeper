@@ -9,7 +9,30 @@ import { createNotification } from '@/hooks/useNotifications';
 // who wrote them; managers only ever see score and pass/fail.
 
 export type ModuleSource = 'pathfinder' | 'staff';
-export type ModuleStatus = 'published' | 'archived';
+export type ModuleStatus = 'published' | 'draft' | 'archived';
+export type LearningStyle = 'visual' | 'auditory' | 'reading' | 'kinesthetic' | 'mixed';
+
+export type ModuleVisual = {
+  kind: 'diagram' | 'board' | 'storyboard' | 'checklist';
+  title: string;
+  prompt: string;
+  steps: string[];
+};
+
+export type AuditFinding = {
+  severity: 'high' | 'medium' | 'low';
+  where: string;
+  issue: string;
+  conflicts_with: string;
+  fix: string;
+};
+
+export type ModuleAudit = {
+  verdict: 'clear' | 'flagged' | 'unreviewed';
+  summary: string;
+  findings: AuditFinding[];
+  audited_at?: string;
+};
 export type AssignmentStatus = 'assigned' | 'in_progress' | 'completed';
 
 export type QuizQuestion = {
@@ -19,7 +42,12 @@ export type QuizQuestion = {
   why: string;
 };
 
-export type ModuleSection = { heading: string; body: string; try_it: string };
+export type ModuleSection = {
+  heading: string;
+  body: string;
+  try_it: string;
+  visuals?: ModuleVisual[];
+};
 
 /** The one content shape every module follows. */
 export type ModuleContent = {
@@ -38,6 +66,8 @@ export type TrainingModule = {
   content: ModuleContent;
   source: ModuleSource;
   origin_goal_id: string | null;
+  learning_style: LearningStyle | null;
+  audit: ModuleAudit | null;
   status: ModuleStatus;
   created_by: string;
   created_at: string;
@@ -73,7 +103,9 @@ export function readContent(raw: unknown): ModuleContent {
   const c = (raw ?? {}) as Partial<ModuleContent>;
   return {
     outcome: typeof c.outcome === 'string' ? c.outcome : '',
-    sections: Array.isArray(c.sections) ? c.sections : [],
+    sections: Array.isArray(c.sections)
+      ? c.sections.map(s => ({ ...s, visuals: Array.isArray(s?.visuals) ? s.visuals : [] }))
+      : [],
     recap: typeof c.recap === 'string' ? c.recap : '',
     quiz:
       c.quiz && Array.isArray(c.quiz.questions) && c.quiz.questions.length > 0
@@ -277,14 +309,74 @@ export function useRecordAttempt() {
 export function useBuildModule() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { topic: string; audience: string[] }) => {
+    mutationFn: async (input: {
+      topic: string;
+      audience: string[];
+      learningStyle: LearningStyle;
+    }) => {
       const { data, error } = await supabase.functions.invoke('training-builder', {
-        body: { topic: input.topic, audience: input.audience },
+        body: {
+          topic: input.topic,
+          audience: input.audience,
+          learning_style: input.learningStyle,
+        },
       });
       if (error) throw new Error(data?.error || error.message);
       if (data?.error) throw new Error(data.error);
-      return data.module as TrainingModule;
+      return {
+        module: { ...data.module, content: readContent(data.module.content) } as TrainingModule,
+        audit: (data.audit ?? null) as ModuleAudit | null,
+      };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['training-modules'] }),
+  });
+}
+
+/** Modules the auditor held back — visible to owners/managers for review. */
+export function useDraftModules() {
+  const { data: ctx } = useOrgContext();
+  return useQuery({
+    queryKey: ['training-modules-draft', ctx?.org_id],
+    enabled: !!ctx,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('training_modules')
+        .select('*')
+        .eq('org_id', ctx!.org_id)
+        .eq('status', 'draft')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(m => ({ ...m, content: readContent(m.content) })) as TrainingModule[];
+    },
+  });
+}
+
+/** Publish a module the auditor flagged, after a human has read the findings. */
+export function usePublishModule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (moduleId: string) => {
+      const { error } = await supabase
+        .from('training_modules')
+        .update({ status: 'published' })
+        .eq('id', moduleId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['training-modules'] });
+      qc.invalidateQueries({ queryKey: ['training-modules-draft'] });
+    },
+  });
+}
+
+/** Discard a flagged draft entirely. */
+export function useDiscardDraft() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (moduleId: string) => {
+      const { error } = await supabase.from('training_modules').delete().eq('id', moduleId);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['training-modules-draft'] }),
   });
 }
