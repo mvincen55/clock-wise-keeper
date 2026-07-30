@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Compass, Loader2, Lock } from 'lucide-react';
+import { Archive, Compass, Loader2, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import GoalProgress from './GoalProgress';
@@ -13,6 +13,7 @@ import ProgressRing from './ProgressRing';
 import TargetProgress from './TargetProgress';
 import GoalStatusBadge from './GoalStatusBadge';
 import PathfinderChat from './PathfinderChat';
+import GoalArchiveDialog from './GoalArchiveDialog';
 import PathfinderPlanEditor, { type DraftTask } from './PathfinderPlanEditor';
 import {
   callPathfinder,
@@ -38,6 +39,7 @@ export default function MyGoalCard({
   onShareUpdate: () => void;
 }) {
   const [draft, setDraft] = useState<DraftTask[] | null>(null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [intro, setIntro] = useState<string>('');
   const [drafting, setDrafting] = useState(false);
   const saveTasks = useSaveGoalTasks();
@@ -213,8 +215,19 @@ export default function MyGoalCard({
                 </Button>
               </>
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={() => setArchiveOpen(true)}
+            >
+              <Archive className="mr-2 h-4 w-4" />
+              Archive
+            </Button>
           </div>
         )}
+
+        <GoalArchiveDialog goal={goal} open={archiveOpen} onOpenChange={setArchiveOpen} />
 
         <PathfinderChat goalId={goal.id} />
       </CardContent>

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { getToday } from '@/lib/time-utils';
+import { buildArchiveEvent } from '@/lib/goal-archive';
 
 // Goals: one encouraging, self-chosen monthly goal per person.
 // Not a scoreboard — progress is only "tasks done / total", never ranked.
@@ -229,6 +230,39 @@ export function useRestoreGoal() {
 
   return { ...mutation, isReady: !!user && !!ctx };
 }
+
+/** Archive a goal — the reason is validated first and always logged. */
+export function useArchiveGoal() {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: async ({ goal, reason }: { goal: Goal; reason: string }) => {
+      // Throws before anything is written when the reason is missing/too thin.
+      const event = buildArchiveEvent({
+        goal,
+        reason,
+        actorId: user?.id ?? '',
+        orgId: ctx?.org_id ?? '',
+      });
+      const { error } = await supabase
+        .from('goals')
+        .update({ status: 'archived' })
+        .eq('id', goal.id);
+      if (error) throw error;
+      const { error: logError } = await supabase.from('goal_events').insert(event);
+      if (logError) console.error('goal archive log failed', logError);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['goals'] });
+      qc.invalidateQueries({ queryKey: ['goals-archived'] });
+    },
+  });
+
+  return { ...mutation, isReady: !!user && !!ctx };
+}
+
 
 export function useUpdateGoal() {
   const qc = useQueryClient();
