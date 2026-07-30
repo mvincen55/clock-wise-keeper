@@ -19,6 +19,8 @@ import { useSpeech } from '@/hooks/useSpeech';
 import ReadAloudControls from './ReadAloudControls';
 import RoleplayChat from './RoleplayChat';
 import RoleplayRubricCard from './RoleplayRubricCard';
+import ModuleAuditPanel from './ModuleAuditPanel';
+import { useOrgContext } from '@/hooks/useOrgContext';
 
 
 
@@ -35,6 +37,8 @@ type Props = {
  */
 export default function ModulePlayer({ module, assignment, onBack }: Props) {
   const content = module.content;
+  const { data: ctx } = useOrgContext();
+  const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
   const questions = content.quiz?.questions ?? [];
   const [phase, setPhase] = useState<'read' | 'quiz' | 'result' | 'roleplay'>('read');
   const [answers, setAnswers] = useState<Record<number, number>>({});
@@ -142,6 +146,8 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
         <h1 className="text-2xl font-semibold leading-tight">{module.title}</h1>
         {module.summary && <p className="text-muted-foreground">{module.summary}</p>}
       </div>
+
+      {isAdmin && module.audit && <ModuleAuditPanel audit={module.audit} />}
 
       {phase === 'read' && (
         <div className="space-y-6">

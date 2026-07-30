@@ -156,3 +156,21 @@ export function useEmployeeAttendance(employeeId: string | undefined, dateRange:
     },
   });
 }
+
+/**
+ * How this team member learns best. Stored on the employee so every module we
+ * build for them teaches and tests the way they actually take information in.
+ */
+export function useSetLearningStyle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ employeeId, style }: { employeeId: string; style: string }) => {
+      const { error } = await supabase
+        .from('employees')
+        .update({ learning_style: style })
+        .eq('id', employeeId);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['org-employees'] }),
+  });
+}

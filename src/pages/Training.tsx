@@ -19,6 +19,7 @@ import {
 import ModulePlayer from '@/components/training/ModulePlayer';
 import AssignModuleDialog, { type Assignee } from '@/components/training/AssignModuleDialog';
 import BuildModuleDialog from '@/components/training/BuildModuleDialog';
+import { ModuleAuditBadge } from '@/components/training/ModuleAuditPanel';
 import RoleplaySettingsCard from '@/components/training/RoleplaySettingsCard';
 import TrainingStatusDashboard from '@/components/training/TrainingStatusDashboard';
 
@@ -172,6 +173,7 @@ export default function Training() {
                             {tag}
                           </Badge>
                         ))}
+                        {isAdmin && <ModuleAuditBadge audit={module.audit} />}
                       </div>
                       <CardTitle className="text-base leading-snug">{module.title}</CardTitle>
                     </CardHeader>
