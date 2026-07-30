@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import MemberProfileRow from '@/components/team/MemberProfileRow';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -94,7 +95,12 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
             {employee.display_name.charAt(0).toUpperCase()}
           </div>
           <div>
-            <p className="text-sm font-semibold">{employee.display_name}</p>
+            <p className="text-sm font-semibold">
+              {employee.display_name}
+              {employee.tag && (
+                <span className="ml-2 font-mono text-[10px] tracking-widest text-muted-foreground">{employee.tag}</span>
+              )}
+            </p>
             <p className="text-xs text-muted-foreground">{employee.email || 'No email'}</p>
           </div>
         </div>
@@ -105,6 +111,8 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
 
       {expanded && (
         <CardContent className="border-t pt-3 pb-4 px-4">
+          <MemberProfileRow employee={employee as never} />
+
           {/* Per-employee stats */}
           <div className="flex items-center gap-3 mb-3">
             {stats.present > 0 && <Badge variant="outline" className="text-success border-success/30 text-xs">{stats.present} present</Badge>}
