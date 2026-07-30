@@ -34,6 +34,7 @@ import { toast } from 'sonner';
 import { downloadSupportPdf } from '@/lib/support-pdf';
 import { slaFor, responseWindowLabel } from '@/lib/support-sla';
 import { useTick } from '@/hooks/useTick';
+import { filesFromDrop } from '@/lib/drop-files';
 import TicketTimeline, { stageFromTicket, type TicketStageTimes } from '@/components/support/TicketTimeline';
 import { redactScreenshot } from '@/lib/redact-image';
 import type { RedactionCategories } from '@/lib/redact-image';
@@ -804,7 +805,9 @@ export default function SupportWidget() {
             <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-primary bg-card/95">
               <ImagePlus className="h-6 w-6 text-primary" />
               <p className="text-sm font-medium text-foreground">Drop it here</p>
-              <p className="text-xs text-muted-foreground">Images or PDFs, up to {MAX_FILES}</p>
+              <p className="text-xs text-muted-foreground">
+                Drop several at once (or a folder) — up to {MAX_FILES} images or PDFs
+              </p>
             </div>
           )}
           <div className="flex items-center justify-between border-b px-3 py-2">
@@ -1112,6 +1115,10 @@ export default function SupportWidget() {
             <div className="space-y-2 border-t p-2">
               {files.length > 0 && (
                 <div className="space-y-2">
+                  <p className="text-[10px] text-muted-foreground">
+                    {files.length} file{files.length === 1 ? '' : 's'} attached — they go over as
+                    one report package.
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {files.map(a => {
                       const shown = redactOn
