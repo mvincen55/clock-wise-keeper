@@ -108,7 +108,10 @@ export default function NotificationBell() {
                         escalated: t.escalated_at,
                         solved: t.resolved_at,
                       }}
+                      contextPath={t.context_path}
+                      contextLabel={t.context_label}
                     />
+
                     {(() => {
                       const sla = slaFor(t);
                       return (
