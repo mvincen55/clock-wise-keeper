@@ -28,6 +28,8 @@ import UserNotesBoard from '@/components/UserNotesBoard';
 import TodayFocusCard from '@/components/copilot/TodayFocusCard';
 import RescopeCard from '@/components/copilot/RescopeCard';
 import { useClockInChase, useMiddayChase } from '@/hooks/useGentleChase';
+import MyAccountabilityCard from '@/components/accountability/MyAccountabilityCard';
+import AccountabilityReviewQueue from '@/components/accountability/AccountabilityReviewQueue';
 
 
 type ClockStatus = 'clocked_out' | 'clocked_in';
@@ -125,6 +127,10 @@ export default function Dashboard() {
       {isManager && <OrgSnapshotPanel />}
 
       {isManager && <PracticeVitalsCard />}
+
+      <AccountabilityReviewQueue />
+
+      <MyAccountabilityCard />
 
       <SprintCard />
 

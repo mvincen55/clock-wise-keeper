@@ -197,6 +197,106 @@ export type Database = {
         }
         Relationships: []
       }
+      accountability_reports: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          escalated_at: string | null
+          facts: Json
+          id: string
+          kind: string
+          manager_note: string | null
+          manager_signed_at: string | null
+          manager_signed_name: string | null
+          member_reason: string | null
+          member_signed_at: string | null
+          member_signed_name: string | null
+          org_id: string
+          period_end: string
+          period_start: string
+          policy_id: string | null
+          review_due_at: string | null
+          reviewer_user_id: string | null
+          status: string
+          subject_employee_id: string | null
+          subject_user_id: string
+          summary: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          escalated_at?: string | null
+          facts?: Json
+          id?: string
+          kind: string
+          manager_note?: string | null
+          manager_signed_at?: string | null
+          manager_signed_name?: string | null
+          member_reason?: string | null
+          member_signed_at?: string | null
+          member_signed_name?: string | null
+          org_id: string
+          period_end: string
+          period_start: string
+          policy_id?: string | null
+          review_due_at?: string | null
+          reviewer_user_id?: string | null
+          status?: string
+          subject_employee_id?: string | null
+          subject_user_id: string
+          summary: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          escalated_at?: string | null
+          facts?: Json
+          id?: string
+          kind?: string
+          manager_note?: string | null
+          manager_signed_at?: string | null
+          manager_signed_name?: string | null
+          member_reason?: string | null
+          member_signed_at?: string | null
+          member_signed_name?: string | null
+          org_id?: string
+          period_end?: string
+          period_start?: string
+          policy_id?: string | null
+          review_due_at?: string | null
+          reviewer_user_id?: string | null
+          status?: string
+          subject_employee_id?: string | null
+          subject_user_id?: string
+          summary?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accountability_reports_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accountability_reports_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "escalation_policies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accountability_reports_subject_employee_id_fkey"
+            columns: ["subject_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       allowed_users: {
         Row: {
           created_at: string
@@ -1413,6 +1513,59 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "employees_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      escalation_policies: {
+        Row: {
+          created_at: string
+          escalate_after_days: number
+          escalate_to: string | null
+          id: string
+          is_active: boolean
+          kind: string
+          org_id: string
+          review_due_days: number
+          reviewer_role: string
+          threshold_count: number
+          threshold_window_days: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          escalate_after_days?: number
+          escalate_to?: string | null
+          id?: string
+          is_active?: boolean
+          kind: string
+          org_id: string
+          review_due_days?: number
+          reviewer_role?: string
+          threshold_count?: number
+          threshold_window_days?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          escalate_after_days?: number
+          escalate_to?: string | null
+          id?: string
+          is_active?: boolean
+          kind?: string
+          org_id?: string
+          review_due_days?: number
+          reviewer_role?: string
+          threshold_count?: number
+          threshold_window_days?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escalation_policies_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
@@ -5041,6 +5194,10 @@ export type Database = {
       can_view_team_goal: { Args: { _goal_id: string }; Returns: boolean }
       conv_created_by: { Args: { _conv: string }; Returns: string }
       conv_type: { Args: { _conv: string }; Returns: string }
+      countersign_accountability_report: {
+        Args: { _note: string; _report_id: string; _typed_name: string }
+        Returns: undefined
+      }
       countersign_incident_report: {
         Args: { _report_id: string; _typed_name: string }
         Returns: {
@@ -5145,6 +5302,26 @@ export type Database = {
         }
         Returns: number
       }
+      my_accountability_reports: {
+        Args: never
+        Returns: {
+          closed_at: string
+          created_at: string
+          id: string
+          kind: string
+          manager_note: string
+          manager_signed_at: string
+          manager_signed_name: string
+          member_reason: string
+          member_signed_at: string
+          member_signed_name: string
+          org_id: string
+          period_end: string
+          period_start: string
+          status: string
+          summary: string
+        }[]
+      }
       my_department: { Args: never; Returns: string }
       my_team: { Args: never; Returns: string }
       owns_goal: { Args: { _goal_id: string }; Returns: boolean }
@@ -5185,6 +5362,10 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      sign_accountability_report: {
+        Args: { _reason: string; _report_id: string; _typed_name: string }
+        Returns: undefined
+      }
       sign_incident_report_employee: {
         Args: { _report_id: string; _typed_name: string }
         Returns: {
@@ -5233,6 +5414,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      sweep_accountability_escalations: { Args: never; Returns: number }
       sweep_attendance: { Args: { p_days?: number }; Returns: string }
       training_attempt_summaries: {
         Args: { _org_id: string }
