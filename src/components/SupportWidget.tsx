@@ -27,6 +27,7 @@ import {
   ChevronLeft,
   ExternalLink,
   SlidersHorizontal,
+  PenLine,
 
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -41,6 +42,8 @@ import {
   REDACTION_LABELS,
 } from '@/lib/redaction-prefs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import RedactionEditor from '@/components/support/RedactionEditor';
+import { composeRedaction, type RedactionBox } from '@/lib/manual-redaction';
 import { extractPdfText } from '@/lib/extract-pdf-text';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -95,6 +98,10 @@ type Attachment = {
   uploadedPath?: string | null;
   /** Last upload problem for this specific file. */
   uploadError?: string | null;
+  /** Boxes the person drew by hand, on top of (or undoing) the auto pass. */
+  boxes?: RedactionBox[];
+  /** The hand-edited image — this is what gets sent when it exists. */
+  manual?: File | null;
 };
 
 const CATEGORIES = [
@@ -180,8 +187,13 @@ export default function SupportWidget() {
   const [stageTimes, setStageTimes] = useState<TicketStageTimes>({});
   /** Where this report came from, so any status line can jump back to it. */
   const [ticketContext, setTicketContext] = useState<TicketContext | null>(null);
+  /** Which attachment is open in the draw-your-own-mask editor. */
+  const [editingKey, setEditingKey] = useState<string | null>(null);
 
 
+
+  const filesRef = useRef<Attachment[]>([]);
+  filesRef.current = files;
 
   const fileRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -214,6 +226,7 @@ export default function SupportWidget() {
     setBubbles([]);
     setText('');
     setFiles([]);
+    setEditingKey(null);
     setTier('standard');
     setSuggested(null);
     setResolved(false);
@@ -235,12 +248,24 @@ export default function SupportWidget() {
         [],
         redactPrefsRef.current,
       );
+      const auto = maskedCount >= 0 ? clean : null;
+      let manual: File | null = null;
+      const existing = filesRef.current.find(a => a.key === key);
+      // Hand-drawn boxes survive a re-scrub: recompose them over the new pass.
+      if (existing?.boxes?.length) {
+        try {
+          manual = (await composeRedaction(existing.original, auto, existing.boxes)).file;
+        } catch {
+          manual = null;
+        }
+      }
       setFiles(prev =>
         prev.map(a =>
           a.key === key
             ? {
                 ...a,
-                redacted: maskedCount >= 0 ? clean : null,
+                redacted: auto,
+                manual,
                 masked: Math.max(maskedCount, 0),
                 text,
                 rawText,
@@ -541,11 +566,11 @@ export default function SupportWidget() {
       for (let i = 0; i < files.length; i += 1) {
         const a = files[i];
         // Send the scrubbed copy whenever we have one and redaction is on.
-        const f = redactOn && a.redacted ? a.redacted : a.original;
+        const f = redactOn ? (a.manual ?? a.redacted ?? a.original) : a.original;
         setProgress({ done: i, total, name: a.original.name });
 
         // Same version of the text as the file: scrubbed image, scrubbed text.
-        const text = redactOn && a.redacted ? a.text : a.rawText || a.text;
+        const text = redactOn && (a.manual || a.redacted) ? a.text : a.rawText || a.text;
 
         // A retry after a half-finished send picks up where it left off.
         if (a.uploadedPath) {
@@ -721,6 +746,8 @@ export default function SupportWidget() {
 
   const anyWorking = files.some(a => a.working);
   const totalMasked = files.reduce((n, a) => n + (a.redacted ? a.masked : 0), 0);
+  const handDrawn = files.reduce((n, a) => n + (a.boxes?.filter(b => b.tool === 'mask').length ?? 0), 0);
+  const editingAttachment = files.find(a => a.key === editingKey) ?? null;
 
   if (!user || !orgId) return null;
 
@@ -1061,7 +1088,9 @@ export default function SupportWidget() {
                 <div className="space-y-2">
                   <div className="flex flex-wrap gap-2">
                     {files.map(a => {
-                      const shown = redactOn && a.redacted ? a.redacted : a.original;
+                      const shown = redactOn
+                        ? (a.manual ?? a.redacted ?? a.original)
+                        : a.original;
                       return (
                         <div
                           key={a.key}
@@ -1096,6 +1125,17 @@ export default function SupportWidget() {
                               <AlertTriangle className="h-3 w-3 text-destructive" />
                             </span>
                           )}
+                          {a.original.type.startsWith('image/') && !a.working && !a.uploadedPath && (
+                            <button
+                              type="button"
+                              onClick={() => setEditingKey(a.key)}
+                              aria-label={`Draw masks on ${a.original.name}`}
+                              title="Cover something yourself"
+                              className="absolute bottom-0 right-0 rounded-tl bg-background/90 p-0.5"
+                            >
+                              <PenLine className="h-3 w-3 text-muted-foreground" />
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => setFiles(prev => prev.filter(x => x.key !== a.key))}
@@ -1119,8 +1159,8 @@ export default function SupportWidget() {
                         {anyWorking
                           ? 'Scrubbing on this device…'
                           : redactOn
-                            ? totalMasked > 0
-                              ? `${totalMasked} item${totalMasked === 1 ? '' : 's'} covered · ${describeRedaction(redactPrefs)}`
+                            ? totalMasked + handDrawn > 0
+                              ? `${totalMasked + handDrawn} item${totalMasked + handDrawn === 1 ? '' : 's'} covered · ${describeRedaction(redactPrefs)}`
                               : describeRedaction(redactPrefs) + ' · nothing found to cover'
                             : 'The screenshot will be sent exactly as-is'}
                       </p>
@@ -1296,6 +1336,26 @@ export default function SupportWidget() {
           )}
         </div>
       )}
+
+      {editingAttachment && (
+        <RedactionEditor
+          open
+          onOpenChange={o => !o && setEditingKey(null)}
+          original={editingAttachment.original}
+          autoRedacted={redactOn ? editingAttachment.redacted : null}
+          boxes={editingAttachment.boxes ?? []}
+          onSave={(boxes, composed) => {
+            setFiles(prev =>
+              prev.map(a =>
+                a.key === editingAttachment.key
+                  ? { ...a, boxes, manual: boxes.length > 0 ? composed : null }
+                  : a,
+              ),
+            );
+          }}
+        />
+      )}
     </>
+
   );
 }
