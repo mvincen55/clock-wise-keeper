@@ -1001,6 +1001,10 @@ export type Database = {
           checks: Json
           created_at: string
           deposit_date: string
+          doctor_cancellations: number
+          doctor_no_shows: number
+          hygiene_cancellations: number
+          hygiene_no_shows: number
           id: string
           illumitrac_cents: number
           ins_cc_cents: number
@@ -1010,6 +1014,7 @@ export type Database = {
           prepared_by: string | null
           prepared_by_name: string
           print_snapshot: Json | null
+          production_cents: number | null
           pt_cc_cents: number
           updated_at: string
         }
@@ -1018,6 +1023,10 @@ export type Database = {
           checks?: Json
           created_at?: string
           deposit_date: string
+          doctor_cancellations?: number
+          doctor_no_shows?: number
+          hygiene_cancellations?: number
+          hygiene_no_shows?: number
           id?: string
           illumitrac_cents?: number
           ins_cc_cents?: number
@@ -1027,6 +1036,7 @@ export type Database = {
           prepared_by?: string | null
           prepared_by_name?: string
           print_snapshot?: Json | null
+          production_cents?: number | null
           pt_cc_cents?: number
           updated_at?: string
         }
@@ -1035,6 +1045,10 @@ export type Database = {
           checks?: Json
           created_at?: string
           deposit_date?: string
+          doctor_cancellations?: number
+          doctor_no_shows?: number
+          hygiene_cancellations?: number
+          hygiene_no_shows?: number
           id?: string
           illumitrac_cents?: number
           ins_cc_cents?: number
@@ -1044,6 +1058,7 @@ export type Database = {
           prepared_by?: string | null
           prepared_by_name?: string
           print_snapshot?: Json | null
+          production_cents?: number | null
           pt_cc_cents?: number
           updated_at?: string
         }
