@@ -4109,6 +4109,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          order_rev: number
           org_id: string
           sort_order: number
           updated_at: string
@@ -4119,6 +4120,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          order_rev?: number
           org_id: string
           sort_order?: number
           updated_at?: string
@@ -4129,6 +4131,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          order_rev?: number
           org_id?: string
           sort_order?: number
           updated_at?: string
@@ -4513,6 +4516,14 @@ export type Database = {
       recompute_attendance_range: {
         Args: { p_end_date: string; p_start_date: string; p_user_id: string }
         Returns: number
+      }
+      reorder_user_notes: {
+        Args: { _expected_rev: number; _ordered_ids: string[] }
+        Returns: {
+          id: string
+          order_rev: number
+          sort_order: number
+        }[]
       }
       search_office_doc_chunks: {
         Args: { p_limit?: number; p_query: string }
