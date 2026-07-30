@@ -298,6 +298,10 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
       </CardContent>
     </Card>
 
+      {isAdmin && (
+        <ReportsAnalyst from={from} to={to} kind={kind} recordCount={closed.length} />
+      )}
+
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
