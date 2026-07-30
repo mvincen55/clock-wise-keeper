@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft, Clock, CalendarDays, Plus, ShieldAlert } from 'lucide-react';
 import { formatDate, formatTime, minutesToHHMM } from '@/lib/time-utils';
+import AccountabilityHistory from '@/components/accountability/AccountabilityHistory';
 import IncidentReportModal from '@/components/IncidentReportModal';
 import IncidentReportDetail from '@/components/IncidentReportDetail';
 import { useEmployeeIncidentReports, type IncidentReport } from '@/hooks/useIncidentReports';
@@ -283,6 +284,8 @@ export default function EmployeeDetail() {
           )}
         </CardContent>
       </Card>
+
+      <AccountabilityHistory employeeId={employeeId} />
     </div>
   );
 }
