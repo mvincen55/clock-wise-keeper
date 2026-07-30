@@ -186,6 +186,26 @@ Deno.serve(async (req) => {
       token = invite.token;
     }
 
+    const { data: alreadyAllowed } = await supabaseAdmin
+      .from("allowed_users")
+      .select("id")
+      .eq("email", rawEmail)
+      .maybeSingle();
+
+    if (!alreadyAllowed) {
+      const { error: allowError } = await supabaseAdmin
+        .from("allowed_users")
+        .insert({ email: rawEmail });
+
+      if (allowError) {
+        console.error("Failed to allow invited user", { error: allowError, email: maskEmail(rawEmail) });
+        return new Response(JSON.stringify({ error: "Failed to prepare invite access" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const base = ALLOWED_ORIGINS.includes(origin) ? origin : FALLBACK_ORIGIN;
     const link = `${base}/accept-invite?token=${token}`;
 
