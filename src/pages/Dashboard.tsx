@@ -25,6 +25,10 @@ import PracticeVitalsCard from '@/components/PracticeVitalsCard';
 import MyMomentumCard from '@/components/MyMomentumCard';
 import SprintCard from '@/components/SprintCard';
 import UserNotesBoard from '@/components/UserNotesBoard';
+import TodayFocusCard from '@/components/copilot/TodayFocusCard';
+import RescopeCard from '@/components/copilot/RescopeCard';
+import { useClockInChase, useMiddayChase } from '@/hooks/useGentleChase';
+
 
 type ClockStatus = 'clocked_out' | 'clocked_in';
 
