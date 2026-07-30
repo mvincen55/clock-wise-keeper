@@ -42,6 +42,9 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
 
   const recordAttempt = useRecordAttempt();
   const updateStatus = useUpdateAssignmentStatus();
+  const { data: roleplayAttempts } = useMyRoleplayAttempts(module.id);
+  const lastRoleplay = roleplayAttempts?.[0]?.result ?? null;
+
 
   // Read-aloud chunks: title/outcome, each section, then the recap.
   const speechChunks = useMemo(() => {
