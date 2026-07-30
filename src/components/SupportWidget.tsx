@@ -60,6 +60,9 @@ type PastTicket = {
   category: string | null;
   severity: string | null;
   page_path: string | null;
+  context_path?: string | null;
+  context_label?: string | null;
+
   created_at: string;
   escalated_at?: string | null;
   resolved_at?: string | null;
