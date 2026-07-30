@@ -299,12 +299,72 @@ export function useAddTaskToChecklist() {
 
 /** Pathfinder calls. */
 export async function callPathfinder(payload: {
-  mode: 'breakdown' | 'draft_update';
-  goalId: string;
+  mode: 'breakdown' | 'draft_update' | 'polish_goal' | 'chat';
+  goalId?: string;
   quickNotes?: string;
+  title?: string;
+  description?: string;
+  message?: string;
 }) {
   const { data, error } = await supabase.functions.invoke('goal-assistant', { body: payload });
   if (error) throw new Error('Pathfinder is unavailable right now');
   if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
-  return data as { tasks?: { title: string; due_date: string | null }[]; content?: string; status?: UpdateStatus };
+  return data as {
+    tasks?: { title: string; due_date: string | null }[];
+    content?: string;
+    status?: UpdateStatus;
+    title?: string;
+    original?: string;
+    reply?: string;
+  };
+}
+
+/* ---------- Pathfinder conversation (per goal, owner only) ---------- */
+
+export type GoalMessage = {
+  id: string;
+  goal_id: string;
+  author: 'member' | 'pathfinder';
+  content: string;
+  created_at: string;
+};
+
+export function useGoalMessages(goalId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['goal-messages', goalId],
+    enabled: enabled && !!goalId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('goal_messages')
+        .select('id, goal_id, author, content, created_at')
+        .eq('goal_id', goalId)
+        .order('created_at');
+      if (error) throw error;
+      return (data ?? []) as GoalMessage[];
+    },
+  });
+}
+
+export function useSendPathfinderMessage(goalId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (message: string) => {
+      const result = await callPathfinder({ mode: 'chat', goalId, message });
+      return result.reply ?? '';
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['goal-messages', goalId] }),
+  });
+}
+
+/* ---------- Progress helpers ---------- */
+
+/** Fraction (0-1) of the month that has elapsed, Eastern. */
+export function monthElapsedFraction(month: string): number {
+  const today = getToday();
+  const [y, m] = month.split('-').map(Number);
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const monthOfToday = today.slice(0, 7);
+  if (monthOfToday > month) return 1;
+  if (monthOfToday < month) return 0;
+  return Math.min(1, Number(today.slice(8, 10)) / days);
 }

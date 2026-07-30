@@ -1657,3 +1657,22 @@
     text-align: left;
   }
 }
+
+/* ---- Goals page: Purple Envelope accent (#53406e) scoped to /goals ---- */
+.goals-theme {
+  --primary: 265 26% 34%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 265 26% 34%;
+  --goal-purple: 265 26% 34%;
+  --goal-green: 152 45% 34%;
+  --goal-amber: 35 85% 42%;
+}
+
+.dark .goals-theme {
+  --primary: 265 32% 62%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 265 32% 62%;
+  --goal-purple: 265 40% 70%;
+  --goal-green: 152 45% 55%;
+  --goal-amber: 35 90% 60%;
+}
