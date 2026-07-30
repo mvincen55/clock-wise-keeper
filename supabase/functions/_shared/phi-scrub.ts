@@ -27,8 +27,23 @@ const DOB = /\b(?:dob|d\.o\.b\.?|born)\b[:\s]*[\d/.-]{6,10}/gi;
 const CHART = /\b(?:mrn|chart|patient|pt)\s*#?\s*\d{3,}/gi;
 
 /**
- * Words that look like a full name but are ordinary office vocabulary. Kept so
- * routine goals and checklist titles don't get pointlessly mangled.
+ * Ordinary words that get capitalised at the start of a sentence and would
+ * otherwise be read as the first half of a name ("Call Sarah", "Ask Megan").
+ * A leading word from this list is peeled off before the name test runs.
+ */
+const SENTENCE_WORDS = new Set([
+  "call", "ask", "tell", "email", "text", "remind", "check", "confirm", "send",
+  "see", "let", "have", "get", "give", "help", "meet", "follow", "thank",
+  "the", "a", "an", "and", "but", "if", "when", "while", "with", "for", "to",
+  "i", "we", "they", "he", "she", "it", "this", "that", "today", "tomorrow",
+  "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+  "morning", "afternoon", "goal", "sprint", "team", "office", "new", "next",
+  "add", "make", "write", "review", "update", "finish", "start", "keep",
+]);
+
+/**
+ * Phrases that look like a full name but are ordinary office vocabulary. Kept
+ * so routine goals and checklist titles don't get pointlessly mangled.
  */
 const ALLOW = new Set([
   "front desk", "team meeting", "morning huddle", "day sheet", "treatment plan",
@@ -52,6 +67,27 @@ export function scrubFreeText(input: unknown, max = 4000): ScrubResult {
     });
   };
 
+  /**
+   * The full-name pass, which needs more care than a flat replace: a sentence
+   * that opens with a capitalised ordinary word ("Call Sarah") must keep that
+   * word and, if only a lone first name is left, redact nothing at all.
+   */
+  const passNames = () => {
+    out = out.replace(FULL_NAME, (match) => {
+      if (ALLOW.has(match.toLowerCase().trim())) return match;
+      const words = match.split(/\s+/);
+      const kept: string[] = [];
+      while (words.length && SENTENCE_WORDS.has(words[0].toLowerCase())) {
+        kept.push(words.shift() as string);
+      }
+      // One word left is a first name, and first names are how this office
+      // talks about its own people. Nothing to redact.
+      if (words.length < 2) return match;
+      if (!hits.includes("full_name")) hits.push("full_name");
+      return [...kept, "[a person]"].join(" ");
+    });
+  };
+
   // Order matters: the most specific patterns run first.
   pass(EMAIL, "email", "[removed]");
   pass(SSN, "ssn", "[removed]");
@@ -59,7 +95,7 @@ export function scrubFreeText(input: unknown, max = 4000): ScrubResult {
   pass(CHART, "chart_id", "[removed]");
   pass(PHONE, "phone", "[removed]");
   pass(TITLE_NAME, "titled_name", "[a person]");
-  pass(FULL_NAME, "full_name", "[a person]");
+  passNames();
 
   return { text: out, redacted: hits.length > 0, hits };
 }
