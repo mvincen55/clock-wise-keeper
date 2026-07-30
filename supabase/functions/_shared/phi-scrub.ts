@@ -19,7 +19,10 @@ export type ScrubResult = {
 };
 
 const TITLE_NAME = /\b(?:Mr|Mrs|Ms|Miss|Mx|Dr)\.?\s+[A-Z][a-z'’-]{1,20}(?:\s+[A-Z][a-z'’-]{1,20})?/g;
-const FULL_NAME = /\b[A-Z][a-z'’-]{1,20}\s+[A-Z][a-z'’-]{1,20}(?:\s+(?:Jr|Sr|II|III)\.?)?\b/g;
+// Two to four capitalised words in a row. The extra reach matters: it lets a
+// sentence-opening word ("Call Sarah Whitman") be peeled off in passNames
+// while the actual name behind it is still caught.
+const FULL_NAME = /\b[A-Z][a-z'’-]{1,20}(?:\s+[A-Z][a-z'’-]{1,20}){1,3}(?:\s+(?:Jr|Sr|II|III)\.?)?\b/g;
 const EMAIL = /\b[\w.+-]+@[\w-]+\.[\w.-]+\b/g;
 const PHONE = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g;
 const SSN = /\b\d{3}-\d{2}-\d{4}\b/g;
