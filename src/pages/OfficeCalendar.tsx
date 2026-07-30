@@ -16,6 +16,8 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAddDayOff } from '@/hooks/useDaysOff';
+import TeamMeetingsCard from '@/components/calendar/TeamMeetingsCard';
+import { useOfficeEvents } from '@/hooks/useOfficeEvents';
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -31,6 +33,7 @@ const eventColors: Record<string, string> = {
   medical: 'bg-warning text-warning-foreground border-warning',
   closure: 'bg-secondary text-secondary-foreground border-secondary-foreground/40',
   gcal: 'bg-accent text-accent-foreground border-accent-foreground/40',
+  meeting: 'bg-[hsl(var(--goal-purple))] text-primary-foreground border-[hsl(var(--goal-purple))]',
 };
 
 type GCalEvent = {
@@ -408,6 +411,19 @@ export default function OfficeCalendar() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const todayStr = new Date().toISOString().split('T')[0];
 
+  // Team meetings live in office_events — Goals paces plans toward them.
+  const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+  const monthEnd = `${year}-${String(month + 1).padStart(2, '0')}-${String(
+    new Date(year, month + 1, 0).getDate()
+  ).padStart(2, '0')}`;
+  const { data: teamMeetings } = useOfficeEvents(monthStart, monthEnd, 'team_meeting');
+  const meetingsByDay = new Map<string, { id: string; title: string }[]>();
+  for (const m of teamMeetings ?? []) {
+    const list = meetingsByDay.get(m.event_date) ?? [];
+    list.push({ id: m.id, title: m.title });
+    meetingsByDay.set(m.event_date, list);
+  }
+
   const weeks: (number | null)[][] = [];
   let week: (number | null)[] = [];
   for (let i = 0; i < firstDayOfMonth; i++) week.push(null);
@@ -751,6 +767,15 @@ export default function OfficeCalendar() {
                       </div>
                     </div>
                     <div className="space-y-0.5">
+                      {(meetingsByDay.get(dateStr) || []).map(m => (
+                        <div
+                          key={m.id}
+                          className={`text-[10px] font-medium leading-tight px-1 py-0.5 rounded border truncate ${eventColors.meeting}`}
+                          title={m.title}
+                        >
+                          👥 {m.title}
+                        </div>
+                      ))}
                       {namedClosures.map((evt, ei) => (
                         <div
                           key={`c-${ei}`}
@@ -802,6 +827,13 @@ export default function OfficeCalendar() {
         </CardContent>
       </Card>
 
+      <TeamMeetingsCard
+        start={monthStart}
+        end={monthEnd}
+        isManager={isManager}
+        defaultDate={todayStr >= monthStart && todayStr <= monthEnd ? todayStr : monthStart}
+      />
+
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-xs">
         <div className="flex items-center gap-1.5">
@@ -819,6 +851,10 @@ export default function OfficeCalendar() {
         <div className="flex items-center gap-1.5">
           <div className={`w-3 h-3 rounded border ${eventColors.closure}`} />
           <span className="text-muted-foreground">Office Closed</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className={`w-3 h-3 rounded border ${eventColors.meeting}`} />
+          <span className="text-muted-foreground">👥 Team Meeting</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className={`w-3 h-3 rounded border ${eventColors.gcal}`} />

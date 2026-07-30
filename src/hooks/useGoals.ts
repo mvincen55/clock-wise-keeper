@@ -36,6 +36,7 @@ export type GoalTask = {
   done: boolean;
   done_at: string | null;
   sort_order: number;
+  training_module_id?: string | null;
 };
 
 export type GoalUpdate = {
@@ -203,16 +204,25 @@ export function useSaveGoalTasks() {
         .limit(1)
         .maybeSingle();
       const base = (existing?.sort_order ?? -1) + 1;
-      const { error } = await supabase.from('goal_tasks').insert(
-        tasks.map((t, i) => ({
-          org_id: ctx.org_id,
-          goal_id: goalId,
-          title: t.title,
-          due_date: t.due_date,
-          sort_order: base + i,
-        }))
-      );
+      const { data, error } = await supabase
+        .from('goal_tasks')
+        .insert(
+          tasks.map((t, i) => ({
+            org_id: ctx.org_id,
+            goal_id: goalId,
+            title: t.title,
+            due_date: t.due_date,
+            sort_order: base + i,
+          }))
+        )
+        .select('id, sort_order');
       if (error) throw error;
+      // Same order the caller passed them in — lets the caller attach a
+      // training module to a specific step.
+      return (data ?? []).sort((a, b) => a.sort_order - b.sort_order) as {
+        id: string;
+        sort_order: number;
+      }[];
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['goals'] }),
   });
@@ -303,13 +313,15 @@ export function useAddTaskToChecklist() {
 
 /** Pathfinder calls. */
 export async function callPathfinder(payload: {
-  mode: 'breakdown' | 'draft_update' | 'polish_goal' | 'chat';
+  mode: 'breakdown' | 'draft_update' | 'polish_goal' | 'chat' | 'build_resource';
   goalId?: string;
   quickNotes?: string;
   title?: string;
   description?: string;
   month?: string;
   message?: string;
+  topic?: string;
+  taskId?: string;
 }) {
   const { data, error } = await supabase.functions.invoke('goal-assistant', { body: payload });
   if (error) throw new Error('Pathfinder is unavailable right now');
@@ -329,6 +341,10 @@ export async function callPathfinder(payload: {
       time_bound: string;
     };
     reply?: string;
+    intro?: string;
+    meeting_date?: string | null;
+    resource?: { topic: string; attach_to_step: number } | null;
+    module?: { id: string; title: string };
   };
 }
 

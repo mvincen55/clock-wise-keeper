@@ -3,10 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Compass, Loader2, Lock } from 'lucide-react';
+import { BookOpen, Compass, Loader2, Lock, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import GoalProgress from './GoalProgress';
+import GoalMonthTimeline from './GoalMonthTimeline';
+import GoalTrainingModules from './GoalTrainingModules';
 import TargetProgress from './TargetProgress';
 import GoalStatusBadge from './GoalStatusBadge';
 import PathfinderChat from './PathfinderChat';
@@ -21,6 +23,8 @@ import {
   type GoalTask,
   type GoalUpdate,
 } from '@/hooks/useGoals';
+import { useNextTeamMeeting } from '@/hooks/useOfficeEvents';
+import { useQueryClient } from '@tanstack/react-query';
 
 /** My goal — the elevated card at the top of the page. */
 export default function MyGoalCard({
@@ -36,6 +40,11 @@ export default function MyGoalCard({
 }) {
   const [draft, setDraft] = useState<DraftTask[] | null>(null);
   const [drafting, setDrafting] = useState(false);
+  const [intro, setIntro] = useState('');
+  const [resource, setResource] = useState<{ topic: string; attach_to_step: number } | null>(null);
+  const [buildingResource, setBuildingResource] = useState(false);
+  const { data: nextMeeting } = useNextTeamMeeting();
+  const qc = useQueryClient();
   const saveTasks = useSaveGoalTasks();
   const addToChecklist = useAddTaskToChecklist();
   const toggleTask = useToggleGoalTask();
@@ -48,6 +57,8 @@ export default function MyGoalCard({
     try {
       const result = await callPathfinder({ mode: 'breakdown', goalId: goal.id });
       setDraft((result.tasks ?? []).map(t => ({ ...t, toChecklist: false })));
+      setIntro(result.intro ?? '');
+      setResource(result.resource ?? null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Pathfinder could not build a plan');
     } finally {
@@ -58,15 +69,41 @@ export default function MyGoalCard({
   const acceptPlan = async () => {
     if (!draft || draft.length === 0) return;
     try {
-      await saveTasks.mutateAsync({
+      const saved = await saveTasks.mutateAsync({
         goalId: goal.id,
         tasks: draft.map(t => ({ title: t.title, due_date: t.due_date })),
       });
       for (const t of draft.filter(t => t.toChecklist)) {
         await addToChecklist.mutateAsync({ title: t.title, dueDate: t.due_date });
       }
+      const pendingResource = resource;
       setDraft(null);
+      setIntro('');
+      setResource(null);
       toast.success('Plan saved — nice work getting started.');
+
+      // Pathfinder thought a learning resource would genuinely help — build it
+      // in the central training library and attach it to the right step.
+      if (pendingResource) {
+        setBuildingResource(true);
+        try {
+          const taskId = saved[pendingResource.attach_to_step - 1]?.id;
+          const built = await callPathfinder({
+            mode: 'build_resource',
+            goalId: goal.id,
+            topic: pendingResource.topic,
+            taskId,
+          });
+          qc.invalidateQueries({ queryKey: ['training-modules'] });
+          qc.invalidateQueries({ queryKey: ['training-assignments'] });
+          qc.invalidateQueries({ queryKey: ['goals'] });
+          if (built.module) toast.success(`Training added: ${built.module.title}`);
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : 'Could not add the training resource');
+        } finally {
+          setBuildingResource(false);
+        }
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not save the plan');
     }
@@ -96,10 +133,30 @@ export default function MyGoalCard({
           <p className="text-sm text-muted-foreground">{goal.description}</p>
         )}
 
-        <div className="space-y-2">
-          <GoalProgress done={done} total={tasks.length} monthElapsed={elapsed} />
-          <TargetProgress target={goal.smart_target} done={done} total={tasks.length} />
-        </div>
+        <GoalMonthTimeline
+          month={goal.month}
+          meetingDate={nextMeeting?.event_date ?? null}
+          done={done}
+          total={tasks.length}
+        />
+
+        {hasPlan && (
+          <div className="space-y-2">
+            <GoalProgress done={done} total={tasks.length} monthElapsed={elapsed} />
+            <TargetProgress target={goal.smart_target} done={done} total={tasks.length} />
+          </div>
+        )}
+
+        {!hasPlan && !draft && (
+          <div className="rounded-lg border border-dashed border-primary/40 bg-primary/[0.03] p-5 text-center">
+            <Compass className="mx-auto mb-2 h-6 w-6 text-[hsl(var(--goal-purple))]" />
+            <p className="text-sm font-medium">No plan yet</p>
+            <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
+              Pathfinder will turn this into a handful of concrete steps, paced around your time
+              off and the next team meeting.
+            </p>
+          </div>
+        )}
 
         {hasPlan && (
           <ul className="space-y-2">
@@ -133,12 +190,42 @@ export default function MyGoalCard({
           </ul>
         )}
 
+        {buildingResource && (
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Building a training resource for this goal…
+          </p>
+        )}
+
+        <GoalTrainingModules goalId={goal.id} memberUserId={goal.user_id} />
+
+        {draft && intro && (
+          <p className="flex items-start gap-2 rounded-lg bg-primary/[0.05] p-3 text-sm">
+            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--goal-purple))]" />
+            <span>{intro}</span>
+          </p>
+        )}
+
+        {draft && resource && (
+          <p className="flex items-start gap-2 px-1 text-xs text-muted-foreground">
+            <BookOpen className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              Pathfinder will also add a training module on “{resource.topic}” to the library when
+              you accept.
+            </span>
+          </p>
+        )}
+
         {draft && (
           <PathfinderPlanEditor
             tasks={draft}
             onChange={setDraft}
             onAccept={acceptPlan}
-            onDiscard={() => setDraft(null)}
+            onDiscard={() => {
+              setDraft(null);
+              setIntro('');
+              setResource(null);
+            }}
             saving={saveTasks.isPending || addToChecklist.isPending}
           />
         )}
