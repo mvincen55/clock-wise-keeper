@@ -325,6 +325,82 @@ ${settingsBlock}`;
     const title = text(parsed.title, 200) || topic;
     const summary = text(parsed.summary, 400);
 
+    // ---- Auditor: always runs BEFORE anything is published ------------------
+    // A second, independent pass checks the draft against the office's standing
+    // rules and documents. Anything that contradicts them, invents policy, or
+    // reads as inappropriate/unsafe holds the module back as a draft for review.
+    const auditSystem = `You are the compliance auditor for a dental practice's training library.
+You are given the office's STANDING RULES and DOCUMENTS, and a DRAFT training module.
+Flag anything that: contradicts a standing rule or document; invents an office policy the sources do not support; states a clinical, legal, HIPAA, or payroll claim that is wrong or risky; references real patient data; or is disrespectful, discriminatory, or otherwise inappropriate.
+Do not flag style, tone preferences, or things that are simply not covered by the sources but are taught as judgment plus escalation.
+Return ONLY JSON: {"verdict":"clear"|"flagged","summary":"one sentence","findings":[{"severity":"high"|"medium"|"low","where":"section heading or 'quiz'","issue":"what is wrong","conflicts_with":"the rule or doc it contradicts, or 'none'","fix":"what to change"}]}`;
+
+    const auditPrompt = `STANDING OFFICE RULES (authoritative):
+${memoryBlock || "(none recorded yet)"}
+
+OFFICE DOCUMENTS (excerpts):
+${docBlock || "(no matching documents)"}
+
+DRAFT MODULE:
+${JSON.stringify({ title, summary, content }).slice(0, 40000)}`;
+
+    let audit: Record<string, unknown> = {
+      verdict: "unreviewed",
+      summary: "The auditor could not be reached.",
+      findings: [],
+      audited_at: new Date().toISOString(),
+    };
+
+    try {
+      const auditRes = await fetch(GATEWAY_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: MODEL,
+          reasoning_effort: "none",
+          messages: [
+            { role: "system", content: auditSystem },
+            { role: "user", content: auditPrompt },
+          ],
+        }),
+      });
+      if (auditRes.ok) {
+        const auditData = await auditRes.json();
+        const auditRaw = (auditData?.choices?.[0]?.message?.content as string | undefined) ?? "";
+        const parsedAudit = parseJsonBlock<Record<string, unknown>>(auditRaw);
+        if (parsedAudit) {
+          const findings = Array.isArray(parsedAudit.findings)
+            ? (parsedAudit.findings as Record<string, unknown>[])
+                .map((f) => ({
+                  severity: ["high", "medium", "low"].includes(text(f?.severity, 10))
+                    ? text(f?.severity, 10)
+                    : "medium",
+                  where: text(f?.where, 200),
+                  issue: text(f?.issue, 700),
+                  conflicts_with: text(f?.conflicts_with, 700),
+                  fix: text(f?.fix, 700),
+                }))
+                .filter((f) => f.issue)
+                .slice(0, 12)
+            : [];
+          audit = {
+            verdict: findings.length > 0 || parsedAudit.verdict === "flagged" ? "flagged" : "clear",
+            summary: text(parsedAudit.summary, 400),
+            findings,
+            audited_at: new Date().toISOString(),
+            model: MODEL,
+          };
+        }
+      } else {
+        console.error("auditor error", auditRes.status, await auditRes.text());
+      }
+    } catch (auditError) {
+      console.error("auditor failed", auditError);
+    }
+
+    // Only a clean audit publishes. Anything else waits for a human.
+    const status = audit.verdict === "clear" ? "published" : "draft";
+
     const { data: saved, error: insertError } = await supabase
       .from("training_modules")
       .insert({
@@ -335,7 +411,9 @@ ${settingsBlock}`;
         content,
         source: "pathfinder",
         origin_goal_id: originGoalId,
-        status: "published",
+        learning_style: learningStyle,
+        audit: audit as unknown as Record<string, unknown>,
+        status,
         created_by: user.id,
       })
       .select()
@@ -346,7 +424,7 @@ ${settingsBlock}`;
       return json({ error: "The module was written but could not be saved." }, 500);
     }
 
-    return json({ module: saved });
+    return json({ module: saved, audit });
   } catch (error) {
     console.error("training-builder failed:", error);
     return json({ error: "Something went wrong building the module." }, 500);
