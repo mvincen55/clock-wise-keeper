@@ -32,9 +32,11 @@ import MorningHuddle from "@/pages/MorningHuddle";
 import Goals from "@/pages/Goals";
 import Training from "@/pages/Training";
 import AcceptInvite from "@/pages/AcceptInvite";
+import Onboarding from "@/pages/Onboarding";
 import NotFound from "@/pages/NotFound";
 import OAuthConsent from "@/pages/OAuthConsent";
 import { Loader2 } from "lucide-react";
+import { useOnboardingStatus } from "@/hooks/useOnboarding";
 
 const queryClient = new QueryClient();
 
@@ -46,7 +48,31 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     </div>
   );
   if (!user || !isAllowed) return <Navigate to="/auth" replace />;
+  return <OnboardingGate>{children}</OnboardingGate>;
+}
+
+/**
+ * Members with unfinished onboarding land on /onboarding until it's done.
+ * Fails open: if the check can't run, the app opens normally.
+ */
+function OnboardingGate({ children }: { children: React.ReactNode }) {
+  const { data: status, isReady, hasOrg } = useOnboardingStatus();
+  if (isReady && hasOrg && status && !status.complete) {
+    return <Navigate to="/onboarding" replace />;
+  }
   return <AppLayout>{children}</AppLayout>;
+}
+
+/** The flow itself renders outside the app shell — no nav until it's finished. */
+function OnboardingRoute() {
+  const { user, loading, isAllowed } = useAuth();
+  if (loading) return (
+    <div className="flex min-h-screen items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
+  if (!user || !isAllowed) return <Navigate to="/auth" replace />;
+  return <Onboarding />;
 }
 
 const App = () => (
@@ -83,6 +109,7 @@ const App = () => (
             <Route path="/morning-huddle" element={<ProtectedRoute><MorningHuddle /></ProtectedRoute>} />
             <Route path="/goals" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
             <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
+            <Route path="/onboarding" element={<OnboardingRoute />} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
             <Route path="*" element={<Navigate to="/auth" replace />} />
