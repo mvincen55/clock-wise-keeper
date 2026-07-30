@@ -160,6 +160,9 @@ export default function SupportWidget() {
   const [history, setHistory] = useState<PastTicket[] | null>(null);
   const [loadingThread, setLoadingThread] = useState(false);
   const [stageTimes, setStageTimes] = useState<TicketStageTimes>({});
+  /** Where this report came from, so any status line can jump back to it. */
+  const [ticketContext, setTicketContext] = useState<TicketContext | null>(null);
+
 
 
   const fileRef = useRef<HTMLInputElement>(null);
