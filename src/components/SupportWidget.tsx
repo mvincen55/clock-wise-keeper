@@ -48,11 +48,12 @@ export default function SupportWidget() {
   const [ticketId, setTicketId] = useState<string | null>(null);
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [text, setText] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [tier, setTier] = useState<'standard' | 'senior'>('standard');
   const [suggested, setSuggested] = useState<string | null>(null);
   const [resolved, setResolved] = useState(false);
+
 
   const fileRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
