@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Lock, Loader2, Users } from 'lucide-react';
+import { Lock, Loader2, Printer, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
@@ -23,6 +24,9 @@ import GoalStatusBadge from '@/components/goals/GoalStatusBadge';
 import MyGoalCard from '@/components/goals/MyGoalCard';
 import SetGoalCard from '@/components/goals/SetGoalCard';
 import TeamGoalCard from '@/components/goals/TeamGoalCard';
+import GoalsPrintSheet, { type GoalsReportRow } from '@/components/goals/GoalsPrintSheet';
+import BrandPrintStyle from '@/components/BrandPrintStyle';
+import { useOrgBranding } from '@/hooks/useOrgBranding';
 import {
   currentMonth,
   monthElapsedFraction,
@@ -41,6 +45,7 @@ export default function Goals() {
   const month = currentMonth();
   const { data, isLoading } = useGoalsMonth(month);
   const { data: team } = useActiveTeam();
+  const { data: branding } = useOrgBranding();
   const createGoal = useCreateGoal();
 
   const [meetingView, setMeetingView] = useState(false);
@@ -85,6 +90,46 @@ export default function Goals() {
     }
   };
 
+  // One row per active team member (me included), each with their shared
+  // goal for the month, its plan, and the latest check-in — the report.
+  const reportRows: GoalsReportRow[] = useMemo(() => {
+    const members = team ?? [];
+    return members.map(m => {
+      const goal = goals.find(
+        g => g.user_id === m.user_id && g.visibility === 'team' && g.status !== 'archived'
+      );
+      return {
+        name: m.display_name,
+        goal,
+        tasks: goal ? tasks.filter(t => t.goal_id === goal.id) : [],
+        latestUpdate: goal ? updates.find(u => u.goal_id === goal.id) : undefined,
+      };
+    });
+  }, [team, goals, tasks, updates]);
+
+  const myName = team?.find(t => t.user_id === user?.id)?.display_name;
+
+  const printSheet = (
+    <>
+      <BrandPrintStyle branding={branding ?? { brandColor: '#53406e', brandTint: '#f3f0f8' }} />
+      <GoalsPrintSheet
+        month={month}
+        rows={reportRows}
+        branding={{
+          displayName: branding?.displayName ?? '',
+          legalName: branding?.legalName ?? '',
+          logoUrl: branding?.logoUrl ?? '',
+        }}
+        preparedBy={myName}
+      />
+    </>
+  );
+
+  const printRoot =
+    typeof document !== 'undefined'
+      ? createPortal(<div className="goals-print-root">{printSheet}</div>, document.body)
+      : null;
+
   if (isLoading) {
     return (
       <div className="goals-theme flex min-h-[50vh] items-center justify-center">
@@ -103,9 +148,15 @@ export default function Goals() {
             <h1 className="text-2xl font-semibold">Team meeting — {monthLabel(month)}</h1>
             <p className="text-sm text-muted-foreground">Where everyone is with their goal.</p>
           </div>
-          <Button variant="outline" onClick={() => setMeetingView(false)}>
-            Back to Goals
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => window.print()}>
+              <Printer className="mr-2 h-4 w-4" />
+              Print report
+            </Button>
+            <Button variant="outline" onClick={() => setMeetingView(false)}>
+              Back to Goals
+            </Button>
+          </div>
         </div>
 
         {teamGoals.length === 0 && (
@@ -146,6 +197,7 @@ export default function Goals() {
             </Card>
           );
         })}
+        {printRoot}
       </div>
     );
   }
@@ -167,6 +219,10 @@ export default function Goals() {
               Private goal with a member
             </Button>
           )}
+          <Button variant="ghost" size="sm" onClick={() => window.print()}>
+            <Printer className="mr-2 h-4 w-4" />
+            Print report
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => setMeetingView(true)}>
             <Users className="mr-2 h-4 w-4" />
             Meeting view
@@ -276,6 +332,9 @@ export default function Goals() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Hidden print copy, portaled outside #root so print CSS shows only it. */}
+      {printRoot}
     </div>
   );
 }

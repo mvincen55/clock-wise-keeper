@@ -155,6 +155,12 @@
   display: none;
 }
 
+/* Printable Monthly Goals Report — team SMART goals, progress, and
+   check-in notes. Hidden on screen; shown only when printing from /goals. */
+.goals-print-root {
+  display: none;
+}
+
 /* Printable Incident Report — one letter page for the safety binder and
    the OSHA sharps log. Hidden on screen; shown only when printing from an
    open report. Same document language as the deposit sheet. */
@@ -1581,6 +1587,268 @@
   page: fof;
 }
 
+
+@page goalsheet {
+  size: letter;
+  margin: 0.5in;
+}
+
+.goal-sheet {
+  --goal-navy: #53406e;
+  --goal-ink: #2b2733;
+  --goal-muted: #6b6577;
+  --goal-line: #d5cfe0;
+  --goal-tint: #f3f0f8;
+  page: goalsheet;
+  width: 7.5in;
+  margin: 0 auto;
+  background: white;
+  color: var(--goal-ink);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 9.5pt;
+  line-height: 1.4;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.goal-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.4in;
+  padding-bottom: 8pt;
+  border-bottom: 1.5pt solid var(--goal-navy);
+  margin-bottom: 10pt;
+}
+
+.goal-logo {
+  height: 0.52in;
+  width: auto;
+}
+
+.goal-head-meta {
+  text-align: right;
+}
+
+.goal-kicker {
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--goal-navy);
+}
+
+.goal-doc-title {
+  font-size: 16pt;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.goal-subtitle {
+  font-size: 8.5pt;
+  color: var(--goal-muted);
+}
+
+.goal-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8pt;
+  margin-bottom: 12pt;
+}
+
+.goal-stat {
+  border: 0.75pt solid var(--goal-line);
+  background: var(--goal-tint);
+  border-radius: 4pt;
+  padding: 6pt 8pt;
+  text-align: center;
+}
+
+.goal-stat-num {
+  display: block;
+  font-size: 15pt;
+  font-weight: 700;
+  color: var(--goal-navy);
+  line-height: 1.1;
+}
+
+.goal-stat-label {
+  display: block;
+  font-size: 7pt;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--goal-muted);
+}
+
+.goal-block {
+  border: 0.75pt solid var(--goal-line);
+  border-radius: 4pt;
+  padding: 8pt 10pt;
+  margin-bottom: 9pt;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.goal-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8pt;
+  border-bottom: 0.5pt solid var(--goal-line);
+  padding-bottom: 4pt;
+  margin-bottom: 5pt;
+}
+
+.goal-name {
+  font-size: 11pt;
+  font-weight: 700;
+  color: var(--goal-navy);
+}
+
+.goal-chip {
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 0.75pt solid var(--goal-line);
+  border-radius: 999pt;
+  padding: 1.5pt 6pt;
+  color: var(--goal-muted);
+  white-space: nowrap;
+}
+
+.goal-chip-on_track {
+  border-color: var(--goal-navy);
+  color: var(--goal-navy);
+}
+
+.goal-chip-at_risk {
+  border-color: #a86a12;
+  color: #a86a12;
+}
+
+.goal-chip-done {
+  border-color: #2f6f52;
+  color: #2f6f52;
+}
+
+.goal-title {
+  font-weight: 700;
+  font-size: 10pt;
+  margin: 0 0 2pt;
+}
+
+.goal-desc {
+  color: var(--goal-muted);
+  margin: 0 0 5pt;
+}
+
+.goal-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6pt 14pt;
+  margin: 5pt 0 6pt;
+}
+
+.goal-metric-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 6pt;
+  font-size: 8pt;
+  color: var(--goal-muted);
+  margin-bottom: 2pt;
+}
+
+.goal-metric-value {
+  font-weight: 700;
+  color: var(--goal-ink);
+  white-space: nowrap;
+}
+
+.goal-bar {
+  height: 4pt;
+  border-radius: 999pt;
+  background: var(--goal-tint);
+  border: 0.5pt solid var(--goal-line);
+  overflow: hidden;
+}
+
+.goal-bar-fill {
+  height: 100%;
+  background: var(--goal-navy);
+}
+
+.goal-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 6pt;
+  columns: 2;
+  column-gap: 14pt;
+  font-size: 8.5pt;
+}
+
+.goal-steps li {
+  display: flex;
+  gap: 4pt;
+  break-inside: avoid;
+  margin-bottom: 1.5pt;
+}
+
+.goal-step-box {
+  display: inline-block;
+  width: 8pt;
+  height: 8pt;
+  line-height: 8pt;
+  text-align: center;
+  font-size: 7pt;
+  border: 0.75pt solid var(--goal-line);
+  border-radius: 2pt;
+  flex: none;
+  margin-top: 1.5pt;
+}
+
+.goal-step-done {
+  color: var(--goal-muted);
+}
+
+.goal-note {
+  background: var(--goal-tint);
+  border-left: 2pt solid var(--goal-navy);
+  padding: 5pt 8pt;
+  border-radius: 0 3pt 3pt 0;
+}
+
+.goal-note-label {
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--goal-navy);
+  margin-bottom: 1pt;
+}
+
+.goal-note-body {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 8.5pt;
+}
+
+.goal-note-empty {
+  margin: 0;
+  font-size: 8.5pt;
+  font-style: italic;
+  color: var(--goal-muted);
+}
+
+.goal-page-footer {
+  margin-top: 10pt;
+  padding-top: 6pt;
+  border-top: 0.75pt solid var(--goal-line);
+  font-size: 7.5pt;
+  color: var(--goal-muted);
+  text-align: center;
+}
+
 @media print {
   body {
     background: white !important;
@@ -1596,14 +1864,22 @@
      sheet. Hiding every body child except the print root covers both. */
   body:has(.fof-print-root) > *:not(.fof-print-root),
   body:has(.deposit-print-root) > *:not(.deposit-print-root),
-  body:has(.incident-print-root) > *:not(.incident-print-root) {
+  body:has(.incident-print-root) > *:not(.incident-print-root),
+  body:has(.goals-print-root) > *:not(.goals-print-root) {
     display: none !important;
   }
 
   .fof-print-root,
   .deposit-print-root,
-  .incident-print-root {
+  .incident-print-root,
+  .goals-print-root {
     display: block !important;
+  }
+
+  /* The goals sheet draws its own rules — exempt from generic table borders. */
+  .goal-sheet th,
+  .goal-sheet td {
+    border: none;
   }
 
   /* The deposit sheet draws its own rules — exempt it from the generic
