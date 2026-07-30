@@ -87,6 +87,50 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
     return true;
   });
 
+  const EXPORT_HEADER = [
+    'Team member',
+    'Kind',
+    'Period start',
+    'Period end',
+    'Summary',
+    'Member reason',
+    'Member signed by',
+    'Member signed at',
+    'Manager note',
+    'Reviewed by',
+    'Reviewed at',
+    'Closed at',
+  ];
+
+  /** Same column mapping for every export format. */
+  const buildRows = () =>
+    closed.map(r => [
+      nameByUser.get(r.subject_user_id ?? '') ?? '',
+      POLICY_LABELS[r.kind] ?? r.kind,
+      r.period_start,
+      r.period_end,
+      r.summary,
+      r.member_reason,
+      r.member_signed_name,
+      r.member_signed_at ? formatDate(r.member_signed_at.slice(0, 10)) : '',
+      r.manager_note,
+      r.manager_signed_name,
+      r.manager_signed_at ? formatDate(r.manager_signed_at.slice(0, 10)) : '',
+      r.closed_at ? formatDate(r.closed_at.slice(0, 10)) : '',
+    ]);
+
+  const baseName = `accountability-records-${kind}-${from || 'start'}-to-${to || 'today'}`;
+
+  const download = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${closed.length} record${closed.length === 1 ? '' : 's'}`);
+  };
+
   /**
    * One file for the whole filtered set — every closed record in the selected
    * range and kind, not a download per card.
@@ -97,50 +141,36 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
       return;
     }
     const cell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const header = [
-      'Team member',
-      'Kind',
-      'Period start',
-      'Period end',
-      'Summary',
-      'Member reason',
-      'Member signed by',
-      'Member signed at',
-      'Manager note',
-      'Reviewed by',
-      'Reviewed at',
-      'Closed at',
-    ];
-    const rows = closed.map(r =>
-      [
-        nameByUser.get(r.subject_user_id ?? '') ?? '',
-        POLICY_LABELS[r.kind] ?? r.kind,
-        r.period_start,
-        r.period_end,
-        r.summary,
-        r.member_reason,
-        r.member_signed_name,
-        r.member_signed_at ? formatDate(r.member_signed_at.slice(0, 10)) : '',
-        r.manager_note,
-        r.manager_signed_name,
-        r.manager_signed_at ? formatDate(r.manager_signed_at.slice(0, 10)) : '',
-        r.closed_at ? formatDate(r.closed_at.slice(0, 10)) : '',
-      ]
-        .map(cell)
-        .join(','),
-    );
+    const rows = buildRows().map(row => row.map(cell).join(','));
     // BOM so Excel opens accented names correctly.
-    const blob = new Blob(['\uFEFF' + [header.map(cell).join(','), ...rows].join('\n')], {
+    const blob = new Blob(['\uFEFF' + [EXPORT_HEADER.map(cell).join(','), ...rows].join('\n')], {
       type: 'text/csv;charset=utf-8;',
     });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `accountability-records-${kind}-${from || 'start'}-to-${to || 'today'}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success(`Exported ${closed.length} record${closed.length === 1 ? '' : 's'}`);
+    download(blob, `${baseName}.csv`);
   };
+
+  const exportXlsx = async () => {
+    if (closed.length === 0) {
+      toast.error('Nothing to export in this range.');
+      return;
+    }
+    const XLSX = await import('xlsx');
+    const data = [EXPORT_HEADER, ...buildRows().map(row => row.map(v => String(v ?? '')))];
+    const sheet = XLSX.utils.aoa_to_sheet(data);
+    sheet['!cols'] = EXPORT_HEADER.map((h, i) => ({
+      wch: Math.min(50, Math.max(h.length + 2, ...data.map(r => String(r[i] ?? '').length + 2))),
+    }));
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, 'Closed records');
+    const out = XLSX.write(book, { bookType: 'xlsx', type: 'array' });
+    download(
+      new Blob([out], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+      `${baseName}.xlsx`,
+    );
+  };
+
 
 
   return (
