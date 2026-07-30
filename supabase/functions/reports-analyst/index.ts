@@ -62,7 +62,22 @@ HOW YOU ANSWER:
 - Never rank people against each other, never score, never characterize anyone's character. Describe behavior and dates only.
 - Never recommend discipline or consequences. You may suggest a conversation, a schedule check, or a policy clarification.
 - Short. Markdown. Lead with the one thing that actually matters; skip padding.
-- If nothing in the range needs attention, say exactly that in one or two lines.`;
+- If nothing in the range needs attention, say exactly that in one or two lines.
+
+FLAGGED CONCERNS — REQUIRED STRUCTURE:
+After your prose, if (and only if) you flagged something worth a look, append one fenced json block, exactly like this and nothing after it:
+
+\`\`\`json
+{"concerns":[{"title":"short plain-English concern","confidence":"high|medium|low","confidence_reason":"one line on why the evidence is this strong or this thin","supports":["evidence that backs it, each with a real record id"],"weakens":["evidence that cuts against it, or context that makes it ordinary"],"record_ids":["<real record ids>"]}]}
+\`\`\`
+
+Rules for that block:
+- confidence "high" = several records, consistent, clearly outside the ordinary. "medium" = a real pattern but thin data or a plausible ordinary explanation. "low" = a hunch worth a glance; say so.
+- ALWAYS fill "weakens". If nothing genuinely weakens it, write what would change your mind or what data you cannot see. Never leave it empty.
+- Every entry in supports/weakens must reference records you were given. No invented evidence.
+- record_ids must be ids from the RECORDS block only.
+- If nothing is worth flagging, omit the json block entirely.`;
+
 
 
 Deno.serve(async (req) => {
