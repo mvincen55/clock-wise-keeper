@@ -275,8 +275,17 @@ WRITING RULES
 - 3 to 5 sections. Each section body is 120-260 words and ends naturally; the "try_it" is one specific action the person can do on their very next shift.
 - The quiz has 4-6 scenario questions (a short situation, then what should you do). Each has 3-4 options, exactly one best answer, and a "why" that teaches the reasoning — not just "correct".
 
+CONVERSATIONAL ASSESSMENT ("roleplay")
+- Include a "roleplay" object ONLY when the skill is interpersonal — explaining treatment, handling insurance questions, financial conversations, phone or front-desk conversations, difficult patients. For purely procedural or technical topics, set "roleplay": null.
+- persona: a NAMED fictional person with a real situation — a patient ("Denise Alvarez, 42, needs a crown and thinks her plan covers it") or an insurance representative. Give them a manner: hesitant, rushed, skeptical, anxious about cost.
+- scenario: one or two sentences setting up where this conversation happens and what the trainee is trying to accomplish.
+- opening: the persona's very first line of dialogue, in their voice.
+- office_answers: the facts and phrasing THIS office actually uses to answer the questions in this scenario, drawn from the standing rules, documents, and practice configuration. Insurance and fee questions must match this office exactly. If the sources don't cover something, say so plainly here so the grader knows the right move is to check with the office manager.
+- rubric: 3-4 criteria with integer weights summing to 100, derived from the learning outcome — typically plain-language explanation, checked the person's understanding, correct per office policy, and warm respectful tone. Each says what good looks like.
+
 Return ONLY JSON in exactly this shape:
-{"title":"...","summary":"one sentence","outcome":"what the person can do after this module","sections":[{"heading":"...","body":"...","try_it":"..."}],"recap":"3-5 sentence recap","quiz":{"questions":[{"q":"...","options":["..."],"correct_index":0,"why":"..."}]}}`;
+{"title":"...","summary":"one sentence","outcome":"what the person can do after this module","sections":[{"heading":"...","body":"...","try_it":"..."}],"recap":"3-5 sentence recap","quiz":{"questions":[{"q":"...","options":["..."],"correct_index":0,"why":"..."}]},"roleplay":{"persona":{"name":"...","role":"...","situation":"...","style":"..."},"scenario":"...","opening":"...","office_answers":"...","rubric":[{"criterion":"...","weight":30,"what_good_looks_like":"..."}]}}`;
+
 
     const userPrompt = `TOPIC: ${topic}
 AUDIENCE (positions this is for): ${audience.length ? audience.join(", ") : "all"}
