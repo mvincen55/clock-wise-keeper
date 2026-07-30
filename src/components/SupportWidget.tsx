@@ -905,8 +905,9 @@ export default function SupportWidget() {
               </Button>
             )}
           </div>
+          )}
 
-          {!resolved && (
+          {view === 'chat' && !resolved && (
             <div className="space-y-2 border-t p-2">
               {files.length > 0 && (
                 <div className="space-y-2">
