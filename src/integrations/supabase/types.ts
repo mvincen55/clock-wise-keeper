@@ -859,6 +859,89 @@ export type Database = {
           },
         ]
       }
+      conversation_participants: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          id: string
+          last_read_at: string | null
+          org_id: string
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          id?: string
+          last_read_at?: string | null
+          org_id: string
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          last_read_at?: string | null
+          org_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_participants_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_participants_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversations: {
+        Row: {
+          audience: string | null
+          created_at: string
+          created_by: string
+          id: string
+          org_id: string
+          title: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          audience?: string | null
+          created_at?: string
+          created_by: string
+          id?: string
+          org_id: string
+          title?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          audience?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          org_id?: string
+          title?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       correction_requests: {
         Row: {
           created_at: string
@@ -1169,6 +1252,7 @@ export type Database = {
           id: string
           learning_style: string | null
           org_id: string
+          team: string | null
           timezone: string
           updated_at: string
           user_id: string | null
@@ -1182,6 +1266,7 @@ export type Database = {
           id?: string
           learning_style?: string | null
           org_id: string
+          team?: string | null
           timezone?: string
           updated_at?: string
           user_id?: string | null
@@ -1195,6 +1280,7 @@ export type Database = {
           id?: string
           learning_style?: string | null
           org_id?: string
+          team?: string | null
           timezone?: string
           updated_at?: string
           user_id?: string | null
@@ -2364,6 +2450,57 @@ export type Database = {
           },
         ]
       }
+      messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          org_id: string
+          reported_at: string | null
+          reported_by: string | null
+          sender_id: string | null
+          sender_kind: string
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          org_id: string
+          reported_at?: string | null
+          reported_by?: string | null
+          sender_id?: string | null
+          sender_kind?: string
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          org_id?: string
+          reported_at?: string | null
+          reported_by?: string | null
+          sender_id?: string | null
+          sender_kind?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           actor_user_id: string | null
@@ -2601,6 +2738,53 @@ export type Database = {
           },
         ]
       }
+      office_nudges: {
+        Row: {
+          content: string
+          created_at: string
+          data_refs: Json
+          id: string
+          kind: string
+          org_id: string
+          resolved_at: string | null
+          status: string
+          surface: string
+          user_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          data_refs?: Json
+          id?: string
+          kind: string
+          org_id: string
+          resolved_at?: string | null
+          status?: string
+          surface: string
+          user_id?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          data_refs?: Json
+          id?: string
+          kind?: string
+          org_id?: string
+          resolved_at?: string | null
+          status?: string
+          surface?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "office_nudges_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_branding: {
         Row: {
           address_line1: string
@@ -2799,6 +2983,7 @@ export type Database = {
           roleplay_notes: string | null
           roleplay_persona_style: string
           roleplay_policy_tone: string
+          security_alert_managers: boolean
           updated_at: string
         }
         Insert: {
@@ -2810,6 +2995,7 @@ export type Database = {
           roleplay_notes?: string | null
           roleplay_persona_style?: string
           roleplay_policy_tone?: string
+          security_alert_managers?: boolean
           updated_at?: string
         }
         Update: {
@@ -2821,6 +3007,7 @@ export type Database = {
           roleplay_notes?: string | null
           roleplay_persona_style?: string
           roleplay_policy_tone?: string
+          security_alert_managers?: boolean
           updated_at?: string
         }
         Relationships: [
@@ -3644,6 +3831,56 @@ export type Database = {
           },
         ]
       }
+      security_events: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          detail: Json
+          fingerprint: string
+          id: string
+          kind: string
+          org_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          severity: string
+          status: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          detail?: Json
+          fingerprint: string
+          id?: string
+          kind: string
+          org_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          severity?: string
+          status?: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          detail?: Json
+          fingerprint?: string
+          id?: string
+          kind?: string
+          org_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          severity?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "security_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suppressed_emails: {
         Row: {
           created_at: string
@@ -3927,6 +4164,69 @@ export type Database = {
           },
         ]
       }
+      training_audit_findings: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string | null
+          fingerprint: string
+          id: string
+          module_id: string
+          note: string
+          org_id: string
+          quote: string
+          severity: string
+          status: string
+          suggested_fix: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          fingerprint: string
+          id?: string
+          module_id: string
+          note?: string
+          org_id: string
+          quote?: string
+          severity?: string
+          status?: string
+          suggested_fix?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          fingerprint?: string
+          id?: string
+          module_id?: string
+          note?: string
+          org_id?: string
+          quote?: string
+          severity?: string
+          status?: string
+          suggested_fix?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_audit_findings_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "training_modules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_audit_findings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       training_modules: {
         Row: {
           audience_tags: string[]
@@ -3999,6 +4299,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          order_rev: number
           org_id: string
           sort_order: number
           updated_at: string
@@ -4009,6 +4310,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          order_rev?: number
           org_id: string
           sort_order?: number
           updated_at?: string
@@ -4019,6 +4321,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          order_rev?: number
           org_id?: string
           sort_order?: number
           updated_at?: string
@@ -4291,7 +4594,10 @@ export type Database = {
       }
       can_access_employee: { Args: { _employee_id: string }; Returns: boolean }
       can_manage_goal: { Args: { _goal_id: string }; Returns: boolean }
+      can_read_conv: { Args: { _conv: string }; Returns: boolean }
       can_view_goal: { Args: { _goal_id: string }; Returns: boolean }
+      conv_created_by: { Args: { _conv: string }; Returns: string }
+      conv_type: { Args: { _conv: string }; Returns: string }
       countersign_incident_report: {
         Args: { _report_id: string; _typed_name: string }
         Returns: {
@@ -4349,6 +4655,8 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      ensure_ai_conversation: { Args: never; Returns: string }
+      ensure_dm: { Args: { _other_user: string }; Returns: string }
       get_employee_timezone: {
         Args: { p_employee_id: string }
         Returns: string
@@ -4380,8 +4688,11 @@ export type Database = {
         Returns: string
       }
       is_allowed_user: { Args: never; Returns: boolean }
+      is_conv_participant: { Args: { _conv: string }; Returns: boolean }
       is_org_admin: { Args: { _org_id: string }; Returns: boolean }
       is_org_member: { Args: { _org_id: string }; Returns: boolean }
+      is_org_owner: { Args: { _org_id: string }; Returns: boolean }
+      mark_conversation_read: { Args: { _conv: string }; Returns: undefined }
       move_to_dlq: {
         Args: {
           dlq_name: string
@@ -4391,6 +4702,7 @@ export type Database = {
         }
         Returns: number
       }
+      my_team: { Args: never; Returns: string }
       owns_goal: { Args: { _goal_id: string }; Returns: boolean }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
@@ -4403,6 +4715,18 @@ export type Database = {
       recompute_attendance_range: {
         Args: { p_end_date: string; p_start_date: string; p_user_id: string }
         Returns: number
+      }
+      reorder_user_notes: {
+        Args: { _expected_rev: number; _ordered_ids: string[] }
+        Returns: {
+          id: string
+          order_rev: number
+          sort_order: number
+        }[]
+      }
+      report_message: {
+        Args: { _message_id: string; _note?: string }
+        Returns: undefined
       }
       search_office_doc_chunks: {
         Args: { p_limit?: number; p_query: string }
