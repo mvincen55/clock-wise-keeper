@@ -1952,3 +1952,126 @@
   --goal-green: 152 45% 55%;
   --goal-amber: 35 90% 60%;
 }
+
+/* ---- Texture + movement ------------------------------------------------
+   Restraint is the rule: the app should feel like it's breathing, never
+   like a video game. Every effect below collapses to nothing when the
+   operating system asks for reduced motion. */
+
+@keyframes pe-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50%      { transform: scale(1.06); opacity: 1; }
+}
+
+@keyframes pe-seal-stamp {
+  0%   { transform: scale(1.7) rotate(-9deg); opacity: 0; }
+  35%  { transform: scale(0.94) rotate(-2deg); opacity: 1; }
+  55%  { transform: scale(1.02) rotate(-2deg); }
+  75%  { transform: scale(1) rotate(-2deg); opacity: 1; }
+  100% { transform: scale(1) rotate(-2deg); opacity: 0; }
+}
+
+@keyframes pe-seal-caption {
+  0%, 25%  { opacity: 0; transform: translateY(4px); }
+  45%, 75% { opacity: 1; transform: translateY(0); }
+  100%     { opacity: 0; }
+}
+
+@keyframes pe-page-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pe-reveal {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@layer utilities {
+  /* Slow ambient breathing — Practice Pulse orb. */
+  .pulse-breathe {
+    animation: pe-breathe 5.5s ease-in-out infinite;
+  }
+
+  .seal-stamp {
+    animation: pe-seal-stamp 1.4s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+  }
+
+  .seal-caption {
+    animation: pe-seal-caption 1.4s ease-out both;
+  }
+
+  .page-enter {
+    animation: pe-page-enter 180ms ease-out both;
+  }
+
+  .reveal-soft {
+    animation: pe-reveal 160ms ease-out both;
+  }
+
+  /* Felt, not seen: a faint laid-paper tooth on elevated surfaces. */
+  .paper-surface {
+    position: relative;
+    isolation: isolate;
+  }
+  .paper-surface::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    border-radius: inherit;
+    opacity: 0.5;
+    background-image:
+      repeating-linear-gradient(
+        0deg,
+        hsl(var(--foreground) / 0.012) 0px,
+        hsl(var(--foreground) / 0.012) 1px,
+        transparent 1px,
+        transparent 3px
+      ),
+      radial-gradient(
+        120% 90% at 15% 0%,
+        hsl(var(--primary) / 0.045) 0%,
+        transparent 60%
+      );
+  }
+
+  /* Subtle lift on cards, soft press on primary actions. */
+  .hover-lift {
+    transition: transform 200ms ease, box-shadow 200ms ease;
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 6px hsl(220 25% 10% / 0.07), 0 14px 32px hsl(220 25% 10% / 0.07);
+  }
+}
+
+/* Rings and meters draw themselves in on load. */
+.meter-fill {
+  transition: width 800ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-breathe,
+  .seal-stamp,
+  .seal-caption,
+  .page-enter,
+  .reveal-soft {
+    animation: none !important;
+  }
+  .hover-lift:hover {
+    transform: none;
+  }
+  .meter-fill,
+  .ring-draw {
+    transition: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

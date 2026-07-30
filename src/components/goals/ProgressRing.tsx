@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { usePrefersReducedMotion } from '@/lib/motion';
 
 /**
  * A small purple ring showing plan progress. Amber when the work badly
- * trails the calendar. Quiet by design — no gamification.
+ * trails the calendar. It draws itself in on load — calm, once, then still.
  */
 export default function ProgressRing({
   done,
@@ -17,11 +19,23 @@ export default function ProgressRing({
   size?: number;
   className?: string;
 }) {
+  const reduced = usePrefersReducedMotion();
   const pct = total > 0 ? done / total : 0;
   const behind = total > 0 && pct + 0.25 < monthElapsed;
   const stroke = 4;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
+
+  // Draw-in: start empty on mount, settle on the real value next frame.
+  const [drawn, setDrawn] = useState(reduced ? pct : 0);
+  useEffect(() => {
+    if (reduced) {
+      setDrawn(pct);
+      return;
+    }
+    const id = requestAnimationFrame(() => setDrawn(pct));
+    return () => cancelAnimationFrame(id);
+  }, [pct, reduced]);
 
   return (
     <svg
@@ -47,7 +61,7 @@ export default function ProgressRing({
         fill="none"
         strokeWidth={stroke}
         strokeLinecap="round"
-        strokeDasharray={`${c * pct} ${c}`}
+        strokeDasharray={`${c * drawn} ${c}`}
         transform={`rotate(-90 ${size / 2} ${size / 2})`}
         stroke={
           total === 0
@@ -56,7 +70,8 @@ export default function ProgressRing({
               ? 'hsl(var(--goal-amber))'
               : 'hsl(var(--goal-purple))'
         }
-        className="transition-all"
+        className="ring-draw"
+        style={{ transition: 'stroke-dasharray 900ms cubic-bezier(0.22, 1, 0.36, 1), stroke 400ms ease' }}
       />
       <text
         x="50%"

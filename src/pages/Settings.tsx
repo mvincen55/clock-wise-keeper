@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import PracticeTargetCard from '@/components/PracticeTargetCard';
 import { Link } from 'react-router-dom';
 import { useOfficeClosures, useGenerateClosures, useAddClosure, useDeleteClosure } from '@/hooks/useOfficeClosures';
 import { usePayrollSettings, useUpsertPayrollSettings } from '@/hooks/usePayrollSettings';
@@ -73,6 +74,8 @@ export default function Settings() {
         <h1 className="text-2xl md:text-3xl font-bold">Settings</h1>
         <p className="text-muted-foreground">Configure payroll, closures, and security</p>
       </div>
+
+      {isManager && <PracticeTargetCard />}
 
       {/* Payroll Settings (manager only) */}
       {isManager && (

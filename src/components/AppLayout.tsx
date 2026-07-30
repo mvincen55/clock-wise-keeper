@@ -254,7 +254,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
         {/* Mobile header */}
         <div className="flex-1 flex flex-col">
-          <header className="md:hidden flex items-center justify-between px-4 py-3 border-b bg-card">
+          <header className="md:hidden flex items-center justify-between px-4 py-3 border-b bg-card paper-surface">
             <Link to="/" className="flex items-center gap-2" onClick={() => setMobileOpen(false)}>
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
                 <Mail className="h-4 w-4 text-primary-foreground" />
@@ -281,7 +281,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <BypassReasonBanner />
 
           <main className="flex-1 overflow-auto">
-            {children}
+            {/* Keyed on the route so each page fades/slides in briefly. */}
+            <div key={location.pathname} className="page-enter">
+              {children}
+            </div>
           </main>
         </div>
       </div>

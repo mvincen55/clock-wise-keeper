@@ -22,6 +22,7 @@ import { Link } from 'react-router-dom';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { OrgSnapshotPanel } from '@/components/OrgSnapshotPanel';
 import PracticeVitalsCard from '@/components/PracticeVitalsCard';
+import PracticePulseCard from '@/components/PracticePulseCard';
 import MyMomentumCard from '@/components/MyMomentumCard';
 
 type ClockStatus = 'clocked_out' | 'clocked_in';
@@ -88,6 +89,9 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto space-y-6">
+      {/* Office health, right now — every role sees this first. */}
+      <PracticePulseCard />
+
       <div>
         <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground">{formatDate(now)}</p>

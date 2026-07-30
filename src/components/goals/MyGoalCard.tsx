@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Compass, Loader2, Lock, Pencil, Trash2 } from 'lucide-react';
+import { CheckCircle2, Compass, Loader2, Lock, Pencil, Trash2 } from 'lucide-react';
+import WaxSeal from '@/components/WaxSeal';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import GoalProgress from './GoalProgress';
@@ -24,6 +25,7 @@ import {
   useAddTaskToChecklist,
   useSaveGoalTasks,
   useToggleGoalTask,
+  useUpdateGoal,
   type Goal,
   type GoalTask,
   type GoalUpdate,
@@ -58,6 +60,17 @@ export default function MyGoalCard({
   const saveTasks = useSaveGoalTasks();
   const addToChecklist = useAddTaskToChecklist();
   const toggleTask = useToggleGoalTask();
+  const updateGoal = useUpdateGoal();
+  const [seal, setSeal] = useState(false);
+
+  const markComplete = async () => {
+    try {
+      await updateGoal.mutateAsync({ id: goal.id, status: 'completed' });
+      setSeal(true);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not mark this goal complete');
+    }
+  };
 
   const done = tasks.filter(t => t.done).length;
   const elapsed = monthElapsedFraction(goal.month);
@@ -103,7 +116,8 @@ export default function MyGoalCard({
   const hasPlan = tasks.length > 0;
 
   return (
-    <Card className="border-primary/40 shadow-sm">
+    <Card className="relative overflow-hidden border-primary/40 shadow-sm">
+      <WaxSeal show={seal} onDone={() => setSeal(false)} caption="Goal complete" />
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <CardTitle className="text-base leading-snug">{goal.title}</CardTitle>
@@ -230,6 +244,21 @@ export default function MyGoalCard({
                   )}
                   Add more steps
                 </Button>
+                {goal.status !== 'completed' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={markComplete}
+                    disabled={updateGoal.isPending}
+                  >
+                    {updateGoal.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                    )}
+                    Mark complete
+                  </Button>
+                )}
               </>
             ) : (
               <>

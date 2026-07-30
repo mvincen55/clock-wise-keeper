@@ -35,6 +35,13 @@ export type Momentum = {
   goalsCompleted: number;
   latestGoalTitle: string | null;
   badges: Badge[];
+  /** Training momentum — forward framing only, never comparison. */
+  modulesThisMonth: number;
+  bestModuleMonth: number;
+  /** Deposit close-out streak, for whoever runs the deposit log. */
+  depositStreak: number;
+  depositBestStreak: number;
+  runsDepositLog: boolean;
 };
 
 function shiftDate(date: string, delta: number): string {
@@ -58,8 +65,16 @@ export function useMomentum() {
       const today = getToday();
       const start = shiftDate(today, -WINDOW_DAYS);
 
-      const [itemsRes, completionsRes, attendanceRes, meetingsRes, updatesRes, goalsRes] =
-        await Promise.all([
+      const [
+        itemsRes,
+        completionsRes,
+        attendanceRes,
+        meetingsRes,
+        updatesRes,
+        goalsRes,
+        attemptsRes,
+        depositsRes,
+      ] = await Promise.all([
           supabase
             .from('checklist_items')
             .select('id, per_person, cadence, is_active')
@@ -96,6 +111,17 @@ export function useMomentum() {
             .select('title, status, updated_at')
             .eq('user_id', user!.id)
             .is('archived_at', null),
+          supabase
+            .from('training_attempts')
+            .select('module_id, passed, completed_at')
+            .eq('user_id', user!.id)
+            .eq('passed', true),
+          supabase
+            .from('deposit_logs')
+            .select('deposit_date, prepared_by')
+            .eq('prepared_by', user!.id)
+            .gte('deposit_date', start)
+            .lte('deposit_date', today),
         ]);
 
       const dailyItems = itemsRes.data ?? [];
@@ -195,6 +221,12 @@ export function useMomentum() {
           earned: sharedBeforeMeeting > 0,
         },
         {
+          id: 'module-passed',
+          label: 'Module passed',
+          detail: 'Pass a module quiz or roleplay',
+          earned: (attemptsRes.data ?? []).length > 0,
+        },
+        {
           id: 'goal-complete',
           label: 'Goal completed',
           detail: latest ? latest.title : 'Finish a goal to unlock',
@@ -202,9 +234,72 @@ export function useMomentum() {
         },
       ];
 
+      // ---- Training momentum: modules passed per calendar month.
+      // Verified from training_attempts (quiz/roleplay passes) — one credit
+      // per module per month, never self-reported.
+      const perMonth = new Map<string, Set<string>>();
+      for (const a of attemptsRes.data ?? []) {
+        const key = (a.completed_at ?? '').slice(0, 7);
+        if (!key) continue;
+        const set = perMonth.get(key) ?? new Set<string>();
+        set.add(a.module_id);
+        perMonth.set(key, set);
+      }
+      const thisMonthKey = today.slice(0, 7);
+      const modulesThisMonth = perMonth.get(thisMonthKey)?.size ?? 0;
+      const bestModuleMonth = Math.max(
+        0,
+        ...[...perMonth.values()].map((s) => s.size)
+      );
+
+      // ---- Deposit close-out streak: consecutive business days with a
+      // deposit log this person closed out. Paused days (closures, time off,
+      // non-scheduled days) are skipped, never counted as a break.
+      const depositDates = new Set((depositsRes.data ?? []).map((d) => d.deposit_date));
+      const runsDepositLog = depositDates.size > 0;
+      const isBusinessDay = (date: string) => {
+        const [y, m, d] = date.split('-').map(Number);
+        const wd = new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay();
+        return wd !== 0 && wd !== 6;
+      };
+      const depositState = (date: string): 'complete' | 'paused' | 'missed' => {
+        const a = attendance.get(date);
+        if (!isBusinessDay(date)) return 'paused';
+        if (a && (a.office_closed || a.has_day_off || !a.is_scheduled_day)) return 'paused';
+        if (depositDates.has(date)) return 'complete';
+        return 'missed';
+      };
+      let depositStreak = 0;
+      for (let i = 0; i < WINDOW_DAYS; i++) {
+        const date = shiftDate(today, -i);
+        const s = depositState(date);
+        if (s === 'complete') depositStreak++;
+        else if (s === 'paused' || (i === 0 && !depositDates.has(date))) continue;
+        else break;
+      }
+      let depositBest = 0;
+      let depositRun = 0;
+      for (let i = WINDOW_DAYS; i >= 0; i--) {
+        const s = depositState(shiftDate(today, -i));
+        if (s === 'complete') {
+          depositRun++;
+          depositBest = Math.max(depositBest, depositRun);
+        } else if (s === 'paused') {
+          continue;
+        } else {
+          depositRun = 0;
+        }
+      }
+      depositBest = Math.max(depositBest, depositStreak);
+
       const todayState = dayState(today);
 
       return {
+        modulesThisMonth,
+        bestModuleMonth,
+        depositStreak,
+        depositBestStreak: depositBest,
+        runsDepositLog,
         streak,
         bestStreak: best,
         days,

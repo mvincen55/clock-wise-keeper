@@ -1,13 +1,22 @@
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Activity, TrendingDown, TrendingUp } from 'lucide-react';
 import { formatCents } from '@/lib/money';
 import { usePracticeVitals } from '@/hooks/usePracticeVitals';
 import { cn } from '@/lib/utils';
+import CountUp from '@/components/ui/count-up';
 
 /** Production gauge, schedule disruption at a glance, and where both are trending. */
 export default function PracticeVitalsCard() {
   const { data, isLoading } = usePracticeVitals();
+  // Meters draw in from empty on first paint.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
   if (isLoading || !data) return null;
+
 
   const { thisMonth, lastMonth, months, monthElapsed } = data;
 
@@ -33,7 +42,7 @@ export default function PracticeVitalsCard() {
   const disruptMax = Math.max(...trendMonths.map(m => m.disruptions), 1);
 
   return (
-    <Card className="card-elevated">
+    <Card className="card-elevated paper-surface">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Activity className="h-4 w-4 text-primary" />
@@ -46,20 +55,22 @@ export default function PracticeVitalsCard() {
           <div className="flex items-baseline justify-between">
             <span className="text-sm text-muted-foreground">Production month to date</span>
             <span className="text-2xl font-semibold tabular-nums">
-              {formatCents(thisMonth.productionCents)}
+              <CountUp value={thisMonth.productionCents} format={v => formatCents(Math.round(v))} />
             </span>
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-primary" style={{ width: `${producedPct}%` }} />
+            <div className="meter-fill h-full rounded-full bg-primary" style={{ width: `${mounted ? producedPct : 0}%` }} />
           </div>
           <div className="flex items-baseline justify-between text-sm text-muted-foreground">
             <span>Collected</span>
-            <span className="tabular-nums">{formatCents(thisMonth.collectedCents)}</span>
+            <span className="tabular-nums">
+              <CountUp value={thisMonth.collectedCents} format={v => formatCents(Math.round(v))} />
+            </span>
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full rounded-full bg-primary/40"
-              style={{ width: `${collectedPct}%` }}
+              className="meter-fill h-full rounded-full bg-primary/40"
+              style={{ width: `${mounted ? collectedPct : 0}%` }}
             />
           </div>
           {delta !== null && (
