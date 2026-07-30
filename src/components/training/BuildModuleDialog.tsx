@@ -131,18 +131,14 @@ export default function BuildModuleDialog({ open, onOpenChange }: Props) {
               </Button>
               <Button
                 disabled={busy}
-                onClick={async () => {
-                  await publish.mutateAsync(flagged.module.id);
-                  toast.success('Published anyway.');
-                  reset();
-                  onOpenChange(false);
-                }}
+                onClick={() => setPreviewModule({ ...flagged.module, audit: flagged.audit })}
               >
-                Publish anyway
+                Review &amp; publish
               </Button>
             </DialogFooter>
           </div>
         ) : (
+
           <>
             <div className="space-y-4">
               <div className="space-y-1.5">
