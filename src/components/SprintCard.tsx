@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Gift, Plus, Sparkles, Users, X } from 'lucide-react';
+import { Gift, Plus, ShieldCheck, Sparkles, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useOrgEmployees } from '@/hooks/useEmployees';
@@ -29,6 +29,7 @@ import {
   type SprintPeriod,
   type SprintScope,
   type SprintVerification,
+  type TeamGoal,
 } from '@/hooks/useTeamGoals';
 
 import { getToday } from '@/lib/time-utils';
