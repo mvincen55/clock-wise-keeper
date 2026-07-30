@@ -4163,54 +4163,84 @@ export type Database = {
       team_goals: {
         Row: {
           ai_suggested: boolean
+          ai_verdict: Json | null
           created_at: string
           created_by: string
           ends_on: string
           id: string
           metric: string
           org_id: string
+          override_reason: string | null
           period: string
           progress: number
           reward: string
+          scope: string
+          scope_department: string | null
+          scope_user_id: string | null
           starts_on: string
           status: string
           target_count: number
           title: string
           updated_at: string
+          verification: string
+          verification_doc_path: string | null
+          verification_note: string | null
+          verified_at: string | null
+          verified_by: string | null
         }
         Insert: {
           ai_suggested?: boolean
+          ai_verdict?: Json | null
           created_at?: string
           created_by: string
           ends_on: string
           id?: string
           metric: string
           org_id: string
+          override_reason?: string | null
           period: string
           progress?: number
           reward: string
+          scope?: string
+          scope_department?: string | null
+          scope_user_id?: string | null
           starts_on: string
           status?: string
           target_count: number
           title: string
           updated_at?: string
+          verification?: string
+          verification_doc_path?: string | null
+          verification_note?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Update: {
           ai_suggested?: boolean
+          ai_verdict?: Json | null
           created_at?: string
           created_by?: string
           ends_on?: string
           id?: string
           metric?: string
           org_id?: string
+          override_reason?: string | null
           period?: string
           progress?: number
           reward?: string
+          scope?: string
+          scope_department?: string | null
+          scope_user_id?: string | null
           starts_on?: string
           status?: string
           target_count?: number
           title?: string
           updated_at?: string
+          verification?: string
+          verification_doc_path?: string | null
+          verification_note?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Relationships: [
           {
@@ -4831,20 +4861,30 @@ export type Database = {
         Args: { _amount?: number; _goal_id: string }
         Returns: {
           ai_suggested: boolean
+          ai_verdict: Json | null
           created_at: string
           created_by: string
           ends_on: string
           id: string
           metric: string
           org_id: string
+          override_reason: string | null
           period: string
           progress: number
           reward: string
+          scope: string
+          scope_department: string | null
+          scope_user_id: string | null
           starts_on: string
           status: string
           target_count: number
           title: string
           updated_at: string
+          verification: string
+          verification_doc_path: string | null
+          verification_note: string | null
+          verified_at: string | null
+          verified_by: string | null
         }
         SetofOptions: {
           from: "*"
@@ -4857,6 +4897,7 @@ export type Database = {
       can_manage_goal: { Args: { _goal_id: string }; Returns: boolean }
       can_read_conv: { Args: { _conv: string }; Returns: boolean }
       can_view_goal: { Args: { _goal_id: string }; Returns: boolean }
+      can_view_team_goal: { Args: { _goal_id: string }; Returns: boolean }
       conv_created_by: { Args: { _conv: string }; Returns: string }
       conv_type: { Args: { _conv: string }; Returns: string }
       countersign_incident_report: {
@@ -4963,6 +5004,7 @@ export type Database = {
         }
         Returns: number
       }
+      my_department: { Args: never; Returns: string }
       my_team: { Args: never; Returns: string }
       owns_goal: { Args: { _goal_id: string }; Returns: boolean }
       read_email_batch: {
