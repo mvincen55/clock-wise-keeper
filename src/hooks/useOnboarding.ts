@@ -137,7 +137,11 @@ export function useSignTerms() {
   return { ...mutation, isReady: !!user && !!ctx };
 }
 
-/** The stealth "get to know you" answers. Private to the member, always. */
+/**
+ * The stealth "get to know you" rankings (private to the member, always) plus
+ * the fun favorites, which live on the employee record on purpose — a manager
+ * can only say thank you well if they know what someone actually likes.
+ */
 export function useSaveWorkStyle() {
   const { user } = useAuth();
   const { data: ctx } = useOrgContext();
@@ -145,7 +149,11 @@ export function useSaveWorkStyle() {
   const completeStep = useCompleteStep();
 
   const mutation = useMutation({
-    mutationFn: async (answers: Record<string, string>) => {
+    mutationFn: async (input: {
+      answers: Record<string, string>;
+      favorites?: Record<string, string>;
+    }) => {
+      const { answers, favorites } = input;
       if (!user || !ctx) throw new Error('No office found for your account');
       const { data: existing } = await supabase
         .from('work_style_profiles')
@@ -162,19 +170,32 @@ export function useSaveWorkStyle() {
       if (error) throw error;
 
       // Learning style quietly informs how training is written — never surfaced.
-      if (answers.learning) {
-        await supabase
-          .from('employees')
-          .update({ learning_style: answers.learning })
-          .eq('id', ctx.employee_id);
+      // With rankings, the top choice is the one that counts.
+      const employeePatch: Record<string, unknown> = {};
+      const topLearning = (answers.learning ?? '').split(',').filter(Boolean)[0];
+      if (topLearning) employeePatch.learning_style = topLearning;
+      if (favorites) {
+        const cleaned = Object.fromEntries(
+          Object.entries(favorites)
+            .map(([k, v]) => [k, v.trim()])
+            .filter(([, v]) => v),
+        );
+        employeePatch.favorites = cleaned;
+      }
+      if (Object.keys(employeePatch).length) {
+        await supabase.from('employees').update(employeePatch).eq('id', ctx.employee_id);
       }
       await completeStep.mutateAsync('work_style');
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['onboarding'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['onboarding'] });
+      qc.invalidateQueries({ queryKey: ['org-employees'] });
+    },
   });
 
   return { ...mutation, isReady: !!user && !!ctx };
 }
+
 
 /** Every tag ever issued in this office — current and archived, forever. */
 export function useTagRegistry() {
