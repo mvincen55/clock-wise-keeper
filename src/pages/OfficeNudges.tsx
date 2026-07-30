@@ -2,6 +2,7 @@ import { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import AddToMyListButton from '@/components/copilot/AddToMyListButton';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -75,7 +76,7 @@ function NudgeCard({ nudge }: { nudge: OfficeNudge }) {
         </div>
 
         {!resolved && (
-          <div className="flex gap-2 pt-1">
+          <div className="flex flex-wrap gap-2 pt-1">
             <Button
               size="sm"
               onClick={() => resolve.mutate({ id: nudge.id, status: 'acted_on' })}
@@ -84,6 +85,8 @@ function NudgeCard({ nudge }: { nudge: OfficeNudge }) {
               <Check className="mr-1.5 h-3.5 w-3.5" />
               On it
             </Button>
+            {/* One-tap capture: the nudge becomes a real item on their list. */}
+            <AddToMyListButton surface="nudge" title={nudge.content.slice(0, 100)} />
             <Button
               size="sm"
               variant="outline"
@@ -95,6 +98,7 @@ function NudgeCard({ nudge }: { nudge: OfficeNudge }) {
             </Button>
           </div>
         )}
+
       </CardContent>
     </Card>
   );

@@ -44,27 +44,37 @@ export function useChecklistGating() {
 
       const { data: items } = await supabase
         .from('checklist_items')
-        .select('id, title, per_person')
+        .select('id, title, per_person, owner_user_id, due_date')
         .eq('org_id', ctx.org_id)
         .in('checklist_id', listIds)
         .eq('cadence', 'daily')
         .eq('is_active', true);
 
-      const all = items ?? [];
+      // Captured items gate exactly like manual ones — but only on (or after)
+      // the day they were set for, and only for the person who confirmed them.
+      const all = (items ?? []).filter(
+        i =>
+          (!i.owner_user_id || i.owner_user_id === user.id) &&
+          (!i.due_date || i.due_date <= today)
+      );
       const gating = all.filter(i => i.per_person);
       const shared = all.filter(i => !i.per_person);
       if (!all.length) return empty;
 
       const { data: completions } = await supabase
         .from('checklist_completions')
-        .select('item_id, completed_by')
-        .in('item_id', all.map(i => i.id))
-        .eq('period_key', periodKey);
+        .select('item_id, completed_by, period_key')
+        .in('item_id', all.map(i => i.id));
 
-      const mine = new Set(
-        (completions ?? []).filter(c => c.completed_by === user.id).map(c => c.item_id)
+      // A dated item completes for its own day; undated daily items for today.
+      const keyFor = (dueDate: string | null) => dueDate ?? periodKey;
+      const byItem = new Map(all.map(i => [i.id, i.due_date as string | null]));
+      const relevant = (completions ?? []).filter(
+        c => c.period_key === keyFor(byItem.get(c.item_id) ?? null)
       );
-      const anyone = new Set((completions ?? []).map(c => c.item_id));
+
+      const mine = new Set(relevant.filter(c => c.completed_by === user.id).map(c => c.item_id));
+      const anyone = new Set(relevant.map(c => c.item_id));
 
       const openGating = gating.filter(i => !mine.has(i.id));
       return {
@@ -72,6 +82,7 @@ export function useChecklistGating() {
         incompleteTitles: openGating.map(i => i.title),
         openSharedCount: shared.filter(i => !anyone.has(i.id)).length,
       };
+
     },
   });
 }

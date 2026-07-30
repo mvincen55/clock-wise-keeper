@@ -54,6 +54,8 @@ import { ActionChips } from '@/components/fof/FofAssistantWidget';
 import AssistantMemoryPanel from '@/components/AssistantMemoryPanel';
 import { useAssistantMemories, useAuditFindings } from '@/hooks/useAssistantMemory';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import CaptureChips from '@/components/copilot/CaptureChips';
+import { useCommitmentListen } from '@/hooks/useCopilot';
 
 const SUGGESTED_QUESTIONS = [
   'What is our PTO accrual policy?',
@@ -65,6 +67,7 @@ function ChatPanel() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const ask = useAskDocs();
+  const listen = useCommitmentListen();
   const scrollRef = useRef<HTMLDivElement>(null);
   const { data: ctx } = useOrgContext();
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
@@ -75,6 +78,9 @@ function ChatPanel() {
     const history = messages;
     setMessages(prev => [...prev, { role: 'user', content: trimmed }]);
     setInput('');
+    // Commitment listening: if they just said they'd do something, offer to
+    // hold it for them. Never blocks or delays the answer.
+    listen.mutate(trimmed);
     ask.mutate(
       { question: trimmed, history },
       {
@@ -166,6 +172,8 @@ function ChatPanel() {
         )}
       </CardContent>
       <div className="border-t p-3 space-y-1.5">
+        {/* "Want this on your list?" — one tap, drafted for the right day. */}
+        <CaptureChips surface="ai_channel" />
         <div className="flex gap-2">
         <Input
           placeholder="Ask about office policies, HR, insurance…"

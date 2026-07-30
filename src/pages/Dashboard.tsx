@@ -25,6 +25,10 @@ import PracticeVitalsCard from '@/components/PracticeVitalsCard';
 import MyMomentumCard from '@/components/MyMomentumCard';
 import SprintCard from '@/components/SprintCard';
 import UserNotesBoard from '@/components/UserNotesBoard';
+import TodayFocusCard from '@/components/copilot/TodayFocusCard';
+import RescopeCard from '@/components/copilot/RescopeCard';
+import { useClockInChase, useMiddayChase } from '@/hooks/useGentleChase';
+
 
 type ClockStatus = 'clocked_out' | 'clocked_in';
 
@@ -72,10 +76,15 @@ export default function Dashboard() {
   const { data: ctx } = useOrgContext();
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
+  // The gentle chase: one kind note at clock-in, one mid-day if untouched.
+  const chaseAtClockIn = useClockInChase();
+  useMiddayChase();
+
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
 
   const punches = todayEntry?.punches || [];
   const status = getStatus(punches);
@@ -108,6 +117,11 @@ export default function Dashboard() {
         </Link>
       </div>
 
+      {/* One spotlight: your next thing. Everything else stays a tap away. */}
+      <TodayFocusCard />
+
+      <RescopeCard />
+
       {isManager && <OrgSnapshotPanel />}
 
       {isManager && <PracticeVitalsCard />}
@@ -117,6 +131,7 @@ export default function Dashboard() {
       <MyMomentumCard />
 
       <UserNotesBoard />
+
 
 
 
@@ -171,7 +186,7 @@ export default function Dashboard() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             {status === 'clocked_out' && (
-              <Button className="col-span-2 h-16 text-lg font-semibold punch-glow" onClick={() => { clockAction.run('clock_in'); if (!reasonPrompted && (unresolvedBypasses?.length ?? 0) > 0) { setReasonPrompted(true); setReasonPromptOpen(true); } }} disabled={isBusy}>
+              <Button className="col-span-2 h-16 text-lg font-semibold punch-glow" onClick={() => { clockAction.run('clock_in'); chaseAtClockIn(); if (!reasonPrompted && (unresolvedBypasses?.length ?? 0) > 0) { setReasonPrompted(true); setReasonPromptOpen(true); } }} disabled={isBusy}>
                 {isBusy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <LogIn className="mr-2 h-5 w-5" />}Clock In
               </Button>
             )}

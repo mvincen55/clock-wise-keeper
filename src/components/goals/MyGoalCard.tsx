@@ -1,3 +1,4 @@
+import AddToMyListButton from '@/components/copilot/AddToMyListButton';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -127,7 +128,7 @@ export default function MyGoalCard({
         {hasPlan && (
           <ul className="space-y-2">
             {tasks.map(task => (
-              <li key={task.id}>
+              <li key={task.id} className="space-y-1">
                 <label className="flex items-start gap-3 sm:items-center">
                   <Checkbox
                     className="mt-0.5 shrink-0 sm:mt-0"
@@ -151,8 +152,21 @@ export default function MyGoalCard({
                     )}
                   </span>
                 </label>
+                {/* One tap puts the step on their real list for the right day. */}
+                {!task.done && (
+                  <div className="pl-8">
+                    <AddToMyListButton
+                      surface="goal_plan"
+                      title={task.title}
+                      dueDate={task.due_date}
+                      label="Add to my list"
+                      variant="ghost"
+                    />
+                  </div>
+                )}
               </li>
             ))}
+
           </ul>
         )}
 
