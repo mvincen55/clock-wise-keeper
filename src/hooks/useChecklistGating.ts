@@ -9,9 +9,12 @@ export type ChecklistGating = {
   /** Per-person daily items still open for this member today. */
   incompleteCount: number;
   incompleteTitles: string[];
+  /** Per-person daily items in total today — the denominator for "N of M done". */
+  gatingTotal: number;
   /** Shared (team-wide) daily items still open — informational only. */
   openSharedCount: number;
 };
+
 
 /**
  * What gates clock-out: only daily, active, per-person items on checklists this
