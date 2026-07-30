@@ -522,7 +522,18 @@ export default function Messages() {
                             )}
                             {m.content && <p className="whitespace-pre-wrap">{m.content}</p>}
                             <MessageAttachments attachments={attByMessage.get(m.id) ?? []} />
-                            <p className="mt-1 text-[10px] opacity-60">{timeLabel(m.created_at)}</p>
+                            <div className="mt-1 flex items-center justify-end gap-2">
+                              <span className="text-[10px] opacity-60">{timeLabel(m.created_at)}</span>
+                              {mine && active.type !== 'ai' && m.id === lastOwnMessageId && (
+                                <MessageReadReceipts
+                                  receipts={otherReceipts}
+                                  messageCreatedAt={m.created_at}
+                                  nameByUserId={nameByUserId}
+                                  compact={active.type === 'dm'}
+                                />
+                              )}
+                            </div>
+
                           </div>
                         </div>
                       );
