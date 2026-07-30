@@ -385,3 +385,169 @@ export function monthElapsedFraction(month: string): number {
   if (monthOfToday < month) return 0;
   return Math.min(1, Number(today.slice(8, 10)) / days);
 }
+
+/* ---------- Accountability: edits, archives, and the change log ---------- */
+
+export type GoalEventType = 'edited' | 'archived' | 'replaced';
+
+export type GoalEvent = {
+  id: string;
+  org_id: string;
+  goal_id: string;
+  actor_id: string;
+  type: string;
+  reason: string;
+  old_title: string;
+  new_title: string | null;
+  created_at: string;
+};
+
+/** Every recorded change to the goals I can see for a month. */
+export function useGoalEvents(month: string) {
+  const { data: ctx } = useOrgContext();
+  return useQuery({
+    queryKey: ['goal-events', ctx?.org_id, month],
+    enabled: !!ctx,
+    queryFn: async () => {
+      const { data: goals, error: goalsError } = await supabase
+        .from('goals')
+        .select('id')
+        .eq('org_id', ctx!.org_id)
+        .eq('month', month);
+      if (goalsError) throw goalsError;
+      const ids = (goals ?? []).map(g => g.id);
+      if (!ids.length) return [] as GoalEvent[];
+      const { data, error } = await supabase
+        .from('goal_events')
+        .select('*')
+        .in('goal_id', ids)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as GoalEvent[];
+    },
+  });
+}
+
+/**
+ * Edit my own goal. If the goal has ever been shared (it has updates), the
+ * edit needs a short reason and is written to the change log.
+ */
+export function useEditGoal() {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      goal: Goal;
+      title: string;
+      description: string | null;
+      smartTarget: string | null;
+      reason?: string;
+      needsReason: boolean;
+    }) => {
+      if (!user || !ctx) throw new Error('Not ready');
+      if (input.goal.user_id !== user.id) throw new Error('Only the goal owner can edit it');
+      const reason = (input.reason ?? '').trim();
+      if (input.needsReason && reason.length < 5) {
+        throw new Error('Add a short reason for the change');
+      }
+      const { error } = await supabase
+        .from('goals')
+        .update({
+          title: input.title,
+          description: input.description,
+          smart_target: input.smartTarget,
+        })
+        .eq('id', input.goal.id);
+      if (error) throw error;
+
+      if (input.needsReason) {
+        const { error: eventError } = await supabase.from('goal_events').insert({
+          org_id: ctx.org_id,
+          goal_id: input.goal.id,
+          actor_id: user.id,
+          type: 'edited',
+          reason,
+          old_title: input.goal.title,
+          new_title: input.title,
+        });
+        if (eventError) throw eventError;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['goals'] });
+      qc.invalidateQueries({ queryKey: ['goal-events'] });
+    },
+  });
+}
+
+/** Never a hard delete: archive with a required reason, always logged. */
+export function useArchiveGoal() {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ goal, reason }: { goal: Goal; reason: string }) => {
+      if (!user || !ctx) throw new Error('Not ready');
+      if (goal.user_id !== user.id) throw new Error('Only the goal owner can remove it');
+      const clean = reason.trim();
+      if (clean.length < 5) throw new Error('A reason is required');
+      const { error } = await supabase
+        .from('goals')
+        .update({
+          status: 'archived',
+          archived_at: new Date().toISOString(),
+          archived_reason: clean,
+        })
+        .eq('id', goal.id);
+      if (error) throw error;
+      const { error: eventError } = await supabase.from('goal_events').insert({
+        org_id: ctx.org_id,
+        goal_id: goal.id,
+        actor_id: user.id,
+        type: 'archived',
+        reason: clean,
+        old_title: goal.title,
+        new_title: null,
+      });
+      if (eventError) throw eventError;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['goals'] });
+      qc.invalidateQueries({ queryKey: ['goal-events'] });
+    },
+  });
+}
+
+/**
+ * Once a replacement goal exists, upgrade the archive event to 'replaced' and
+ * point it at the successor so the meeting reads as one story.
+ */
+export function useLinkReplacementGoal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      archivedGoalId,
+      newTitle,
+    }: {
+      archivedGoalId: string;
+      newTitle: string;
+    }) => {
+      const { data: event } = await supabase
+        .from('goal_events')
+        .select('id')
+        .eq('goal_id', archivedGoalId)
+        .eq('type', 'archived')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!event) return;
+      const { error } = await supabase
+        .from('goal_events')
+        .update({ type: 'replaced', new_title: newTitle })
+        .eq('id', event.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['goal-events'] }),
+  });
+}
