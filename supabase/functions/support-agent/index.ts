@@ -197,7 +197,7 @@ Deno.serve(async (req) => {
 
     const { data: ticket } = await db
       .from("support_tickets")
-      .select("id, org_id, user_id, page_path, status")
+      .select("id, org_id, user_id, page_path, status, category, severity, range_start, range_end")
       .eq("id", ticketId)
       .maybeSingle();
 
@@ -244,7 +244,16 @@ Deno.serve(async (req) => {
       String(ticket.user_id),
       String(member?.role ?? "employee"),
       String(ticket.page_path ?? ""),
-    );
+    ) + [
+      "",
+      "WHAT THEY PICKED WHEN REPORTING:",
+      `- Area: ${ticket.category ?? "not set"}`,
+      `- How bad: ${ticket.severity ?? "not set"}`,
+      ticket.range_start || ticket.range_end
+        ? `- Dates involved: ${ticket.range_start ?? "?"} to ${ticket.range_end ?? "?"}`
+        : "- Dates involved: not set",
+      "Focus your checking on that area and those dates first.",
+    ].join("\n");
 
     // Screenshots live in a private bucket — hand the model a short-lived
     // signed URL rather than the raw file.
