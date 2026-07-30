@@ -24,6 +24,7 @@ import ProgressRing from '@/components/goals/ProgressRing';
 import TargetProgress from '@/components/goals/TargetProgress';
 import GoalStatusBadge from '@/components/goals/GoalStatusBadge';
 import MyGoalCard from '@/components/goals/MyGoalCard';
+import ArchivedGoalsSection from '@/components/goals/ArchivedGoalsSection';
 import SetGoalCard from '@/components/goals/SetGoalCard';
 import TeamGoalCard from '@/components/goals/TeamGoalCard';
 import GoalsPrintSheet, { type GoalsReportRow } from '@/components/goals/GoalsPrintSheet';
