@@ -30,6 +30,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: null,
     items: [
+      { to: '/messages', icon: MessageSquare, label: 'Messages' },
       { to: '/assistant', icon: Sparkles, label: 'Ask AI' },
       { to: '/office-calendar', icon: Calendar, label: 'Calendar' },
     ],
