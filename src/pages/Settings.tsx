@@ -82,9 +82,9 @@ export default function Settings() {
       {isManager && <EscalationPoliciesCard />}
 
       {/* Payroll Settings (manager only) */}
-      {isManager && (
-      <MessagingSettingsCard />
+      {isManager && <MessagingSettingsCard />}
 
+      {isManager && (
       <Card className="card-elevated">
         <CardHeader className="border-b">
           <CardTitle className="flex items-center gap-2">
