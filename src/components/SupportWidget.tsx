@@ -25,6 +25,8 @@ import {
   Clock,
   Plus,
   ChevronLeft,
+  ExternalLink,
+
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadSupportPdf } from '@/lib/support-pdf';
