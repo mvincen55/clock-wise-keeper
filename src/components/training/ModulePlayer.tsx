@@ -14,6 +14,9 @@ import {
 } from '@/hooks/useTraining';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useSpeech } from '@/hooks/useSpeech';
+import ReadAloudControls from './ReadAloudControls';
+
 
 type Props = {
   module: TrainingModule;
