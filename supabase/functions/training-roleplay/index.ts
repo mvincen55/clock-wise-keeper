@@ -164,11 +164,40 @@ Deno.serve(async (req) => {
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(80);
+    const { data: practice } = await supabase
+      .from("org_practice_settings")
+      .select("roleplay_persona_style, roleplay_policy_tone, roleplay_notes")
+      .eq("org_id", orgId)
+      .maybeSingle();
+
+    const PERSONA: Record<string, string> = {
+      gentle: "Cooperative and easygoing. Ask your questions plainly and accept a clear answer.",
+      balanced: "A realistic mix — mostly reasonable, with one or two awkward moments.",
+      challenging: "Interrupt, push back, and ask the hard follow-up more than once.",
+      skeptical: "Price-sensitive and distrustful. Test every answer and hint you may go elsewhere.",
+    };
+    const TONE: Record<string, string> = {
+      warm_professional: "warm, reassuring, and still precise",
+      plainspoken: "direct and simple, with no jargon",
+      formal: "careful, clinical, and buttoned-up",
+      concierge: "high-touch and boutique, anticipating the next need",
+    };
+    const personaStyle = text(practice?.roleplay_persona_style, 40) || "balanced";
+    const policyTone = text(practice?.roleplay_policy_tone, 40) || "warm_professional";
+    const officeNotes = text(practice?.roleplay_notes, 1500);
+
+    const officeConfig = `OFFICE CONFIGURATION
+- Persona style (${personaStyle}): ${PERSONA[personaStyle] ?? PERSONA.balanced}
+- Expected policy tone from the trainee: ${TONE[policyTone] ?? TONE.warm_professional}
+${officeNotes ? `- Office notes: ${officeNotes}` : ""}`;
+
     const memoryBlock = (memories ?? [])
       .map((m: { content: string }) => `- ${text(m.content, 500)}`)
       .join("\n");
 
-    const grounding = `MODULE BEING PRACTICED:
+    const grounding = `${officeConfig}
+
+MODULE BEING PRACTICED:
 ${moduleBlock}
 
 STANDING OFFICE RULES (authoritative — this office answers this way):
@@ -215,7 +244,7 @@ BUILD THE RUBRIC from the module: 4-6 criteria that together define doing this w
 
 SCORING
 - For each criterion give: earned points (0..weight), a verdict ("met" | "partial" | "missed"), feedback, and one concrete "next_time" action.
-- Grade what actually happened, judged against how THIS office does it. Office rules beat generic best practice.
+- Grade what actually happened, judged against how THIS office does it. Office rules and the configured policy tone beat generic best practice.
 - Be fair and specific, warm and direct. This is coaching, not a verdict on the person.
 - ${PASS_MARK}% is the pass mark. In "gap_to_pass" say plainly which criteria would most efficiently close the gap.
 
