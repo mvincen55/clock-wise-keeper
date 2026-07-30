@@ -7,8 +7,8 @@ const corsHeaders = {
 };
 
 const SITE_NAME = "Purple Envelope";
-const FROM_DOMAIN = "purpleenvelope.app";
-const SENDER_DOMAIN = "notify.purpleenvelope.app";
+const FROM_DOMAIN = "timekeepers.me";
+const SENDER_DOMAIN = "notify.timekeepers.me";
 const FALLBACK_ORIGIN = "https://purpleenvelope.app";
 const ALLOWED_ORIGINS = [
   "https://purpleenvelope.app",
@@ -201,7 +201,7 @@ Deno.serve(async (req) => {
     const { error: enqueueError } = await supabaseAdmin.rpc("enqueue_email", {
       queue_name: "transactional_emails",
       payload: {
-        run_id: crypto.randomUUID(),
+        idempotency_key: `org-invite-${messageId}`,
         message_id: messageId,
         to: rawEmail,
         from: `${SITE_NAME} <noreply@${FROM_DOMAIN}>`,
