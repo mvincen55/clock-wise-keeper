@@ -19,6 +19,8 @@ import {
 import ModulePlayer from '@/components/training/ModulePlayer';
 import AssignModuleDialog, { type Assignee } from '@/components/training/AssignModuleDialog';
 import BuildModuleDialog from '@/components/training/BuildModuleDialog';
+import RoleplaySettingsCard from '@/components/training/RoleplaySettingsCard';
+import TrainingStatusDashboard from '@/components/training/TrainingStatusDashboard';
 
 /** Active team members, used for the assignment picker and creator names. */
 function useTeamRoster() {
@@ -121,6 +123,7 @@ export default function Training() {
                 </span>
               )}
             </TabsTrigger>
+            {isAdmin && <TabsTrigger value="status">Status</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="library" className="space-y-4 pt-4">
