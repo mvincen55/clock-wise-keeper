@@ -29,11 +29,22 @@ export interface AnalystCitation {
   closed_at: string | null;
 }
 
+export interface AnalystConcern {
+  title: string;
+  confidence: 'high' | 'medium' | 'low';
+  confidence_reason: string;
+  supports: string[];
+  weakens: string[];
+  record_ids: string[];
+}
+
 type Turn = {
   role: 'user' | 'assistant';
   content: string;
   citations?: AnalystCitation[];
+  concerns?: AnalystConcern[];
 };
+
 
 const CITE = /\[rec:([0-9a-fA-F-]{6,})\]/g;
 
