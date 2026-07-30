@@ -297,6 +297,11 @@ export default function Training() {
         onClose={() => setAssignTarget(null)}
       />
       <BuildModuleDialog open={buildOpen} onOpenChange={setBuildOpen} />
+      <AuditPreviewDialog
+        module={previewModule}
+        open={!!previewModule}
+        onOpenChange={v => !v && setPreviewModule(null)}
+      />
     </>
   );
 }
