@@ -137,6 +137,8 @@ export default function SupportWidget() {
   const { data: org } = useOrgContext();
   const orgId = org?.org_id ?? null;
   const location = useLocation();
+  const navigate = useNavigate();
+
 
   const [open, setOpen] = useState(false);
   const [ticketId, setTicketId] = useState<string | null>(null);
