@@ -1,7 +1,18 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import {
+  clearQueuedReorder,
+  isConnectivityError,
+  isOnline,
+  queueReorder,
+  readQueuedReorder,
+  type QueuedReorder,
+} from '@/lib/offline-queue';
+
 
 export type UserNote = {
   id: string;
@@ -89,9 +100,21 @@ export function useDeleteNote() {
   });
 }
 
+/** The single write that makes an arrangement stick. Shared with the offline replay. */
+export async function writeNoteOrder(orderedIds: string[]) {
+  const results = await Promise.all(
+    orderedIds.map((id, index) =>
+      supabase.from('user_notes').update({ sort_order: index }).eq('id', id)
+    )
+  );
+  const failed = results.find(r => r.error);
+  if (failed?.error) throw failed.error;
+}
+
 /**
  * Writes the new arrangement back. The board already shows the new order
- * optimistically, so this only has to make it stick.
+ * optimistically, so this only has to make it stick — and when the connection
+ * is gone it parks the arrangement locally instead of snapping the board back.
  */
 export function useReorderNotes() {
   const qc = useQueryClient();
@@ -99,13 +122,21 @@ export function useReorderNotes() {
 
   return useMutation({
     mutationFn: async (orderedIds: string[]) => {
-      const results = await Promise.all(
-        orderedIds.map((id, index) =>
-          supabase.from('user_notes').update({ sort_order: index }).eq('id', id)
-        )
-      );
-      const failed = results.find(r => r.error);
-      if (failed?.error) throw failed.error;
+      if (user && !isOnline()) {
+        queueReorder(user.id, orderedIds);
+        return { queued: true as const };
+      }
+      try {
+        await writeNoteOrder(orderedIds);
+        if (user) clearQueuedReorder(user.id);
+        return { queued: false as const };
+      } catch (error) {
+        if (user && isConnectivityError(error)) {
+          queueReorder(user.id, orderedIds);
+          return { queued: true as const };
+        }
+        throw error;
+      }
     },
     onMutate: async (orderedIds: string[]) => {
       const key = [...KEY, user?.id];
@@ -128,6 +159,69 @@ export function useReorderNotes() {
     onError: (_err, _ids, context) => {
       if (context?.previous) qc.setQueryData(context.key, context.previous);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSettled: (result) => {
+      // A queued reorder must not be refetched — the server still has the old
+      // order and would visibly undo the drag the person just made.
+      if (result?.queued) return;
+      qc.invalidateQueries({ queryKey: KEY });
+    },
   });
 }
+
+/**
+ * Watches the connection and flushes a parked arrangement the moment it comes
+ * back. Returns whether something is still waiting, so the board can say so.
+ */
+export function useOfflineReorderSync() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const [pending, setPending] = useState<QueuedReorder | null>(null);
+  const flushing = useRef(false);
+
+  const flush = useCallback(async () => {
+    if (!user || flushing.current || !isOnline()) return;
+    const queued = readQueuedReorder(user.id);
+    if (!queued) {
+      setPending(null);
+      return;
+    }
+    flushing.current = true;
+    try {
+      await writeNoteOrder(queued.orderedIds);
+      clearQueuedReorder(user.id);
+      setPending(null);
+      qc.invalidateQueries({ queryKey: KEY });
+      toast.success('Your note order is synced.');
+    } catch (error) {
+      // Still offline or the write failed — leave it parked and try again later.
+      if (!isConnectivityError(error)) {
+        clearQueuedReorder(user.id);
+        setPending(null);
+      }
+    } finally {
+      flushing.current = false;
+    }
+  }, [qc, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    setPending(readQueuedReorder(user.id));
+    void flush();
+
+    const onOnline = () => void flush();
+    const onOffline = () => setPending(readQueuedReorder(user.id));
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    // Coming back to the tab is as good a signal as the online event.
+    const onVisible = () => document.visibilityState === 'visible' && void flush();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [flush, user]);
+
+  return { pending, refresh: () => user && setPending(readQueuedReorder(user.id)) };
+}
+

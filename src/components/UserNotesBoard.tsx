@@ -19,10 +19,11 @@ import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { GripVertical, Plus, StickyNote, Trash2 } from 'lucide-react';
+import { CloudOff, GripVertical, Plus, StickyNote, Trash2 } from 'lucide-react';
 import {
   useCreateNote,
   useDeleteNote,
+  useOfflineReorderSync,
   useReorderNotes,
   useUpdateNote,
   useUserNotes,
@@ -115,6 +116,7 @@ export default function UserNotesBoard() {
   const update = useUpdateNote();
   const remove = useDeleteNote();
   const reorder = useReorderNotes();
+  const { pending: pendingOrder, refresh: refreshPendingOrder } = useOfflineReorderSync();
 
   const items = useMemo(() => (notes ?? []).map(n => n.id), [notes]);
 
@@ -129,7 +131,7 @@ export default function UserNotesBoard() {
     const oldIndex = items.indexOf(String(active.id));
     const newIndex = items.indexOf(String(over.id));
     if (oldIndex < 0 || newIndex < 0) return;
-    reorder.mutate(arrayMove(items, oldIndex, newIndex));
+    reorder.mutate(arrayMove(items, oldIndex, newIndex), { onSettled: () => refreshPendingOrder() });
   }
 
   return (
@@ -150,6 +152,12 @@ export default function UserNotesBoard() {
         </Button>
       </CardHeader>
       <CardContent>
+        {pendingOrder && (
+          <p className="mb-3 flex items-center gap-2 rounded-md border border-dashed bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            <CloudOff className="h-3.5 w-3.5 shrink-0" />
+            Your new order is saved on this device and will sync when you're back online.
+          </p>
+        )}
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading your notes…</p>
         ) : !notes?.length ? (
