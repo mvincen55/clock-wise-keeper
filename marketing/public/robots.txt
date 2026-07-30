@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://purpleenvelope.app/sitemap.xml

@@ -1,0 +1,197 @@
+/* Latin subsets only. Mobile is the primary experience and this is an
+   English-language site — shipping Cyrillic, Greek and Vietnamese subsets
+   would be ~150kB of fonts nobody here renders. */
+@import "@fontsource/ibm-plex-sans/latin-400.css";
+@import "@fontsource/ibm-plex-sans/latin-500.css";
+@import "@fontsource/ibm-plex-sans/latin-600.css";
+@import "@fontsource/ibm-plex-mono/latin-400.css";
+@import "@fontsource/ibm-plex-mono/latin-500.css";
+
+/* Archivo declared by hand rather than via the package's entrypoints: the
+   display face needs BOTH axes, and the width axis is what makes the
+   headlines read as blocked-out rather than merely bold. The package's
+   wght-only file would silently ignore font-stretch. */
+@font-face {
+  font-family: "Archivo Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  src: url("@fontsource-variable/archivo/files/archivo-latin-standard-normal.woff2")
+    format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --pe-purple: #53406e;
+    --pe-ink: #17141c;
+    --pe-paper: #fbfafc;
+    --pe-carbon: #e7e2ee;
+    --pe-deep: #2e2440;
+    --pe-flag: #b4342a;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--pe-paper);
+    color: var(--pe-ink);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* All numeric data on this site sits in columns that have to line up:
+     deposit totals, fee schedules, punch times. */
+  .tnum,
+  table,
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: "Archivo Variable", Archivo, system-ui, sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    font-stretch: 112%;
+    line-height: 0.95;
+    text-wrap: balance;
+  }
+
+  /* Visible keyboard focus everywhere, square to match the corner rule. */
+  :focus-visible {
+    outline: 2px solid var(--pe-purple);
+    outline-offset: 2px;
+  }
+
+  .on-dark :focus-visible {
+    outline-color: #fff;
+  }
+
+  ::selection {
+    background: var(--pe-purple);
+    color: #fff;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* ── SIGNATURE ELEMENT ─────────────────────────────────────────────
+     The carbonless form set. The product's real output is a two-part
+     sheet: office copy on top, bank copy underneath. The site is built
+     out of that object.
+
+     The perforation is square notches on a 10px pitch — never rounded
+     dots, which would read as a dotted border and lose the reference. */
+  .pe-perf {
+    position: relative;
+    height: 11px;
+    background-image: repeating-linear-gradient(
+      to right,
+      var(--pe-purple) 0px,
+      var(--pe-purple) 5px,
+      transparent 5px,
+      transparent 10px
+    );
+    background-position: center;
+    background-size: 100% 1.5px;
+    background-repeat: no-repeat;
+  }
+
+  /* The notches that make it read as a tear line rather than a dash rule. */
+  .pe-perf::before,
+  .pe-perf::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 7px;
+    height: 7px;
+    background: var(--pe-paper);
+    border: 1.5px solid var(--pe-purple);
+    transform: translateY(-50%) rotate(45deg);
+  }
+  .pe-perf::before {
+    left: -4px;
+  }
+  .pe-perf::after {
+    right: -4px;
+  }
+
+  /* A sheet: square corners, hairline carbon rule, flat fill, no shadow. */
+  .pe-sheet {
+    background: #fff;
+    border: 1px solid var(--pe-carbon);
+  }
+
+  /* The second copy. Same content, carbon ink, sitting under the first. */
+  .pe-carbon-copy {
+    background: linear-gradient(
+      to bottom,
+      var(--pe-carbon) 0%,
+      #f3f0f7 100%
+    );
+    border: 1px solid var(--pe-carbon);
+    border-top: none;
+    color: #5f5673;
+  }
+
+  /* Mono field label, the way it reads on an actual form. */
+  .pe-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+  }
+
+  .pe-rule {
+    border-top: 1px solid var(--pe-carbon);
+  }
+
+  /* Subhead level. h1–h3 pick up the display face from base, but a <dt> or
+     <span> given only `font-display` would render Archivo at weight 400 and
+     read as body text. This is the display face at subhead weight. */
+  .pe-h3 {
+    font-family: "Archivo Variable", Archivo, system-ui, sans-serif;
+    font-weight: 700;
+    font-stretch: 106%;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+  }
+
+  /* Money and totals. The display face carries these, but a dollar figure set
+     at weight 400 looks accidental — a total on a deposit log should look
+     like it was stamped there. */
+  .pe-num {
+    font-family: "Archivo Variable", Archivo, system-ui, sans-serif;
+    font-weight: 700;
+    font-stretch: 104%;
+    letter-spacing: -0.025em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+}
