@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
@@ -179,8 +180,18 @@ export function useUpdateGoal() {
     mutationFn: async ({ id, ...patch }: { id: string } & Partial<Goal>) => {
       const { error } = await supabase.from('goals').update(patch).eq('id', id);
       if (error) throw error;
+      return patch;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['goals'] }),
+    onSuccess: (patch) => {
+      // Calm acknowledgement, not a celebration.
+      if (patch?.status === 'completed') {
+        toast('Goal marked complete', {
+          description: patch.title ?? 'Nice work closing this one out.',
+          duration: 5000,
+        });
+      }
+      qc.invalidateQueries({ queryKey: ['goals'] });
+    },
   });
 }
 

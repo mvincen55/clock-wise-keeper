@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Flame, Pause, Award, Trophy, Sparkles } from 'lucide-react';
 import { useMomentum, type StreakDay } from '@/hooks/useMomentum';
+import { useMilestoneSeal } from '@/hooks/useMilestoneSeal';
 import { cn } from '@/lib/utils';
 
 const DOT: Record<StreakDay['state'], string> = {
@@ -20,6 +21,8 @@ const DOT_LABEL: Record<StreakDay['state'], string> = {
 
 export default function MyMomentumCard() {
   const { data, isLoading } = useMomentum();
+  // At most one quiet acknowledgement a month — no fanfare, no ranking.
+  const sealed = useMilestoneSeal(data?.badges);
 
   if (isLoading || !data) return null;
   if (data.dailyItemCount === 0 && data.streak === 0 && data.goalsCompleted === 0) return null;
@@ -80,6 +83,12 @@ export default function MyMomentumCard() {
               <p className="truncate text-xs text-muted-foreground">{data.latestGoalTitle}</p>
             </div>
           </div>
+        )}
+
+        {sealed && (
+          <p className="text-xs text-muted-foreground">
+            Marked this month: {sealed.label} — {sealed.detail}
+          </p>
         )}
 
         <div className="flex flex-wrap gap-2">
