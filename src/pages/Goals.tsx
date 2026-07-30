@@ -23,6 +23,7 @@ import TargetProgress from '@/components/goals/TargetProgress';
 import GoalStatusBadge from '@/components/goals/GoalStatusBadge';
 import MyGoalCard from '@/components/goals/MyGoalCard';
 import SetGoalCard from '@/components/goals/SetGoalCard';
+import GoalChangeLog from '@/components/goals/GoalChangeLog';
 import TeamGoalCard from '@/components/goals/TeamGoalCard';
 import GoalMonthTimeline from '@/components/goals/GoalMonthTimeline';
 import ProgressRing from '@/components/goals/ProgressRing';
@@ -36,7 +37,9 @@ import {
   monthLabel,
   useActiveTeam,
   useCreateGoal,
+  useGoalEvents,
   useGoalsMonth,
+  useLinkReplacement,
   type Goal,
   type GoalTask,
   type GoalUpdate,
@@ -52,6 +55,8 @@ export default function Goals() {
   const { data: nextMeeting } = useNextTeamMeeting();
   const meetingDate = nextMeeting?.event_date ?? null;
   const createGoal = useCreateGoal();
+  const { data: goalEvents } = useGoalEvents(month);
+  const linkReplacement = useLinkReplacement();
 
   const [meetingView, setMeetingView] = useState(false);
   const [privateOpen, setPrivateOpen] = useState(false);
@@ -59,6 +64,9 @@ export default function Goals() {
   const [privateTitle, setPrivateTitle] = useState('');
   const [privateDescription, setPrivateDescription] = useState('');
   const [updateGoal, setUpdateGoal] = useState<Goal | null>(null);
+  // Set right after archiving: the create flow opens, and the goal it produces
+  // is linked back to the archive event as its replacement.
+  const [replacing, setReplacing] = useState<{ eventId: string; title: string } | null>(null);
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
   const goals = data?.goals ?? [];
@@ -68,6 +76,23 @@ export default function Goals() {
   const tasksFor = (goalId: string): GoalTask[] => tasks.filter(t => t.goal_id === goalId);
   const latestUpdate = (goalId: string): GoalUpdate | undefined =>
     updates.find(u => u.goal_id === goalId);
+  const shareCount = (goalId: string) => updates.filter(u => u.goal_id === goalId).length;
+
+  const handleArchived = (goal: Goal) => (eventId: string) => {
+    setReplacing({ eventId, title: goal.title });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleReplacementCreated = async (title: string) => {
+    if (!replacing) return;
+    const eventId = replacing.eventId;
+    setReplacing(null);
+    try {
+      await linkReplacement.mutateAsync({ eventId, newTitle: title });
+    } catch {
+      // The archive is already on the record — linking is a nicety.
+    }
+  };
 
   const myGoals = useMemo(() => goals.filter(g => g.user_id === user?.id), [goals, user?.id]);
   const myTeamGoal = myGoals.find(g => g.visibility === 'team' && g.status === 'active');
@@ -146,6 +171,7 @@ export default function Goals() {
   // ---- Meeting view: what the team reads together ----
   if (meetingView) {
     const teamGoals = goals.filter(g => g.visibility === 'team');
+    const teamChangeEvents = (goalEvents ?? []).filter(e => e.goals.visibility === 'team');
     return (
       <div className="goals-theme mx-auto max-w-3xl space-y-6 p-4 md:p-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -167,6 +193,21 @@ export default function Goals() {
             </Button>
           </div>
         </div>
+
+        {teamChangeEvents.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Changes since last meeting</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <GoalChangeLog
+                events={teamChangeEvents}
+                nameOf={nameOf}
+                title="What changed"
+              />
+            </CardContent>
+          </Card>
+        )}
 
         {teamGoals.length === 0 && (
           <Card className="border-dashed">
@@ -221,6 +262,11 @@ export default function Goals() {
                   done={t.filter(x => x.done).length}
                   total={t.length}
                 />
+                <GoalChangeLog
+                  events={(goalEvents ?? []).filter(e => e.goal_id === goal.id)}
+                  nameOf={nameOf}
+                  title="Changes to this goal"
+                />
                 {u ? (
                   <p className="whitespace-pre-wrap text-sm">{u.content}</p>
                 ) : (
@@ -269,7 +315,13 @@ export default function Goals() {
         </div>
       </header>
 
-      {!myTeamGoal && <SetGoalCard month={month} />}
+      {(!myTeamGoal || replacing) && (
+        <SetGoalCard
+          month={month}
+          replacingTitle={replacing?.title}
+          onCreated={handleReplacementCreated}
+        />
+      )}
 
       {myGoals.length > 0 && (
         <section className="space-y-4">
@@ -281,6 +333,8 @@ export default function Goals() {
               tasks={tasksFor(goal.id)}
               latestUpdate={latestUpdate(goal.id)}
               onShareUpdate={() => setUpdateGoal(goal)}
+              shareCount={shareCount(goal.id)}
+              onArchived={handleArchived(goal)}
             />
           ))}
         </section>
