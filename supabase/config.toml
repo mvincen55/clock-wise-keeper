@@ -11,6 +11,8 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = false
   [functions.auth-email-hook]
     verify_jwt = false
+  [functions.checklist-bypass]
+    verify_jwt = true
   [functions.confirm-import]
     verify_jwt = false
   [functions.export-report]
