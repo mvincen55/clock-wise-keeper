@@ -3,6 +3,18 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { getToday } from '@/lib/time-utils';
+import {
+  bestStreak as computeBestStreak,
+  currentStreak as computeCurrentStreak,
+  dayState as computeDayState,
+  expandDateRange,
+  recentDays,
+  shiftDate,
+  type StreakDay,
+  type StreakInput,
+} from '@/lib/momentum';
+
+export type { StreakDay } from '@/lib/momentum';
 
 /**
  * Motivational momentum, computed ONLY from verified system records:
@@ -12,11 +24,6 @@ import { getToday } from '@/lib/time-utils';
  * Streaks PAUSE (never break) on approved days off, PTO, office closures,
  * and non-scheduled days.
  */
-
-export type StreakDay = {
-  date: string;
-  state: 'complete' | 'paused' | 'missed' | 'pending';
-};
 
 export type Badge = {
   id: string;
@@ -36,13 +43,6 @@ export type Momentum = {
   latestGoalTitle: string | null;
   badges: Badge[];
 };
-
-function shiftDate(date: string, delta: number): string {
-  const [y, m, d] = date.split('-').map(Number);
-  const t = new Date(Date.UTC(y, m - 1, d, 12));
-  t.setUTCDate(t.getUTCDate() + delta);
-  return t.toISOString().slice(0, 10);
-}
 
 const WINDOW_DAYS = 90;
 
