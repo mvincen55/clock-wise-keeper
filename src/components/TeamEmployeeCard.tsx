@@ -29,7 +29,6 @@ type Employee = {
   email: string | null;
   user_id: string | null;
   timezone: string;
-  team?: string | null;
 };
 
 type WeekStats = { present: number; late: number; absent: number };
@@ -112,10 +111,6 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
             {stats.late > 0 && <Badge variant="outline" className="text-warning border-warning/30 text-xs">{stats.late} late</Badge>}
             {stats.absent > 0 && <Badge variant="outline" className="text-destructive border-destructive/30 text-xs">{stats.absent} absent</Badge>}
           </div>
-
-          {canArchive && <TeamAssignment employee={employee} />}
-
-
 
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="w-full grid grid-cols-4 mb-3">
@@ -870,60 +865,4 @@ function LoadingSpinner() {
 }
 function EmptyState({ text }: { text: string }) {
   return <p className="text-center text-muted-foreground text-sm py-6">{text}</p>;
-}
-
-/**
- * Which side of the office this person works on. Drives who receives
- * clinical-only / clerical-only announcements in Messages.
- */
-function TeamAssignment({ employee }: { employee: Employee }) {
-  const qc = useQueryClient();
-  const { toast } = useToast();
-  const [saving, setSaving] = useState(false);
-  const current = employee.team ?? 'none';
-
-  const save = async (value: string) => {
-    setSaving(true);
-    const { error } = await supabase
-      .from('employees')
-      .update({ team: value === 'none' ? null : value })
-      .eq('id', employee.id);
-    setSaving(false);
-    if (error) {
-      toast({ title: 'Could not save', description: error.message, variant: 'destructive' });
-      return;
-    }
-    qc.invalidateQueries({ queryKey: ['org-employees'] });
-    qc.invalidateQueries({ queryKey: ['employees'] });
-    qc.invalidateQueries({ queryKey: ['messaging-team'] });
-    toast({ title: 'Team updated' });
-  };
-
-  return (
-    <div className="mb-3 flex flex-wrap items-center gap-2">
-      <Label className="text-xs text-muted-foreground">Team</Label>
-      {(
-        [
-          ['clinical', 'Clinical'],
-          ['clerical', 'Clerical'],
-          ['none', 'Not set'],
-        ] as const
-      ).map(([value, label]) => (
-        <Button
-          key={value}
-          type="button"
-          size="sm"
-          variant={current === value ? 'default' : 'outline'}
-          disabled={saving}
-          className="h-7 text-xs"
-          onClick={() => save(value)}
-        >
-          {label}
-        </Button>
-      ))}
-      <span className="text-[11px] text-muted-foreground">
-        Used for clinical / clerical announcements.
-      </span>
-    </div>
-  );
 }

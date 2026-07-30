@@ -17,13 +17,9 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = false
   [functions.export-report]
     verify_jwt = false
-  [functions.integrity-report]
-    verify_jwt = false
   [functions.mcp]
     verify_jwt = false
   [functions.fof-assistant]
-    verify_jwt = true
-  [functions.office-ai]
     verify_jwt = true
   [functions.goal-assistant]
     verify_jwt = true

@@ -2,12 +2,11 @@ import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Clock, Table2, CalendarDays, FileText, LogOut, Menu, X, Settings, ShieldCheck, ShieldAlert, Send, CheckSquare, Users, Calendar, ReceiptText, Sparkles, BookOpen, Phone, ListChecks, Banknote, Sunrise, Target, GraduationCap, Mail, MessageSquare, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
+import { Clock, Table2, CalendarDays, FileText, LogOut, Menu, X, Settings, ShieldCheck, ShieldAlert, Send, CheckSquare, Users, Calendar, ReceiptText, Sparkles, BookOpen, Phone, ListChecks, Banknote, Sunrise, Target, GraduationCap, Mail, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import NotificationBell from '@/components/NotificationBell';
 import BypassReasonBanner from '@/components/BypassReasonBanner';
 import { useApprovalCounts } from '@/hooks/useApprovalCounts';
-import { useUnreadMessageCount } from '@/hooks/useMessaging';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface NavItem {
@@ -31,7 +30,6 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: null,
     items: [
-      { to: '/messages', icon: MessageSquare, label: 'Messages' },
       { to: '/assistant', icon: Sparkles, label: 'Ask AI' },
       { to: '/office-calendar', icon: Calendar, label: 'Calendar' },
     ],
@@ -83,7 +81,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const { data: approvalCounts } = useApprovalCounts();
-  const unreadMessages = useUnreadMessageCount();
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
   const groups = NAV_GROUPS.filter(g => !g.managerOnly || isManager);
@@ -103,19 +100,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       ? 'bg-primary/10 text-primary font-medium'
       : 'text-muted-foreground';
     const iconOnly = collapsed && !mobile;
-    const badgeCount =
-      item.to === '/approvals'
-        ? approvalCounts?.total ?? 0
-        : item.to === '/messages'
-          ? unreadMessages
-          : 0;
-    const badge = badgeCount > 0 && (
+    const badge = item.to === '/approvals' && approvalCounts && approvalCounts.total > 0 && (
       <span
         className={`flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1 ${
           iconOnly ? 'absolute -top-1 -right-1' : 'ml-auto'
         }`}
       >
-        {badgeCount}
+        {approvalCounts.total}
       </span>
     );
     const link = (

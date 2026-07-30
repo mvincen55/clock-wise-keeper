@@ -24,7 +24,6 @@ import ProgressRing from '@/components/goals/ProgressRing';
 import TargetProgress from '@/components/goals/TargetProgress';
 import GoalStatusBadge from '@/components/goals/GoalStatusBadge';
 import MyGoalCard from '@/components/goals/MyGoalCard';
-import ArchivedGoalsSection from '@/components/goals/ArchivedGoalsSection';
 import SetGoalCard from '@/components/goals/SetGoalCard';
 import TeamGoalCard from '@/components/goals/TeamGoalCard';
 import GoalsPrintSheet, { type GoalsReportRow } from '@/components/goals/GoalsPrintSheet';
@@ -264,8 +263,6 @@ export default function Goals() {
           ))}
         </section>
       )}
-
-      <ArchivedGoalsSection month={month} userId={user?.id} />
 
       <section className="space-y-4">
         <h2 className="text-lg font-semibold">The team this month</h2>

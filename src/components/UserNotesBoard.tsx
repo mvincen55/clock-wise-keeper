@@ -26,8 +26,6 @@ import {
   useReorderNotes,
   useUpdateNote,
   useUserNotes,
-  useUserNotesRealtime,
-  orderRevOf,
   type UserNote,
 } from '@/hooks/useUserNotes';
 
@@ -113,8 +111,6 @@ function SortableNote({
  */
 export default function UserNotesBoard() {
   const { data: notes, isLoading } = useUserNotes();
-  // Keeps this board on the same revision as the person's other devices.
-  useUserNotesRealtime();
   const create = useCreateNote();
   const update = useUpdateNote();
   const remove = useDeleteNote();
@@ -133,10 +129,7 @@ export default function UserNotesBoard() {
     const oldIndex = items.indexOf(String(active.id));
     const newIndex = items.indexOf(String(over.id));
     if (oldIndex < 0 || newIndex < 0) return;
-    reorder.mutate({
-      orderedIds: arrayMove(items, oldIndex, newIndex),
-      expectedRev: orderRevOf(notes),
-    });
+    reorder.mutate(arrayMove(items, oldIndex, newIndex));
   }
 
   return (

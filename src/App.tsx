@@ -31,7 +31,6 @@ import IncidentReports from "@/pages/IncidentReports";
 import MorningHuddle from "@/pages/MorningHuddle";
 import Goals from "@/pages/Goals";
 import Training from "@/pages/Training";
-import Messages from "@/pages/Messages";
 import AcceptInvite from "@/pages/AcceptInvite";
 import NotFound from "@/pages/NotFound";
 import OAuthConsent from "@/pages/OAuthConsent";
@@ -84,8 +83,6 @@ const App = () => (
             <Route path="/morning-huddle" element={<ProtectedRoute><MorningHuddle /></ProtectedRoute>} />
             <Route path="/goals" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
             <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
-            <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
-
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
             <Route path="*" element={<Navigate to="/auth" replace />} />

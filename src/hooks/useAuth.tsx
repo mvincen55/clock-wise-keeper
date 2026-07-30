@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { noteFailedSignIn, clearCounter, SIGNIN_COUNTER_KEY } from '@/lib/integrity';
 
 const DEFAULT_TIMEOUT_MINUTES = 0; // 0 = never auto-logout
 const TIMEOUT_STORAGE_KEY = 'timevault_session_timeout_minutes';
@@ -123,20 +122,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      // Integrity: repeated failures from this device are a probing signal.
-      noteFailedSignIn(email, false);
-      return { error };
-    }
+    if (error) return { error };
     // Same server-side gate RLS uses; deny and sign out non-allowlisted
     // accounts right here so the form shows a clear message.
     const allowed = await checkAllowed(data.user);
     if (!allowed) {
       await supabase.auth.signOut();
-      noteFailedSignIn(email, true);
       return { error: { message: 'Access denied.' } };
     }
-    clearCounter(SIGNIN_COUNTER_KEY);
     return { error: null };
   };
 

@@ -1,10 +1,7 @@
 # Training Library — feature spec (as prompted to Lovable)
 
-Status (2026-07-30): initial prompt sent (Training.tsx exists). Prompt 9 (in
-`docs/goals-and-bypass-spec.md`) extends it with read-aloud + roleplay assessments.
-Prompt 12 (below) adds the training auditor + learning-style adaptation.
-Prompt 23 (`docs/intelligence-spec.md`) hardens privacy: roleplay transcripts are
-process-and-discard — see decision 8 amendment below.
+Status (2026-07-30): initial prompt sent. Prompt 9 (in `docs/goals-and-bypass-spec.md`)
+extends it with read-aloud + roleplay assessments.
 
 ## Product decisions (the "why")
 
@@ -17,9 +14,9 @@ process-and-discard — see decision 8 amendment below.
    The rules of the office are the rules of the world: no generic advice that
    contradicts office policy, fictional scenarios only, never patient data.
 3. **Premium model for content, cheap model for chatter.** Module/quiz/roleplay
-   generation, roleplay rubric scoring, AND training audits use the strongest
-   available model (cost explicitly approved); polish/chat/drafts and the live
-   roleplay persona use the fast model.
+   generation AND roleplay rubric scoring use the strongest available model (cost
+   explicitly approved); polish/chat/drafts and the live roleplay persona use the
+   fast model.
 4. **Member-created modules go straight into the library** — no approval queue
    (same philosophy as goals). Source badge keeps provenance honest; managers
    can archive anything off-base.
@@ -31,24 +28,12 @@ process-and-discard — see decision 8 amendment below.
 7. **Modules are listenable** (Prompt 9): a "Listen" button in the module player
    reads outcome/sections/recap aloud using browser speech synthesis — no server
    cost, play/pause, auto-stop on leave.
-8. **Assessments match the skill** (Prompt 9, AMENDED by Prompt 23): recall →
-   scenario quiz; interpersonal → live roleplay with an AI persona grounded in
-   office policy, scored by the strong model at an 80% bar, unlimited retakes.
-   training_attempts gains type ('quiz' | 'roleplay'). **AMENDMENT (2026-07-30,
-   Prompt 23): roleplay transcripts are PROCESS-AND-DISCARD — the attempt stores
-   score, passed, and a brief feedback summary ONLY; the raw transcript is never
-   persisted anywhere. (Supersedes the earlier transcript-in-answers-jsonb rule.)
-   Quiz answers still live in answers jsonb, member-only.** Passing either
-   assessment completes the assignment.
-9. **Every module gets audited by a second AI** (Prompt 12): training-auditor
-   mirrors the assistant-auditor pattern — contradiction / inappropriate /
-   incorrect / patient_data checks, fingerprinted findings, proposes-but-never-
-   applies, FAIL-OPEN. Findings are a MANAGER surface; staff never see the auditor.
-10. **Modules adapt to how the member learns** (Prompt 12): training-builder reads
-    work_style_profiles (stealth — NEVER reveal the adaptation). Visual →
-    diagram/flowchart blocks; auditory → listen-first; readers → text-first;
-    hands-on → practice-first. Assessments adapt too. Member-specific modules
-    fully adapt; general modules balanced mix; no profile → balanced mix.
+8. **Assessments match the skill** (Prompt 9): recall → scenario quiz; interpersonal
+   → live roleplay with an AI persona (named patient, insurance rep) grounded in
+   office policy, scored by the strong model against a rubric at an 80% bar,
+   unlimited retakes. training_attempts gains type ('quiz' | 'roleplay');
+   transcripts stay in answers jsonb under the same privacy rule as quiz answers.
+   Passing either assessment completes the assignment.
 
 ## The prompt (as given to Lovable)
 
@@ -77,23 +62,6 @@ process-and-discard — see decision 8 amendment below.
 >
 > When finished: deploy the training-builder edge function and confirm it's live.
 
-## Prompt 12 — Training auditor + learning-style adaptation (pending)
-
-> Two upgrades to the Training Library: an AI auditor for every module, and learning-style adaptation.
->
-> 1) TRAINING AUDITOR (a second AI that never talks to staff — same philosophy as assistant-auditor):
-> - New edge function training-auditor (verify_jwt = true, add to supabase/config.toml). After ANY module is created or edited — by training-builder or by a staff member — audit it against: assistant_memories and the office docs (contradictions with office rules and policies), appropriateness (tone, professionalism), correctness (procedural claims about how THIS office actually works), and the no-patient-data rule (fictional scenarios only).
-> - Auditing NEVER blocks publishing (fail-open — an auditor outage can't stop training). It runs after save and records findings: training_audit_findings (id, org_id, module_id, finding_type ('contradiction' | 'inappropriate' | 'incorrect' | 'patient_data'), detail, quoted passage, suggested_fix, status ('open' | 'dismissed' | 'fixed'), fingerprint, created_at). Fingerprint findings so re-audits never re-report open or dismissed items, and it PROPOSES fixes — it never edits modules itself.
-> - The Training page gets a "Needs review" badge for owners/managers. Each finding shows the quoted passage, why it's a problem, and the suggested fix with one-tap apply or dismiss. Modules with open findings carry a subtle flag; clean modules show a quiet "Audited" mark. Use the strong model for audits.
->
-> 2) LEARNING-STYLE-ADAPTIVE MODULES:
-> - training-builder now reads work_style_profiles for its audience and adapts the format to how they learn: visual learners get visual-first sections (diagrams and flowcharts as a new styled block type { type: 'visual', title, description, alt } rendered as designed CSS/SVG diagram cards — not generated images); auditory learners get listen-first sections written for the read-aloud player with audio-style Q&A; readers get text-first with written reflection prompts; hands-on learners get practice-first sections (short reading, the try-it action up front).
-> - Assessments adapt too: visual learners get scenario/visual questions, auditory learners get questions read aloud, hands-on learners get "show me what you'd do" roleplay-style assessment.
-> - Scope: modules built for a specific member (goal-linked or single-assignee) adapt fully to that member; general library modules use a balanced mix of formats; no profile on record → balanced mix.
-> - STEALTH RULE (same as goals): NEVER reveal the adaptation anywhere — no "since you're a visual learner…" phrasing in the UI, the module, or AI output. It just happens to fit them.
->
-> When finished: deploy the training-auditor edge function and confirm it's live.
-
 ## Integration with Goals (baked into Prompt 6)
 
 - goal-assistant's resource behavior calls `training-builder`, then links via
@@ -104,16 +72,11 @@ process-and-discard — see decision 8 amendment below.
 
 ## Known build risks
 
-- **Roleplay transcript retention (Prompt 23).** training-roleplay must NOT
-  persist transcripts — score + brief feedback only. Check answers jsonb after a
-  roleplay: feedback text, never dialogue.
 - **Grounding depth is the make-or-break.** If generated modules read like generic
   internet advice, the function isn't actually pulling assistant_memories / docs —
   check the function logs for what context it gathered.
-- **content jsonb shape drift.** Player and builder must agree on the shape
-  exactly; a mismatch renders blank modules. Roleplay (persona + rubric) and
-  visual blocks each add a shape — same rule.
-- **training-builder AND training-auditor must deploy** (edge functions) — probe
-  per `docs/runbook.md` §1 if "Build with AI" or audits toast a function error.
-- **Stealth leaks.** Adaptation must never be visible; if a module ever says
-  "as a visual learner", the profile boundary broke.
+- **content jsonb shape drift.** Player and builder must agree on the shape exactly;
+  a mismatch renders blank modules. Roleplay adds a second shape (persona + rubric) —
+  same rule.
+- **training-builder must deploy** (new edge function) — probe per
+  `docs/runbook.md` §1 if "Build with AI" toasts a function error.

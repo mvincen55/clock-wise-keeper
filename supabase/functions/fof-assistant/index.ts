@@ -14,7 +14,6 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadProcedureNotes } from "../_shared/procedure-notes.ts";
-import { guardAiInput, REFUSAL } from "../_shared/integrity.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -138,17 +137,6 @@ Deno.serve(async (req) => {
       .filter((m) => m.content !== "");
     if (chat.length === 0 || chat[chat.length - 1].role !== "user") {
       return json({ error: "Bad request" }, 400);
-    }
-
-    if (
-      await guardAiInput({
-        orgId: membership.org_id,
-        userId: user.id,
-        surface: "fof-assistant",
-        inputs: [chat[chat.length - 1]?.content],
-      })
-    ) {
-      return json({ reply: REFUSAL, saveRule: null });
     }
 
     const visits = (Array.isArray(body.context?.visits) ? body.context!.visits! : [])

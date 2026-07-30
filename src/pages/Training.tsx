@@ -12,15 +12,17 @@ import { cn } from '@/lib/utils';
 import { getToday } from '@/lib/time-utils';
 import {
   useAttemptSummaries,
-  useDraftModules,
   useTrainingAssignments,
   useTrainingModules,
+  useDraftModules,
   type TrainingModule,
 } from '@/hooks/useTraining';
 import ModulePlayer from '@/components/training/ModulePlayer';
 import AssignModuleDialog, { type Assignee } from '@/components/training/AssignModuleDialog';
 import BuildModuleDialog from '@/components/training/BuildModuleDialog';
-import ModuleReviewQueue from '@/components/training/ModuleReviewQueue';
+import ModuleAuditPanel from '@/components/training/ModuleAuditPanel';
+import AuditPreviewDialog from '@/components/training/AuditPreviewDialog';
+import { diffAudit, describeDiff } from '@/lib/audit-diff';
 
 /** Active team members, used for the assignment picker and creator names. */
 function useTeamRoster() {
@@ -51,12 +53,12 @@ export default function Training() {
   const { data: attempts = [] } = useAttemptSummaries();
   const { data: roster = [] } = useTeamRoster();
   const { data: drafts = [] } = useDraftModules();
-  const draftCount = isAdmin ? drafts.length : 0;
 
   const [openModuleId, setOpenModuleId] = useState<string | null>(null);
   const [assignTarget, setAssignTarget] = useState<TrainingModule | null>(null);
   const [buildOpen, setBuildOpen] = useState(false);
   const [tagFilter, setTagFilter] = useState<string>('all');
+  const [previewModule, setPreviewModule] = useState<TrainingModule | null>(null);
 
   const nameFor = useMemo(() => {
     const map = new Map(roster.map(m => [m.user_id, m.display_name]));
@@ -117,6 +119,16 @@ export default function Training() {
         <Tabs defaultValue={new URLSearchParams(window.location.search).get('tab') === 'mine' ? 'mine' : 'library'}>
           <TabsList>
             <TabsTrigger value="library">Library</TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="drafts">
+                Awaiting review
+                {drafts.length > 0 && (
+                  <span className="ml-1.5 rounded-full bg-destructive px-1.5 text-xs text-destructive-foreground">
+                    {drafts.length}
+                  </span>
+                )}
+              </TabsTrigger>
+            )}
             <TabsTrigger value="mine">
               My training
               {myAssignments.filter(a => a.status !== 'completed').length > 0 && (
@@ -125,25 +137,39 @@ export default function Training() {
                 </span>
               )}
             </TabsTrigger>
-            {isAdmin && (
-              <TabsTrigger value="review">
-                Review queue
-                {draftCount > 0 && (
-                  <span className="ml-1.5 rounded-full bg-warning px-1.5 text-xs text-warning-foreground">
-                    {draftCount}
-                  </span>
-                )}
-              </TabsTrigger>
-            )}
           </TabsList>
 
           {isAdmin && (
-            <TabsContent value="review" className="space-y-4 pt-4">
-              <p className="text-sm text-muted-foreground">
-                Modules the auditor held back. Check the ones you trust and approve them together —
-                rejected modules are archived, never silently deleted.
-              </p>
-              <ModuleReviewQueue />
+            <TabsContent value="drafts" className="space-y-4 pt-4">
+              {drafts.length === 0 && (
+                <Card>
+                  <CardContent className="p-10 text-center text-sm text-muted-foreground">
+                    Nothing is waiting on a review.
+                  </CardContent>
+                </Card>
+              )}
+              {drafts.map(draft => {
+                const d = diffAudit(draft.audit, draft.audit?.review ?? null);
+                return (
+                  <Card key={draft.id}>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base leading-snug">{draft.title}</CardTitle>
+                      <p className="text-sm text-muted-foreground">{describeDiff(d)}</p>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {draft.audit && <ModuleAuditPanel audit={draft.audit} />}
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" onClick={() => setPreviewModule(draft)}>
+                          Review &amp; publish
+                        </Button>
+                        {d.needsReview && !d.firstReview && (
+                          <Badge variant="destructive">Findings changed — re-review needed</Badge>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </TabsContent>
           )}
 
@@ -271,6 +297,11 @@ export default function Training() {
         onClose={() => setAssignTarget(null)}
       />
       <BuildModuleDialog open={buildOpen} onOpenChange={setBuildOpen} />
+      <AuditPreviewDialog
+        module={previewModule}
+        open={!!previewModule}
+        onOpenChange={v => !v && setPreviewModule(null)}
+      />
     </>
   );
 }

@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { adminClient, logSecurityEvent } from "../_shared/integrity.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -167,36 +166,6 @@ serve(async (req) => {
       .limit(1);
 
     const lastEvent = lastEvents?.[0];
-
-    // Integrity: a device cannot travel faster than a plane. Two consecutive
-    // fixes that imply that are a spoofing signal (coordinates only — no map,
-    // no history, no content).
-    if (lastEvent?.latitude != null && lastEvent?.longitude != null) {
-      const seconds =
-        (new Date(now).getTime() - new Date(lastEvent.created_at).getTime()) / 1000;
-      if (seconds > 5) {
-        const meters = haversineDistance(lat, lng, lastEvent.latitude, lastEvent.longitude);
-        const kmh = (meters / seconds) * 3.6;
-        if (kmh > 900 && meters > 2000) {
-          await logSecurityEvent(adminClient(), {
-            orgId,
-            actorUserId: userId,
-            kind: "time_anomaly",
-            severity: kmh > 3000 ? "elevated" : "watch",
-            detail: {
-              signal: "impossible_travel",
-              implied_kmh: Math.round(kmh),
-              meters: Math.round(meters),
-              seconds: Math.round(seconds),
-              accuracy_m: accuracy,
-            },
-            fingerprintParts: ["impossible_travel", userId, today],
-            summary: `Location fixes imply travel of ${Math.round(kmh)} km/h — the device's position may be spoofed.`,
-          });
-        }
-      }
-    }
-
     const lastStatus = lastEvent?.zone_status;
     const lastZoneId = lastEvent?.zone_id;
 
