@@ -13,6 +13,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
 import { guardAiInput, JAILBREAK_REFUSAL } from "../_shared/jailbreak-guard.ts";
 
+import { scrubMessages } from "../_shared/ai-safe.ts";
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 // The record book deserves the strongest reasoning model we have.
 const MODEL = "openai/gpt-5.5";
@@ -128,7 +129,7 @@ async function auditAnswer(
       body: JSON.stringify({
         model: AUDITOR_MODEL,
         max_completion_tokens: 900,
-        messages: [
+        messages: scrubMessages([
           { role: "system", content: `${OFFICE_DOCTRINE}\n\n---\n\n${AUDITOR_RULES}` },
           {
             role: "user",
@@ -136,7 +137,7 @@ async function auditAnswer(
               `RECORDS:\n${corpus}\n\n---\n\nTHE ANSWER TO AUDIT:\n${answer}\n\n` +
               `FLAGGED CONCERNS (structured):\n${JSON.stringify(concerns)}`,
           },
-        ],
+        ], "reports-analyst"),
       }),
     });
     if (!res.ok) {
@@ -283,7 +284,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: MODEL,
         max_completion_tokens: 1400,
-        messages: [
+        messages: scrubMessages([
           { role: "system", content: `${OFFICE_DOCTRINE}\n\n---\n\n${ANALYST_RULES}` },
           ...history
             .filter((m: Row) => m && (m.role === "user" || m.role === "assistant"))
@@ -293,7 +294,7 @@ Deno.serve(async (req) => {
             content:
               `Range: ${range}\nRecords: ${rows.length}\n\n${task}\n\nRECORDS:\n${corpus}`,
           },
-        ],
+        ], "reports-analyst"),
       }),
     });
 

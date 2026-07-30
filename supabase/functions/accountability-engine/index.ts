@@ -13,6 +13,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
 
+import { scrubMessages } from "../_shared/ai-safe.ts";
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-3.6-flash";
 
@@ -65,10 +66,10 @@ async function draftSummary(
       },
       body: JSON.stringify({
         model: MODEL,
-        messages: [
+        messages: scrubMessages([
           { role: "system", content: OFFICE_DOCTRINE },
           { role: "user", content: prompt },
-        ],
+        ], "accountability-engine"),
       }),
     });
     if (!res.ok) {

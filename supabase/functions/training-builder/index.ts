@@ -15,6 +15,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { guardAiInput, JAILBREAK_REFUSAL } from "../_shared/jailbreak-guard.ts";
 import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
 
+import { scrubMessages } from "../_shared/ai-safe.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -327,10 +328,10 @@ ${settingsBlock}`;
       body: JSON.stringify({
         model: MODEL,
         reasoning_effort: "none",
-        messages: [
+        messages: scrubMessages([
           { role: "system", content: `${OFFICE_DOCTRINE}\n\n---\n\n${system}` },
           { role: "user", content: userPrompt },
-        ],
+        ], "training-builder"),
       }),
     });
 
@@ -390,10 +391,10 @@ ${JSON.stringify({ title, summary, content }).slice(0, 40000)}`;
         body: JSON.stringify({
           model: MODEL,
           reasoning_effort: "none",
-          messages: [
+          messages: scrubMessages([
             { role: "system", content: `${OFFICE_DOCTRINE}\n\n---\n\n${auditSystem}` },
             { role: "user", content: auditPrompt },
-          ],
+          ], "training-builder"),
         }),
       });
       if (auditRes.ok) {

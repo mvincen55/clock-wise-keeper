@@ -32,6 +32,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadCodeNotes, type CodeNote } from "../_shared/procedure-notes.ts";
 import { withDoctrine } from "../_shared/office-doctrine.ts";
 
+import { scrubMessages } from "../_shared/ai-safe.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -103,10 +104,10 @@ async function askChecker(
         model,
         max_tokens: maxTokens,
         temperature: 0,
-        messages: [
+        messages: scrubMessages([
           { role: "system", content: withDoctrine(system) },
           { role: "user", content: user },
-        ],
+        ], "assistant-auditor"),
       }),
       signal: AbortSignal.timeout(60_000),
     });

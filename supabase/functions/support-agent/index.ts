@@ -15,6 +15,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
 import { guardAiInput, JAILBREAK_REFUSAL } from "../_shared/jailbreak-guard.ts";
 
+import { scrubMessages } from "../_shared/ai-safe.ts";
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 // Tier 1: fast and cheap, handles the everyday reports.
@@ -315,7 +316,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: tier === "senior" ? SENIOR_MODEL : STANDARD_MODEL,
         max_completion_tokens: tier === "senior" ? 1400 : 700,
-        messages,
+        messages: scrubMessages(messages, "support-agent"),
       }),
     });
 
