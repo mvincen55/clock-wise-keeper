@@ -611,6 +611,66 @@ export type Database = {
           },
         ]
       }
+      capture_proposals: {
+        Row: {
+          created_at: string
+          due_date: string | null
+          fingerprint: string
+          first_step: string | null
+          id: string
+          item_id: string | null
+          org_id: string
+          resolved_at: string | null
+          status: string
+          surface: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          due_date?: string | null
+          fingerprint: string
+          first_step?: string | null
+          id?: string
+          item_id?: string | null
+          org_id: string
+          resolved_at?: string | null
+          status?: string
+          surface: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          due_date?: string | null
+          fingerprint?: string
+          first_step?: string | null
+          id?: string
+          item_id?: string | null
+          org_id?: string
+          resolved_at?: string | null
+          status?: string
+          surface?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "capture_proposals_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "capture_proposals_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       change_requests: {
         Row: {
           created_at: string
@@ -772,11 +832,18 @@ export type Database = {
           cadence: string
           checklist_id: string
           created_at: string
+          created_by: string | null
+          deferral_count: number
+          due_date: string | null
+          first_step: string | null
           id: string
           is_active: boolean
           org_id: string
+          owner_user_id: string | null
           per_person: boolean
           sort_order: number
+          source: string
+          source_ref: Json
           title: string
           updated_at: string
         }
@@ -784,11 +851,18 @@ export type Database = {
           cadence: string
           checklist_id: string
           created_at?: string
+          created_by?: string | null
+          deferral_count?: number
+          due_date?: string | null
+          first_step?: string | null
           id?: string
           is_active?: boolean
           org_id: string
+          owner_user_id?: string | null
           per_person?: boolean
           sort_order?: number
+          source?: string
+          source_ref?: Json
           title: string
           updated_at?: string
         }
@@ -796,11 +870,18 @@ export type Database = {
           cadence?: string
           checklist_id?: string
           created_at?: string
+          created_by?: string | null
+          deferral_count?: number
+          due_date?: string | null
+          first_step?: string | null
           id?: string
           is_active?: boolean
           org_id?: string
+          owner_user_id?: string | null
           per_person?: boolean
           sort_order?: number
+          source?: string
+          source_ref?: Json
           title?: string
           updated_at?: string
         }
@@ -828,6 +909,7 @@ export type Database = {
           id: string
           name: string
           org_id: string
+          owner_user_id: string | null
           sort_order: number
           updated_at: string
         }
@@ -837,6 +919,7 @@ export type Database = {
           id?: string
           name: string
           org_id: string
+          owner_user_id?: string | null
           sort_order?: number
           updated_at?: string
         }
@@ -846,6 +929,7 @@ export type Database = {
           id?: string
           name?: string
           org_id?: string
+          owner_user_id?: string | null
           sort_order?: number
           updated_at?: string
         }
