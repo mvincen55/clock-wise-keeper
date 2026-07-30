@@ -305,3 +305,28 @@ export function useCompleteMyItem() {
     },
   });
 }
+
+/**
+ * COMMITMENT LISTENING — when someone says they'll do something in the AI
+ * channel, the AI drafts it and offers it. Silent when there's no commitment,
+ * silent when the same thing was already offered once.
+ */
+export function useCommitmentListen() {
+  const propose = useProposeCapture();
+
+  return useMutation({
+    mutationFn: async (message: string) => {
+      const { data, error } = await supabase.functions.invoke('commitment-listen', {
+        body: { message, today: getToday() },
+      });
+      if (error || !data?.capture) return null; // fails open: never blocks the chat
+      const capture = data.capture as { title: string; first_step?: string; due_date?: string };
+      return propose.mutateAsync({
+        surface: 'ai_channel',
+        title: capture.title,
+        firstStep: capture.first_step ?? null,
+        dueDate: capture.due_date ?? null,
+      });
+    },
+  });
+}
