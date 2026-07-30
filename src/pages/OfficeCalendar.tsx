@@ -11,6 +11,8 @@ import { ChevronLeft, ChevronRight, Plus, Trash2, Printer, FileText, Loader2, Sh
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useOrgEmployees } from '@/hooks/useEmployees';
 import { useOfficeClosures, useAddClosure } from '@/hooks/useOfficeClosures';
+import { useOfficeEvents } from '@/hooks/useOfficeEvents';
+import TeamMeetingsCard from '@/components/calendar/TeamMeetingsCard';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -149,6 +151,7 @@ export default function OfficeCalendar() {
   });
 
   const { data: closures } = useOfficeClosures(year);
+  const { data: officeEvents } = useOfficeEvents();
   const addClosure = useAddClosure();
   const addDayOff = useAddDayOff();
 
@@ -715,6 +718,8 @@ export default function OfficeCalendar() {
         </Button>
       </div>
 
+      <TeamMeetingsCard isManager={isManager} />
+
       {/* Calendar Grid */}
       <Card className="card-elevated overflow-hidden">
         <CardContent className="p-0">
@@ -751,6 +756,17 @@ export default function OfficeCalendar() {
                       </div>
                     </div>
                     <div className="space-y-0.5">
+                      {(officeEvents || [])
+                        .filter(e => e.event_date === dateStr && e.category === 'team_meeting')
+                        .map(e => (
+                          <div
+                            key={e.id}
+                            className="truncate rounded border border-primary/40 bg-primary/10 px-1 py-0.5 text-[10px] font-medium leading-tight text-primary"
+                            title={e.notes || e.title}
+                          >
+                            👥 {e.title}
+                          </div>
+                        ))}
                       {namedClosures.map((evt, ei) => (
                         <div
                           key={`c-${ei}`}
