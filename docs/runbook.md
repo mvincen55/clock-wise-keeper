@@ -110,8 +110,8 @@ DEFINER helper (same pattern as `is_org_member`). Test by selecting from
 Radix portals dialogs/popovers to `<body>` as **siblings** of `#root`. Print CSS that
 only hides `#root` will print the dialog (this was the incident-report bug,
 `225b37f`). The rule: under `@media print`, hide every body child except the print
-root. All three print sheets (FOF, Deposit Log, Incident Report) are covered by
-print-invariant snapshot tests — run `npm run test` before merging.
+root. All print sheets (FOF, Deposit Log, Incident Report, Goals Report) are covered
+by print-invariant snapshot tests — run `npm run test` before merging.
 
 ## 8. Checklist data questions / building on checklists
 
@@ -122,7 +122,7 @@ Exact model in README §Checklist data model and migration
   (`YYYY-MM-DD` / `week-YYYY-MM-DD` Monday / `YYYY-MM` / `YYYY`). Don't invent new
   formats; `useChecklists.ts` already computes them.
 - `per_person = false` items are one shared checkbox — "did the team do X" ≠ "did
-  this member do X". The planned bypass feature (clock-out gate) must reason about
+  this member do X". The bypass feature (clock-out gate) reasons about
   **per-person daily items for that member**, not shared items.
 - Checklist titles are business data only — never patient info (migration header).
 
@@ -130,7 +130,8 @@ Exact model in README §Checklist data model and migration
 
 - Time data: `useTimeEntries`, `useWorkSchedule`, `useEmployeeSchedules`,
   `usePtoEngine` (accrual logic lives here — change it carefully, balances derive
-  from it).
+  from it). Clock-out with the checklist gate: `useGuardedClockAction` wraps
+  `useClockAction` and opens `ChecklistBypassDialog` first.
 - Location-verified clock-in: `useGeoTracking` + `process-location-event` +
   `LocationStatusPanel`; zones are managed at `/work-zones`.
 - Tardiness has its own objects (`useTardies`, `TardyReasonModal`) — don't fold it
@@ -147,6 +148,27 @@ Exact model in README §Checklist data model and migration
   is `safeProcedureLabel` (derived from CDT codes only, no overrides argument) and
   it's asserted in tests. If you're tempted to pass overrides into AI context, stop.
 
+## 11. A page shows an OLD version after work shipped
+
+Diagnosed 2026-07-30 (Goals page): the repo had the new code all along — the
+"overwriting" was a serving problem, not a code problem. Check in this order:
+
+1. **Verify what's actually committed** (GitHub → the page file). If the repo has
+   the new code, the code was never the problem — stop looking at code.
+2. **Was the site Published?** Lovable's preview reflects code; the live site
+   (`purpleenvelope.app`) only updates on **Share → Publish**. During sprint
+   sessions this is the usual cause.
+3. **Stale client / PWA cache.** `vite.config.ts` ships
+   `VitePWA({ selfDestroying: true })` — a replacement worker that unregisters the
+   old one, clears caches, and reloads. A stale client **heals itself on its next
+   visit after a publish**; if a device still shows old after that, clear site data
+   once (browser settings → site data) and it will never recur.
+4. **Lovable snapshot churn.** Multiple chat threads or checkpoint Restores commit
+   older snapshots over newer code ("Work in progress" commits). Rules: ONE chat
+   thread per feature sprint, never Restore mid-sprint. If code actually reverted,
+   re-send the consolidation spec (for /goals: Prompt 10 in
+   `docs/goals-and-bypass-spec.md`).
+
 ---
 
 ## Change-checklist for any agent editing this repo
@@ -160,3 +182,4 @@ Exact model in README §Checklist data model and migration
 - [ ] Anything AI → re-read README §HIPAA boundary.
 - [ ] Org scoping → derive from `org_members` server-side; never trust
       client-supplied `org_id`.
+- [ ] "It looks old on my phone" → §11 BEFORE touching code.
