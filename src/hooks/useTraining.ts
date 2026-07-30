@@ -32,7 +32,10 @@ export type ModuleAudit = {
   summary: string;
   findings: AuditFinding[];
   audited_at?: string;
+  /** The last human sign-off, so we can tell when findings changed since. */
+  review?: ReviewSnapshot | null;
 };
+
 export type AssignmentStatus = 'assigned' | 'in_progress' | 'completed';
 
 export type QuizQuestion = {
