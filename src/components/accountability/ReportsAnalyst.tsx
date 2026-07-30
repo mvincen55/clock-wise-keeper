@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Sparkles, Loader2, Send, FileText } from 'lucide-react';
+import { Sparkles, Loader2, Send, FileText, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { formatDate } from '@/lib/time-utils';
