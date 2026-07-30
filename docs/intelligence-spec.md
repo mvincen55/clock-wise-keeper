@@ -1,15 +1,15 @@
 # Office Intelligence — feature spec
 
-Status (2026-07-30): Prompts 16 + 19 v2 pending. This layer makes the app feel
+Status (2026-07-30): Prompts 16 + 19 v3 pending. This layer makes the app feel
 smart everywhere — proactive, grounded, learning — rather than smart only when
 tapped. Pairs with `docs/messaging-spec.md` (16 is the brain, 17 the voice).
-Prompt 19 v2 supersedes v1 (sprint goals gained scoping + verification tiers).
+Prompt 19 v3 supersedes v2 (proof can be pasted; office-level verification
+default; verification archive — with process-and-discard proof handling).
 
 ## Product decisions (the "why")
 
-1. **Ambient, not on-demand.** Today's AI is summoned (Break it down, chat, draft).
-   This layer speaks first: briefs at day-start, nudges at transition moments
-   (clock-in, morning, clock-out, meeting), quiet otherwise.
+1. **Ambient, not on-demand.** This layer speaks first: briefs at day-start,
+   nudges at transition moments, quiet otherwise.
 2. **Receipts or silence.** Every claim cites real numbers. Generic filler is a
    bug. The brief must sometimes say "nothing to report."
 3. **The dismissal loop IS the learning.** `acted_on` vs `dismissed` per nudge
@@ -19,30 +19,27 @@ Prompt 19 v2 supersedes v1 (sprint goals gained scoping + verification tiers).
 5. **Calm rationing.** Max ONE nudge per surface/person per day. Fail-open always.
 6. **The Huddle boundary is load-bearing** — no patient-related storage or
    computation anywhere near the huddle page.
-7. **Suggestions propose, managers dispose.** Incident follow-through, sprint
-   suggestions, and document-verdict overrides all keep humans senior.
-8. **THE OFFICE AI DOCTRINE applies to every AI surface** (goal-assistant,
-   training-builder, training-roleplay, office-insights, AI channel): the mission
-   in every system prompt is "make this office excellent within the owner's
-   vision, rules, policies, and actual structure." It encourages and reminds
-   EVERYONE — owners and managers included — with "might not be a bad idea to…"
-   framing. Never pushy, never shaming, receipts cited, quiet when there's nothing.
-9. **Sprint goals are scoped and tier-verified (19 v2):**
-   - Scope: whole team / department (clinical·clerical via employees.team) /
-     individual. Visibility follows scope (department goals → that department +
-     admins; individual → that member + admins).
-   - Verification is a per-sprint setting because stakes differ: HONOR (pizza
-     tier — auto-declares) · MANAGER_APPROVAL (one-tap recorded decision,
-     verified_by/at) · DOCUMENT (upload the outside report — e.g. the recall
-     export — the STRONG model reads it, extracts the metric, compares to
-     target, and renders a verdict WITH RECEIPTS: the number found + where).
-   - The verifier can OVERRIDE a document verdict with a required reason —
-     humans outrank the document reader.
-   - Verifier = manager; if no manager exists → owner; if the manager is the one
-     being verified → owner. Nobody grades their own homework.
-   - The AI runs the lifecycle: announce on create (manager never says it out
-     loud), mid-period progress nudges, verification push at period end
-     ("upload the recall report to verify"), final declaration (seal on a win).
+7. **Suggestions propose, managers dispose.** Humans stay senior: incident
+   follow-through, sprint suggestions, document-verdict overrides.
+8. **THE OFFICE AI DOCTRINE applies to every AI surface:** the mission in every
+   system prompt is "make this office excellent within the owner's vision, rules,
+   policies, and actual structure." Encourages and reminds EVERYONE — owners and
+   managers included — "might not be a bad idea to…" framing. Never pushy, never
+   shaming, receipts cited, quiet when there's nothing.
+9. **Sprint goals are scoped and tier-verified (19 v2):** whole team / department
+   / individual (visibility follows scope); verification tier per sprint — HONOR
+   (auto-declares) · MANAGER_APPROVAL (recorded one-tap) · DOCUMENT (AI reads
+   proof, verdict with receipts). Verifier = manager → owner fallback; nobody
+   grades their own homework.
+10. **Verification is office-configurable AND proof is process-and-discard
+    (19 v3):** org setting `sprint_verification_default` sets the house default
+    (per-sprint override). Proof may be uploaded OR pasted as text. The proof is
+    processed TRANSIENTLY — read, metric extracted, discarded — NEVER persisted,
+    because outside reports can contain patient names and PE never stores patient
+    data. The archive (`sprint_verifications`) keeps everything about the VERDICT
+    (extracted metric, source description, AI summary, verdict, verifier,
+    overrides) and nothing about the patients. Raw-document retention would be a
+    deliberate BAA conversation, not a sprint feature.
 
 ## Prompt 16 — Office Intelligence layer (pending)
 
@@ -67,34 +64,35 @@ Prompt 19 v2 supersedes v1 (sprint goals gained scoping + verification tiers).
 >
 > When finished: deploy office-insights and confirm it responds.
 
-## Prompt 19 v2 — Reminder hooks + scoped/verified sprint goals + AI doctrine (pending)
+## Prompt 19 v3 — Reminder hooks + scoped/verified/archived sprint goals + AI doctrine (pending)
 
-> Two additions: AI-triggered reminders, and team sprint goals the office AI runs — scoped and verified. Apply the OFFICE AI DOCTRINE to every AI surface (goal-assistant, training-builder, training-roleplay, office-insights, the AI channel): the mission is "make this office excellent within the owner's vision, rules, policies, and actual structure." It encourages and reminds EVERYONE including owners/managers — never pushy, never shaming, receipts cited, quiet when there's nothing.
+> Two additions: AI-triggered reminders, and team sprint goals the office AI runs — scoped, verified, and archived. Apply the OFFICE AI DOCTRINE to every AI surface (goal-assistant, training-builder, training-roleplay, office-insights, the AI channel): the mission is "make this office excellent within the owner's vision, rules, policies, and actual structure." It encourages and reminds EVERYONE including owners/managers — never pushy, never shaming, receipts cited, quiet when there's nothing.
 >
 > 1) REMINDER HOOKS (scheduled AI follow-ups):
 > - New table reminder_hooks: id, org_id, user_id, kind ('goal_task_due' | 'training_due' | 'plan_stall' | 'checklist_gap' | 'sprint_progress' | 'follow_up' | 'sprint_verify'), ref_id nullable, fire_at, status ('pending' | 'sent' | 'cancelled'), created_at. org_id + RLS (member reads own).
 > - A scheduled job (extend office-insights or training-reminders) fires due hooks and delivers them as AI-channel messages (or notifications until messaging ships): goal task due, training due, plan stalling, committed follow-ups, sprint progress, and verification pushes. Max one reminder per person per day, dismissal-learning, fail-open.
 >
-> 2) TEAM SPRINT GOALS — scoped and verified:
-> - New table team_goals: id, org_id, title, metric text (what's counted), target_count int, period ('week' | 'month'), starts_on, ends_on, reward text (pizza, gift card, bonus — free text), progress int default 0, scope ('team' | 'department' | 'individual'), scope_department nullable ('clinical' | 'clerical'), scope_user_id nullable, verification ('honor' | 'manager_approval' | 'document') default 'honor', status ('active' | 'pending_verification' | 'won' | 'missed' | 'cancelled'), created_by, ai_suggested bool default false, verified_by nullable, verified_at nullable, verification_note nullable, created_at. org_id + RLS: team-scope readable by all; department-scope by that department + admins; individual-scope by that member + admins. Members can only increment progress on honor-verification goals in their scope.
-> - SCOPES: the whole team, one department (clinical/clerical via employees.team), or a single person (an individual bonus goal).
-> - VERIFICATION FLOW: when the period ends OR the target is reached, status → 'pending_verification' and the AI pushes the verifier — the manager; if no manager exists, the owner — via whichever method the sprint was set up with:
->   a) HONOR: no verification — the result declares automatically (pizza-tier goals).
->   b) MANAGER_APPROVAL: one-tap electronic approve/decline with an optional note. Not a signature — a recorded decision (verified_by, verified_at).
->   c) DOCUMENT: the AI asks the verifier to upload the outside report (e.g. the recall export from the office's external system — PDF, screenshot, or phone photo). The STRONG model reads the document, extracts the relevant metric (how many calls were actually made), compares it to the target, and renders a verdict WITH RECEIPTS: the number it found and where in the document it found it. Supported → 'won', reward declared, celebration seal. Not supported → 'missed', showing the document's numbers plainly.
-> - The verifier can OVERRIDE the AI's document verdict with a required reason — humans outrank the document reader, and the override is recorded.
-> - THE AI RUNS IT END TO END: announces the sprint when created (the manager never says a word out loud), mid-period progress nudges with real numbers, the verification push at the end ("upload the recall report to verify"), and the final declaration.
-> - AI SUGGESTS SPRINTS: weekly, one dismissible suggestion to each manager based on office data ("the recall list is long — might not be a bad idea to run a calls sprint verified against the outside report"), marked ai_suggested when accepted.
+> 2) TEAM SPRINT GOALS — scoped, verified, and archived:
+> - Org setting sprint_verification_default ('honor' | 'manager_approval' | 'document') in Settings — the office picks its house default; each sprint can still override it.
+> - team_goals table: id, org_id, title, metric text, target_count int, period ('week'|'month'), starts_on, ends_on, reward text, progress int default 0, scope ('team'|'department'|'individual'), scope_department nullable, scope_user_id nullable, verification (defaults from the org setting, overridable per sprint), status ('active'|'pending_verification'|'won'|'missed'|'cancelled'), created_by, ai_suggested bool, verified_by nullable, verified_at nullable, verification_note nullable, created_at. org_id + RLS by scope (team → all; department → that department + admins; individual → that member + admins). Members increment progress only on honor goals in their scope.
+> - PROOF INPUT — verifier's choice: upload the outside report (PDF, screenshot, phone photo) OR copy-paste the report text straight in. The STRONG model reads either, extracts the metric, compares to target, verdict WITH RECEIPTS (the number + where it came from). If it can't find the metric, verdict 'unclear' and it asks for a clearer export — never guesses.
+> - PROOF HANDLING (hard privacy rule): proof is processed TRANSIENTLY — read, metric extracted, then discarded; never written to a table or storage. Outside reports can contain patient names, and Purple Envelope never stores patient data. The archive keeps everything about the verdict, nothing about the patients.
+> - VERIFICATION ARCHIVE — new table sprint_verifications: id, org_id, team_goal_id, method, verifier_id, extracted_metric, source_description text (e.g. "pasted recall export, 2 pages"), ai_summary text (2–3 sentences: what the proof showed and how the verdict was reached), verdict ('supported'|'unsupported'|'unclear'), overridden bool, override_reason nullable, created_at. RLS: owners/managers read; written only by the verification flow.
+> - SPRINT HISTORY + REPORTS: a Sprint history view — past sprints with title, period, scope, outcome, reward, verifier, and the AI summary — plus inclusion in Reports exports so the owner can pull the full record anytime.
+> - The verifier can OVERRIDE with a required reason (recorded).
+> - THE AI RUNS IT END TO END: announces on create, mid-period progress nudges, the verification push ("upload or paste the recall report to verify"), and the final declaration (seal on a win).
+> - AI SUGGESTS one sprint weekly per manager (dismissible, ai_suggested).
 
 ## Known build risks
 
-- **Nagware drift.** If the dismissal loop isn't real (kinds never go quiet), the
-  layer becomes noise — test that dismissing a kind twice suppresses it.
-- **Receipt honesty.** data_refs must contain the actual figures cited; the
-  document verdict must name where in the document the number came from.
-- **Document parsing brittleness.** Outside reports vary — if the AI can't find
-  the metric, it must say so and ask for a clearer export rather than guess
-  (a guessed verdict is worse than none).
+- **PHI leak via proof upload.** The single most important rule in this file:
+  verification proof must never be persisted. Verify there's no storage upload,
+  no table insert, and no function log line carrying the raw proof — mask and
+  discard. A Weave-style export contains patient names.
+- **Nagware drift.** Dismissed kinds must actually go quiet — test the 2-week
+  suppression.
+- **Receipt honesty.** data_refs holds the actual figures; the document verdict
+  names where the number came from; 'unclear' instead of guesses.
 - **Scope visibility leaks.** Department/individual sprints must not leak into
   other members' dashboards — probe RLS as a member outside the scope.
 - **Huddle leakage.** Context block sources from business tables only.
