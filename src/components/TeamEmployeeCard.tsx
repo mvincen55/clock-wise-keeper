@@ -29,6 +29,7 @@ type Employee = {
   email: string | null;
   user_id: string | null;
   timezone: string;
+  team?: string | null;
 };
 
 type WeekStats = { present: number; late: number; absent: number };
