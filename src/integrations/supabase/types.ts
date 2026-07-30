@@ -4358,6 +4358,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          ocr_text: string | null
           org_id: string
           role: string
           ticket_id: string
@@ -4369,6 +4370,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          ocr_text?: string | null
           org_id: string
           role: string
           ticket_id: string
@@ -4380,6 +4382,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          ocr_text?: string | null
           org_id?: string
           role?: string
           ticket_id?: string
