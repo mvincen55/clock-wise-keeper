@@ -38,11 +38,19 @@ export interface RedactionResult {
   file: File;
   previewUrl: string;
   maskedCount: number;
+  /** Words read off the screenshot, with masked words replaced by blocks. */
+  text: string;
+  /** Everything read off the screenshot, unmasked. */
+  rawText: string;
 }
 
 interface Word {
   text: string;
   bbox: { x0: number; y0: number; x1: number; y1: number };
+}
+
+interface Line {
+  words?: Word[];
 }
 
 function shouldMask(raw: string, knownNames: Set<string>): boolean {
@@ -100,13 +108,21 @@ export async function redactScreenshot(
   );
 
   let words: Word[] = [];
+  let lines: Line[] = [];
   try {
     const { data } = await Tesseract.recognize(canvas, 'eng');
     words = ((data as unknown as { words?: Word[] }).words ?? []).filter(w => w?.bbox);
+    lines = (data as unknown as { lines?: Line[] }).lines ?? [];
   } catch {
     // OCR failed — better to send nothing readable than to leak. Fall back to
     // handing back the original and letting the caller decide.
-    return { file, previewUrl: canvas.toDataURL('image/png'), maskedCount: -1 };
+    return {
+      file,
+      previewUrl: canvas.toDataURL('image/png'),
+      maskedCount: -1,
+      text: '',
+      rawText: '',
+    };
   }
 
   let maskedCount = 0;
@@ -126,5 +142,22 @@ export async function redactScreenshot(
     type: 'image/png',
   });
 
-  return { file: redacted, previewUrl: URL.createObjectURL(redacted), maskedCount };
+  // Same words, as text — so the help desk agent can quote what the screenshot
+  // actually says instead of guessing at pixels. Masked words stay masked here.
+  const rows = lines.length > 0 ? lines.map(l => l.words ?? []) : [words];
+  const masked: string[] = [];
+  const raw: string[] = [];
+  for (const row of rows) {
+    if (row.length === 0) continue;
+    masked.push(row.map(w => (shouldMask(w.text ?? '', names) ? '[hidden]' : w.text)).join(' ').trim());
+    raw.push(row.map(w => w.text).join(' ').trim());
+  }
+
+  return {
+    file: redacted,
+    previewUrl: URL.createObjectURL(redacted),
+    maskedCount,
+    text: masked.filter(Boolean).join('\n').slice(0, 6000),
+    rawText: raw.filter(Boolean).join('\n').slice(0, 6000),
+  };
 }

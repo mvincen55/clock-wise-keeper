@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { downloadSupportPdf } from '@/lib/support-pdf';
 import TicketTimeline, { stageFromTicket } from '@/components/support/TicketTimeline';
 import { redactScreenshot } from '@/lib/redact-image';
+import { extractPdfText } from '@/lib/extract-pdf-text';
 import { Switch } from '@/components/ui/switch';
 import {
   Select,
@@ -49,6 +50,10 @@ type Attachment = {
   redacted: File | null;
   masked: number;
   working: boolean;
+  /** Text read off the file, safe version (masked words hidden). */
+  text: string;
+  /** Text read off the file with nothing hidden. */
+  rawText: string;
 };
 
 const CATEGORIES = [
@@ -162,11 +167,18 @@ export default function SupportWidget() {
    */
   const redactOne = useCallback(async (key: string, file: File) => {
     try {
-      const { file: clean, maskedCount } = await redactScreenshot(file);
+      const { file: clean, maskedCount, text, rawText } = await redactScreenshot(file);
       setFiles(prev =>
         prev.map(a =>
           a.key === key
-            ? { ...a, redacted: maskedCount >= 0 ? clean : null, masked: Math.max(maskedCount, 0), working: false }
+            ? {
+                ...a,
+                redacted: maskedCount >= 0 ? clean : null,
+                masked: Math.max(maskedCount, 0),
+                text,
+                rawText,
+                working: false,
+              }
             : a,
         ),
       );
@@ -174,6 +186,14 @@ export default function SupportWidget() {
       setFiles(prev => prev.map(a => (a.key === key ? { ...a, working: false } : a)));
       toast.error('Could not scrub that screenshot — it will be sent as-is unless you remove it.');
     }
+  }, []);
+
+  /** PDFs get read too, so the agent can quote the page instead of the filename. */
+  const readPdf = useCallback(async (key: string, file: File) => {
+    const text = await extractPdfText(file);
+    setFiles(prev =>
+      prev.map(a => (a.key === key ? { ...a, text, rawText: text, working: false } : a)),
+    );
   }, []);
 
   const addFiles = useCallback(
@@ -192,21 +212,27 @@ export default function SupportWidget() {
             continue;
           }
           const isImage = f.type.startsWith('image/');
+          const isPdf = f.type === 'application/pdf';
           const item: Attachment = {
             key: crypto.randomUUID(),
             original: f,
             redacted: null,
             masked: 0,
-            working: isImage,
+            working: isImage || isPdf,
+            text: '',
+            rawText: '',
           };
           next.push(item);
-          if (isImage) queued.push(item);
+          if (isImage || isPdf) queued.push(item);
         }
         return next;
       });
-      for (const item of queued) void redactOne(item.key, item.original);
+      for (const item of queued) {
+        if (item.original.type === 'application/pdf') void readPdf(item.key, item.original);
+        else void redactOne(item.key, item.original);
+      }
     },
-    [redactOne],
+    [redactOne, readPdf],
   );
 
   /** Paste screenshots straight into the box — the fastest way to report. */
@@ -282,7 +308,7 @@ export default function SupportWidget() {
         setTicketId(id);
       }
 
-      const uploaded: { path: string; file: File }[] = [];
+      const uploaded: { path: string; file: File; text: string }[] = [];
       for (const a of files) {
         // Send the scrubbed copy whenever we have one and redaction is on.
         const f = redactOn && a.redacted ? a.redacted : a.original;
@@ -292,7 +318,10 @@ export default function SupportWidget() {
           .from('support-attachments')
           .upload(path, f, { contentType: f.type });
         if (upErr) throw upErr;
-        uploaded.push({ path, file: f });
+        // Send the same version of the text we're sending of the file: if the
+        // screenshot is scrubbed, the quoted text is scrubbed too.
+        const text = redactOn && a.redacted ? a.text : a.rawText || a.text;
+        uploaded.push({ path, file: f, text });
       }
 
       // One row per attachment so the agent sees each file; the first row
@@ -306,6 +335,7 @@ export default function SupportWidget() {
               author_user_id: user.id,
               content: i === 0 ? body || `(${u.file.name})` : `(${u.file.name})`,
               attachment_path: u.path,
+              ocr_text: u.text ? u.text.slice(0, 6000) : null,
             }))
           : [
               {
