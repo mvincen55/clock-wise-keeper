@@ -38,13 +38,16 @@ export default function NotificationBell() {
     incident_report_signature_needed: '✍️',
     incident_report_signed: '✅',
     incident_report_closed: '✅',
+    training_due: '🎓',
   };
 
   /** Notifications that point at a row we can open from here. */
   const linkFor = (n: { related_table: string | null; related_id: string | null }) =>
     n.related_table === 'incident_reports' && n.related_id
       ? `/incident-reports?report=${n.related_id}`
-      : null;
+      : n.related_table === 'training_assignments'
+        ? '/training?tab=mine'
+        : null;
 
   return (
     <div className="relative" ref={ref}>
