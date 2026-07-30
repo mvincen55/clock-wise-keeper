@@ -127,19 +127,32 @@ Deno.serve(async (req) => {
           {
             role: "system",
             content:
-              "You clean up a person's monthly self-improvement goal for a dental practice team app. Rewrite their words into ONE clear, professional, specific sentence in their own first-person voice. Fix grammar, casing and vagueness; keep their intent and scope exactly — never add new commitments or metrics they did not imply. Max 140 characters, no quotes, no trailing period preferred. " +
-              'Reply with ONLY JSON: {"title":string}',
+              "You turn a dental practice team member's rough monthly self-improvement goal into a genuine SMART goal for a ONE-MONTH horizon: Specific, Measurable, Achievable, Relevant to their role, Time-bound to this month. " +
+              "Preserve their intent and scope — never swap the subject of the goal. If their words have no measure, INFER a reasonable, modest one from the goal and a dental-practice role (e.g. 'work on explaining treatment to patients' -> 'Use the teach-back method at every treatment presentation this month and ask a teammate for feedback at least 4 times'). Keep it to ONE first-person sentence, max 180 characters, no quotes, no trailing period. " +
+              "Also return the measurable target as a very short phrase (max 40 chars, e.g. '4 feedback asks', '10 same-day reappointments'), and a one-line SMART read-out: for each of specific, measurable, achievable, relevant, time_bound, a few words (max 40 chars) saying how the polished goal satisfies it. If an element is genuinely missing, write a gentle nudge instead (e.g. 'add a number to make this measurable'). Never scold. " +
+              'Reply with ONLY JSON: {"title":string,"target":string,"smart":{"specific":string,"measurable":string,"achievable":string,"relevant":string,"time_bound":string}}',
           },
           {
             role: "user",
-            content: `Raw goal: ${rawTitle}\nExtra context: ${bounded(body.description, 600) || "(none)"}`,
+            content: `Raw goal: ${rawTitle}\nExtra context: ${bounded(body.description, 600) || "(none)"}\nMonth: ${bounded(body.month, 7) || "(this month)"}`,
           },
         ],
-        200
+        400
       );
-      const parsed = raw ? parseJsonBlock<{ title?: unknown }>(raw) : null;
-      const title = bounded(parsed?.title, 160) || rawTitle;
-      return json({ title, original: rawTitle });
+      const parsed = raw
+        ? parseJsonBlock<{ title?: unknown; target?: unknown; smart?: Record<string, unknown> }>(raw)
+        : null;
+      const title = bounded(parsed?.title, 220) || rawTitle;
+      const target = bounded(parsed?.target, 60) || null;
+      const sm = parsed?.smart ?? {};
+      const smart = {
+        specific: bounded(sm.specific, 60),
+        measurable: bounded(sm.measurable, 60),
+        achievable: bounded(sm.achievable, 60),
+        relevant: bounded(sm.relevant, 60),
+        time_bound: bounded(sm.time_bound, 60),
+      };
+      return json({ title, original: rawTitle, target, smart });
     }
 
     const goalId = bounded(body.goalId, 60);
@@ -147,7 +160,7 @@ Deno.serve(async (req) => {
 
     const { data: goal } = await supabase
       .from("goals")
-      .select("id, org_id, user_id, title, description, month")
+      .select("id, org_id, user_id, title, description, month, smart_target")
       .eq("id", goalId)
       .maybeSingle();
     if (!goal) return json({ error: "Goal not found" }, 404);
@@ -222,13 +235,15 @@ Deno.serve(async (req) => {
             role: "system",
             content:
               "You are Pathfinder, a warm, practical coach inside a dental practice's team app. You turn one person's monthly self-improvement goal into a short list of concrete action steps. " +
-              "Rules: 4 to 8 tasks. Every task title is a short, clean, professional imperative sentence starting with a verb — proper sentence casing, correct grammar, no numbering, no filler, max 90 characters. Spread the due dates realistically across the remaining month. Never schedule a task on a day the member is off or the office is closed, and keep short-staffed days light. Encouraging, human tone — no jargon, no scoring, no comparison to other people. " +
+              "Rules: 4 to 8 tasks. The steps must ladder up to the goal's measurable target when one is given — finishing every step should achieve that target by the end of the month, so make the counts add up. Every task title is a short, clean, professional imperative sentence starting with a verb — proper sentence casing, correct grammar, no numbering, no filler, max 90 characters. Spread the due dates realistically across the remaining month. Never schedule a task on a day the member is off or the office is closed, and keep short-staffed days light. Encouraging, human tone — no jargon, no scoring, no comparison to other people. " +
               "NEVER explain your scheduling reasoning, never reference any profile, answers, questionnaire, preferences, or 'based on…' anything. " +
               'Reply with ONLY JSON: {"tasks":[{"title":string,"due_date":"YYYY-MM-DD"}]}',
           },
           {
             role: "user",
-            content: `Goal: ${bounded(goal.title, 200)}\nDescription: ${
+            content: `Goal: ${bounded(goal.title, 200)}\nMeasurable target: ${
+              bounded(goal.smart_target, 80) || "(none stated — infer a sensible one from the goal)"
+            }\nDescription: ${
               bounded(goal.description, 800) || "(none given)"
             }\n${contextBlock}`,
           },
@@ -279,6 +294,7 @@ Deno.serve(async (req) => {
 
       const context = [
         `Goal: ${bounded(goal.title, 200)}`,
+        `Measurable target: ${bounded(goal.smart_target, 80) || "(none set yet)"}`,
         `Description: ${bounded(goal.description, 800) || "(none)"}`,
         `Month: ${month}`,
         `Steps: ${
@@ -302,7 +318,7 @@ Deno.serve(async (req) => {
         {
           role: "system",
           content:
-            "You are Pathfinder, a warm, practical coach inside a dental practice's team app, talking privately with one team member about their monthly goal. Be calm, encouraging, concrete and brief (1-4 short paragraphs max, plain sentences, no bullet spam, no hype, no scoring, no comparison to teammates). You remember the whole conversation. " +
+            "You are Pathfinder, a warm, practical coach inside a dental practice's team app, talking privately with one team member about their monthly goal. When they ask for help shaping, tightening or adjusting the goal, coach them toward SMART naturally in conversation — specific, measurable, achievable, relevant to their role, time-bound to this month — by suggesting a concrete number or timeframe rather than lecturing them about the framework or listing the letters. Be calm, encouraging, concrete and brief (1-4 short paragraphs max, plain sentences, no bullet spam, no hype, no scoring, no comparison to teammates). You remember the whole conversation. " +
             "NEVER reference any profile, questionnaire, answers, or 'based on…' anything.\n\n" +
             context,
         },
@@ -365,6 +381,7 @@ Deno.serve(async (req) => {
           role: "system",
           content:
             "You are Pathfinder, helping one person write the short progress update they will read aloud at their team meeting. Write 3 to 5 sentences in the person's own first-person voice — plain, warm, honest, specific about what actually got done and what is next. No hype, no scoring, no comparison to teammates, no bullet points. " +
+            "When the goal has a measurable target, frame the update against it — say where they are versus that target in their own words. " +
             "Also pick a status: on_track, at_risk, or done. " +
             "NEVER reference any profile, questionnaire, answers, or 'based on…' anything, and never mention that you talked with them. " +
             'Reply with ONLY JSON: {"content":string,"status":"on_track"|"at_risk"|"done"}',
@@ -373,6 +390,7 @@ Deno.serve(async (req) => {
           role: "user",
           content: [
             `Goal: ${bounded(goal.title, 200)}`,
+            `Measurable target: ${bounded(goal.smart_target, 80) || "(none set)"}`,
             `Description: ${bounded(goal.description, 600) || "(none)"}`,
             `Finished since the last update: ${
               doneSince.map((t) => bounded(t.title, 90)).join("; ") || "(nothing recorded)"
