@@ -173,6 +173,63 @@ export function useCreateGoal() {
   return { ...mutation, isReady: !!user && !!ctx && !isLoading };
 }
 
+/** My archived goals for a month — the restore shelf. */
+export function useArchivedGoals(month: string) {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+
+  return useQuery({
+    queryKey: ['goals-archived', ctx?.org_id, month, user?.id],
+    enabled: !!user && !!ctx,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('goals')
+        .select('*')
+        .eq('org_id', ctx!.org_id)
+        .eq('month', month)
+        .eq('status', 'archived')
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Goal[];
+    },
+  });
+}
+
+/** Bring an archived goal back into the active list — always logged. */
+export function useRestoreGoal() {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: async ({ goal, reason }: { goal: Goal; reason?: string }) => {
+      if (!user || !ctx) throw new Error('Not ready');
+      const { error } = await supabase
+        .from('goals')
+        .update({ status: 'active' })
+        .eq('id', goal.id);
+      if (error) throw error;
+      // Accountability: never silently. Failing to log must not block the restore.
+      const { error: logError } = await supabase.from('goal_events').insert({
+        org_id: ctx.org_id,
+        goal_id: goal.id,
+        actor_id: user.id,
+        type: 'restore',
+        old_title: goal.title,
+        new_title: goal.title,
+        reason: reason?.trim() || 'Restored to active goals',
+      });
+      if (logError) console.error('goal restore log failed', logError);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['goals'] });
+      qc.invalidateQueries({ queryKey: ['goals-archived'] });
+    },
+  });
+
+  return { ...mutation, isReady: !!user && !!ctx };
+}
+
 export function useUpdateGoal() {
   const qc = useQueryClient();
   return useMutation({
@@ -180,7 +237,10 @@ export function useUpdateGoal() {
       const { error } = await supabase.from('goals').update(patch).eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['goals'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['goals'] });
+      qc.invalidateQueries({ queryKey: ['goals-archived'] });
+    },
   });
 }
 
