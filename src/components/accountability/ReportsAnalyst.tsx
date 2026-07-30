@@ -392,7 +392,8 @@ export default function ReportsAnalyst({
             Reads the records in the range above — patterns, anything worth a look, and what's
             ordinary. Anything it flags comes with a confidence level and the evidence on both
             sides. Every claim cites a real record you can open; citations that don't match a
-            real record are stripped before you ever see them.
+            real record are stripped before you ever see them. A second, independent AI then
+            audits the answer against the same records and flags anything that doesn't hold up.
           </p>
 
         </CardHeader>
