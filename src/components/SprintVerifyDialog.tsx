@@ -126,6 +126,14 @@ export default function SprintVerifyDialog({
               {busy ? 'Reading the report…' : 'Upload the report (PDF or photo)'}
             </Button>
 
+            <NoPhiNote what="This report" />
+            <p className="text-xs text-muted-foreground">
+              Upload a totals-only export. The file is read once and deleted straight after —
+              only the number and where it was found are kept.
+            </p>
+
+
+
             {verdict && (
               <div className="rounded-md border bg-muted/40 p-3 space-y-2 text-sm">
                 <p className="font-medium">
