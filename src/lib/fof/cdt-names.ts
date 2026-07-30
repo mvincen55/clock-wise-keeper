@@ -159,3 +159,30 @@ export function friendlyCdtName(code: string): string | null {
   const name = NAMES[match[1]];
   return name ? titleCase(name) : null;
 }
+
+/** Office overrides for what patients see, keyed by uppercase code. */
+export type CodeNameOverrides = Record<string, string>;
+
+/**
+ * The patient-facing name for a code: the office's own wording when a
+ * manager has set one, otherwise the built-in CDT name. Null when neither
+ * exists — callers fall back to the schedule's description.
+ *
+ * Overrides apply to any code, including custom office codes that have no
+ * built-in name, so an office can name its own procedures for patients.
+ *
+ * NOT used for AI payloads. Overrides are staff-authored free text, and
+ * the name-visits request is deliberately derived from codes alone so that
+ * typed text cannot reach a gateway the practice has no BAA with. See
+ * safeProcedureLabel in ./ai.ts.
+ */
+export function resolvePatientName(
+  code: string,
+  overrides: CodeNameOverrides | undefined
+): string | null {
+  const key = code.trim().toUpperCase();
+  if (!key) return null;
+  const override = overrides?.[key]?.trim();
+  if (override) return override;
+  return friendlyCdtName(key);
+}

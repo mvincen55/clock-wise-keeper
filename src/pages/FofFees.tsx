@@ -29,11 +29,12 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { ArrowLeft, Copy, Download, FileSpreadsheet, Loader2, Pencil, Plus, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, Copy, Download, Eye, FileSpreadsheet, Loader2, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import FeeImportDialog from '@/components/fof/FeeImportDialog';
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
 import { categorizeCdtCode } from '@/lib/fof/cdt';
-import { friendlyCdtName } from '@/lib/fof/cdt-names';
+import { friendlyCdtName, resolvePatientName } from '@/lib/fof/cdt-names';
+import { partitionRulesByProcedure, procedureTerms } from '@/lib/fof/rule-relevance';
 import { useCodeKnowledge } from '@/hooks/useAssistantMemory';
 import type { FeeCategory } from '@/lib/fof/insurance';
 import { useOrgContext } from '@/hooks/useOrgContext';
@@ -42,6 +43,8 @@ import {
   useDeleteFeeScheduleItem,
   useFeeScheduleItems,
   useFeeSchedules,
+  useCodeNames,
+  useUpsertCodeName,
   useUpsertFeeSchedule,
   useUpsertFeeScheduleItem,
   type FeeSchedule,
@@ -60,19 +63,26 @@ function ItemEditorDialog({
   open,
   scheduleId,
   item,
+  canEdit,
   onClose,
 }: {
   open: boolean;
   scheduleId: string;
   item: FeeScheduleItem | null;
+  /** Owners/managers edit; team members open the same dialog read-only. */
+  canEdit: boolean;
   onClose: () => void;
 }) {
   const upsert = useUpsertFeeScheduleItem();
+  const upsertName = useUpsertCodeName();
+  const { data: codeNames } = useCodeNames();
   const [code, setCode] = useState(item?.code ?? '');
   const [description, setDescription] = useState(item?.description ?? '');
   const [fee, setFee] = useState(item ? formatCents(item.feeCents) : '');
   const [category, setCategory] = useState<FeeCategory>(item?.category ?? 'other');
   const [notes, setNotes] = useState(item?.notes ?? '');
+  // Empty means "use the built-in name"; the placeholder shows what that is.
+  const [patientNameInput, setPatientNameInput] = useState('');
 
   // Re-sync when a different item opens
   const [lastKey, setLastKey] = useState('');
@@ -84,21 +94,44 @@ function ItemEditorDialog({
     setFee(item ? formatCents(item.feeCents) : '');
     setCategory(item?.category ?? 'other');
     setNotes(item?.notes ?? '');
+    setPatientNameInput(codeNames?.[(item?.code ?? '').trim().toUpperCase()] ?? '');
   }
 
   const feeCents = parseCurrencyInput(fee);
   const canSave = code.trim() !== '' && feeCents !== null;
-  const patientName = friendlyCdtName(code);
+  const builtInName = friendlyCdtName(code);
+  const patientName = resolvePatientName(code, {
+    ...(codeNames ?? {}),
+    ...(patientNameInput.trim() ? { [code.trim().toUpperCase()]: patientNameInput.trim() } : {}),
+  });
   // What the assistant already follows for this code, so nothing it has
   // been taught is invisible from the place you'd look for it.
   const { data: knowledge } = useCodeKnowledge(code, scheduleId);
+  // Standing rules are global, so only the ones that actually name this
+  // procedure belong here — a surgical-guide rule says nothing about a
+  // crown. The rest are counted, not hidden.
+  const { matching: rulesHere, others: globalRules } = useMemo(
+    () =>
+      partitionRulesByProcedure(
+        knowledge?.wordingRules ?? [],
+        procedureTerms(code, patientName, description)
+      ),
+    [knowledge?.wordingRules, code, patientName, description]
+  );
 
   return (
     <Dialog open={open} onOpenChange={isOpen => !isOpen && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{item ? `Edit ${item.code}` : 'Add Code'}</DialogTitle>
+          <DialogTitle>
+            {canEdit ? (item ? `Edit ${item.code}` : 'Add Code') : item?.code ?? 'Code'}
+          </DialogTitle>
         </DialogHeader>
+        {!canEdit && (
+          <p className="text-xs text-muted-foreground">
+            View only — ask an owner or manager to change any of this.
+          </p>
+        )}
         <div className="space-y-3">
           <div className="grid gap-3 grid-cols-2">
             <div className="space-y-1.5">
@@ -123,6 +156,7 @@ function ItemEditorDialog({
                 placeholder="$0.00"
                 value={fee}
                 onChange={e => setFee(e.target.value)}
+                disabled={!canEdit}
               />
             </div>
           </div>
@@ -133,26 +167,43 @@ function ItemEditorDialog({
               placeholder="Crown - porcelain/ceramic"
               value={description}
               onChange={e => setDescription(e.target.value)}
+              disabled={!canEdit}
             />
-            {/* The description is usually practice-management shorthand
-                ("CrnAllCer"); this is the wording a patient actually reads
-                on the printed form. */}
-            {patientName ? (
+          </div>
+
+          {/* The description above is practice-management shorthand
+              ("CrnAllCer"); this is the wording the patient actually reads
+              on the printed form. */}
+          <div className="space-y-1.5">
+            <Label htmlFor="item-patient-name">Name patients see</Label>
+            <Input
+              id="item-patient-name"
+              placeholder={builtInName ?? 'e.g. Porcelain Crown'}
+              value={patientNameInput}
+              onChange={e => setPatientNameInput(e.target.value)}
+              disabled={!canEdit}
+            />
+            {canEdit ? (
               <p className="text-xs text-muted-foreground">
-                Patients see: <span className="font-medium text-foreground">{patientName}</span>
+                {patientNameInput.trim()
+                  ? builtInName
+                    ? `Overrides the built-in name (“${builtInName}”). Clear the field to go back to it.`
+                    : 'Your own wording for this code.'
+                  : builtInName
+                    ? `Using the built-in name “${builtInName}” — type here to word it your way.`
+                    : 'No built-in name for this code, so the form falls back to the description above. Set a name here to control what patients read.'}
               </p>
             ) : (
-              code.trim() !== '' && (
-                <p className="text-xs text-muted-foreground">
-                  No patient-friendly name for this code — the form falls back to the
-                  description above, so keep it readable.
-                </p>
-              )
+              <p className="text-xs text-muted-foreground">
+                {patientName
+                  ? 'This is what prints on the patient’s form.'
+                  : 'No patient name set — the form falls back to the description above.'}
+              </p>
             )}
           </div>
           <div className="space-y-1.5">
             <Label>Coverage Category</Label>
-            <Select value={category} onValueChange={v => setCategory(v as FeeCategory)}>
+            <Select value={category} onValueChange={v => setCategory(v as FeeCategory)} disabled={!canEdit}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {(Object.keys(CATEGORY_LABELS) as FeeCategory[]).map(c => (
@@ -169,6 +220,7 @@ function ItemEditorDialog({
               placeholder="How we talk about this procedure, office policy details, insurance quirks…"
               value={notes}
               onChange={e => setNotes(e.target.value)}
+              disabled={!canEdit}
             />
             <p className="text-xs text-muted-foreground">
               The whole team sees these — and the AI follows them, both in the FOF's
@@ -176,15 +228,11 @@ function ItemEditorDialog({
             </p>
           </div>
 
-          {(knowledge?.elsewhere.length || knowledge?.wordingRules.length) ? (
+          {(knowledge?.elsewhere.length || rulesHere.length || globalRules.length) ? (
             <div className="space-y-2 rounded-md border bg-muted/40 p-2.5">
-              <p className="text-xs font-semibold">What the AI already follows here</p>
-
               {(knowledge?.elsewhere ?? []).length > 0 && (
                 <div className="space-y-1">
-                  <p className="text-[11px] text-muted-foreground">
-                    This code also has notes on another schedule:
-                  </p>
+                  <p className="text-xs font-semibold">Notes on this code elsewhere</p>
                   {knowledge!.elsewhere.map((note, i) => (
                     <div key={i} className="rounded border bg-background px-2 py-1">
                       <Badge variant={note.isUniversal ? 'default' : 'secondary'} className="text-[10px] font-normal">
@@ -196,16 +244,13 @@ function ItemEditorDialog({
                 </div>
               )}
 
-              {(knowledge?.wordingRules ?? []).length > 0 && (
+              {rulesHere.length > 0 && (
                 <div className="space-y-1">
-                  {/* Standing rules are global — taught through the FOF
-                      assistant, not attached to any one code — so say so
-                      rather than implying they were set here. */}
-                  <p className="text-[11px] text-muted-foreground">
-                    Standing wording rules (from training — these apply to every code):
+                  <p className="text-xs font-semibold">
+                    Standing rules that mention {patientName ? patientName.toLowerCase() : 'this code'}
                   </p>
                   <ul className="space-y-0.5">
-                    {knowledge!.wordingRules.map((rule, i) => (
+                    {rulesHere.map((rule, i) => (
                       <li key={i} className="text-xs text-foreground/80">
                         • {rule}
                       </li>
@@ -213,34 +258,66 @@ function ItemEditorDialog({
                   </ul>
                 </div>
               )}
+
+              {/* The remaining rules are still in force — say so plainly
+                  rather than listing them here, where they'd read as
+                  guidance about this procedure. */}
+              {globalRules.length > 0 && (
+                <p className="text-[11px] text-muted-foreground">
+                  {rulesHere.length > 0 ? 'Plus ' : ''}
+                  {globalRules.length} other standing wording rule
+                  {globalRules.length === 1 ? '' : 's'} the AI follows across all codes —
+                  see them in the FOF Assistant.
+                </p>
+              )}
             </div>
           ) : null}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button
-            disabled={!canSave || upsert.isPending}
-            onClick={() =>
-              upsert.mutate(
-                {
-                  ...(item ? { id: item.id } : {}),
-                  scheduleId,
-                  code: code.trim(),
-                  description: description.trim(),
-                  feeCents: feeCents ?? 0,
-                  category,
-                  notes: notes.trim(),
-                },
-                {
-                  onSuccess: () => { toast.success('Saved'); onClose(); },
-                  onError: err => toast.error(err.message),
+          {canEdit ? (
+            <>
+              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button
+                disabled={!canSave || upsert.isPending || upsertName.isPending}
+                onClick={() =>
+                  upsert.mutate(
+                    {
+                      ...(item ? { id: item.id } : {}),
+                      scheduleId,
+                      code: code.trim(),
+                      description: description.trim(),
+                      feeCents: feeCents ?? 0,
+                      category,
+                      notes: notes.trim(),
+                    },
+                    {
+                      // The patient-facing name lives per code, not per
+                      // schedule, so it saves separately — only after the
+                      // item write succeeds, so a failure can't leave a
+                      // name attached to a code that wasn't saved.
+                      onSuccess: () =>
+                        upsertName.mutate(
+                          { code: code.trim(), patientName: patientNameInput },
+                          {
+                            onSuccess: () => { toast.success('Saved'); onClose(); },
+                            onError: err =>
+                              toast.error(`Fee saved, but the patient name didn't: ${err.message}`),
+                          }
+                        ),
+                      onError: err => toast.error(err.message),
+                    }
+                  )
                 }
-              )
-            }
-          >
-            {upsert.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Save
-          </Button>
+              >
+                {(upsert.isPending || upsertName.isPending) && (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                )}
+                Save
+              </Button>
+            </>
+          ) : (
+            <Button variant="outline" onClick={onClose}>Close</Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -249,6 +326,8 @@ function ItemEditorDialog({
 
 function ScheduleItemsCard({ schedule, isManager }: { schedule: FeeSchedule; isManager: boolean }) {
   const { data: items, isLoading } = useFeeScheduleItems(schedule.id);
+  // Everyone sees the patient-facing wording; only managers can change it.
+  const { data: codeNames } = useCodeNames();
   const deleteItem = useDeleteFeeScheduleItem();
   const [search, setSearch] = useState('');
   const [editorOpen, setEditorOpen] = useState(false);
@@ -343,9 +422,10 @@ function ScheduleItemsCard({ schedule, isManager }: { schedule: FeeSchedule; isM
               <tr className="border-b bg-muted/50">
                 <th className="text-left p-2">Code</th>
                 <th className="text-left p-2">Description</th>
+                <th className="text-left p-2">Patients see</th>
                 <th className="text-left p-2">Category</th>
                 <th className="text-right p-2">Fee</th>
-                {isManager && <th className="p-2" />}
+                <th className="p-2" />
               </tr>
             </thead>
             <tbody>
@@ -360,6 +440,15 @@ function ScheduleItemsCard({ schedule, isManager }: { schedule: FeeSchedule; isM
                       </div>
                     )}
                   </td>
+                  <td className="p-2 max-w-48">
+                    {/* Everyone can see the wording patients get, even
+                        though only managers can change it. */}
+                    <div className="truncate" title={resolvePatientName(item.code, codeNames) ?? ''}>
+                      {resolvePatientName(item.code, codeNames) ?? (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </div>
+                  </td>
                   <td className="p-2 text-muted-foreground">{CATEGORY_LABELS[item.category]}</td>
                   <td className="p-2 text-right whitespace-nowrap">
                     {formatCents(item.feeCents)}
@@ -372,22 +461,27 @@ function ScheduleItemsCard({ schedule, isManager }: { schedule: FeeSchedule; isM
                       </span>
                     )}
                   </td>
-                  {isManager && (
-                    <td className="p-2 text-right whitespace-nowrap">
-                      <Button
-                        variant="ghost" size="icon" className="h-7 w-7"
-                        onClick={() => { setEditing(item); setEditorOpen(true); }}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
+                  <td className="p-2 text-right whitespace-nowrap">
+                    {/* Team members get the same dialog, read-only, so
+                        they can see the notes and the AI's guidance. */}
+                    <Button
+                      variant="ghost" size="icon" className="h-7 w-7"
+                      aria-label={isManager ? `Edit ${item.code}` : `View ${item.code}`}
+                      title={isManager ? 'Edit' : 'View details'}
+                      onClick={() => { setEditing(item); setEditorOpen(true); }}
+                    >
+                      {isManager ? <Pencil className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    </Button>
+                    {isManager && (
                       <Button
                         variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                        aria-label={`Delete ${item.code}`}
                         onClick={() => deleteItem.mutate(item.id, { onError: err => toast.error(err.message) })}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
-                    </td>
-                  )}
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -403,6 +497,7 @@ function ScheduleItemsCard({ schedule, isManager }: { schedule: FeeSchedule; isM
         open={editorOpen}
         scheduleId={schedule.id}
         item={editing}
+        canEdit={isManager}
         onClose={() => setEditorOpen(false)}
       />
     </div>
