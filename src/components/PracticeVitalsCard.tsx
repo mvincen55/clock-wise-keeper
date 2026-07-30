@@ -1,13 +1,22 @@
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Activity, TrendingDown, TrendingUp } from 'lucide-react';
 import { formatCents } from '@/lib/money';
 import { usePracticeVitals } from '@/hooks/usePracticeVitals';
 import { cn } from '@/lib/utils';
+import CountUp from '@/components/ui/count-up';
 
 /** Production gauge, schedule disruption at a glance, and where both are trending. */
 export default function PracticeVitalsCard() {
   const { data, isLoading } = usePracticeVitals();
+  // Meters draw in from empty on first paint.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
   if (isLoading || !data) return null;
+
 
   const { thisMonth, lastMonth, months, monthElapsed } = data;
 
