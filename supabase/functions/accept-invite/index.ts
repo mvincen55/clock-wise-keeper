@@ -99,6 +99,26 @@ Deno.serve(async (req) => {
       );
     }
 
+    const normalizedEmail = invite.email.toLowerCase();
+    const { data: alreadyAllowed } = await supabaseAdmin
+      .from("allowed_users")
+      .select("id")
+      .eq("email", normalizedEmail)
+      .maybeSingle();
+
+    if (!alreadyAllowed) {
+      const { error: allowError } = await supabaseAdmin
+        .from("allowed_users")
+        .insert({ email: normalizedEmail });
+
+      if (allowError) {
+        return new Response(
+          JSON.stringify({ error: "Failed to activate invite access" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // Check if already a member
     const { data: existing } = await supabaseAdmin
       .from("org_members")
@@ -158,17 +178,6 @@ Deno.serve(async (req) => {
         email: user.email,
         employment_status: "active",
       });
-    }
-
-    // Add to allowed_users if not there
-    const { data: alreadyAllowed } = await supabaseAdmin
-      .from("allowed_users")
-      .select("id")
-      .eq("email", user.email!)
-      .maybeSingle();
-
-    if (!alreadyAllowed) {
-      await supabaseAdmin.from("allowed_users").insert({ email: user.email! });
     }
 
     // Mark invite accepted

@@ -186,8 +186,54 @@ Deno.serve(async (req) => {
       token = invite.token;
     }
 
+    const { data: alreadyAllowed } = await supabaseAdmin
+      .from("allowed_users")
+      .select("id")
+      .eq("email", rawEmail)
+      .maybeSingle();
+
+    if (!alreadyAllowed) {
+      const { error: allowError } = await supabaseAdmin
+        .from("allowed_users")
+        .insert({ email: rawEmail });
+
+      if (allowError) {
+        console.error("Failed to allow invited user", { error: allowError, email: maskEmail(rawEmail) });
+        return new Response(JSON.stringify({ error: "Failed to prepare invite access" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const base = ALLOWED_ORIGINS.includes(origin) ? origin : FALLBACK_ORIGIN;
     const link = `${base}/accept-invite?token=${token}`;
+
+    let unsubscribeToken = crypto.randomUUID();
+    const { data: existingUnsubscribeToken } = await supabaseAdmin
+      .from("email_unsubscribe_tokens")
+      .select("token")
+      .eq("email", rawEmail)
+      .maybeSingle();
+
+    if (existingUnsubscribeToken?.token) {
+      unsubscribeToken = existingUnsubscribeToken.token;
+    } else {
+      const { data: newUnsubscribeToken, error: unsubscribeTokenError } = await supabaseAdmin
+        .from("email_unsubscribe_tokens")
+        .insert({ email: rawEmail, token: unsubscribeToken })
+        .select("token")
+        .single();
+
+      if (unsubscribeTokenError || !newUnsubscribeToken?.token) {
+        console.error("Failed to create unsubscribe token", { error: unsubscribeTokenError, email: maskEmail(rawEmail) });
+        return new Response(
+          JSON.stringify({ success: true, emailed: false, link, warning: "Invite created but the email could not be prepared. Share the link manually." }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      unsubscribeToken = newUnsubscribeToken.token;
+    }
 
     // Enqueue onto the transactional queue; process-email-queue does the sending.
     const messageId = crypto.randomUUID();
@@ -211,6 +257,7 @@ Deno.serve(async (req) => {
         text: inviteEmailText(orgName, role, link),
         purpose: "transactional",
         label: "org_invite",
+        unsubscribe_token: unsubscribeToken,
         queued_at: new Date().toISOString(),
       },
     });
