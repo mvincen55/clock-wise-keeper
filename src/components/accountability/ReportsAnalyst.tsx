@@ -361,6 +361,7 @@ export default function ReportsAnalyst({
           content: data.answer as string,
           citations: (data.citations ?? []) as AnalystCitation[],
           concerns: (data.concerns ?? []) as AnalystConcern[],
+          audit: (data.audit ?? undefined) as AnalystAudit | undefined,
         },
 
       ]);
