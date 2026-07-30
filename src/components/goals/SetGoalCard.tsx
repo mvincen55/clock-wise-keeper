@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { callPathfinder, useCreateGoal } from '@/hooks/useGoals';
 import SmartChips, { type SmartRead } from '@/components/goals/SmartChips';
 import RoleGoalIdeas from '@/components/goals/RoleGoalIdeas';
+import NoPhiNote from '@/components/NoPhiNote';
 
 /**
  * Set this month's goal. Pathfinder polishes the raw wording into one clear
@@ -153,6 +154,7 @@ export default function SetGoalCard({ month }: { month: string }) {
             value={description}
             onChange={e => setDescription(e.target.value)}
           />
+          <NoPhiNote what="Your goal wording" />
         </div>
 
         <div className="flex items-center gap-2">
