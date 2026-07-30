@@ -54,6 +54,48 @@ function citeLabel(c: AnalystCitation | undefined, id: string) {
   return `${c.who} · ${formatDate(c.period_start)}`;
 }
 
+/** Renders one line of text, turning [rec:<id>] tokens into record chips. */
+function CiteLine({
+  text,
+  byId,
+  onOpen,
+}: {
+  text: string;
+  byId: Map<string, AnalystCitation>;
+  onOpen: (c: AnalystCitation) => void;
+}) {
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  CITE.lastIndex = 0;
+  while ((m = CITE.exec(text))) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    const c = byId.get(m[1]);
+    out.push(
+      <button
+        key={`${m[1]}-${m.index}`}
+        type="button"
+        disabled={!c}
+        onClick={() => c && onOpen(c)}
+        className="mx-0.5 inline-flex items-center gap-1 rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5 align-baseline text-[11px] font-medium text-accent hover:bg-accent/20 disabled:opacity-50"
+        title={c ? c.summary : 'Record not found'}
+      >
+        <FileText className="h-3 w-3" />
+        {citeLabel(c, m[1])}
+      </button>,
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return (
+    <>
+      {out.map((n, i) => (
+        <Fragment key={i}>{n}</Fragment>
+      ))}
+    </>
+  );
+}
+
 /**
  * Light renderer — the analyst answers in short markdown with [rec:<id>]
  * citation tokens. Every token becomes a chip that opens the real record.
@@ -69,32 +111,6 @@ function AnswerText({
 }) {
   const byId = new Map(citations.map(c => [c.id, c]));
 
-  const renderLine = (line: string) => {
-    const out: React.ReactNode[] = [];
-    let last = 0;
-    let m: RegExpExecArray | null;
-    CITE.lastIndex = 0;
-    while ((m = CITE.exec(line))) {
-      if (m.index > last) out.push(line.slice(last, m.index));
-      const c = byId.get(m[1]);
-      out.push(
-        <button
-          key={`${m[1]}-${m.index}`}
-          type="button"
-          disabled={!c}
-          onClick={() => c && onOpen(c)}
-          className="mx-0.5 inline-flex items-center gap-1 rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5 align-baseline text-[11px] font-medium text-accent hover:bg-accent/20 disabled:opacity-50"
-          title={c ? c.summary : 'Record not found'}
-        >
-          <FileText className="h-3 w-3" />
-          {citeLabel(c, m[1])}
-        </button>,
-      );
-      last = m.index + m[0].length;
-    }
-    if (last < line.length) out.push(line.slice(last));
-    return out.map((n, i) => <Fragment key={i}>{n}</Fragment>);
-  };
 
   return (
     <div className="space-y-1.5 text-sm leading-relaxed">
