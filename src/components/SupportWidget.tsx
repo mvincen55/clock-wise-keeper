@@ -675,11 +675,43 @@ export default function SupportWidget() {
               ),
             )}
 
-            {busy && (
+            {busy && progress && (
+              <div className="space-y-1">
+                <p className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span className="truncate">Uploading {progress.name}</span>
+                  <span className="shrink-0 tabular-nums">
+                    {progress.done}/{progress.total}
+                  </span>
+                </p>
+                <Progress
+                  value={progress.total ? (progress.done / progress.total) * 100 : 0}
+                  className="h-1.5"
+                />
+              </div>
+            )}
+
+            {busy && !progress && (
               <p className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 {tier === 'senior' ? 'Digging into it…' : 'Looking at it…'}
               </p>
+            )}
+
+            {sendError && !busy && (
+              <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-2">
+                <p className="flex items-start gap-2 text-xs text-foreground">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+                  <span>{sendError.message}</span>
+                </p>
+                {sendError.kind === 'send' && (
+                  <p className="pl-[22px] text-[10px] text-muted-foreground">
+                    Nothing already uploaded will be sent twice.
+                  </p>
+                )}
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={retrySend}>
+                  <RotateCw className="mr-1 h-3 w-3" /> Retry
+                </Button>
+              </div>
             )}
 
             {suggested && !busy && (
@@ -715,7 +747,10 @@ export default function SupportWidget() {
                       return (
                         <div
                           key={a.key}
-                          className="relative h-16 w-16 overflow-hidden rounded border bg-muted"
+                          className={`relative h-16 w-16 overflow-hidden rounded border bg-muted ${
+                            a.uploadError ? 'border-destructive' : ''
+                          }`}
+                          title={a.uploadError ?? a.original.name}
                         >
                           {shown.type.startsWith('image/') ? (
                             <img
@@ -731,6 +766,16 @@ export default function SupportWidget() {
                           {a.working && (
                             <span className="absolute inset-0 flex items-center justify-center bg-background/70">
                               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            </span>
+                          )}
+                          {a.uploadedPath && !a.working && (
+                            <span className="absolute bottom-0 left-0 rounded-tr bg-background/90 p-0.5">
+                              <CheckCircle2 className="h-3 w-3 text-primary" />
+                            </span>
+                          )}
+                          {a.uploadError && !a.working && (
+                            <span className="absolute bottom-0 left-0 rounded-tr bg-background/90 p-0.5">
+                              <AlertTriangle className="h-3 w-3 text-destructive" />
                             </span>
                           )}
                           <button
