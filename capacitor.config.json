@@ -1,6 +1,6 @@
 {
   "appId": "app.lovable.timevault",
-  "appName": "TimeVault",
+  "appName": "Purple Envelope",
   "webDir": "dist",
   "server": {
     "url": "https://1fc9eedc-91d9-4d4f-a24d-aba0b1c277e1.lovableproject.com?forceHideBadge=true",
