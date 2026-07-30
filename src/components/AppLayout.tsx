@@ -6,6 +6,8 @@ import { Clock, Table2, CalendarDays, FileText, LogOut, Menu, X, Settings, Shiel
 import { useOrgContext } from '@/hooks/useOrgContext';
 import NotificationBell from '@/components/NotificationBell';
 import BypassReasonBanner from '@/components/BypassReasonBanner';
+import SupportWidget from '@/components/SupportWidget';
+
 import { useApprovalCounts } from '@/hooks/useApprovalCounts';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
