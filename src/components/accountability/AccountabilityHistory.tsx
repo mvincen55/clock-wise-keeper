@@ -20,6 +20,7 @@ import {
   useEmployeeAccountabilityReports,
   POLICY_LABELS,
   type AccountabilityReport,
+  type PolicyKind,
 } from '@/hooks/useAccountability';
 import AccountabilityAuditTimeline from './AccountabilityAuditTimeline';
 
