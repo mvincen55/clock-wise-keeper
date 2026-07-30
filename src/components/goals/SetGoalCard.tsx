@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { callPathfinder, useCreateGoal } from '@/hooks/useGoals';
 import SmartChips, { type SmartRead } from '@/components/goals/SmartChips';
 import RoleGoalIdeas from '@/components/goals/RoleGoalIdeas';
+import { evaluateSmartGate } from '@/lib/smart';
 
 /**
  * Set this month's goal. Pathfinder polishes the raw wording into one clear
@@ -49,8 +50,11 @@ export default function SetGoalCard({ month }: { month: string }) {
     }
   };
 
+  // Hard gate: Specific + Measurable are required. A/R/T stay as coaching.
+  const gate = evaluateSmartGate({ title, target });
+
   const save = async () => {
-    if (!title.trim()) return;
+    if (!gate.ok) return;
     try {
       await createGoal.mutateAsync({
         title: title.trim(),
@@ -136,7 +140,7 @@ export default function SetGoalCard({ month }: { month: string }) {
         {smart && <SmartChips smart={smart} />}
 
         <div className="space-y-1.5">
-          <Label htmlFor="goal-target">How you'll measure it (optional)</Label>
+          <Label htmlFor="goal-target">How you'll measure it</Label>
           <Input
             id="goal-target"
             value={target}
@@ -162,9 +166,17 @@ export default function SetGoalCard({ month }: { month: string }) {
           </Label>
         </div>
 
+        {!gate.ok && (title.trim() || target.trim()) && (
+          <ul className="space-y-1 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+            {gate.reasons.map(r => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+        )}
+
         <Button
           onClick={save}
-          disabled={!title.trim() || createGoal.isPending || !createGoal.isReady || polishing}
+          disabled={!gate.ok || createGoal.isPending || !createGoal.isReady || polishing}
         >
           {createGoal.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Set this month's goal
