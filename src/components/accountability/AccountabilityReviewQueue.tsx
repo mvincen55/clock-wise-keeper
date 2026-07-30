@@ -16,6 +16,7 @@ import {
   POLICY_LABELS,
   type AccountabilityReport,
 } from '@/hooks/useAccountability';
+import AccountabilityAuditTimeline from './AccountabilityAuditTimeline';
 
 function ReviewForm({ report }: { report: AccountabilityReport }) {
   const sign = useCountersignAccountabilityReport();
@@ -113,6 +114,7 @@ export default function AccountabilityReviewQueue() {
                 “{r.member_reason}” — {r.member_signed_name}
               </p>
             )}
+            <AccountabilityAuditTimeline report={r} />
             <ReviewForm report={r} />
           </div>
         ))}
