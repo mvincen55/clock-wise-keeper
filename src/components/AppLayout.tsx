@@ -82,6 +82,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const { data: approvalCounts } = useApprovalCounts();
+  const unreadMessages = useUnreadMessageCount();
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
   const groups = NAV_GROUPS.filter(g => !g.managerOnly || isManager);
