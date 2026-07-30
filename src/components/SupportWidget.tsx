@@ -19,6 +19,9 @@ import {
   EyeOff,
   AlertTriangle,
   RotateCw,
+  History,
+  Plus,
+  ChevronLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadSupportPdf } from '@/lib/support-pdf';
@@ -45,6 +48,18 @@ type Bubble = {
   attachmentNames?: string[];
 };
 
+
+/** A report from before, as it appears in the history list. */
+type PastTicket = {
+  id: string;
+  title: string | null;
+  status: string | null;
+  tier: string | null;
+  category: string | null;
+  severity: string | null;
+  page_path: string | null;
+  created_at: string;
+};
 
 /** A file waiting to be sent, plus its scrubbed twin. */
 type Attachment = {
@@ -134,6 +149,9 @@ export default function SupportWidget() {
   const [tier, setTier] = useState<'standard' | 'senior'>('standard');
   const [suggested, setSuggested] = useState<string | null>(null);
   const [resolved, setResolved] = useState(false);
+  const [view, setView] = useState<'chat' | 'history'>('chat');
+  const [history, setHistory] = useState<PastTicket[] | null>(null);
+  const [loadingThread, setLoadingThread] = useState(false);
 
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -292,6 +310,82 @@ export default function SupportWidget() {
     }
     addFiles(usable);
   };
+
+  /** Every report this person has filed, newest first. */
+  const loadHistory = useCallback(async () => {
+    if (!user) return;
+    const { data, error } = await supabase
+      .from('support_tickets')
+      .select('id, title, status, tier, category, severity, page_path, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(25);
+    if (error) {
+      toast.error('Could not load your past reports.');
+      setHistory([]);
+      return;
+    }
+    setHistory((data ?? []) as PastTicket[]);
+  }, [user]);
+
+  /**
+   * Reopen an old report exactly as it was: the whole back-and-forth plus the
+   * screenshots that were sent with it (fresh links, since the files are private).
+   */
+  const openTicket = useCallback(async (t: PastTicket) => {
+    setLoadingThread(true);
+    setView('chat');
+    setSendError(null);
+    setSuggested(null);
+    setFiles([]);
+    setText('');
+    setTicketId(t.id);
+    setTier(t.tier === 'senior' ? 'senior' : 'standard');
+    setResolved(t.status === 'resolved');
+    try {
+      const { data, error } = await supabase
+        .from('support_messages')
+        .select('id, role, content, attachment_path, created_at')
+        .eq('ticket_id', t.id)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+
+      const rows = data ?? [];
+      const restored: Bubble[] = [];
+      for (const m of rows) {
+        const path = m.attachment_path as string | null;
+        let previewUrls: string[] | undefined;
+        let attachmentNames: string[] | undefined;
+        if (path) {
+          const name = path.split('/').pop() ?? 'attachment';
+          attachmentNames = [name];
+          if (/\.(png|jpe?g|webp|gif|bmp|heic)$/i.test(path)) {
+            const { data: signed } = await supabase.storage
+              .from('support-attachments')
+              .createSignedUrl(path, 600);
+            if (signed?.signedUrl) previewUrls = [signed.signedUrl];
+          }
+        }
+        restored.push({
+          id: String(m.id),
+          role: m.role === 'assistant' ? 'assistant' : m.role === 'staff' ? 'staff' : 'user',
+          content: String(m.content ?? ''),
+          previewUrls,
+          attachmentNames,
+        });
+      }
+      setBubbles(restored);
+    } catch {
+      toast.error('Could not open that report.');
+    } finally {
+      setLoadingThread(false);
+    }
+  }, []);
+
+  // Keep the list of past reports current whenever the panel is open.
+  useEffect(() => {
+    if (open && view === 'history') void loadHistory();
+  }, [open, view, loadHistory]);
 
   /** Turn a raw storage/network failure into something a human can act on. */
   const plainError = (e: unknown, what: string): string => {
@@ -587,7 +681,31 @@ export default function SupportWidget() {
               )}
             </div>
             <div className="flex items-center gap-1">
-              {bubbles.length > 0 && (
+              {view === 'chat' && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setView('history')}
+                  title="Your past reports"
+                >
+                  <History className="mr-1 h-3 w-3" /> Past
+                </Button>
+              )}
+              {view === 'history' && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => {
+                    reset();
+                    setView('chat');
+                  }}
+                >
+                  <Plus className="mr-1 h-3 w-3" /> New
+                </Button>
+              )}
+              {view === 'chat' && bubbles.length > 0 && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -598,7 +716,7 @@ export default function SupportWidget() {
                   <Download className="mr-1 h-3 w-3" /> PDF
                 </Button>
               )}
-              {ticketId && !resolved && (
+              {view === 'chat' && ticketId && !resolved && (
                 <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={markResolved}>
                   <CheckCircle2 className="mr-1 h-3 w-3" /> Solved
                 </Button>
@@ -617,7 +735,53 @@ export default function SupportWidget() {
             </div>
           </div>
 
-          {(ticketId || bubbles.length > 0) && (
+          {view === 'history' && (
+            <div className="flex-1 overflow-y-auto p-3">
+              <button
+                type="button"
+                onClick={() => setView('chat')}
+                className="mb-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <ChevronLeft className="h-3 w-3" /> Back to this report
+              </button>
+              {history === null && <p className="text-sm text-muted-foreground">Loading…</p>}
+              {history?.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Nothing here yet — reports you send are kept here.
+                </p>
+              )}
+              <div className="space-y-2">
+                {(history ?? []).map(t => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => void openTicket(t)}
+                    className="w-full rounded-lg border p-2 text-left transition-colors hover:bg-muted/50"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="line-clamp-2 text-sm font-medium">
+                        {t.title || t.page_path || 'Problem report'}
+                      </span>
+                      <Badge variant="secondary" className="shrink-0 text-[10px] capitalize">
+                        {(t.status ?? 'open').replace('_', ' ')}
+                      </Badge>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                      <span>{new Date(t.created_at).toLocaleString()}</span>
+                      {t.category && <span className="capitalize">{t.category}</span>}
+                      {t.tier === 'senior' && (
+                        <span className="inline-flex items-center gap-1">
+                          <ShieldCheck className="h-3 w-3" /> Senior
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {view === 'chat' && (ticketId || bubbles.length > 0) && (
             <div className="border-b bg-muted/30 px-3 py-2">
               <TicketTimeline
                 stage={stageFromTicket(
@@ -630,8 +794,12 @@ export default function SupportWidget() {
             </div>
           )}
 
+          {view === 'chat' && (
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-3">
-            {bubbles.length === 0 && (
+            {loadingThread && (
+              <p className="text-sm text-muted-foreground">Opening that report…</p>
+            )}
+            {bubbles.length === 0 && !loadingThread && (
               <div className="space-y-2 text-sm text-muted-foreground">
                 <p>What went wrong? A sentence is plenty.</p>
                 <p className="text-xs">
@@ -736,8 +904,9 @@ export default function SupportWidget() {
               </Button>
             )}
           </div>
+          )}
 
-          {!resolved && (
+          {view === 'chat' && !resolved && (
             <div className="space-y-2 border-t p-2">
               {files.length > 0 && (
                 <div className="space-y-2">
