@@ -32,7 +32,8 @@ const MODEL = "openai/gpt-5.6-sol";
 const MAX_DOC_CHARS = 30000;
 
 type QuizQuestion = { q: string; options: string[]; correct_index: number; why: string };
-type Section = { heading: string; body: string; try_it: string };
+type Visual = { kind: string; title: string; prompt: string; steps: string[] };
+type Section = { heading: string; body: string; try_it: string; visuals: Visual[] };
 type ModuleContent = {
   outcome: string;
   sections: Section[];
@@ -64,6 +65,23 @@ function normalizeContent(raw: unknown): ModuleContent | null {
           heading: text(s?.heading, 160),
           body: typeof s?.body === "string" ? s.body.trim().slice(0, 4000) : "",
           try_it: text(s?.try_it, 500),
+          visuals: Array.isArray(s?.visuals)
+            ? (s.visuals as Record<string, unknown>[])
+                .map((v) => ({
+                  kind: (["diagram", "board", "storyboard", "checklist"].includes(
+                    text(v?.kind, 20)
+                  )
+                    ? text(v?.kind, 20)
+                    : "board"),
+                  title: text(v?.title, 160),
+                  prompt: text(v?.prompt, 700),
+                  steps: Array.isArray(v?.steps)
+                    ? (v.steps as unknown[]).map((x) => text(x, 220)).filter(Boolean).slice(0, 8)
+                    : [],
+                }))
+                .filter((v) => v.title && (v.steps.length > 0 || v.prompt))
+                .slice(0, 3)
+            : [],
         }))
         .filter((s) => s.heading && s.body && s.try_it)
         .slice(0, 8)
