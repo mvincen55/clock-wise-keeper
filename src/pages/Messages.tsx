@@ -113,11 +113,20 @@ export default function Messages() {
   const [scopeToThread, setScopeToThread] = useState(false);
   const [draft, setDraft] = useState('');
   const [newDmOpen, setNewDmOpen] = useState(false);
+  const [pending, setPending] = useState<File[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
 
+  const { toast } = useToast();
   const send = useSendMessage();
   const markRead = useMarkConversationRead();
   const ensureDm = useEnsureDm();
   const ensureAi = useEnsureAiConversation();
+  const { data: attachments = [] } = useConversationAttachments(activeId);
+  const attByMessage = useMemo(() => {
+    const m = new Map<string, typeof attachments>();
+    attachments.forEach(a => m.set(a.message_id, [...(m.get(a.message_id) ?? []), a]));
+    return m;
+  }, [attachments]);
 
   const nameByUserId = useMemo(() => {
     const m = new Map<string, string>();
