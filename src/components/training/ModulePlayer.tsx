@@ -136,6 +136,8 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
 
       {phase === 'read' && (
         <div className="space-y-6">
+          <ReadAloudControls speech={speech} />
+
           {content.outcome && (
             <Card className="border-primary/40 bg-primary/5">
               <CardContent className="flex gap-3 p-4">
@@ -149,7 +151,14 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
           )}
 
           {content.sections.map((section, i) => (
-            <section key={i} className="space-y-3">
+            <section
+              key={i}
+              className={cn(
+                'space-y-3 rounded-md transition-colors',
+                activeSection === i && 'bg-primary/5 ring-1 ring-primary/30 p-3 -m-0.5'
+              )}
+            >
+
               <h2 className="text-lg font-semibold">{section.heading}</h2>
               {section.body.split(/\n{2,}/).map((para, j) => (
                 <p key={j} className="text-sm leading-relaxed text-foreground/90">
