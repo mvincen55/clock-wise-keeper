@@ -19,10 +19,12 @@ import {
   ThumbsDown,
   ShieldCheck,
   ShieldAlert,
+  Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { formatDate } from '@/lib/time-utils';
+import { buildAnalystPdf } from '@/lib/analyst-pdf';
 
 export interface AnalystCitation {
   id: string;
@@ -372,6 +374,28 @@ export default function ReportsAnalyst({
     }
   };
 
+  const lastAnswer = [...turns].reverse().find(t => t.role === 'assistant');
+
+  const downloadPdf = () => {
+    if (!lastAnswer) return;
+    try {
+      const doc = buildAnalystPdf({
+        from,
+        to,
+        kindLabel: kind && kind !== 'all' ? kind.replace(/_/g, ' ') : 'All categories',
+        recordCount,
+        answer: lastAnswer.content,
+        citations: lastAnswer.citations ?? [],
+        concerns: lastAnswer.concerns ?? [],
+        audit: lastAnswer.audit,
+      });
+      doc.save(`record-analyst-${from}-to-${to}.pdf`);
+      toast.success('PDF downloaded.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not build the PDF.');
+    }
+  };
+
   const ask = () => {
     const q = question.trim();
     if (!q || busy) return;
@@ -406,6 +430,12 @@ export default function ReportsAnalyst({
             )}
             Analyze {recordCount} record{recordCount === 1 ? '' : 's'}
           </Button>
+          {lastAnswer && (
+            <Button size="sm" variant="ghost" className="ml-2" onClick={downloadPdf}>
+              <Download className="mr-2 h-4 w-4" />
+              Download PDF summary
+            </Button>
+          )}
 
           {turns.length > 0 && (
             <div className="max-h-[420px] space-y-4 overflow-y-auto rounded-md border bg-muted/20 p-3">
