@@ -106,7 +106,7 @@ All routes except `/auth`, `/accept-invite`, and `/.lovable/oauth/consent` are b
 |---|---|---|
 | `/office-calendar` | OfficeCalendar | Shared calendar, office closures (`useOfficeClosures`), Google Calendar events (`google-calendar-events`), `team_meeting` event category |
 | `/checklists` | Checklists | Recurring office checklists — see Checklist data model |
-| `/deposit-log` | DepositLog | Daily close-out: deposits (collections truth) **plus practice vitals** (production, cancellations, late cancels, no-shows — Prompt 13) + branded print sheet |
+| `/deposit-log` | DepositLog | Daily close-out: deposits (collections truth) **plus practice vitals** (production, hygiene/doctor cancellations + no-shows — Prompt 13 v2) + branded print sheet |
 | `/incident-reports` | IncidentReports | Incident reports with signature/review workflow + print sheet |
 | `/important-numbers` | ImportantNumbers | Office contact directory with tabs |
 | `/policy-manual` | PolicyManual | Office policy manual + document Q&A (`ask-docs` / `ingest-doc`) |
@@ -238,7 +238,7 @@ Migration `20260723200000_checklists.sql`:
 - [`docs/goals-and-bypass-spec.md`](docs/goals-and-bypass-spec.md) — Goals page (Pathfinder, S+M gate, meters, edit/delete accountability) and the checklist-bypass loop (LANDED). Prompts 1–10 with live status.
 - [`docs/training-library-spec.md`](docs/training-library-spec.md) — Training Library: modules, assignments, quizzes, roleplay, auditor, learning-style adaptation.
 - **Dashboard redesign (Prompt 11 v3, pending):** role-shaped front pages — Practice Pulse orb (transparent signal breakdown, no black-box score), OWNER (no clock card — setting; collections + production gauges from deposit log, payroll %, staffing strip, needs-attention), MANAGER (live roster timeline, checklist completion, collections ring, approvals/OT/bypass alerts), TEAM MEMBER (v2 layout: clock hero, needs-attention, practice-goal card, momentum, private sticky notes `user_notes`, light motivation layer — verified-event streaks that PAUSE on approved time off, no rankings). Ground rule: only data that exists today.
-- **Deposit Log vitals (Prompt 13, pending):** production_amount + cancellations / late_cancellations / no_shows per day; same-day editable, audited edits after; feeds owner Production gauge, Practice Pulse disruption signal, monthly trends.
+- **Deposit Log vitals (Prompt 13 v2, pending):** `production_amount` + four schedule-disruption counters — `hygiene_cancellations`, `hygiene_no_shows`, `doctor_cancellations`, `doctor_no_shows` — entered via SLIDERS (0–15, snap to whole numbers, calm→amber tint, tap-to-type overflow). Same-day editable; audited edits after. Feeds: owner Production gauge, hygiene-vs-doctor disruption visual, Practice Pulse spike signal, monthly production + disruption trends.
 - **Deferred until real data exists** (do NOT stub): write-offs (needs billing data), open positions/recruiting, license/credential tracking, announcements system, shift swap, doctor clinical view (needs PMS integration + a deliberate HIPAA conversation).
 - [`docs/team-onboarding.md`](docs/team-onboarding.md) — Team onboarding feature list (next major build after Goals), including the stealth work-style questions that feed Pathfinder and learning-style-adaptive training.
 
