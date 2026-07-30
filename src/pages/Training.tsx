@@ -21,6 +21,8 @@ import AssignModuleDialog, { type Assignee } from '@/components/training/AssignM
 import BuildModuleDialog from '@/components/training/BuildModuleDialog';
 import ModuleAuditPanel from '@/components/training/ModuleAuditPanel';
 import { useAuditFindings } from '@/hooks/useTrainingAudit';
+import NudgeLine from '@/components/NudgeLine';
+import { useSurfaceNudge } from '@/hooks/useOfficeInsights';
 
 /** Active team members, used for the assignment picker and creator names. */
 function useTeamRoster() {
@@ -45,6 +47,7 @@ export default function Training() {
   const { user } = useAuth();
   const { data: ctx } = useOrgContext();
   const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
+  const { nudge: trainingNudge } = useSurfaceNudge('training');
 
   const { data: modules = [], isLoading } = useTrainingModules();
   const { data: assignments = [] } = useTrainingAssignments();
@@ -116,6 +119,8 @@ export default function Training() {
             </Button>
           )}
         </div>
+
+        {trainingNudge && <NudgeLine nudge={trainingNudge} />}
 
         <Tabs defaultValue={new URLSearchParams(window.location.search).get('tab') === 'mine' ? 'mine' : 'library'}>
           <TabsList>

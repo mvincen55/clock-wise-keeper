@@ -28,6 +28,8 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
+import NudgeLine from '@/components/NudgeLine';
+import { useSurfaceNudge } from '@/hooks/useOfficeInsights';
 import { CheckSquare, ChevronLeft, ChevronRight, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
@@ -141,6 +143,7 @@ function CompletionNames({ completions }: { completions: ChecklistCompletion[] }
 export default function Checklists() {
   const { user } = useAuth();
   const { data, isLoading } = useChecklists();
+  const { nudge: checklistNudge } = useSurfaceNudge('checklists');
   const toggle = useToggleCompletion();
   const upsertItem = useUpsertChecklistItem();
   const deleteItem = useDeleteChecklistItem();
@@ -221,6 +224,8 @@ export default function Checklists() {
           Daily, weekly, monthly, and yearly duties — checked off in everyone's name, with history.
         </p>
       </div>
+
+      {checklistNudge && <NudgeLine nudge={checklistNudge} />}
 
       {checklists.length === 0 ? (
         <Card>

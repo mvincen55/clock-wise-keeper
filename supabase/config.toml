@@ -27,6 +27,8 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = true
   [functions.name-visits]
     verify_jwt = true
+  [functions.office-insights]
+    verify_jwt = true
   [functions.parse-pdf]
     verify_jwt = false
   [functions.process-email-queue]
