@@ -39,6 +39,30 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
   const recordAttempt = useRecordAttempt();
   const updateStatus = useUpdateAssignmentStatus();
 
+  // Read-aloud chunks: title/outcome, each section, then the recap.
+  const speechChunks = useMemo(() => {
+    const parts: string[] = [];
+    parts.push([module.title, content.outcome && `What you'll be able to do: ${content.outcome}`]
+      .filter(Boolean)
+      .join('. '));
+    content.sections.forEach(section => {
+      parts.push(
+        [section.heading, section.body, section.try_it && `Try it today: ${section.try_it}`]
+          .filter(Boolean)
+          .join('. ')
+      );
+    });
+    if (content.recap) parts.push(`Recap. ${content.recap}`);
+    return parts;
+  }, [module.title, content]);
+
+  const speech = useSpeech(speechChunks);
+
+  // Section index 0 is the intro block, so sections start at 1.
+  const activeSection = speech.activeIndex === null ? null : speech.activeIndex - 1;
+
+
+
   const score = useMemo(() => {
     if (questions.length === 0) return 100;
     const right = questions.filter((q, i) => answers[i] === q.correct_index).length;
