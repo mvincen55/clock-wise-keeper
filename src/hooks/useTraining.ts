@@ -356,15 +356,47 @@ export function useDraftModules() {
   });
 }
 
-/** Publish a module the auditor flagged, after a human has read the findings. */
-export function usePublishModule() {
+/** Snapshot of the findings a person just read, stored on the audit itself. */
+function buildReviewSnapshot(audit: ModuleAudit | null, userId?: string): ReviewSnapshot {
+  return {
+    fingerprint: fingerprintFindings(audit?.findings ?? [], audit?.verdict),
+    findings: audit?.findings ?? [],
+    verdict: audit?.verdict,
+    reviewed_at: new Date().toISOString(),
+    reviewed_by: userId,
+  };
+}
+
+/** Record that a human read the current findings, without publishing yet. */
+export function useRecordAuditReview() {
+  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (moduleId: string) => {
+    mutationFn: async ({ module }: { module: TrainingModule }) => {
+      const audit = module.audit;
+      const nextAudit = { ...(audit ?? {}), review: buildReviewSnapshot(audit, user?.id) };
       const { error } = await supabase
         .from('training_modules')
-        .update({ status: 'published' })
-        .eq('id', moduleId);
+        .update({ audit: nextAudit as never })
+        .eq('id', module.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['training-modules-draft'] }),
+  });
+}
+
+/** Publish a module the auditor flagged, after a human has read the findings. */
+export function usePublishModule() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ module }: { module: TrainingModule }) => {
+      const audit = module.audit;
+      const nextAudit = { ...(audit ?? {}), review: buildReviewSnapshot(audit, user?.id) };
+      const { error } = await supabase
+        .from('training_modules')
+        .update({ status: 'published', audit: nextAudit as never })
+        .eq('id', module.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -373,6 +405,7 @@ export function usePublishModule() {
     },
   });
 }
+
 
 /** Discard a flagged draft entirely. */
 export function useDiscardDraft() {
