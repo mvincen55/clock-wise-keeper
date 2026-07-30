@@ -109,6 +109,10 @@ export default function Dashboard() {
 
       {isManager && <PracticeVitalsCard />}
 
+      <MyMomentumCard />
+
+
+
       {missingDays.length > 0 && <MissingShiftBanner missingDays={missingDays} />}
 
       {/* PTO Widget */}
