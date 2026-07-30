@@ -97,10 +97,14 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
     'Member signed by',
     'Member signed at',
     'Manager note',
-    'Reviewed by',
-    'Reviewed at',
+    'Reviewer',
+    'Signed timestamp',
+    'Escalated timestamp',
     'Closed at',
   ];
+
+  const formatTimestamp = (iso: string | null | undefined) =>
+    iso ? `${formatDate(iso)} ${formatTime(iso)}` : '';
 
   /** Same column mapping for every export format. */
   const buildRows = () =>
@@ -112,12 +116,14 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
       r.summary,
       r.member_reason,
       r.member_signed_name,
-      r.member_signed_at ? formatDate(r.member_signed_at.slice(0, 10)) : '',
+      formatTimestamp(r.member_signed_at),
       r.manager_note,
       r.manager_signed_name,
-      r.manager_signed_at ? formatDate(r.manager_signed_at.slice(0, 10)) : '',
-      r.closed_at ? formatDate(r.closed_at.slice(0, 10)) : '',
+      formatTimestamp(r.manager_signed_at),
+      formatTimestamp(r.escalated_at),
+      formatTimestamp(r.closed_at),
     ]);
+
 
   const baseName = `accountability-records-${kind}-${from || 'start'}-to-${to || 'today'}`;
 
