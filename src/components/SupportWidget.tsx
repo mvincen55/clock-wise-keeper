@@ -879,7 +879,10 @@ export default function SupportWidget() {
                 )}
                 working={busy}
                 times={stageTimes}
+                contextPath={ticketContext?.path ?? null}
+                contextLabel={ticketContext?.label ?? null}
               />
+
               {(() => {
                 const sla = slaFor({
                   status: resolved ? 'resolved' : tier === 'senior' ? 'escalated' : 'open',
