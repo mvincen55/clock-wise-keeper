@@ -282,6 +282,10 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
                 <RotateCcw className="mr-1.5 h-4 w-4" />
                 Take it again
               </Button>
+              <Button variant="outline" onClick={() => { speech.stop(); setPhase('roleplay'); }}>
+                <MessagesSquare className="mr-1.5 h-4 w-4" />
+                Practice the conversation
+              </Button>
               <Button variant="ghost" onClick={() => setPhase('read')}>
                 Reread the module
               </Button>
@@ -292,6 +296,28 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
           )}
         </div>
       )}
+
+      {phase === 'roleplay' && (
+        <div className="space-y-5">
+          <RoleplayChat module={module} />
+
+          {lastRoleplay && (
+            <details className="rounded-md border border-border p-3">
+              <summary className="cursor-pointer text-sm font-medium">
+                Your last breakdown — {lastRoleplay.score}%
+              </summary>
+              <div className="pt-4">
+                <RoleplayRubricCard result={lastRoleplay} />
+              </div>
+            </details>
+          )}
+
+          <Button variant="ghost" onClick={() => setPhase(questions.length ? 'result' : 'read')}>
+            Back to the module
+          </Button>
+        </div>
+      )}
     </div>
   );
+
 }
