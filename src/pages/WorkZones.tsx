@@ -186,10 +186,10 @@ export default function WorkZones() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Switch checked={zone.is_active} onCheckedChange={() => handleToggle(zone)} />
-                  <Button variant="ghost" size="icon" onClick={() => setEditingZone(zone)}>
+                  <Button variant="ghost" size="icon" onClick={() => setEditingZone(zone)} aria-label={`Edit ${zone.name}`}>
                     <Save className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleDelete(zone.id)}>
+                  <Button variant="ghost" size="icon" onClick={() => handleDelete(zone.id)} aria-label={`Delete ${zone.name}`}>
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
                 </div>
