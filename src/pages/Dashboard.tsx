@@ -23,6 +23,7 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import { OrgSnapshotPanel } from '@/components/OrgSnapshotPanel';
 import PracticeVitalsCard from '@/components/PracticeVitalsCard';
 import MyMomentumCard from '@/components/MyMomentumCard';
+import SprintCard from '@/components/SprintCard';
 import UserNotesBoard from '@/components/UserNotesBoard';
 
 type ClockStatus = 'clocked_out' | 'clocked_in';
@@ -110,6 +111,8 @@ export default function Dashboard() {
       {isManager && <OrgSnapshotPanel />}
 
       {isManager && <PracticeVitalsCard />}
+
+      <SprintCard />
 
       <MyMomentumCard />
 
