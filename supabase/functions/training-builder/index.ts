@@ -13,6 +13,12 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { guardAiInput, REFUSAL } from "../_shared/integrity.ts";
+import {
+  normalizeAudit,
+  statusForAudit,
+  unreviewedAudit,
+  type AuditResult,
+} from "../_shared/training-audit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -357,12 +363,7 @@ ${docBlock || "(no matching documents)"}
 DRAFT MODULE:
 ${JSON.stringify({ title, summary, content }).slice(0, 40000)}`;
 
-    let audit: Record<string, unknown> = {
-      verdict: "unreviewed",
-      summary: "The auditor could not be reached.",
-      findings: [],
-      audited_at: new Date().toISOString(),
-    };
+    let audit: AuditResult = unreviewedAudit(new Date().toISOString());
 
     try {
       const auditRes = await fetch(GATEWAY_URL, {
@@ -382,27 +383,7 @@ ${JSON.stringify({ title, summary, content }).slice(0, 40000)}`;
         const auditRaw = (auditData?.choices?.[0]?.message?.content as string | undefined) ?? "";
         const parsedAudit = parseJsonBlock<Record<string, unknown>>(auditRaw);
         if (parsedAudit) {
-          const findings = Array.isArray(parsedAudit.findings)
-            ? (parsedAudit.findings as Record<string, unknown>[])
-                .map((f) => ({
-                  severity: ["high", "medium", "low"].includes(text(f?.severity, 10))
-                    ? text(f?.severity, 10)
-                    : "medium",
-                  where: text(f?.where, 200),
-                  issue: text(f?.issue, 700),
-                  conflicts_with: text(f?.conflicts_with, 700),
-                  fix: text(f?.fix, 700),
-                }))
-                .filter((f) => f.issue)
-                .slice(0, 12)
-            : [];
-          audit = {
-            verdict: findings.length > 0 || parsedAudit.verdict === "flagged" ? "flagged" : "clear",
-            summary: text(parsedAudit.summary, 400),
-            findings,
-            audited_at: new Date().toISOString(),
-            model: MODEL,
-          };
+          audit = normalizeAudit(parsedAudit, { now: new Date().toISOString(), model: MODEL });
         }
       } else {
         console.error("auditor error", auditRes.status, await auditRes.text());
@@ -412,7 +393,7 @@ ${JSON.stringify({ title, summary, content }).slice(0, 40000)}`;
     }
 
     // Only a clean audit publishes. Anything else waits for a human.
-    const status = audit.verdict === "clear" ? "published" : "draft";
+    const status = statusForAudit(audit);
 
     const { data: saved, error: insertError } = await supabase
       .from("training_modules")
