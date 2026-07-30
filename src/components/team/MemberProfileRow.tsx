@@ -19,7 +19,19 @@ type Member = {
   display_name: string;
   preferred_name?: string | null;
   tag?: string | null;
+  /** Shared-by-choice fun facts, used for thank-yous and birthdays. */
+  favorites?: Record<string, string> | null;
 };
+
+const FAVORITE_LABELS: Record<string, string> = {
+  food: 'Food',
+  pizza: 'Pizza',
+  dessert: 'Dessert',
+  drink: 'Drink',
+  snack: 'Snack',
+  treat: 'Treat',
+};
+
 
 /**
  * Manager view of a member's tag and onboarding progress.
