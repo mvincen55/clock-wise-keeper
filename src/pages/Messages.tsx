@@ -205,11 +205,31 @@ export default function Messages() {
     setActiveId(id);
   };
 
+  const onPickFiles = (list: FileList | null) => {
+    if (!list) return;
+    const next: File[] = [];
+    for (const f of Array.from(list)) {
+      const err = validateAttachment(f);
+      if (err) {
+        toast({ title: 'File not attached', description: `${f.name}: ${err}`, variant: 'destructive' });
+        continue;
+      }
+      next.push(f);
+    }
+    setPending(p => [...p, ...next]);
+  };
+
   const submit = () => {
-    if (!activeId || !draft.trim()) return;
+    if (!activeId || (!draft.trim() && pending.length === 0)) return;
     send.mutate(
-      { conversationId: activeId, content: draft },
-      { onSuccess: () => setDraft('') },
+      { conversationId: activeId, content: draft, files: pending },
+      {
+        onSuccess: () => {
+          setDraft('');
+          setPending([]);
+          if (fileRef.current) fileRef.current.value = '';
+        },
+      },
     );
   };
 
