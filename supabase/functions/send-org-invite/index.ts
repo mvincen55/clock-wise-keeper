@@ -7,8 +7,8 @@ const corsHeaders = {
 };
 
 const SITE_NAME = "Purple Envelope";
-const FROM_DOMAIN = "timekeepers.me";
-const SENDER_DOMAIN = "notify.timekeepers.me";
+const FROM_DOMAIN = "purpleenvelope.app";
+const SENDER_DOMAIN = "notify.purpleenvelope.app";
 const FALLBACK_ORIGIN = "https://purpleenvelope.app";
 const ALLOWED_ORIGINS = [
   "https://purpleenvelope.app",
