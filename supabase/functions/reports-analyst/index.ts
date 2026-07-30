@@ -34,9 +34,10 @@ type Row = Record<string, unknown>;
 
 function line(r: Row, who: string): string {
   const parts = [
-    `[${r.id}] ${who} · ${KIND_LABELS[String(r.kind)] ?? r.kind} · ${r.period_start} → ${r.period_end} · status ${r.status}`,
+    `[rec:${r.id}] ${who} · ${KIND_LABELS[String(r.kind)] ?? r.kind} · ${r.period_start} → ${r.period_end} · status ${r.status}`,
     `  summary: ${r.summary ?? "—"}`,
   ];
+
   if (r.member_reason) parts.push(`  member said: ${r.member_reason}`);
   if (r.manager_note) parts.push(`  reviewer note: ${r.manager_note}`);
   if (r.escalated_at) parts.push(`  escalated: ${String(r.escalated_at).slice(0, 10)}`);
