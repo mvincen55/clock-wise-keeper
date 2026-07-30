@@ -192,10 +192,12 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
               className="h-9"
               disabled={closed.length === 0}
               onClick={exportCsv}
+              title="Downloads every record in this range as one CSV"
             >
               <Download className="mr-2 h-4 w-4" />
-              Export CSV
+              Export all ({closed.length})
             </Button>
+
           </div>
         )}
       </CardHeader>
