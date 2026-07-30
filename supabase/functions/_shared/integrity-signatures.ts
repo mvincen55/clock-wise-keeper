@@ -229,6 +229,13 @@ export function buildAdminAlerts(args: {
   }));
 }
 
+/**
+ * How many elevated alert emails one org may receive in a single Eastern day.
+ * Past the cap the in-app review item is still created — only the email stops,
+ * and the daily owners digest picks up whatever the throttle held back.
+ */
+export const ELEVATED_EMAIL_DAILY_CAP = 3;
+
 /** The store the recorder writes through — kept tiny so tests can fake it. */
 export interface IntegrityStore {
   /** True when this fingerprint already has an open or dismissed event. */
@@ -240,6 +247,10 @@ export interface IntegrityStore {
   insertNotifications(rows: AdminAlert[]): Promise<void>;
   /** Optional email fanout for elevated signals. */
   sendEmails?(rows: AdminAlert[]): Promise<void>;
+  /** Elevated events already emailed for this org on this Eastern day. */
+  countEmailedToday?(orgId: string, day: string): Promise<number>;
+  /** Mark an event as having triggered an email, so the cap can count it. */
+  markEmailed?(eventId: string): Promise<void>;
 }
 
 export interface RecordOutcome {
@@ -247,6 +258,8 @@ export interface RecordOutcome {
   deduped: boolean;
   alerted: number;
   emailed: number;
+  /** True when the email was withheld by the daily cap (digest will cover it). */
+  emailThrottled: boolean;
 }
 
 /**
@@ -264,13 +277,13 @@ export async function recordJailbreakSignature(
     now?: Date;
   },
 ): Promise<RecordOutcome> {
-  const empty: RecordOutcome = { recorded: false, deduped: false, alerted: 0, emailed: 0 };
-  if (!args.scan.flagged || !args.scan.signature || !args.orgId) return empty;
+  const base = { recorded: false, deduped: false, alerted: 0, emailed: 0, emailThrottled: false };
+  if (!args.scan.flagged || !args.scan.signature || !args.orgId) return base;
 
   const event = buildSecurityEvent(args);
   try {
     if (await store.hasEvent(event.fingerprint)) {
-      return { recorded: false, deduped: true, alerted: 0, emailed: 0 };
+      return { ...base, deduped: true };
     }
   } catch {
     // A failed dedupe read must not lose the signal — fall through and insert.
@@ -280,11 +293,11 @@ export async function recordJailbreakSignature(
   try {
     eventId = await store.insertEvent(event);
   } catch {
-    return empty;
+    return base;
   }
 
   if (!isElevated(args.scan)) {
-    return { recorded: true, deduped: false, alerted: 0, emailed: 0 };
+    return { ...base, recorded: true };
   }
 
   let alerts: AdminAlert[] = [];
@@ -293,20 +306,40 @@ export async function recordJailbreakSignature(
     alerts = buildAdminAlerts({ event, eventId, adminUserIds: admins, scan: args.scan });
     if (alerts.length) await store.insertNotifications(alerts);
   } catch {
-    return { recorded: true, deduped: false, alerted: 0, emailed: 0 };
+    return { ...base, recorded: true };
+  }
+
+  // Throttle the email fanout — the in-app item above is already recorded, so
+  // nothing is lost when we go quiet; the daily digest sweeps up the rest.
+  let throttled = false;
+  if (alerts.length && store.countEmailedToday) {
+    try {
+      const already = await store.countEmailedToday(args.orgId, easternDay(args.now));
+      throttled = already >= ELEVATED_EMAIL_DAILY_CAP;
+    } catch {
+      throttled = false;
+    }
   }
 
   let emailed = 0;
-  if (alerts.length && store.sendEmails) {
+  if (alerts.length && !throttled && store.sendEmails) {
     try {
       await store.sendEmails(alerts);
       emailed = alerts.length;
+      if (eventId && store.markEmailed) await store.markEmailed(eventId);
     } catch {
       emailed = 0;
     }
   }
-  return { recorded: true, deduped: false, alerted: alerts.length, emailed };
+  return {
+    recorded: true,
+    deduped: false,
+    alerted: alerts.length,
+    emailed,
+    emailThrottled: throttled,
+  };
 }
+
 
 /** What the AI says back. Polite, ordinary — it never mentions the flag. */
 export const JAILBREAK_REFUSAL =
