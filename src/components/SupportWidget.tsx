@@ -16,10 +16,13 @@ import {
   ShieldCheck,
   CheckCircle2,
   Download,
+  EyeOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadSupportPdf } from '@/lib/support-pdf';
 import TicketTimeline, { stageFromTicket } from '@/components/support/TicketTimeline';
+import { redactScreenshot } from '@/lib/redact-image';
+import { Switch } from '@/components/ui/switch';
 
 type Bubble = {
   id: string;
@@ -30,6 +33,15 @@ type Bubble = {
   attachmentNames?: string[];
 };
 
+
+/** A file waiting to be sent, plus its scrubbed twin. */
+type Attachment = {
+  key: string;
+  original: File;
+  redacted: File | null;
+  masked: number;
+  working: boolean;
+};
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_FILES = 5;
@@ -53,7 +65,8 @@ export default function SupportWidget() {
   const [ticketId, setTicketId] = useState<string | null>(null);
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [text, setText] = useState('');
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<Attachment[]>([]);
+  const [redactOn, setRedactOn] = useState(true);
   const [busy, setBusy] = useState(false);
   const [tier, setTier] = useState<'standard' | 'senior'>('standard');
   const [suggested, setSuggested] = useState<string | null>(null);
@@ -82,24 +95,58 @@ export default function SupportWidget() {
     setResolved(false);
   }, []);
 
-  const addFiles = useCallback((incoming: File[]) => {
-    if (incoming.length === 0) return;
-    setFiles(prev => {
-      const next = [...prev];
-      for (const f of incoming) {
-        if (next.length >= MAX_FILES) {
-          toast.error(`You can attach up to ${MAX_FILES} files.`);
-          break;
-        }
-        if (f.size > MAX_IMAGE_BYTES) {
-          toast.error(`${f.name} is over 8MB — try a smaller one.`);
-          continue;
-        }
-        next.push(f);
-      }
-      return next;
-    });
+  /**
+   * Screenshots get scrubbed on this device before anything is uploaded:
+   * names, punch times, dates, emails and record IDs are painted over.
+   */
+  const redactOne = useCallback(async (key: string, file: File) => {
+    try {
+      const { file: clean, maskedCount } = await redactScreenshot(file);
+      setFiles(prev =>
+        prev.map(a =>
+          a.key === key
+            ? { ...a, redacted: maskedCount >= 0 ? clean : null, masked: Math.max(maskedCount, 0), working: false }
+            : a,
+        ),
+      );
+    } catch {
+      setFiles(prev => prev.map(a => (a.key === key ? { ...a, working: false } : a)));
+      toast.error('Could not scrub that screenshot — it will be sent as-is unless you remove it.');
+    }
   }, []);
+
+  const addFiles = useCallback(
+    (incoming: File[]) => {
+      if (incoming.length === 0) return;
+      const queued: Attachment[] = [];
+      setFiles(prev => {
+        const next = [...prev];
+        for (const f of incoming) {
+          if (next.length >= MAX_FILES) {
+            toast.error(`You can attach up to ${MAX_FILES} files.`);
+            break;
+          }
+          if (f.size > MAX_IMAGE_BYTES) {
+            toast.error(`${f.name} is over 8MB — try a smaller one.`);
+            continue;
+          }
+          const isImage = f.type.startsWith('image/');
+          const item: Attachment = {
+            key: crypto.randomUUID(),
+            original: f,
+            redacted: null,
+            masked: 0,
+            working: isImage,
+          };
+          next.push(item);
+          if (isImage) queued.push(item);
+        }
+        return next;
+      });
+      for (const item of queued) void redactOne(item.key, item.original);
+    },
+    [redactOne],
+  );
 
   /** Paste screenshots straight into the box — the fastest way to report. */
   const onPaste = (e: React.ClipboardEvent) => {
@@ -135,7 +182,9 @@ export default function SupportWidget() {
       }
 
       const uploaded: { path: string; file: File }[] = [];
-      for (const f of files) {
+      for (const a of files) {
+        // Send the scrubbed copy whenever we have one and redaction is on.
+        const f = redactOn && a.redacted ? a.redacted : a.original;
         const ext = f.name.split('.').pop()?.toLowerCase() || 'png';
         const path = `${orgId}/${id}/${crypto.randomUUID()}.${ext}`;
         const { error: upErr } = await supabase.storage
@@ -271,6 +320,9 @@ export default function SupportWidget() {
     setResolved(true);
     toast.success('Thanks — closed out.');
   };
+
+  const anyWorking = files.some(a => a.working);
+  const totalMasked = files.reduce((n, a) => n + (a.redacted ? a.masked : 0), 0);
 
   if (!user || !orgId) return null;
 
@@ -424,33 +476,66 @@ export default function SupportWidget() {
           {!resolved && (
             <div className="space-y-2 border-t p-2">
               {files.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {files.map((f, i) => (
-                    <div
-                      key={`${f.name}-${i}`}
-                      className="relative h-16 w-16 overflow-hidden rounded border bg-muted"
-                    >
-                      {f.type.startsWith('image/') ? (
-                        <img
-                          src={URL.createObjectURL(f)}
-                          alt={`Attachment preview: ${f.name}`}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <span className="flex h-full w-full items-center justify-center px-1 text-center text-[9px] leading-tight text-muted-foreground">
-                          {f.name}
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))}
-                        aria-label={`Remove ${f.name}`}
-                        className="absolute right-0 top-0 rounded-bl bg-background/90 p-0.5"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {files.map(a => {
+                      const shown = redactOn && a.redacted ? a.redacted : a.original;
+                      return (
+                        <div
+                          key={a.key}
+                          className="relative h-16 w-16 overflow-hidden rounded border bg-muted"
+                        >
+                          {shown.type.startsWith('image/') ? (
+                            <img
+                              src={URL.createObjectURL(shown)}
+                              alt={`Attachment preview: ${a.original.name}`}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="flex h-full w-full items-center justify-center px-1 text-center text-[9px] leading-tight text-muted-foreground">
+                              {a.original.name}
+                            </span>
+                          )}
+                          {a.working && (
+                            <span className="absolute inset-0 flex items-center justify-center bg-background/70">
+                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setFiles(prev => prev.filter(x => x.key !== a.key))}
+                            aria-label={`Remove ${a.original.name}`}
+                            className="absolute right-0 top-0 rounded-bl bg-background/90 p-0.5"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5">
+                    <EyeOff className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <div className="flex-1 leading-tight">
+                      <p className="text-[11px] font-medium text-foreground">
+                        Hide names, times &amp; IDs
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {anyWorking
+                          ? 'Scrubbing on this device…'
+                          : redactOn
+                            ? totalMasked > 0
+                              ? `${totalMasked} item${totalMasked === 1 ? '' : 's'} covered before sending`
+                              : 'Nothing sensitive found to cover'
+                            : 'The screenshot will be sent exactly as-is'}
+                      </p>
                     </div>
-                  ))}
+                    <Switch
+                      checked={redactOn}
+                      onCheckedChange={setRedactOn}
+                      aria-label="Hide names, times and IDs in screenshots"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -495,7 +580,7 @@ export default function SupportWidget() {
                   size="sm"
                   className="h-7"
                   onClick={() => send()}
-                  disabled={busy || (!text.trim() && files.length === 0)}
+                  disabled={busy || anyWorking || (!text.trim() && files.length === 0)}
 
                 >
                   <Send className="h-3.5 w-3.5" />
