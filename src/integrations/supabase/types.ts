@@ -1339,6 +1339,66 @@ export type Database = {
           },
         ]
       }
+      doctor_board_items: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          due_at: string | null
+          id: string
+          note: string | null
+          org_id: string
+          owner_user_id: string
+          repeat_rule: string
+          source_request_id: string | null
+          title: string
+          updated_at: string
+          visible_to_manager: boolean
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          note?: string | null
+          org_id: string
+          owner_user_id: string
+          repeat_rule?: string
+          source_request_id?: string | null
+          title: string
+          updated_at?: string
+          visible_to_manager?: boolean
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          note?: string | null
+          org_id?: string
+          owner_user_id?: string
+          repeat_rule?: string
+          source_request_id?: string | null
+          title?: string
+          updated_at?: string
+          visible_to_manager?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doctor_board_items_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doctor_board_items_source_request_id_fkey"
+            columns: ["source_request_id"]
+            isOneToOne: false
+            referencedRelation: "office_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_send_log: {
         Row: {
           created_at: string
@@ -3170,6 +3230,110 @@ export type Database = {
           },
         ]
       }
+      office_request_replies: {
+        Row: {
+          body: string
+          created_at: string
+          first_seen_at: string | null
+          id: string
+          org_id: string
+          request_id: string
+          sender_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          first_seen_at?: string | null
+          id?: string
+          org_id: string
+          request_id: string
+          sender_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          first_seen_at?: string | null
+          id?: string
+          org_id?: string
+          request_id?: string
+          sender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "office_request_replies_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "office_request_replies_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "office_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      office_requests: {
+        Row: {
+          acknowledged_at: string | null
+          category: string
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          first_seen_at: string | null
+          id: string
+          needs_reply: boolean
+          note: string
+          org_id: string
+          recipient_id: string
+          reference: string | null
+          sender_id: string
+          status: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          category?: string
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          first_seen_at?: string | null
+          id?: string
+          needs_reply?: boolean
+          note: string
+          org_id: string
+          recipient_id: string
+          reference?: string | null
+          sender_id: string
+          status?: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          category?: string
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          first_seen_at?: string | null
+          id?: string
+          needs_reply?: boolean
+          note?: string
+          org_id?: string
+          recipient_id?: string
+          reference?: string | null
+          sender_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "office_requests_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_branding: {
         Row: {
           address_line1: string
@@ -3358,6 +3522,53 @@ export type Database = {
           },
         ]
       }
+      org_messaging_settings: {
+        Row: {
+          categories: string[]
+          closeout_cutoff_minutes: number
+          closeout_item_enabled: boolean
+          created_at: string
+          enabled: boolean
+          messages_label: string
+          org_id: string
+          requests_label: string
+          retention_days: number
+          updated_at: string
+        }
+        Insert: {
+          categories?: string[]
+          closeout_cutoff_minutes?: number
+          closeout_item_enabled?: boolean
+          created_at?: string
+          enabled?: boolean
+          messages_label?: string
+          org_id: string
+          requests_label?: string
+          retention_days?: number
+          updated_at?: string
+        }
+        Update: {
+          categories?: string[]
+          closeout_cutoff_minutes?: number
+          closeout_item_enabled?: boolean
+          created_at?: string
+          enabled?: boolean
+          messages_label?: string
+          org_id?: string
+          requests_label?: string
+          retention_days?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_messaging_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_practice_settings: {
         Row: {
           collections_visibility: string
@@ -3428,6 +3639,41 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      owner_board_prefs: {
+        Row: {
+          created_at: string
+          digest_frequency: string
+          org_id: string
+          share_with_manager: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          digest_frequency?: string
+          org_id: string
+          share_with_manager?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          digest_frequency?: string
+          org_id?: string
+          share_with_manager?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "owner_board_prefs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       payroll_settings: {
         Row: {
@@ -5261,6 +5507,10 @@ export type Database = {
         Args: { p_end: string; p_start: string; p_user_id: string }
         Returns: undefined
       }
+      board_shared_with_manager: {
+        Args: { _owner_user_id: string }
+        Returns: boolean
+      }
       bump_team_goal: {
         Args: { _amount?: number; _goal_id: string }
         Returns: {
@@ -5298,6 +5548,7 @@ export type Database = {
         }
       }
       can_access_employee: { Args: { _employee_id: string }; Returns: boolean }
+      can_access_request: { Args: { _request_id: string }; Returns: boolean }
       can_manage_goal: { Args: { _goal_id: string }; Returns: boolean }
       can_read_conv: { Args: { _conv: string }; Returns: boolean }
       can_view_goal: { Args: { _goal_id: string }; Returns: boolean }
@@ -5435,6 +5686,7 @@ export type Database = {
       my_department: { Args: never; Returns: string }
       my_team: { Args: never; Returns: string }
       owns_goal: { Args: { _goal_id: string }; Returns: boolean }
+      purge_messaging_retention: { Args: never; Returns: number }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
         Returns: {
