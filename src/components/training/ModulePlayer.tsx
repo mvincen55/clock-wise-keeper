@@ -196,9 +196,16 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
             </>
           )}
 
-          <Button onClick={finishReading} className="w-full sm:w-auto">
-            {questions.length > 0 ? 'Start the quiz' : 'Mark as complete'}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={finishReading}>
+              {questions.length > 0 ? 'Start the quiz' : 'Mark as complete'}
+            </Button>
+            <Button variant="outline" onClick={() => { speech.stop(); setPhase('roleplay'); }}>
+              <MessagesSquare className="mr-1.5 h-4 w-4" />
+              Practice the conversation
+            </Button>
+          </div>
+
         </div>
       )}
 
