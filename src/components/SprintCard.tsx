@@ -69,16 +69,25 @@ function NewSprintDialog({
   seed?: string;
 }) {
   const create = useCreateSprint();
+  const { data: employees } = useOrgEmployees();
   const today = getToday();
   const [title, setTitle] = useState('');
   const [metric, setMetric] = useState('');
   const [target, setTarget] = useState('20');
   const [period, setPeriod] = useState<SprintPeriod>('month');
   const [reward, setReward] = useState('');
+  const [scope, setScope] = useState<SprintScope>('team');
+  const [department, setDepartment] = useState<SprintDepartment>('clinical');
+  const [scopeUser, setScopeUser] = useState('');
+  const [verification, setVerification] = useState<SprintVerification>('honor');
 
   const submit = async () => {
     if (!title.trim() || !metric.trim() || !reward.trim()) {
       toast.error('Give the sprint a name, something to count, and a reward.');
+      return;
+    }
+    if (scope === 'individual' && !scopeUser) {
+      toast.error('Pick who this one is for.');
       return;
     }
     const count = Math.max(1, Number(target) || 0);
@@ -91,6 +100,10 @@ function NewSprintDialog({
         starts_on: today,
         ends_on: addDays(today, period === 'week' ? 6 : 29),
         reward: reward.trim(),
+        scope,
+        scope_department: scope === 'department' ? department : null,
+        scope_user_id: scope === 'individual' ? scopeUser : null,
+        verification,
         ai_suggested: !!seed,
       });
       toast.success('Sprint started — the office AI will announce it.');
@@ -103,11 +116,11 @@ function NewSprintDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Start a team sprint</DialogTitle>
+          <DialogTitle>Start a sprint</DialogTitle>
           <DialogDescription>
-            One number, one reward, the whole team. No rankings, no per-person tallies.
+            One number, one reward. No rankings, no per-person tallies — the AI announces and runs it.
           </DialogDescription>
         </DialogHeader>
         {seed && (
@@ -141,10 +154,69 @@ function NewSprintDialog({
             </div>
           </div>
           <div className="space-y-1.5">
+            <Label>Who's it for?</Label>
+            <Select value={scope} onValueChange={v => setScope(v as SprintScope)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="team">The whole team</SelectItem>
+                <SelectItem value="department">One department</SelectItem>
+                <SelectItem value="individual">One person</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {scope === 'department' && (
+            <div className="space-y-1.5">
+              <Label>Department</Label>
+              <Select value={department} onValueChange={v => setDepartment(v as SprintDepartment)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="clinical">Clinical</SelectItem>
+                  <SelectItem value="clerical">Clerical</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {scope === 'individual' && (
+            <div className="space-y-1.5">
+              <Label>Team member</Label>
+              <Select value={scopeUser} onValueChange={setScopeUser}>
+                <SelectTrigger><SelectValue placeholder="Pick someone" /></SelectTrigger>
+                <SelectContent>
+                  {(employees ?? [])
+                    .filter(e => !!e.user_id)
+                    .map(e => (
+                      <SelectItem key={e.id} value={e.user_id as string}>
+                        {e.display_name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label>How does it get verified?</Label>
+            <Select value={verification} onValueChange={v => setVerification(v as SprintVerification)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="honor">Honour — the tally speaks for itself</SelectItem>
+                <SelectItem value="manager_approval">Manager confirms at the end</SelectItem>
+                <SelectItem value="document">Checked against the outside report</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {verification === 'honor'
+                ? 'Anyone in scope taps +1 as they go. Pizza-tier goals live here.'
+                : verification === 'manager_approval'
+                ? 'One tap from the manager (or the owner) closes it out.'
+                : 'At the end the verifier uploads the report and the AI reads the number out of it.'}
+            </p>
+          </div>
+          <div className="space-y-1.5">
             <Label htmlFor="sprint-reward">Reward if we hit it</Label>
             <Input id="sprint-reward" value={reward} onChange={e => setReward(e.target.value)} placeholder="Lunch on the practice, Friday" />
           </div>
         </div>
+
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={submit} disabled={!create.isReady || create.isPending}>
