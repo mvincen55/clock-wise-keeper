@@ -279,10 +279,15 @@ export function useMarkConversationRead() {
     mutationFn: async (conversationId: string) => {
       const { error } = await supabase.rpc('mark_conversation_read', { _conv: conversationId });
       if (error) throw error;
+      return conversationId;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['conversations'] }),
+    onSuccess: id => {
+      qc.invalidateQueries({ queryKey: ['conversations'] });
+      qc.invalidateQueries({ queryKey: ['conversation-receipts', id] });
+    },
   });
 }
+
 
 export function useEnsureDm() {
   const qc = useQueryClient();
