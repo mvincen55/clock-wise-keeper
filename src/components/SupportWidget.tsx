@@ -1334,6 +1334,26 @@ export default function SupportWidget() {
           )}
         </div>
       )}
+
+      {editingAttachment && (
+        <RedactionEditor
+          open
+          onOpenChange={o => !o && setEditingKey(null)}
+          original={editingAttachment.original}
+          autoRedacted={redactOn ? editingAttachment.redacted : null}
+          boxes={editingAttachment.boxes ?? []}
+          onSave={(boxes, composed) => {
+            setFiles(prev =>
+              prev.map(a =>
+                a.key === editingAttachment.key
+                  ? { ...a, boxes, manual: boxes.length > 0 ? composed : null }
+                  : a,
+              ),
+            );
+          }}
+        />
+      )}
     </>
+
   );
 }
