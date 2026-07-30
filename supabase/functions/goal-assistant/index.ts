@@ -16,6 +16,7 @@
 // task was scheduled a certain way based on it.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { guardAiInput, REFUSAL } from "../_shared/integrity.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -131,6 +132,19 @@ Deno.serve(async (req) => {
     };
     const allowed = ["breakdown", "draft_update", "polish_goal", "chat"];
     const mode = allowed.includes(body.mode ?? "") ? body.mode! : "breakdown";
+
+    // Integrity: attack-signature check on what the member typed. Only the
+    // matched signature is ever logged — never their words.
+    if (
+      await guardAiInput({
+        orgId: membership.org_id,
+        userId: user.id,
+        surface: "goal-assistant",
+        inputs: [body.message, body.quickNotes, body.title, body.description],
+      })
+    ) {
+      return json({ error: REFUSAL, reply: REFUSAL });
+    }
 
     // ---- polish_goal: no goal row exists yet ----
     if (mode === "polish_goal") {

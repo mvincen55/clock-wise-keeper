@@ -12,6 +12,7 @@
 // "try it today" action.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { guardAiInput, REFUSAL } from "../_shared/integrity.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -173,6 +174,18 @@ Deno.serve(async (req) => {
       .limit(1)
       .maybeSingle();
     if (!membership) return json({ error: "No active organization" }, 403);
+
+    // Integrity: signature-only check on the requested topic.
+    if (
+      await guardAiInput({
+        orgId: membership.org_id,
+        userId: user.id,
+        surface: "training-builder",
+        inputs: [topic, audience.join(" ")],
+      })
+    ) {
+      return json({ error: REFUSAL }, 400);
+    }
     const orgId = membership.org_id as string;
 
     // ---- Grounding: standing office rules (authoritative) -------------------
