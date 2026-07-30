@@ -78,6 +78,9 @@ export default function MyGoalCard({
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <CardTitle className="text-base leading-snug">{goal.title}</CardTitle>
+          {goal.smart_target && (
+            <p className="mt-1 text-xs text-muted-foreground">Target: {goal.smart_target}</p>
+          )}
           <div className="flex items-center gap-2">
             {goal.visibility === 'private' && (
               <Badge variant="outline" className="gap-1">
