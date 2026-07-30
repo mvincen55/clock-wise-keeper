@@ -15,8 +15,10 @@ import {
   ArrowUpCircle,
   ShieldCheck,
   CheckCircle2,
+  Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { downloadSupportPdf } from '@/lib/support-pdf';
 
 type Bubble = {
   id: string;
@@ -24,7 +26,9 @@ type Bubble = {
   content: string;
   tier?: string | null;
   previewUrls?: string[];
+  attachmentNames?: string[];
 };
+
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_FILES = 5;
@@ -175,6 +179,7 @@ export default function SupportWidget() {
           previewUrls: uploaded
             .filter(u => u.file.type.startsWith('image/'))
             .map(u => URL.createObjectURL(u.file)),
+          attachmentNames: uploaded.map(u => u.file.name),
         },
       ]);
       setText('');
@@ -239,6 +244,23 @@ export default function SupportWidget() {
     }
   };
 
+  /** A printable copy of the whole thread — for the person's own records. */
+  const exportPdf = () => {
+    downloadSupportPdf({
+      ticketId,
+      pagePath: location.pathname,
+      reporter: user?.email ?? 'Team member',
+      tier,
+      resolved,
+      bubbles: bubbles.map(b => ({
+        role: b.role,
+        content: b.content,
+        tier: b.tier,
+        attachments: b.attachmentNames,
+      })),
+    });
+  };
+
   const markResolved = async () => {
     if (!ticketId) return;
     await supabase
@@ -280,6 +302,17 @@ export default function SupportWidget() {
               )}
             </div>
             <div className="flex items-center gap-1">
+              {bubbles.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={exportPdf}
+                  title="Download this conversation as a PDF"
+                >
+                  <Download className="mr-1 h-3 w-3" /> PDF
+                </Button>
+              )}
               {ticketId && !resolved && (
                 <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={markResolved}>
                   <CheckCircle2 className="mr-1 h-3 w-3" /> Solved
