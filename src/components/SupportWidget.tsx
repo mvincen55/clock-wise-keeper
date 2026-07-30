@@ -376,14 +376,37 @@ export default function SupportWidget() {
 
           {!resolved && (
             <div className="space-y-2 border-t p-2">
-              {file && (
-                <div className="flex items-center justify-between rounded bg-muted px-2 py-1 text-xs">
-                  <span className="truncate">{file.name}</span>
-                  <button type="button" onClick={() => setFile(null)} aria-label="Remove screenshot">
-                    <X className="h-3 w-3" />
-                  </button>
+              {files.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {files.map((f, i) => (
+                    <div
+                      key={`${f.name}-${i}`}
+                      className="relative h-16 w-16 overflow-hidden rounded border bg-muted"
+                    >
+                      {f.type.startsWith('image/') ? (
+                        <img
+                          src={URL.createObjectURL(f)}
+                          alt={`Attachment preview: ${f.name}`}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center px-1 text-center text-[9px] leading-tight text-muted-foreground">
+                          {f.name}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))}
+                        aria-label={`Remove ${f.name}`}
+                        className="absolute right-0 top-0 rounded-bl bg-background/90 p-0.5"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
+
               <Textarea
                 ref={textRef}
                 value={text}
