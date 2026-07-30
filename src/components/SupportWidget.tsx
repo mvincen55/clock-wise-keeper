@@ -361,6 +361,10 @@ export default function SupportWidget() {
     setTicketId(t.id);
     setTier(t.tier === 'senior' ? 'senior' : 'standard');
     setResolved(t.status === 'resolved');
+    setTicketContext(
+      t.context_path ? { path: t.context_path, label: t.context_label ?? 'what this was about' } : null,
+    );
+
     try {
       const { data, error } = await supabase
         .from('support_messages')
