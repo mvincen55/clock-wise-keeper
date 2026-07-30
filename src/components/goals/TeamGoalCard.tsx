@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import GoalProgress from './GoalProgress';
+import TargetProgress from './TargetProgress';
 import GoalStatusBadge from './GoalStatusBadge';
 import { monthElapsedFraction, type Goal, type GoalTask, type GoalUpdate } from '@/hooks/useGoals';
 
@@ -27,13 +28,16 @@ export default function TeamGoalCard({
         {goal ? (
           <>
             <p className="break-words text-sm">{goal.title}</p>
-            {goal.smart_target && (
-              <p className="mt-0.5 text-xs text-muted-foreground">Target: {goal.smart_target}</p>
-            )}
             <GoalProgress
               done={tasks.filter(t => t.done).length}
               total={tasks.length}
               monthElapsed={monthElapsedFraction(goal.month)}
+              compact
+            />
+            <TargetProgress
+              target={goal.smart_target}
+              done={tasks.filter(t => t.done).length}
+              total={tasks.length}
               compact
             />
             {latestUpdate ? (

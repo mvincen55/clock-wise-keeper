@@ -9,6 +9,7 @@ import { Loader2, Target, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { callPathfinder, useCreateGoal } from '@/hooks/useGoals';
 import SmartChips, { type SmartRead } from '@/components/goals/SmartChips';
+import RoleGoalIdeas from '@/components/goals/RoleGoalIdeas';
 
 /**
  * Set this month's goal. Pathfinder polishes the raw wording into one clear
@@ -121,6 +122,16 @@ export default function SetGoalCard({ month }: { month: string }) {
             </div>
           )}
         </div>
+
+        <RoleGoalIdeas
+          onPickExample={idea => {
+            setTitle(idea.title);
+            setTarget(idea.target);
+            setOriginal(null);
+            setSmart(null);
+          }}
+          onPickTarget={t => setTarget(t)}
+        />
 
         {smart && <SmartChips smart={smart} />}
 
