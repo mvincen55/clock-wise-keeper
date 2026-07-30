@@ -14,6 +14,7 @@ import { Loader2, Shield, Timer, CalendarDays, Plus, Trash2, DollarSign, Refresh
 import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/time-utils';
 import PrivacyTermsCard from '@/components/onboarding/PrivacyTermsCard';
+import EscalationPoliciesCard from '@/components/accountability/EscalationPoliciesCard';
 
 const WEEKDAY_OPTIONS = [
   { value: '0', label: 'Sunday' },
