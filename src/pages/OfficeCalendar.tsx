@@ -412,10 +412,6 @@ export default function OfficeCalendar() {
   const todayStr = new Date().toISOString().split('T')[0];
 
   // Team meetings live in office_events — Goals paces plans toward them.
-  const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-  const monthEnd = `${year}-${String(month + 1).padStart(2, '0')}-${String(
-    new Date(year, month + 1, 0).getDate()
-  ).padStart(2, '0')}`;
   const { data: teamMeetings } = useOfficeEvents(monthStart, monthEnd, 'team_meeting');
   const meetingsByDay = new Map<string, { id: string; title: string }[]>();
   for (const m of teamMeetings ?? []) {
