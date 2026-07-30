@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Loader2, Shield, Timer, CalendarDays, Plus, Trash2, DollarSign, RefreshCw, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/time-utils';
+import IntegritySection from '@/components/IntegritySection';
 
 const WEEKDAY_OPTIONS = [
   { value: '0', label: 'Sunday' },
@@ -226,6 +227,9 @@ export default function Settings() {
           )}
         </CardContent>
       </Card>
+
+      {/* Integrity & Safety (owners and managers) */}
+      {isManager && <IntegritySection isOwner={ctx?.role === 'owner'} />}
 
       {/* Security & Privacy */}
       <Card className="card-elevated">
