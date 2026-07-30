@@ -62,7 +62,22 @@ HOW YOU ANSWER:
 - Never rank people against each other, never score, never characterize anyone's character. Describe behavior and dates only.
 - Never recommend discipline or consequences. You may suggest a conversation, a schedule check, or a policy clarification.
 - Short. Markdown. Lead with the one thing that actually matters; skip padding.
-- If nothing in the range needs attention, say exactly that in one or two lines.`;
+- If nothing in the range needs attention, say exactly that in one or two lines.
+
+FLAGGED CONCERNS — REQUIRED STRUCTURE:
+After your prose, if (and only if) you flagged something worth a look, append one fenced json block, exactly like this and nothing after it:
+
+\`\`\`json
+{"concerns":[{"title":"short plain-English concern","confidence":"high|medium|low","confidence_reason":"one line on why the evidence is this strong or this thin","supports":["evidence that backs it, each with a real record id"],"weakens":["evidence that cuts against it, or context that makes it ordinary"],"record_ids":["<real record ids>"]}]}
+\`\`\`
+
+Rules for that block:
+- confidence "high" = several records, consistent, clearly outside the ordinary. "medium" = a real pattern but thin data or a plausible ordinary explanation. "low" = a hunch worth a glance; say so.
+- ALWAYS fill "weakens". If nothing genuinely weakens it, write what would change your mind or what data you cannot see. Never leave it empty.
+- Every entry in supports/weakens must reference records you were given. No invented evidence.
+- record_ids must be ids from the RECORDS block only.
+- If nothing is worth flagging, omit the json block entirely.`;
+
 
 
 Deno.serve(async (req) => {
@@ -208,19 +223,74 @@ Deno.serve(async (req) => {
     let answer = data?.choices?.[0]?.message?.content?.trim() ||
       "Nothing stood out in this range.";
 
-    // Anti-hallucination: any cited id that is not a real row we handed the
-    // model gets stripped out. The AI never gets to invent an entry.
     const realIds = new Set(rows.map((r: Row) => String(r.id)));
     const cited = new Set<string>();
-    let dropped = 0;
-    answer = answer.replace(/\[rec:\s*([0-9a-fA-F-]{6,})\s*\]/g, (m: string, id: string) => {
-      if (realIds.has(id)) {
-        cited.add(id);
-        return `[rec:${id}]`;
+
+    // Pull the structured concerns block out of the prose.
+    type Concern = {
+      title: string;
+      confidence: "high" | "medium" | "low";
+      confidence_reason: string;
+      supports: string[];
+      weakens: string[];
+      record_ids: string[];
+    };
+    let concerns: Concern[] = [];
+    const block = answer.match(/```json\s*([\s\S]*?)```/);
+    if (block) {
+      answer = answer.replace(block[0], "").trim();
+      try {
+        const parsed = JSON.parse(block[1]);
+        const list = Array.isArray(parsed?.concerns) ? parsed.concerns : [];
+        concerns = list
+          .map((c: Row) => {
+            const conf = String(c.confidence ?? "low").toLowerCase();
+            const ids = (Array.isArray(c.record_ids) ? c.record_ids : [])
+              .map(String)
+              // Anti-hallucination: a concern may only point at real records.
+              .filter((id: string) => realIds.has(id));
+            ids.forEach((id: string) => cited.add(id));
+            return {
+              title: String(c.title ?? "").slice(0, 300),
+              confidence: (["high", "medium", "low"].includes(conf) ? conf : "low") as
+                Concern["confidence"],
+              confidence_reason: String(c.confidence_reason ?? ""),
+              supports: (Array.isArray(c.supports) ? c.supports : []).map((s: unknown) =>
+                String(s).slice(0, 500)
+              ),
+              weakens: (Array.isArray(c.weakens) ? c.weakens : []).map((s: unknown) =>
+                String(s).slice(0, 500)
+              ),
+              record_ids: ids,
+            };
+          })
+          // A concern with no real record behind it is not a concern.
+          .filter((c: Concern) => c.title && c.record_ids.length > 0);
+      } catch (err) {
+        console.warn("reports-analyst could not parse concerns block", err);
       }
-      dropped++;
-      return "";
-    });
+    }
+
+    // Anti-hallucination: any cited id that is not a real row we handed the
+    // model gets stripped out. The AI never gets to invent an entry.
+    let dropped = 0;
+    const scrub = (text: string) =>
+      text.replace(/\[rec:\s*([0-9a-fA-F-]{6,})\s*\]/g, (_m: string, id: string) => {
+        if (realIds.has(id)) {
+          cited.add(id);
+          return `[rec:${id}]`;
+        }
+        dropped++;
+        return "";
+      });
+
+    answer = scrub(answer);
+    concerns = concerns.map(c => ({
+      ...c,
+      supports: c.supports.map(scrub),
+      weakens: c.weakens.map(scrub),
+    }));
+
     if (dropped > 0) {
       console.warn("reports-analyst dropped fabricated citations", dropped);
       answer +=
@@ -243,7 +313,8 @@ Deno.serve(async (req) => {
         closed_at: r.closed_at ?? null,
       }));
 
-    return json({ answer, citations, record_count: rows.length });
+    return json({ answer, concerns, citations, record_count: rows.length });
+
 
   } catch (e) {
     console.error("reports-analyst failed", e);

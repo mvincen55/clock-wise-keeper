@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Sparkles, Loader2, Send, FileText } from 'lucide-react';
+import { Sparkles, Loader2, Send, FileText, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { formatDate } from '@/lib/time-utils';
@@ -29,11 +29,22 @@ export interface AnalystCitation {
   closed_at: string | null;
 }
 
+export interface AnalystConcern {
+  title: string;
+  confidence: 'high' | 'medium' | 'low';
+  confidence_reason: string;
+  supports: string[];
+  weakens: string[];
+  record_ids: string[];
+}
+
 type Turn = {
   role: 'user' | 'assistant';
   content: string;
   citations?: AnalystCitation[];
+  concerns?: AnalystConcern[];
 };
+
 
 const CITE = /\[rec:([0-9a-fA-F-]{6,})\]/g;
 
@@ -41,6 +52,48 @@ const CITE = /\[rec:([0-9a-fA-F-]{6,})\]/g;
 function citeLabel(c: AnalystCitation | undefined, id: string) {
   if (!c) return `#${id.slice(0, 8)}`;
   return `${c.who} · ${formatDate(c.period_start)}`;
+}
+
+/** Renders one line of text, turning [rec:<id>] tokens into record chips. */
+function CiteLine({
+  text,
+  byId,
+  onOpen,
+}: {
+  text: string;
+  byId: Map<string, AnalystCitation>;
+  onOpen: (c: AnalystCitation) => void;
+}) {
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  CITE.lastIndex = 0;
+  while ((m = CITE.exec(text))) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    const c = byId.get(m[1]);
+    out.push(
+      <button
+        key={`${m[1]}-${m.index}`}
+        type="button"
+        disabled={!c}
+        onClick={() => c && onOpen(c)}
+        className="mx-0.5 inline-flex items-center gap-1 rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5 align-baseline text-[11px] font-medium text-accent hover:bg-accent/20 disabled:opacity-50"
+        title={c ? c.summary : 'Record not found'}
+      >
+        <FileText className="h-3 w-3" />
+        {citeLabel(c, m[1])}
+      </button>,
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return (
+    <>
+      {out.map((n, i) => (
+        <Fragment key={i}>{n}</Fragment>
+      ))}
+    </>
+  );
 }
 
 /**
@@ -58,32 +111,6 @@ function AnswerText({
 }) {
   const byId = new Map(citations.map(c => [c.id, c]));
 
-  const renderLine = (line: string) => {
-    const out: React.ReactNode[] = [];
-    let last = 0;
-    let m: RegExpExecArray | null;
-    CITE.lastIndex = 0;
-    while ((m = CITE.exec(line))) {
-      if (m.index > last) out.push(line.slice(last, m.index));
-      const c = byId.get(m[1]);
-      out.push(
-        <button
-          key={`${m[1]}-${m.index}`}
-          type="button"
-          disabled={!c}
-          onClick={() => c && onOpen(c)}
-          className="mx-0.5 inline-flex items-center gap-1 rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5 align-baseline text-[11px] font-medium text-accent hover:bg-accent/20 disabled:opacity-50"
-          title={c ? c.summary : 'Record not found'}
-        >
-          <FileText className="h-3 w-3" />
-          {citeLabel(c, m[1])}
-        </button>,
-      );
-      last = m.index + m[0].length;
-    }
-    if (last < line.length) out.push(line.slice(last));
-    return out.map((n, i) => <Fragment key={i}>{n}</Fragment>);
-  };
 
   return (
     <div className="space-y-1.5 text-sm leading-relaxed">
@@ -106,13 +133,112 @@ function AnswerText({
                     : 'text-muted-foreground'
               }
             >
-              {renderLine(body)}
+              <CiteLine text={body} byId={byId} onOpen={onOpen} />
             </p>
           );
         })}
     </div>
   );
 }
+
+const CONFIDENCE: Record<
+  AnalystConcern['confidence'],
+  { label: string; className: string; blurb: string }
+> = {
+  high: {
+    label: 'High confidence',
+    className: 'border-destructive/40 bg-destructive/10 text-destructive',
+    blurb: 'Several records point the same way.',
+  },
+  medium: {
+    label: 'Medium confidence',
+    className: 'border-accent/40 bg-accent/10 text-accent',
+    blurb: 'A real pattern, but thin data or an ordinary explanation.',
+  },
+  low: {
+    label: 'Low confidence',
+    className: 'border-muted-foreground/30 bg-muted text-muted-foreground',
+    blurb: 'Worth a glance, not a conclusion.',
+  },
+};
+
+/** A flagged concern with its confidence and both sides of the evidence. */
+function ConcernCard({
+  concern,
+  byId,
+  onOpen,
+}: {
+  concern: AnalystConcern;
+  byId: Map<string, AnalystCitation>;
+  onOpen: (c: AnalystCitation) => void;
+}) {
+  const conf = CONFIDENCE[concern.confidence];
+  return (
+    <div className="space-y-2 rounded-md border bg-background p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <p className="text-sm font-medium">{concern.title}</p>
+        <span
+          className={`shrink-0 rounded border px-2 py-0.5 text-[11px] font-medium ${conf.className}`}
+          title={conf.blurb}
+        >
+          {conf.label}
+        </span>
+      </div>
+      {concern.confidence_reason && (
+        <p className="text-xs italic text-muted-foreground">{concern.confidence_reason}</p>
+      )}
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="space-y-1">
+          <p className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <ThumbsUp className="h-3 w-3" /> Supports this
+          </p>
+          {concern.supports.length === 0 ? (
+            <p className="text-xs text-muted-foreground">—</p>
+          ) : (
+            concern.supports.map((s, i) => (
+              <p key={i} className="text-xs leading-relaxed text-muted-foreground">
+                • <CiteLine text={s} byId={byId} onOpen={onOpen} />
+              </p>
+            ))
+          )}
+        </div>
+        <div className="space-y-1">
+          <p className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <ThumbsDown className="h-3 w-3" /> Weakens this
+          </p>
+          {concern.weakens.length === 0 ? (
+            <p className="text-xs text-muted-foreground">—</p>
+          ) : (
+            concern.weakens.map((s, i) => (
+              <p key={i} className="text-xs leading-relaxed text-muted-foreground">
+                • <CiteLine text={s} byId={byId} onOpen={onOpen} />
+              </p>
+            ))
+          )}
+        </div>
+      </div>
+      {concern.record_ids.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {concern.record_ids.map(id => {
+            const c = byId.get(id);
+            if (!c) return null;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onOpen(c)}
+                className="rounded border bg-muted/40 px-2 py-1 text-[11px] hover:bg-muted"
+              >
+                {c.who} · {c.kind_label} · {formatDate(c.period_start)}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 /**
  * The AI reader over the accountability record book. Same filters as the list
@@ -155,7 +281,9 @@ export default function ReportsAnalyst({
           role: 'assistant',
           content: data.answer as string,
           citations: (data.citations ?? []) as AnalystCitation[],
+          concerns: (data.concerns ?? []) as AnalystConcern[],
         },
+
       ]);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'The analyst could not answer.');
@@ -182,9 +310,11 @@ export default function ReportsAnalyst({
           </CardTitle>
           <p className="text-xs text-muted-foreground">
             Reads the records in the range above — patterns, anything worth a look, and what's
-            ordinary. Every claim cites a real record you can open. Citations that don't match a
+            ordinary. Anything it flags comes with a confidence level and the evidence on both
+            sides. Every claim cites a real record you can open; citations that don't match a
             real record are stripped before you ever see them.
           </p>
+
         </CardHeader>
         <CardContent className="space-y-3 p-4">
           <Button size="sm" variant="outline" disabled={busy} onClick={() => call('analyze')}>
@@ -210,7 +340,24 @@ export default function ReportsAnalyst({
                       citations={t.citations ?? []}
                       onOpen={setOpen}
                     />
+                    {(t.concerns?.length ?? 0) > 0 && (
+                      <div className="space-y-2 border-t pt-2">
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Flagged concerns ({t.concerns!.length}) — with confidence and both
+                          sides of the evidence
+                        </p>
+                        {t.concerns!.map((c, ci) => (
+                          <ConcernCard
+                            key={ci}
+                            concern={c}
+                            byId={new Map((t.citations ?? []).map(x => [x.id, x]))}
+                            onOpen={setOpen}
+                          />
+                        ))}
+                      </div>
+                    )}
                     {(t.citations?.length ?? 0) > 0 && (
+
                       <div className="space-y-1 border-t pt-2">
                         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                           Records used ({t.citations!.length})
