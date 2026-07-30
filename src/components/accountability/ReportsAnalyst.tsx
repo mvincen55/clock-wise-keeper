@@ -310,9 +310,11 @@ export default function ReportsAnalyst({
           </CardTitle>
           <p className="text-xs text-muted-foreground">
             Reads the records in the range above — patterns, anything worth a look, and what's
-            ordinary. Every claim cites a real record you can open. Citations that don't match a
+            ordinary. Anything it flags comes with a confidence level and the evidence on both
+            sides. Every claim cites a real record you can open; citations that don't match a
             real record are stripped before you ever see them.
           </p>
+
         </CardHeader>
         <CardContent className="space-y-3 p-4">
           <Button size="sm" variant="outline" disabled={busy} onClick={() => call('analyze')}>
