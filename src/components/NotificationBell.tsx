@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { slaFor } from '@/lib/support-sla';
+import { useTick } from '@/hooks/useTick';
 import TicketTimeline, { stageFromTicket } from '@/components/support/TicketTimeline';
 
 export default function NotificationBell() {
@@ -18,6 +19,7 @@ export default function NotificationBell() {
   const ref = useRef<HTMLDivElement>(null);
   const { data: notifications } = useNotifications();
   const unreadCount = useUnreadCount();
+  const now = useTick(1000);
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllRead();
   const { user } = useAuth();
@@ -30,7 +32,7 @@ export default function NotificationBell() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('support_tickets')
-        .select('id, title, status, tier, severity, context_path, context_label, created_at, escalated_at, resolved_at')
+        .select('id, title, status, tier, severity, category, context_path, context_label, created_at, escalated_at, resolved_at')
         .eq('user_id', user!.id)
         .order('created_at', { ascending: false })
         .limit(5);
@@ -113,7 +115,7 @@ export default function NotificationBell() {
                     />
 
                     {(() => {
-                      const sla = slaFor(t);
+                      const sla = slaFor(t, now);
                       return (
                         <p
                           className={`text-[11px] ${
