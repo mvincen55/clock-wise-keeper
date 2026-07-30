@@ -17,44 +17,18 @@ import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { scrubFreeText, looksPersonLevel } from '../../supabase/functions/_shared/phi-scrub';
+import {
+  AI_GATEWAY_ALLOWLIST,
+  allowlistedSurfaces,
+  consentedSurfaces,
+  surfacesRequiringScrub,
+  assertGatewayAllowed,
+} from '../../supabase/functions/_shared/ai-allowlist';
 
 const FUNCTIONS_DIR = join(process.cwd(), 'supabase', 'functions');
 
-/** Functions that put office free text in a prompt. These must scrub. */
-const MUST_SCRUB = [
-  'goal-assistant',
-  'office-pulse',
-  'sprint-verify',
-  'commitment-listen',
-  'training-roleplay',
-  'ask-docs',
-  'assistant-auditor',
-  'fof-assistant',
-  'kimi-agent',
-  'reports-analyst',
-  'support-agent',
-  'training-builder',
-  'accountability-engine',
-];
-
-/**
- * Functions where the person-level content is the deliberate subject of the
- * request and the user knows they are sending it. Each needs a reason.
- */
-const CONSENTED: Record<string, string> = {
-  'parse-pdf': 'User uploads a payroll/timesheet PDF and asks for it to be read.',
-  'parse-treatment': 'User uploads a treatment plan and asks for it to be parsed.',
-  'ingest-doc': 'Owner deliberately uploads office policy documents to the corpus.',
-  'name-visits': 'Sees procedure codes and visit structure only — no person fields.',
-};
-
-/**
- * Known gaps: these reach the gateway with staff-authored text that is not yet
- * scrubbed. Listed so the exposure is visible and bounded. This list may shrink
- * and must never grow — a new unscrubbed AI caller fails the suite instead of
- * quietly joining the list.
- */
-const PENDING_SCRUB: string[] = [];
+const MUST_SCRUB = surfacesRequiringScrub();
+const CONSENTED = consentedSurfaces();
 
 function functionDirs(): string[] {
   return readdirSync(FUNCTIONS_DIR, { withFileTypes: true })
@@ -76,19 +50,43 @@ describe('every AI caller is a decision someone made', () => {
     expect(callers.length).toBeGreaterThan(0);
   });
 
-  it('classifies every function that reaches the AI gateway', () => {
-    const classified = new Set([...MUST_SCRUB, ...Object.keys(CONSENTED), ...PENDING_SCRUB]);
-    const unclassified = callers.filter((n) => !classified.has(n));
+  it('every gateway caller is registered in the allowlist', () => {
+    const allowed = new Set(allowlistedSurfaces());
+    const unregistered = callers.filter((n) => !allowed.has(n));
     expect(
-      unclassified,
-      `These functions call the AI gateway but are not classified for PHI. ` +
-        `Add scrubbing and list them in MUST_SCRUB, or document why they are exempt: ` +
-        unclassified.join(', '),
+      unregistered,
+      `These functions call the AI gateway but are not registered in ` +
+        `supabase/functions/_shared/ai-allowlist.ts. Add an entry with a PHI ` +
+        `handler ("scrub" or "consented") and a reason: ${unregistered.join(', ')}`,
     ).toEqual([]);
   });
 
-  it('never lets the unscrubbed list grow', () => {
-    expect(PENDING_SCRUB.length).toBeLessThanOrEqual(0);
+  it('the allowlist has no stale entries', () => {
+    const live = new Set(callers);
+    const stale = allowlistedSurfaces().filter((n) => !live.has(n));
+    expect(
+      stale,
+      `Registered but no longer reaching the gateway — remove: ${stale.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('every allowlist entry carries a reason', () => {
+    for (const [name, entry] of Object.entries(AI_GATEWAY_ALLOWLIST)) {
+      expect(['scrub', 'consented'], `${name} has an unknown handler`).toContain(entry.handler);
+      expect(entry.reason.trim().length, `${name} needs a reason`).toBeGreaterThan(10);
+    }
+  });
+
+  it('refuses an unregistered surface at runtime', () => {
+    expect(() => assertGatewayAllowed('brand-new-ai-function')).toThrow(/not registered/i);
+    expect(() => assertGatewayAllowed(undefined)).toThrow();
+    for (const name of allowlistedSurfaces()) {
+      expect(() => assertGatewayAllowed(name)).not.toThrow();
+    }
+  });
+
+  it('consented exemptions stay rare and deliberate', () => {
+    expect(CONSENTED.length).toBeLessThanOrEqual(4);
   });
 
   for (const name of MUST_SCRUB) {

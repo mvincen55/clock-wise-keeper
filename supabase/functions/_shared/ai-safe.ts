@@ -12,6 +12,7 @@
 // rows, image captions — is scrubbed.
 
 import { scrubFreeText, type ScrubResult } from "./phi-scrub.ts";
+import { assertGatewayAllowed, isAllowlisted } from "./ai-allowlist.ts";
 
 type Part = { type?: string; text?: unknown; [k: string]: unknown };
 type Message = { role?: unknown; content?: unknown; [k: string]: unknown };
@@ -44,6 +45,9 @@ function scrubContent(content: unknown, hits: string[]): unknown {
  * never mutated. Safe to call on anything — malformed entries pass through.
  */
 export function scrubMessages<T>(messages: T, surface?: string): T {
+  // A named surface must be registered in the allowlist. Unregistered callers
+  // throw here rather than shipping text to a gateway nobody signed off on.
+  if (surface !== undefined) assertGatewayAllowed(surface);
   if (!Array.isArray(messages)) return messages;
   const hits: string[] = [];
   const out = messages.map((m) => {
@@ -58,3 +62,5 @@ export function scrubMessages<T>(messages: T, surface?: string): T {
   }
   return out as unknown as T;
 }
+
+export { assertGatewayAllowed, isAllowlisted };
