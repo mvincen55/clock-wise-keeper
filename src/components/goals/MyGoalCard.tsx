@@ -7,6 +7,7 @@ import { Compass, Loader2, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import GoalProgress from './GoalProgress';
+import TargetProgress from './TargetProgress';
 import GoalStatusBadge from './GoalStatusBadge';
 import PathfinderChat from './PathfinderChat';
 import PathfinderPlanEditor, { type DraftTask } from './PathfinderPlanEditor';
@@ -78,9 +79,7 @@ export default function MyGoalCard({
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <CardTitle className="text-base leading-snug">{goal.title}</CardTitle>
-          {goal.smart_target && (
-            <p className="mt-1 text-xs text-muted-foreground">Target: {goal.smart_target}</p>
-          )}
+
           <div className="flex items-center gap-2">
             {goal.visibility === 'private' && (
               <Badge variant="outline" className="gap-1">
@@ -97,7 +96,10 @@ export default function MyGoalCard({
           <p className="text-sm text-muted-foreground">{goal.description}</p>
         )}
 
-        <GoalProgress done={done} total={tasks.length} monthElapsed={elapsed} />
+        <div className="space-y-2">
+          <GoalProgress done={done} total={tasks.length} monthElapsed={elapsed} />
+          <TargetProgress target={goal.smart_target} done={done} total={tasks.length} />
+        </div>
 
         {hasPlan && (
           <ul className="space-y-2">
