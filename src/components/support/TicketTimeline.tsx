@@ -1,5 +1,20 @@
 import { Check, Loader2 } from 'lucide-react';
 
+/** Eastern Time, to the minute — the house convention everywhere in the app. */
+function stamp(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+export type TicketStageTimes = Partial<Record<TicketStage, string | null>>;
+
 export type TicketStage = 'open' | 'analyst' | 'escalated' | 'solved';
 
 const STAGES: { key: TicketStage; label: string }[] = [
@@ -29,10 +44,13 @@ export default function TicketTimeline({
   stage,
   working = false,
   className = '',
+  times,
 }: {
   stage: TicketStage;
   working?: boolean;
   className?: string;
+  /** When each step actually happened. Steps without a time just show the label. */
+  times?: TicketStageTimes;
 }) {
   const current = STAGES.findIndex(s => s.key === stage);
 
@@ -42,7 +60,7 @@ export default function TicketTimeline({
         const done = i < current || stage === 'solved';
         const active = i === current;
         return (
-          <li key={s.key} className="flex flex-1 items-center gap-1">
+          <li key={s.key} className="flex flex-1 items-start gap-1">
             <span
               className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[9px] ${
                 done
@@ -60,16 +78,21 @@ export default function TicketTimeline({
                 i + 1
               )}
             </span>
-            <span
-              className={`truncate text-[10px] leading-tight ${
-                active ? 'font-medium text-foreground' : 'text-muted-foreground'
-              }`}
-            >
-              {s.label}
+            <span className="min-w-0 flex-1">
+              <span
+                className={`block truncate text-[10px] leading-tight ${
+                  active ? 'font-medium text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                {s.label}
+              </span>
+              <span className="block truncate text-[9px] leading-tight text-muted-foreground">
+                {times?.[s.key] ? stamp(times[s.key] as string) : '—'}
+              </span>
             </span>
             {i < STAGES.length - 1 && (
               <span
-                className={`h-px flex-1 ${done ? 'bg-primary/50' : 'bg-border'}`}
+                className={`mt-2 h-px w-2 shrink-0 ${done ? 'bg-primary/50' : 'bg-border'}`}
                 aria-hidden="true"
               />
             )}
