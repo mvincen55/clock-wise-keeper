@@ -24,6 +24,7 @@ import ProgressRing from '@/components/goals/ProgressRing';
 import TargetProgress from '@/components/goals/TargetProgress';
 import GoalStatusBadge from '@/components/goals/GoalStatusBadge';
 import MyGoalCard from '@/components/goals/MyGoalCard';
+import GoalChangeLog from '@/components/goals/GoalChangeLog';
 import SetGoalCard from '@/components/goals/SetGoalCard';
 import TeamGoalCard from '@/components/goals/TeamGoalCard';
 import GoalsPrintSheet, { type GoalsReportRow } from '@/components/goals/GoalsPrintSheet';
@@ -35,7 +36,9 @@ import {
   monthLabel,
   useActiveTeam,
   useCreateGoal,
+  useGoalEvents,
   useGoalsMonth,
+  useLinkReplacementGoal,
   type Goal,
   type GoalTask,
   type GoalUpdate,
@@ -49,6 +52,9 @@ export default function Goals() {
   const { data: team } = useActiveTeam();
   const { data: branding } = useOrgBranding();
   const createGoal = useCreateGoal();
+  const { data: goalEvents = [] } = useGoalEvents(month);
+  const linkReplacement = useLinkReplacementGoal();
+  const [replacingGoalId, setReplacingGoalId] = useState<string | null>(null);
 
   const [meetingView, setMeetingView] = useState(false);
   const [privateOpen, setPrivateOpen] = useState(false);
@@ -61,6 +67,8 @@ export default function Goals() {
   const goals = data?.goals ?? [];
   const tasks = data?.tasks ?? [];
   const updates = data?.updates ?? [];
+
+  const eventsFor = (goalId: string) => goalEvents.filter(e => e.goal_id === goalId);
 
   const tasksFor = (goalId: string): GoalTask[] => tasks.filter(t => t.goal_id === goalId);
   const latestUpdate = (goalId: string): GoalUpdate | undefined =>
@@ -161,6 +169,8 @@ export default function Goals() {
           </div>
         </div>
 
+        <GoalChangeLog events={goalEvents} nameOf={nameOf} />
+
         {teamGoals.length === 0 && (
           <p className="text-sm text-muted-foreground">No goals shared with the team yet.</p>
         )}
@@ -247,7 +257,17 @@ export default function Goals() {
         </div>
       </header>
 
-      {!myTeamGoal && <SetGoalCard month={month} />}
+      {!myTeamGoal && (
+        <SetGoalCard
+          month={month}
+          onCreated={title => {
+            if (replacingGoalId) {
+              linkReplacement.mutate({ archivedGoalId: replacingGoalId, newTitle: title });
+              setReplacingGoalId(null);
+            }
+          }}
+        />
+      )}
 
       {myGoals.length > 0 && (
         <section className="space-y-4">
@@ -259,6 +279,13 @@ export default function Goals() {
               tasks={tasksFor(goal.id)}
               latestUpdate={latestUpdate(goal.id)}
               onShareUpdate={() => setUpdateGoal(goal)}
+              hasUpdates={updates.some(u => u.goal_id === goal.id)}
+              events={eventsFor(goal.id)}
+              nameOf={nameOf}
+              onArchived={id => {
+                setReplacingGoalId(id);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
             />
           ))}
         </section>

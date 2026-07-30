@@ -16,7 +16,14 @@ import { evaluateSmartGate } from '@/lib/smart';
  * Set this month's goal. Pathfinder polishes the raw wording into one clear
  * sentence, which the member can edit or restore to their own words.
  */
-export default function SetGoalCard({ month }: { month: string }) {
+export default function SetGoalCard({
+  month,
+  onCreated,
+}: {
+  month: string;
+  /** Lets the page link a fresh goal to the one it replaces. */
+  onCreated?: (title: string) => void;
+}) {
   const createGoal = useCreateGoal();
   const [title, setTitle] = useState('');
   const [original, setOriginal] = useState<string | null>(null);
@@ -55,6 +62,7 @@ export default function SetGoalCard({ month }: { month: string }) {
   const save = async () => {
     if (!gate.passes) return;
     try {
+      const saved = title.trim();
       await createGoal.mutateAsync({
         title: title.trim(),
         description: description.trim() || undefined,
@@ -68,6 +76,7 @@ export default function SetGoalCard({ month }: { month: string }) {
       setSmart(null);
       setDescription('');
       setIsPrivate(false);
+      onCreated?.(saved);
       toast.success('Goal set — good luck this month.');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not save your goal');
