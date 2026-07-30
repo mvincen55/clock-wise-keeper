@@ -11,6 +11,7 @@ Build order / status: Prompt 1 (Goals) — sent · Prompt 3 (redesign) — sent 
 Prompt 4 (brand pass) — sent · Prompt 2 (bypass, revised) — sent, implementing ·
 Training Library (`docs/training-library-spec.md`) — sent BEFORE Prompt 6 ·
 Prompt 6 (visuals + meetings + library hookup) — final version below ·
+Prompt 7 (edit/delete goals with accountability) — final version below, pending ·
 Prompt 5 (SMART) — pending, independent, send anytime.
 
 ## Product decisions (the "why")
@@ -51,6 +52,11 @@ Prompt 5 (SMART) — pending, independent, send anytime.
     (`docs/training-library-spec.md`) — goal resources link into it, never a parallel
     store. Grounding authority: assistant_memories > office docs > org config.
     Premium model for content generation (cost approved), cheap model for chatter.
+12. **Goals are mutable, never silently** (Prompt 7): members edit/delete only their
+    own goals (not even admins). Delete = archive with a required reason, never
+    hard-delete. Edits to never-shared goals are free; edits to shared goals require
+    a reason. Every change becomes a `goal_events` row that surfaces in the next
+    meeting view and in the member's drafted update.
 
 ## Prompt 1 — Goals (sent)
 
@@ -185,6 +191,28 @@ training-builder; sending this first would recreate the silo).
 > - MODEL TIERS — cost explicitly approved: training-builder already uses the strongest available model for content generation; keep goal-assistant's fast model for polish_goal, chat, and draft_update. Quiz answers stay private to the member — the team sees "completed", never scores.
 >
 > When finished: redeploy the updated goal-assistant edge function and confirm it's live.
+
+## Prompt 7 — Edit/delete goals with accountability (FINAL, pending)
+
+> Let members edit and delete their own goals — with accountability, never silently. Keep everything else as it is.
+>
+> EDIT:
+> - "Edit goal" on my own goal card → edit title + description.
+> - If the goal has ANY goal_updates (it's been shared with the team), saving an edit requires a short reason ("why the change?"). If it was never shared, edit freely.
+> - Only the goal's owner can edit or delete it — not managers, not owners of the org.
+>
+> DELETE / REPLACE:
+> - "Delete goal" → a modal that REQUIRES a reason before the confirm button enables. Always required, shared or not.
+> - Never hard-delete: set status='archived', archived_at, archived_reason. Archived goals disappear from cards and meeting view but stay in the database.
+> - After the archive confirms, immediately open the create-goal flow so they can set the replacement.
+>
+> VISIBILITY — if it was shared, the team hears about it at the next meeting:
+> - New table goal_events: id, org_id, goal_id, actor_id, type ('edited' | 'archived' | 'replaced'), reason text, old_title text, new_title text nullable, created_at. org_id + RLS matching the parent goal's visibility (team goal events → whole org reads; private goal events → member + owners/managers only).
+> - Record an event on every reasoned edit and every archive (type 'replaced' once the successor goal exists — link it by setting new_title).
+> - Meeting view gets a "Changes since last meeting" section: "Megan archived 'Explain treatment better' — reason: … → New goal: '…'". Also show the event as a subtle entry in that goal's update timeline.
+> - goal-assistant "draft_update" mode: if the member's goal was edited or archived since their last update, the drafted update mentions the change and reason naturally — it's part of what they report.
+>
+> No other schema changes beyond goal_events and the archived_at / archived_reason columns on goals.
 
 ## Known build risks (check these when testing)
 
