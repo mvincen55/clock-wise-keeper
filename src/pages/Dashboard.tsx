@@ -186,7 +186,7 @@ export default function Dashboard() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             {status === 'clocked_out' && (
-              <Button className="col-span-2 h-16 text-lg font-semibold punch-glow" onClick={() => { clockAction.run('clock_in'); if (!reasonPrompted && (unresolvedBypasses?.length ?? 0) > 0) { setReasonPrompted(true); setReasonPromptOpen(true); } }} disabled={isBusy}>
+              <Button className="col-span-2 h-16 text-lg font-semibold punch-glow" onClick={() => { clockAction.run('clock_in'); chaseAtClockIn(); if (!reasonPrompted && (unresolvedBypasses?.length ?? 0) > 0) { setReasonPrompted(true); setReasonPromptOpen(true); } }} disabled={isBusy}>
                 {isBusy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <LogIn className="mr-2 h-5 w-5" />}Clock In
               </Button>
             )}
