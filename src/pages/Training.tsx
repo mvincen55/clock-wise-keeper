@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import AppLayout from '@/components/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
@@ -82,18 +81,16 @@ export default function Training() {
 
   if (openModule) {
     return (
-      <AppLayout>
-        <ModulePlayer
-          module={openModule}
-          assignment={openAssignment}
-          onBack={() => setOpenModuleId(null)}
-        />
-      </AppLayout>
+      <ModulePlayer
+        module={openModule}
+        assignment={openAssignment}
+        onBack={() => setOpenModuleId(null)}
+      />
     );
   }
 
   return (
-    <AppLayout>
+    <>
       <div className="space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -250,6 +247,6 @@ export default function Training() {
         onClose={() => setAssignTarget(null)}
       />
       <BuildModuleDialog open={buildOpen} onOpenChange={setBuildOpen} />
-    </AppLayout>
+    </>
   );
 }
