@@ -107,8 +107,8 @@ export function useMomentum() {
           // Verified time off only — approved requests and recorded closures.
           supabase
             .from('pto_requests')
-            .select('start_date, end_date, status, user_id')
-            .eq('user_id', user!.id)
+            .select('start_date, end_date, status, employee_id')
+            .eq('employee_id', ctx!.employee_id)
             .eq('status', 'approved')
             .lte('start_date', today)
             .gte('end_date', start),
@@ -134,7 +134,14 @@ export function useMomentum() {
       );
 
       const attendance = new Map(
-        (attendanceRes.data ?? []).map((a) => [a.entry_date, a])
+        (attendanceRes.data ?? []).map((a) => [
+          a.entry_date,
+          {
+            is_scheduled_day: a.is_scheduled_day,
+            office_closed: a.office_closed,
+            has_day_off: a.has_day_off,
+          },
+        ])
       );
 
       const ptoDates = new Set<string>();
@@ -204,7 +211,7 @@ export function useMomentum() {
         },
       ];
 
-      const todayState = dayState(today);
+      const todayState = computeDayState(today, streakInput);
 
       return {
         streak,
