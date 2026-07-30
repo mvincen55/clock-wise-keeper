@@ -1,5 +1,4 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Mail, Loader2 } from 'lucide-react';
 import { useOfficeBrief } from '@/hooks/useOfficeInsights';
 
