@@ -86,7 +86,12 @@ export default function AcceptInvite() {
       });
       if (error) {
         const details = 'context' in error ? await error.context.text() : '';
-        const parsed = details ? JSON.parse(details) : null;
+        let parsed: { error?: string } | null = null;
+        try {
+          parsed = details ? JSON.parse(details) : null;
+        } catch {
+          parsed = null;
+        }
         throw new Error(parsed?.error || error.message);
       }
       if (data?.error) throw new Error(data.error);
