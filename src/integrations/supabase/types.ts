@@ -2983,6 +2983,7 @@ export type Database = {
           roleplay_notes: string | null
           roleplay_persona_style: string
           roleplay_policy_tone: string
+          security_alert_managers: boolean
           updated_at: string
         }
         Insert: {
@@ -2994,6 +2995,7 @@ export type Database = {
           roleplay_notes?: string | null
           roleplay_persona_style?: string
           roleplay_policy_tone?: string
+          security_alert_managers?: boolean
           updated_at?: string
         }
         Update: {
@@ -3005,6 +3007,7 @@ export type Database = {
           roleplay_notes?: string | null
           roleplay_persona_style?: string
           roleplay_policy_tone?: string
+          security_alert_managers?: boolean
           updated_at?: string
         }
         Relationships: [
@@ -3824,6 +3827,56 @@ export type Database = {
             columns: ["schedule_version_id"]
             isOneToOne: false
             referencedRelation: "schedule_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      security_events: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          detail: Json
+          fingerprint: string
+          id: string
+          kind: string
+          org_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          severity: string
+          status: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          detail?: Json
+          fingerprint: string
+          id?: string
+          kind: string
+          org_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          severity?: string
+          status?: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          detail?: Json
+          fingerprint?: string
+          id?: string
+          kind?: string
+          org_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          severity?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "security_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
         ]
