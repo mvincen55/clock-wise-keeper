@@ -113,6 +113,10 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
             {stats.absent > 0 && <Badge variant="outline" className="text-destructive border-destructive/30 text-xs">{stats.absent} absent</Badge>}
           </div>
 
+          {canArchive && <TeamAssignment employee={employee} />}
+
+
+
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="w-full grid grid-cols-4 mb-3">
               <TabsTrigger value="attendance" className="text-xs"><Calendar className="h-3 w-3 mr-1" />Attendance</TabsTrigger>
