@@ -32,14 +32,35 @@ export default function PracticeVitalsCard() {
   const trendMax = Math.max(...trendMonths.map(m => m.productionCents), 1);
   const disruptMax = Math.max(...trendMonths.map(m => m.disruptions), 1);
 
+  const pulseInput = {
+    productionCents: thisMonth.productionCents,
+    pacedTargetCents: lastMonthPaced,
+    disruptions: thisMonth.disruptions,
+    disruptionBaseline: lastMonth.disruptions * monthElapsed,
+    month: new Date().toISOString().slice(0, 7),
+    comparisonMonth: months.length > 1 ? months[months.length - 2].month : '—',
+    rowsThisMonth: thisMonth.days,
+    rowsComparisonMonth: lastMonth.days,
+    monthElapsed,
+    comparisonProductionCents: lastMonth.productionCents,
+    hygieneCancellations: thisMonth.hygieneCancellations,
+    hygieneNoShows: thisMonth.hygieneNoShows,
+    doctorCancellations: thisMonth.doctorCancellations,
+    doctorNoShows: thisMonth.doctorNoShows,
+  };
+
   return (
     <Card className="card-elevated">
       <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Activity className="h-4 w-4 text-primary" />
-          Practice vitals
+        <CardTitle className="flex flex-wrap items-center gap-x-3 gap-y-1 text-lg">
+          <span className="flex items-center gap-2">
+            <Activity className="h-4 w-4 text-primary" />
+            Practice vitals
+          </span>
+          <PracticePulseOrb input={pulseInput} />
         </CardTitle>
       </CardHeader>
+
       <CardContent className="space-y-6">
         {/* Production vs collections, month to date */}
         <div className="space-y-2">
