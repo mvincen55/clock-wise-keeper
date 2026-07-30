@@ -37,7 +37,8 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
  */
 export default function SupportWidget() {
   const { user } = useAuth();
-  const { orgId } = useOrgContext();
+  const { data: org } = useOrgContext();
+  const orgId = org?.org_id ?? null;
   const location = useLocation();
 
   const [open, setOpen] = useState(false);
