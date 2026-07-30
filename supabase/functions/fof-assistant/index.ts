@@ -15,6 +15,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadProcedureNotes } from "../_shared/procedure-notes.ts";
 
+import { scrubMessages } from "../_shared/ai-safe.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -58,14 +59,14 @@ async function searchQueries(apiKey: string, question: string): Promise<string[]
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 300,
-        messages: [
+        messages: scrubMessages([
           {
             role: "system",
             content:
               "Convert a dental office staff question into search queries for a keyword AND search over office documents (policies, HR, insurance manuals like Delta Dental). Return ONLY a JSON array of 3 to 5 query strings, each 1-3 precise words. Expand shorthand (DD MA -> Delta Dental, pt -> patient).",
           },
           { role: "user", content: question },
-        ],
+        ], "fof-assistant"),
       }),
     });
     const data = await response.json();
@@ -213,7 +214,7 @@ Deno.serve(async (req) => {
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: MODEL,
-        messages: [
+        messages: scrubMessages([
           {
             role: "system",
             content:
@@ -236,7 +237,7 @@ Deno.serve(async (req) => {
               ' Reply with ONLY a JSON object: {"reply": string, "saveRule": string|null}. Keep replies concise and concrete — suggest exact wording when discussing phrasing.',
           },
           ...chat,
-        ],
+        ], "fof-assistant"),
         max_tokens: 700,
       }),
     });

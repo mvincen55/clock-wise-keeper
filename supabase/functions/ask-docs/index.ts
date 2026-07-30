@@ -3,6 +3,7 @@ import { guardAiInput, JAILBREAK_REFUSAL } from "../_shared/jailbreak-guard.ts";
 import { loadProcedureNotes } from "../_shared/procedure-notes.ts";
 import { withDoctrine } from "../_shared/office-doctrine.ts";
 
+import { scrubMessages } from "../_shared/ai-safe.ts";
 // AI assistant over the office knowledge base (policies, HR info,
 // insurance handbooks). Two-step retrieval: an AI call first turns the
 // staff question into several short search queries (expanding dental and
@@ -44,7 +45,7 @@ async function callGateway(apiKey: string, messages: unknown[], maxTokens?: numb
   const response = await fetch(GATEWAY_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: MODEL, messages, ...(maxTokens ? { max_tokens: maxTokens } : {}) }),
+    body: JSON.stringify({ model: MODEL, messages: scrubMessages(messages, "ask-docs"), ...(maxTokens ? { max_tokens: maxTokens } : {}) }),
   });
   return response;
 }

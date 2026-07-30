@@ -27,6 +27,14 @@ const MUST_SCRUB = [
   'sprint-verify',
   'commitment-listen',
   'training-roleplay',
+  'ask-docs',
+  'assistant-auditor',
+  'fof-assistant',
+  'kimi-agent',
+  'reports-analyst',
+  'support-agent',
+  'training-builder',
+  'accountability-engine',
 ];
 
 /**
@@ -46,16 +54,7 @@ const CONSENTED: Record<string, string> = {
  * and must never grow — a new unscrubbed AI caller fails the suite instead of
  * quietly joining the list.
  */
-const PENDING_SCRUB = [
-  'ask-docs',
-  'assistant-auditor',
-  'fof-assistant',
-  'kimi-agent',
-  'reports-analyst',
-  'support-agent',
-  'training-builder',
-  'accountability-engine',
-];
+const PENDING_SCRUB: string[] = [];
 
 function functionDirs(): string[] {
   return readdirSync(FUNCTIONS_DIR, { withFileTypes: true })
@@ -89,15 +88,15 @@ describe('every AI caller is a decision someone made', () => {
   });
 
   it('never lets the unscrubbed list grow', () => {
-    expect(PENDING_SCRUB.length).toBeLessThanOrEqual(8);
+    expect(PENDING_SCRUB.length).toBeLessThanOrEqual(0);
   });
 
   for (const name of MUST_SCRUB) {
     it(`${name} scrubs free text before the prompt`, () => {
       const src = sourceOf(name);
       expect(src, `${name}/index.ts is missing`).not.toBe('');
-      expect(src).toMatch(/_shared\/phi-scrub/);
-      expect(src).toMatch(/scrubFreeText|scrubList/);
+      expect(src).toMatch(/_shared\/(phi-scrub|ai-safe)/);
+      expect(src).toMatch(/scrubFreeText|scrubList|scrubMessages/);
     });
   }
 

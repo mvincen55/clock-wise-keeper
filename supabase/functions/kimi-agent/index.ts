@@ -35,6 +35,7 @@ import { guardAiInput, JAILBREAK_REFUSAL } from "../_shared/jailbreak-guard.ts";
 import { formatCodeNote, loadCodeNotes, type CodeNote } from "../_shared/procedure-notes.ts";
 import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
 
+import { scrubMessages } from "../_shared/ai-safe.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -423,7 +424,7 @@ async function findContradiction(
         model,
         max_tokens: 400,
         temperature: 0,
-        messages: [
+        messages: scrubMessages([
           {
             role: "system",
             content:
@@ -437,7 +438,7 @@ async function findContradiction(
               '"explanation": "<one sentence naming what disagrees, or empty>"}',
           },
           { role: "user", content: `EXISTING FACTS:\n${numbered}\n\nNEW FACT:\n${newFact}` },
-        ],
+        ], "kimi-agent"),
       }),
       signal: AbortSignal.timeout(30_000),
     });
@@ -1212,7 +1213,7 @@ Deno.serve(async (req) => {
         },
         body: JSON.stringify({
           model,
-          messages: convo,
+          messages: scrubMessages(convo, "kimi-agent"),
           // Tools stay declared even on the final round (tool messages in
           // history need them); tool_choice "none" forces a text reply.
           ...(tools.length > 0 ? { tools, tool_choice: finalizing ? "none" : "auto" } : {}),
