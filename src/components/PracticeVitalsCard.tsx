@@ -3,6 +3,8 @@ import { Activity, TrendingDown, TrendingUp } from 'lucide-react';
 import { formatCents } from '@/lib/money';
 import { usePracticeVitals } from '@/hooks/usePracticeVitals';
 import { cn } from '@/lib/utils';
+import PracticePulseOrb from '@/components/PracticePulseOrb';
+
 
 /** Production gauge, schedule disruption at a glance, and where both are trending. */
 export default function PracticeVitalsCard() {
