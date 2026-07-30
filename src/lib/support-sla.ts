@@ -119,6 +119,12 @@ function stampEastern(d: Date): string {
 
 /** Where a report stands against its reply target, right now. */
 export function slaFor(t: SlaTicket, now: Date = new Date()): SlaState {
+  const escalated = t.status === 'escalated' || t.tier === 'senior';
+  const target = targetMinutesFor(t.severity, t.category, escalated);
+  const windowLabel = escalated
+    ? `within ${fmt(target)} (senior)`
+    : responseWindowLabel(t.severity, t.category);
+
   const closed = t.status === 'resolved' || t.status === 'closed';
   if (closed) {
     const at = t.resolved_at ? new Date(t.resolved_at) : null;
@@ -127,27 +133,31 @@ export function slaFor(t: SlaTicket, now: Date = new Date()): SlaState {
       dueAt: null,
       minutesLeft: 0,
       overdue: false,
+      targetMinutes: target,
+      windowLabel,
+      countdown: '',
       label: at ? `Solved ${stampEastern(at)}` : 'Solved',
     };
   }
 
-  const escalated = t.status === 'escalated' || t.tier === 'senior';
   const from = new Date(escalated && t.escalated_at ? t.escalated_at : t.created_at);
-  const target = escalated
-    ? SENIOR_MINUTES
-    : (TARGET_MINUTES[String(t.severity ?? 'medium')] ?? TARGET_MINUTES.medium);
-
   const dueAt = new Date(from.getTime() + target * 60_000);
-  const minutesLeft = Math.round((dueAt.getTime() - now.getTime()) / 60_000);
-  const overdue = minutesLeft < 0;
+  const msLeft = dueAt.getTime() - now.getTime();
+  const minutesLeft = Math.round(msLeft / 60_000);
+  const overdue = msLeft < 0;
+  const countdown = countdownFor(msLeft);
 
   return {
     done: false,
     dueAt,
     minutesLeft,
     overdue,
+    targetMinutes: target,
+    windowLabel,
+    countdown,
     label: overdue
-      ? `Overdue by ${fmt(minutesLeft)}`
-      : `Reply expected within ${fmt(minutesLeft)} · by ${stampEastern(dueAt)}`,
+      ? `Overdue by ${countdown} · target was ${windowLabel}`
+      : `Reply ${windowLabel} · ${countdown} left · by ${stampEastern(dueAt)}`,
   };
+
 }
