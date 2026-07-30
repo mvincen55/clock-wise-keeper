@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Clock, Table2, CalendarDays, FileText, LogOut, Menu, X, Settings, ShieldCheck, ShieldAlert, Send, CheckSquare, Users, Calendar, ReceiptText, Sparkles, BookOpen, Phone, ListChecks, Banknote, Sunrise, Target, Mail, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import NotificationBell from '@/components/NotificationBell';
+import BypassReasonBanner from '@/components/BypassReasonBanner';
 import { useApprovalCounts } from '@/hooks/useApprovalCounts';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -275,6 +276,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               {renderGroups(() => setMobileOpen(false), true)}
             </div>
           )}
+
+          <BypassReasonBanner />
 
           <main className="flex-1 overflow-auto">
             {children}
