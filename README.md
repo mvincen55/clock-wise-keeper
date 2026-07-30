@@ -27,6 +27,7 @@ Golden rules that must survive every change:
 - **Recipient emails are PII** — use the existing `maskEmail()` pattern in edge function logs.
 - **Printing is snapshot-tested.** FOF, Deposit Log, Incident Report, and Goals Report sheets have print-invariant tests; run the suite before merging print changes.
 - **"It looks old on my phone" is a serving problem until proven otherwise** — runbook §11 before touching code.
+- **Gamification motivates, never exploits** — rewards compute only from verified system records, never self-reported input; streaks pause on approved time off, never break; no public rankings (see Product rules).
 
 ---
 
@@ -36,6 +37,7 @@ Golden rules that must survive every change:
 2. **Everything is a setting.** Offices differ; behavior that could vary by office should be configurable rather than hard-coded.
 3. **Defaults are the product.** A new office should get a sensible, working configuration out of the box.
 4. **Invite-only access.** No public sign-up into an org. Access is gated by an allowlist (see Access model).
+5. **Accountability through visibility, not surveillance or exploitation.** Team goals are shared, quiz answers and Pathfinder threads are private, and any gamification is motivation-only: verified events, streaks that pause (never punish) on approved time off, no public leaderboards.
 
 ## HIPAA boundary (how the rule is enforced in code)
 
@@ -78,7 +80,7 @@ All routes except `/auth`, `/accept-invite`, and `/.lovable/oauth/consent` are b
 ### Time & attendance
 | Route | Page | What it does |
 |---|---|---|
-| `/` | Dashboard | Front page (redesign in flight — see Roadmap): clock in/out with the **checklist-bypass guard** (`useGuardedClockAction` + `ChecklistBypassDialog`), GPS auto-clock, punches, PTO widget, org snapshot, missing-shift banner |
+| `/` | Dashboard | Front page (role-shaped redesign in flight — see Roadmap): clock in/out with the **checklist-bypass guard** (`useGuardedClockAction` + `ChecklistBypassDialog`), GPS auto-clock, punches, PTO widget, org snapshot, missing-shift banner |
 | `/timesheet` | Timesheet | Clock in/out, punch history, manager punch editing (`PunchEditorModal`), tardy reasons (`TardyReasonModal`, `TardyReviewModal`) |
 | `/work-zones` | WorkZones | Geofenced zones for location-verified clock-in (`useGeoTracking`, `LocationStatusPanel`, `process-location-event`) |
 | `/reports` | Reports | Payroll/attendance reporting; export via `export-report` |
@@ -104,7 +106,7 @@ All routes except `/auth`, `/accept-invite`, and `/.lovable/oauth/consent` are b
 |---|---|---|
 | `/office-calendar` | OfficeCalendar | Shared calendar, office closures (`useOfficeClosures`), Google Calendar events (`google-calendar-events`), `team_meeting` event category |
 | `/checklists` | Checklists | Recurring office checklists — see Checklist data model |
-| `/deposit-log` | DepositLog | Daily deposit log + branded print sheet; **source of truth for the collections goal meter** |
+| `/deposit-log` | DepositLog | Daily close-out: deposits (collections truth) **plus practice vitals** (production, cancellations, late cancels, no-shows — Prompt 13) + branded print sheet |
 | `/incident-reports` | IncidentReports | Incident reports with signature/review workflow + print sheet |
 | `/important-numbers` | ImportantNumbers | Office contact directory with tabs |
 | `/policy-manual` | PolicyManual | Office policy manual + document Q&A (`ask-docs` / `ingest-doc`) |
@@ -235,7 +237,9 @@ Migration `20260723200000_checklists.sql`:
 
 - [`docs/goals-and-bypass-spec.md`](docs/goals-and-bypass-spec.md) — Goals page (Pathfinder, S+M gate, meters, edit/delete accountability) and the checklist-bypass loop (LANDED). Prompts 1–10 with live status.
 - [`docs/training-library-spec.md`](docs/training-library-spec.md) — Training Library: modules, assignments, quizzes, roleplay, auditor, learning-style adaptation.
-- **Dashboard redesign (Prompt 11 v2, pending):** from time-clock page to practice front page — hero clock + checklist/PTO chips, "Needs attention" (role-aware, renders only when non-empty), practice collections goal meter (target = org setting, month-to-date computed live from the deposit log, visibility setting), office-today strip, "My momentum" (goal + training), private sticky notes (`user_notes`, owner-only RLS), time details demoted.
+- **Dashboard redesign (Prompt 11 v3, pending):** role-shaped front pages — Practice Pulse orb (transparent signal breakdown, no black-box score), OWNER (no clock card — setting; collections + production gauges from deposit log, payroll %, staffing strip, needs-attention), MANAGER (live roster timeline, checklist completion, collections ring, approvals/OT/bypass alerts), TEAM MEMBER (v2 layout: clock hero, needs-attention, practice-goal card, momentum, private sticky notes `user_notes`, light motivation layer — verified-event streaks that PAUSE on approved time off, no rankings). Ground rule: only data that exists today.
+- **Deposit Log vitals (Prompt 13, pending):** production_amount + cancellations / late_cancellations / no_shows per day; same-day editable, audited edits after; feeds owner Production gauge, Practice Pulse disruption signal, monthly trends.
+- **Deferred until real data exists** (do NOT stub): write-offs (needs billing data), open positions/recruiting, license/credential tracking, announcements system, shift swap, doctor clinical view (needs PMS integration + a deliberate HIPAA conversation).
 - [`docs/team-onboarding.md`](docs/team-onboarding.md) — Team onboarding feature list (next major build after Goals), including the stealth work-style questions that feed Pathfinder and learning-style-adaptive training.
 
 ## Local development
