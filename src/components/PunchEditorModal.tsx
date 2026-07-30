@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { notePunchEdit } from '@/lib/integrity';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
@@ -260,6 +261,7 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
         edited: editedPunches,
         reason: reason.trim(),
       });
+      notePunchEdit();
       toast({ title: 'Punches saved with audit trail' });
       onClose();
     } catch (err: any) {

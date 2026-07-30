@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertTriangle, Download, Trash2, Loader2, CheckCircle, ShieldOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { reportIntegritySignal } from '@/lib/integrity';
 
 export default function WipeDataTool() {
   const { user } = useAuth();
@@ -184,6 +185,23 @@ export default function WipeDataTool() {
       qc.invalidateQueries({ queryKey: ['days-off'] });
       qc.invalidateQueries({ queryKey: ['attendance-exceptions'] });
       qc.invalidateQueries({ queryKey: ['attendance-day-status'] });
+
+      // Integrity: a destructive admin action is always recorded, with the
+      // counts only — never the records themselves.
+      const hour = new Date().getHours();
+      reportIntegritySignal({
+        kind: 'destructive_action',
+        signal: 'data_wipe',
+        severity: 'elevated',
+        summary: `Time data was wiped for ${startDate} to ${endDate} (${entryIds.length} day records, ${punchCount} punches).`,
+        detail: {
+          entries: entryIds.length,
+          punches: punchCount,
+          range_start: startDate,
+          range_end: endDate,
+          after_hours: hour < 6 || hour >= 20,
+        },
+      });
 
       toast({ title: 'Data wiped successfully' });
     } catch (err: any) {

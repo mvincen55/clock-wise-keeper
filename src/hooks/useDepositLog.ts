@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import type { Tables } from '@/integrations/supabase/types';
+import { reportIntegritySignal } from '@/lib/integrity';
 
 // Daily deposit sheet: one record per office day. Check amounts only —
 // no payer names, no account numbers.
@@ -63,6 +64,37 @@ export function useSaveDepositLog() {
         .eq('user_id', user.id)
         .limit(1)
         .maybeSingle();
+      // Integrity: editing a day that is already closed out (any day before
+      // today) is a discrepancy signal — amounts only, no payer detail.
+      const todayEastern = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/New_York',
+      }).format(new Date());
+      if (input.depositDate < todayEastern) {
+        const { data: prior } = await supabase
+          .from('deposit_logs')
+          .select('cash_cents, ins_cc_cents, pt_cc_cents, production_cents')
+          .eq('deposit_date', input.depositDate)
+          .maybeSingle();
+        if (prior) {
+          const priorTotal =
+            (prior.cash_cents ?? 0) + (prior.ins_cc_cents ?? 0) + (prior.pt_cc_cents ?? 0);
+          const newTotal = input.cashCents + input.insCcCents + input.ptCcCents;
+          if (priorTotal !== newTotal || (prior.production_cents ?? 0) !== (input.productionCents ?? 0)) {
+            reportIntegritySignal({
+              kind: 'deposit_discrepancy',
+              signal: 'deposit_edited_after_close',
+              severity: Math.abs(newTotal - priorTotal) >= 50000 ? 'elevated' : 'watch',
+              summary: `The deposit sheet for ${input.depositDate} was changed after that day closed (collections moved by ${((newTotal - priorTotal) / 100).toFixed(2)}).`,
+              detail: {
+                deposit_date: input.depositDate,
+                delta_cents: newTotal - priorTotal,
+                production_delta_cents: (input.productionCents ?? 0) - (prior.production_cents ?? 0),
+              },
+            });
+          }
+        }
+      }
+
       const { error } = await supabase.from('deposit_logs').upsert(
         {
           org_id: ctx.org_id,
