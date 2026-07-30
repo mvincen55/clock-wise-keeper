@@ -23,10 +23,13 @@ type Bubble = {
   role: 'user' | 'assistant' | 'staff';
   content: string;
   tier?: string | null;
-  previewUrl?: string | null;
+  previewUrls?: string[];
 };
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_FILES = 5;
+const ACCEPTED = 'image/*,application/pdf';
+
 
 /**
  * "Report a problem" — the little life-ring in the corner of every page.
