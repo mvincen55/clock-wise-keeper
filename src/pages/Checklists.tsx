@@ -28,14 +28,14 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
+import NudgeLine from '@/components/NudgeLine';
+import { useSurfaceNudge } from '@/hooks/useOfficeInsights';
 import { CheckSquare, ChevronLeft, ChevronRight, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { getToday } from '@/lib/time-utils';
 import type { ChecklistCadence } from '@/lib/checklist-defaults';
 import {
-import NudgeLine from '@/components/NudgeLine';
-import { useSurfaceNudge } from '@/hooks/useOfficeInsights';
   CADENCE_LABELS,
   CADENCES,
   periodKeyFor,

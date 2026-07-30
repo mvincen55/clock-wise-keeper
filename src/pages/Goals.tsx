@@ -29,10 +29,10 @@ import SetGoalCard from '@/components/goals/SetGoalCard';
 import TeamGoalCard from '@/components/goals/TeamGoalCard';
 import GoalsPrintSheet, { type GoalsReportRow } from '@/components/goals/GoalsPrintSheet';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
-import { useOrgBranding } from '@/hooks/useOrgBranding';
-import {
 import NudgeLine from '@/components/NudgeLine';
 import { useSurfaceNudge } from '@/hooks/useOfficeInsights';
+import { useOrgBranding } from '@/hooks/useOrgBranding';
+import {
   currentMonth,
   monthElapsedFraction,
   monthLabel,
