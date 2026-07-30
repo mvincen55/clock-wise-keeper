@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Loader2, Shield, Timer, CalendarDays, Plus, Trash2, DollarSign, RefreshCw, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/time-utils';
+import PracticeGoalSettingsCard from '@/components/settings/PracticeGoalSettingsCard';
 
 const WEEKDAY_OPTIONS = [
   { value: '0', label: 'Sunday' },
@@ -130,6 +131,8 @@ export default function Settings() {
         </CardContent>
       </Card>
       )}
+
+      {isManager && <PracticeGoalSettingsCard />}
 
       {/* Work Zones (manager only) — lives here instead of the sidebar */}
       {isManager && (
