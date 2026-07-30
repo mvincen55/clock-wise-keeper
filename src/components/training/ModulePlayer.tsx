@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, CheckCircle2, Lightbulb, RotateCcw, Target, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Lightbulb, PenTool, RotateCcw, Target, XCircle } from 'lucide-react';
 import {
   PASS_MARK,
   useRecordAttempt,
@@ -129,6 +129,33 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
                   {para}
                 </p>
               ))}
+              {(section.visuals ?? []).map((visual, vi) => (
+                <div key={vi} className="rounded-md border border-primary/30 bg-primary/5 p-3">
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <PenTool className="h-4 w-4 shrink-0 text-primary" />
+                    <span className="text-sm font-medium">{visual.title}</span>
+                    <Badge variant="outline" className="text-[10px] uppercase">
+                      {visual.kind}
+                    </Badge>
+                  </div>
+                  {visual.prompt && (
+                    <p className="text-sm text-muted-foreground">{visual.prompt}</p>
+                  )}
+                  {visual.steps.length > 0 && (
+                    <ol className="mt-2 space-y-1.5">
+                      {visual.steps.map((step, si) => (
+                        <li key={si} className="flex gap-2 text-sm">
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary/15 font-mono text-xs text-primary">
+                            {si + 1}
+                          </span>
+                          <span>{step}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              ))}
+
               {section.try_it && (
                 <div className="flex gap-2.5 rounded-md border border-border bg-muted/40 p-3">
                   <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
