@@ -4,7 +4,12 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Loader2, Trash2 } from 'lucide-react';
 
-export type DraftTask = { title: string; due_date: string | null; toChecklist: boolean };
+export type DraftTask = {
+  title: string;
+  due_date: string | null;
+  toChecklist: boolean;
+  training_module_id?: string | null;
+};
 
 /**
  * The editable Pathfinder draft plan. Rows stack on mobile so task titles

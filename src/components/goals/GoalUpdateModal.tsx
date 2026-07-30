@@ -12,6 +12,7 @@ import {
   type Goal,
   type UpdateStatus,
 } from '@/hooks/useGoals';
+import GoalMonthTimeline from './GoalMonthTimeline';
 
 const STATUSES: UpdateStatus[] = ['on_track', 'at_risk', 'done'];
 
@@ -96,6 +97,11 @@ export default function GoalUpdateModal({
           <DialogTitle>Share an update</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 p-3">
+            <p className="break-words text-sm font-medium">{goal.title}</p>
+            <GoalMonthTimeline month={goal.month} compact />
+          </div>
+
           <div className="space-y-1.5">
             <Label htmlFor="quick-notes">Quick notes (optional)</Label>
             <Textarea

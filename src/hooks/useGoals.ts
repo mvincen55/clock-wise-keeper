@@ -36,6 +36,7 @@ export type GoalTask = {
   done: boolean;
   done_at: string | null;
   sort_order: number;
+  training_module_id: string | null;
 };
 
 export type GoalUpdate = {
@@ -192,7 +193,7 @@ export function useSaveGoalTasks() {
       tasks,
     }: {
       goalId: string;
-      tasks: { title: string; due_date: string | null }[];
+      tasks: { title: string; due_date: string | null; training_module_id?: string | null }[];
     }) => {
       if (!ctx) throw new Error('No office found for your account');
       const { data: existing } = await supabase
@@ -209,6 +210,7 @@ export function useSaveGoalTasks() {
           goal_id: goalId,
           title: t.title,
           due_date: t.due_date,
+          training_module_id: t.training_module_id ?? null,
           sort_order: base + i,
         }))
       );
@@ -315,7 +317,9 @@ export async function callPathfinder(payload: {
   if (error) throw new Error('Pathfinder is unavailable right now');
   if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
   return data as {
-    tasks?: { title: string; due_date: string | null }[];
+    tasks?: { title: string; due_date: string | null; training_module_id?: string | null }[];
+    intro?: string;
+    module?: { id: string; title: string } | null;
     content?: string;
     status?: UpdateStatus;
     title?: string;

@@ -1,5 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Target } from 'lucide-react';
 import GoalProgress from './GoalProgress';
+import GoalMonthTimeline from './GoalMonthTimeline';
+import GoalTrainingModules from './GoalTrainingModules';
+import ProgressRing from './ProgressRing';
 import TargetProgress from './TargetProgress';
 import GoalStatusBadge from './GoalStatusBadge';
 import { monthElapsedFraction, type Goal, type GoalTask, type GoalUpdate } from '@/hooks/useGoals';
@@ -28,6 +32,22 @@ export default function TeamGoalCard({
         {goal ? (
           <>
             <p className="break-words text-sm">{goal.title}</p>
+            <div className="flex items-start gap-3">
+              <ProgressRing
+                done={tasks.filter(t => t.done).length}
+                total={tasks.length}
+                monthElapsed={monthElapsedFraction(goal.month)}
+                size={38}
+              />
+              <div className="min-w-0 flex-1">
+                <GoalMonthTimeline
+                  month={goal.month}
+                  done={tasks.filter(t => t.done).length}
+                  total={tasks.length}
+                  compact
+                />
+              </div>
+            </div>
             <GoalProgress
               done={tasks.filter(t => t.done).length}
               total={tasks.length}
@@ -47,11 +67,16 @@ export default function TeamGoalCard({
                 No update yet
               </p>
             )}
+            <GoalTrainingModules goalId={goal.id} ownerUserId={goal.user_id} compact />
           </>
         ) : (
-          <p className="text-[11px] uppercase tracking-wide text-muted-foreground/70">
-            No goal set yet
-          </p>
+          <div className="flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-border/70 px-3 py-5 text-center">
+            <Target className="h-5 w-5 text-muted-foreground/60" />
+            <p className="text-xs font-medium">No goal set yet</p>
+            <p className="text-[11px] text-muted-foreground">
+              They'll pick one thing to work on this month.
+            </p>
+          </div>
         )}
       </CardContent>
     </Card>

@@ -1685,6 +1685,7 @@ export type Database = {
           org_id: string
           sort_order: number
           title: string
+          training_module_id: string | null
           updated_at: string
         }
         Insert: {
@@ -1697,6 +1698,7 @@ export type Database = {
           org_id: string
           sort_order?: number
           title: string
+          training_module_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -1709,6 +1711,7 @@ export type Database = {
           org_id?: string
           sort_order?: number
           title?: string
+          training_module_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1717,6 +1720,13 @@ export type Database = {
             columns: ["goal_id"]
             isOneToOne: false
             referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_tasks_training_module_id_fkey"
+            columns: ["training_module_id"]
+            isOneToOne: false
+            referencedRelation: "training_modules"
             referencedColumns: ["id"]
           },
         ]
@@ -2469,6 +2479,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "office_docs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      office_events: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string | null
+          event_date: string
+          id: string
+          notes: string | null
+          org_id: string
+          start_time: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          event_date: string
+          id?: string
+          notes?: string | null
+          org_id: string
+          start_time?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          event_date?: string
+          id?: string
+          notes?: string | null
+          org_id?: string
+          start_time?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "office_events_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"

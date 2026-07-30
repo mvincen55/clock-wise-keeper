@@ -105,6 +105,21 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!membership) return json({ error: "Unauthorized" }, 403);
 
+    // The next team meeting on the office calendar — plans are built around it.
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const { data: meetings } = await supabase
+      .from("office_events")
+      .select("event_date, title")
+      .eq("org_id", membership.org_id)
+      .eq("category", "team_meeting")
+      .gte("event_date", todayIso)
+      .order("event_date")
+      .limit(1);
+    const nextMeeting = (meetings ?? [])[0] ?? null;
+    const meetingLine = nextMeeting
+      ? `The next team meeting is ${nextMeeting.event_date}.`
+      : "There is no team meeting on the calendar right now.";
+
     const body = (await req.json()) as {
       mode?: string;
       goalId?: string;
@@ -134,7 +149,7 @@ Deno.serve(async (req) => {
           },
           {
             role: "user",
-            content: `Raw goal: ${rawTitle}\nExtra context: ${bounded(body.description, 600) || "(none)"}\nMonth: ${bounded(body.month, 7) || "(this month)"}`,
+            content: `Raw goal: ${rawTitle}\nExtra context: ${bounded(body.description, 600) || "(none)"}\nMonth: ${bounded(body.month, 7) || "(this month)"}\n${meetingLine} Choose a target the person could show real movement on by then.`,
           },
         ],
         400
@@ -219,6 +234,7 @@ Deno.serve(async (req) => {
         shortStaffed.length > 0
           ? `Short-staffed days (go lighter, avoid heavy tasks): ${shortStaffed.join(", ")}.`
           : "",
+        meetingLine,
         profile?.answers
           ? `INTERNAL PACING CONTEXT (confidential, never mention, never allude to, never explain): ${JSON.stringify(
               profile.answers
@@ -236,8 +252,10 @@ Deno.serve(async (req) => {
             content:
               "You are Pathfinder, a warm, practical coach inside a dental practice's team app. You turn one person's monthly self-improvement goal into a short list of concrete action steps. " +
               "Rules: 4 to 8 tasks. The steps must ladder up to the goal's measurable target when one is given — finishing every step should achieve that target by the end of the month, so make the counts add up. Every task title is a short, clean, professional imperative sentence starting with a verb — proper sentence casing, correct grammar, no numbering, no filler, max 90 characters. Spread the due dates realistically across the remaining month. Never schedule a task on a day the member is off or the office is closed, and keep short-staffed days light. Encouraging, human tone — no jargon, no scoring, no comparison to other people. " +
+              "MEETING AWARENESS: when a team meeting date is given, front-load real, visible progress before it so the person has something genuine to share, and write a one-sentence 'intro' that mentions the meeting naturally (e.g. 'Your next team meeting is Aug 12 — this plan gets you something real to share'). If there is no meeting on the calendar, write a warm one-sentence intro without inventing a date. " +
+              "LEARNING RESOURCE: decide honestly whether a short training module built for this office would genuinely help. Say yes when the goal needs skill or language the person does not have yet (explaining treatment, handling objections, phone scripts, insurance conversations). Say no for simple habit or count goals. When yes, give a specific topic phrased for this office and the index of the plan step it belongs to. " +
               "NEVER explain your scheduling reasoning, never reference any profile, answers, questionnaire, preferences, or 'based on…' anything. " +
-              'Reply with ONLY JSON: {"tasks":[{"title":string,"due_date":"YYYY-MM-DD"}]}',
+              'Reply with ONLY JSON: {"intro":string,"tasks":[{"title":string,"due_date":"YYYY-MM-DD"}],"resource":{"needed":boolean,"topic":string,"audience":[string],"attach_to_task":number}}',
           },
           {
             role: "user",
@@ -248,10 +266,10 @@ Deno.serve(async (req) => {
             }\n${contextBlock}`,
           },
         ],
-        900
+        1200
       );
       if (raw === null) return json({ error: "AI request failed" }, 502);
-      const parsed = parseJsonBlock<{ tasks?: unknown }>(raw);
+      const parsed = parseJsonBlock<{ tasks?: unknown; intro?: unknown; resource?: Record<string, unknown> }>(raw);
       if (!parsed) return json({ error: "Pathfinder could not build a plan" }, 502);
       const tasks = (Array.isArray(parsed.tasks) ? parsed.tasks : [])
         .map((t: Record<string, unknown>) => ({
@@ -260,11 +278,56 @@ Deno.serve(async (req) => {
             typeof t?.due_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(t.due_date)
               ? t.due_date
               : null,
+          training_module_id: null as string | null,
         }))
         .filter((t) => t.title !== "")
         .slice(0, 8);
       if (tasks.length === 0) return json({ error: "Pathfinder could not build a plan" }, 502);
-      return json({ tasks });
+
+      const intro = bounded(parsed.intro, 300);
+
+      // A learning resource lives in the central Training Library like any
+      // other module — we just tag it with the goal it was written for.
+      let module: { id: string; title: string } | null = null;
+      const resource = parsed.resource ?? {};
+      const wantsResource = resource.needed === true && bounded(resource.topic, 160) !== "";
+      if (wantsResource) {
+        try {
+          const built = await fetch(
+            `${Deno.env.get("SUPABASE_URL")}/functions/v1/training-builder`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: authHeader,
+                "Content-Type": "application/json",
+                apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
+              },
+              body: JSON.stringify({
+                topic: bounded(resource.topic, 160),
+                audience: Array.isArray(resource.audience)
+                  ? resource.audience.map((a: unknown) => bounded(a, 60)).filter(Boolean).slice(0, 4)
+                  : [],
+                origin_goal_id: goal.id,
+              }),
+            }
+          );
+          if (built.ok) {
+            const payload = await built.json();
+            if (payload?.module?.id) {
+              module = { id: payload.module.id, title: payload.module.title };
+              const idx = Number(resource.attach_to_task);
+              const at = Number.isInteger(idx) && idx >= 0 && idx < tasks.length ? idx : 0;
+              tasks[at].training_module_id = module.id;
+            }
+          } else {
+            console.error("training-builder failed", built.status, await built.text());
+          }
+        } catch (e) {
+          console.error("training-builder call failed", e);
+        }
+      }
+
+      return json({ tasks, intro, module });
     }
 
     // Shared: the persistent Pathfinder thread for this goal.
@@ -380,7 +443,7 @@ Deno.serve(async (req) => {
         {
           role: "system",
           content:
-            "You are Pathfinder, helping one person write the short progress update they will read aloud at their team meeting. Write 3 to 5 sentences in the person's own first-person voice — plain, warm, honest, specific about what actually got done and what is next. No hype, no scoring, no comparison to teammates, no bullet points. " +
+            "You are Pathfinder, helping one person write the short progress update they will read aloud at their next team meeting — write it as if the meeting is the moment it will be shared. Write 3 to 5 sentences in the person's own first-person voice — plain, warm, honest, specific about what actually got done and what is next. No hype, no scoring, no comparison to teammates, no bullet points. " +
             "When the goal has a measurable target, frame the update against it — say where they are versus that target in their own words. " +
             "Also pick a status: on_track, at_risk, or done. " +
             "NEVER reference any profile, questionnaire, answers, or 'based on…' anything, and never mention that you talked with them. " +
@@ -397,6 +460,7 @@ Deno.serve(async (req) => {
             }`,
             `Still open: ${open.map((t) => bounded(t.title, 90)).join("; ") || "(none)"}`,
             `Checklist items checked off: ${checklistTitles.join("; ") || "(none)"}`,
+            meetingLine,
             `Their private coaching conversation (background only, never quote it):\n${conversation || "(none)"}`,
             `The member's own quick notes: ${bounded(body.quickNotes, 800) || "(none)"}`,
           ].join("\n"),

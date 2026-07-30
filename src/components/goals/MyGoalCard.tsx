@@ -7,6 +7,9 @@ import { Compass, Loader2, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import GoalProgress from './GoalProgress';
+import GoalMonthTimeline from './GoalMonthTimeline';
+import GoalTrainingModules from './GoalTrainingModules';
+import ProgressRing from './ProgressRing';
 import TargetProgress from './TargetProgress';
 import GoalStatusBadge from './GoalStatusBadge';
 import PathfinderChat from './PathfinderChat';
@@ -35,6 +38,7 @@ export default function MyGoalCard({
   onShareUpdate: () => void;
 }) {
   const [draft, setDraft] = useState<DraftTask[] | null>(null);
+  const [intro, setIntro] = useState<string>('');
   const [drafting, setDrafting] = useState(false);
   const saveTasks = useSaveGoalTasks();
   const addToChecklist = useAddTaskToChecklist();
@@ -48,6 +52,10 @@ export default function MyGoalCard({
     try {
       const result = await callPathfinder({ mode: 'breakdown', goalId: goal.id });
       setDraft((result.tasks ?? []).map(t => ({ ...t, toChecklist: false })));
+      setIntro(result.intro ?? '');
+      if (result.module) {
+        toast.success(`Pathfinder added "${result.module.title}" to the Training Library.`);
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Pathfinder could not build a plan');
     } finally {
@@ -60,12 +68,17 @@ export default function MyGoalCard({
     try {
       await saveTasks.mutateAsync({
         goalId: goal.id,
-        tasks: draft.map(t => ({ title: t.title, due_date: t.due_date })),
+        tasks: draft.map(t => ({
+          title: t.title,
+          due_date: t.due_date,
+          training_module_id: t.training_module_id ?? null,
+        })),
       });
       for (const t of draft.filter(t => t.toChecklist)) {
         await addToChecklist.mutateAsync({ title: t.title, dueDate: t.due_date });
       }
       setDraft(null);
+      setIntro('');
       toast.success('Plan saved — nice work getting started.');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not save the plan');
@@ -96,10 +109,20 @@ export default function MyGoalCard({
           <p className="text-sm text-muted-foreground">{goal.description}</p>
         )}
 
-        <div className="space-y-2">
-          <GoalProgress done={done} total={tasks.length} monthElapsed={elapsed} />
-          <TargetProgress target={goal.smart_target} done={done} total={tasks.length} />
+        <div className="flex items-start gap-4 rounded-lg border border-border/60 bg-muted/20 p-3">
+          <ProgressRing done={done} total={tasks.length} monthElapsed={elapsed} size={52} />
+          <div className="min-w-0 flex-1 space-y-2">
+            <GoalMonthTimeline
+              month={goal.month}
+              done={done}
+              total={tasks.length}
+            />
+            <GoalProgress done={done} total={tasks.length} monthElapsed={elapsed} />
+            <TargetProgress target={goal.smart_target} done={done} total={tasks.length} />
+          </div>
         </div>
+
+        <GoalTrainingModules goalId={goal.id} ownerUserId={goal.user_id} />
 
         {hasPlan && (
           <ul className="space-y-2">
@@ -131,6 +154,23 @@ export default function MyGoalCard({
               </li>
             ))}
           </ul>
+        )}
+
+        {!hasPlan && !draft && (
+          <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-primary/40 bg-primary/[0.03] px-4 py-6 text-center">
+            <Compass className="h-6 w-6 text-primary" />
+            <p className="text-sm font-medium">No plan yet</p>
+            <p className="max-w-sm text-xs text-muted-foreground">
+              Pathfinder can turn this goal into a handful of dated steps that land before
+              your next team meeting.
+            </p>
+          </div>
+        )}
+
+        {draft && intro && (
+          <p className="rounded-lg bg-primary/5 px-3 py-2 text-sm text-muted-foreground">
+            {intro}
+          </p>
         )}
 
         {draft && (

@@ -19,6 +19,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import GoalUpdateModal from '@/components/goals/GoalUpdateModal';
 import GoalProgress from '@/components/goals/GoalProgress';
+import GoalMonthTimeline from '@/components/goals/GoalMonthTimeline';
+import ProgressRing from '@/components/goals/ProgressRing';
 import TargetProgress from '@/components/goals/TargetProgress';
 import GoalStatusBadge from '@/components/goals/GoalStatusBadge';
 import MyGoalCard from '@/components/goals/MyGoalCard';
@@ -176,6 +178,21 @@ export default function Goals() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="break-words font-medium">{goal.title}</p>
+                <div className="flex items-start gap-4">
+                  <ProgressRing
+                    done={t.filter(x => x.done).length}
+                    total={t.length}
+                    monthElapsed={monthElapsedFraction(goal.month)}
+                    size={48}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <GoalMonthTimeline
+                      month={goal.month}
+                      done={t.filter(x => x.done).length}
+                      total={t.length}
+                    />
+                  </div>
+                </div>
                 <GoalProgress
                   done={t.filter(x => x.done).length}
                   total={t.length}
