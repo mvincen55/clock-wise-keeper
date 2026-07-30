@@ -6,6 +6,21 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+function normalizeEmail(email: unknown): string {
+  return typeof email === "string" ? email.trim().toLowerCase() : "";
+}
+
+function canonicalEmail(email: unknown): string {
+  const normalized = normalizeEmail(email);
+  const [local, domain] = normalized.split("@");
+  if (!local || !domain) return normalized;
+  if (domain === "gmail.com" || domain === "googlemail.com") {
+    const base = local.split("+")[0].replace(/\./g, "");
+    return `${base}@gmail.com`;
+  }
+  return normalized;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -91,15 +106,21 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check email matches
-    if (user.email?.toLowerCase() !== invite.email.toLowerCase()) {
+    // Check email matches. Gmail treats dots and +tags as the same inbox,
+    // so accept those equivalent forms while keeping other domains exact.
+    if (canonicalEmail(user.email) !== canonicalEmail(invite.email)) {
       return new Response(
-        JSON.stringify({ error: "Email does not match invite" }),
+        JSON.stringify({
+          error: "Email does not match invite",
+          code: "email_mismatch",
+          signedInEmail: normalizeEmail(user.email),
+          inviteEmail: normalizeEmail(invite.email),
+        }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const normalizedEmail = invite.email.toLowerCase();
+    const normalizedEmail = normalizeEmail(invite.email);
     const { data: alreadyAllowed } = await supabaseAdmin
       .from("allowed_users")
       .select("id")
