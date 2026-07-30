@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
+import { AddToMyListButton } from '@/components/copilot/AddToMyListButton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -355,6 +356,15 @@ export default function SprintCard() {
                   >
                     <Plus className="mr-1 h-4 w-4" />1
                   </Button>
+                )}
+                {!pending && (
+                  <AddToMyListButton
+                    surface="sprint"
+                    title={`Sprint step: ${sprint.title}`}
+                    firstStep={sprint.metric}
+                    label="Add a step to my list"
+                    variant="ghost"
+                  />
                 )}
                 {isManager && pending && (
                   <Button size="sm" onClick={() => setVerifyOpen(true)}>

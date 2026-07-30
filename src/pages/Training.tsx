@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BookOpen, GraduationCap, Sparkles, UserPlus } from 'lucide-react';
+import { AddToMyListButton } from '@/components/copilot/AddToMyListButton';
 import { cn } from '@/lib/utils';
 import { getToday } from '@/lib/time-utils';
 import {
@@ -279,10 +280,21 @@ export default function Training() {
                     </div>
                     <div className="flex items-center gap-2">
                       {overdue && <Badge className="bg-warning text-warning-foreground">Overdue</Badge>}
+                      {assignment.status !== 'completed' && (
+                        <AddToMyListButton
+                          surface="training"
+                          title={`Finish training: ${module.title}`}
+                          firstStep="Open the module and read the first section."
+                          dueDate={assignment.due_date ?? today}
+                          label="Add to my list"
+                          variant="ghost"
+                        />
+                      )}
                       <Button size="sm" onClick={() => setOpenModuleId(module.id)}>
                         {assignment.status === 'completed' ? 'Review' : 'Start'}
                       </Button>
                     </div>
+
                   </CardContent>
                 </Card>
               );
