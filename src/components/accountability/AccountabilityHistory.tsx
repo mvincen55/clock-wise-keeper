@@ -40,6 +40,7 @@ import {
   type PolicyKind,
 } from '@/hooks/useAccountability';
 import AccountabilityAuditTimeline from './AccountabilityAuditTimeline';
+import ReportsAnalyst from './ReportsAnalyst';
 
 
 function RecordRow({ r, who }: { r: AccountabilityReport; who?: string }) {
