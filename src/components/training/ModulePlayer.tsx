@@ -36,7 +36,7 @@ type Props = {
 export default function ModulePlayer({ module, assignment, onBack }: Props) {
   const content = module.content;
   const questions = content.quiz?.questions ?? [];
-  const [phase, setPhase] = useState<'read' | 'quiz' | 'result'>('read');
+  const [phase, setPhase] = useState<'read' | 'quiz' | 'result' | 'roleplay'>('read');
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [graded, setGraded] = useState(false);
 
