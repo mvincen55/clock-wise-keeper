@@ -14,6 +14,12 @@ import { scrubMessages } from '../../supabase/functions/_shared/ai-safe';
 const FUNCTIONS_DIR = join(process.cwd(), 'supabase', 'functions');
 const CALLS_GATEWAY = /ai\.gateway\.lovable\.dev|openrouter/i;
 
+/**
+ * Functions where the person-level content is the whole point of the request
+ * and the user knowingly uploaded it (documented in phi-gateway-guard).
+ */
+const CONSENTED = new Set(['parse-pdf', 'parse-treatment', 'ingest-doc', 'name-visits']);
+
 function sourceOf(name: string): string {
   const p = join(FUNCTIONS_DIR, name, 'index.ts');
   return existsSync(p) ? readFileSync(p, 'utf8') : '';
@@ -23,7 +29,7 @@ describe('nothing reaches the gateway unscrubbed', () => {
   const callers = readdirSync(FUNCTIONS_DIR, { withFileTypes: true })
     .filter((e) => e.isDirectory() && !e.name.startsWith('_'))
     .map((e) => e.name)
-    .filter((n) => CALLS_GATEWAY.test(sourceOf(n)));
+    .filter((n) => CALLS_GATEWAY.test(sourceOf(n)) && !CONSENTED.has(n));
 
   it('found the AI callers', () => {
     expect(callers.length).toBeGreaterThan(5);
