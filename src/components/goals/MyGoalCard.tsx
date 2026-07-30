@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Compass, Loader2, Lock } from 'lucide-react';
+import { Compass, Loader2, Lock, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import GoalProgress from './GoalProgress';
@@ -14,6 +14,10 @@ import TargetProgress from './TargetProgress';
 import GoalStatusBadge from './GoalStatusBadge';
 import PathfinderChat from './PathfinderChat';
 import PathfinderPlanEditor, { type DraftTask } from './PathfinderPlanEditor';
+import GoalEditDialog from './GoalEditDialog';
+import GoalArchiveDialog from './GoalArchiveDialog';
+import GoalChangeLog from './GoalChangeLog';
+import type { GoalEvent } from '@/hooks/useGoals';
 import {
   callPathfinder,
   monthElapsedFraction,
@@ -31,15 +35,26 @@ export default function MyGoalCard({
   tasks,
   latestUpdate,
   onShareUpdate,
+  hasUpdates = false,
+  events = [],
+  nameOf = () => 'You',
+  onArchived,
 }: {
   goal: Goal;
   tasks: GoalTask[];
   latestUpdate?: GoalUpdate;
   onShareUpdate: () => void;
+  /** Has this goal ever been shared with the team? Edits then need a reason. */
+  hasUpdates?: boolean;
+  events?: GoalEvent[];
+  nameOf?: (userId: string) => string;
+  onArchived?: (goalId: string) => void;
 }) {
   const [draft, setDraft] = useState<DraftTask[] | null>(null);
   const [intro, setIntro] = useState<string>('');
   const [drafting, setDrafting] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const saveTasks = useSaveGoalTasks();
   const addToChecklist = useAddTaskToChecklist();
   const toggleTask = useToggleGoalTask();
@@ -100,6 +115,24 @@ export default function MyGoalCard({
               </Badge>
             )}
             {latestUpdate && <GoalStatusBadge status={latestUpdate.status} />}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2"
+              onClick={() => setEditOpen(true)}
+              aria-label="Edit goal"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-muted-foreground"
+              onClick={() => setArchiveOpen(true)}
+              aria-label="Put this goal aside"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -216,7 +249,24 @@ export default function MyGoalCard({
           </div>
         )}
 
+        {events.length > 0 && (
+          <GoalChangeLog events={events} nameOf={nameOf} title="Changes to this goal" />
+        )}
+
         <PathfinderChat goalId={goal.id} />
+
+        <GoalEditDialog
+          goal={goal}
+          hasUpdates={hasUpdates}
+          open={editOpen}
+          onOpenChange={setEditOpen}
+        />
+        <GoalArchiveDialog
+          goal={goal}
+          open={archiveOpen}
+          onOpenChange={setArchiveOpen}
+          onArchived={id => onArchived?.(id)}
+        />
       </CardContent>
     </Card>
   );

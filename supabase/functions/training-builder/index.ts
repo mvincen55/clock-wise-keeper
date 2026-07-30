@@ -32,8 +32,7 @@ const MODEL = "openai/gpt-5.6-sol";
 const MAX_DOC_CHARS = 30000;
 
 type QuizQuestion = { q: string; options: string[]; correct_index: number; why: string };
-type Visual = { kind: string; title: string; prompt: string; steps: string[] };
-type Section = { heading: string; body: string; try_it: string; visuals: Visual[] };
+type Section = { heading: string; body: string; try_it: string };
 type ModuleContent = {
   outcome: string;
   sections: Section[];
@@ -65,23 +64,6 @@ function normalizeContent(raw: unknown): ModuleContent | null {
           heading: text(s?.heading, 160),
           body: typeof s?.body === "string" ? s.body.trim().slice(0, 4000) : "",
           try_it: text(s?.try_it, 500),
-          visuals: Array.isArray(s?.visuals)
-            ? (s.visuals as Record<string, unknown>[])
-                .map((v) => ({
-                  kind: (["diagram", "board", "storyboard", "checklist"].includes(
-                    text(v?.kind, 20)
-                  )
-                    ? text(v?.kind, 20)
-                    : "board"),
-                  title: text(v?.title, 160),
-                  prompt: text(v?.prompt, 700),
-                  steps: Array.isArray(v?.steps)
-                    ? (v.steps as unknown[]).map((x) => text(x, 220)).filter(Boolean).slice(0, 8)
-                    : [],
-                }))
-                .filter((v) => v.title && (v.steps.length > 0 || v.prompt))
-                .slice(0, 3)
-            : [],
         }))
         .filter((s) => s.heading && s.body && s.try_it)
         .slice(0, 8)
@@ -158,10 +140,6 @@ Deno.serve(async (req) => {
       ? body.audience.map((a: unknown) => text(a, 60)).filter(Boolean).slice(0, 8)
       : [];
     const originGoalId = typeof body?.origin_goal_id === "string" ? body.origin_goal_id : null;
-    const styleIn = text(body?.learning_style, 20).toLowerCase();
-    const learningStyle = ["visual", "auditory", "reading", "kinesthetic"].includes(styleIn)
-      ? styleIn
-      : "mixed";
     if (!topic) return json({ error: "A topic is required" }, 400);
 
     // Caller's org + role (RLS-scoped read).
@@ -238,25 +216,6 @@ Deno.serve(async (req) => {
       1
     ).slice(0, 3000);
 
-    const STYLE_RULES: Record<string, string> = {
-      visual: `LEARNER STYLE: VISUAL.
-- Teach through things the person can SEE. Every section must include 1-2 "visuals": a diagram, a whiteboard/board layout, a storyboard, or a visual checklist they can sketch or post at their station.
-- "kind" is one of diagram | board | storyboard | checklist. "steps" are the labelled boxes/frames/rows, in order. "prompt" describes the layout in one or two sentences so it can be drawn or generated as an image.
-- Never make a visual learner rely on audio-only practice (no "say it out loud" drills as the main exercise). Their "try_it" should produce or use something visual.
-- The quiz should lean on scenarios described spatially ("the schedule shows...", "the board reads..."), and at least one question should ask them to read a described layout.`,
-      auditory: `LEARNER STYLE: AUDITORY.
-- Teach through dialogue and script. Give word-for-word phrasing they can hear and repeat, and "try_it" actions that are spoken (a real conversation on their next shift).
-- "visuals" may be an empty array.`,
-      reading: `LEARNER STYLE: READING/WRITING.
-- Teach through clear structure: crisp definitions, short numbered rules, written examples. "try_it" actions involve writing something down (a note, a template, a log entry).
-- "visuals" may be an empty array.`,
-      kinesthetic: `LEARNER STYLE: HANDS-ON.
-- Teach through doing: walkthroughs, rehearsals at the operatory or front desk, step-by-step runs. "try_it" is always a physical run-through on their next shift.
-- "visuals" may include a simple step board when it helps the run-through.`,
-      mixed: `LEARNER STYLE: MIXED.
-- Balance a short script, a written rule, and one simple visual per module. "visuals" may be an empty array on sections that do not need one.`,
-    };
-
     const system = `You write short, excellent, practical training modules for a dental practice's team.
 
 THE RULES OF THIS OFFICE ARE THE RULES OF THE WORLD.
@@ -270,15 +229,13 @@ WRITING RULES
 - Fictional scenarios ONLY. Invent patient names and situations. Never reference real patients or real patient data.
 - Warm, respectful, practical. Talk to a capable colleague, never down to them.
 - 3 to 5 sections. Each section body is 120-260 words and ends naturally; the "try_it" is one specific action the person can do on their very next shift.
-${STYLE_RULES[learningStyle]}
 - The quiz has 4-6 scenario questions (a short situation, then what should you do). Each has 3-4 options, exactly one best answer, and a "why" that teaches the reasoning — not just "correct".
 
 Return ONLY JSON in exactly this shape:
-{"title":"...","summary":"one sentence","outcome":"what the person can do after this module","sections":[{"heading":"...","body":"...","try_it":"...","visuals":[{"kind":"diagram|board|storyboard|checklist","title":"...","prompt":"...","steps":["..."]}]}],"recap":"3-5 sentence recap","quiz":{"questions":[{"q":"...","options":["..."],"correct_index":0,"why":"..."}]}}`;
+{"title":"...","summary":"one sentence","outcome":"what the person can do after this module","sections":[{"heading":"...","body":"...","try_it":"..."}],"recap":"3-5 sentence recap","quiz":{"questions":[{"q":"...","options":["..."],"correct_index":0,"why":"..."}]}}`;
 
     const userPrompt = `TOPIC: ${topic}
 AUDIENCE (positions this is for): ${audience.length ? audience.join(", ") : "all"}
-LEARNING STYLE TO WRITE FOR: ${learningStyle}
 
 STANDING OFFICE RULES (authoritative):
 ${memoryBlock || "(none recorded yet)"}
@@ -325,82 +282,6 @@ ${settingsBlock}`;
     const title = text(parsed.title, 200) || topic;
     const summary = text(parsed.summary, 400);
 
-    // ---- Auditor: always runs BEFORE anything is published ------------------
-    // A second, independent pass checks the draft against the office's standing
-    // rules and documents. Anything that contradicts them, invents policy, or
-    // reads as inappropriate/unsafe holds the module back as a draft for review.
-    const auditSystem = `You are the compliance auditor for a dental practice's training library.
-You are given the office's STANDING RULES and DOCUMENTS, and a DRAFT training module.
-Flag anything that: contradicts a standing rule or document; invents an office policy the sources do not support; states a clinical, legal, HIPAA, or payroll claim that is wrong or risky; references real patient data; or is disrespectful, discriminatory, or otherwise inappropriate.
-Do not flag style, tone preferences, or things that are simply not covered by the sources but are taught as judgment plus escalation.
-Return ONLY JSON: {"verdict":"clear"|"flagged","summary":"one sentence","findings":[{"severity":"high"|"medium"|"low","where":"section heading or 'quiz'","issue":"what is wrong","conflicts_with":"the rule or doc it contradicts, or 'none'","fix":"what to change"}]}`;
-
-    const auditPrompt = `STANDING OFFICE RULES (authoritative):
-${memoryBlock || "(none recorded yet)"}
-
-OFFICE DOCUMENTS (excerpts):
-${docBlock || "(no matching documents)"}
-
-DRAFT MODULE:
-${JSON.stringify({ title, summary, content }).slice(0, 40000)}`;
-
-    let audit: Record<string, unknown> = {
-      verdict: "unreviewed",
-      summary: "The auditor could not be reached.",
-      findings: [],
-      audited_at: new Date().toISOString(),
-    };
-
-    try {
-      const auditRes = await fetch(GATEWAY_URL, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: MODEL,
-          reasoning_effort: "none",
-          messages: [
-            { role: "system", content: auditSystem },
-            { role: "user", content: auditPrompt },
-          ],
-        }),
-      });
-      if (auditRes.ok) {
-        const auditData = await auditRes.json();
-        const auditRaw = (auditData?.choices?.[0]?.message?.content as string | undefined) ?? "";
-        const parsedAudit = parseJsonBlock<Record<string, unknown>>(auditRaw);
-        if (parsedAudit) {
-          const findings = Array.isArray(parsedAudit.findings)
-            ? (parsedAudit.findings as Record<string, unknown>[])
-                .map((f) => ({
-                  severity: ["high", "medium", "low"].includes(text(f?.severity, 10))
-                    ? text(f?.severity, 10)
-                    : "medium",
-                  where: text(f?.where, 200),
-                  issue: text(f?.issue, 700),
-                  conflicts_with: text(f?.conflicts_with, 700),
-                  fix: text(f?.fix, 700),
-                }))
-                .filter((f) => f.issue)
-                .slice(0, 12)
-            : [];
-          audit = {
-            verdict: findings.length > 0 || parsedAudit.verdict === "flagged" ? "flagged" : "clear",
-            summary: text(parsedAudit.summary, 400),
-            findings,
-            audited_at: new Date().toISOString(),
-            model: MODEL,
-          };
-        }
-      } else {
-        console.error("auditor error", auditRes.status, await auditRes.text());
-      }
-    } catch (auditError) {
-      console.error("auditor failed", auditError);
-    }
-
-    // Only a clean audit publishes. Anything else waits for a human.
-    const status = audit.verdict === "clear" ? "published" : "draft";
-
     const { data: saved, error: insertError } = await supabase
       .from("training_modules")
       .insert({
@@ -411,9 +292,7 @@ ${JSON.stringify({ title, summary, content }).slice(0, 40000)}`;
         content,
         source: "pathfinder",
         origin_goal_id: originGoalId,
-        learning_style: learningStyle,
-        audit: audit as unknown as Record<string, unknown>,
-        status,
+        status: "published",
         created_by: user.id,
       })
       .select()
@@ -424,7 +303,7 @@ ${JSON.stringify({ title, summary, content }).slice(0, 40000)}`;
       return json({ error: "The module was written but could not be saved." }, 500);
     }
 
-    return json({ module: saved, audit });
+    return json({ module: saved });
   } catch (error) {
     console.error("training-builder failed:", error);
     return json({ error: "Something went wrong building the module." }, 500);

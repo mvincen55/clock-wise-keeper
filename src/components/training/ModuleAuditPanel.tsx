@@ -1,68 +1,104 @@
-import { AlertTriangle, ShieldCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import type { ModuleAudit } from '@/hooks/useTraining';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { AlertTriangle, Loader2, ShieldCheck } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  useAuditFindings,
+  useResolveFinding,
+  useRunAudit,
+  type AuditFinding,
+} from '@/hooks/useTrainingAudit';
 
-const SEVERITY: Record<string, string> = {
-  high: 'destructive',
-  medium: 'secondary',
-  low: 'outline',
+const TONE: Record<AuditFinding['severity'], string> = {
+  critical: 'destructive',
+  warning: 'secondary',
+  info: 'outline',
 };
 
-/** What the auditor found before the module was allowed to publish. */
-export default function ModuleAuditPanel({ audit }: { audit: ModuleAudit }) {
-  if (audit.verdict === 'clear') {
-    return (
-      <div className="flex items-start gap-2 rounded-md border border-primary/40 bg-primary/5 p-3 text-sm">
-        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-        <div>
-          <p className="font-medium">Auditor cleared it</p>
-          <p className="text-muted-foreground">
-            {audit.summary || 'Nothing contradicts the office rules or documents.'}
-          </p>
-        </div>
-      </div>
-    );
-  }
+/**
+ * What the reviewer flagged on one module. Owners and managers decide — the
+ * module is never blocked or changed automatically.
+ */
+export default function ModuleAuditPanel({ moduleId }: { moduleId: string }) {
+  const { data: findings = [] } = useAuditFindings();
+  const resolve = useResolveFinding();
+  const runAudit = useRunAudit();
+
+  const mine = findings.filter(f => f.module_id === moduleId);
 
   return (
-    <div className="space-y-3 rounded-md border border-destructive/40 bg-destructive/5 p-3">
-      <div className="flex items-start gap-2 text-sm">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-        <div>
-          <p className="font-medium">
-            {audit.verdict === 'unreviewed'
-              ? 'The auditor could not review this'
-              : 'The auditor flagged this module'}
-          </p>
-          <p className="text-muted-foreground">
-            {audit.summary || 'Read the findings below before publishing.'}
-          </p>
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            {mine.length ? (
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+            ) : (
+              <ShieldCheck className="h-4 w-4 text-primary" />
+            )}
+            Review
+          </CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={runAudit.isPending}
+            onClick={async () => {
+              await runAudit.mutateAsync(moduleId);
+              toast.success('Review finished.');
+            }}
+          >
+            {runAudit.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+            Re-check against office rules
+          </Button>
         </div>
-      </div>
-
-      <ul className="space-y-2">
-        {audit.findings.map((f, i) => (
-          <li key={i} className="rounded-md border border-border bg-background p-2.5 text-sm">
-            <div className="mb-1 flex flex-wrap items-center gap-1.5">
-              <Badge variant={(SEVERITY[f.severity] ?? 'secondary') as never}>{f.severity}</Badge>
-              {f.where && <span className="text-xs text-muted-foreground">{f.where}</span>}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {mine.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            Nothing flagged against the office's rules.
+          </p>
+        )}
+        {mine.map(f => (
+          <div key={f.id} className="space-y-1.5 rounded-lg border border-border/60 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={TONE[f.severity] as 'default' | 'secondary' | 'outline' | 'destructive'}>
+                {f.severity}
+              </Badge>
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                {f.category}
+              </span>
             </div>
-            <p>{f.issue}</p>
-            {f.conflicts_with && f.conflicts_with !== 'none' && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                <span className="font-medium">Conflicts with: </span>
-                {f.conflicts_with}
+            {f.quote && (
+              <p className="break-words border-l-2 border-border pl-2 text-sm italic text-muted-foreground">
+                "{f.quote}"
               </p>
             )}
-            {f.fix && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                <span className="font-medium">Fix: </span>
-                {f.fix}
+            <p className="break-words text-sm">{f.note}</p>
+            {f.suggested_fix && (
+              <p className="break-words text-sm text-muted-foreground">
+                Suggested fix: {f.suggested_fix}
               </p>
             )}
-          </li>
+            <div className="flex gap-2 pt-1">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => resolve.mutate({ id: f.id, status: 'fixed' })}
+              >
+                Handled
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => resolve.mutate({ id: f.id, status: 'dismissed' })}
+              >
+                Not an issue
+              </Button>
+            </div>
+          </div>
         ))}
-      </ul>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
