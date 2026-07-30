@@ -1,4 +1,8 @@
-import { useTodayEntry, useClockAction, PunchRow } from '@/hooks/useTimeEntries';
+import { useTodayEntry, PunchRow } from '@/hooks/useTimeEntries';
+import { useGuardedClockAction } from '@/hooks/useGuardedClockAction';
+import ChecklistBypassDialog from '@/components/ChecklistBypassDialog';
+import BypassReasonDialog from '@/components/BypassReasonDialog';
+import { useUnresolvedBypasses } from '@/hooks/useChecklistBypasses';
 import { minutesToHHMM, formatTime, formatDate } from '@/lib/time-utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,7 +47,10 @@ function getRunningMinutes(punches: PunchRow[]): number {
 
 export default function Dashboard() {
   const { data: todayEntry, isLoading } = useTodayEntry();
-  const clockAction = useClockAction();
+  const clockAction = useGuardedClockAction();
+  const { data: unresolvedBypasses } = useUnresolvedBypasses();
+  const [reasonPromptOpen, setReasonPromptOpen] = useState(false);
+  const [reasonPrompted, setReasonPrompted] = useState(false);
   const [now, setNow] = useState(new Date());
   const [autoClockEnabled, setAutoClockEnabled] = useState(() => {
     return localStorage.getItem('timevault_auto_clock') !== 'false';
@@ -150,7 +157,7 @@ export default function Dashboard() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             {status === 'clocked_out' && (
-              <Button className="col-span-2 h-16 text-lg font-semibold punch-glow" onClick={() => clockAction.mutate('clock_in')} disabled={isBusy}>
+              <Button className="col-span-2 h-16 text-lg font-semibold punch-glow" onClick={() => { clockAction.run('clock_in'); if (!reasonPrompted && (unresolvedBypasses?.length ?? 0) > 0) { setReasonPrompted(true); setReasonPromptOpen(true); } }} disabled={isBusy}>
                 {isBusy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <LogIn className="mr-2 h-5 w-5" />}Clock In
               </Button>
             )}
@@ -158,7 +165,7 @@ export default function Dashboard() {
               /* Break tracking was removed: it clocked you out with no way back.
                  For an unpaid break, clock out and clock back in — the gap is
                  already excluded from paid time. */
-              <Button variant="destructive" className="col-span-2 h-16 text-lg font-semibold" onClick={() => clockAction.mutate('clock_out')} disabled={isBusy}>
+              <Button variant="destructive" className="col-span-2 h-16 text-lg font-semibold" onClick={() => clockAction.run('clock_out')} disabled={isBusy}>
                 {isBusy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <LogOut className="mr-2 h-5 w-5" />}Clock Out
               </Button>
             )}
