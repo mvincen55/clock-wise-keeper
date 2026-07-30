@@ -746,6 +746,8 @@ export default function SupportWidget() {
 
   const anyWorking = files.some(a => a.working);
   const totalMasked = files.reduce((n, a) => n + (a.redacted ? a.masked : 0), 0);
+  const handDrawn = files.reduce((n, a) => n + (a.boxes?.filter(b => b.tool === 'mask').length ?? 0), 0);
+  const editingAttachment = files.find(a => a.key === editingKey) ?? null;
 
   if (!user || !orgId) return null;
 
@@ -1158,7 +1160,7 @@ export default function SupportWidget() {
                           ? 'Scrubbing on this device…'
                           : redactOn
                             ? totalMasked > 0
-                              ? `${totalMasked} item${totalMasked === 1 ? '' : 's'} covered · ${describeRedaction(redactPrefs)}`
+                              ? `${totalMasked + handDrawn} item${totalMasked + handDrawn === 1 ? '' : 's'} covered · ${describeRedaction(redactPrefs)}`
                               : describeRedaction(redactPrefs) + ' · nothing found to cover'
                             : 'The screenshot will be sent exactly as-is'}
                       </p>
