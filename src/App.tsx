@@ -31,6 +31,7 @@ import IncidentReports from "@/pages/IncidentReports";
 import MorningHuddle from "@/pages/MorningHuddle";
 import Goals from "@/pages/Goals";
 import Training from "@/pages/Training";
+import Messages from "@/pages/Messages";
 import AcceptInvite from "@/pages/AcceptInvite";
 import NotFound from "@/pages/NotFound";
 import OAuthConsent from "@/pages/OAuthConsent";
