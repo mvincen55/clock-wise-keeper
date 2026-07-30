@@ -22,6 +22,7 @@ import { Link } from 'react-router-dom';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { OrgSnapshotPanel } from '@/components/OrgSnapshotPanel';
 import PracticeVitalsCard from '@/components/PracticeVitalsCard';
+import MyMomentumCard from '@/components/MyMomentumCard';
 
 type ClockStatus = 'clocked_out' | 'clocked_in';
 
