@@ -7,31 +7,22 @@ them current as things ship. Refinement pass starts with a spec-vs-built audit.
 First refinement item, BEFORE refactor: fix the `allowed_users` RLS recursion
 (runbook §6) — don't build on the crack.
 
-OPERATIONAL NOTES (verified against code 2026-07-30):
-- **Prompt 2 (bypass) LANDED**: `useGuardedClockAction`, `ChecklistBypassDialog`,
-  `BypassReasonDialog`, `useUnresolvedBypasses` are wired into Dashboard clock-in/out.
-- **New Goals architecture LANDED**: componentized `src/components/goals/*`
-  (MyGoalCard, TeamGoalCard, SetGoalCard, GoalMonthTimeline, ProgressRing,
-  TargetProgress, GoalStatusBadge, GoalUpdateModal, GoalsPrintSheet), `useGoals`
-  hook, `smart_target` in use, print sheet on BrandPrintStyle + portal pattern.
-- **The "old Goals page keeps showing" episode was NOT code reversion** — repo held
-  the new version throughout, and after Publishing, purpleenvelope.app serves the
-  current code (confirmed 2026-07-30). What still looked "old" post-publish was the
-  UNSENT Prompt 10 feature set (always-on timeline in empty states, polish
-  enforcement, meters before a plan exists). Publishing serves what exists; it
-  cannot ship a prompt. SEND PROMPT 10. Full serving-vs-code diagnosis procedure:
-  `docs/runbook.md` §11.
+OPERATIONAL WARNING (2026-07-30): Lovable is committing from stale snapshots
+("Work in progress" commits interleaved with doc commits) and older versions of
+/goals have overwritten newer ones. Rules: ONE Lovable chat thread for Goals work,
+never use checkpoint Restore mid-sprint, verify /goals after every prompt. If the
+page drifts again, Prompt 10's feature-set list is the consolidation reference —
+re-send it. If docs/ files vanish or revert, re-push from the last doc commit.
 
-Build order / status: Prompt 1 (Goals) — sent, landed · Prompt 3 (redesign) — sent,
-landed · Prompt 4 (brand pass) — sent, landed · Prompt 2 (bypass) — LANDED ·
-Training Library (`docs/training-library-spec.md`) — sent, landed (Training.tsx
-exists) · Prompt 6 (visuals + meetings + library hookup) — partially landed
-(timeline/ring/target present; training links + meeting awareness unverified) ·
-Prompt 7 (edit/delete accountability) — pending · Prompt 8 (print fix + polish
-enforcement) — partially landed (print sheet exists; polish enforcement unverified) ·
-Prompt 9 (team-page goals + read-aloud + roleplay) — pending ·
-Prompt 10 (CONSOLIDATION + S+M gate) — SEND NEXT; the gap-filler after Publish ·
-Prompt 5 (SMART) — SUPERSEDED, do not send.
+Build order / status: Prompt 1 (Goals) — sent · Prompt 3 (redesign) — sent ·
+Prompt 4 (brand pass) — sent · Prompt 2 (bypass, revised) — sent, implementing ·
+Training Library (`docs/training-library-spec.md`) — sent BEFORE Prompt 6 ·
+Prompt 6 (visuals + meetings + library hookup) — final version below ·
+Prompt 7 (edit/delete goals with accountability) — final version below, pending ·
+Prompt 8 (Goals Report print fix + polish enforcement) — final version below, pending ·
+Prompt 9 (team-page goals + read-aloud + roleplay) — final below, pending ·
+Prompt 10 (CONSOLIDATION + S+M gate) — final below; supersedes Prompt 9 section 1
+and Prompt 8 line 5 · Prompt 5 (SMART) — SUPERSEDED, do not send.
 
 ## Product decisions (the "why")
 
@@ -53,8 +44,6 @@ Prompt 5 (SMART) — SUPERSEDED, do not send.
    questions. Members must not learn the answers shape their AI plans — visible
    connection invites gaming (answering to minimize work). Goals ships the
    `work_style_profiles` table empty; Pathfinder reads it if present, never mentions it.
-   The same profile now also drives learning-style-adaptive training modules
-   (Prompt 12, `docs/training-library-spec.md`) under the identical stealth rule.
 6. **Meeting updates are AI-drafted, human-approved:** the draft assembles what the
    member actually completed (goal tasks + linked checklist items) since the last
    update plus the member's quick notes; the member edits before submitting.
@@ -91,7 +80,7 @@ Prompt 5 (SMART) — SUPERSEDED, do not send.
     (title, progress, latest status) shows on Team cards and EmployeeDetail for
     EVERY role; private goals never appear there.
 
-## Prompt 1 — Goals (sent, landed)
+## Prompt 1 — Goals (sent)
 
 > Build a "Goals" feature. Context: multi-tenant practice-ops app — org_id on every table, RLS on everything, roles owner/manager/employee, React + shadcn/ui + React Router. Follow existing code patterns. This feature is about self-improvement and team culture, NOT competition — keep the tone encouraging, never gamified or ranked.
 >
@@ -119,7 +108,7 @@ Prompt 5 (SMART) — SUPERSEDED, do not send.
 > 6. A "Meeting view" toggle: one clean screen listing every member's latest update for the current month (goal title, status, update text, tasks done/total) — this is what the team reads together at the meeting. Private goals are excluded.
 > 7. Progress = tasks done/total only. Only the goal's owner can add updates or check off tasks. Everyone can view team goals; private goals follow the visibility rule above.
 
-## Prompt 2 — Checklist-bypass accountability loop (LANDED — verified in code)
+## Prompt 2 — Checklist-bypass accountability loop (REVISED 2026-07-30 — sent, implementing)
 
 Integration points verified against the codebase: clock-out = `useClockAction()` in
 `src/hooks/useTimeEntries.ts` (writes `punches` + `audit_events`); Eastern-local
@@ -158,7 +147,7 @@ dates via `getToday()` in `src/lib/time-utils.ts`; checklist gate respects
 >
 > Tone: the first bypass is matter-of-fact; escalations are firm; nothing is ever shaming.
 
-## Prompt 3 — Goals redesign + smarter Pathfinder (sent, landed)
+## Prompt 3 — Goals redesign + smarter Pathfinder (sent)
 
 > Redesign the Goals page (/goals). Keep ALL existing functionality, tables, and data — this is a UX/visual overhaul plus three AI upgrades. Brand accent is Purple Envelope purple #53406e (replace the orange accents on this page). Professional, calm, encouraging — no gamification, no confetti.
 >
@@ -176,7 +165,7 @@ dates via `getToday()` in `src/lib/time-utils.ts`; checklist gate respects
 >
 > Do not change the goals / goal_tasks / goal_updates schemas beyond adding goal_messages. Team/private visibility rules stay exactly as they are.
 
-## Prompt 4 — Global brand pass (sent, landed)
+## Prompt 4 — Global brand pass (sent)
 
 > Global rebrand pass, purely visual — no functionality changes. The product is Purple Envelope, not TimeVault. Replace the TimeVault name and orange clock mark in the app header/layout with "Purple Envelope" and a simple purple envelope mark. Switch the app's primary accent color from orange to #53406e everywhere it appears: buttons, links, active nav states, toggles, focus rings, badges — keeping text contrast accessible. Also update the PWA manifest name/theme color and any remaining "TimeVault"/"TimeKeeper" strings in nav labels and page titles. Leave printed-form footers alone for now; that's a separate pass.
 
@@ -185,10 +174,10 @@ dates via `getToday()` in `src/lib/time-utils.ts`; checklist gate respects
 Prompt 10's Specific+Measurable hard gate replaces both this and Prompt 9's
 all-five gate. Kept for history only.
 
-## Prompt 6 — Always-on visuals + meeting awareness + Training Library hookup (partially landed)
+## Prompt 6 — Always-on visuals + meeting awareness + Training Library hookup (FINAL, send AFTER Training Library)
 
-Landed: month timeline, progress ring, TargetProgress/smart_target. Unverified:
-training-library links on cards, team_meeting calendar category, meeting-aware AI.
+Depends on `docs/training-library-spec.md` being built first (it calls
+training-builder; sending this first would recreate the silo).
 
 > Upgrade the Goals feature in three ways: make the page genuinely visual in EVERY state, make Pathfinder meeting-aware, and connect Pathfinder to the new Training Library. Extend what exists — don't rebuild it.
 >
@@ -212,7 +201,7 @@ training-library links on cards, team_meeting calendar category, meeting-aware A
 >
 > When finished: redeploy the updated goal-assistant edge function and confirm it's live.
 
-## Prompt 7 — Edit/delete goals with accountability (pending)
+## Prompt 7 — Edit/delete goals with accountability (FINAL, pending)
 
 > Let members edit and delete their own goals — with accountability, never silently. Keep everything else as it is.
 >
@@ -234,10 +223,7 @@ training-library links on cards, team_meeting calendar category, meeting-aware A
 >
 > No other schema changes beyond goal_events and the archived_at / archived_reason columns on goals.
 
-## Prompt 8 — Goals Report print fix + polish enforcement (partially landed)
-
-Landed: GoalsPrintSheet on BrandPrintStyle + portal pattern. Unverified: footer
-pinning, snapshot test inclusion, polish enforcement.
+## Prompt 8 — Goals Report print fix + polish enforcement (FINAL, pending)
 
 > Fix the Team Goals Report print layout and make goal polish impossible to silently skip.
 >
@@ -254,7 +240,7 @@ pinning, snapshot test inclusion, polish enforcement.
 NOTE: Prompt 10 item 2 replaces Prompt 8 line 5 with the Specific+Measurable hard
 gate. Send Prompt 8 as-is, then Prompt 10 tightens and consolidates.
 
-## Prompt 9 — Team-page goals + read-aloud + roleplay (pending)
+## Prompt 9 — Team-page goals + read-aloud + roleplay (FINAL, pending)
 
 Section 1 (all-five SMART gate) is SUPERSEDED by Prompt 10 item 2. Sections 2–4
 stand as written.
@@ -278,7 +264,7 @@ stand as written.
 >
 > When finished: redeploy the updated training-builder and goal-assistant edge functions and confirm both are live.
 
-## Prompt 10 — CONSOLIDATION + Specific/Measurable hard gate (SEND NEXT — the anti-revert reference)
+## Prompt 10 — CONSOLIDATION + Specific/Measurable hard gate (FINAL — the anti-revert reference)
 
 Send this whenever /goals has drifted, and after any revert. Its feature list is
 the single source of truth for what the page must contain.
@@ -314,5 +300,7 @@ the single source of truth for what the page must contain.
 - **New edge functions must actually deploy.** goal-assistant (Prompt 1),
   checklist-bypass (Prompt 2), training-builder (Training Library) — probe per
   `docs/runbook.md` §1 if the UI toasts "Failed to send a request to the Edge Function."
-- **Serving vs code.** If a page looks old: runbook §11 BEFORE touching code —
-  check what's committed, then Publish state, then client cache, then snapshot churn.
+- **Sprint-speed drift + Lovable snapshot churn.** These bones were built fast by
+  design, and Lovable has already reverted /goals once from a stale snapshot. The
+  refinement pass audits spec-vs-built before any refactor; Prompt 10 is the
+  consolidation reference when the page drifts.

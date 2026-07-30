@@ -4,10 +4,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, CheckCircle2, Lightbulb, MessagesSquare, RotateCcw, Target, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Lightbulb, RotateCcw, Target, XCircle } from 'lucide-react';
 import {
   PASS_MARK,
-  useMyRoleplayAttempts,
   useRecordAttempt,
   useUpdateAssignmentStatus,
   type TrainingAssignment,
@@ -15,12 +14,6 @@ import {
 } from '@/hooks/useTraining';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { useSpeech } from '@/hooks/useSpeech';
-import ReadAloudControls from './ReadAloudControls';
-import RoleplayChat from './RoleplayChat';
-import RoleplayRubricCard from './RoleplayRubricCard';
-
-
 
 type Props = {
   module: TrainingModule;
@@ -36,39 +29,12 @@ type Props = {
 export default function ModulePlayer({ module, assignment, onBack }: Props) {
   const content = module.content;
   const questions = content.quiz?.questions ?? [];
-  const [phase, setPhase] = useState<'read' | 'quiz' | 'result' | 'roleplay'>('read');
+  const [phase, setPhase] = useState<'read' | 'quiz' | 'result'>('read');
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [graded, setGraded] = useState(false);
 
   const recordAttempt = useRecordAttempt();
   const updateStatus = useUpdateAssignmentStatus();
-  const { data: roleplayAttempts } = useMyRoleplayAttempts(module.id);
-  const lastRoleplay = roleplayAttempts?.[0]?.result ?? null;
-
-
-  // Read-aloud chunks: title/outcome, each section, then the recap.
-  const speechChunks = useMemo(() => {
-    const parts: string[] = [];
-    parts.push([module.title, content.outcome && `What you'll be able to do: ${content.outcome}`]
-      .filter(Boolean)
-      .join('. '));
-    content.sections.forEach(section => {
-      parts.push(
-        [section.heading, section.body, section.try_it && `Try it today: ${section.try_it}`]
-          .filter(Boolean)
-          .join('. ')
-      );
-    });
-    if (content.recap) parts.push(`Recap. ${content.recap}`);
-    return parts;
-  }, [module.title, content]);
-
-  const speech = useSpeech(speechChunks);
-
-  // Section index 0 is the intro block, so sections start at 1.
-  const activeSection = speech.activeIndex === null ? null : speech.activeIndex - 1;
-
-
 
   const score = useMemo(() => {
     if (questions.length === 0) return 100;
@@ -86,9 +52,7 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
   }
 
   async function finishReading() {
-    speech.stop();
     if (questions.length > 0) {
-
       if (assignment && assignment.status === 'assigned') {
         updateStatus.mutate({ id: assignment.id, status: 'in_progress' });
       }
@@ -123,7 +87,7 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => { speech.stop(); onBack(); }} className="-ml-2">
+      <Button variant="ghost" size="sm" onClick={onBack} className="-ml-2">
         <ArrowLeft className="mr-1.5 h-4 w-4" />
         Back to Training
       </Button>
@@ -145,8 +109,6 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
 
       {phase === 'read' && (
         <div className="space-y-6">
-          <ReadAloudControls speech={speech} />
-
           {content.outcome && (
             <Card className="border-primary/40 bg-primary/5">
               <CardContent className="flex gap-3 p-4">
@@ -160,14 +122,7 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
           )}
 
           {content.sections.map((section, i) => (
-            <section
-              key={i}
-              className={cn(
-                'space-y-3 rounded-md transition-colors',
-                activeSection === i && 'bg-primary/5 ring-1 ring-primary/30 p-3 -m-0.5'
-              )}
-            >
-
+            <section key={i} className="space-y-3">
               <h2 className="text-lg font-semibold">{section.heading}</h2>
               {section.body.split(/\n{2,}/).map((para, j) => (
                 <p key={j} className="text-sm leading-relaxed text-foreground/90">
@@ -196,16 +151,9 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
             </>
           )}
 
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={finishReading}>
-              {questions.length > 0 ? 'Start the quiz' : 'Mark as complete'}
-            </Button>
-            <Button variant="outline" onClick={() => { speech.stop(); setPhase('roleplay'); }}>
-              <MessagesSquare className="mr-1.5 h-4 w-4" />
-              Practice the conversation
-            </Button>
-          </div>
-
+          <Button onClick={finishReading} className="w-full sm:w-auto">
+            {questions.length > 0 ? 'Start the quiz' : 'Mark as complete'}
+          </Button>
         </div>
       )}
 
@@ -289,10 +237,6 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
                 <RotateCcw className="mr-1.5 h-4 w-4" />
                 Take it again
               </Button>
-              <Button variant="outline" onClick={() => { speech.stop(); setPhase('roleplay'); }}>
-                <MessagesSquare className="mr-1.5 h-4 w-4" />
-                Practice the conversation
-              </Button>
               <Button variant="ghost" onClick={() => setPhase('read')}>
                 Reread the module
               </Button>
@@ -303,28 +247,6 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
           )}
         </div>
       )}
-
-      {phase === 'roleplay' && (
-        <div className="space-y-5">
-          <RoleplayChat module={module} />
-
-          {lastRoleplay && (
-            <details className="rounded-md border border-border p-3">
-              <summary className="cursor-pointer text-sm font-medium">
-                Your last breakdown — {lastRoleplay.score}%
-              </summary>
-              <div className="pt-4">
-                <RoleplayRubricCard result={lastRoleplay} />
-              </div>
-            </details>
-          )}
-
-          <Button variant="ghost" onClick={() => setPhase(questions.length ? 'result' : 'read')}>
-            Back to the module
-          </Button>
-        </div>
-      )}
     </div>
   );
-
 }

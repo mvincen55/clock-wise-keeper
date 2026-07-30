@@ -1001,6 +1001,10 @@ export type Database = {
           checks: Json
           created_at: string
           deposit_date: string
+          doctor_cancellations: number
+          doctor_no_shows: number
+          hygiene_cancellations: number
+          hygiene_no_shows: number
           id: string
           illumitrac_cents: number
           ins_cc_cents: number
@@ -1010,6 +1014,7 @@ export type Database = {
           prepared_by: string | null
           prepared_by_name: string
           print_snapshot: Json | null
+          production_cents: number | null
           pt_cc_cents: number
           updated_at: string
         }
@@ -1018,6 +1023,10 @@ export type Database = {
           checks?: Json
           created_at?: string
           deposit_date: string
+          doctor_cancellations?: number
+          doctor_no_shows?: number
+          hygiene_cancellations?: number
+          hygiene_no_shows?: number
           id?: string
           illumitrac_cents?: number
           ins_cc_cents?: number
@@ -1027,6 +1036,7 @@ export type Database = {
           prepared_by?: string | null
           prepared_by_name?: string
           print_snapshot?: Json | null
+          production_cents?: number | null
           pt_cc_cents?: number
           updated_at?: string
         }
@@ -1035,6 +1045,10 @@ export type Database = {
           checks?: Json
           created_at?: string
           deposit_date?: string
+          doctor_cancellations?: number
+          doctor_no_shows?: number
+          hygiene_cancellations?: number
+          hygiene_no_shows?: number
           id?: string
           illumitrac_cents?: number
           ins_cc_cents?: number
@@ -1044,6 +1058,7 @@ export type Database = {
           prepared_by?: string | null
           prepared_by_name?: string
           print_snapshot?: Json | null
+          production_cents?: number | null
           pt_cc_cents?: number
           updated_at?: string
         }
@@ -1152,6 +1167,7 @@ export type Database = {
           employment_status: Database["public"]["Enums"]["employment_status"]
           hire_date: string | null
           id: string
+          learning_style: string | null
           org_id: string
           timezone: string
           updated_at: string
@@ -1164,6 +1180,7 @@ export type Database = {
           employment_status?: Database["public"]["Enums"]["employment_status"]
           hire_date?: string | null
           id?: string
+          learning_style?: string | null
           org_id: string
           timezone?: string
           updated_at?: string
@@ -1176,6 +1193,7 @@ export type Database = {
           employment_status?: Database["public"]["Enums"]["employment_status"]
           hire_date?: string | null
           id?: string
+          learning_style?: string | null
           org_id?: string
           timezone?: string
           updated_at?: string
@@ -2778,6 +2796,9 @@ export type Database = {
           id: string
           monthly_collections_target_cents: number | null
           org_id: string
+          roleplay_notes: string | null
+          roleplay_persona_style: string
+          roleplay_policy_tone: string
           updated_at: string
         }
         Insert: {
@@ -2786,6 +2807,9 @@ export type Database = {
           id?: string
           monthly_collections_target_cents?: number | null
           org_id: string
+          roleplay_notes?: string | null
+          roleplay_persona_style?: string
+          roleplay_policy_tone?: string
           updated_at?: string
         }
         Update: {
@@ -2794,6 +2818,9 @@ export type Database = {
           id?: string
           monthly_collections_target_cents?: number | null
           org_id?: string
+          roleplay_notes?: string | null
+          roleplay_persona_style?: string
+          roleplay_policy_tone?: string
           updated_at?: string
         }
         Relationships: [
@@ -3903,10 +3930,12 @@ export type Database = {
       training_modules: {
         Row: {
           audience_tags: string[]
+          audit: Json | null
           content: Json
           created_at: string
           created_by: string
           id: string
+          learning_style: string | null
           org_id: string
           origin_goal_id: string | null
           source: string
@@ -3917,10 +3946,12 @@ export type Database = {
         }
         Insert: {
           audience_tags?: string[]
+          audit?: Json | null
           content?: Json
           created_at?: string
           created_by: string
           id?: string
+          learning_style?: string | null
           org_id: string
           origin_goal_id?: string | null
           source?: string
@@ -3931,10 +3962,12 @@ export type Database = {
         }
         Update: {
           audience_tags?: string[]
+          audit?: Json | null
           content?: Json
           created_at?: string
           created_by?: string
           id?: string
+          learning_style?: string | null
           org_id?: string
           origin_goal_id?: string | null
           source?: string

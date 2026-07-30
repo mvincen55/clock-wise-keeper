@@ -42,6 +42,11 @@ export interface DepositLogSave {
   illumitracCents: number;
   outsideFinancingCents: number;
   notes: string;
+  productionCents: number | null;
+  hygieneCancellations: number;
+  hygieneNoShows: number;
+  doctorCancellations: number;
+  doctorNoShows: number;
 }
 
 export function useSaveDepositLog() {
@@ -69,6 +74,11 @@ export function useSaveDepositLog() {
           illumitrac_cents: input.illumitracCents,
           outside_financing_cents: input.outsideFinancingCents,
           notes: input.notes.trim(),
+          production_cents: input.productionCents,
+          hygiene_cancellations: input.hygieneCancellations,
+          hygiene_no_shows: input.hygieneNoShows,
+          doctor_cancellations: input.doctorCancellations,
+          doctor_no_shows: input.doctorNoShows,
           prepared_by: user.id,
           prepared_by_name: employee?.display_name || user.email || '',
         },
@@ -76,7 +86,9 @@ export function useSaveDepositLog() {
       );
       if (error) throw error;
     },
-    onSuccess: (_, input) =>
-      qc.invalidateQueries({ queryKey: ['deposit-log', ctx?.org_id, input.depositDate] }),
+    onSuccess: (_, input) => {
+      qc.invalidateQueries({ queryKey: ['deposit-log', ctx?.org_id, input.depositDate] });
+      qc.invalidateQueries({ queryKey: ['practice-vitals'] });
+    },
   });
 }

@@ -24,6 +24,7 @@ import {
 } from '@/hooks/useDepositLog';
 import { useOrgBranding, useOrgDepositSettings } from '@/hooks/useOrgBranding';
 import DepositSettingsCard from '@/components/DepositSettingsCard';
+import DailyVitalsCard, { type VitalsForm } from '@/components/DailyVitalsCard';
 import { useOrgContext } from '@/hooks/useOrgContext';
 
 function shiftDate(date: string, delta: number): string {
@@ -53,6 +54,7 @@ interface FormState {
   illumitrac: string;
   outsideFinancing: string;
   notes: string;
+  vitals: VitalsForm;
 }
 
 const centsToInput = (cents: number): string => (cents > 0 ? (cents / 100).toFixed(2) : '');
@@ -95,6 +97,13 @@ export default function DepositLog() {
       illumitrac: centsToInput(log?.illumitrac_cents ?? 0),
       outsideFinancing: centsToInput(log?.outside_financing_cents ?? 0),
       notes: log?.notes ?? '',
+      vitals: {
+        production: centsToInput(log?.production_cents ?? 0),
+        hygieneCancellations: log?.hygiene_cancellations ?? 0,
+        hygieneNoShows: log?.hygiene_no_shows ?? 0,
+        doctorCancellations: log?.doctor_cancellations ?? 0,
+        doctorNoShows: log?.doctor_no_shows ?? 0,
+      },
     });
     setDirty(false);
   }, [log, isLoading, date]);
@@ -143,6 +152,11 @@ export default function DepositLog() {
         illumitracCents: totals.illumitrac,
         outsideFinancingCents: totals.financing,
         notes: form.notes,
+        productionCents: parseCurrencyInput(form.vitals.production),
+        hygieneCancellations: form.vitals.hygieneCancellations,
+        hygieneNoShows: form.vitals.hygieneNoShows,
+        doctorCancellations: form.vitals.doctorCancellations,
+        doctorNoShows: form.vitals.doctorNoShows,
       },
       {
         onSuccess: () => toast.success('Deposit log saved'),
@@ -186,6 +200,11 @@ export default function DepositLog() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-4">
+            <DailyVitalsCard
+              value={form.vitals}
+              onChange={v => updateForm(f => ({ ...f, vitals: v }))}
+            />
+
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Cash &amp; Checks</CardTitle>
