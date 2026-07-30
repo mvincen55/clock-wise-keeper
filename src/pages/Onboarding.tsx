@@ -153,12 +153,17 @@ function TermsStep({ onDone }: { onDone: () => void }) {
 
 function WorkStyleStep({ onDone }: { onDone: () => void }) {
   const save = useSaveWorkStyle();
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const answered = WORK_STYLE_QUESTIONS.every(q => answers[q.id]);
+  const [orders, setOrders] = useState<Record<string, string[]>>(() =>
+    Object.fromEntries(WORK_STYLE_QUESTIONS.map(q => [q.id, q.options.map(o => o.value)])),
+  );
+  const [favorites, setFavorites] = useState<Record<string, string>>({});
 
   const submit = async () => {
     try {
-      await save.mutateAsync(answers);
+      const answers = Object.fromEntries(
+        Object.entries(orders).map(([id, order]) => [id, rankingToAnswer(order)]),
+      );
+      await save.mutateAsync({ answers, favorites });
       onDone();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not save your answers');
@@ -172,32 +177,46 @@ function WorkStyleStep({ onDone }: { onDone: () => void }) {
       </CardHeader>
       <CardContent className="space-y-6 p-5">
         <p className="text-sm text-muted-foreground">
-          Five quick ones. There are no wrong answers, and your answers stay private to you.
+          Five quick ones — put each list in your own order, most like you at the top. There are
+          no wrong answers, and your answers stay private to you.
         </p>
 
         {WORK_STYLE_QUESTIONS.map(q => (
-          <div key={q.id} className="space-y-2">
-            <p className="text-sm font-medium">{q.prompt}</p>
-            <RadioGroup
-              value={answers[q.id] ?? ''}
-              onValueChange={v => setAnswers(a => ({ ...a, [q.id]: v }))}
-              className="gap-2"
-            >
-              {q.options.map(opt => (
-                <label
-                  key={opt.value}
-                  htmlFor={`${q.id}-${opt.value}`}
-                  className="flex cursor-pointer items-center gap-3 rounded-md border p-2.5 text-sm transition-colors hover:bg-muted/50 has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5"
-                >
-                  <RadioGroupItem id={`${q.id}-${opt.value}`} value={opt.value} />
-                  {opt.label}
-                </label>
-              ))}
-            </RadioGroup>
-          </div>
+          <RankQuestion
+            key={q.id}
+            question={q}
+            order={orders[q.id]}
+            onChange={next => setOrders(o => ({ ...o, [q.id]: next }))}
+          />
         ))}
 
-        <Button onClick={submit} disabled={!answered || save.isPending} className="w-full">
+        <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+          <div className="space-y-1">
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <Cake className="h-4 w-4 text-primary" />
+              The fun ones
+            </p>
+            <p className="text-xs text-muted-foreground">
+              These ones <strong>are</strong> shared with the office — that's the point. They get
+              used for birthdays, thank-yous, and the occasional surprise. Skip any you'd rather
+              not answer.
+            </p>
+          </div>
+          {FAVORITE_QUESTIONS.map(f => (
+            <div key={f.id} className="space-y-1">
+              <Label htmlFor={`fav-${f.id}`} className="text-xs">{f.label}</Label>
+              <Input
+                id={`fav-${f.id}`}
+                value={favorites[f.id] ?? ''}
+                onChange={e => setFavorites(v => ({ ...v, [f.id]: e.target.value }))}
+                placeholder={f.placeholder}
+                maxLength={80}
+              />
+            </div>
+          ))}
+        </div>
+
+        <Button onClick={submit} disabled={save.isPending || !save.isReady} className="w-full">
           {save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Continue
         </Button>
@@ -205,6 +224,7 @@ function WorkStyleStep({ onDone }: { onDone: () => void }) {
     </Card>
   );
 }
+
 
 function BasicsStep({ onDone }: { onDone: () => void }) {
   const { data: ctx } = useOrgContext();
