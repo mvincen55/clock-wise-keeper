@@ -286,7 +286,18 @@ async function fireHooks(db: Client, apiKey: string | undefined, orgId: string, 
         title = "Your plan has gone quiet";
         fallback = `Nothing has been checked off on "${payload.title}" this week — want to rescope it or shrink the next step?`;
         brief = `A team member's goal "${payload.title}" has had nothing checked off in the last 7 days. Offer to rescope or shrink the next step. No shame.`;
+      } else if (hook.kind === "sprint_verify") {
+        title = "A sprint is waiting on you";
+        fallback = payload.verification === "document"
+          ? `"${payload.title}" finished at ${payload.progress} of ${payload.target}. When you get a minute, upload the outside report so the result can be verified.`
+          : `"${payload.title}" finished at ${payload.progress} of ${payload.target}. It needs your approve or decline to close out.`;
+        brief = `A sprint "${payload.title}" ended at ${payload.progress} of ${payload.target} ${payload.metric}. The verifier needs to ${
+          payload.verification === "document"
+            ? "upload the office's outside report so the AI can check the number"
+            : "approve or decline the result"
+        }. Ask calmly, no pressure — this person may be the manager or the owner.`;
       } else {
+
         title = "Following up";
         fallback = payload.message ?? "You asked to be reminded about this.";
         brief = `Follow up on: ${payload.message ?? payload.title ?? "an earlier commitment"}.`;
@@ -321,21 +332,99 @@ async function orgMembers(db: Client, orgId: string) {
   return data ?? [];
 }
 
-/** 2. The AI runs the sprints: announce, nudge, and call the result. */
+/** Who hears about this sprint: the whole office, one department, or one person. */
+async function sprintAudience(
+  db: Client,
+  orgId: string,
+  sprint: Record<string, unknown>,
+): Promise<string[]> {
+  const members = await orgMembers(db, orgId);
+  const all = members.map(m => String(m.user_id));
+  const admins = members
+    .filter(m => m.role === "owner" || m.role === "manager")
+    .map(m => String(m.user_id));
+
+  if (sprint.scope === "individual") {
+    const target = sprint.scope_user_id ? [String(sprint.scope_user_id)] : [];
+    return [...new Set([...target, ...admins])];
+  }
+  if (sprint.scope === "department") {
+    const { data: staff } = await db
+      .from("employees")
+      .select("user_id, team")
+      .eq("org_id", orgId)
+      .not("user_id", "is", null);
+    const dept = String(sprint.scope_department ?? "").toLowerCase();
+    const inDept = (staff ?? [])
+      .filter(e => String(e.team ?? "").toLowerCase() === dept)
+      .map(e => String(e.user_id));
+    return [...new Set([...inDept, ...admins])];
+  }
+  return all;
+}
+
+/** The verifier is the manager; if the office has no manager, the owner. */
+async function sprintVerifier(db: Client, orgId: string): Promise<string | null> {
+  const members = await orgMembers(db, orgId);
+  const manager = members.find(m => m.role === "manager");
+  const owner = members.find(m => m.role === "owner");
+  const chosen = manager ?? owner;
+  return chosen ? String(chosen.user_id) : null;
+}
+
+/** 2. The AI runs the sprints: announce, nudge, push verification, and call the result. */
 async function runSprints(db: Client, apiKey: string | undefined, orgId: string, today: string) {
   const { data: sprints } = await db
     .from("team_goals")
     .select("*")
     .eq("org_id", orgId)
-    .eq("status", "active");
+    .in("status", ["active", "pending_verification"]);
   if (!sprints?.length) return 0;
 
-  const members = await orgMembers(db, orgId);
   let handled = 0;
 
   for (const s of sprints) {
     const pct = Math.min(100, Math.round((s.progress / Math.max(1, s.target_count)) * 100));
     const daysLeft = daysBetween(today, s.ends_on);
+    const hitTarget = s.progress >= s.target_count;
+    const verification = String(s.verification ?? "honor");
+    const scopeLabel = s.scope === "department"
+      ? `the ${s.scope_department} team`
+      : s.scope === "individual"
+      ? "one team member"
+      : "the whole office";
+
+    // A sprint waiting on a human: push the verifier, and only the verifier.
+    if (s.status === "pending_verification") {
+      const verifier = await sprintVerifier(db, orgId);
+      if (!verifier) continue;
+      const { data: openHook } = await db
+        .from("reminder_hooks")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("kind", "sprint_verify")
+        .eq("ref_id", s.id)
+        .eq("status", "pending")
+        .limit(1);
+      if ((openHook?.length ?? 0) > 0) continue;
+      await db.from("reminder_hooks").insert({
+        org_id: orgId,
+        user_id: verifier,
+        kind: "sprint_verify",
+        ref_id: s.id,
+        fire_at: new Date().toISOString(),
+        payload: {
+          title: s.title,
+          metric: s.metric,
+          progress: s.progress,
+          target: s.target_count,
+          verification,
+        },
+      });
+      handled++;
+      continue;
+    }
+
     const announced = (s as Record<string, unknown>).created_at as string;
     const isNew = Date.parse(announced) > Date.now() - 6 * 60 * 60 * 1000;
 
@@ -347,40 +436,60 @@ async function runSprints(db: Client, apiKey: string | undefined, orgId: string,
     if (isNew) {
       kind = "sprint_announced";
       title = "New team sprint";
-      fallback = `The office is going for ${s.target_count} ${s.metric} by ${s.ends_on}. Hit it and it's ${s.reward}. Everyone's tally counts — tap +1 as you go.`;
-      brief = `Announce a new team sprint to the whole office. Title: "${s.title}". Counting: ${s.metric}. Target: ${s.target_count} by ${s.ends_on}. Reward if the team hits it: ${s.reward}. It's the whole team against the number — no rankings. Mention that people tap +1 on the dashboard as they go.`;
-    } else if (daysLeft < 0) {
-      const won = s.progress >= s.target_count;
-      await db.from("team_goals").update({ status: won ? "won" : "missed" }).eq("id", s.id);
-      kind = won ? "sprint_won" : "sprint_missed";
-      title = won ? "Sprint won" : "Sprint wrapped";
-      fallback = won
-        ? `${s.progress} ${s.metric} against a target of ${s.target_count}. That's ${s.reward}.`
-        : `${s.progress} of ${s.target_count} ${s.metric} — so close. Worth another run when the time is right.`;
-      brief = won
-        ? `The office WON a sprint: ${s.progress} ${s.metric} against a target of ${s.target_count}. The reward is ${s.reward}. Celebrate the team, warmly and briefly, no hype.`
-        : `The office fell short of a sprint: ${s.progress} of ${s.target_count} ${s.metric} by ${s.ends_on}. Be gracious and genuinely kind — "so close", no shame, no lecture.`;
+      fallback = `${scopeLabel} is going for ${s.target_count} ${s.metric} by ${s.ends_on}. Hit it and it's ${s.reward}.`;
+      brief = `Announce a new sprint for ${scopeLabel}. Title: "${s.title}". Counting: ${s.metric}. Target: ${s.target_count} by ${s.ends_on}. Reward: ${s.reward}. ${
+        verification === "honor"
+          ? "The tally is on the honour system — people tap +1 on the dashboard as they go."
+          : verification === "manager_approval"
+          ? "The result gets confirmed by a manager at the end."
+          : "The result gets checked against the office's outside report at the end."
+      } No rankings.`;
+    } else if (daysLeft < 0 || hitTarget) {
+      // Period over, or target reached early.
+      if (verification === "honor") {
+        const won = hitTarget;
+        await db.from("team_goals").update({ status: won ? "won" : "missed" }).eq("id", s.id);
+        kind = won ? "sprint_won" : "sprint_missed";
+        title = won ? "Sprint won" : "Sprint wrapped";
+        fallback = won
+          ? `${s.progress} ${s.metric} against a target of ${s.target_count}. That's ${s.reward}.`
+          : `${s.progress} of ${s.target_count} ${s.metric} — so close. Worth another run when the time is right.`;
+        brief = won
+          ? `A sprint was WON: ${s.progress} ${s.metric} against a target of ${s.target_count}. The reward is ${s.reward}. Celebrate warmly and briefly, no hype.`
+          : `A sprint fell short: ${s.progress} of ${s.target_count} ${s.metric} by ${s.ends_on}. Be gracious and genuinely kind — no shame, no lecture.`;
+      } else {
+        await db.from("team_goals").update({ status: "pending_verification" }).eq("id", s.id);
+        kind = "sprint_pending_verification";
+        title = "Sprint is up for verification";
+        fallback = `${s.progress} of ${s.target_count} ${s.metric} recorded. The result is with the verifier now.`;
+        brief = `A sprint reached the end of its run: ${s.progress} of ${s.target_count} ${s.metric}. It now waits on ${
+          verification === "document"
+            ? "the outside report being uploaded"
+            : "a manager's confirmation"
+        }. State it plainly, no verdict yet.`;
+      }
     } else if (daysLeft > 0 && pct < 100 && easternWeekday() === 3) {
       // Midweek check-in with the real number.
       kind = "sprint_progress";
       title = "Sprint check-in";
-      fallback = `${daysLeft} day${daysLeft === 1 ? "" : "s"} left and the team is ${pct}% of the way to ${s.target_count} ${s.metric}. A push gets ${s.reward}.`;
-      brief = `Mid-sprint check-in for the whole office. ${s.progress} of ${s.target_count} ${s.metric} so far (${pct}%), ${daysLeft} day${daysLeft === 1 ? "" : "s"} left, reward is ${s.reward}. Use the real numbers. Encouraging, not pushy.`;
+      fallback = `${daysLeft} day${daysLeft === 1 ? "" : "s"} left and ${scopeLabel} is ${pct}% of the way to ${s.target_count} ${s.metric}. A push gets ${s.reward}.`;
+      brief = `Mid-sprint check-in for ${scopeLabel}. ${s.progress} of ${s.target_count} ${s.metric} so far (${pct}%), ${daysLeft} day${daysLeft === 1 ? "" : "s"} left, reward is ${s.reward}. Use the real numbers. Encouraging, not pushy.`;
     }
 
     if (!kind) continue;
     const message = await say(apiKey, brief, fallback);
-    for (const m of members) {
+    const audience = await sprintAudience(db, orgId, s as Record<string, unknown>);
+    for (const uid of audience) {
       try {
         await deliver(db, {
           org_id: orgId,
-          user_id: m.user_id as string,
+          user_id: uid,
           kind,
           title,
           message,
           related_table: "team_goals",
           related_id: s.id,
-          data_refs: { progress: s.progress, target: s.target_count, ends_on: s.ends_on },
+          data_refs: { progress: s.progress, target: s.target_count, ends_on: s.ends_on, scope: s.scope },
         });
       } catch (e) {
         console.warn("sprint delivery skipped:", (e as Error).message);
@@ -390,6 +499,7 @@ async function runSprints(db: Client, apiKey: string | undefined, orgId: string,
   }
   return handled;
 }
+
 
 /** 3. Once a week, offer each manager ONE sprint idea grounded in office data. */
 async function suggestSprints(db: Client, apiKey: string | undefined, orgId: string, today: string) {
