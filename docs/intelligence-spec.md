@@ -1,10 +1,9 @@
 # Office Intelligence — feature spec
 
-Status (2026-07-30): Prompts 16 + 19 v3 + 21 pending. This layer makes the app feel
-smart everywhere — proactive, grounded, learning — rather than smart only when
-tapped. Pairs with `docs/messaging-spec.md` (16 is the brain, 17 the voice).
-19 v3 supersedes v2 (paste-in proof, office verification default, process-and-discard).
-21 adds the Executive Co-Pilot.
+Status (2026-07-30): Prompts 16 + 19 v3 + 21 + 23 + 22 pending. This layer makes
+the app feel smart everywhere — proactive, grounded, learning. Pairs with
+`docs/messaging-spec.md` (16 is the brain, 17 the voice; 23 is the privacy
+foundation and should land BEFORE 17). Order note: 23 → 17 → 22.
 
 ## Product decisions (the "why")
 
@@ -12,36 +11,38 @@ tapped. Pairs with `docs/messaging-spec.md` (16 is the brain, 17 the voice).
    nudges at transition moments, quiet otherwise.
 2. **Receipts or silence.** Every claim cites real numbers. Generic filler is a
    bug. The brief must sometimes say "nothing to report."
-3. **The dismissal loop IS the learning.** `acted_on` vs `dismissed` per nudge
-   kind; repeatedly-dismissed kinds go quiet for 2 weeks. Also the accessibility
-   feature: it learns WHEN each person actually responds.
+3. **The dismissal loop IS the learning** — and the accessibility feature: it
+   learns WHEN each person actually responds.
 4. **The office's language, not internet language.** assistant_memories + office
-   docs + settings are authoritative — real names, real targets, real rules.
+   docs + settings are authoritative.
 5. **Calm rationing.** Max ONE nudge per surface/person per day. Fail-open always.
 6. **The Huddle boundary is load-bearing** — no patient-related storage or
    computation anywhere near the huddle page.
-7. **Suggestions propose, managers dispose.** Humans stay senior: incident
-   follow-through, sprint suggestions, document-verdict overrides.
-8. **THE OFFICE AI DOCTRINE applies to every AI surface:** "make this office
-   excellent within the owner's vision, rules, policies, and actual structure."
-   Encourages EVERYONE — owners included — "might not be a bad idea to…" framing.
-   Never pushy, never shaming, receipts cited, quiet when there's nothing.
-9. **Sprint goals are scoped and tier-verified:** team / department / individual;
-   HONOR · MANAGER_APPROVAL · DOCUMENT verification. Verifier = manager → owner
-   fallback; nobody grades their own homework.
-10. **Verification is office-configurable AND proof is process-and-discard:**
-    org setting `sprint_verification_default`; proof uploaded OR pasted; read,
-    metric extracted, DISCARDED — never persisted (outside reports can contain
-    patient names; PE never stores patient data). Archive keeps the verdict,
-    never the proof.
-11. **THE EXECUTIVE CO-PILOT (Prompt 21): the AI carries the remembering.**
-    Design for the executive-function pattern, never label any person — nothing
-    in product or docs names a condition. Principles: capture is one tap, never
-    typing; reminders land at the moment of action, not in a pile; the first step
-    is always tiny; follow-ups are kind and shame-free (deferral is one tap, no
-    commentary); quiet is a feature — alarm fatigue is the #1 failure mode. The
-    stealth work-style profile tunes reminder style per person without anyone
-    self-identifying anything.
+7. **Suggestions propose, managers dispose.** Humans stay senior.
+8. **THE OFFICE AI DOCTRINE, sharpened:** every system prompt's mission —
+   "make THIS office the best dental office it can be, within the owner's vision,
+   rules, policies, and actual structure." Parochial by design: it only cares
+   about this office. Motivating, never obnoxious, genuinely good for the team
+   member — INCLUDING the owner/manager — or it's management-by-robot.
+9. **Sprint goals are scoped and tier-verified; proof is process-and-discard.**
+10. **(folded into 9)**
+11. **THE EXECUTIVE CO-PILOT: the AI carries the remembering** — design for the
+    executive-function pattern, never label any person. One-tap capture,
+    just-in-time reminders, tiny first steps, shame-free deferral, quiet as a
+    feature.
+12. **TRANSCRIPTS ARE TRANSIENT; LEARNINGS ARE DISTILLED (Prompt 23).** Roleplay
+    transcripts are process-and-discard: score + brief feedback retained, raw
+    transcript never persisted ANYWHERE (same rule as verification proof). No
+    massive context windows — AI context comes from `ai_member_memory` (curated
+    notes: preferences, patterns, strengths) + current records. Members can read,
+    edit, and delete their own memory notes ("what the office remembers about
+    you"); NO admin read. The AI never records anything it wouldn't say to the
+    member's face; deleting a note stops that kind of tracking.
+13. **THE PROCESS & MANAGEMENT ADVISOR (Prompt 22)** is the doctrine applied to
+    operations: weekly, 2–4 concrete, receipt-cited suggestions from the office's
+    own data (vitals, checklists, attendance, training, sprints, goal patterns) +
+    one streamline spotlight for the manager personally. About systems, never
+    character judgments. Dismissible, one-tap actionable.
 
 ## Prompt 16 — Office Intelligence layer (pending)
 
@@ -99,20 +100,47 @@ tapped. Pairs with `docs/messaging-spec.md` (16 is the brain, 17 the voice).
 >
 > 5) RESCOPE, DON'T PILE UP: if items keep slipping, the AI offers to shrink or reschedule the plan ("this week's been heavy — move these two to Monday?") instead of letting a backlog rot in place.
 
+## Prompt 23 — AI privacy architecture (pending — send BEFORE Prompt 17)
+
+> Harden the AI privacy architecture: transcripts are transient, learnings are distilled, and members can see what the office AI holds about them.
+>
+> 1) ROLEPLAY TRANSCRIPTS — PROCESS-AND-DISCARD (this REPLACES transcript retention): when a training roleplay ends, the strong model scores it and writes a short feedback summary (rubric lines + what to try next). training_attempts stores score, passed, and the brief feedback text ONLY. The raw transcript is never persisted — not in answers jsonb, not in logs, nowhere. Quiz answers stay as they are (member-only).
+>
+> 2) DISTILLED MEMBER MEMORY (replaces massive context windows): new table ai_member_memory: id, org_id, user_id, note text, kind ('preference' | 'pattern' | 'strength' | 'watch_out'), created_at, updated_at. org_id + RLS: the MEMBER can read, edit, and delete their own notes (surface it as "what the office remembers about you" — transparency builds trust); NO admin read — not owners, not managers. Written only by AI edge functions with the service role.
+> - After conversations and activity, the AI distills durable useful facts — "prefers written instructions", "does her best focused work before lunch", "hates surprise schedule changes", "improving at insurance explanations" — and reads THESE (not raw history) for context going forward.
+> - The AI must never record anything it wouldn't say to the member's face. If the member deletes a note, the AI stops tracking that kind of thing.
+>
+> 3) CONTEXT BUDGET: AI functions build context from ai_member_memory + current records (goals, tasks, training state, office rules) — NOT from replaying conversation history. Small, curated, current.
+
+## Prompt 22 — Process & Management Advisor (pending)
+
+> Build the Process & Management Advisor for owners/managers — the office AI as an operations consultant that only cares about THIS office, under the Office AI Doctrine: motivating, never obnoxious, genuinely good for the manager too.
+>
+> 1) WEEKLY OPERATIONS REVIEW (or on-demand "Review my week"): the strong model analyzes the office's own data — deposit vitals trends (production, collections, hygiene vs doctor disruption), checklist completion patterns, attendance/tardy patterns, bypasses, training completion, sprint results, goal stall patterns — and produces 2–4 CONCRETE suggestions, each with receipts ("hygiene no-shows cluster on Mondays — 6 of 8 this month — might not be a bad idea to move recall reminders to Sunday evening").
+>
+> 2) MANAGEMENT COACHING, grounded: suggestions about running the team from actual patterns ("her goals stall at week 3 — a shorter sprint might fit better than monthly goals") — kind about every team member, never character judgments, always about systems not people.
+>
+> 3) STREAMLINE SPOTLIGHT: one recurring "this process could be tighter" observation per review — something the manager spends effort on that the data says could be simpler (batching approvals, checklist items that keep clustering on one person, steps nobody owns).
+>
+> 4) Delivery: a Manager Brief in the AI channel (dashboard card until messaging ships), weekly, dismissible — feeds the dismissal loop. Every suggestion one-tap actionable where possible ("make it a sprint goal", "assign the module", "reassign the item").
+
 ## Known build risks
 
-- **PHI leak via proof upload.** The single most important rule in this file:
-  verification proof must never be persisted. No storage upload, no table insert,
-  no log line carrying raw proof.
-- **ALARM FATIGUE (Prompt 21's #1 failure mode).** The co-pilot dies if it pings
-  too much: max one capture offer per conversation turn, one Today Focus card,
+- **PHI/sensitive-data persistence.** Two hard rules now: verification proof AND
+  roleplay transcripts are process-and-discard. No storage, no table insert, no
+  log line carrying raw content. Probe function logs for leaks.
+- **Memory overreach.** ai_member_memory notes must be things the AI would say to
+  the member's face — review the first week of distilled notes manually; anything
+  creepy or clinical is a bug, not a feature.
+- **ALARM FATIGUE.** Max one capture offer per turn, one Today Focus card,
   follow-ups only at action moments. Test a heavy day and count the pings.
-- **Nagware drift.** Dismissed kinds must actually go quiet — test the 2-week
-  suppression.
-- **Receipt honesty.** data_refs holds the actual figures; document verdicts name
-  where numbers came from; 'unclear' instead of guesses.
-- **Scope visibility leaks.** Department/individual sprints must not leak into
-  other members' dashboards — probe RLS as a member outside the scope.
+- **Nagware drift.** Dismissed kinds must actually go quiet — test suppression.
+- **Receipt honesty.** data_refs holds actual figures; verdicts name sources;
+  'unclear' instead of guesses.
+- **Scope visibility leaks.** Department/individual sprints must not leak — probe
+  RLS as a member outside the scope.
+- **Advisor harshness.** Management suggestions about a team member must read as
+  system observations, never character judgments — tone-check before shipping.
 - **Huddle leakage.** Context block sources from business tables only.
 - **Reminder delivery before messaging ships.** reminder_hooks degrade to plain
   notifications if the AI channel doesn't exist yet.
