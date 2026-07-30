@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadSupportPdf } from '@/lib/support-pdf';
-import TicketTimeline, { stageFromTicket } from '@/components/support/TicketTimeline';
+import TicketTimeline, { stageFromTicket, type TicketStageTimes } from '@/components/support/TicketTimeline';
 import { redactScreenshot } from '@/lib/redact-image';
 import { extractPdfText } from '@/lib/extract-pdf-text';
 import { Switch } from '@/components/ui/switch';
@@ -59,6 +59,8 @@ type PastTicket = {
   severity: string | null;
   page_path: string | null;
   created_at: string;
+  escalated_at?: string | null;
+  resolved_at?: string | null;
 };
 
 /** A file waiting to be sent, plus its scrubbed twin. */
@@ -152,6 +154,7 @@ export default function SupportWidget() {
   const [view, setView] = useState<'chat' | 'history'>('chat');
   const [history, setHistory] = useState<PastTicket[] | null>(null);
   const [loadingThread, setLoadingThread] = useState(false);
+  const [stageTimes, setStageTimes] = useState<TicketStageTimes>({});
 
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -188,6 +191,7 @@ export default function SupportWidget() {
     setTier('standard');
     setSuggested(null);
     setResolved(false);
+    setStageTimes({});
     setCategory('other');
     setSeverity('medium');
   }, []);
@@ -316,7 +320,9 @@ export default function SupportWidget() {
     if (!user) return;
     const { data, error } = await supabase
       .from('support_tickets')
-      .select('id, title, status, tier, category, severity, page_path, created_at')
+      .select(
+        'id, title, status, tier, category, severity, page_path, created_at, escalated_at, resolved_at',
+      )
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(25);
@@ -375,6 +381,14 @@ export default function SupportWidget() {
         });
       }
       setBubbles(restored);
+      // Rebuild the clock: the first agent reply is when the analyst started trying.
+      const firstAnswer = rows.find(m => m.role !== 'user')?.created_at ?? null;
+      setStageTimes({
+        open: t.created_at,
+        analyst: firstAnswer,
+        escalated: t.escalated_at ?? null,
+        solved: t.resolved_at ?? null,
+      });
     } catch {
       toast.error('Could not open that report.');
     } finally {
@@ -423,6 +437,13 @@ export default function SupportWidget() {
         tier: data.tier,
       },
     ]);
+    const answeredAt = new Date().toISOString();
+    setStageTimes(prev => ({
+      ...prev,
+      ...(asTier === 'senior'
+        ? { escalated: prev.escalated ?? answeredAt }
+        : { analyst: prev.analyst ?? answeredAt }),
+    }));
     if (data.escalate && asTier === 'standard') setSuggested(String(data.escalate));
   };
 
@@ -448,11 +469,12 @@ export default function SupportWidget() {
             range_start: rangeStart || null,
             range_end: rangeEnd || null,
           })
-          .select('id')
+          .select('id, created_at')
           .single();
         if (error) throw error;
         id = data.id;
         setTicketId(id);
+        setStageTimes({ open: data.created_at ?? new Date().toISOString() });
       }
 
       const uploaded: { path: string; file: File; text: string }[] = [];
@@ -579,11 +601,13 @@ export default function SupportWidget() {
     setBusy(true);
     setTier('senior');
     setSuggested(null);
+    const escalatedAt = new Date().toISOString();
     try {
       await supabase
         .from('support_tickets')
-        .update({ status: 'escalated', tier: 'senior', escalated_at: new Date().toISOString() })
+        .update({ status: 'escalated', tier: 'senior', escalated_at: escalatedAt })
         .eq('id', ticketId);
+      setStageTimes(prev => ({ ...prev, escalated: prev.escalated ?? escalatedAt }));
 
       const { data, error } = await supabase.functions.invoke('support-agent', {
         body: { ticket_id: ticketId, tier: 'senior' },
@@ -626,10 +650,12 @@ export default function SupportWidget() {
 
   const markResolved = async () => {
     if (!ticketId) return;
+    const resolvedAt = new Date().toISOString();
     await supabase
       .from('support_tickets')
-      .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+      .update({ status: 'resolved', resolved_at: resolvedAt })
       .eq('id', ticketId);
+    setStageTimes(prev => ({ ...prev, solved: resolvedAt }));
     setResolved(true);
     toast.success('Thanks — closed out.');
   };
@@ -790,6 +816,7 @@ export default function SupportWidget() {
                   bubbles.some(b => b.role !== 'user'),
                 )}
                 working={busy}
+                times={stageTimes}
               />
             </div>
           )}
