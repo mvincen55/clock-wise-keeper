@@ -682,7 +682,31 @@ export default function SupportWidget() {
               )}
             </div>
             <div className="flex items-center gap-1">
-              {bubbles.length > 0 && (
+              {view === 'chat' && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setView('history')}
+                  title="Your past reports"
+                >
+                  <History className="mr-1 h-3 w-3" /> Past
+                </Button>
+              )}
+              {view === 'history' && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => {
+                    reset();
+                    setView('chat');
+                  }}
+                >
+                  <Plus className="mr-1 h-3 w-3" /> New
+                </Button>
+              )}
+              {view === 'chat' && bubbles.length > 0 && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -693,7 +717,7 @@ export default function SupportWidget() {
                   <Download className="mr-1 h-3 w-3" /> PDF
                 </Button>
               )}
-              {ticketId && !resolved && (
+              {view === 'chat' && ticketId && !resolved && (
                 <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={markResolved}>
                   <CheckCircle2 className="mr-1 h-3 w-3" /> Solved
                 </Button>
@@ -712,7 +736,53 @@ export default function SupportWidget() {
             </div>
           </div>
 
-          {(ticketId || bubbles.length > 0) && (
+          {view === 'history' && (
+            <div className="flex-1 overflow-y-auto p-3">
+              <button
+                type="button"
+                onClick={() => setView('chat')}
+                className="mb-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <ChevronLeft className="h-3 w-3" /> Back to this report
+              </button>
+              {history === null && <p className="text-sm text-muted-foreground">Loading…</p>}
+              {history?.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Nothing here yet — reports you send are kept here.
+                </p>
+              )}
+              <div className="space-y-2">
+                {(history ?? []).map(t => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => void openTicket(t)}
+                    className="w-full rounded-lg border p-2 text-left transition-colors hover:bg-muted/50"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="line-clamp-2 text-sm font-medium">
+                        {t.title || t.page_path || 'Problem report'}
+                      </span>
+                      <Badge variant="secondary" className="shrink-0 text-[10px] capitalize">
+                        {(t.status ?? 'open').replace('_', ' ')}
+                      </Badge>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                      <span>{new Date(t.created_at).toLocaleString()}</span>
+                      {t.category && <span className="capitalize">{t.category}</span>}
+                      {t.tier === 'senior' && (
+                        <span className="inline-flex items-center gap-1">
+                          <ShieldCheck className="h-3 w-3" /> Senior
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {view === 'chat' && (ticketId || bubbles.length > 0) && (
             <div className="border-b bg-muted/30 px-3 py-2">
               <TicketTimeline
                 stage={stageFromTicket(
@@ -725,8 +795,12 @@ export default function SupportWidget() {
             </div>
           )}
 
+          {view === 'chat' && (
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-3">
-            {bubbles.length === 0 && (
+            {loadingThread && (
+              <p className="text-sm text-muted-foreground">Opening that report…</p>
+            )}
+            {bubbles.length === 0 && !loadingThread && (
               <div className="space-y-2 text-sm text-muted-foreground">
                 <p>What went wrong? A sentence is plenty.</p>
                 <p className="text-xs">
