@@ -2771,6 +2771,41 @@ export type Database = {
           },
         ]
       }
+      org_practice_settings: {
+        Row: {
+          collections_visibility: string
+          created_at: string
+          id: string
+          monthly_collections_target_cents: number | null
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          collections_visibility?: string
+          created_at?: string
+          id?: string
+          monthly_collections_target_cents?: number | null
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          collections_visibility?: string
+          created_at?: string
+          id?: string
+          monthly_collections_target_cents?: number | null
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_practice_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orgs: {
         Row: {
           created_at: string
@@ -3921,6 +3956,47 @@ export type Database = {
             columns: ["origin_goal_id"]
             isOneToOne: false
             referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_notes: {
+        Row: {
+          color: string
+          content: string
+          created_at: string
+          id: string
+          org_id: string
+          sort_order: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          content?: string
+          created_at?: string
+          id?: string
+          org_id: string
+          sort_order?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          content?: string
+          created_at?: string
+          id?: string
+          org_id?: string
+          sort_order?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_notes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
         ]
