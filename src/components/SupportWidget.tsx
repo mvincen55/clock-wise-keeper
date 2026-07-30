@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { buildTicketContext, type TicketContext } from '@/lib/support-context';
 
 import { supabase } from '@/integrations/supabase/client';
