@@ -123,7 +123,27 @@ export default function Training() {
                 </span>
               )}
             </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="review">
+                Review queue
+                {draftCount > 0 && (
+                  <span className="ml-1.5 rounded-full bg-warning px-1.5 text-xs text-warning-foreground">
+                    {draftCount}
+                  </span>
+                )}
+              </TabsTrigger>
+            )}
           </TabsList>
+
+          {isAdmin && (
+            <TabsContent value="review" className="space-y-4 pt-4">
+              <p className="text-sm text-muted-foreground">
+                Modules the auditor held back. Check the ones you trust and approve them together —
+                rejected modules are archived, never silently deleted.
+              </p>
+              <ModuleReviewQueue />
+            </TabsContent>
+          )}
 
           <TabsContent value="library" className="space-y-4 pt-4">
             {allTags.length > 0 && (
