@@ -3598,6 +3598,53 @@ export type Database = {
           },
         ]
       }
+      reminder_hooks: {
+        Row: {
+          created_at: string
+          fire_at: string
+          id: string
+          kind: string
+          org_id: string
+          payload: Json
+          ref_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          fire_at: string
+          id?: string
+          kind: string
+          org_id: string
+          payload?: Json
+          ref_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          fire_at?: string
+          id?: string
+          kind?: string
+          org_id?: string
+          payload?: Json
+          ref_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reminder_hooks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       report_runs: {
         Row: {
           completed_at: string | null
@@ -3983,6 +4030,68 @@ export type Database = {
             columns: ["time_entry_id"]
             isOneToOne: false
             referencedRelation: "time_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_goals: {
+        Row: {
+          ai_suggested: boolean
+          created_at: string
+          created_by: string
+          ends_on: string
+          id: string
+          metric: string
+          org_id: string
+          period: string
+          progress: number
+          reward: string
+          starts_on: string
+          status: string
+          target_count: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          ai_suggested?: boolean
+          created_at?: string
+          created_by: string
+          ends_on: string
+          id?: string
+          metric: string
+          org_id: string
+          period: string
+          progress?: number
+          reward: string
+          starts_on: string
+          status?: string
+          target_count: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          ai_suggested?: boolean
+          created_at?: string
+          created_by?: string
+          ends_on?: string
+          id?: string
+          metric?: string
+          org_id?: string
+          period?: string
+          progress?: number
+          reward?: string
+          starts_on?: string
+          status?: string
+          target_count?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_goals_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
         ]
@@ -4591,6 +4700,32 @@ export type Database = {
       _recompute_schedule_window: {
         Args: { p_end: string; p_start: string; p_user_id: string }
         Returns: undefined
+      }
+      bump_team_goal: {
+        Args: { _amount?: number; _goal_id: string }
+        Returns: {
+          ai_suggested: boolean
+          created_at: string
+          created_by: string
+          ends_on: string
+          id: string
+          metric: string
+          org_id: string
+          period: string
+          progress: number
+          reward: string
+          starts_on: string
+          status: string
+          target_count: number
+          title: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "team_goals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       can_access_employee: { Args: { _employee_id: string }; Returns: boolean }
       can_manage_goal: { Args: { _goal_id: string }; Returns: boolean }
