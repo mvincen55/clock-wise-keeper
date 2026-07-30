@@ -11,7 +11,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ScrollText, Download, FileSpreadsheet } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { ScrollText, Download, FileSpreadsheet, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDate, formatTime } from '@/lib/time-utils';
 import { useOrgEmployees } from '@/hooks/useEmployees';
@@ -24,6 +40,7 @@ import {
   type PolicyKind,
 } from '@/hooks/useAccountability';
 import AccountabilityAuditTimeline from './AccountabilityAuditTimeline';
+
 
 function RecordRow({ r, who }: { r: AccountabilityReport; who?: string }) {
   return (
@@ -68,6 +85,9 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [kind, setKind] = useState<'all' | PolicyKind>('all');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [pendingFormat, setPendingFormat] = useState<'csv' | 'xlsx' | null>(null);
+
 
   const nameByUser = useMemo(() => {
     const m = new Map<string, string>();
@@ -141,11 +161,16 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
    * One file for the whole filtered set — every closed record in the selected
    * range and kind, not a download per card.
    */
-  const exportCsv = () => {
+  const startPreview = (format: 'csv' | 'xlsx') => {
     if (closed.length === 0) {
       toast.error('Nothing to export in this range.');
       return;
     }
+    setPendingFormat(format);
+    setPreviewOpen(true);
+  };
+
+  const doExportCsv = () => {
     const cell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const rows = buildRows().map(row => row.map(cell).join(','));
     // BOM so Excel opens accented names correctly.
@@ -155,11 +180,7 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
     download(blob, `${baseName}.csv`);
   };
 
-  const exportXlsx = async () => {
-    if (closed.length === 0) {
-      toast.error('Nothing to export in this range.');
-      return;
-    }
+  const doExportXlsx = async () => {
     const XLSX = await import('xlsx');
     const data = [EXPORT_HEADER, ...buildRows().map(row => row.map(v => String(v ?? '')))];
     const sheet = XLSX.utils.aoa_to_sheet(data);
@@ -177,9 +198,18 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
     );
   };
 
+  const confirmDownload = () => {
+    setPreviewOpen(false);
+    if (pendingFormat === 'csv') doExportCsv();
+    else if (pendingFormat === 'xlsx') doExportXlsx();
+    setPendingFormat(null);
+  };
+
+
 
 
   return (
+    <>
     <Card className="card-elevated">
       <CardHeader className="border-b">
         <CardTitle className="flex items-center gap-2">
@@ -227,10 +257,10 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
               size="sm"
               className="h-9"
               disabled={closed.length === 0}
-              onClick={exportCsv}
-              title="Downloads every record in this range as one CSV"
+              onClick={() => startPreview('csv')}
+              title="Preview and download every record in this range as one CSV"
             >
-              <Download className="mr-2 h-4 w-4" />
+              <Eye className="mr-2 h-4 w-4" />
               Export CSV ({closed.length})
             </Button>
             <Button
@@ -238,12 +268,13 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
               size="sm"
               className="h-9"
               disabled={closed.length === 0}
-              onClick={exportXlsx}
-              title="Downloads every record in this range as one Excel file"
+              onClick={() => startPreview('xlsx')}
+              title="Preview and download every record in this range as one Excel file"
             >
-              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              <Eye className="mr-2 h-4 w-4" />
               Export XLSX ({closed.length})
             </Button>
+
 
 
           </div>
@@ -265,5 +296,63 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
         )}
       </CardContent>
     </Card>
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Export preview</DialogTitle>
+            <DialogDescription>
+              Showing the first 3 of {closed.length} record{closed.length === 1 ? '' : 's'}.
+              Dates and times are displayed in Eastern Time.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-auto rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {EXPORT_HEADER.map(h => (
+                    <TableHead key={h} className="whitespace-nowrap text-xs">
+                      {h}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {buildRows()
+                  .slice(0, 3)
+                  .map((row, i) => (
+                    <TableRow key={i}>
+                      {row.map((cell, j) => (
+                        <TableCell key={j} className="max-w-[200px] truncate text-xs">
+                          {String(cell ?? '')}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreviewOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmDownload}>
+              {pendingFormat === 'csv' ? (
+                <>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download CSV
+                </>
+              ) : (
+                <>
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Download XLSX
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
+
