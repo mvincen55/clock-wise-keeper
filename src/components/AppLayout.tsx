@@ -254,7 +254,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
         {/* Mobile header */}
         <div className="flex-1 flex flex-col">
-          <header className="md:hidden flex items-center justify-between px-4 py-3 border-b bg-card">
+          <header className="md:hidden flex items-center justify-between px-4 py-3 border-b bg-card paper-surface">
             <Link to="/" className="flex items-center gap-2" onClick={() => setMobileOpen(false)}>
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
                 <Mail className="h-4 w-4 text-primary-foreground" />
