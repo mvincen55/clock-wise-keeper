@@ -22,7 +22,6 @@ import {
   History,
   Plus,
   ChevronLeft,
-  Paperclip,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadSupportPdf } from '@/lib/support-pdf';
