@@ -286,7 +286,18 @@ async function fireHooks(db: Client, apiKey: string | undefined, orgId: string, 
         title = "Your plan has gone quiet";
         fallback = `Nothing has been checked off on "${payload.title}" this week — want to rescope it or shrink the next step?`;
         brief = `A team member's goal "${payload.title}" has had nothing checked off in the last 7 days. Offer to rescope or shrink the next step. No shame.`;
+      } else if (hook.kind === "sprint_verify") {
+        title = "A sprint is waiting on you";
+        fallback = payload.verification === "document"
+          ? `"${payload.title}" finished at ${payload.progress} of ${payload.target}. When you get a minute, upload the outside report so the result can be verified.`
+          : `"${payload.title}" finished at ${payload.progress} of ${payload.target}. It needs your approve or decline to close out.`;
+        brief = `A sprint "${payload.title}" ended at ${payload.progress} of ${payload.target} ${payload.metric}. The verifier needs to ${
+          payload.verification === "document"
+            ? "upload the office's outside report so the AI can check the number"
+            : "approve or decline the result"
+        }. Ask calmly, no pressure — this person may be the manager or the owner.`;
       } else {
+
         title = "Following up";
         fallback = payload.message ?? "You asked to be reminded about this.";
         brief = `Follow up on: ${payload.message ?? payload.title ?? "an earlier commitment"}.`;
