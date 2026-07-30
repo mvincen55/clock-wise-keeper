@@ -31,6 +31,7 @@
 //   GITHUB_BRANCH       optional — Lovable-synced branch, default main
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { guardAiInput, JAILBREAK_REFUSAL } from "../_shared/jailbreak-guard.ts";
 import { formatCodeNote, loadCodeNotes, type CodeNote } from "../_shared/procedure-notes.ts";
 import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
 
@@ -950,6 +951,21 @@ Deno.serve(async (req) => {
     if (chat.length === 0 || chat[chat.length - 1].role !== "user") {
       return json({ error: "Bad request" }, 400);
     }
+    // Integrity: signature-only jailbreak check on the newest user turn.
+    // Nothing typed is stored or scanned for meaning — only the pattern that
+    // matched is logged, and the refusal never mentions the flag.
+    if (
+      await guardAiInput({
+        orgId: membership.org_id as string,
+        actorUserId: user.id,
+        surface: mode === "fof" ? "office-ai:fof" : "office-ai:ask",
+        input: chat,
+        isMessageArray: true,
+      })
+    ) {
+      return json({ answer: JAILBREAK_REFUSAL, reply: JAILBREAK_REFUSAL, sources: [] });
+    }
+
     const training = mode === "fof" && isManager && body.trainingEnabled !== false;
 
     // De-identified FOF context (same caps and derivation as fof-assistant).

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { guardAiInput, JAILBREAK_REFUSAL } from "../_shared/jailbreak-guard.ts";
 import { loadProcedureNotes } from "../_shared/procedure-notes.ts";
 import { withDoctrine } from "../_shared/office-doctrine.ts";
 
@@ -129,6 +130,27 @@ Deno.serve(async (req) => {
           .slice(-10)
           .map((m: HistoryMessage) => ({ role: m.role, content: String(m.content).slice(0, 4000) }))
       : [];
+
+    // Integrity: signature-only jailbreak check before anything is grounded or
+    // sent to the model. The question text is never stored — only the matched
+    // pattern — and the refusal reads like an ordinary "can't help with that".
+    const { data: askerOrg } = await supabase
+      .from("org_members")
+      .select("org_id")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle();
+    if (
+      await guardAiInput({
+        orgId: askerOrg?.org_id as string | undefined,
+        actorUserId: user.id,
+        surface: "office-insights:ask-docs",
+        input: question,
+      })
+    ) {
+      return json({ answer: JAILBREAK_REFUSAL, sources: [] });
+    }
 
     const { data: docs } = await supabase
       .from("office_docs")
