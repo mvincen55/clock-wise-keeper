@@ -34,6 +34,8 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import { getToday } from '@/lib/time-utils';
 import type { ChecklistCadence } from '@/lib/checklist-defaults';
 import {
+import NudgeLine from '@/components/NudgeLine';
+import { useSurfaceNudge } from '@/hooks/useOfficeInsights';
   CADENCE_LABELS,
   CADENCES,
   periodKeyFor,
@@ -221,6 +223,8 @@ export default function Checklists() {
           Daily, weekly, monthly, and yearly duties — checked off in everyone's name, with history.
         </p>
       </div>
+
+      {checklistNudge && <NudgeLine nudge={checklistNudge} />}
 
       {checklists.length === 0 ? (
         <Card>
