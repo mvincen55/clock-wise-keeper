@@ -133,13 +133,112 @@ function AnswerText({
                     : 'text-muted-foreground'
               }
             >
-              {renderLine(body)}
+              <CiteLine text={body} byId={byId} onOpen={onOpen} />
             </p>
           );
         })}
     </div>
   );
 }
+
+const CONFIDENCE: Record<
+  AnalystConcern['confidence'],
+  { label: string; className: string; blurb: string }
+> = {
+  high: {
+    label: 'High confidence',
+    className: 'border-destructive/40 bg-destructive/10 text-destructive',
+    blurb: 'Several records point the same way.',
+  },
+  medium: {
+    label: 'Medium confidence',
+    className: 'border-accent/40 bg-accent/10 text-accent',
+    blurb: 'A real pattern, but thin data or an ordinary explanation.',
+  },
+  low: {
+    label: 'Low confidence',
+    className: 'border-muted-foreground/30 bg-muted text-muted-foreground',
+    blurb: 'Worth a glance, not a conclusion.',
+  },
+};
+
+/** A flagged concern with its confidence and both sides of the evidence. */
+function ConcernCard({
+  concern,
+  byId,
+  onOpen,
+}: {
+  concern: AnalystConcern;
+  byId: Map<string, AnalystCitation>;
+  onOpen: (c: AnalystCitation) => void;
+}) {
+  const conf = CONFIDENCE[concern.confidence];
+  return (
+    <div className="space-y-2 rounded-md border bg-background p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <p className="text-sm font-medium">{concern.title}</p>
+        <span
+          className={`shrink-0 rounded border px-2 py-0.5 text-[11px] font-medium ${conf.className}`}
+          title={conf.blurb}
+        >
+          {conf.label}
+        </span>
+      </div>
+      {concern.confidence_reason && (
+        <p className="text-xs italic text-muted-foreground">{concern.confidence_reason}</p>
+      )}
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="space-y-1">
+          <p className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <ThumbsUp className="h-3 w-3" /> Supports this
+          </p>
+          {concern.supports.length === 0 ? (
+            <p className="text-xs text-muted-foreground">—</p>
+          ) : (
+            concern.supports.map((s, i) => (
+              <p key={i} className="text-xs leading-relaxed text-muted-foreground">
+                • <CiteLine text={s} byId={byId} onOpen={onOpen} />
+              </p>
+            ))
+          )}
+        </div>
+        <div className="space-y-1">
+          <p className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <ThumbsDown className="h-3 w-3" /> Weakens this
+          </p>
+          {concern.weakens.length === 0 ? (
+            <p className="text-xs text-muted-foreground">—</p>
+          ) : (
+            concern.weakens.map((s, i) => (
+              <p key={i} className="text-xs leading-relaxed text-muted-foreground">
+                • <CiteLine text={s} byId={byId} onOpen={onOpen} />
+              </p>
+            ))
+          )}
+        </div>
+      </div>
+      {concern.record_ids.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {concern.record_ids.map(id => {
+            const c = byId.get(id);
+            if (!c) return null;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onOpen(c)}
+                className="rounded border bg-muted/40 px-2 py-1 text-[11px] hover:bg-muted"
+              >
+                {c.who} · {c.kind_label} · {formatDate(c.period_start)}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 /**
  * The AI reader over the accountability record book. Same filters as the list
