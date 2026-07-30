@@ -13,7 +13,8 @@ Training Library (`docs/training-library-spec.md`) — sent BEFORE Prompt 6 ·
 Prompt 6 (visuals + meetings + library hookup) — final version below ·
 Prompt 7 (edit/delete goals with accountability) — final version below, pending ·
 Prompt 8 (Goals Report print fix + polish enforcement) — final version below, pending ·
-Prompt 5 (SMART) — pending, independent, send anytime.
+Prompt 9 (hard SMART gate + team-page goals + read-aloud + roleplay) — final below, pending ·
+Prompt 5 (SMART) — SUPERSEDED by Prompt 9's hard gate; do not send.
 
 ## Product decisions (the "why")
 
@@ -48,10 +49,11 @@ Prompt 5 (SMART) — pending, independent, send anytime.
    punctuation) always applies. Original words stay restorable.
 9. **Pathfinder threads are visible only to the goal's owner** — even for team goals.
    People ask coaching questions more honestly when it isn't effectively cc'ing the boss.
-10. **SMART goals are coaching, never a hard gate** (Prompts 5 + 8): polish rewrites
-    goals to be Specific/Measurable/Achievable/Relevant/Time-bound and chips teach
-    the framework. Saving a goal that misses a SMART element requires an explicit
-    "Save anyway" tap — never a silent bypass, never a hard block.
+10. **SMART is a HARD GATE** (Prompt 9, superseding Prompt 5's soft version): a goal
+    cannot be saved until all five SMART chips pass — for creation AND edits. The
+    flow makes passing easy (polish proposes a fully-SMART version; chips update
+    live; hints by failing chips) rather than punitive. Watch for fake-round-number
+    goals in the first month — the known failure mode of hard gates.
 11. **Training content lives in the central Training Library**
     (`docs/training-library-spec.md`) — goal resources link into it, never a parallel
     store. Grounding authority: assistant_memories > office docs > org config.
@@ -65,6 +67,9 @@ Prompt 5 (SMART) — pending, independent, send anytime.
     BrandPrintStyle, the hide-all-body-children-except-print-root rule, full-height
     sheet with the footer pinned to the page bottom, and inclusion in the
     print-invariant snapshot tests. FOF, Deposit Log, Incident Report, Goals Report.
+14. **Goals follow the member across the app** (Prompt 9): current-month team goal
+    (title, progress, latest status) shows on Team cards and EmployeeDetail for
+    EVERY role; private goals never appear there.
 
 ## Prompt 1 — Goals (sent)
 
@@ -155,23 +160,9 @@ dates via `getToday()` in `src/lib/time-utils.ts`; checklist gate respects
 
 > Global rebrand pass, purely visual — no functionality changes. The product is Purple Envelope, not TimeVault. Replace the TimeVault name and orange clock mark in the app header/layout with "Purple Envelope" and a simple purple envelope mark. Switch the app's primary accent color from orange to #53406e everywhere it appears: buttons, links, active nav states, toggles, focus rings, badges — keeping text contrast accessible. Also update the PWA manifest name/theme color and any remaining "TimeVault"/"TimeKeeper" strings in nav labels and page titles. Leave printed-form footers alone for now; that's a separate pass.
 
-## Prompt 5 — SMART goals backbone (pending, independent — send anytime)
+## Prompt 5 — SUPERSEDED by Prompt 9 (do not send)
 
-> Make SMART goals the backbone of the Goals feature — as coaching, never as a gate. SMART = Specific, Measurable, Achievable, Relevant, Time-bound. Keep the encouraging tone; nobody should ever see a red error or be blocked from saving.
->
-> GOAL CREATION:
-> 1. Under the goal input, show a small one-line hint: "Great goals are SMART: specific, measurable, achievable, relevant to your role, and bound to this month."
-> 2. Upgrade the "polish_goal" mode of goal-assistant: the polished goal statement it returns must be a genuine SMART goal for a one-month horizon — if the member's raw words lack a measure, infer a reasonable one from the goal and their role (e.g. "work on explaining treatment to patients" → "Use the teach-back method at every treatment presentation this month and ask a teammate for feedback at least 4 times") — while preserving their intent. The polished version stays editable with the original words restorable, exactly as it works now.
-> 3. After polishing, show a compact SMART summary as five small labeled chips (S/M/A/R/T), each with a few words on how the polished goal satisfies it (e.g. M: "4 feedback asks"). This teaches the framework quietly. If an element is genuinely missing, that chip says so gently ("add a number to make this measurable") — but the member can still save.
->
-> PATHFINDER BREAKDOWN + CHAT:
-> 4. In "breakdown" mode, the 4–8 tasks must ladder up to the goal's measurable target — completing the plan achieves the measure by month end. Include the target in the function input.
-> 5. In "chat" mode, when a member asks for help shaping or adjusting their goal, coach toward SMART naturally in conversation.
->
-> MEETING UPDATES:
-> 6. In "draft_update" mode, frame the draft against the goal's measurable target where one exists ("Target: X · So far: Y") using goal_tasks progress and the thread. The team card + meeting view show the target line under the goal title when the goal has one.
->
-> Store the measurable target as a new nullable text column goals.smart_target (filled from the polished goal; editable). No other schema changes.
+Prompt 9's hard SMART gate replaces the soft-gate approach. Kept for history only.
 
 ## Prompt 6 — Always-on visuals + meeting awareness + Training Library hookup (FINAL, send AFTER Training Library)
 
@@ -235,6 +226,34 @@ training-builder; sending this first would recreate the silo).
 > 4. polish_goal ALWAYS runs when a goal is submitted, and the polished SMART version is the default — saving the raw text requires an explicit "Use my original words instead" tap. Even then, always apply a light grammar cleanup (capitalization, punctuation, obvious typos) without changing the meaning.
 > 5. If the polished goal still misses a SMART element, the member CAN save — but only via an explicit "Save anyway" tap after the chips show what's missing. Never a silent bypass, never a hard block.
 > 6. Retroactive cleanup: any existing active goal whose title differs from what polish_goal produces gets a one-tap "Polish it" prompt on the goal card showing the improved version, original restorable.
+
+NOTE: Prompt 9 section 1 replaces Prompt 8 line 5 with a hard gate. If Prompt 8
+hasn't been sent yet, send it as-is and let Prompt 9 tighten it — or drop line 5
+from Prompt 8 and send Prompt 9 right after.
+
+## Prompt 9 — Hard SMART gate + team-page goals + read-aloud + roleplay (FINAL, pending)
+
+> Four upgrades: a hard SMART gate on goals, goals shown on the Team pages, read-aloud for training modules, and conversational roleplay assessments.
+>
+> 1) HARD SMART GATE (this REPLACES the soft "Save anyway" behavior):
+> - A goal cannot be saved until it meets ALL five SMART criteria. Make this easy, not annoying: polish_goal always proposes a fully-SMART version (grammar and wording fixed), the S/M/A/R/T chips update live as the member edits, and Save stays disabled until every chip passes — with a plain hint by the failing chip ("make it measurable — add a number or count"). No red error styling.
+> - Applies to goal creation AND edits. Existing raw goals still get the one-tap "Polish it" cleanup.
+>
+> 2) GOALS ON THE TEAM PAGES (every role):
+> - Show each member's current-month TEAM goal — polished title, tasks done/total, latest status — on the Team page member cards and on the EmployeeDetail page. Visible to owners, managers, AND employees, same visibility as the Goals team grid. Private goals never appear here.
+>
+> 3) READ-ALOUD in the training module player:
+> - A "Listen" button reads the module aloud: outcome, each section with its try-it action, recap. Use the browser's built-in speech synthesis with the most natural available voice, play/pause controls, auto-stop when leaving the page, and a subtle indication of which section is currently being read. Keep it simple — no server calls.
+>
+> 4) ROLEPLAY ASSESSMENTS (new assessment type next to quizzes):
+> - training-builder can now build a CONVERSATIONAL assessment when the skill is interpersonal (explaining treatment, handling insurance questions, front-desk conversations). The trainee chats live with an AI persona — a named patient with a situation, or an insurance rep — who asks realistic questions and reacts naturally: good answers get follow-ups, weak answers get pushback the way a real patient would push back.
+> - Personas, scenarios, and the scoring rubric are grounded in THIS office like module content is: assistant_memories, office docs, org configuration. Insurance-question scenarios must answer the way the office actually answers.
+> - After the conversation (or ~8 exchanges), the STRONG model scores the transcript against a rubric derived from the module outcome (plain-language explanation, checked understanding, correct per office policy, tone), gives specific per-line feedback, and marks pass/fail at an 80% bar. Unlimited retakes.
+> - Record in training_attempts with a new type field ('quiz' | 'roleplay'), score, passed, transcript in answers jsonb. Same privacy: admins see status and pass/fail ONLY — never transcripts or answers.
+> - Model tiers: persona conversation runs on the fast model; rubric scoring and content generation use the strong one.
+> - The module player offers whatever the module has: "Take the quiz" and/or "Practice the conversation". Passing either marks the assignment complete.
+>
+> When finished: redeploy the updated training-builder and goal-assistant edge functions and confirm both are live.
 
 ## Known build risks (check these when testing)
 

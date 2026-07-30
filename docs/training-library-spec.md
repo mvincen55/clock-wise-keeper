@@ -1,9 +1,7 @@
 # Training Library — feature spec (as prompted to Lovable)
 
-Status: **spec ready, sent before Prompt 6** (2026-07-30). Foundation feature: one
-central database of training modules for the whole practice, with assignments.
-Goals' Pathfinder resources plug into this library — there is NO separate
-goal-side resource store.
+Status (2026-07-30): initial prompt sent. Prompt 9 (in `docs/goals-and-bypass-spec.md`)
+extends it with read-aloud + roleplay assessments.
 
 ## Product decisions (the "why")
 
@@ -15,17 +13,27 @@ goal-side resource store.
    authoritative) > office docs / policy manual corpus > org configuration.
    The rules of the office are the rules of the world: no generic advice that
    contradicts office policy, fictional scenarios only, never patient data.
-3. **Premium model for content, cheap model for chatter.** Module/quiz generation
-   uses the strongest available model (cost explicitly approved); polish/chat/
-   update-drafting stay on the fast model.
+3. **Premium model for content, cheap model for chatter.** Module/quiz/roleplay
+   generation AND roleplay rubric scoring use the strongest available model (cost
+   explicitly approved); polish/chat/drafts and the live roleplay persona use the
+   fast model.
 4. **Member-created modules go straight into the library** — no approval queue
    (same philosophy as goals). Source badge keeps provenance honest; managers
    can archive anything off-base.
 5. **Quiz answers are private; pass/fail is not.** Assigners/admins see assignment
-   status and pass/fail — never per-question answers. For goal-linked modules,
-   the team sees "completed", never scores.
+   status and pass/fail — never per-question answers or roleplay transcripts.
+   For goal-linked modules, the team sees "completed", never scores.
 6. **Anyone with admin rights can assign to anyone** — owner → manager, manager →
    themselves, etc.
+7. **Modules are listenable** (Prompt 9): a "Listen" button in the module player
+   reads outcome/sections/recap aloud using browser speech synthesis — no server
+   cost, play/pause, auto-stop on leave.
+8. **Assessments match the skill** (Prompt 9): recall → scenario quiz; interpersonal
+   → live roleplay with an AI persona (named patient, insurance rep) grounded in
+   office policy, scored by the strong model against a rubric at an 80% bar,
+   unlimited retakes. training_attempts gains type ('quiz' | 'roleplay');
+   transcripts stay in answers jsonb under the same privacy rule as quiz answers.
+   Passing either assessment completes the assignment.
 
 ## The prompt (as given to Lovable)
 
@@ -68,6 +76,7 @@ goal-side resource store.
   internet advice, the function isn't actually pulling assistant_memories / docs —
   check the function logs for what context it gathered.
 - **content jsonb shape drift.** Player and builder must agree on the shape exactly;
-  a mismatch renders blank modules.
+  a mismatch renders blank modules. Roleplay adds a second shape (persona + rubric) —
+  same rule.
 - **training-builder must deploy** (new edge function) — probe per
   `docs/runbook.md` §1 if "Build with AI" toasts a function error.
