@@ -26,6 +26,7 @@ import {
   Plus,
   ChevronLeft,
   ExternalLink,
+  SlidersHorizontal,
 
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -33,6 +34,13 @@ import { downloadSupportPdf } from '@/lib/support-pdf';
 import { slaFor } from '@/lib/support-sla';
 import TicketTimeline, { stageFromTicket, type TicketStageTimes } from '@/components/support/TicketTimeline';
 import { redactScreenshot } from '@/lib/redact-image';
+import type { RedactionCategories } from '@/lib/redact-image';
+import {
+  useRedactionPrefs,
+  describeRedaction,
+  REDACTION_LABELS,
+} from '@/lib/redaction-prefs';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { extractPdfText } from '@/lib/extract-pdf-text';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -146,6 +154,10 @@ export default function SupportWidget() {
   const [text, setText] = useState('');
   const [files, setFiles] = useState<Attachment[]>([]);
   const [redactOn, setRedactOn] = useState(true);
+  /** Which data types get painted over before upload — the person's own choice. */
+  const { prefs: redactPrefs, toggle: toggleRedactPref } = useRedactionPrefs();
+  const redactPrefsRef = useRef<RedactionCategories>(redactPrefs);
+  redactPrefsRef.current = redactPrefs;
   const [category, setCategory] = useState('other');
   const [severity, setSeverity] = useState('medium');
   const [rangeStart, setRangeStart] = useState('');
@@ -218,7 +230,11 @@ export default function SupportWidget() {
    */
   const redactOne = useCallback(async (key: string, file: File) => {
     try {
-      const { file: clean, maskedCount, text, rawText } = await redactScreenshot(file);
+      const { file: clean, maskedCount, text, rawText } = await redactScreenshot(
+        file,
+        [],
+        redactPrefsRef.current,
+      );
       setFiles(prev =>
         prev.map(a =>
           a.key === key
@@ -238,6 +254,23 @@ export default function SupportWidget() {
       toast.error('Could not scrub that screenshot — it will be sent as-is unless you remove it.');
     }
   }, []);
+
+  // Changing what gets hidden re-scrubs anything already attached, from the
+  // original file — so turning a category back on can never leak a stale copy.
+  const prefsKey = JSON.stringify(redactPrefs);
+  const lastPrefsKey = useRef(prefsKey);
+  useEffect(() => {
+    if (lastPrefsKey.current === prefsKey) return;
+    lastPrefsKey.current = prefsKey;
+    const images = files.filter(a => a.original.type.startsWith('image/') && !a.uploadedPath);
+    if (images.length === 0) return;
+    setFiles(prev =>
+      prev.map(a =>
+        images.some(i => i.key === a.key) ? { ...a, working: true } : a,
+      ),
+    );
+    for (const a of images) void redactOne(a.key, a.original);
+  }, [prefsKey, files, redactOne]);
 
   /** PDFs get read too, so the agent can quote the page instead of the filename. */
   const readPdf = useCallback(async (key: string, file: File) => {
@@ -1080,22 +1113,59 @@ export default function SupportWidget() {
                     <EyeOff className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     <div className="flex-1 leading-tight">
                       <p className="text-[11px] font-medium text-foreground">
-                        Hide names, times &amp; IDs
+                        Hide sensitive details
                       </p>
                       <p className="text-[10px] text-muted-foreground">
                         {anyWorking
                           ? 'Scrubbing on this device…'
                           : redactOn
                             ? totalMasked > 0
-                              ? `${totalMasked} item${totalMasked === 1 ? '' : 's'} covered before sending`
-                              : 'Nothing sensitive found to cover'
+                              ? `${totalMasked} item${totalMasked === 1 ? '' : 's'} covered · ${describeRedaction(redactPrefs)}`
+                              : describeRedaction(redactPrefs) + ' · nothing found to cover'
                             : 'The screenshot will be sent exactly as-is'}
                       </p>
                     </div>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 shrink-0"
+                          aria-label="Choose what gets hidden"
+                          title="Choose what gets hidden"
+                        >
+                          <SlidersHorizontal className="h-3.5 w-3.5" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" className="z-[60] w-60 p-3">
+                        <p className="text-xs font-medium text-foreground">What gets hidden</p>
+                        <p className="mt-0.5 text-[10px] leading-tight text-muted-foreground">
+                          Masking happens on this device, before anything uploads.
+                        </p>
+                        <div className="mt-2 space-y-2">
+                          {(
+                            Object.keys(REDACTION_LABELS) as (keyof typeof REDACTION_LABELS)[]
+                          ).map(k => (
+                            <div key={k} className="flex items-center justify-between gap-2">
+                              <label htmlFor={`redact-${k}`} className="text-[11px] text-foreground">
+                                {REDACTION_LABELS[k]}
+                              </label>
+                              <Switch
+                                id={`redact-${k}`}
+                                checked={redactPrefs[k]}
+                                disabled={!redactOn}
+                                onCheckedChange={v => toggleRedactPref(k, v)}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                     <Switch
                       checked={redactOn}
                       onCheckedChange={setRedactOn}
-                      aria-label="Hide names, times and IDs in screenshots"
+                      aria-label="Hide sensitive details in screenshots"
                     />
                   </div>
                 </div>
