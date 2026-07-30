@@ -35,6 +35,8 @@ import { downloadSupportPdf } from '@/lib/support-pdf';
 import { slaFor, responseWindowLabel } from '@/lib/support-sla';
 import { useTick } from '@/hooks/useTick';
 import { filesFromDrop } from '@/lib/drop-files';
+import { SupportAttachmentGallery } from '@/components/SupportAttachmentGallery';
+
 import TicketTimeline, { stageFromTicket, type TicketStageTimes } from '@/components/support/TicketTimeline';
 import { redactScreenshot } from '@/lib/redact-image';
 import type { RedactionCategories } from '@/lib/redact-image';
