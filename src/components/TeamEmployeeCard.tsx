@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import MemberGoalSummary from '@/components/goals/MemberGoalSummary';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -111,6 +112,12 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
             {stats.late > 0 && <Badge variant="outline" className="text-warning border-warning/30 text-xs">{stats.late} late</Badge>}
             {stats.absent > 0 && <Badge variant="outline" className="text-destructive border-destructive/30 text-xs">{stats.absent} absent</Badge>}
           </div>
+
+          {/* This month's team goal — same visibility as the Goals team grid. */}
+          <div className="mb-3">
+            <MemberGoalSummary userId={employee.user_id} />
+          </div>
+
 
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="w-full grid grid-cols-4 mb-3">

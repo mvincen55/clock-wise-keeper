@@ -1,19 +1,20 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Target, Undo2 } from 'lucide-react';
+import { Loader2, Sparkles, Target, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { callPathfinder, useCreateGoal } from '@/hooks/useGoals';
-import SmartChips, { type SmartRead } from '@/components/goals/SmartChips';
+import SmartChips from '@/components/goals/SmartChips';
 import RoleGoalIdeas from '@/components/goals/RoleGoalIdeas';
+import { evaluateSmart, isSmart } from '@/lib/smart';
 
 /**
- * Set this month's goal. Pathfinder polishes the raw wording into one clear
- * sentence, which the member can edit or restore to their own words.
+ * Set this month's goal. Pathfinder proposes a fully-SMART wording, the chips
+ * update live as the member edits, and saving waits until all five pass.
  */
 export default function SetGoalCard({
   month,
@@ -32,7 +33,12 @@ export default function SetGoalCard({
   const [isPrivate, setIsPrivate] = useState(false);
   const [polishing, setPolishing] = useState(false);
   const [target, setTarget] = useState('');
-  const [smart, setSmart] = useState<SmartRead | null>(null);
+
+  const checks = useMemo(
+    () => evaluateSmart({ title, target, description }),
+    [title, target, description]
+  );
+  const smartOk = isSmart(checks);
 
   const polish = async () => {
     const raw = title.trim();
@@ -50,16 +56,15 @@ export default function SetGoalCard({
         setTitle(result.title);
       }
       if (result.target) setTarget(result.target);
-      if (result.smart) setSmart(result.smart);
     } catch {
-      // Polishing is a nicety — never block saving a goal.
+      toast.error('Could not polish the wording — you can still edit it yourself.');
     } finally {
       setPolishing(false);
     }
   };
 
   const save = async () => {
-    if (!title.trim()) return;
+    if (!smartOk) return;
     try {
       const created = title.trim();
       await createGoal.mutateAsync({
@@ -72,7 +77,6 @@ export default function SetGoalCard({
       setTitle('');
       setOriginal(null);
       setTarget('');
-      setSmart(null);
       setDescription('');
       setIsPrivate(false);
       onCreated?.(created);
@@ -109,18 +113,31 @@ export default function SetGoalCard({
             id="goal-title"
             value={title}
             onChange={e => setTitle(e.target.value)}
-            onBlur={() => void polish()}
+            onBlur={() => {
+              if (!smartOk) void polish();
+            }}
             placeholder="e.g. Get faster and more confident at scheduling follow-ups"
           />
-          <p className="text-xs text-muted-foreground">
-            Great goals are SMART: specific, measurable, achievable, relevant to your role, and
-            bound to this month.
-          </p>
-          {polishing && (
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" /> Tidying up the wording…
-            </p>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7"
+              disabled={!title.trim() || polishing}
+              onClick={() => void polish()}
+            >
+              {polishing ? (
+                <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+              ) : (
+                <Sparkles className="mr-1.5 h-3 w-3" />
+              )}
+              Polish it
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Pathfinder will make it SMART and fix the wording.
+            </span>
+          </div>
           {original && (
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span className="break-words">your words: {original}</span>
@@ -132,7 +149,6 @@ export default function SetGoalCard({
                 onClick={() => {
                   setTitle(original);
                   setOriginal(null);
-                  setSmart(null);
                 }}
               >
                 <Undo2 className="mr-1 h-3 w-3" /> Restore
@@ -146,15 +162,14 @@ export default function SetGoalCard({
             setTitle(idea.title);
             setTarget(idea.target);
             setOriginal(null);
-            setSmart(null);
           }}
           onPickTarget={t => setTarget(t)}
         />
 
-        {smart && <SmartChips smart={smart} />}
+        <SmartChips checks={checks} />
 
         <div className="space-y-1.5">
-          <Label htmlFor="goal-target">How you'll measure it (optional)</Label>
+          <Label htmlFor="goal-target">How you'll measure it</Label>
           <Input
             id="goal-target"
             value={target}
@@ -182,7 +197,7 @@ export default function SetGoalCard({
 
         <Button
           onClick={save}
-          disabled={!title.trim() || createGoal.isPending || !createGoal.isReady || polishing}
+          disabled={!smartOk || createGoal.isPending || !createGoal.isReady || polishing}
         >
           {createGoal.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Set this month's goal

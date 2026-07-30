@@ -33,12 +33,22 @@ const MAX_DOC_CHARS = 30000;
 
 type QuizQuestion = { q: string; options: string[]; correct_index: number; why: string };
 type Section = { heading: string; body: string; try_it: string };
+type RubricItem = { criterion: string; weight: number; what_good_looks_like: string };
+type Roleplay = {
+  persona: { name: string; role: string; situation: string; style: string };
+  scenario: string;
+  opening: string;
+  office_answers: string;
+  rubric: RubricItem[];
+};
 type ModuleContent = {
   outcome: string;
   sections: Section[];
   recap: string;
   quiz: { questions: QuizQuestion[] } | null;
+  roleplay: Roleplay | null;
 };
+
 
 const text = (v: unknown, cap: number): string =>
   typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, cap) : "";
@@ -91,12 +101,46 @@ function normalizeContent(raw: unknown): ModuleContent | null {
     if (questions.length > 0) quiz = { questions };
   }
 
+  // A conversational assessment, when the skill is interpersonal.
+  const rawRp = r.roleplay as Record<string, unknown> | null | undefined;
+  let roleplay: Roleplay | null = null;
+  if (rawRp && typeof rawRp === "object") {
+    const p = (rawRp.persona ?? {}) as Record<string, unknown>;
+    const rubric: RubricItem[] = Array.isArray(rawRp.rubric)
+      ? (rawRp.rubric as Record<string, unknown>[])
+          .map((item) => ({
+            criterion: text(item?.criterion, 200),
+            weight: Math.max(5, Math.min(60, Math.round(Number(item?.weight) || 25))),
+            what_good_looks_like: text(item?.what_good_looks_like, 500),
+          }))
+          .filter((item) => item.criterion && item.what_good_looks_like)
+          .slice(0, 6)
+      : [];
+    const candidate: Roleplay = {
+      persona: {
+        name: text(p?.name, 80),
+        role: text(p?.role, 140),
+        situation: text(p?.situation, 900),
+        style: text(p?.style, 400),
+      },
+      scenario: text(rawRp.scenario, 1200),
+      opening: text(rawRp.opening, 600),
+      office_answers: text(rawRp.office_answers, 3000),
+      rubric,
+    };
+    if (candidate.persona.name && candidate.scenario && candidate.opening && rubric.length >= 2) {
+      roleplay = candidate;
+    }
+  }
+
   return {
     outcome: text(r.outcome, 600),
     sections,
     recap: text(r.recap, 1500),
     quiz,
+    roleplay,
   };
+
 }
 
 /** Short FTS queries over the office corpus, derived from the topic + audience. */
