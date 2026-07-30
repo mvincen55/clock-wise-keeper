@@ -1159,7 +1159,7 @@ export default function SupportWidget() {
                         {anyWorking
                           ? 'Scrubbing on this device…'
                           : redactOn
-                            ? totalMasked > 0
+                            ? totalMasked + handDrawn > 0
                               ? `${totalMasked + handDrawn} item${totalMasked + handDrawn === 1 ? '' : 's'} covered · ${describeRedaction(redactPrefs)}`
                               : describeRedaction(redactPrefs) + ' · nothing found to cover'
                             : 'The screenshot will be sent exactly as-is'}
