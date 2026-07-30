@@ -3,11 +3,21 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 
-// Team sprints: one collective, reward-based push the whole office runs together.
-// Never ranked, never per-person — the tally belongs to the team.
+// Team sprints: a scoped, reward-based push the office AI runs end to end.
+// Never ranked, never per-person leaderboards — the tally belongs to the scope.
 
 export type SprintPeriod = 'week' | 'month';
-export type SprintStatus = 'active' | 'won' | 'missed' | 'cancelled';
+export type SprintStatus = 'active' | 'pending_verification' | 'won' | 'missed' | 'cancelled';
+export type SprintScope = 'team' | 'department' | 'individual';
+export type SprintDepartment = 'clinical' | 'clerical';
+export type SprintVerification = 'honor' | 'manager_approval' | 'document';
+
+export type SprintVerdict = {
+  supported: boolean;
+  found_count: number | null;
+  where: string;
+  reasoning: string;
+};
 
 export type TeamGoal = {
   id: string;
@@ -21,6 +31,16 @@ export type TeamGoal = {
   reward: string;
   progress: number;
   status: SprintStatus;
+  scope: SprintScope;
+  scope_department: SprintDepartment | null;
+  scope_user_id: string | null;
+  verification: SprintVerification;
+  verified_by: string | null;
+  verified_at: string | null;
+  verification_note: string | null;
+  verification_doc_path: string | null;
+  ai_verdict: SprintVerdict | null;
+  override_reason: string | null;
   created_by: string | null;
   ai_suggested: boolean;
   created_at: string;
@@ -32,7 +52,7 @@ export type SprintSuggestion = {
   created_at: string;
 };
 
-/** The sprint currently running (at most one at a time), plus the last few results. */
+/** Sprints this member is allowed to see (RLS handles the scoping). */
 export function useTeamGoals() {
   const { data: ctx } = useOrgContext();
 
@@ -45,18 +65,20 @@ export function useTeamGoals() {
         .select('*')
         .eq('org_id', ctx!.org_id)
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(20);
       if (error) throw error;
-      const all = (data ?? []) as TeamGoal[];
+      const all = (data ?? []) as unknown as TeamGoal[];
+      const live = all.filter(s => s.status === 'active' || s.status === 'pending_verification');
       return {
-        active: all.find(s => s.status === 'active') ?? null,
-        past: all.filter(s => s.status !== 'active').slice(0, 3),
+        active: live[0] ?? null,
+        live,
+        past: all.filter(s => !live.includes(s)).slice(0, 3),
       };
     },
   });
 }
 
-/** Honour tally — any member can add to the count. */
+/** Honour tally — members can only add to honour-verified sprints in their scope. */
 export function useBumpSprint() {
   const qc = useQueryClient();
   const { data: ctx } = useOrgContext();
@@ -88,17 +110,27 @@ export function useCreateSprint() {
       starts_on: string;
       ends_on: string;
       reward: string;
+      scope: SprintScope;
+      scope_department?: SprintDepartment | null;
+      scope_user_id?: string | null;
+      verification: SprintVerification;
       ai_suggested?: boolean;
     }) => {
       if (!user) throw new Error('Not signed in');
       if (!ctx) throw new Error('No office found for your account');
       const { data, error } = await supabase
         .from('team_goals')
-        .insert({ ...input, org_id: ctx.org_id, created_by: user.id })
+        .insert({
+          ...input,
+          scope_department: input.scope === 'department' ? input.scope_department ?? null : null,
+          scope_user_id: input.scope === 'individual' ? input.scope_user_id ?? null : null,
+          org_id: ctx.org_id,
+          created_by: user.id,
+        })
         .select('*')
         .single();
       if (error) throw error;
-      return data as TeamGoal;
+      return data as unknown as TeamGoal;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['team-goals'] }),
   });
@@ -118,6 +150,58 @@ export function useCancelSprint() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['team-goals'] }),
   });
+}
+
+/** Upload the outside report the document verdict will be read from. */
+export function useUploadSprintDoc() {
+  const { data: ctx } = useOrgContext();
+  return useMutation({
+    mutationFn: async ({ goalId, file }: { goalId: string; file: File }) => {
+      if (!ctx) throw new Error('No office found for your account');
+      const ext = file.name.split('.').pop() ?? 'bin';
+      const path = `${ctx.org_id}/${goalId}/${Date.now()}.${ext}`;
+      const { error } = await supabase.storage
+        .from('sprint-verification')
+        .upload(path, file, { contentType: file.type || undefined, upsert: false });
+      if (error) throw error;
+      return path;
+    },
+  });
+}
+
+/**
+ * The recorded decision: approve, decline, an AI document read, or a human
+ * override of that read. Humans outrank the document reader.
+ */
+export function useVerifySprint() {
+  const qc = useQueryClient();
+  const { data: ctx } = useOrgContext();
+
+  const mutation = useMutation({
+    mutationFn: async (input: {
+      goalId: string;
+      action: 'approve' | 'decline' | 'document' | 'override';
+      note?: string;
+      doc_path?: string;
+      result?: 'won' | 'missed';
+    }) => {
+      const { data, error } = await supabase.functions.invoke('sprint-verify', {
+        body: {
+          goal_id: input.goalId,
+          action: input.action,
+          note: input.note,
+          doc_path: input.doc_path,
+          result: input.result,
+        },
+      });
+      if (error) throw new Error(data?.error ?? error.message);
+      if (data?.error) throw new Error(data.error);
+      return data as { sprint: TeamGoal; verdict?: SprintVerdict; overridden?: boolean };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['team-goals'] }),
+  });
+
+  return { ...mutation, isReady: !!ctx?.org_id };
 }
 
 /** The office AI's weekly sprint idea, if it had one worth offering. */
