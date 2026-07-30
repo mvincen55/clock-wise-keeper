@@ -10,7 +10,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Sparkles, Loader2, Send, FileText, ThumbsUp, ThumbsDown } from 'lucide-react';
+import {
+  Sparkles,
+  Loader2,
+  Send,
+  FileText,
+  ThumbsUp,
+  ThumbsDown,
+  ShieldCheck,
+  ShieldAlert,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { formatDate } from '@/lib/time-utils';
@@ -38,11 +47,25 @@ export interface AnalystConcern {
   record_ids: string[];
 }
 
+export interface AnalystAuditIssue {
+  type: string;
+  claim: string;
+  problem: string;
+  severity: 'high' | 'low';
+}
+
+export interface AnalystAudit {
+  verdict: 'clean' | 'issues' | 'unavailable';
+  summary: string;
+  issues: AnalystAuditIssue[];
+}
+
 type Turn = {
   role: 'user' | 'assistant';
   content: string;
   citations?: AnalystCitation[];
   concerns?: AnalystConcern[];
+  audit?: AnalystAudit;
 };
 
 
@@ -239,6 +262,62 @@ function ConcernCard({
   );
 }
 
+const AUDIT_TYPE_LABEL: Record<string, string> = {
+  unsupported: 'Not supported by the records',
+  misquoted: 'Quote does not match',
+  overstated: 'Stated more strongly than the evidence',
+  missed_context: 'Left out context that cuts against it',
+};
+
+/**
+ * The second-pass auditor's verdict. A different model re-reads the answer
+ * against the same records; the analyst never grades its own work.
+ */
+function AuditPanel({ audit }: { audit: AnalystAudit }) {
+  if (audit.verdict === 'unavailable') {
+    return (
+      <p className="flex items-center gap-1.5 border-t pt-2 text-[11px] text-muted-foreground">
+        <ShieldAlert className="h-3 w-3" /> Auditor unavailable — this answer was not
+        double-checked.
+      </p>
+    );
+  }
+  if (audit.verdict === 'clean') {
+    return (
+      <p className="flex items-center gap-1.5 border-t pt-2 text-[11px] text-muted-foreground">
+        <ShieldCheck className="h-3 w-3 text-accent" />
+        <span className="font-medium text-accent">Audited</span> · {audit.summary}
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-2 border-t pt-2">
+      <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-destructive">
+        <ShieldAlert className="h-3 w-3" /> Auditor flagged {audit.issues.length} claim
+        {audit.issues.length === 1 ? '' : 's'}
+      </p>
+      {audit.summary && <p className="text-xs text-muted-foreground">{audit.summary}</p>}
+      {audit.issues.map((issue, i) => (
+        <div
+          key={i}
+          className="space-y-1 rounded-md border border-destructive/30 bg-destructive/5 p-2"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded border border-destructive/40 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+              {AUDIT_TYPE_LABEL[issue.type] ?? issue.type}
+            </span>
+            {issue.severity === 'high' && (
+              <span className="text-[10px] font-medium uppercase text-destructive">Serious</span>
+            )}
+          </div>
+          <p className="text-xs italic text-muted-foreground">"{issue.claim}"</p>
+          <p className="text-xs text-foreground">{issue.problem}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 
 /**
  * The AI reader over the accountability record book. Same filters as the list
@@ -282,6 +361,7 @@ export default function ReportsAnalyst({
           content: data.answer as string,
           citations: (data.citations ?? []) as AnalystCitation[],
           concerns: (data.concerns ?? []) as AnalystConcern[],
+          audit: (data.audit ?? undefined) as AnalystAudit | undefined,
         },
 
       ]);
@@ -312,7 +392,8 @@ export default function ReportsAnalyst({
             Reads the records in the range above — patterns, anything worth a look, and what's
             ordinary. Anything it flags comes with a confidence level and the evidence on both
             sides. Every claim cites a real record you can open; citations that don't match a
-            real record are stripped before you ever see them.
+            real record are stripped before you ever see them. A second, independent AI then
+            audits the answer against the same records and flags anything that doesn't hold up.
           </p>
 
         </CardHeader>
@@ -380,6 +461,7 @@ export default function ReportsAnalyst({
                         </div>
                       </div>
                     )}
+                    {t.audit && <AuditPanel audit={t.audit} />}
                   </div>
                 ),
               )}
