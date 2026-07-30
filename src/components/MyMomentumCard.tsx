@@ -1,6 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Flame, Pause, Award, Trophy, Sparkles } from 'lucide-react';
+import { Flame, Pause, Trophy, Sparkles, GraduationCap, Banknote } from 'lucide-react';
+import { WaxSealMark } from '@/components/WaxSeal';
+import CountUp from '@/components/ui/count-up';
 import { useMomentum, type StreakDay } from '@/hooks/useMomentum';
 import { cn } from '@/lib/utils';
 
@@ -26,8 +28,17 @@ export default function MyMomentumCard() {
 
   const earned = data.badges.filter((b) => b.earned);
 
+  // Forward framing only — never a comparison with anyone else.
+  const toBest = data.bestModuleMonth - data.modulesThisMonth;
+  const trainingLine =
+    data.modulesThisMonth === 0
+      ? 'No modules finished yet this month'
+      : toBest > 0
+        ? `${toBest} away from your best month`
+        : 'Your best month yet';
+
   return (
-    <Card>
+    <Card className="paper-surface">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Sparkles className="h-4 w-4 text-primary" />
@@ -82,23 +93,55 @@ export default function MyMomentumCard() {
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2">
+        {/* Training momentum — a personal count, moving forward. */}
+        <div className="flex items-center gap-3 rounded-md border border-border/60 bg-muted/20 p-3">
+          <GraduationCap className="h-4 w-4 shrink-0 text-primary" />
+          <div className="min-w-0 flex-1 text-sm">
+            <p className="font-medium">
+              <CountUp value={data.modulesThisMonth} /> module
+              {data.modulesThisMonth === 1 ? '' : 's'} completed this month
+            </p>
+            <p className="text-xs text-muted-foreground">{trainingLine}</p>
+          </div>
+        </div>
+
+        {/* Deposit close-out streak — only for whoever runs the log. */}
+        {data.runsDepositLog && (
+          <div className="flex items-center gap-3 rounded-md border border-border/60 bg-muted/20 p-3">
+            <Banknote className="h-4 w-4 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1 text-sm">
+              <p className="font-medium">
+                <CountUp value={data.depositStreak} /> business day
+                {data.depositStreak === 1 ? '' : 's'} closing out the deposit log
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Best {data.depositBestStreak} · closures and time off pause it
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Milestone seals — private to this view, earned from system records. */}
+        <div className="flex flex-wrap gap-3">
           {(earned.length ? earned : data.badges).map((b) => (
             <span
               key={b.id}
               title={b.detail}
               className={cn(
-                'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs',
+                'inline-flex items-center gap-2 rounded-full py-1 pl-1 pr-3 text-xs',
                 b.earned
                   ? 'bg-primary/10 text-primary'
-                  : 'bg-muted text-muted-foreground opacity-70'
+                  : 'bg-muted text-muted-foreground opacity-60 grayscale'
               )}
             >
-              <Award className="h-3 w-3" />
+              <WaxSealMark size={22} label="" />
               {b.label}
             </span>
           ))}
         </div>
+        <p className="text-[11px] text-muted-foreground">
+          Private to you. Earned from system records — never from anything typed in.
+        </p>
       </CardContent>
     </Card>
   );
