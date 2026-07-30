@@ -431,20 +431,25 @@ export default function SupportWidget() {
                   onClick={() => fileRef.current?.click()}
                   disabled={busy}
                 >
-                  <ImagePlus className="mr-1 h-3.5 w-3.5" /> Screenshot
+                  <ImagePlus className="mr-1 h-3.5 w-3.5" /> Attach
                 </Button>
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="image/*"
+                  accept={ACCEPTED}
+                  multiple
                   className="hidden"
-                  onChange={e => setFile(e.target.files?.[0] ?? null)}
+                  onChange={e => {
+                    addFiles(Array.from(e.target.files ?? []));
+                    e.target.value = '';
+                  }}
                 />
                 <Button
                   size="sm"
                   className="h-7"
                   onClick={() => send()}
-                  disabled={busy || (!text.trim() && !file)}
+                  disabled={busy || (!text.trim() && files.length === 0)}
+
                 >
                   <Send className="h-3.5 w-3.5" />
                 </Button>
