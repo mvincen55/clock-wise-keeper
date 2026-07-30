@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { getToday } from '@/lib/time-utils';
 import {
   useAttemptSummaries,
+  useDraftModules,
   useTrainingAssignments,
   useTrainingModules,
   type TrainingModule,
@@ -19,6 +20,7 @@ import {
 import ModulePlayer from '@/components/training/ModulePlayer';
 import AssignModuleDialog, { type Assignee } from '@/components/training/AssignModuleDialog';
 import BuildModuleDialog from '@/components/training/BuildModuleDialog';
+import ModuleReviewQueue from '@/components/training/ModuleReviewQueue';
 
 /** Active team members, used for the assignment picker and creator names. */
 function useTeamRoster() {
@@ -48,6 +50,8 @@ export default function Training() {
   const { data: assignments = [] } = useTrainingAssignments();
   const { data: attempts = [] } = useAttemptSummaries();
   const { data: roster = [] } = useTeamRoster();
+  const { data: drafts = [] } = useDraftModules();
+  const draftCount = isAdmin ? drafts.length : 0;
 
   const [openModuleId, setOpenModuleId] = useState<string | null>(null);
   const [assignTarget, setAssignTarget] = useState<TrainingModule | null>(null);
@@ -121,7 +125,27 @@ export default function Training() {
                 </span>
               )}
             </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="review">
+                Review queue
+                {draftCount > 0 && (
+                  <span className="ml-1.5 rounded-full bg-warning px-1.5 text-xs text-warning-foreground">
+                    {draftCount}
+                  </span>
+                )}
+              </TabsTrigger>
+            )}
           </TabsList>
+
+          {isAdmin && (
+            <TabsContent value="review" className="space-y-4 pt-4">
+              <p className="text-sm text-muted-foreground">
+                Modules the auditor held back. Check the ones you trust and approve them together —
+                rejected modules are archived, never silently deleted.
+              </p>
+              <ModuleReviewQueue />
+            </TabsContent>
+          )}
 
           <TabsContent value="library" className="space-y-4 pt-4">
             {allTags.length > 0 && (

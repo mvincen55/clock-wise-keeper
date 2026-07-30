@@ -380,3 +380,65 @@ export function useDiscardDraft() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['training-modules-draft'] }),
   });
 }
+
+/* ---------- Review queue (owners/managers) ---------- */
+
+export type ModuleFinding = {
+  id: string;
+  module_id: string;
+  fingerprint: string;
+  severity: string;
+  category: string;
+  note: string;
+  quote: string;
+  suggested_fix: string;
+  status: string;
+};
+
+/** Auditor findings for the drafts in the queue, keyed by module. */
+export function useModuleFindings(moduleIds: string[]) {
+  const { data: ctx } = useOrgContext();
+  const key = [...moduleIds].sort().join(',');
+  return useQuery({
+    queryKey: ['training-findings', ctx?.org_id, key],
+    enabled: !!ctx && moduleIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('training_audit_findings')
+        .select('id, module_id, fingerprint, severity, category, note, quote, suggested_fix, status')
+        .eq('org_id', ctx!.org_id)
+        .in('module_id', moduleIds)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      const byModule = new Map<string, ModuleFinding[]>();
+      for (const f of (data ?? []) as ModuleFinding[]) {
+        byModule.set(f.module_id, [...(byModule.get(f.module_id) ?? []), f]);
+      }
+      return byModule;
+    },
+  });
+}
+
+/**
+ * Approve (publish) or reject (archive) many drafts at once.
+ * Reject archives rather than deletes so the audit trail survives.
+ */
+export function useBulkReviewModules() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ ids, action }: { ids: string[]; action: 'approve' | 'reject' }) => {
+      if (ids.length === 0) return 0;
+      const { error } = await supabase
+        .from('training_modules')
+        .update({ status: action === 'approve' ? 'published' : 'archived' })
+        .in('id', ids);
+      if (error) throw error;
+      return ids.length;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['training-modules'] });
+      qc.invalidateQueries({ queryKey: ['training-modules-draft'] });
+      qc.invalidateQueries({ queryKey: ['training-findings'] });
+    },
+  });
+}
