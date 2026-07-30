@@ -78,6 +78,96 @@ Rules for that block:
 - record_ids must be ids from the RECORDS block only.
 - If nothing is worth flagging, omit the json block entirely.`;
 
+// ---------------------------------------------------------------------------
+// The auditor: a second, different model that never sees the analyst's
+// instructions — only the records and the finished answer. Its only job is
+// to check that each claim is actually supported by a real record. It cannot
+// add findings of its own, and it cannot rewrite the answer.
+const AUDITOR_MODEL = "google/gemini-3.1-pro-preview";
+
+const AUDITOR_RULES = `You are an independent auditor checking another AI's written read of a dental practice's accountability record book.
+
+You are NOT the analyst. Do not add new findings, do not restate the analysis, do not give advice.
+
+Check ONLY these things, strictly against the RECORDS block:
+1. unsupported — a factual claim (a count, a date, a repeat, a name, a "stalled review") that the records do not actually show.
+2. misquoted — a quote or paraphrase that does not match the record's "member said" or "reviewer note" text.
+3. overstated — a concern whose stated confidence is stronger than its evidence (e.g. "high" off two records, or a pattern with an obvious ordinary explanation the analyst ignored).
+4. missed_context — the analyst left out something in the records that clearly cuts against its own conclusion.
+
+Be strict about facts and generous about wording. Do not flag tone, style, brevity, or a judgement call you merely disagree with. Say nothing when the answer holds up.
+
+Reply with ONLY this JSON, nothing else:
+{"verdict":"clean"|"issues","summary":"one short line a manager reads first","issues":[{"type":"unsupported"|"misquoted"|"overstated"|"missed_context","claim":"the exact phrase from the answer","problem":"one line on what is wrong","severity":"high"|"low"}]}
+
+"clean" means every claim checks out; issues must then be an empty array.`;
+
+type AuditIssue = {
+  type: string;
+  claim: string;
+  problem: string;
+  severity: "high" | "low";
+};
+type Audit = { verdict: "clean" | "issues" | "unavailable"; summary: string; issues: AuditIssue[] };
+
+async function auditAnswer(
+  apiKey: string,
+  corpus: string,
+  answer: string,
+  concerns: unknown[],
+): Promise<Audit> {
+  const unavailable: Audit = {
+    verdict: "unavailable",
+    summary: "The auditor could not check this answer.",
+    issues: [],
+  };
+  try {
+    const res = await fetch(GATEWAY_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: AUDITOR_MODEL,
+        max_completion_tokens: 900,
+        messages: [
+          { role: "system", content: `${OFFICE_DOCTRINE}\n\n---\n\n${AUDITOR_RULES}` },
+          {
+            role: "user",
+            content:
+              `RECORDS:\n${corpus}\n\n---\n\nTHE ANSWER TO AUDIT:\n${answer}\n\n` +
+              `FLAGGED CONCERNS (structured):\n${JSON.stringify(concerns)}`,
+          },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      console.error("reports-analyst auditor error", res.status, (await res.text()).slice(0, 300));
+      return unavailable;
+    }
+    const data = await res.json();
+    const raw = String(data?.choices?.[0]?.message?.content ?? "");
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) return unavailable;
+    const parsed = JSON.parse(match[0]);
+    const issues: AuditIssue[] = (Array.isArray(parsed?.issues) ? parsed.issues : [])
+      .map((i: Row) => ({
+        type: String(i?.type ?? "unsupported"),
+        claim: String(i?.claim ?? "").slice(0, 400),
+        problem: String(i?.problem ?? "").slice(0, 400),
+        severity: (String(i?.severity ?? "low") === "high" ? "high" : "low") as "high" | "low",
+      }))
+      .filter((i: AuditIssue) => i.claim && i.problem)
+      .slice(0, 8);
+    return {
+      verdict: issues.length > 0 ? "issues" : "clean",
+      summary: String(parsed?.summary ?? (issues.length ? "Some claims need a second look." : "Every claim checks out against the records."))
+        .slice(0, 300),
+      issues,
+    };
+  } catch (err) {
+    console.error("reports-analyst auditor failed", err);
+    return unavailable;
+  }
+}
 
 
 Deno.serve(async (req) => {
