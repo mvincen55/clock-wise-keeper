@@ -16,6 +16,7 @@ import { FileText, Printer, Download, MapPin, Hand, Clock, AlertTriangle, Chevro
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
+import AccountabilityHistory from '@/components/accountability/AccountabilityHistory';
 
 type ReportType = 'weekly' | 'pay_period' | 'monthly' | 'pto' | 'tardy' | 'attendance_exceptions';
 
@@ -816,6 +817,10 @@ export default function Reports() {
               </CardContent>
             </Card>
           )}
+
+          <div className="no-print">
+            <AccountabilityHistory />
+          </div>
         </div>
       )}
     </div>
