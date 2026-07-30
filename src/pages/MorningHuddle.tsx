@@ -6,6 +6,7 @@
  */
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Sunrise, History, CalendarCheck, Telescope } from 'lucide-react';
+import HuddleContextBlock from '@/components/HuddleContextBlock';
 
 const AGENDA: { title: string; icon: typeof History; items: (string | { text: string; sub: string[] })[] }[] = [
   {
@@ -60,6 +61,9 @@ export default function MorningHuddle() {
           stored, so patient details stay in the room.
         </p>
       </div>
+
+      {/* Computed business context. Numbers only — never anything about a patient. */}
+      <HuddleContextBlock />
 
       {AGENDA.map((section, si) => (
         <Card key={section.title}>

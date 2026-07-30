@@ -2601,6 +2601,53 @@ export type Database = {
           },
         ]
       }
+      office_nudges: {
+        Row: {
+          content: string
+          created_at: string
+          data_refs: Json
+          id: string
+          kind: string
+          org_id: string
+          resolved_at: string | null
+          status: string
+          surface: string
+          user_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          data_refs?: Json
+          id?: string
+          kind: string
+          org_id: string
+          resolved_at?: string | null
+          status?: string
+          surface: string
+          user_id?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          data_refs?: Json
+          id?: string
+          kind?: string
+          org_id?: string
+          resolved_at?: string | null
+          status?: string
+          surface?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "office_nudges_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_branding: {
         Row: {
           address_line1: string

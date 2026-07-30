@@ -24,6 +24,9 @@ import { OrgSnapshotPanel } from '@/components/OrgSnapshotPanel';
 import PracticeVitalsCard from '@/components/PracticeVitalsCard';
 import PracticePulseCard from '@/components/PracticePulseCard';
 import MyMomentumCard from '@/components/MyMomentumCard';
+import OfficeBriefCard from '@/components/OfficeBriefCard';
+import NudgeLine from '@/components/NudgeLine';
+import { useSurfaceNudge } from '@/hooks/useOfficeInsights';
 
 type ClockStatus = 'clocked_out' | 'clocked_in';
 
@@ -52,6 +55,8 @@ export default function Dashboard() {
   const { data: todayEntry, isLoading } = useTodayEntry();
   const clockAction = useGuardedClockAction();
   const { data: unresolvedBypasses } = useUnresolvedBypasses();
+  const { nudge: dashboardNudge } = useSurfaceNudge('dashboard');
+  const { nudge: clockNudge } = useSurfaceNudge('clock');
   const [reasonPromptOpen, setReasonPromptOpen] = useState(false);
   const [reasonPrompted, setReasonPrompted] = useState(false);
   const [now, setNow] = useState(new Date());
@@ -92,6 +97,9 @@ export default function Dashboard() {
       {/* Office health, right now — every role sees this first. */}
       <PracticePulseCard />
 
+      {/* The Office Brief sits above everything but the Pulse. */}
+      <OfficeBriefCard />
+
       <div>
         <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground">{formatDate(now)}</p>
@@ -117,6 +125,8 @@ export default function Dashboard() {
       <MyMomentumCard />
 
 
+
+      {dashboardNudge && <NudgeLine nudge={dashboardNudge} />}
 
       {missingDays.length > 0 && <MissingShiftBanner missingDays={missingDays} />}
 
