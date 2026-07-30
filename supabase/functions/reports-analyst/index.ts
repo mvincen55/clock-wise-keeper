@@ -313,7 +313,12 @@ Deno.serve(async (req) => {
         closed_at: r.closed_at ?? null,
       }));
 
-    return json({ answer, concerns, citations, record_count: rows.length });
+    // ---- Second pass: an independent auditor reads the draft against the
+    // same records and says whether every claim actually holds up. A
+    // different model on purpose — the writer never grades its own work.
+    const audit = await auditAnswer(apiKey, corpus, answer, concerns);
+
+    return json({ answer, concerns, citations, audit, record_count: rows.length });
 
 
   } catch (e) {
