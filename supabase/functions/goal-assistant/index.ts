@@ -17,6 +17,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
+import { logScrub, scrubFreeText } from "../_shared/phi-scrub.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -352,8 +354,12 @@ Deno.serve(async (req) => {
       .order("sort_order");
 
     if (mode === "chat") {
-      const message = bounded(body.message, 2000);
+      // Person-level detail never leaves for the gateway, whatever was typed.
+      const scrubbed = scrubFreeText(bounded(body.message, 2000), 2000);
+      logScrub("goal-assistant.chat", scrubbed);
+      const message = scrubbed.text;
       if (!message) return json({ error: "Bad request" }, 400);
+
 
       const { data: recentUpdates } = await supabase
         .from("goal_updates")
@@ -362,19 +368,22 @@ Deno.serve(async (req) => {
         .order("created_at", { ascending: false })
         .limit(5);
 
+      // Everything below is staff free text, so everything below gets scrubbed.
+      const safe = (v: unknown, n: number) => scrubFreeText(bounded(v, n), n).text;
+
       const context = [
-        `Goal: ${bounded(goal.title, 200)}`,
-        `Measurable target: ${bounded(goal.smart_target, 80) || "(none set yet)"}`,
-        `Description: ${bounded(goal.description, 800) || "(none)"}`,
+        `Goal: ${safe(goal.title, 200)}`,
+        `Measurable target: ${safe(goal.smart_target, 80) || "(none set yet)"}`,
+        `Description: ${safe(goal.description, 800) || "(none)"}`,
         `Month: ${month}`,
         `Steps: ${
           (goalTasks ?? [])
-            .map((t) => `${t.done ? "[done] " : "[open] "}${bounded(t.title, 90)}${t.due_date ? ` (due ${t.due_date})` : ""}`)
+            .map((t) => `${t.done ? "[done] " : "[open] "}${safe(t.title, 90)}${t.due_date ? ` (due ${t.due_date})` : ""}`)
             .join("; ") || "(no plan yet)"
         }`,
         `Recent team updates: ${
           (recentUpdates ?? [])
-            .map((u) => `${u.status}: ${bounded(u.content, 300)}`)
+            .map((u) => `${u.status}: ${safe(u.content, 300)}`)
             .join(" | ") || "(none)"
         }`,
         profile?.answers
@@ -383,6 +392,7 @@ Deno.serve(async (req) => {
       ]
         .filter(Boolean)
         .join("\n");
+
 
       const messages: ChatMessage[] = [
         {
@@ -394,7 +404,7 @@ Deno.serve(async (req) => {
         },
         ...(thread ?? []).map((m) => ({
           role: (m.author === "pathfinder" ? "assistant" : "user") as "assistant" | "user",
-          content: bounded(m.content, 2000),
+          content: safe(m.content, 2000),
         })),
         { role: "user", content: message },
       ];
@@ -435,13 +445,16 @@ Deno.serve(async (req) => {
       .gte("completed_at", since)
       .limit(40);
 
-    const checklistTitles = (checkoffs ?? [])
-      .map((c) => bounded((c as { checklist_items?: { title?: string } }).checklist_items?.title, 90))
-      .filter(Boolean);
+    // Checklist titles are office-authored free text and can name people or
+    // procedures. Pathfinder only needs the volume, so it only gets the count.
+    const checkoffCount = (checkoffs ?? []).length;
+
+    // Everything below is staff free text, so everything below gets scrubbed.
+    const safe = (v: unknown, n: number) => scrubFreeText(bounded(v, n), n).text;
 
     const conversation = (thread ?? [])
       .slice(-20)
-      .map((m) => `${m.author === "pathfinder" ? "Pathfinder" : "Member"}: ${bounded(m.content, 400)}`)
+      .map((m) => `${m.author === "pathfinder" ? "Pathfinder" : "Member"}: ${safe(m.content, 400)}`)
       .join("\n");
 
     const raw = await callModel(
@@ -459,17 +472,17 @@ Deno.serve(async (req) => {
         {
           role: "user",
           content: [
-            `Goal: ${bounded(goal.title, 200)}`,
-            `Measurable target: ${bounded(goal.smart_target, 80) || "(none set)"}`,
-            `Description: ${bounded(goal.description, 600) || "(none)"}`,
+            `Goal: ${safe(goal.title, 200)}`,
+            `Measurable target: ${safe(goal.smart_target, 80) || "(none set)"}`,
+            `Description: ${safe(goal.description, 600) || "(none)"}`,
             `Finished since the last update: ${
-              doneSince.map((t) => bounded(t.title, 90)).join("; ") || "(nothing recorded)"
+              doneSince.map((t) => safe(t.title, 90)).join("; ") || "(nothing recorded)"
             }`,
-            `Still open: ${open.map((t) => bounded(t.title, 90)).join("; ") || "(none)"}`,
-            `Checklist items checked off: ${checklistTitles.join("; ") || "(none)"}`,
+            `Still open: ${open.map((t) => safe(t.title, 90)).join("; ") || "(none)"}`,
+            `Checklist items checked off since the last update: ${checkoffCount}`,
             meetingLine,
             `Their private coaching conversation (background only, never quote it):\n${conversation || "(none)"}`,
-            `The member's own quick notes: ${bounded(body.quickNotes, 800) || "(none)"}`,
+            `The member's own quick notes: ${safe(body.quickNotes, 800) || "(none)"}`,
           ].join("\n"),
         },
       ],

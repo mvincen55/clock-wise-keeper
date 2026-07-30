@@ -12,6 +12,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
+import { logScrub, scrubFreeText } from "../_shared/phi-scrub.ts";
 
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-3.6-flash";
@@ -54,10 +55,18 @@ function easternWeekday(): number {
 
 type Client = ReturnType<typeof createClient>;
 
-/** One short line from the office AI. Falls back to the template on any failure. */
-async function say(apiKey: string | undefined, brief: string, fallback: string): Promise<string> {
+/**
+ * One short line from the office AI. Falls back to the template on any failure.
+ * Every brief passes through the PHI scrub first — goal, sprint and checklist
+ * titles are office-typed free text and this is the only door to the gateway.
+ */
+async function say(apiKey: string | undefined, rawBrief: string, fallback: string): Promise<string> {
   if (!apiKey) return fallback;
+  const scrubbed = scrubFreeText(rawBrief, 2000);
+  logScrub("office-pulse.brief", scrubbed);
+  const brief = scrubbed.text;
   try {
+
     const res = await fetch(GATEWAY_URL, {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -588,13 +597,22 @@ async function suggestSprints(db: Client, apiKey: string | undefined, orgId: str
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  // Cron-only. This runs every office in the system with the service-role key,
+  // so nothing but the scheduler may reach it.
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const bearer = req.headers.get("Authorization")?.replace("Bearer ", "").trim();
+  if (!bearer || bearer !== serviceKey) {
+    return json({ error: "Not authorized" }, 401);
+  }
+
   try {
     const db = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      serviceKey,
       { auth: { persistSession: false } },
     );
     const apiKey = Deno.env.get("LOVABLE_API_KEY") ?? undefined;
+
     const today = easternToday();
 
     const { data: orgs } = await db.from("orgs").select("id");

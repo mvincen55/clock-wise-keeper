@@ -37,3 +37,23 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = true
   [functions.training-builder]
     verify_jwt = true
+  [functions.accountability-engine]
+    verify_jwt = true
+  [functions.commitment-listen]
+    verify_jwt = true
+  [functions.google-calendar-events]
+    verify_jwt = true
+  [functions.integrity-digest]
+    verify_jwt = false
+  [functions.office-pulse]
+    verify_jwt = false
+  [functions.parse-treatment]
+    verify_jwt = true
+  [functions.reports-analyst]
+    verify_jwt = true
+  [functions.sprint-verify]
+    verify_jwt = true
+  [functions.support-agent]
+    verify_jwt = true
+  [functions.training-reminders]
+    verify_jwt = false

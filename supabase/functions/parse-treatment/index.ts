@@ -20,11 +20,18 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+import { requireUser } from "../_shared/require-user.ts";
+
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-2.5-flash";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  // Reads an uploaded clinical screenshot — signed-in members only, never open.
+  const user = await requireUser(req);
+  if (!user) return json({ error: "Not authorized" }, 401);
+
   try {
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!apiKey) return json({ error: "AI is not configured" }, 500);

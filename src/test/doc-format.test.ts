@@ -4,8 +4,8 @@ import { parseDocBlocks } from '@/lib/doc-format';
 // The messy shape real PDF extractions produced: hard-wrapped lines,
 // lone bullet marks on their own lines, floating page numbers, short
 // standalone headings, letterhead blocks.
-const MESSY = `Harelick Dental
-Associates, LLC
+const MESSY = `Northfield Dental
+Group, LLC
 Fairhaven, MA
 Mission Statement
 To fulfill the needs of patients by providing the highest quality of dental health services through a patient
@@ -34,7 +34,7 @@ describe('parseDocBlocks — messy plain-text extractions', () => {
   it('keeps the letterhead as a paragraph, not headings', () => {
     expect(blocks[0]).toMatchObject({
       type: 'para',
-      text: 'Harelick Dental Associates, LLC Fairhaven, MA',
+      text: 'Northfield Dental Group, LLC Fairhaven, MA',
     });
   });
 

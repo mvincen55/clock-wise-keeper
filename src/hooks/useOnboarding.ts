@@ -214,7 +214,7 @@ export function useTagRegistry() {
   });
 }
 
-/** "Megan Vincent" -> "MV". Falls back to the first letters of one name. */
+/** "Jordan Rivera" -> "JR". Falls back to the first letters of one name. */
 export function suggestTag(fullName: string): string {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '';
