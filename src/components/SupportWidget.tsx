@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { buildTicketContext, type TicketContext } from '@/lib/support-context';
+
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
@@ -23,6 +25,8 @@ import {
   Clock,
   Plus,
   ChevronLeft,
+  ExternalLink,
+
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadSupportPdf } from '@/lib/support-pdf';
@@ -60,6 +64,9 @@ type PastTicket = {
   category: string | null;
   severity: string | null;
   page_path: string | null;
+  context_path?: string | null;
+  context_label?: string | null;
+
   created_at: string;
   escalated_at?: string | null;
   resolved_at?: string | null;
@@ -130,6 +137,8 @@ export default function SupportWidget() {
   const { data: org } = useOrgContext();
   const orgId = org?.org_id ?? null;
   const location = useLocation();
+  const navigate = useNavigate();
+
 
   const [open, setOpen] = useState(false);
   const [ticketId, setTicketId] = useState<string | null>(null);
@@ -157,6 +166,9 @@ export default function SupportWidget() {
   const [history, setHistory] = useState<PastTicket[] | null>(null);
   const [loadingThread, setLoadingThread] = useState(false);
   const [stageTimes, setStageTimes] = useState<TicketStageTimes>({});
+  /** Where this report came from, so any status line can jump back to it. */
+  const [ticketContext, setTicketContext] = useState<TicketContext | null>(null);
+
 
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -194,6 +206,8 @@ export default function SupportWidget() {
     setSuggested(null);
     setResolved(false);
     setStageTimes({});
+    setTicketContext(null);
+
     setCategory('other');
     setSeverity('medium');
   }, []);
@@ -323,8 +337,9 @@ export default function SupportWidget() {
     const { data, error } = await supabase
       .from('support_tickets')
       .select(
-        'id, title, status, tier, category, severity, page_path, created_at, escalated_at, resolved_at',
+        'id, title, status, tier, category, severity, page_path, context_path, context_label, created_at, escalated_at, resolved_at',
       )
+
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(25);
@@ -350,6 +365,10 @@ export default function SupportWidget() {
     setTicketId(t.id);
     setTier(t.tier === 'senior' ? 'senior' : 'standard');
     setResolved(t.status === 'resolved');
+    setTicketContext(
+      t.context_path ? { path: t.context_path, label: t.context_label ?? 'what this was about' } : null,
+    );
+
     try {
       const { data, error } = await supabase
         .from('support_messages')
@@ -459,12 +478,15 @@ export default function SupportWidget() {
     try {
       let id = ticketId;
       if (!id) {
+        const ctx = buildTicketContext(location.pathname, location.search, rangeStart, rangeEnd);
         const { data, error } = await supabase
           .from('support_tickets')
           .insert({
             org_id: orgId,
             user_id: user.id,
             page_path: location.pathname,
+            context_path: ctx.path,
+            context_label: ctx.label,
             title: (body || 'Screenshot report').slice(0, 80),
             category,
             severity,
@@ -476,8 +498,10 @@ export default function SupportWidget() {
         if (error) throw error;
         id = data.id;
         setTicketId(id);
+        setTicketContext(ctx);
         setStageTimes({ open: data.created_at ?? new Date().toISOString() });
       }
+
 
       const uploaded: { path: string; file: File; text: string }[] = [];
       const total = files.length;
@@ -815,7 +839,31 @@ export default function SupportWidget() {
                         </p>
                       );
                     })()}
+                    {t.context_path && (
+                      <span
+                        role="link"
+                        tabIndex={0}
+                        onClick={e => {
+                          e.stopPropagation();
+                          navigate(t.context_path as string);
+                          setOpen(false);
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            navigate(t.context_path as string);
+                            setOpen(false);
+                          }
+                        }}
+                        className="mt-1 inline-flex cursor-pointer items-center gap-1 text-[11px] text-primary underline-offset-2 hover:underline"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Jump back to {t.context_label ?? 'what this was about'}
+                      </span>
+                    )}
                   </button>
+
                 ))}
               </div>
             </div>
@@ -831,7 +879,10 @@ export default function SupportWidget() {
                 )}
                 working={busy}
                 times={stageTimes}
+                contextPath={ticketContext?.path ?? null}
+                contextLabel={ticketContext?.label ?? null}
               />
+
               {(() => {
                 const sla = slaFor({
                   status: resolved ? 'resolved' : tier === 'senior' ? 'escalated' : 'open',

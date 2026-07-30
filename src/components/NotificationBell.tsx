@@ -30,7 +30,7 @@ export default function NotificationBell() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('support_tickets')
-        .select('id, title, status, tier, severity, created_at, escalated_at, resolved_at')
+        .select('id, title, status, tier, severity, context_path, context_label, created_at, escalated_at, resolved_at')
         .eq('user_id', user!.id)
         .order('created_at', { ascending: false })
         .limit(5);
@@ -108,7 +108,10 @@ export default function NotificationBell() {
                         escalated: t.escalated_at,
                         solved: t.resolved_at,
                       }}
+                      contextPath={t.context_path}
+                      contextLabel={t.context_label}
                     />
+
                     {(() => {
                       const sla = slaFor(t);
                       return (

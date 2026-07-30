@@ -4401,6 +4401,8 @@ export type Database = {
       support_tickets: {
         Row: {
           category: string | null
+          context_label: string | null
+          context_path: string | null
           created_at: string
           escalated_at: string | null
           id: string
@@ -4418,6 +4420,8 @@ export type Database = {
         }
         Insert: {
           category?: string | null
+          context_label?: string | null
+          context_path?: string | null
           created_at?: string
           escalated_at?: string | null
           id?: string
@@ -4435,6 +4439,8 @@ export type Database = {
         }
         Update: {
           category?: string | null
+          context_label?: string | null
+          context_path?: string | null
           created_at?: string
           escalated_at?: string | null
           id?: string
