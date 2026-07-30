@@ -11,7 +11,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ScrollText, Download, FileSpreadsheet } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { ScrollText, Download, FileSpreadsheet, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDate, formatTime } from '@/lib/time-utils';
 import { useOrgEmployees } from '@/hooks/useEmployees';
@@ -24,6 +40,7 @@ import {
   type PolicyKind,
 } from '@/hooks/useAccountability';
 import AccountabilityAuditTimeline from './AccountabilityAuditTimeline';
+
 
 function RecordRow({ r, who }: { r: AccountabilityReport; who?: string }) {
   return (
