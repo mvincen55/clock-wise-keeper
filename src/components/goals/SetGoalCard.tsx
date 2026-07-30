@@ -15,7 +15,16 @@ import RoleGoalIdeas from '@/components/goals/RoleGoalIdeas';
  * Set this month's goal. Pathfinder polishes the raw wording into one clear
  * sentence, which the member can edit or restore to their own words.
  */
-export default function SetGoalCard({ month }: { month: string }) {
+export default function SetGoalCard({
+  month,
+  replacingTitle,
+  onCreated,
+}: {
+  month: string;
+  /** Set when this card is standing in for a goal that was just archived. */
+  replacingTitle?: string;
+  onCreated?: (title: string) => void;
+}) {
   const createGoal = useCreateGoal();
   const [title, setTitle] = useState('');
   const [original, setOriginal] = useState<string | null>(null);
@@ -52,8 +61,9 @@ export default function SetGoalCard({ month }: { month: string }) {
   const save = async () => {
     if (!title.trim()) return;
     try {
+      const created = title.trim();
       await createGoal.mutateAsync({
-        title: title.trim(),
+        title: created,
         description: description.trim() || undefined,
         smartTarget: target.trim() || null,
         month,
@@ -65,6 +75,7 @@ export default function SetGoalCard({ month }: { month: string }) {
       setSmart(null);
       setDescription('');
       setIsPrivate(false);
+      onCreated?.(created);
       toast.success('Goal set — good luck this month.');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not save your goal');
@@ -84,6 +95,13 @@ export default function SetGoalCard({ month }: { month: string }) {
           Pick something you'd like to get better at. The whole team will see this at the next team
           meeting.
         </p>
+
+        {replacingTitle && (
+          <p className="rounded-lg border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
+            Replacing “{replacingTitle}”. Whatever you set here is what the team hears about at the
+            next meeting.
+          </p>
+        )}
 
         <div className="space-y-1.5">
           <Label htmlFor="goal-title">Goal</Label>
