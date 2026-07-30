@@ -3823,6 +3823,7 @@ export type Database = {
           org_id: string
           passed: boolean
           score: number
+          type: string
           user_id: string
         }
         Insert: {
@@ -3833,6 +3834,7 @@ export type Database = {
           org_id: string
           passed?: boolean
           score?: number
+          type?: string
           user_id: string
         }
         Update: {
@@ -3843,6 +3845,7 @@ export type Database = {
           org_id?: string
           passed?: boolean
           score?: number
+          type?: string
           user_id?: string
         }
         Relationships: [
@@ -4361,6 +4364,7 @@ export type Database = {
           org_id: string
           passed: boolean
           score: number
+          type: string
           user_id: string
         }[]
       }

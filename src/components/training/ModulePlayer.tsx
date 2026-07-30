@@ -4,7 +4,19 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, CheckCircle2, Lightbulb, RotateCcw, Target, XCircle } from 'lucide-react';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Lightbulb,
+  MessagesSquare,
+  Pause,
+  Play,
+  RotateCcw,
+  Square,
+  Target,
+  Volume2,
+  XCircle,
+} from 'lucide-react';
 import {
   PASS_MARK,
   useRecordAttempt,
@@ -14,6 +26,8 @@ import {
 } from '@/hooks/useTraining';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useSpeech, type SpeechSegment } from '@/hooks/useSpeech';
+import RoleplayChat from './RoleplayChat';
 
 type Props = {
   module: TrainingModule;
@@ -29,12 +43,27 @@ type Props = {
 export default function ModulePlayer({ module, assignment, onBack }: Props) {
   const content = module.content;
   const questions = content.quiz?.questions ?? [];
-  const [phase, setPhase] = useState<'read' | 'quiz' | 'result'>('read');
+  const roleplay = content.roleplay;
+  const [phase, setPhase] = useState<'read' | 'quiz' | 'result' | 'roleplay'>('read');
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [graded, setGraded] = useState(false);
 
   const recordAttempt = useRecordAttempt();
   const updateStatus = useUpdateAssignmentStatus();
+
+  // Read-aloud: outcome, then each section with its try-it, then the recap.
+  const segments = useMemo<SpeechSegment[]>(() => {
+    const list: SpeechSegment[] = [];
+    if (content.outcome) list.push({ id: 'outcome', text: `What you'll be able to do. ${content.outcome}` });
+    content.sections.forEach((section, i) => {
+      const tryIt = section.try_it ? ` Try it today. ${section.try_it}` : '';
+      list.push({ id: `section-${i}`, text: `${section.heading}. ${section.body}${tryIt}` });
+    });
+    if (content.recap) list.push({ id: 'recap', text: `Recap. ${content.recap}` });
+    return list;
+  }, [content]);
+
+  const speech = useSpeech(segments);
 
   const score = useMemo(() => {
     if (questions.length === 0) return 100;
@@ -51,7 +80,16 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
     }
   }
 
+  function startAssessment(next: 'quiz' | 'roleplay') {
+    speech.stop();
+    if (assignment && assignment.status === 'assigned') {
+      updateStatus.mutate({ id: assignment.id, status: 'in_progress' });
+    }
+    setPhase(next);
+  }
+
   async function finishReading() {
+    speech.stop();
     if (questions.length > 0) {
       if (assignment && assignment.status === 'assigned') {
         updateStatus.mutate({ id: assignment.id, status: 'in_progress' });
@@ -105,12 +143,37 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
         </div>
         <h1 className="text-2xl font-semibold leading-tight">{module.title}</h1>
         {module.summary && <p className="text-muted-foreground">{module.summary}</p>}
+        {phase === 'read' && speech.supported && segments.length > 0 && (
+          <div className="flex items-center gap-2 pt-1">
+            <Button variant="outline" size="sm" onClick={speech.toggle}>
+              {!speech.speaking ? (
+                <Volume2 className="mr-1.5 h-4 w-4" />
+              ) : speech.paused ? (
+                <Play className="mr-1.5 h-4 w-4" />
+              ) : (
+                <Pause className="mr-1.5 h-4 w-4" />
+              )}
+              {!speech.speaking ? 'Listen' : speech.paused ? 'Resume' : 'Pause'}
+            </Button>
+            {speech.speaking && (
+              <Button variant="ghost" size="sm" onClick={speech.stop}>
+                <Square className="mr-1.5 h-3.5 w-3.5" />
+                Stop
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {phase === 'read' && (
         <div className="space-y-6">
           {content.outcome && (
-            <Card className="border-primary/40 bg-primary/5">
+            <Card
+              className={cn(
+                'border-primary/40 bg-primary/5 transition-shadow',
+                speech.activeId === 'outcome' && 'ring-2 ring-primary/50'
+              )}
+            >
               <CardContent className="flex gap-3 p-4">
                 <Target className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
                 <div>
@@ -122,7 +185,13 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
           )}
 
           {content.sections.map((section, i) => (
-            <section key={i} className="space-y-3">
+            <section
+              key={i}
+              className={cn(
+                'space-y-3 rounded-md transition-colors',
+                speech.activeId === `section-${i}` && 'bg-primary/5 p-3 ring-1 ring-primary/30'
+              )}
+            >
               <h2 className="text-lg font-semibold">{section.heading}</h2>
               {section.body.split(/\n{2,}/).map((para, j) => (
                 <p key={j} className="text-sm leading-relaxed text-foreground/90">
@@ -144,16 +213,35 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
           {content.recap && (
             <>
               <Separator />
-              <section className="space-y-2">
+              <section
+                className={cn(
+                  'space-y-2 rounded-md transition-colors',
+                  speech.activeId === 'recap' && 'bg-primary/5 p-3 ring-1 ring-primary/30'
+                )}
+              >
                 <h2 className="text-lg font-semibold">Recap</h2>
                 <p className="text-sm leading-relaxed text-muted-foreground">{content.recap}</p>
               </section>
             </>
           )}
 
-          <Button onClick={finishReading} className="w-full sm:w-auto">
-            {questions.length > 0 ? 'Start the quiz' : 'Mark as complete'}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {questions.length > 0 && (
+              <Button onClick={() => startAssessment('quiz')}>Take the quiz</Button>
+            )}
+            {roleplay && (
+              <Button
+                variant={questions.length > 0 ? 'outline' : 'default'}
+                onClick={() => startAssessment('roleplay')}
+              >
+                <MessagesSquare className="mr-1.5 h-4 w-4" />
+                Practise the conversation
+              </Button>
+            )}
+            {questions.length === 0 && !roleplay && (
+              <Button onClick={finishReading}>Mark as complete</Button>
+            )}
+          </div>
         </div>
       )}
 
@@ -237,6 +325,12 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
                 <RotateCcw className="mr-1.5 h-4 w-4" />
                 Take it again
               </Button>
+              {roleplay && (
+                <Button variant="outline" onClick={() => setPhase('roleplay')}>
+                  <MessagesSquare className="mr-1.5 h-4 w-4" />
+                  Practise the conversation
+                </Button>
+              )}
               <Button variant="ghost" onClick={() => setPhase('read')}>
                 Reread the module
               </Button>
@@ -246,6 +340,10 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
             </div>
           )}
         </div>
+      )}
+
+      {phase === 'roleplay' && roleplay && (
+        <RoleplayChat module={module} onPassed={complete} onBack={onBack} />
       )}
     </div>
   );

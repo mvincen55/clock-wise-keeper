@@ -10,6 +10,7 @@ import { formatDate, formatTime, minutesToHHMM } from '@/lib/time-utils';
 import IncidentReportModal from '@/components/IncidentReportModal';
 import IncidentReportDetail from '@/components/IncidentReportDetail';
 import { useEmployeeIncidentReports, type IncidentReport } from '@/hooks/useIncidentReports';
+import MemberGoalSummary from '@/components/goals/MemberGoalSummary';
 import {
   CATEGORY_LABELS,
   SEVERITY_CLASSES,
@@ -127,6 +128,18 @@ export default function EmployeeDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* This month's team goal */}
+      <Card className="card-elevated">
+        <CardHeader className="border-b">
+          <CardTitle className="text-base">This month's goal</CardTitle>
+        </CardHeader>
+        <CardContent className="p-4">
+          <MemberGoalSummary userId={employee.user_id} />
+        </CardContent>
+      </Card>
+
+
 
       {/* Incident Reports — injuries and exposures filed to this record. */}
       <Card className="card-elevated">

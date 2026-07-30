@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -9,13 +9,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
-import { useEditGoal, type Goal } from '@/hooks/useGoals';
+import { callPathfinder, useEditGoal, type Goal } from '@/hooks/useGoals';
+import SmartChips from '@/components/goals/SmartChips';
+import { evaluateSmart, isSmart } from '@/lib/smart';
 
 /**
- * Edit my own goal. Once it has been shared with the team, a change is never
- * silent — a short reason is required and recorded.
+ * Edit my own goal. It has to stay SMART — the chips update live and saving
+ * waits until all five pass. Once shared with the team, a change is never
+ * silent: a short reason is required and recorded.
  */
 export default function GoalEditDialog({
   goal,
@@ -32,12 +35,39 @@ export default function GoalEditDialog({
   const [title, setTitle] = useState(goal.title);
   const [description, setDescription] = useState(goal.description ?? '');
   const [reason, setReason] = useState('');
+  const [polishing, setPolishing] = useState(false);
+
+  const checks = useMemo(
+    () => evaluateSmart({ title, target: goal.smart_target, description }),
+    [title, description, goal.smart_target]
+  );
+  const smartOk = isSmart(checks);
 
   const titleChanged = title.trim() !== goal.title;
   const descChanged = (description.trim() || null) !== (goal.description ?? null);
   const changed = titleChanged || descChanged;
   const needsReason = wasShared && changed;
-  const canSave = !!title.trim() && changed && (!needsReason || reason.trim().length >= 5);
+  const canSave =
+    !!title.trim() && changed && smartOk && (!needsReason || reason.trim().length >= 5);
+
+  const polish = async () => {
+    const raw = title.trim();
+    if (!raw) return;
+    setPolishing(true);
+    try {
+      const result = await callPathfinder({
+        mode: 'polish_goal',
+        title: raw,
+        description: description.trim() || undefined,
+        month: goal.month,
+      });
+      if (result.title) setTitle(result.title);
+    } catch {
+      toast.error('Could not polish the wording — you can still edit it yourself.');
+    } finally {
+      setPolishing(false);
+    }
+  };
 
   const save = async () => {
     if (!canSave) return;
@@ -71,7 +101,25 @@ export default function GoalEditDialog({
               value={title}
               onChange={e => setTitle(e.target.value)}
             />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7"
+              disabled={!title.trim() || polishing}
+              onClick={() => void polish()}
+            >
+              {polishing ? (
+                <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+              ) : (
+                <Sparkles className="mr-1.5 h-3 w-3" />
+              )}
+              Polish it
+            </Button>
           </div>
+
+          <SmartChips checks={checks} />
+
           <div className="space-y-1.5">
             <Label htmlFor="edit-goal-description">Why it matters (optional)</Label>
             <Textarea
