@@ -1585,6 +1585,41 @@ export type Database = {
           },
         ]
       }
+      goal_messages: {
+        Row: {
+          author: string
+          content: string
+          created_at: string
+          goal_id: string
+          id: string
+          org_id: string
+        }
+        Insert: {
+          author: string
+          content: string
+          created_at?: string
+          goal_id: string
+          id?: string
+          org_id: string
+        }
+        Update: {
+          author?: string
+          content?: string
+          created_at?: string
+          goal_id?: string
+          id?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_messages_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goal_tasks: {
         Row: {
           created_at: string
