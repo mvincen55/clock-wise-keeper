@@ -60,6 +60,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/pto', icon: Clock, label: 'PTO' },
       { to: '/my-requests', icon: Send, label: 'My Requests' },
       { to: '/goals', icon: Target, label: 'Goals' },
+      { to: '/training', icon: GraduationCap, label: 'Training' },
     ],
   },
   {
