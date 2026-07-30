@@ -110,6 +110,8 @@ export default function SupportWidget() {
   const [severity, setSeverity] = useState('medium');
   const [rangeStart, setRangeStart] = useState('');
   const [rangeEnd, setRangeEnd] = useState('');
+  const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);
   const [busy, setBusy] = useState(false);
   const [tier, setTier] = useState<'standard' | 'senior'>('standard');
   const [suggested, setSuggested] = useState<string | null>(null);
@@ -214,6 +216,42 @@ export default function SupportWidget() {
       e.preventDefault();
       addFiles(imgs);
     }
+  };
+
+  /** Drop a screenshot anywhere on the panel — same as attaching it. */
+  const onDragEnter = (e: React.DragEvent) => {
+    if (!Array.from(e.dataTransfer.types).includes('Files')) return;
+    e.preventDefault();
+    dragDepth.current += 1;
+    setDragging(true);
+  };
+
+  const onDragOver = (e: React.DragEvent) => {
+    if (!Array.from(e.dataTransfer.types).includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const onDragLeave = () => {
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setDragging(false);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    const dropped = Array.from(e.dataTransfer.files ?? []);
+    if (dropped.length === 0) return;
+    e.preventDefault();
+    dragDepth.current = 0;
+    setDragging(false);
+    if (resolved || busy) return;
+    const usable = dropped.filter(
+      f => f.type.startsWith('image/') || f.type === 'application/pdf',
+    );
+    if (usable.length === 0) {
+      toast.error('Images and PDFs only.');
+      return;
+    }
+    addFiles(usable);
   };
 
   const send = async (asTier: 'standard' | 'senior' = tier) => {
@@ -406,7 +444,20 @@ export default function SupportWidget() {
       )}
 
       {open && (
-        <div className="fixed bottom-4 right-4 z-50 flex max-h-[70vh] w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border bg-card shadow-2xl">
+        <div
+          className="fixed bottom-4 right-4 z-50 flex max-h-[70vh] w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border bg-card shadow-2xl"
+          onDragEnter={onDragEnter}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+        >
+          {dragging && !resolved && (
+            <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-primary bg-card/95">
+              <ImagePlus className="h-6 w-6 text-primary" />
+              <p className="text-sm font-medium text-foreground">Drop it here</p>
+              <p className="text-xs text-muted-foreground">Images or PDFs, up to {MAX_FILES}</p>
+            </div>
+          )}
           <div className="flex items-center justify-between border-b px-3 py-2">
             <div className="flex items-center gap-2">
               <LifeBuoy className="h-4 w-4 text-accent" />
@@ -466,7 +517,7 @@ export default function SupportWidget() {
               <div className="space-y-2 text-sm text-muted-foreground">
                 <p>What went wrong? A sentence is plenty.</p>
                 <p className="text-xs">
-                  You can paste or attach a screenshot. The everyday agent answers first — if it's a
+                  Drag a screenshot in, paste one, or attach a file. The everyday agent answers first — if it's a
                   real problem, one tap hands it to the senior agent.
                 </p>
               </div>
