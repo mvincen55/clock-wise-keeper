@@ -2601,6 +2601,53 @@ export type Database = {
           },
         ]
       }
+      office_nudges: {
+        Row: {
+          content: string
+          created_at: string
+          data_refs: Json
+          id: string
+          kind: string
+          org_id: string
+          resolved_at: string | null
+          status: string
+          surface: string
+          user_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          data_refs?: Json
+          id?: string
+          kind: string
+          org_id: string
+          resolved_at?: string | null
+          status?: string
+          surface: string
+          user_id?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          data_refs?: Json
+          id?: string
+          kind?: string
+          org_id?: string
+          resolved_at?: string | null
+          status?: string
+          surface?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "office_nudges_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_branding: {
         Row: {
           address_line1: string
@@ -3920,6 +3967,69 @@ export type Database = {
           },
           {
             foreignKeyName: "training_attempts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_audit_findings: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string | null
+          fingerprint: string
+          id: string
+          module_id: string
+          note: string
+          org_id: string
+          quote: string
+          severity: string
+          status: string
+          suggested_fix: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          fingerprint: string
+          id?: string
+          module_id: string
+          note?: string
+          org_id: string
+          quote?: string
+          severity?: string
+          status?: string
+          suggested_fix?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          fingerprint?: string
+          id?: string
+          module_id?: string
+          note?: string
+          org_id?: string
+          quote?: string
+          severity?: string
+          status?: string
+          suggested_fix?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_audit_findings_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "training_modules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_audit_findings_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
