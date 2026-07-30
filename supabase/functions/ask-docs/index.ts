@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadProcedureNotes } from "../_shared/procedure-notes.ts";
+import { guardAiInput, REFUSAL } from "../_shared/integrity.ts";
 
 // AI assistant over the office knowledge base (policies, HR info,
 // insurance handbooks). Two-step retrieval: an AI call first turns the
@@ -122,6 +123,25 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const question = String(body.question ?? "").trim();
     if (!question) return json({ error: "Missing question" }, 400);
+
+    // Integrity: attack-signature check (signature only, never the question).
+    const { data: askMembership } = await supabase
+      .from("org_members")
+      .select("org_id")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle();
+    if (
+      await guardAiInput({
+        orgId: askMembership?.org_id,
+        userId: user.id,
+        surface: "ask-docs",
+        inputs: [question],
+      })
+    ) {
+      return json({ answer: REFUSAL, sources: [] });
+    }
     const history: HistoryMessage[] = Array.isArray(body.history)
       ? body.history
           .filter((m: HistoryMessage) => m && (m.role === "user" || m.role === "assistant"))
