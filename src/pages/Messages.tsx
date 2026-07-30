@@ -188,16 +188,38 @@ export default function Messages() {
 
   const active = conversations.find(c => c.id === activeId) ?? null;
   const { data: messages = [] } = useMessages(activeId);
+  const { data: receipts = [] } = useConversationReceipts(activeId);
+
+  // Everyone in the thread except me — these are the people whose read state
+  // we surface on my own messages.
+  const otherReceipts = useMemo(
+    () => receipts.filter(r => r.user_id !== user?.id),
+    [receipts, user?.id],
+  );
+
+  // The last message I sent — receipts render only there to keep the thread calm.
+  const lastOwnMessageId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].sender_id === user?.id) return messages[i].id;
+    }
+    return null;
+  }, [messages, user?.id]);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' });
   }, [messages.length, activeId]);
 
+  // Keep last_read_at advancing while the thread is open so unread counts stay
+  // accurate and other people's receipts reflect reality.
+  const newestAt = messages.length ? messages[messages.length - 1].created_at : null;
   useEffect(() => {
-    if (activeId && active && active.unreadCount > 0) markRead.mutate(activeId);
+    if (!activeId || !active) return;
+    const stale = !active.lastReadAt || (newestAt !== null && newestAt > active.lastReadAt);
+    if (active.unreadCount > 0 || stale) markRead.mutate(activeId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeId, active?.unreadCount]);
+  }, [activeId, active?.unreadCount, active?.lastReadAt, newestAt]);
+
 
   const activeFilters =
     (typeFilter !== 'all' ? 1 : 0) +
