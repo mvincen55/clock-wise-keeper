@@ -27,6 +27,9 @@ export default function TeamGoalCard({
         {goal ? (
           <>
             <p className="break-words text-sm">{goal.title}</p>
+            {goal.smart_target && (
+              <p className="mt-0.5 text-xs text-muted-foreground">Target: {goal.smart_target}</p>
+            )}
             <GoalProgress
               done={tasks.filter(t => t.done).length}
               total={tasks.length}

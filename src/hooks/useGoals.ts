@@ -17,6 +17,8 @@ export type Goal = {
   user_id: string;
   title: string;
   description: string | null;
+  /** Short measurable target, e.g. "4 feedback asks". Optional — never a gate. */
+  smart_target: string | null;
   month: string;
   visibility: GoalVisibility;
   status: GoalStatus;
@@ -139,6 +141,7 @@ export function useCreateGoal() {
     mutationFn: async (input: {
       title: string;
       description?: string;
+      smartTarget?: string | null;
       month: string;
       visibility?: GoalVisibility;
       /** Managers can set a private goal WITH a member. */
@@ -153,6 +156,7 @@ export function useCreateGoal() {
           user_id: input.forUserId ?? user.id,
           title: input.title,
           description: input.description ?? null,
+          smart_target: input.smartTarget ?? null,
           month: input.month,
           visibility: input.visibility ?? 'team',
           created_by: user.id,
@@ -304,6 +308,7 @@ export async function callPathfinder(payload: {
   quickNotes?: string;
   title?: string;
   description?: string;
+  month?: string;
   message?: string;
 }) {
   const { data, error } = await supabase.functions.invoke('goal-assistant', { body: payload });
@@ -315,6 +320,14 @@ export async function callPathfinder(payload: {
     status?: UpdateStatus;
     title?: string;
     original?: string;
+    target?: string | null;
+    smart?: {
+      specific: string;
+      measurable: string;
+      achievable: string;
+      relevant: string;
+      time_bound: string;
+    };
     reply?: string;
   };
 }

@@ -124,6 +124,9 @@ export default function Goals() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="break-words font-medium">{goal.title}</p>
+                {goal.smart_target && (
+                  <p className="text-xs text-muted-foreground">Target: {goal.smart_target}</p>
+                )}
                 <GoalProgress
                   done={t.filter(x => x.done).length}
                   total={t.length}
