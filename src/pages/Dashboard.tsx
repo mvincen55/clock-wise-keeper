@@ -233,6 +233,21 @@ export default function Dashboard() {
           prefill={{ target_table: 'time_entries', target_id: todayEntry.id, entry_date: todayEntry.entry_date }}
         />
       )}
+
+      <ChecklistBypassDialog
+        open={clockAction.dialogOpen}
+        incompleteCount={clockAction.incompleteCount}
+        openSharedCount={clockAction.openSharedCount}
+        busy={clockAction.bypassing}
+        onGoBack={clockAction.closeDialog}
+        onBypass={clockAction.bypassAndClockOut}
+      />
+
+      <BypassReasonDialog
+        bypass={unresolvedBypasses?.[0] ?? null}
+        open={reasonPromptOpen}
+        onOpenChange={setReasonPromptOpen}
+      />
     </div>
   );
 }
