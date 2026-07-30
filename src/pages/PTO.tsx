@@ -562,10 +562,10 @@ function PtoUsageRow({ entry, onUpdateHours }: { entry: any; onUpdateHours: (id:
               autoFocus
               onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
             />
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={save}>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={save} aria-label="Save">
               <Check className="h-3 w-3 text-success" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditing(false)}>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditing(false)} aria-label="Cancel">
               <X className="h-3 w-3 text-muted-foreground" />
             </Button>
           </div>

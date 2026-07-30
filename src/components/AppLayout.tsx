@@ -260,10 +260,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </Link>
             <div className="flex items-center gap-1">
               <NotificationBell />
-              <Button variant="ghost" size="icon" onClick={privacyLock} className="text-destructive">
+              <Button variant="ghost" size="icon" onClick={privacyLock} className="text-destructive" aria-label="Privacy lock">
                 <ShieldCheck className="h-5 w-5" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => setMobileOpen(!mobileOpen)}>
+              <Button variant="ghost" size="icon" onClick={() => setMobileOpen(!mobileOpen)} aria-label={mobileOpen ? 'Close menu' : 'Open menu'}>
                 {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </Button>
             </div>

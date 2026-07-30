@@ -665,7 +665,7 @@ export default function DaysOff() {
                         {d.hours != null && <span className="text-xs text-muted-foreground">{d.hours}h</span>}
                         {/* Removing a logged day off is an attendance-record change — manager only */}
                         {isManager && (
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(d.id)}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(d.id)} aria-label="Delete day off">
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         )}

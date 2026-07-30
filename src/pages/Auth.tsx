@@ -59,7 +59,7 @@ export default function Auth() {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-primary">
             <Clock className="h-7 w-7 text-primary-foreground" />
           </div>
-          <CardTitle className="text-2xl">Purple Envelope</CardTitle>
+          <h1 className="text-2xl font-semibold leading-none tracking-tight">Sign in to Purple Envelope</h1>
           <CardDescription>Sign in to your account</CardDescription>
         </CardHeader>
         <CardContent>
