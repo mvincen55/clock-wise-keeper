@@ -389,20 +389,29 @@ export default function SupportWidget() {
   };
 
   const onDrop = (e: React.DragEvent) => {
-    const dropped = Array.from(e.dataTransfer.files ?? []);
-    if (dropped.length === 0) return;
+    if (!Array.from(e.dataTransfer.types).includes('Files')) return;
     e.preventDefault();
     dragDepth.current = 0;
     setDragging(false);
     if (resolved || busy) return;
-    const usable = dropped.filter(
-      f => f.type.startsWith('image/') || f.type === 'application/pdf',
-    );
-    if (usable.length === 0) {
-      toast.error('Images and PDFs only.');
-      return;
-    }
-    addFiles(usable);
+    // Read the whole drop first — several files, or a folder of them.
+    const dt = e.dataTransfer;
+    void filesFromDrop(dt).then(dropped => {
+      if (dropped.length === 0) return;
+      const usable = dropped.filter(
+        f => f.type.startsWith('image/') || f.type === 'application/pdf',
+      );
+      if (usable.length === 0) {
+        toast.error('Images and PDFs only.');
+        return;
+      }
+      const skipped = dropped.length - usable.length;
+      if (skipped > 0) {
+        toast.message(`${skipped} file${skipped === 1 ? '' : 's'} skipped — images and PDFs only.`);
+      }
+      addFiles(usable);
+    });
+
   };
 
   /** Every report this person has filed, newest first. */
