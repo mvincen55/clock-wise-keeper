@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import WaxSeal from '@/components/WaxSeal';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
@@ -43,6 +44,7 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
   }, [answers, questions]);
 
   const passed = score >= PASS_MARK;
+  const [seal, setSeal] = useState(false);
   const allAnswered = questions.every((_, i) => answers[i] !== undefined);
 
   async function complete() {
@@ -75,11 +77,13 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
     });
     if (passed) {
       await complete();
+      setSeal(true);
       toast.success(`Passed with ${score}%.`);
     }
   }
 
   function retake() {
+    setSeal(false);
     setAnswers({});
     setGraded(false);
     setPhase('quiz');
@@ -160,7 +164,8 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
       {(phase === 'quiz' || phase === 'result') && (
         <div className="space-y-5">
           {phase === 'result' && (
-            <Card className={cn(passed ? 'border-primary/50 bg-primary/5' : 'border-warning/50')}>
+            <Card className={cn('relative overflow-hidden', passed ? 'border-primary/50 bg-primary/5' : 'border-warning/50')}>
+              <WaxSeal show={seal} onDone={() => setSeal(false)} caption="Module passed" />
               <CardContent className="space-y-2 p-4">
                 <div className="flex items-center justify-between">
                   <p className="font-medium">
