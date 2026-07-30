@@ -1,10 +1,17 @@
 # Goals + Checklist-Bypass — feature specs (as prompted to Lovable)
 
-Status: **being built in Lovable** (started 2026-07-30). This file preserves the exact
-specs and the decisions behind them, so a future debugging session can tell intended
-behavior from drift. Build order so far: Prompt 1 (Goals), Prompt 3 (redesign + AI
-upgrades), Prompt 4 (brand pass) — sent. Prompt 2 (bypass, revised) and Prompt 5
-(SMART goals) — pending.
+Status (2026-07-30): **sprint mode** — burning expiring Lovable credits to get all
+pages/bones built and flowing, then a refinement pass with higher-end models, then a
+planned refactor. The docs (README, runbook, specs) are the refactor's map — keep
+them current as things ship. Refinement pass starts with a spec-vs-built audit.
+First refinement item, BEFORE refactor: fix the `allowed_users` RLS recursion
+(runbook §6) — don't build on the crack.
+
+Build order / status: Prompt 1 (Goals) — sent · Prompt 3 (redesign) — sent ·
+Prompt 4 (brand pass) — sent · Prompt 2 (bypass, revised) — sent, implementing ·
+Training Library (`docs/training-library-spec.md`) — sent BEFORE Prompt 6 ·
+Prompt 6 (visuals + meetings + library hookup) — final version below ·
+Prompt 5 (SMART) — pending, independent, send anytime.
 
 ## Product decisions (the "why")
 
@@ -19,6 +26,8 @@ upgrades), Prompt 4 (brand pass) — sent. Prompt 2 (bypass, revised) and Prompt
    leaderboards, or gamification.**
 4. **Pathfinder is schedule-aware:** suggested due dates avoid the member's approved
    time off, office closures, and go lighter on short-staffed days (teammates' PTO).
+   It is also **meeting-aware** (Prompt 6): plans front-load progress before the next
+   `team_meeting` event on the office calendar.
 5. **Work-style questions are deliberately separated from Goals UI.** They'll be asked
    in *onboarding* (see `docs/team-onboarding.md`) framed as get-to-know-you culture
    questions. Members must not learn the answers shape their AI plans — visible
@@ -38,6 +47,10 @@ upgrades), Prompt 4 (brand pass) — sent. Prompt 2 (bypass, revised) and Prompt
 10. **SMART goals are coaching, never a gate** (Prompt 5): polish rewrites goals to be
     Specific/Measurable/Achievable/Relevant/Time-bound, chips teach the framework, but
     nothing ever blocks a save.
+11. **Training content lives in the central Training Library**
+    (`docs/training-library-spec.md`) — goal resources link into it, never a parallel
+    store. Grounding authority: assistant_memories > office docs > org config.
+    Premium model for content generation (cost approved), cheap model for chatter.
 
 ## Prompt 1 — Goals (sent)
 
@@ -67,13 +80,12 @@ upgrades), Prompt 4 (brand pass) — sent. Prompt 2 (bypass, revised) and Prompt
 > 6. A "Meeting view" toggle: one clean screen listing every member's latest update for the current month (goal title, status, update text, tasks done/total) — this is what the team reads together at the meeting. Private goals are excluded.
 > 7. Progress = tasks done/total only. Only the goal's owner can add updates or check off tasks. Everyone can view team goals; private goals follow the visibility rule above.
 
-## Prompt 2 — Checklist-bypass accountability loop (REVISED 2026-07-30 after schema + clock-out audit — pending)
+## Prompt 2 — Checklist-bypass accountability loop (REVISED 2026-07-30 — sent, implementing)
 
-Supersedes the original Prompt 2. Integration points verified against the codebase:
-clock-out = `useClockAction()` in `src/hooks/useTimeEntries.ts` (writes `punches` +
-`audit_events`); Eastern-local dates via `getToday()` in `src/lib/time-utils.ts`;
-checklist gate must respect `per_person` / `cadence` / `audience` from migration
-`20260723200000_checklists.sql`.
+Integration points verified against the codebase: clock-out = `useClockAction()` in
+`src/hooks/useTimeEntries.ts` (writes `punches` + `audit_events`); Eastern-local
+dates via `getToday()` in `src/lib/time-utils.ts`; checklist gate respects
+`per_person` / `cadence` / `audience` from migration `20260723200000_checklists.sql`.
 
 > Build the checklist-bypass accountability loop on top of the existing checklists and time clock. Conventions: org_id on every table, RLS on everything, roles owner/manager/employee, audit_events for anything notable (follow the useClockAction pattern), Eastern-local dates via src/lib/time-utils (getToday()).
 >
@@ -129,7 +141,7 @@ checklist gate must respect `per_person` / `cadence` / `audience` from migration
 
 > Global rebrand pass, purely visual — no functionality changes. The product is Purple Envelope, not TimeVault. Replace the TimeVault name and orange clock mark in the app header/layout with "Purple Envelope" and a simple purple envelope mark. Switch the app's primary accent color from orange to #53406e everywhere it appears: buttons, links, active nav states, toggles, focus rings, badges — keeping text contrast accessible. Also update the PWA manifest name/theme color and any remaining "TimeVault"/"TimeKeeper" strings in nav labels and page titles. Leave printed-form footers alone for now; that's a separate pass.
 
-## Prompt 5 — SMART goals backbone (pending)
+## Prompt 5 — SMART goals backbone (pending, independent — send anytime)
 
 > Make SMART goals the backbone of the Goals feature — as coaching, never as a gate. SMART = Specific, Measurable, Achievable, Relevant, Time-bound. Keep the encouraging tone; nobody should ever see a red error or be blocked from saving.
 >
@@ -147,6 +159,33 @@ checklist gate must respect `per_person` / `cadence` / `audience` from migration
 >
 > Store the measurable target as a new nullable text column goals.smart_target (filled from the polished goal; editable). No other schema changes.
 
+## Prompt 6 — Always-on visuals + meeting awareness + Training Library hookup (FINAL, send AFTER Training Library)
+
+Depends on `docs/training-library-spec.md` being built first (it calls
+training-builder; sending this first would recreate the silo).
+
+> Upgrade the Goals feature in three ways: make the page genuinely visual in EVERY state, make Pathfinder meeting-aware, and connect Pathfinder to the new Training Library. Extend what exists — don't rebuild it.
+>
+> 1) ALWAYS-ON VISUALS (the page must feel designed even before any plan exists):
+> - Every goal card gets a month timeline that renders ALWAYS, even with no plan: a horizontal bar for the month with a marker for today and a marker for the next team meeting (from the office calendar), plus a countdown line like "Team meeting in 6 days."
+> - Once a plan exists, layer the tasks-done progress (ring or bar, purple #53406e) onto the same card so work-vs-calendar is obvious at a glance; amber when progress badly trails the calendar.
+> - Empty states must look intentional — structured layout, iconography, one primary action — never a bare text line. Team cards get mini progress rings. Carry the same visual language into the Share an update dialog and the Meeting view.
+> - Professional and calm, no gamification.
+>
+> 2) MEETING-AWARE PLANNING:
+> - Add a "team_meeting" category to office calendar events (reuse the existing events system) so office meetings can be marked on the calendar.
+> - Pass the next scheduled team meeting date (or null) into goal-assistant's "breakdown" and "polish_goal" modes. Plans should front-load meaningful progress before the next meeting, and the plan intro should reference it naturally ("Your next team meeting is Aug 12 — this plan gets you something real to share").
+> - "draft_update" frames the update for the upcoming meeting.
+>
+> 3) PATHFINDER TRAINING RESOURCES VIA THE TRAINING LIBRARY (the /training feature's library is the single source of truth — do NOT create goal_resources or quiz_attempts tables; training_modules / training_assignments / training_attempts already exist):
+> - Upgrade goal-assistant's resource behavior: when Pathfinder decides a learning resource would genuinely help a goal (be creative — a goal about explaining treatment → a training module with a quiz; a simple habit goal → maybe a one-page guide), it calls the training-builder function with the goal context, then links the created module to the goal via training_modules.origin_goal_id.
+> - The goal card lists linked modules with the member's state (not started / in progress / passed), derived from that member's training_assignments/training_attempts.
+> - When a linked module attaches to a plan task, completing it (module read + quiz passed) checks that plan task off automatically.
+> - Modules built for goals live in the central library like everything else — managers can assign them to anyone later.
+> - MODEL TIERS — cost explicitly approved: training-builder already uses the strongest available model for content generation; keep goal-assistant's fast model for polish_goal, chat, and draft_update. Quiz answers stay private to the member — the team sees "completed", never scores.
+>
+> When finished: redeploy the updated goal-assistant edge function and confirm it's live.
+
 ## Known build risks (check these when testing)
 
 - **Bypass depends on clock-out knowing checklist state.** Integration point is
@@ -157,6 +196,9 @@ checklist gate must respect `per_person` / `cadence` / `audience` from migration
   intended — accepted plan tasks are commitments — but verify it doesn't surprise.
 - **Pathfinder schedule-awareness** is the most likely part to come back shallow —
   test with a member who has approved PTO and confirm suggested due dates dodge it.
-- **New edge functions must actually deploy.** goal-assistant (Prompt 1) and
-  checklist-bypass (Prompt 2) — probe per `docs/runbook.md` §1 if the UI toasts
-  "Failed to send a request to the Edge Function."
+- **New edge functions must actually deploy.** goal-assistant (Prompt 1),
+  checklist-bypass (Prompt 2), training-builder (Training Library) — probe per
+  `docs/runbook.md` §1 if the UI toasts "Failed to send a request to the Edge Function."
+- **Sprint-speed drift.** These bones were built fast by design; the refinement pass
+  audits spec-vs-built before any refactor. This file is the reference for
+  "intended" when something looks off.
