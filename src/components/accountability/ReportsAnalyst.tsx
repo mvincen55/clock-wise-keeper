@@ -20,6 +20,10 @@ import {
   ShieldCheck,
   ShieldAlert,
   Download,
+  Search,
+  Scale,
+  ListChecks,
+  CalendarClock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -72,6 +76,34 @@ type Turn = {
 
 
 const CITE = /\[rec:([0-9a-fA-F-]{6,})\]/g;
+
+/** One-tap follow-ups — the questions managers actually ask of the record book. */
+const QUICK_ASKS: { label: string; icon: typeof Search; question: string }[] = [
+  {
+    label: 'Spot anomalies',
+    icon: Search,
+    question:
+      'Spot anomalies in these records for this date range — anything that stands out from the normal pattern, like sudden clusters, one person spiking, or an unusual day of the week. Cite the records. If nothing stands out, say so plainly.',
+  },
+  {
+    label: 'Find policy violations',
+    icon: Scale,
+    question:
+      'Based only on these records and the office policies you can see, point out anything that looks like a policy violation for this date range. Be careful and neutral — if something is ambiguous, say it is ambiguous rather than calling it a violation. Cite the records.',
+  },
+  {
+    label: 'Summarize exceptions',
+    icon: ListChecks,
+    question:
+      'Summarize the exceptions in this date range — the records that are out of the ordinary or fall outside normal expectations — grouped by person, with the count for each. Cite the records.',
+  },
+  {
+    label: 'Stalled reviews',
+    icon: CalendarClock,
+    question:
+      'Which records in this date range are stalled — still open, unsigned, or waiting on a review — and how long have they been sitting? Cite the records.',
+  },
+];
 
 /** A short, clickable label for a record — never a raw uuid wall. */
 function citeLabel(c: AnalystCitation | undefined, id: string) {
@@ -396,12 +428,17 @@ export default function ReportsAnalyst({
     }
   };
 
+  const send = (q: string) => {
+    if (!q || busy) return;
+    setTurns(prev => [...prev, { role: 'user', content: q }]);
+    call('ask', q);
+  };
+
   const ask = () => {
     const q = question.trim();
     if (!q || busy) return;
-    setTurns(prev => [...prev, { role: 'user', content: q }]);
     setQuestion('');
-    call('ask', q);
+    send(q);
   };
 
   return (
@@ -502,6 +539,22 @@ export default function ReportsAnalyst({
               )}
             </div>
           )}
+
+          <div className="flex flex-wrap gap-1.5">
+            {QUICK_ASKS.map(qa => (
+              <Button
+                key={qa.label}
+                size="sm"
+                variant="secondary"
+                className="h-7 rounded-full px-3 text-xs"
+                disabled={busy}
+                onClick={() => send(qa.question)}
+              >
+                <qa.icon className="mr-1.5 h-3 w-3" />
+                {qa.label}
+              </Button>
+            ))}
+          </div>
 
           <div className="flex gap-2">
             <Input
