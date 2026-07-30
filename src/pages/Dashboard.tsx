@@ -21,6 +21,7 @@ import { useCurrentPtoBalance } from '@/hooks/usePtoEngine';
 import { Link } from 'react-router-dom';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { OrgSnapshotPanel } from '@/components/OrgSnapshotPanel';
+import PracticeVitalsCard from '@/components/PracticeVitalsCard';
 
 type ClockStatus = 'clocked_out' | 'clocked_in';
 
@@ -105,6 +106,8 @@ export default function Dashboard() {
       </div>
 
       {isManager && <OrgSnapshotPanel />}
+
+      {isManager && <PracticeVitalsCard />}
 
       {missingDays.length > 0 && <MissingShiftBanner missingDays={missingDays} />}
 
