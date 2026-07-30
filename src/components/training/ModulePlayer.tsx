@@ -14,6 +14,9 @@ import {
 } from '@/hooks/useTraining';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useSpeech } from '@/hooks/useSpeech';
+import ReadAloudControls from './ReadAloudControls';
+
 
 type Props = {
   module: TrainingModule;
@@ -36,6 +39,30 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
   const recordAttempt = useRecordAttempt();
   const updateStatus = useUpdateAssignmentStatus();
 
+  // Read-aloud chunks: title/outcome, each section, then the recap.
+  const speechChunks = useMemo(() => {
+    const parts: string[] = [];
+    parts.push([module.title, content.outcome && `What you'll be able to do: ${content.outcome}`]
+      .filter(Boolean)
+      .join('. '));
+    content.sections.forEach(section => {
+      parts.push(
+        [section.heading, section.body, section.try_it && `Try it today: ${section.try_it}`]
+          .filter(Boolean)
+          .join('. ')
+      );
+    });
+    if (content.recap) parts.push(`Recap. ${content.recap}`);
+    return parts;
+  }, [module.title, content]);
+
+  const speech = useSpeech(speechChunks);
+
+  // Section index 0 is the intro block, so sections start at 1.
+  const activeSection = speech.activeIndex === null ? null : speech.activeIndex - 1;
+
+
+
   const score = useMemo(() => {
     if (questions.length === 0) return 100;
     const right = questions.filter((q, i) => answers[i] === q.correct_index).length;
@@ -52,7 +79,9 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
   }
 
   async function finishReading() {
+    speech.stop();
     if (questions.length > 0) {
+
       if (assignment && assignment.status === 'assigned') {
         updateStatus.mutate({ id: assignment.id, status: 'in_progress' });
       }
@@ -87,7 +116,7 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <Button variant="ghost" size="sm" onClick={onBack} className="-ml-2">
+      <Button variant="ghost" size="sm" onClick={() => { speech.stop(); onBack(); }} className="-ml-2">
         <ArrowLeft className="mr-1.5 h-4 w-4" />
         Back to Training
       </Button>
@@ -109,6 +138,8 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
 
       {phase === 'read' && (
         <div className="space-y-6">
+          <ReadAloudControls speech={speech} />
+
           {content.outcome && (
             <Card className="border-primary/40 bg-primary/5">
               <CardContent className="flex gap-3 p-4">
@@ -122,7 +153,14 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
           )}
 
           {content.sections.map((section, i) => (
-            <section key={i} className="space-y-3">
+            <section
+              key={i}
+              className={cn(
+                'space-y-3 rounded-md transition-colors',
+                activeSection === i && 'bg-primary/5 ring-1 ring-primary/30 p-3 -m-0.5'
+              )}
+            >
+
               <h2 className="text-lg font-semibold">{section.heading}</h2>
               {section.body.split(/\n{2,}/).map((para, j) => (
                 <p key={j} className="text-sm leading-relaxed text-foreground/90">

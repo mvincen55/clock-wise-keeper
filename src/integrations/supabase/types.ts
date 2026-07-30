@@ -1639,6 +1639,50 @@ export type Database = {
           },
         ]
       }
+      goal_events: {
+        Row: {
+          actor_id: string
+          created_at: string
+          goal_id: string
+          id: string
+          new_title: string | null
+          old_title: string
+          org_id: string
+          reason: string
+          type: string
+        }
+        Insert: {
+          actor_id: string
+          created_at?: string
+          goal_id: string
+          id?: string
+          new_title?: string | null
+          old_title: string
+          org_id: string
+          reason: string
+          type: string
+        }
+        Update: {
+          actor_id?: string
+          created_at?: string
+          goal_id?: string
+          id?: string
+          new_title?: string | null
+          old_title?: string
+          org_id?: string
+          reason?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_events_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goal_messages: {
         Row: {
           author: string
@@ -1774,6 +1818,8 @@ export type Database = {
       }
       goals: {
         Row: {
+          archived_at: string | null
+          archived_reason: string | null
           created_at: string
           created_by: string
           description: string | null
@@ -1788,6 +1834,8 @@ export type Database = {
           visibility: string
         }
         Insert: {
+          archived_at?: string | null
+          archived_reason?: string | null
           created_at?: string
           created_by: string
           description?: string | null
@@ -1802,6 +1850,8 @@ export type Database = {
           visibility?: string
         }
         Update: {
+          archived_at?: string | null
+          archived_reason?: string | null
           created_at?: string
           created_by?: string
           description?: string | null
@@ -2716,6 +2766,41 @@ export type Database = {
             foreignKeyName: "org_members_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_practice_settings: {
+        Row: {
+          collections_visibility: string
+          created_at: string
+          id: string
+          monthly_collections_target_cents: number | null
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          collections_visibility?: string
+          created_at?: string
+          id?: string
+          monthly_collections_target_cents?: number | null
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          collections_visibility?: string
+          created_at?: string
+          id?: string
+          monthly_collections_target_cents?: number | null
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_practice_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
             referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
@@ -3773,6 +3858,7 @@ export type Database = {
           org_id: string
           passed: boolean
           score: number
+          type: string
           user_id: string
         }
         Insert: {
@@ -3783,6 +3869,7 @@ export type Database = {
           org_id: string
           passed?: boolean
           score?: number
+          type?: string
           user_id: string
         }
         Update: {
@@ -3793,6 +3880,7 @@ export type Database = {
           org_id?: string
           passed?: boolean
           score?: number
+          type?: string
           user_id?: string
         }
         Relationships: [
@@ -3868,6 +3956,47 @@ export type Database = {
             columns: ["origin_goal_id"]
             isOneToOne: false
             referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_notes: {
+        Row: {
+          color: string
+          content: string
+          created_at: string
+          id: string
+          org_id: string
+          sort_order: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          content?: string
+          created_at?: string
+          id?: string
+          org_id: string
+          sort_order?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          content?: string
+          created_at?: string
+          id?: string
+          org_id?: string
+          sort_order?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_notes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
         ]
@@ -4311,6 +4440,7 @@ export type Database = {
           org_id: string
           passed: boolean
           score: number
+          type: string
           user_id: string
         }[]
       }
