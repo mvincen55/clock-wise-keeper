@@ -362,6 +362,31 @@ export default function SupportWidget() {
     [redactOne, readPdf],
   );
 
+  /** Swap one attachment for a different file, keeping its spot in the list. */
+  const replaceFile = useCallback(
+    (key: string, file: File) => {
+      if (file.size > MAX_IMAGE_BYTES) {
+        toast.error('That file is over 8MB — try a smaller one.');
+        return;
+      }
+      const isImage = file.type.startsWith('image/');
+      const isPdf = file.type === 'application/pdf';
+      const fresh: Attachment = {
+        key: crypto.randomUUID(),
+        original: file,
+        redacted: null,
+        masked: 0,
+        working: isImage || isPdf,
+        text: '',
+        rawText: '',
+      };
+      setFiles(prev => prev.map(a => (a.key === key ? fresh : a)));
+      if (isPdf) void readPdf(fresh.key, file);
+      else if (isImage) void redactOne(fresh.key, file);
+    },
+    [readPdf, redactOne],
+  );
+
 
   /** Paste screenshots straight into the box — the fastest way to report. */
   const onPaste = (e: React.ClipboardEvent) => {
