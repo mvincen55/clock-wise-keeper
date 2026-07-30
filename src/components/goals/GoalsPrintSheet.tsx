@@ -44,7 +44,7 @@ function Bar({ fraction }: { fraction: number }) {
   );
 }
 
-function MemberBlock({ row }: { row: GoalsReportRow }) {
+function MemberBlock({ row, month }: { row: GoalsReportRow; month: string }) {
   const { name, goal, tasks, latestUpdate } = row;
   const done = tasks.filter(t => t.done).length;
   const total = tasks.length;
@@ -115,7 +115,7 @@ function MemberBlock({ row }: { row: GoalsReportRow }) {
           </div>
         </>
       ) : (
-        <p className="goal-note-empty">Nothing set for {monthLabel(row.goal?.month ?? '')}.</p>
+        <p className="goal-note-empty">Nothing set for {monthLabel(month)}.</p>
       )}
     </section>
   );
@@ -161,7 +161,7 @@ export default function GoalsPrintSheet({ month, rows, branding, preparedBy }: P
 
       <div className="goal-body">
         {rows.map(r => (
-          <MemberBlock key={r.name + (r.goal?.id ?? '')} row={r} />
+          <MemberBlock key={r.name + (r.goal?.id ?? '')} row={r} month={month} />
         ))}
         {rows.length === 0 && <p className="goal-note-empty">No team members to report on.</p>}
       </div>
