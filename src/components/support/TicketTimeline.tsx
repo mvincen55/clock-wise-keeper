@@ -1,4 +1,6 @@
-import { Check, Loader2 } from 'lucide-react';
+import { Check, ExternalLink, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+
 
 /** Eastern Time, to the minute — the house convention everywhere in the app. */
 function stamp(iso: string) {
