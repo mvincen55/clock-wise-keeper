@@ -34,9 +34,10 @@ type Row = Record<string, unknown>;
 
 function line(r: Row, who: string): string {
   const parts = [
-    `[${r.id}] ${who} · ${KIND_LABELS[String(r.kind)] ?? r.kind} · ${r.period_start} → ${r.period_end} · status ${r.status}`,
+    `[rec:${r.id}] ${who} · ${KIND_LABELS[String(r.kind)] ?? r.kind} · ${r.period_start} → ${r.period_end} · status ${r.status}`,
     `  summary: ${r.summary ?? "—"}`,
   ];
+
   if (r.member_reason) parts.push(`  member said: ${r.member_reason}`);
   if (r.manager_note) parts.push(`  reviewer note: ${r.manager_note}`);
   if (r.escalated_at) parts.push(`  escalated: ${String(r.escalated_at).slice(0, 10)}`);
@@ -51,12 +52,18 @@ WHAT YOU DO:
 - Separate "worth a look" from "this is normal". Most records are ordinary life — school, traffic, illness. Say so when that is what the data shows.
 - Flag genuine concerns plainly: repeated same-kind records for one person in a short window, a stalled review, a pattern the office rules would want addressed.
 
+CITATIONS — HARD RULE:
+- Every factual claim must end with one or more citation tokens in this exact form: [rec:<the record id exactly as given>]
+- Only ever cite ids that appear in the RECORDS block below. NEVER invent an id, a date, a name, a quote, or a record. If it is not in the RECORDS block, it does not exist.
+- When you quote a person, quote the exact words from that record's "member said" or "reviewer note" line, and cite it.
+- If you cannot support a statement with a real record id, do not make the statement.
+
 HOW YOU ANSWER:
-- Cite receipts: names, dates, counts, and the record period. If you cannot point at a row, do not say it.
 - Never rank people against each other, never score, never characterize anyone's character. Describe behavior and dates only.
 - Never recommend discipline or consequences. You may suggest a conversation, a schedule check, or a policy clarification.
 - Short. Markdown. Lead with the one thing that actually matters; skip padding.
 - If nothing in the range needs attention, say exactly that in one or two lines.`;
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -198,10 +205,46 @@ Deno.serve(async (req) => {
     }
 
     const data = await res.json();
-    const answer = data?.choices?.[0]?.message?.content?.trim() ||
+    let answer = data?.choices?.[0]?.message?.content?.trim() ||
       "Nothing stood out in this range.";
 
-    return json({ answer, record_count: rows.length });
+    // Anti-hallucination: any cited id that is not a real row we handed the
+    // model gets stripped out. The AI never gets to invent an entry.
+    const realIds = new Set(rows.map((r: Row) => String(r.id)));
+    const cited = new Set<string>();
+    let dropped = 0;
+    answer = answer.replace(/\[rec:\s*([0-9a-fA-F-]{6,})\s*\]/g, (m: string, id: string) => {
+      if (realIds.has(id)) {
+        cited.add(id);
+        return `[rec:${id}]`;
+      }
+      dropped++;
+      return "";
+    });
+    if (dropped > 0) {
+      console.warn("reports-analyst dropped fabricated citations", dropped);
+      answer +=
+        "\n\n_Some citations pointed at records that do not exist and were removed._";
+    }
+
+    const citations = rows
+      .filter((r: Row) => cited.has(String(r.id)))
+      .map((r: Row) => ({
+        id: String(r.id),
+        who: nameByUser.get(String(r.subject_user_id ?? "")) ?? "Team member",
+        kind: String(r.kind),
+        kind_label: KIND_LABELS[String(r.kind)] ?? String(r.kind),
+        period_start: r.period_start,
+        period_end: r.period_end,
+        status: r.status,
+        summary: r.summary ?? "",
+        member_reason: r.member_reason ?? null,
+        manager_note: r.manager_note ?? null,
+        closed_at: r.closed_at ?? null,
+      }));
+
+    return json({ answer, citations, record_count: rows.length });
+
   } catch (e) {
     console.error("reports-analyst failed", e);
     return json({ error: "The analyst could not read the records just now." }, 500);
