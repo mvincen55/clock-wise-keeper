@@ -232,13 +232,18 @@ async function scheduleHooks(db: Client, orgId: string, today: string) {
   }
 
   if (hooks.length === 0) return 0;
-  // The unique partial index keeps repeats out; ignore the conflicts.
-  const { error } = await db.from("reminder_hooks").upsert(hooks, {
-    onConflict: "user_id,kind,ref_id,fire_at",
-    ignoreDuplicates: true,
-  });
+  // Don't re-schedule anything already waiting to fire.
+  const { data: pending } = await db
+    .from("reminder_hooks")
+    .select("user_id, kind, ref_id")
+    .eq("org_id", orgId)
+    .eq("status", "pending");
+  const seen = new Set((pending ?? []).map(h => `${h.user_id}|${h.kind}|${h.ref_id}`));
+  const fresh = hooks.filter(h => !seen.has(`${h.user_id}|${h.kind}|${h.ref_id}`));
+  if (fresh.length === 0) return 0;
+  const { error } = await db.from("reminder_hooks").insert(fresh);
   if (error) console.warn("hook scheduling skipped:", error.message);
-  return hooks.length;
+  return fresh.length;
 }
 
 /** 1b. Fire whatever is due, one per person per day. */
@@ -405,10 +410,10 @@ async function suggestSprints(db: Client, apiKey: string | undefined, orgId: str
   // Receipts: the last 30 days of deposits and the last few closed sprints.
   const { data: deposits } = await db
     .from("deposit_logs")
-    .select("log_date, production_total, disruption_count")
+    .select("deposit_date, production_cents, hygiene_cancellations, hygiene_no_shows, doctor_cancellations, doctor_no_shows")
     .eq("org_id", orgId)
-    .gte("log_date", addDays(today, -30))
-    .order("log_date", { ascending: false })
+    .gte("deposit_date", addDays(today, -30))
+    .order("deposit_date", { ascending: false })
     .limit(30);
   const { data: past } = await db
     .from("team_goals")
@@ -419,8 +424,14 @@ async function suggestSprints(db: Client, apiKey: string | undefined, orgId: str
     .limit(3);
 
   const facts = [
-    `Recent daily logs (date, production, disruptions): ${(deposits ?? [])
-      .map(d => `${d.log_date}: ${d.production_total ?? "n/a"}, ${d.disruption_count ?? 0}`)
+    `Recent daily logs (date, production in dollars, cancellations + no-shows): ${(deposits ?? [])
+      .map(d => {
+        const prod = d.production_cents == null ? "n/a" : `$${Math.round(Number(d.production_cents) / 100)}`;
+        const disruptions =
+          Number(d.hygiene_cancellations ?? 0) + Number(d.hygiene_no_shows ?? 0) +
+          Number(d.doctor_cancellations ?? 0) + Number(d.doctor_no_shows ?? 0);
+        return `${d.deposit_date}: ${prod}, ${disruptions}`;
+      })
       .join("; ") || "none recorded"}`,
     `Past sprints: ${(past ?? [])
       .map(p => `"${p.title}" ${p.progress}/${p.target_count} ${p.status}`)
