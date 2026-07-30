@@ -455,7 +455,7 @@ async function suggestSprints(db: Client, apiKey: string | undefined, orgId: str
         .select("id")
         .eq("user_id", a.user_id as string)
         .eq("kind", "sprint_suggestion")
-        .eq("status", "open")
+        .in("status", ["new", "shown"])
         .limit(1);
       if ((open?.length ?? 0) > 0) continue;
       await db.from("office_nudges").insert({
