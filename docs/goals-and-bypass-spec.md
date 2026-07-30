@@ -15,10 +15,12 @@ OPERATIONAL NOTES (verified against code 2026-07-30):
   TargetProgress, GoalStatusBadge, GoalUpdateModal, GoalsPrintSheet), `useGoals`
   hook, `smart_target` in use, print sheet on BrandPrintStyle + portal pattern.
 - **The "old Goals page keeps showing" episode was NOT code reversion** — repo held
-  the new version throughout. Cause: serving (unpublished site / stale client).
-  Full diagnosis procedure: `docs/runbook.md` §11. Lovable snapshot churn remains a
-  real hazard ("Work in progress" commits): ONE chat thread per feature, never
-  Restore mid-sprint.
+  the new version throughout, and after Publishing, purpleenvelope.app serves the
+  current code (confirmed 2026-07-30). What still looked "old" post-publish was the
+  UNSENT Prompt 10 feature set (always-on timeline in empty states, polish
+  enforcement, meters before a plan exists). Publishing serves what exists; it
+  cannot ship a prompt. SEND PROMPT 10. Full serving-vs-code diagnosis procedure:
+  `docs/runbook.md` §11.
 
 Build order / status: Prompt 1 (Goals) — sent, landed · Prompt 3 (redesign) — sent,
 landed · Prompt 4 (brand pass) — sent, landed · Prompt 2 (bypass) — LANDED ·
@@ -28,7 +30,7 @@ exists) · Prompt 6 (visuals + meetings + library hookup) — partially landed
 Prompt 7 (edit/delete accountability) — pending · Prompt 8 (print fix + polish
 enforcement) — partially landed (print sheet exists; polish enforcement unverified) ·
 Prompt 9 (team-page goals + read-aloud + roleplay) — pending ·
-Prompt 10 (CONSOLIDATION + S+M gate) — final below; the gap-filler after Publish ·
+Prompt 10 (CONSOLIDATION + S+M gate) — SEND NEXT; the gap-filler after Publish ·
 Prompt 5 (SMART) — SUPERSEDED, do not send.
 
 ## Product decisions (the "why")
@@ -51,6 +53,8 @@ Prompt 5 (SMART) — SUPERSEDED, do not send.
    questions. Members must not learn the answers shape their AI plans — visible
    connection invites gaming (answering to minimize work). Goals ships the
    `work_style_profiles` table empty; Pathfinder reads it if present, never mentions it.
+   The same profile now also drives learning-style-adaptive training modules
+   (Prompt 12, `docs/training-library-spec.md`) under the identical stealth rule.
 6. **Meeting updates are AI-drafted, human-approved:** the draft assembles what the
    member actually completed (goal tasks + linked checklist items) since the last
    update plus the member's quick notes; the member edits before submitting.
@@ -274,7 +278,7 @@ stand as written.
 >
 > When finished: redeploy the updated training-builder and goal-assistant edge functions and confirm both are live.
 
-## Prompt 10 — CONSOLIDATION + Specific/Measurable hard gate (FINAL — the anti-revert reference)
+## Prompt 10 — CONSOLIDATION + Specific/Measurable hard gate (SEND NEXT — the anti-revert reference)
 
 Send this whenever /goals has drifted, and after any revert. Its feature list is
 the single source of truth for what the page must contain.
