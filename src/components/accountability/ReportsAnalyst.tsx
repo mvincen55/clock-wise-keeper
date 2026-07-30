@@ -38,11 +38,25 @@ export interface AnalystConcern {
   record_ids: string[];
 }
 
+export interface AnalystAuditIssue {
+  type: string;
+  claim: string;
+  problem: string;
+  severity: 'high' | 'low';
+}
+
+export interface AnalystAudit {
+  verdict: 'clean' | 'issues' | 'unavailable';
+  summary: string;
+  issues: AnalystAuditIssue[];
+}
+
 type Turn = {
   role: 'user' | 'assistant';
   content: string;
   citations?: AnalystCitation[];
   concerns?: AnalystConcern[];
+  audit?: AnalystAudit;
 };
 
 
