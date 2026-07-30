@@ -773,6 +773,7 @@ export type Database = {
           checklist_id: string
           created_at: string
           id: string
+          is_active: boolean
           org_id: string
           per_person: boolean
           sort_order: number
@@ -784,6 +785,7 @@ export type Database = {
           checklist_id: string
           created_at?: string
           id?: string
+          is_active?: boolean
           org_id: string
           per_person?: boolean
           sort_order?: number
@@ -795,6 +797,7 @@ export type Database = {
           checklist_id?: string
           created_at?: string
           id?: string
+          is_active?: boolean
           org_id?: string
           per_person?: boolean
           sort_order?: number
