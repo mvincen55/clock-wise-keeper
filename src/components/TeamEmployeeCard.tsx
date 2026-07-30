@@ -30,6 +30,9 @@ type Employee = {
   email: string | null;
   user_id: string | null;
   timezone: string;
+  /** Short code shown on reports and print sheets instead of the full name. */
+  tag?: string | null;
+  preferred_name?: string | null;
 };
 
 type WeekStats = { present: number; late: number; absent: number };
