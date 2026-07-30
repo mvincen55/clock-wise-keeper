@@ -338,7 +338,24 @@ export default function ReportsAnalyst({
                       citations={t.citations ?? []}
                       onOpen={setOpen}
                     />
+                    {(t.concerns?.length ?? 0) > 0 && (
+                      <div className="space-y-2 border-t pt-2">
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Flagged concerns ({t.concerns!.length}) — with confidence and both
+                          sides of the evidence
+                        </p>
+                        {t.concerns!.map((c, ci) => (
+                          <ConcernCard
+                            key={ci}
+                            concern={c}
+                            byId={new Map((t.citations ?? []).map(x => [x.id, x]))}
+                            onOpen={setOpen}
+                          />
+                        ))}
+                      </div>
+                    )}
                     {(t.citations?.length ?? 0) > 0 && (
+
                       <div className="space-y-1 border-t pt-2">
                         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                           Records used ({t.citations!.length})
