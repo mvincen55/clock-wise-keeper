@@ -58,16 +58,7 @@ export function useMomentum() {
       const today = getToday();
       const start = shiftDate(today, -WINDOW_DAYS);
 
-      const [
-        itemsRes,
-        completionsRes,
-        attendanceRes,
-        meetingsRes,
-        updatesRes,
-        goalsRes,
-        ptoRes,
-        closuresRes,
-      ] = await Promise.all([
+      const [itemsRes, completionsRes, attendanceRes, meetingsRes] = await Promise.all([
           supabase
             .from('checklist_items')
             .select('id, per_person, cadence, is_active')
@@ -94,6 +85,9 @@ export function useMomentum() {
             .eq('category', 'team_meeting')
             .gte('event_date', start)
             .lte('event_date', today),
+      ]);
+
+      const [updatesRes, goalsRes, ptoRes, closuresRes] = await Promise.all([
           supabase
             .from('goal_updates')
             .select('created_at')
