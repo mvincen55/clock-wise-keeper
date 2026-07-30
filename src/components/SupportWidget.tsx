@@ -1252,6 +1252,12 @@ export default function SupportWidget() {
                       </Select>
                     </div>
                   </div>
+                  <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <Clock className="h-3 w-3" />
+                    A person follows up {responseWindowLabel(severity, category)} — the agent
+                    answers right away.
+                  </p>
+
                   <div className="space-y-1">
                     <label className="text-[10px] font-medium text-muted-foreground">
                       Dates involved
