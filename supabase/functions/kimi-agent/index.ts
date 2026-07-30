@@ -32,6 +32,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { formatCodeNote, loadCodeNotes, type CodeNote } from "../_shared/procedure-notes.ts";
+import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1177,7 +1178,10 @@ Deno.serve(async (req) => {
 
     // ---- agent loop --------------------------------------------------------
     // deno-lint-ignore no-explicit-any
-    const convo: any[] = [{ role: "system", content: systemPrompt }, ...chat];
+    const convo: any[] = [
+      { role: "system", content: `${OFFICE_DOCTRINE}\n\n---\n\n${systemPrompt}` },
+      ...chat,
+    ];
     let reply = "";
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       const outOfTime = Date.now() - startedAt > SOFT_DEADLINE_MS;

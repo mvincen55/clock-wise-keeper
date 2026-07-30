@@ -16,6 +16,7 @@
 // task was scheduled a certain way based on it.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -55,6 +56,12 @@ function datesBetween(start: string, end: string): string[] {
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
 async function callModel(apiKey: string, messages: ChatMessage[], maxTokens: number) {
+  // Every Pathfinder call speaks with the office's one voice.
+  const withDoctrine: ChatMessage[] = messages.map((m, i) =>
+    i === 0 && m.role === "system"
+      ? { ...m, content: `${OFFICE_DOCTRINE}\n\n---\n\n${m.content}` }
+      : m,
+  );
   const response = await fetch(GATEWAY_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -62,7 +69,7 @@ async function callModel(apiKey: string, messages: ChatMessage[], maxTokens: num
       model: MODEL,
       reasoning_effort: "none",
       max_tokens: maxTokens,
-      messages,
+      messages: withDoctrine,
     }),
   });
   if (!response.ok) return null;

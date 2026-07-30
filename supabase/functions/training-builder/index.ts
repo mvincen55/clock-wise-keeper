@@ -12,6 +12,7 @@
 // "try it today" action.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -296,7 +297,7 @@ ${settingsBlock}`;
         model: MODEL,
         reasoning_effort: "none",
         messages: [
-          { role: "system", content: system },
+          { role: "system", content: `${OFFICE_DOCTRINE}\n\n---\n\n${system}` },
           { role: "user", content: userPrompt },
         ],
       }),
@@ -359,7 +360,7 @@ ${JSON.stringify({ title, summary, content }).slice(0, 40000)}`;
           model: MODEL,
           reasoning_effort: "none",
           messages: [
-            { role: "system", content: auditSystem },
+            { role: "system", content: `${OFFICE_DOCTRINE}\n\n---\n\n${auditSystem}` },
             { role: "user", content: auditPrompt },
           ],
         }),
