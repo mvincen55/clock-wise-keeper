@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { callPathfinder, useCreateGoal } from '@/hooks/useGoals';
 import SmartChips, { type SmartRead } from '@/components/goals/SmartChips';
 import RoleGoalIdeas from '@/components/goals/RoleGoalIdeas';
+import { evaluateSmartGate } from '@/lib/smart';
 
 /**
  * Set this month's goal. Pathfinder polishes the raw wording into one clear
@@ -49,8 +50,10 @@ export default function SetGoalCard({ month }: { month: string }) {
     }
   };
 
+  const gate = evaluateSmartGate({ title, target, smart });
+
   const save = async () => {
-    if (!title.trim()) return;
+    if (!gate.passes) return;
     try {
       await createGoal.mutateAsync({
         title: title.trim(),
@@ -133,16 +136,25 @@ export default function SetGoalCard({ month }: { month: string }) {
           onPickTarget={t => setTarget(t)}
         />
 
-        {smart && <SmartChips smart={smart} />}
+        {smart && (
+          <SmartChips
+            smart={smart}
+            hintFor={gate.specificOk ? (gate.measurableOk ? null : 'measurable') : 'specific'}
+            hint={gate.hint}
+          />
+        )}
 
         <div className="space-y-1.5">
-          <Label htmlFor="goal-target">How you'll measure it (optional)</Label>
+          <Label htmlFor="goal-target">How you'll measure it</Label>
           <Input
             id="goal-target"
             value={target}
             onChange={e => setTarget(e.target.value)}
             placeholder="e.g. 4 feedback asks"
           />
+          {!smart && gate.hint && (
+            <p className="text-xs text-muted-foreground">{gate.hint}</p>
+          )}
         </div>
 
         <div className="space-y-1.5">
@@ -164,7 +176,7 @@ export default function SetGoalCard({ month }: { month: string }) {
 
         <Button
           onClick={save}
-          disabled={!title.trim() || createGoal.isPending || !createGoal.isReady || polishing}
+          disabled={!gate.passes || createGoal.isPending || !createGoal.isReady || polishing}
         >
           {createGoal.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Set this month's goal
