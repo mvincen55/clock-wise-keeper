@@ -161,11 +161,16 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
    * One file for the whole filtered set — every closed record in the selected
    * range and kind, not a download per card.
    */
-  const exportCsv = () => {
+  const startPreview = (format: 'csv' | 'xlsx') => {
     if (closed.length === 0) {
       toast.error('Nothing to export in this range.');
       return;
     }
+    setPendingFormat(format);
+    setPreviewOpen(true);
+  };
+
+  const doExportCsv = () => {
     const cell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const rows = buildRows().map(row => row.map(cell).join(','));
     // BOM so Excel opens accented names correctly.
@@ -175,11 +180,7 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
     download(blob, `${baseName}.csv`);
   };
 
-  const exportXlsx = async () => {
-    if (closed.length === 0) {
-      toast.error('Nothing to export in this range.');
-      return;
-    }
+  const doExportXlsx = async () => {
     const XLSX = await import('xlsx');
     const data = [EXPORT_HEADER, ...buildRows().map(row => row.map(v => String(v ?? '')))];
     const sheet = XLSX.utils.aoa_to_sheet(data);
@@ -196,6 +197,14 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
       `${baseName}.xlsx`,
     );
   };
+
+  const confirmDownload = () => {
+    setPreviewOpen(false);
+    if (pendingFormat === 'csv') doExportCsv();
+    else if (pendingFormat === 'xlsx') doExportXlsx();
+    setPendingFormat(null);
+  };
+
 
 
 
