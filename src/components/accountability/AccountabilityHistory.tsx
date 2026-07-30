@@ -37,6 +37,9 @@ function RecordRow({ r, who }: { r: AccountabilityReport; who?: string }) {
           {r.manager_signed_at ? ` on ${formatDate(r.manager_signed_at.slice(0, 10))}` : ''}
         </p>
       )}
+      <div className="pt-2">
+        <AccountabilityAuditTimeline report={r} />
+      </div>
     </div>
   );
 }
