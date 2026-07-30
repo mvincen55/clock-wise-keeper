@@ -77,6 +77,8 @@ export default function Settings() {
 
       <PrivacyTermsCard />
 
+      {isManager && <EscalationPoliciesCard />}
+
       {/* Payroll Settings (manager only) */}
       {isManager && (
       <Card className="card-elevated">
