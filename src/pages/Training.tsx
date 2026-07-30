@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { getToday } from '@/lib/time-utils';
 import {
   useAttemptSummaries,
+  useDraftModules,
   useTrainingAssignments,
   useTrainingModules,
   type TrainingModule,
@@ -19,6 +20,7 @@ import {
 import ModulePlayer from '@/components/training/ModulePlayer';
 import AssignModuleDialog, { type Assignee } from '@/components/training/AssignModuleDialog';
 import BuildModuleDialog from '@/components/training/BuildModuleDialog';
+import ModuleReviewQueue from '@/components/training/ModuleReviewQueue';
 
 /** Active team members, used for the assignment picker and creator names. */
 function useTeamRoster() {
