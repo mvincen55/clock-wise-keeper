@@ -316,13 +316,19 @@ export default function SupportWidget() {
                   <div className="rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
                     {b.content}
                   </div>
-                  {b.previewUrl && (
-                    <img
-                      src={b.previewUrl}
-                      alt="Screenshot attached to this problem report"
-                      className="ml-auto max-h-40 rounded-md border"
-                    />
+                  {!!b.previewUrls?.length && (
+                    <div className="flex flex-wrap justify-end gap-1">
+                      {b.previewUrls.map(u => (
+                        <img
+                          key={u}
+                          src={u}
+                          alt="Screenshot attached to this problem report"
+                          className="max-h-28 rounded-md border"
+                        />
+                      ))}
+                    </div>
                   )}
+
                 </div>
               ) : (
                 <div key={b.id} className="max-w-[92%] space-y-1">
