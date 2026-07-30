@@ -35,6 +35,8 @@ import { downloadSupportPdf } from '@/lib/support-pdf';
 import { slaFor, responseWindowLabel } from '@/lib/support-sla';
 import { useTick } from '@/hooks/useTick';
 import { filesFromDrop } from '@/lib/drop-files';
+import { SupportAttachmentGallery } from '@/components/SupportAttachmentGallery';
+
 import TicketTimeline, { stageFromTicket, type TicketStageTimes } from '@/components/support/TicketTimeline';
 import { redactScreenshot } from '@/lib/redact-image';
 import type { RedactionCategories } from '@/lib/redact-image';
@@ -358,6 +360,31 @@ export default function SupportWidget() {
       }
     },
     [redactOne, readPdf],
+  );
+
+  /** Swap one attachment for a different file, keeping its spot in the list. */
+  const replaceFile = useCallback(
+    (key: string, file: File) => {
+      if (file.size > MAX_IMAGE_BYTES) {
+        toast.error('That file is over 8MB — try a smaller one.');
+        return;
+      }
+      const isImage = file.type.startsWith('image/');
+      const isPdf = file.type === 'application/pdf';
+      const fresh: Attachment = {
+        key: crypto.randomUUID(),
+        original: file,
+        redacted: null,
+        masked: 0,
+        working: isImage || isPdf,
+        text: '',
+        rawText: '',
+      };
+      setFiles(prev => prev.map(a => (a.key === key ? fresh : a)));
+      if (isPdf) void readPdf(fresh.key, file);
+      else if (isImage) void redactOne(fresh.key, file);
+    },
+    [readPdf, redactOne],
   );
 
 
@@ -1115,72 +1142,23 @@ export default function SupportWidget() {
             <div className="space-y-2 border-t p-2">
               {files.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-[10px] text-muted-foreground">
-                    {files.length} file{files.length === 1 ? '' : 's'} attached — they go over as
-                    one report package.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {files.map(a => {
-                      const shown = redactOn
-                        ? (a.manual ?? a.redacted ?? a.original)
-                        : a.original;
-                      return (
-                        <div
-                          key={a.key}
-                          className={`relative h-16 w-16 overflow-hidden rounded border bg-muted ${
-                            a.uploadError ? 'border-destructive' : ''
-                          }`}
-                          title={a.uploadError ?? a.original.name}
-                        >
-                          {shown.type.startsWith('image/') ? (
-                            <img
-                              src={URL.createObjectURL(shown)}
-                              alt={`Attachment preview: ${a.original.name}`}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <span className="flex h-full w-full items-center justify-center px-1 text-center text-[9px] leading-tight text-muted-foreground">
-                              {a.original.name}
-                            </span>
-                          )}
-                          {a.working && (
-                            <span className="absolute inset-0 flex items-center justify-center bg-background/70">
-                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                            </span>
-                          )}
-                          {a.uploadedPath && !a.working && (
-                            <span className="absolute bottom-0 left-0 rounded-tr bg-background/90 p-0.5">
-                              <CheckCircle2 className="h-3 w-3 text-primary" />
-                            </span>
-                          )}
-                          {a.uploadError && !a.working && (
-                            <span className="absolute bottom-0 left-0 rounded-tr bg-background/90 p-0.5">
-                              <AlertTriangle className="h-3 w-3 text-destructive" />
-                            </span>
-                          )}
-                          {a.original.type.startsWith('image/') && !a.working && !a.uploadedPath && (
-                            <button
-                              type="button"
-                              onClick={() => setEditingKey(a.key)}
-                              aria-label={`Draw masks on ${a.original.name}`}
-                              title="Cover something yourself"
-                              className="absolute bottom-0 right-0 rounded-tl bg-background/90 p-0.5"
-                            >
-                              <PenLine className="h-3 w-3 text-muted-foreground" />
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setFiles(prev => prev.filter(x => x.key !== a.key))}
-                            aria-label={`Remove ${a.original.name}`}
-                            className="absolute right-0 top-0 rounded-bl bg-background/90 p-0.5"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <SupportAttachmentGallery
+                    maxFiles={MAX_FILES}
+                    items={files.map(a => ({
+                      key: a.key,
+                      original: a.original,
+                      shown: redactOn ? (a.manual ?? a.redacted ?? a.original) : a.original,
+                      working: a.working,
+                      uploadedPath: a.uploadedPath,
+                      uploadError: a.uploadError,
+                    }))}
+                    onRemove={key => setFiles(prev => prev.filter(x => x.key !== key))}
+                    onRemoveAll={() => setFiles([])}
+                    onAdd={f => addFiles(f)}
+                    onReplace={replaceFile}
+                    onEditMasks={key => setEditingKey(key)}
+                  />
+
 
                   <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5">
                     <EyeOff className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
