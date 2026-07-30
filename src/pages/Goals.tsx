@@ -18,6 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import GoalUpdateModal from '@/components/goals/GoalUpdateModal';
 import GoalProgress from '@/components/goals/GoalProgress';
+import TargetProgress from '@/components/goals/TargetProgress';
 import GoalStatusBadge from '@/components/goals/GoalStatusBadge';
 import MyGoalCard from '@/components/goals/MyGoalCard';
 import SetGoalCard from '@/components/goals/SetGoalCard';
@@ -124,13 +125,15 @@ export default function Goals() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="break-words font-medium">{goal.title}</p>
-                {goal.smart_target && (
-                  <p className="text-xs text-muted-foreground">Target: {goal.smart_target}</p>
-                )}
                 <GoalProgress
                   done={t.filter(x => x.done).length}
                   total={t.length}
                   monthElapsed={monthElapsedFraction(goal.month)}
+                />
+                <TargetProgress
+                  target={goal.smart_target}
+                  done={t.filter(x => x.done).length}
+                  total={t.length}
                 />
                 {u ? (
                   <p className="whitespace-pre-wrap text-sm">{u.content}</p>
