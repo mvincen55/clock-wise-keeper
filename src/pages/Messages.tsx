@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import AppLayout from '@/components/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -86,7 +85,7 @@ export default function Messages() {
   };
 
   return (
-    <AppLayout>
+    <>
       <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-6xl flex-col px-3 py-4 md:px-6">
         <div className="mb-3 flex items-center justify-between gap-2">
           <div>
@@ -157,6 +156,6 @@ export default function Messages() {
 
       <NewConversationDialog open={newOpen} onOpenChange={setNewOpen} onCreated={select} />
       <NewAnnouncementDialog open={announceOpen} onOpenChange={setAnnounceOpen} onCreated={select} />
-    </AppLayout>
+    </>
   );
 }
