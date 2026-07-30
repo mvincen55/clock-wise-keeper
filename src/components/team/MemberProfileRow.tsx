@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Check, Loader2, Pencil, X } from 'lucide-react';
+import { Check, Gift, Loader2, Pencil, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   freeTag,
