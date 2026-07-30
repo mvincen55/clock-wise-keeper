@@ -104,3 +104,27 @@ export const REFERENCE_LABEL = 'chart or appt reference — no patient names';
 
 export const NOTE_MAX = 280;
 export const REFERENCE_MAX = 40;
+
+/**
+ * Plain-language status. Nothing here reads as a scoreboard entry — a note that
+ * was passed along says so, and stops there.
+ */
+export function statusCopy(status: string): string {
+  switch (status) {
+    case 'sent':
+      return 'Sent';
+    case 'seen':
+      return 'Opened';
+    case 'replied':
+      return 'Replied';
+    case 'handled':
+      return 'Handled';
+    case 'on_doctors_list':
+      return 'On the doctor’s list';
+    case 'sent_to_manager':
+      return 'Passed to the manager';
+    default:
+      return 'Sent';
+  }
+}
+
