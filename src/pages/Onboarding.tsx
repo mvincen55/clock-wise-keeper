@@ -5,16 +5,21 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Check, Loader2, PenLine, Sparkles } from 'lucide-react';
+import { Cake, Check, Loader2, PenLine, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import PrivacyTermsBody from '@/components/onboarding/PrivacyTermsBody';
+import RankQuestion from '@/components/onboarding/RankQuestion';
 import SetGoalCard from '@/components/goals/SetGoalCard';
 import { PRIVACY_TERMS_ACKNOWLEDGMENT } from '@/lib/privacy-terms';
-import { WORK_STYLE_QUESTIONS } from '@/lib/work-style-questions';
+import {
+  FAVORITE_QUESTIONS,
+  rankingToAnswer,
+  WORK_STYLE_QUESTIONS,
+} from '@/lib/work-style-questions';
+
 import { currentMonth, useGoalsMonth } from '@/hooks/useGoals';
 import {
   freeTag,
