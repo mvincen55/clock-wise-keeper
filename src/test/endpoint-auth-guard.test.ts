@@ -36,6 +36,7 @@ const USER_ONLY = [
   { name: 'confirm-import', body: { import_id: '00000000-0000-0000-0000-000000000000' } },
   { name: 'ask-docs', body: { question: 'probe' } },
   { name: 'assistant-auditor', body: {} },
+  { name: 'training-roleplay', body: { mode: 'start', module_id: '00000000-0000-0000-0000-000000000000' } },
 ];
 
 /**

@@ -54,12 +54,20 @@ export type ModuleSection = {
   visuals?: ModuleVisual[];
 };
 
+/** A conversational assessment: who the trainee talks to, and how it's judged. */
+export type ModuleRoleplay = {
+  persona: string;
+  scenario: string;
+  rubric: string[];
+};
+
 /** The one content shape every module follows. */
 export type ModuleContent = {
   outcome: string;
   sections: ModuleSection[];
   recap: string;
   quiz: { questions: QuizQuestion[] } | null;
+  roleplay: ModuleRoleplay | null;
 };
 
 export type TrainingModule = {
@@ -91,6 +99,8 @@ export type TrainingAssignment = {
   created_at: string;
 };
 
+export type AttemptType = 'quiz' | 'roleplay';
+
 export type AttemptSummary = {
   id: string;
   org_id: string;
@@ -98,6 +108,7 @@ export type AttemptSummary = {
   user_id: string;
   score: number;
   passed: boolean;
+  type?: AttemptType;
   completed_at: string;
 };
 
@@ -115,6 +126,14 @@ export function readContent(raw: unknown): ModuleContent {
     quiz:
       c.quiz && Array.isArray(c.quiz.questions) && c.quiz.questions.length > 0
         ? { questions: c.quiz.questions }
+        : null,
+    roleplay:
+      c.roleplay && typeof c.roleplay.persona === 'string' && c.roleplay.persona.trim()
+        ? {
+            persona: c.roleplay.persona,
+            scenario: typeof c.roleplay.scenario === 'string' ? c.roleplay.scenario : '',
+            rubric: Array.isArray(c.roleplay.rubric) ? c.roleplay.rubric.filter(r => typeof r === 'string') : [],
+          }
         : null,
   };
 }
@@ -293,7 +312,10 @@ export function useRecordAttempt() {
       moduleId: string;
       score: number;
       passed: boolean;
-      answers: number[];
+      /** Quiz answers, or the roleplay transcript + feedback. */
+      answers: unknown;
+      /** Which assessment this was. Admins see the type, never the answers. */
+      type?: AttemptType;
     }) => {
       if (!ctx || !user) throw new Error('Not ready');
       const { error } = await supabase.from('training_attempts').insert({
@@ -302,6 +324,7 @@ export function useRecordAttempt() {
         user_id: user.id,
         score: input.score,
         passed: input.passed,
+        type: input.type ?? 'quiz',
         answers: input.answers as never,
       });
       if (error) throw error;

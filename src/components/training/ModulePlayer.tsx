@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, CheckCircle2, Lightbulb, PenTool, RotateCcw, Target, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Lightbulb, MessageCircle, PenTool, RotateCcw, Target, XCircle } from 'lucide-react';
 import {
   PASS_MARK,
   useRecordAttempt,
@@ -12,6 +12,7 @@ import {
   type TrainingAssignment,
   type TrainingModule,
 } from '@/hooks/useTraining';
+import RoleplayChat from './RoleplayChat';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -29,7 +30,8 @@ type Props = {
 export default function ModulePlayer({ module, assignment, onBack }: Props) {
   const content = module.content;
   const questions = content.quiz?.questions ?? [];
-  const [phase, setPhase] = useState<'read' | 'quiz' | 'result'>('read');
+  const roleplay = content.roleplay;
+  const [phase, setPhase] = useState<'read' | 'quiz' | 'result' | 'roleplay'>('read');
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [graded, setGraded] = useState(false);
 
@@ -49,6 +51,13 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
     if (assignment && assignment.status !== 'completed') {
       await updateStatus.mutateAsync({ id: assignment.id, status: 'completed' });
     }
+  }
+
+  function startRoleplay() {
+    if (assignment && assignment.status === 'assigned') {
+      updateStatus.mutate({ id: assignment.id, status: 'in_progress' });
+    }
+    setPhase('roleplay');
   }
 
   async function finishReading() {
@@ -71,6 +80,7 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
       moduleId: module.id,
       score,
       passed,
+      type: 'quiz',
       answers: questions.map((_, i) => answers[i] ?? -1),
     });
     if (passed) {
@@ -178,10 +188,27 @@ export default function ModulePlayer({ module, assignment, onBack }: Props) {
             </>
           )}
 
-          <Button onClick={finishReading} className="w-full sm:w-auto">
-            {questions.length > 0 ? 'Start the quiz' : 'Mark as complete'}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {questions.length > 0 && <Button onClick={finishReading}>Take the quiz</Button>}
+            {roleplay && (
+              <Button variant={questions.length > 0 ? 'outline' : 'default'} onClick={startRoleplay}>
+                <MessageCircle className="mr-1.5 h-4 w-4" />
+                Practice the conversation
+              </Button>
+            )}
+            {questions.length === 0 && !roleplay && (
+              <Button onClick={finishReading}>Mark as complete</Button>
+            )}
+          </div>
         </div>
+      )}
+
+      {phase === 'roleplay' && (
+        <RoleplayChat
+          module={module}
+          onPassed={complete}
+          onExit={() => setPhase('read')}
+        />
       )}
 
       {(phase === 'quiz' || phase === 'result') && (

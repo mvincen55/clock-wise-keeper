@@ -57,3 +57,5 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = true
   [functions.training-reminders]
     verify_jwt = false
+  [functions.training-roleplay]
+    verify_jwt = true

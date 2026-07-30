@@ -5376,6 +5376,54 @@ export type Database = {
       }
     }
     Views: {
+      training_attempt_summary: {
+        Row: {
+          completed_at: string | null
+          id: string | null
+          module_id: string | null
+          org_id: string | null
+          passed: boolean | null
+          score: number | null
+          type: string | null
+          user_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          id?: string | null
+          module_id?: string | null
+          org_id?: string | null
+          passed?: boolean | null
+          score?: number | null
+          type?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          id?: string | null
+          module_id?: string | null
+          org_id?: string | null
+          passed?: boolean | null
+          score?: number | null
+          type?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_attempts_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "training_modules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_attempts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_audit_trail: {
         Row: {
           after_value: string | null
