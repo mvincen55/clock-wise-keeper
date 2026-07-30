@@ -4,9 +4,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, CheckCircle2, Lightbulb, RotateCcw, Target, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Lightbulb, MessagesSquare, RotateCcw, Target, XCircle } from 'lucide-react';
 import {
   PASS_MARK,
+  useMyRoleplayAttempts,
   useRecordAttempt,
   useUpdateAssignmentStatus,
   type TrainingAssignment,
@@ -16,6 +17,9 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useSpeech } from '@/hooks/useSpeech';
 import ReadAloudControls from './ReadAloudControls';
+import RoleplayChat from './RoleplayChat';
+import RoleplayRubricCard from './RoleplayRubricCard';
+
 
 
 type Props = {
