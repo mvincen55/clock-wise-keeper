@@ -295,5 +295,62 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
         )}
       </CardContent>
     </Card>
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Export preview</DialogTitle>
+            <DialogDescription>
+              Showing the first 3 of {closed.length} record{closed.length === 1 ? '' : 's'}.
+              Dates and times are displayed in Eastern Time.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-auto rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {EXPORT_HEADER.map(h => (
+                    <TableHead key={h} className="whitespace-nowrap text-xs">
+                      {h}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {buildRows()
+                  .slice(0, 3)
+                  .map((row, i) => (
+                    <TableRow key={i}>
+                      {row.map((cell, j) => (
+                        <TableCell key={j} className="max-w-[200px] truncate text-xs">
+                          {String(cell ?? '')}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreviewOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmDownload}>
+              {pendingFormat === 'csv' ? (
+                <>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download CSV
+                </>
+              ) : (
+                <>
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Download XLSX
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
   );
 }
+
