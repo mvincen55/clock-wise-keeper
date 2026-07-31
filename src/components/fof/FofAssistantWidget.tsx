@@ -228,7 +228,6 @@ export default function FofAssistantWidget({ context }: Props) {
                   : 'Ask me anything about this form, the payment schedule, or office policy. Wording preferences need a manager.'}
               </div>
 
-              </div>
             )}
             {messages.map((m, i) => (
               <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
