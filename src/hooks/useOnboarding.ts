@@ -104,7 +104,7 @@ export function useCompleteStep() {
           : null;
 
       const { error } = existing
-        ? await supabase.from('member_onboarding').update(merged).eq('id', existing.id)
+        ? await supabase.from('member_onboarding').update(merged as never).eq('id', existing.id)
         : await supabase.from('member_onboarding').insert(merged as never);
       if (error) throw error;
     },
@@ -183,7 +183,7 @@ export function useSaveWorkStyle() {
         employeePatch.favorites = cleaned;
       }
       if (Object.keys(employeePatch).length) {
-        await supabase.from('employees').update(employeePatch).eq('id', ctx.employee_id);
+        await supabase.from('employees').update(employeePatch as never).eq('id', ctx.employee_id);
       }
       await completeStep.mutateAsync('work_style');
     },
@@ -260,7 +260,7 @@ export function useSaveBasics() {
       if (input.team !== undefined) patch.team = input.team;
       if (input.tag !== undefined) patch.tag = input.tag.toUpperCase().trim() || null;
 
-      const { error } = await supabase.from('employees').update(patch).eq('id', id);
+      const { error } = await supabase.from('employees').update(patch as never).eq('id', id);
       if (error) {
         if (error.code === '23505' || /already retired/i.test(error.message)) {
           throw new Error('That tag is already taken by someone in this office — pick another.');
