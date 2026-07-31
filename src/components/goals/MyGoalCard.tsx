@@ -246,8 +246,38 @@ export default function MyGoalCard({
           </div>
         )}
 
+        {events.length > 0 && (
+          <div className="space-y-1 rounded-lg border border-border/60 bg-muted/10 p-3">
+            <p className="text-xs font-medium">Changes to this goal</p>
+            {events.map(ev => (
+              <p key={ev.id} className="text-xs text-muted-foreground">
+                {ev.type === 'archived'
+                  ? 'Set aside'
+                  : ev.type === 'replaced'
+                    ? `Replaced by “${ev.new_title}”`
+                    : 'Reworded'}{' '}
+                — {ev.reason}
+              </p>
+            ))}
+          </div>
+        )}
+
         <PathfinderChat goalId={goal.id} />
       </CardContent>
+
+      <GoalEditDialog
+        goal={goal}
+        hasUpdates={!!latestUpdate}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
+      <GoalArchiveDialog
+        goal={goal}
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+        onArchived={id => onArchived?.(id)}
+      />
     </Card>
   );
 }
+
