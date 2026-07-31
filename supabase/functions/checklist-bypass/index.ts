@@ -170,6 +170,9 @@ Deno.serve(async (req) => {
     }
 
     // 1. Re-verify gating items server-side — never trust the client count.
+    //    Mirrors src/hooks/useChecklistGating: a personal item only counts for
+    //    the person it belongs to, dated items only once their day has come,
+    //    and a dated item completes against its own day, not today.
     const audiences = isAdmin ? ["all", "manager"] : ["all"];
     const { data: lists } = await admin
       .from("checklists")
@@ -178,30 +181,37 @@ Deno.serve(async (req) => {
       .in("audience", audiences);
 
     const listIds = (lists ?? []).map((l) => l.id);
-    let gatingItemIds: string[] = [];
+    let gatingItems: { id: string; due_date: string | null }[] = [];
     if (listIds.length) {
       const { data: items } = await admin
         .from("checklist_items")
-        .select("id")
+        .select("id, owner_user_id, due_date")
         .eq("org_id", orgId)
         .in("checklist_id", listIds)
         .eq("cadence", "daily")
         .eq("is_active", true)
         .eq("per_person", true);
-      gatingItemIds = (items ?? []).map((i) => i.id);
+      gatingItems = (items ?? [])
+        .filter((i) =>
+          (!i.owner_user_id || i.owner_user_id === user.id) &&
+          (!i.due_date || (i.due_date as string) <= today)
+        )
+        .map((i) => ({ id: i.id as string, due_date: (i.due_date as string | null) ?? null }));
     }
 
-    let incompleteCount = gatingItemIds.length;
-    if (gatingItemIds.length) {
+    let incompleteCount = gatingItems.length;
+    if (gatingItems.length) {
       const { data: done } = await admin
         .from("checklist_completions")
-        .select("item_id")
-        .in("item_id", gatingItemIds)
-        .eq("period_key", today)
+        .select("item_id, period_key")
+        .in("item_id", gatingItems.map((i) => i.id))
         .eq("completed_by", user.id);
-      const doneIds = new Set((done ?? []).map((d) => d.item_id));
-      incompleteCount = gatingItemIds.filter((id) => !doneIds.has(id)).length;
+      const doneKeys = new Set((done ?? []).map((d) => `${d.item_id}:${d.period_key}`));
+      incompleteCount = gatingItems.filter(
+        (i) => !doneKeys.has(`${i.id}:${i.due_date ?? today}`),
+      ).length;
     }
+
 
     if (incompleteCount === 0) {
       return new Response(JSON.stringify({ recorded: false }), {
