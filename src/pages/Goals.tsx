@@ -247,6 +247,12 @@ export default function Goals() {
               <GoalsCsvImport />
             </>
           )}
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/settings/reminders">
+              <Bell className="mr-2 h-4 w-4" />
+              Reminder settings
+            </Link>
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => window.print()}>
             <Printer className="mr-2 h-4 w-4" />
             Print report
