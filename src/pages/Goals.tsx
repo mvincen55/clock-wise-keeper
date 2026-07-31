@@ -35,7 +35,9 @@ import {
   monthLabel,
   useActiveTeam,
   useCreateGoal,
+  useGoalEvents,
   useGoalsMonth,
+  useLinkReplacement,
   type Goal,
   type GoalTask,
   type GoalUpdate,
@@ -49,6 +51,8 @@ export default function Goals() {
   const { data: team } = useActiveTeam();
   const { data: branding } = useOrgBranding();
   const createGoal = useCreateGoal();
+  const { data: goalEvents } = useGoalEvents(month);
+  const linkReplacement = useLinkReplacement();
 
   const [meetingView, setMeetingView] = useState(false);
   const [privateOpen, setPrivateOpen] = useState(false);
@@ -56,6 +60,8 @@ export default function Goals() {
   const [privateTitle, setPrivateTitle] = useState('');
   const [privateDescription, setPrivateDescription] = useState('');
   const [updateGoal, setUpdateGoal] = useState<Goal | null>(null);
+  // When a goal is archived, the next goal set becomes its replacement.
+  const [pendingReplacement, setPendingReplacement] = useState<string | null>(null);
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
   const goals = data?.goals ?? [];
@@ -247,7 +253,16 @@ export default function Goals() {
         </div>
       </header>
 
-      {!myTeamGoal && <SetGoalCard month={month} />}
+      {!myTeamGoal && (
+        <SetGoalCard
+          month={month}
+          onCreated={title => {
+            if (!pendingReplacement) return;
+            linkReplacement.mutate({ eventId: pendingReplacement, newTitle: title });
+            setPendingReplacement(null);
+          }}
+        />
+      )}
 
       {myGoals.length > 0 && (
         <section className="space-y-4">
@@ -259,6 +274,8 @@ export default function Goals() {
               tasks={tasksFor(goal.id)}
               latestUpdate={latestUpdate(goal.id)}
               onShareUpdate={() => setUpdateGoal(goal)}
+              events={(goalEvents ?? []).filter(ev => ev.goal_id === goal.id)}
+              onArchived={setPendingReplacement}
             />
           ))}
         </section>

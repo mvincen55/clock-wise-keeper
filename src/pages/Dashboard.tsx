@@ -1,5 +1,6 @@
 import { useTodayEntry, PunchRow } from '@/hooks/useTimeEntries';
 import { useGuardedClockAction } from '@/hooks/useGuardedClockAction';
+import { useClocksIn } from '@/hooks/usePracticeSettings';
 import ChecklistBypassDialog from '@/components/ChecklistBypassDialog';
 import BypassReasonDialog from '@/components/BypassReasonDialog';
 import { useUnresolvedBypasses } from '@/hooks/useChecklistBypasses';
@@ -60,6 +61,8 @@ function getRunningMinutes(punches: PunchRow[]): number {
 export default function Dashboard() {
   const { data: todayEntry, isLoading } = useTodayEntry();
   const clockAction = useGuardedClockAction();
+  // Doctors are out of the clock flow unless the office turns it on.
+  const clocksIn = useClocksIn();
   const { data: unresolvedBypasses } = useUnresolvedBypasses();
   const [reasonPromptOpen, setReasonPromptOpen] = useState(false);
   const [reasonPrompted, setReasonPrompted] = useState(false);
@@ -181,6 +184,7 @@ export default function Dashboard() {
       </Card>
 
       {/* Clock display */}
+      {clocksIn && (
       <Card className="card-elevated overflow-hidden">
         <div className="bg-clock-bg text-clock-fg p-8 text-center">
           <p className="time-display text-5xl md:text-6xl font-bold">
@@ -213,7 +217,9 @@ export default function Dashboard() {
           </div>
         </CardContent>
       </Card>
+      )}
 
+      {clocksIn && (
       <Card className="card-elevated">
         <CardContent className="p-4 flex items-center justify-between">
           <div>
@@ -223,8 +229,9 @@ export default function Dashboard() {
           <Switch checked={autoClockEnabled} onCheckedChange={v => { setAutoClockEnabled(v); localStorage.setItem('timevault_auto_clock', String(v)); }} disabled={!zones?.length} />
         </CardContent>
       </Card>
+      )}
 
-      {autoClockEnabled && <LocationStatusPanel state={geoState} />}
+      {clocksIn && autoClockEnabled && <LocationStatusPanel state={geoState} />}
 
       <Card className="card-elevated">
         <CardHeader className="flex flex-row items-center justify-between">

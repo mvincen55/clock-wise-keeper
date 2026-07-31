@@ -15,6 +15,8 @@ import TargetProgress from './TargetProgress';
 import GoalStatusBadge from './GoalStatusBadge';
 import PathfinderChat from './PathfinderChat';
 import PathfinderPlanEditor, { type DraftTask } from './PathfinderPlanEditor';
+import GoalEditDialog from './GoalEditDialog';
+import GoalArchiveDialog from './GoalArchiveDialog';
 import {
   callPathfinder,
   monthElapsedFraction,
@@ -22,6 +24,7 @@ import {
   useSaveGoalTasks,
   useToggleGoalTask,
   type Goal,
+  type GoalEvent,
   type GoalTask,
   type GoalUpdate,
 } from '@/hooks/useGoals';
@@ -32,12 +35,19 @@ export default function MyGoalCard({
   tasks,
   latestUpdate,
   onShareUpdate,
+  events = [],
+  onArchived,
 }: {
   goal: Goal;
   tasks: GoalTask[];
   latestUpdate?: GoalUpdate;
   onShareUpdate: () => void;
+  /** Change history for this goal — edits and archives, never silent. */
+  events?: GoalEvent[];
+  onArchived?: (eventId: string) => void;
 }) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [draft, setDraft] = useState<DraftTask[] | null>(null);
   const [intro, setIntro] = useState<string>('');
   const [drafting, setDrafting] = useState(false);
@@ -101,6 +111,12 @@ export default function MyGoalCard({
               </Badge>
             )}
             {latestUpdate && <GoalStatusBadge status={latestUpdate.status} />}
+            <Button variant="ghost" size="sm" onClick={() => setEditOpen(true)}>
+              Edit
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setArchiveOpen(true)}>
+              Let it go
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -230,8 +246,38 @@ export default function MyGoalCard({
           </div>
         )}
 
+        {events.length > 0 && (
+          <div className="space-y-1 rounded-lg border border-border/60 bg-muted/10 p-3">
+            <p className="text-xs font-medium">Changes to this goal</p>
+            {events.map(ev => (
+              <p key={ev.id} className="text-xs text-muted-foreground">
+                {ev.type === 'archived'
+                  ? 'Set aside'
+                  : ev.type === 'replaced'
+                    ? `Replaced by “${ev.new_title}”`
+                    : 'Reworded'}{' '}
+                — {ev.reason}
+              </p>
+            ))}
+          </div>
+        )}
+
         <PathfinderChat goalId={goal.id} />
       </CardContent>
+
+      <GoalEditDialog
+        goal={goal}
+        hasUpdates={!!latestUpdate}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
+      <GoalArchiveDialog
+        goal={goal}
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+        onArchived={id => onArchived?.(id)}
+      />
     </Card>
   );
 }
+

@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { getToday } from '@/lib/time-utils';
 import { periodKeyFor } from '@/hooks/useChecklists';
+import { useClocksIn } from '@/hooks/usePracticeSettings';
 
 export type ChecklistGating = {
   /** Per-person daily items still open for this member today. */
@@ -21,16 +22,18 @@ export function useChecklistGating() {
   const { user } = useAuth();
   const { data: ctx } = useOrgContext();
   const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
+  // Doctors don't carry assigned checklists unless the office opts them in.
+  const clocksIn = useClocksIn();
   const today = getToday();
   const periodKey = periodKeyFor('daily', today);
 
   return useQuery({
-    queryKey: ['checklist-gating', ctx?.org_id, user?.id, periodKey],
+    queryKey: ['checklist-gating', ctx?.org_id, user?.id, periodKey, clocksIn],
     enabled: !!user && !!ctx,
     staleTime: 30_000,
     queryFn: async (): Promise<ChecklistGating> => {
       const empty: ChecklistGating = { incompleteCount: 0, incompleteTitles: [], openSharedCount: 0 };
-      if (!ctx || !user) return empty;
+      if (!ctx || !user || !clocksIn) return empty;
 
       const audiences = isAdmin ? ['all', 'manager'] : ['all'];
       const { data: lists } = await supabase

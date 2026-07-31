@@ -10,13 +10,21 @@ import { toast } from 'sonner';
 import { callPathfinder, useCreateGoal } from '@/hooks/useGoals';
 import SmartChips, { type SmartRead } from '@/components/goals/SmartChips';
 import RoleGoalIdeas from '@/components/goals/RoleGoalIdeas';
+import { evaluateGoalGate, flagsFromSmartText } from '@/lib/goal-gate';
 import NoPhiNote from '@/components/NoPhiNote';
 
 /**
  * Set this month's goal. Pathfinder polishes the raw wording into one clear
  * sentence, which the member can edit or restore to their own words.
  */
-export default function SetGoalCard({ month }: { month: string }) {
+export default function SetGoalCard({
+  month,
+  onCreated,
+}: {
+  month: string;
+  /** Fires with the new goal's title so a replaced goal can be linked to it. */
+  onCreated?: (title: string) => void;
+}) {
   const createGoal = useCreateGoal();
   const [title, setTitle] = useState('');
   const [original, setOriginal] = useState<string | null>(null);
@@ -50,8 +58,11 @@ export default function SetGoalCard({ month }: { month: string }) {
     }
   };
 
+  // S+M hard gate — the goal must be specific and measurable before it saves.
+  const gate = evaluateGoalGate({ title, target, smart: flagsFromSmartText(smart) });
+
   const save = async () => {
-    if (!title.trim()) return;
+    if (!gate.ok) return;
     try {
       await createGoal.mutateAsync({
         title: title.trim(),
@@ -66,6 +77,7 @@ export default function SetGoalCard({ month }: { month: string }) {
       setSmart(null);
       setDescription('');
       setIsPrivate(false);
+      onCreated?.(title.trim());
       toast.success('Goal set — good luck this month.');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not save your goal');
@@ -135,15 +147,21 @@ export default function SetGoalCard({ month }: { month: string }) {
         />
 
         {smart && <SmartChips smart={smart} />}
+        {gate.hints.specific && (
+          <p className="text-xs text-muted-foreground">S: {gate.hints.specific}</p>
+        )}
 
         <div className="space-y-1.5">
-          <Label htmlFor="goal-target">How you'll measure it (optional)</Label>
+          <Label htmlFor="goal-target">How you'll measure it</Label>
           <Input
             id="goal-target"
             value={target}
             onChange={e => setTarget(e.target.value)}
             placeholder="e.g. 4 feedback asks"
           />
+          {gate.hints.measurable && (
+            <p className="text-xs text-muted-foreground">M: {gate.hints.measurable}</p>
+          )}
         </div>
 
         <div className="space-y-1.5">
@@ -166,7 +184,7 @@ export default function SetGoalCard({ month }: { month: string }) {
 
         <Button
           onClick={save}
-          disabled={!title.trim() || createGoal.isPending || !createGoal.isReady || polishing}
+          disabled={!gate.ok || createGoal.isPending || !createGoal.isReady || polishing}
         >
           {createGoal.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Set this month's goal

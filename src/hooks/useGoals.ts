@@ -276,43 +276,205 @@ export function useAddGoalUpdate() {
  * checklist system under a per-person "My Goal Steps" list.
  */
 export function useAddTaskToChecklist() {
+  const { user } = useAuth();
   const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ title, dueDate }: { title: string; dueDate: string | null }) => {
-      if (!ctx) throw new Error('No office found for your account');
+      if (!ctx || !user) throw new Error('No office found for your account');
+      // These are personal items: the list and the item belong to this member,
+      // which is also what the checklist policies require of a non-admin.
       let listId: string | undefined;
       const { data: list } = await supabase
         .from('checklists')
         .select('id')
         .eq('org_id', ctx.org_id)
         .eq('name', 'My Goal Steps')
+        .eq('owner_user_id', user.id)
         .limit(1)
         .maybeSingle();
       if (list) listId = list.id;
       else {
         const { data: created, error } = await supabase
           .from('checklists')
-          .insert({ org_id: ctx.org_id, name: 'My Goal Steps', audience: 'all', sort_order: 900 })
+          .insert({
+            org_id: ctx.org_id,
+            name: 'My Goal Steps',
+            audience: 'all',
+            sort_order: 900,
+            owner_user_id: user.id,
+          })
           .select('id')
           .single();
         if (error) throw error;
         listId = created.id;
       }
-      const label = dueDate ? `${title} (due ${dueDate})` : title;
       const { error: itemError } = await supabase.from('checklist_items').insert({
         org_id: ctx.org_id,
         checklist_id: listId,
-        title: label,
+        title,
         cadence: 'daily',
         per_person: true,
         sort_order: 0,
+        owner_user_id: user.id,
+        due_date: dueDate,
       });
       if (itemError) throw itemError;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['checklists'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['checklists'] });
+      qc.invalidateQueries({ queryKey: ['checklist-gating'] });
+    },
   });
 }
+
+// ---- Goal edit / archive with accountability (never silently) ----
+
+export type GoalEvent = {
+  id: string;
+  org_id: string;
+  goal_id: string;
+  actor_id: string;
+  type: 'edited' | 'archived' | 'replaced';
+  reason: string;
+  old_title: string;
+  new_title: string | null;
+  created_at: string;
+};
+
+/** Change history for the goals of a month — powers "Changes since last meeting". */
+export function useGoalEvents(month: string) {
+  const { data: ctx } = useOrgContext();
+  return useQuery({
+    queryKey: ['goal-events', ctx?.org_id, month],
+    enabled: !!ctx,
+    queryFn: async (): Promise<GoalEvent[]> => {
+      const { data: monthGoals } = await supabase
+        .from('goals')
+        .select('id')
+        .eq('org_id', ctx!.org_id)
+        .eq('month', month);
+      const ids = (monthGoals ?? []).map(g => g.id);
+      if (!ids.length) return [];
+      const { data, error } = await supabase
+        .from('goal_events')
+        .select('*')
+        .in('goal_id', ids)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as GoalEvent[];
+    },
+  });
+}
+
+/**
+ * Edit my own goal. Once the goal has been shared (it has updates), the change
+ * needs a reason — and the reason is recorded, never silently applied.
+ */
+export function useEditGoal() {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      goal: Goal;
+      title: string;
+      description: string | null;
+      smartTarget: string | null;
+      reason: string | null;
+      requiresReason: boolean;
+    }) => {
+      if (!user || !ctx) throw new Error('Not ready');
+      const reason = input.reason?.trim() || '';
+      if (input.requiresReason && !reason) {
+        throw new Error('Please say what changed and why — this goal has already been shared.');
+      }
+      const { error } = await supabase
+        .from('goals')
+        .update({
+          title: input.title.trim(),
+          description: input.description?.trim() || null,
+          smart_target: input.smartTarget?.trim() || null,
+        })
+        .eq('id', input.goal.id);
+      if (error) throw error;
+
+      if (input.title.trim() !== input.goal.title || reason) {
+        const { error: evError } = await supabase.from('goal_events').insert({
+          org_id: ctx.org_id,
+          goal_id: input.goal.id,
+          actor_id: user.id,
+          type: 'edited',
+          reason: reason || 'no reason needed — not shared yet',
+          old_title: input.goal.title,
+          new_title: input.title.trim(),
+        });
+        if (evError) throw evError;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['goals'] });
+      qc.invalidateQueries({ queryKey: ['goal-events'] });
+    },
+  });
+}
+
+/** Archive (never delete) my own goal, with a reason on the record. */
+export function useArchiveGoal() {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ goal, reason }: { goal: Goal; reason: string }) => {
+      if (!user || !ctx) throw new Error('Not ready');
+      const clean = reason.trim();
+      if (!clean) throw new Error('A reason is required before archiving a goal.');
+      const { error } = await supabase
+        .from('goals')
+        .update({
+          status: 'archived',
+          archived_at: new Date().toISOString(),
+          archived_reason: clean,
+        })
+        .eq('id', goal.id);
+      if (error) throw error;
+      const { data: event, error: evError } = await supabase
+        .from('goal_events')
+        .insert({
+          org_id: ctx.org_id,
+          goal_id: goal.id,
+          actor_id: user.id,
+          type: 'archived',
+          reason: clean,
+          old_title: goal.title,
+        })
+        .select('id')
+        .single();
+      if (evError) throw evError;
+      return event.id as string;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['goals'] });
+      qc.invalidateQueries({ queryKey: ['goal-events'] });
+    },
+  });
+}
+
+/** Once the successor goal exists, close the loop: archived → replaced by …. */
+export function useLinkReplacement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, newTitle }: { eventId: string; newTitle: string }) => {
+      const { error } = await supabase
+        .from('goal_events')
+        .update({ type: 'replaced', new_title: newTitle })
+        .eq('id', eventId);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['goal-events'] }),
+  });
+}
+
 
 /** Pathfinder calls. */
 export async function callPathfinder(payload: {
