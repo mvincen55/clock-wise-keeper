@@ -259,24 +259,31 @@ export default function FofAssistantWidget({ context }: Props) {
           </div>
           )}
 
-          <div className="flex items-center gap-2 border-t p-2">
-            <Input
-              value={input}
-              autoComplete="off"
-              onFocus={() => setView('chat')}
-              placeholder={isManager ? 'Teach me, ask me, or have me build…' : 'Ask a question…'}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-            />
-            <Button size="icon" onClick={send} disabled={busy || input.trim() === ''}>
-              <Send className="h-4 w-4" />
-            </Button>
+          <div className="border-t p-2">
+            <div className="flex items-center gap-2">
+              <Input
+                value={input}
+                autoComplete="off"
+                onFocus={() => setView('chat')}
+                placeholder={isManager ? 'Teach me, ask me, or have me build…' : 'Ask a question…'}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+              />
+              <Button size="icon" onClick={send} disabled={busy || input.trim() === ''}>
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+            {/* Persistent, at the point of typing — the accepted PHI mitigation. */}
+            <p className="mt-1.5 px-0.5 text-[11px] text-muted-foreground">
+              Never include patient names — I only see the procedures, not the patient.
+            </p>
           </div>
+
         </div>
       ) : (
         <Button
