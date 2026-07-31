@@ -51,8 +51,11 @@ export default function SetGoalCard({ month }: { month: string }) {
     }
   };
 
+  // S+M hard gate — the goal must be specific and measurable before it saves.
+  const gate = evaluateGoalGate({ title, target, smart: flagsFromSmartText(smart) });
+
   const save = async () => {
-    if (!title.trim()) return;
+    if (!gate.ok) return;
     try {
       await createGoal.mutateAsync({
         title: title.trim(),
