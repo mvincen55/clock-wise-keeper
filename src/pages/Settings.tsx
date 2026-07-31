@@ -83,6 +83,12 @@ export default function Settings() {
 
       {isManager && <EscalationPoliciesCard />}
 
+      {/* Practice-wide settings (manager only) */}
+      {isManager && <PracticeSettingsCard />}
+
+      {/* FOF policy wording (manager only) */}
+      {isManager && <FofPolicySettingsCard />}
+
       {/* Payroll Settings (manager only) */}
       {isManager && <MessagingSettingsCard />}
 
