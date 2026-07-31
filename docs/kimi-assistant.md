@@ -130,5 +130,6 @@ paste it into the Lovable database view's SQL runner, or ask Lovable to run it.
   file sizes (64k chars/file, 10 files/commit), tool rounds (6), and a soft
   100s deadline so the function finalizes before the edge wall clock.
 
-The previous `fof-assistant` and `ask-docs` functions are left in place
-untouched as a rollback path; the UI no longer calls them.
+The previous `fof-assistant` function has been retired and deleted (nothing
+called it, and its prompt recited stale hardcoded office numbers). `ask-docs`
+is left in place and still used for corpus Q&A.

@@ -15,7 +15,7 @@
 //              publishing the production site stays a human click in
 //              Lovable, and the prompt tells the model to be honest there.
 //
-// HIPAA note: unchanged from fof-assistant/ask-docs — the AI must NEVER
+// HIPAA note: unchanged from ask-docs — the AI must NEVER
 // see a patient's identity. Chat is bounded and never stored; the only
 // writes are explicit, de-identified artifacts (memories, wording rules,
 // code commits) created under the caller's JWT so RLS enforces org and
@@ -1040,7 +1040,7 @@ Deno.serve(async (req) => {
 
     const training = mode === "fof" && isManager && body.trainingEnabled !== false;
 
-    // De-identified FOF context (same caps and derivation as fof-assistant).
+    // De-identified FOF context (de-identified: code-derived wording only).
     const visits = (Array.isArray(body.context?.visits) ? body.context!.visits! : [])
       .slice(0, MAX_VISITS)
       .map(

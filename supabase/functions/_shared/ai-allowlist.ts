@@ -55,10 +55,6 @@ export const AI_GATEWAY_ALLOWLIST: Record<string, GatewayEntry> = {
     handler: "scrub",
     reason: "Second-pass audit over another model's output.",
   },
-  "fof-assistant": {
-    handler: "scrub",
-    reason: "General office assistant over staff-authored prompts.",
-  },
   "kimi-agent": {
     handler: "scrub",
     reason: "General agent surface over staff-authored prompts.",
