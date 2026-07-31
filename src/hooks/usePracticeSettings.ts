@@ -6,7 +6,7 @@ export type PracticeSettings = {
   /** Doctors/owners are only in the clock + closeout flow if the office says so. */
   owners_clock_in: boolean;
   /** Office decides whether employees see the practice-vitals collections bar. */
-  collections_visibility: 'admin_only' | 'everyone';
+  collections_visibility: 'admin_only' | 'everyone' | string;
   /** Monthly collections target used to pace the vitals gauge. */
   monthly_collections_target_cents: number;
 };
