@@ -24,9 +24,10 @@
 // Secrets (Supabase edge function secrets):
 //   OPENROUTER_API_KEY  required — chat runs through OpenRouter
 //   OPENROUTER_MODEL    optional — defaults to moonshotai/kimi-k3
-//   GITHUB_TOKEN        optional — fine-grained PAT (Contents RW, Pull
+//   GITHUB_FINE_GRAINED_TOKEN  optional — fine-grained PAT (Contents RW, Pull
 //                       requests RW on the repo); without it the build
 //                       tools report "not configured" instead of failing
+//   GITHUB_TOKEN        optional — fallback secret name for the same token
 //   GITHUB_REPO         optional — owner/name, default mvincen55/clock-wise-keeper
 //   GITHUB_BRANCH       optional — Lovable-synced branch, default main
 
@@ -241,7 +242,7 @@ async function ghFetch(
 }
 
 const NOT_CONFIGURED =
-  "ERROR: GitHub is not configured. A manager must add the GITHUB_TOKEN secret (fine-grained PAT with Contents read/write and Pull requests read/write on the repo) in the backend secrets. Until then you can only read nothing and change nothing on GitHub — tell the user exactly that.";
+  "ERROR: GitHub is not configured. A manager must add the GITHUB_FINE_GRAINED_TOKEN secret (fine-grained PAT with Contents read/write and Pull requests read/write on the repo) in the backend secrets. Until then you can only read nothing and change nothing on GitHub — tell the user exactly that.";
 
 /** Repo-relative path guard — no traversal, no absolute paths, no .git. */
 function safeRepoPath(raw: unknown): string | null {
@@ -707,7 +708,7 @@ function buildSystemPrompt(ctx: PromptContext): string {
       );
     } else {
       parts.push(
-        "BUILD TOOLS NOT CONFIGURED: GitHub access is not set up (missing GITHUB_TOKEN secret), so you cannot read or change the app's code right now. If asked to build, explain a manager must add the GITHUB_TOKEN secret per docs/kimi-assistant.md, and offer a ready-to-paste 'Prompt for Lovable:' as the alternative."
+        "BUILD TOOLS NOT CONFIGURED: GitHub access is not set up (missing GITHUB_FINE_GRAINED_TOKEN secret), so you cannot read or change the app's code right now. If asked to build, explain a manager must add the GITHUB_FINE_GRAINED_TOKEN secret per docs/kimi-assistant.md, and offer a ready-to-paste 'Prompt for Lovable:' as the alternative."
       );
     }
     parts.push(
