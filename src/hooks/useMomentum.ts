@@ -164,7 +164,7 @@ export function useMomentum() {
       let sharedBeforeMeeting = 0;
       for (const m of meetingsRes.data ?? []) {
         const cutoff = new Date(
-          `${m.event_date}T${(m.start_time ?? '09:00:00').slice(0, 8)}-05:00`
+          easternWallToUtcIso(m.event_date, m.start_time?.slice(0, 5) ?? '09:00')
         ).getTime();
         const windowStart = cutoff - 7 * 24 * 3600 * 1000;
         if (updates.some((u) => u > windowStart && u <= cutoff)) sharedBeforeMeeting++;

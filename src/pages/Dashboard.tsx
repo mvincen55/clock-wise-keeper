@@ -4,7 +4,7 @@ import { useClocksIn } from '@/hooks/usePracticeSettings';
 import ChecklistBypassDialog from '@/components/ChecklistBypassDialog';
 import BypassReasonDialog from '@/components/BypassReasonDialog';
 import { useUnresolvedBypasses } from '@/hooks/useChecklistBypasses';
-import { minutesToHHMM, formatTime, formatDate } from '@/lib/time-utils';
+import { minutesToHHMM, formatTime, formatDate, getToday } from '@/lib/time-utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -75,9 +75,7 @@ export default function Dashboard() {
   const { data: zones } = useWorkZones();
   const geoState = useGeoTracking(autoClockEnabled && (zones?.length ?? 0) > 0);
 
-  const fourteenDaysAgo = new Date();
-  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-  const missingDays = useMissingShifts(fourteenDaysAgo.toISOString().split('T')[0]);
+  const missingDays = useMissingShifts(getToday(-14));
 
   const ptoState = useCurrentPtoBalance();
   const { data: ctx } = useOrgContext();

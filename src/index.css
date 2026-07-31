@@ -1890,7 +1890,7 @@
   }
 
   .dep-checks th {
-    border-bottom: 1.25pt solid #53406e;
+    border-bottom: 1.25pt solid var(--dep-navy);
   }
 
   .dep-checks td {
