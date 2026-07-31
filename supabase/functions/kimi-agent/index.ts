@@ -755,7 +755,7 @@ function buildSystemPrompt(ctx: PromptContext): string {
 
   // --- mode specifics ------------------------------------------------------
   if (ctx.mode === "fof") {
-    parts.push(POLICY_SUMMARY);
+    parts.push(ctx.policySummary ?? BASE_POLICY_SUMMARY);
     if (ctx.guidance.length > 0) {
       parts.push(
         `STANDING WORDING RULES already in effect (from past training): ${ctx.guidance.map((g, i) => `(${i + 1}) ${g}`).join(" ")}`
