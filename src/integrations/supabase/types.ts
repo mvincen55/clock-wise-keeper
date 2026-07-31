@@ -3486,8 +3486,10 @@ export type Database = {
           created_at: string
           envelope_note: string
           id: string
+          membership_row_label: string
           office_copy_note: string
           org_id: string
+          outside_financing_label: string
           updated_at: string
         }
         Insert: {
@@ -3498,8 +3500,10 @@ export type Database = {
           created_at?: string
           envelope_note?: string
           id?: string
+          membership_row_label?: string
           office_copy_note?: string
           org_id: string
+          outside_financing_label?: string
           updated_at?: string
         }
         Update: {
@@ -3510,8 +3514,10 @@ export type Database = {
           created_at?: string
           envelope_note?: string
           id?: string
+          membership_row_label?: string
           office_copy_note?: string
           org_id?: string
+          outside_financing_label?: string
           updated_at?: string
         }
         Relationships: [
@@ -3609,6 +3615,7 @@ export type Database = {
           closeout_cutoff_minutes: number
           closeout_item_enabled: boolean
           created_at: string
+          doctor_recipient_label: string
           enabled: boolean
           messages_label: string
           org_id: string
@@ -3621,6 +3628,7 @@ export type Database = {
           closeout_cutoff_minutes?: number
           closeout_item_enabled?: boolean
           created_at?: string
+          doctor_recipient_label?: string
           enabled?: boolean
           messages_label?: string
           org_id: string
@@ -3633,6 +3641,7 @@ export type Database = {
           closeout_cutoff_minutes?: number
           closeout_item_enabled?: boolean
           created_at?: string
+          doctor_recipient_label?: string
           enabled?: boolean
           messages_label?: string
           org_id?: string
