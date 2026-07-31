@@ -9,6 +9,83 @@ const corsHeaders = {
 /** Days out that earn a nudge, plus day-of. Overdue is handled separately. */
 const LEAD_DAYS = [1, 0];
 const GOAL_LIST_NAME = "My Goal Steps";
+const SITE_NAME = "Purple Envelope";
+const FROM_DOMAIN = "purpleenvelope.app";
+const SENDER_DOMAIN = "notify.purpleenvelope.app";
+
+/** Used when someone has not customized their reminder settings. */
+const DEFAULT_PREF = { enabled: true, reminder_hour: 8, channel: "in_app" } as const;
+
+/** Eastern-local hour (0-23) right now. */
+function easternHour(): number {
+  return Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "2-digit",
+      hour12: false,
+    }).format(new Date()),
+  ) % 24;
+}
+
+/** Queues one due-notice email through the shared email queue. */
+// deno-lint-ignore no-explicit-any
+async function enqueueReminderEmail(
+  admin: any,
+  to: string,
+  heading: string,
+  line: string,
+  itemId: string,
+  today: string,
+): Promise<boolean> {
+  const messageId = crypto.randomUUID();
+  await admin.from("email_send_log").insert({
+    message_id: messageId,
+    template_name: "goal_step_due",
+    recipient_email: to,
+    status: "pending",
+  });
+
+  let unsubscribeToken = crypto.randomUUID();
+  const { data: existingToken } = await admin
+    .from("email_unsubscribe_tokens")
+    .select("token")
+    .eq("email", to)
+    .maybeSingle();
+  if (existingToken?.token) {
+    unsubscribeToken = existingToken.token;
+  } else {
+    const { data: created } = await admin
+      .from("email_unsubscribe_tokens")
+      .insert({ email: to, token: unsubscribeToken })
+      .select("token")
+      .maybeSingle();
+    if (created?.token) unsubscribeToken = created.token;
+  }
+
+  const { error } = await admin.rpc("enqueue_email", {
+    queue_name: "transactional_emails",
+    payload: {
+      idempotency_key: `goal-step-${itemId}-${today}`,
+      message_id: messageId,
+      to,
+      from: `${SITE_NAME} <noreply@${FROM_DOMAIN}>`,
+      sender_domain: SENDER_DOMAIN,
+      subject: heading,
+      html:
+        `<p style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5">${line}</p>`,
+      text: line,
+      purpose: "transactional",
+      label: "goal_step_due",
+      unsubscribe_token: unsubscribeToken,
+      queued_at: new Date().toISOString(),
+    },
+  });
+  if (error) {
+    console.error("Failed to enqueue goal step reminder email", { itemId, error: error.message });
+    return false;
+  }
+  return true;
+}
 
 /** Eastern-local day, matching src/lib/time-utils getToday(). */
 function easternToday(): string {
