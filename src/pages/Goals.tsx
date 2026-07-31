@@ -247,7 +247,16 @@ export default function Goals() {
         </div>
       </header>
 
-      {!myTeamGoal && <SetGoalCard month={month} />}
+      {!myTeamGoal && (
+        <SetGoalCard
+          month={month}
+          onCreated={title => {
+            if (!pendingReplacement) return;
+            linkReplacement.mutate({ eventId: pendingReplacement, newTitle: title });
+            setPendingReplacement(null);
+          }}
+        />
+      )}
 
       {myGoals.length > 0 && (
         <section className="space-y-4">
@@ -259,6 +268,8 @@ export default function Goals() {
               tasks={tasksFor(goal.id)}
               latestUpdate={latestUpdate(goal.id)}
               onShareUpdate={() => setUpdateGoal(goal)}
+              events={(goalEvents ?? []).filter(ev => ev.goal_id === goal.id)}
+              onArchived={setPendingReplacement}
             />
           ))}
         </section>
