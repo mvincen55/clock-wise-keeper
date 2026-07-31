@@ -32,12 +32,19 @@ export default function MyGoalCard({
   tasks,
   latestUpdate,
   onShareUpdate,
+  events = [],
+  onArchived,
 }: {
   goal: Goal;
   tasks: GoalTask[];
   latestUpdate?: GoalUpdate;
   onShareUpdate: () => void;
+  /** Change history for this goal — edits and archives, never silent. */
+  events?: GoalEvent[];
+  onArchived?: (eventId: string) => void;
 }) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [draft, setDraft] = useState<DraftTask[] | null>(null);
   const [intro, setIntro] = useState<string>('');
   const [drafting, setDrafting] = useState(false);
