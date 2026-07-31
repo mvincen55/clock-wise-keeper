@@ -34,18 +34,20 @@ import {
   type TeamGoal,
 } from '@/hooks/useTeamGoals';
 
-import { getToday } from '@/lib/time-utils';
+import { daysBetween, getToday, shiftDate } from '@/lib/time-utils';
 
-/** Days between two "YYYY-MM-DD" dates, Eastern calendar. */
+/** Days from today until an Eastern "YYYY-MM-DD" date. */
 function daysLeft(endsOn: string): number {
-  return Math.round((Date.parse(`${endsOn}T12:00:00Z`) - Date.parse(`${getToday()}T12:00:00Z`)) / 86_400_000);
+  return daysBetween(getToday(), endsOn);
 }
 
-function addDays(iso: string, days: number): string {
-  const d = new Date(`${iso}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
+/** Days elapsed since an Eastern "YYYY-MM-DD" date. */
+function daysSince(startsOn: string): number {
+  return daysBetween(startsOn, getToday());
 }
+
+const addDays = shiftDate;
+
 
 function NewSprintDialog({
   open,
