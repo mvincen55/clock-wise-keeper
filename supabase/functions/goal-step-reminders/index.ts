@@ -188,6 +188,40 @@ Deno.serve(async (req) => {
       if (daysLeft >= 0) return LEAD_DAYS.includes(daysLeft);
       return Math.abs(daysLeft) % 3 === 0 && Math.abs(daysLeft) <= 30;
     });
+    const hourNow = easternHour();
+
+    // Every step we considered gets a line in the audit log, sent or skipped.
+    type LogRow = Record<string, unknown>;
+    const auditLog: LogRow[] = [];
+    const daysLeftOf = (due: string) =>
+      Math.round((Date.parse(`${due}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86400000);
+    const note = (
+      // deno-lint-ignore no-explicit-any
+      item: any,
+      outcome: string,
+      reason: string | null,
+      channel: string | null = null,
+    ) => {
+      auditLog.push({
+        org_id: item.org_id ?? null,
+        run_date: today,
+        run_hour: hourNow,
+        item_id: item.id,
+        item_title: item.title,
+        owner_user_id: item.owner_user_id,
+        due_date: item.due_date,
+        days_left: daysLeftOf(item.due_date),
+        outcome,
+        reason,
+        channel,
+      });
+    };
+    const flushLog = async () => {
+      if (auditLog.length === 0) return;
+      const { error } = await admin.from("goal_reminder_log").insert(auditLog);
+      if (error) console.error("Could not write reminder log", error.message);
+    };
+
     if (candidates.length === 0) {
       return new Response(JSON.stringify({ checked: items?.length ?? 0, sent: 0 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -222,7 +256,6 @@ Deno.serve(async (req) => {
     const prefs = new Map(
       (prefRows ?? []).map((p) => [p.user_id as string, p]),
     );
-    const hourNow = easternHour();
 
     const wantsEmail = candidates.some((c) => {
       const ch = prefs.get(c.owner_user_id as string)?.channel ?? DEFAULT_PREF.channel;
@@ -239,16 +272,33 @@ Deno.serve(async (req) => {
     for (const item of candidates) {
       const ownerId = item.owner_user_id as string;
       const pref = prefs.get(ownerId) ?? DEFAULT_PREF;
-      if (!pref.enabled) continue;
-      if ((pref.reminder_hour ?? DEFAULT_PREF.reminder_hour) !== hourNow) continue;
-      if (alreadySent.has(item.id)) continue;
-      if (doneBy.has(`${item.id}:${ownerId}`)) continue;
+      if (!pref.enabled) {
+        note(item, "skipped", "Reminders are turned off in this person's settings");
+        continue;
+      }
+      if ((pref.reminder_hour ?? DEFAULT_PREF.reminder_hour) !== hourNow) {
+        note(
+          item,
+          "skipped",
+          `Not their reminder hour yet (they chose ${pref.reminder_hour ?? DEFAULT_PREF.reminder_hour}:00 Eastern)`,
+        );
+        continue;
+      }
+      if (alreadySent.has(item.id)) {
+        note(item, "skipped", "Already reminded earlier today");
+        continue;
+      }
+      if (doneBy.has(`${item.id}:${ownerId}`)) {
+        note(item, "skipped", "Step was already checked off today");
+        continue;
+      }
 
-      const daysLeft = Math.round(
-        (Date.parse(`${item.due_date}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86400000,
-      );
+      const daysLeft = daysLeftOf(item.due_date as string);
       const { heading, line } = copyFor(item.title, item.due_date as string, daysLeft);
       const channel = pref.channel ?? DEFAULT_PREF.channel;
+      let inAppOk = false;
+      let emailOk = false;
+      let failure: string | null = null;
 
       if (channel !== "email") {
         const { error: nErr } = await admin.from("notifications").insert({
@@ -262,23 +312,38 @@ Deno.serve(async (req) => {
         });
         if (nErr) {
           console.error("Goal step reminder failed", { item: item.id, error: nErr.message });
+          note(item, "failed", "In-app notification could not be saved", channel);
           continue;
         }
+        inAppOk = true;
         sent += 1;
       }
 
       if (channel !== "in_app") {
         const to = emailFor.get(ownerId);
-        if (!to) continue;
-        const ok = await enqueueReminderEmail(admin, to, heading, line, item.id, today);
-        if (ok) emailed += 1;
+        if (!to) {
+          failure = "No email address on file for this person";
+        } else {
+          emailOk = await enqueueReminderEmail(admin, to, heading, line, item.id, today);
+          if (emailOk) emailed += 1;
+          else failure = "Email could not be queued";
+        }
+      }
+
+      if (inAppOk || emailOk) {
+        const where = inAppOk && emailOk ? "in-app and email" : inAppOk ? "in-app" : "email";
+        note(item, "sent", failure ? `Sent ${where}; ${failure}` : `Sent ${where}`, channel);
+      } else {
+        note(item, "failed", failure ?? "Nothing could be delivered", channel);
       }
     }
 
+    await flushLog();
 
     return new Response(JSON.stringify({ checked: candidates.length, sent, emailed }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
   } catch (e) {
     console.error("goal-step-reminders failed", e);
     return new Response(JSON.stringify({ error: "Reminder run failed" }), {

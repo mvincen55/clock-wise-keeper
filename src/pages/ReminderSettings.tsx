@@ -22,6 +22,7 @@ import {
   type ReminderChannel,
   type ReminderPrefs,
 } from '@/hooks/useReminderPrefs';
+import ReminderLog from '@/components/goals/ReminderLog';
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
@@ -146,6 +147,8 @@ export default function ReminderSettings() {
           </div>
         </CardContent>
       </Card>
+
+      <ReminderLog />
     </div>
   );
 }
