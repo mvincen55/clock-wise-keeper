@@ -15,6 +15,8 @@ import TargetProgress from './TargetProgress';
 import GoalStatusBadge from './GoalStatusBadge';
 import PathfinderChat from './PathfinderChat';
 import PathfinderPlanEditor, { type DraftTask } from './PathfinderPlanEditor';
+import GoalEditDialog from './GoalEditDialog';
+import GoalArchiveDialog from './GoalArchiveDialog';
 import {
   callPathfinder,
   monthElapsedFraction,
@@ -22,6 +24,7 @@ import {
   useSaveGoalTasks,
   useToggleGoalTask,
   type Goal,
+  type GoalEvent,
   type GoalTask,
   type GoalUpdate,
 } from '@/hooks/useGoals';
