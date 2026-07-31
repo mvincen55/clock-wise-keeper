@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 import GoalProgress from './GoalProgress';
 import GoalMonthTimeline from './GoalMonthTimeline';
 import GoalTrainingModules from './GoalTrainingModules';
-import ProgressRing from './ProgressRing';
+import ProgressRing from '@/components/ProgressRing';
 import TargetProgress from './TargetProgress';
 import GoalStatusBadge from './GoalStatusBadge';
 import PathfinderChat from './PathfinderChat';

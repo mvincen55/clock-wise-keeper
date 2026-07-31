@@ -21,7 +21,7 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import GoalUpdateModal from '@/components/goals/GoalUpdateModal';
 import GoalProgress from '@/components/goals/GoalProgress';
 import GoalMonthTimeline from '@/components/goals/GoalMonthTimeline';
-import ProgressRing from '@/components/goals/ProgressRing';
+import ProgressRing from '@/components/ProgressRing';
 import TargetProgress from '@/components/goals/TargetProgress';
 import GoalStatusBadge from '@/components/goals/GoalStatusBadge';
 import MyGoalCard from '@/components/goals/MyGoalCard';

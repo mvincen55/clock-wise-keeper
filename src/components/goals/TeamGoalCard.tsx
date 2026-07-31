@@ -3,7 +3,7 @@ import { Target } from 'lucide-react';
 import GoalProgress from './GoalProgress';
 import GoalMonthTimeline from './GoalMonthTimeline';
 import GoalTrainingModules from './GoalTrainingModules';
-import ProgressRing from './ProgressRing';
+import ProgressRing from '@/components/ProgressRing';
 import TargetProgress from './TargetProgress';
 import GoalStatusBadge from './GoalStatusBadge';
 import { monthElapsedFraction, type Goal, type GoalTask, type GoalUpdate } from '@/hooks/useGoals';
