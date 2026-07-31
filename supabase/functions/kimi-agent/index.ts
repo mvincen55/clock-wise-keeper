@@ -1130,6 +1130,7 @@ Deno.serve(async (req) => {
       visits,
       treatment,
       docCount: docsRes.data?.length ?? 0,
+      policySummary,
     });
     const tools = buildTools({ isManager, training, mode, githubReady });
 
