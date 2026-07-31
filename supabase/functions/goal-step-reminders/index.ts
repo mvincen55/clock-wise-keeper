@@ -199,7 +199,7 @@ Deno.serve(async (req) => {
     }
 
 
-    return new Response(JSON.stringify({ checked: candidates.length, sent }), {
+    return new Response(JSON.stringify({ checked: candidates.length, sent, emailed }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
