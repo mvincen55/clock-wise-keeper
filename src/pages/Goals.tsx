@@ -26,6 +26,7 @@ import GoalStatusBadge from '@/components/goals/GoalStatusBadge';
 import MyGoalCard from '@/components/goals/MyGoalCard';
 import SetGoalCard from '@/components/goals/SetGoalCard';
 import GoalsAnalytics from '@/components/goals/GoalsAnalytics';
+import GoalsCsvImport from '@/components/goals/GoalsCsvImport';
 import TeamGoalCard from '@/components/goals/TeamGoalCard';
 import GoalsPrintSheet, { type GoalsReportRow } from '@/components/goals/GoalsPrintSheet';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
