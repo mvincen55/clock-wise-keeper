@@ -1,0 +1,175 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
+
+/** Days out that earn a nudge, plus day-of. Overdue is handled separately. */
+const LEAD_DAYS = [1, 0];
+const GOAL_LIST_NAME = "My Goal Steps";
+
+/** Eastern-local day, matching src/lib/time-utils getToday(). */
+function easternToday(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function addDays(isoDate: string, days: number): string {
+  const d = new Date(`${isoDate}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function prettyDate(isoDate: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(new Date(`${isoDate}T12:00:00Z`));
+}
+
+function copyFor(title: string, dueDate: string, daysLeft: number) {
+  const when = prettyDate(dueDate);
+  if (daysLeft < 0) {
+    const n = Math.abs(daysLeft);
+    return {
+      heading: "A goal step is still open",
+      line: `"${title}" was due ${when} — ${n} day${n === 1 ? "" : "s"} ago. Finish it, or shrink it so it fits the week you actually have.`,
+    };
+  }
+  if (daysLeft === 0) {
+    return {
+      heading: "Goal step due today",
+      line: `"${title}" is due today (${when}). One step is all today asks for.`,
+    };
+  }
+  return {
+    heading: "Goal step due tomorrow",
+    line: `"${title}" is due ${when}. Good time to line it up.`,
+  };
+}
+
+/**
+ * Scheduled in-app reminders for goal-driven checklist steps. Uses the step's
+ * own owner (checklist_items.owner_user_id) and due date, skips anything already
+ * checked off for the day, and posts at most one notification per step per
+ * Eastern day. Invoked by pg_cron with the service-role key.
+ */
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const bearer = req.headers.get("Authorization")?.replace("Bearer ", "").trim();
+  if (!bearer || bearer !== serviceKey) {
+    return new Response(JSON.stringify({ error: "Not authorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  try {
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
+    const today = easternToday();
+
+    // Goal steps live on each member's own "My Goal Steps" list.
+    const { data: lists, error: lErr } = await admin
+      .from("checklists")
+      .select("id")
+      .eq("name", GOAL_LIST_NAME);
+    if (lErr) throw new Error(lErr.message);
+    const listIds = (lists ?? []).map((l) => l.id);
+    if (listIds.length === 0) {
+      return new Response(JSON.stringify({ checked: 0, sent: 0 }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: items, error: iErr } = await admin
+      .from("checklist_items")
+      .select("id, org_id, title, owner_user_id, due_date")
+      .in("checklist_id", listIds)
+      .eq("is_active", true)
+      .not("owner_user_id", "is", null)
+      .not("due_date", "is", null)
+      .lte("due_date", addDays(today, Math.max(...LEAD_DAYS)));
+    if (iErr) throw new Error(iErr.message);
+
+    // Nudge on the lead days, then every 3rd day while overdue (up to 30 days).
+    const candidates = (items ?? []).filter((i) => {
+      const daysLeft = Math.round(
+        (Date.parse(`${i.due_date}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86400000,
+      );
+      if (daysLeft >= 0) return LEAD_DAYS.includes(daysLeft);
+      return Math.abs(daysLeft) % 3 === 0 && Math.abs(daysLeft) <= 30;
+    });
+    if (candidates.length === 0) {
+      return new Response(JSON.stringify({ checked: items?.length ?? 0, sent: 0 }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const ids = candidates.map((c) => c.id);
+
+    // Already done today? Then there is nothing to chase.
+    const { data: done } = await admin
+      .from("checklist_completions")
+      .select("item_id, completed_by, period_key")
+      .in("item_id", ids)
+      .eq("period_key", today);
+    const doneBy = new Set((done ?? []).map((d) => `${d.item_id}:${d.completed_by}`));
+
+    // Already nudged today? The job is safe to re-run.
+    const { data: sentToday } = await admin
+      .from("notifications")
+      .select("related_id")
+      .eq("notification_type", "goal_step_due")
+      .in("related_id", ids)
+      .gte("created_at", `${today}T00:00:00Z`);
+    const alreadySent = new Set((sentToday ?? []).map((n) => n.related_id));
+
+    let sent = 0;
+    for (const item of candidates) {
+      if (alreadySent.has(item.id)) continue;
+      if (doneBy.has(`${item.id}:${item.owner_user_id}`)) continue;
+
+      const daysLeft = Math.round(
+        (Date.parse(`${item.due_date}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86400000,
+      );
+      const { heading, line } = copyFor(item.title, item.due_date as string, daysLeft);
+
+      const { error: nErr } = await admin.from("notifications").insert({
+        org_id: item.org_id,
+        recipient_user_id: item.owner_user_id,
+        notification_type: "goal_step_due",
+        title: heading,
+        message: line,
+        related_table: "checklist_items",
+        related_id: item.id,
+      });
+      if (nErr) {
+        console.error("Goal step reminder failed", { item: item.id, error: nErr.message });
+        continue;
+      }
+      sent += 1;
+    }
+
+    return new Response(JSON.stringify({ checked: candidates.length, sent }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("goal-step-reminders failed", e);
+    return new Response(JSON.stringify({ error: "Reminder run failed" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
