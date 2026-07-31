@@ -5,6 +5,10 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 export type PracticeSettings = {
   /** Doctors/owners are only in the clock + closeout flow if the office says so. */
   owners_clock_in: boolean;
+  /** Office decides whether employees see the practice-vitals collections bar. */
+  collections_visibility: 'admin_only' | 'everyone';
+  /** Monthly collections target used to pace the vitals gauge. */
+  monthly_collections_target_cents: number;
 };
 
 /** Office-wide practice settings, readable by every member of the office. */
@@ -17,10 +21,14 @@ export function usePracticeSettings() {
     queryFn: async (): Promise<PracticeSettings> => {
       const { data } = await supabase
         .from('org_practice_settings')
-        .select('owners_clock_in')
+        .select('owners_clock_in, collections_visibility, monthly_collections_target_cents')
         .eq('org_id', ctx!.org_id)
         .maybeSingle();
-      return { owners_clock_in: data?.owners_clock_in ?? false };
+      return {
+        owners_clock_in: data?.owners_clock_in ?? false,
+        collections_visibility: data?.collections_visibility ?? 'everyone',
+        monthly_collections_target_cents: data?.monthly_collections_target_cents ?? 0,
+      };
     },
   });
 }
