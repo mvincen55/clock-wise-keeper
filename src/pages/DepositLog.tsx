@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { Banknote, ChevronLeft, ChevronRight, Loader2, Plus, Printer, Trash2 } from 'lucide-react';
 import DepositPrintSheet from '@/components/DepositPrintSheet';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
-import { getToday } from '@/lib/time-utils';
+import { getToday, shiftDate } from '@/lib/time-utils';
 import { formatCents, parseCurrencyInput } from '@/lib/money';
 import {
   depositChecks,
@@ -26,13 +26,6 @@ import { useOrgBranding, useOrgDepositSettings } from '@/hooks/useOrgBranding';
 import DepositSettingsCard from '@/components/DepositSettingsCard';
 import DailyVitalsCard, { type VitalsForm } from '@/components/DailyVitalsCard';
 import { useOrgContext } from '@/hooks/useOrgContext';
-
-function shiftDate(date: string, delta: number): string {
-  const [y, m, d] = date.split('-').map(Number);
-  const noonUtc = new Date(Date.UTC(y, m - 1, d, 12));
-  noonUtc.setUTCDate(noonUtc.getUTCDate() + delta);
-  return noonUtc.toISOString().slice(0, 10);
-}
 
 function dateLabel(date: string): string {
   if (date === getToday()) return 'Today';
