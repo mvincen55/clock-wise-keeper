@@ -8,6 +8,35 @@
 
 const APP_TZ = 'America/New_York';
 
+/**
+ * Plain-date arithmetic on "YYYY-MM-DD" strings.
+ *
+ * All of it goes through UTC noon so a DST shift can never roll the date
+ * backwards or forwards. These are the single copies — do not re-derive them
+ * in pages or hooks.
+ */
+export function shiftDate(date: string, delta: number): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const noonUtc = new Date(Date.UTC(y, m - 1, d, 12));
+  noonUtc.setUTCDate(noonUtc.getUTCDate() + delta);
+  return noonUtc.toISOString().slice(0, 10);
+}
+
+/** Whole days from `from` to `to` (negative when `to` is earlier). */
+export function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86_400_000);
+}
+
+/** Monday of the week containing the given plain date. */
+export function mondayOf(date: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const noonUtc = new Date(Date.UTC(y, m - 1, d, 12));
+  const dow = noonUtc.getUTCDay(); // 0=Sun..6=Sat
+  noonUtc.setUTCDate(noonUtc.getUTCDate() - ((dow + 6) % 7));
+  return noonUtc.toISOString().slice(0, 10);
+}
+
+
 export function minutesToHHMM(minutes: number): string {
   const h = Math.floor(Math.abs(minutes) / 60);
   const m = Math.abs(minutes) % 60;

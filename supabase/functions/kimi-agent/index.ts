@@ -325,7 +325,7 @@ async function githubCommitFiles(
 
   // Trailer makes every assistant-driven commit attributable to the staff
   // member who asked for it — this repo is a payroll system of record.
-  const message = `${input.message}\n\nPushed-via: TimeVault kimi-agent for ${userEmail}`;
+  const message = `${input.message}\n\nPushed-via: Purple Envelope kimi-agent for ${userEmail}`;
   const commit = await ghFetch(gh, `/repos/${gh.repo}/git/commits`, {
     method: "POST",
     body: { message, tree: tree.data?.sha, parents: [baseSha] },
@@ -418,7 +418,7 @@ async function findContradiction(
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
         "HTTP-Referer": "https://github.com/mvincen55/clock-wise-keeper",
-        "X-Title": "TimeVault Memory Auditor",
+        "X-Title": "Purple Envelope Memory Auditor",
       },
       body: JSON.stringify({
         model,
@@ -565,7 +565,7 @@ async function saveCodeNote(
 // ---------------------------------------------------------------------------
 
 const SITE_PRIMER =
-  "THE SITE (so you know what you're standing in and what you'd be editing): TimeVault, the office's internal web app — repo mvincen55/clock-wise-keeper on GitHub, built and hosted with Lovable, which two-way syncs the repo's default branch. Features: time clock with punches and geofenced work zones; schedules and attendance review; PTO requests and approvals; payroll export (this is the payroll system of record — time math is owned by Postgres triggers, times are America/New_York wall time, be extremely careful in that area); the FOF builder (Financial Options Forms: CDT-code fee schedules, insurance estimates, discounts, AI-named visits, print sheets, templates); Policy Manual and an office document knowledge base with AI search; Deposit Log; Important Numbers; checklists; notifications. Stack: Vite + React 18 + TypeScript + Tailwind + shadcn/ui, TanStack Query, React Router, Capacitor wrapper; backend is Supabase (Lovable Cloud): Postgres with strict RLS, Deno edge functions in supabase/functions/, migrations in supabase/migrations/. Frontend lives in src/ (pages/, components/, hooks/, lib/ — FOF logic in src/lib/fof). CI on GitHub Actions runs bun test and a production build on every push and PR.";
+  "THE SITE (so you know what you are standing in and what you would be editing): Purple Envelope, the office's internal web app — repo mvincen55/clock-wise-keeper on GitHub, built and hosted with Lovable, which two-way syncs the repo's default branch. Features: time clock with punches and geofenced work zones; schedules and attendance review; PTO requests and approvals; payroll export (this is the payroll system of record — time math is owned by Postgres triggers, times are America/New_York wall time, be extremely careful in that area); the FOF builder (Financial Options Forms: CDT-code fee schedules, insurance estimates, discounts, AI-named visits, print sheets, templates); Policy Manual and an office document knowledge base with AI search; Deposit Log; Important Numbers; checklists; notifications. Stack: Vite + React 18 + TypeScript + Tailwind + shadcn/ui, TanStack Query, React Router, Capacitor wrapper; backend is Supabase (Lovable Cloud): Postgres with strict RLS, Deno edge functions in supabase/functions/, migrations in supabase/migrations/. Frontend lives in src/ (pages/, components/, hooks/, lib/ — FOF logic in src/lib/fof). CI on GitHub Actions runs bun test and a production build on every push and PR.";
 
 const BASE_POLICY_SUMMARY =
   "Office FOF policy facts are generated from the org's current settings and guidance rules below. The assistant must explain the live values, not assume defaults. Product-behavior rules that do not change per office: larger plans collect a full visit ahead so the patient never carries a balance, with the final visit split half ahead / half at the visit; work-up procedures and surgical guides are billed at their visit, never prepaid; finished lab work is always described as 'delivered' (crown delivery, denture delivery, implant crown delivery) — never 'seating', 'seat', 'insertion', 'placement', or 'cementation'; fillings are described without surfaces.";
@@ -661,7 +661,7 @@ function buildSystemPrompt(ctx: PromptContext): string {
   parts.push(
     ctx.mode === "fof"
       ? "You are the FOF Assistant inside a dental office's Financial Options Form builder — a sharp, friendly treatment-coordination colleague. You help staff with the form's wording, payment schedules, and office policy questions, you refine how AI-written treatment summaries read, and for managers you are also the office's build partner for this app."
-      : "You are the office's AI assistant on the Ask AI page of TimeVault, their internal app — a sharp, friendly colleague. You answer questions from the office's own documents and standing knowledge, and for managers you are also the build partner for the app itself."
+      : "You are the office's AI assistant on the Ask AI page of Purple Envelope, their internal app — a sharp, friendly colleague. You answer questions from the office's own documents and standing knowledge, and for managers you are also the build partner for the app itself."
   );
   parts.push("You are Kimi (Moonshot AI's Kimi K3) running through OpenRouter.");
   parts.push(SITE_PRIMER);
@@ -1308,7 +1308,7 @@ Deno.serve(async (req) => {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
           "HTTP-Referer": "https://github.com/mvincen55/clock-wise-keeper",
-          "X-Title": "TimeVault Office Assistant",
+          "X-Title": "Purple Envelope Office Assistant",
         },
         body: JSON.stringify({
           model,

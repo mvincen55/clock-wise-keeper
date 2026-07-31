@@ -11,15 +11,15 @@
   },
   "mcp": {
     "server": {
-      "name": "timevault-mcp",
+      "name": "purple-envelope-mcp",
       "version": "0.1.0",
-      "title": "TimeVault"
+      "title": "Purple Envelope"
     },
     "tools": [
       {
         "name": "whoami",
         "title": "Who am I",
-        "description": "Returns the signed-in user's TimeVault identity: email, employee id, org id, org name, and role (owner, manager, or employee).",
+        "description": "Returns the signed-in user's Purple Envelope identity: email, employee id, org id, org name, and role (owner, manager, or employee).",
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,

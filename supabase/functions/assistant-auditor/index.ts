@@ -98,7 +98,7 @@ async function askChecker(
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
         "HTTP-Referer": "https://github.com/mvincen55/clock-wise-keeper",
-        "X-Title": "TimeVault Assistant Auditor",
+        "X-Title": "Purple Envelope Assistant Auditor",
       },
       body: JSON.stringify({
         model,

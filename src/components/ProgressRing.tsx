@@ -3,23 +3,29 @@ import { cn } from '@/lib/utils';
 /**
  * A small purple ring showing plan progress. Amber when the work badly
  * trails the calendar. Quiet by design — no gamification.
+ *
+ * Shared by goal cards and sprint cards — the single ring in the app.
  */
 export default function ProgressRing({
   done,
   total,
   monthElapsed,
   size = 44,
+  stroke = 4,
+  showLabel = true,
   className,
 }: {
   done: number;
   total: number;
+  /** 0–1 fraction of the period already spent; drives the "behind" amber. */
   monthElapsed: number;
   size?: number;
+  stroke?: number;
+  showLabel?: boolean;
   className?: string;
 }) {
-  const pct = total > 0 ? done / total : 0;
+  const pct = total > 0 ? Math.min(1, done / total) : 0;
   const behind = total > 0 && pct + 0.25 < monthElapsed;
-  const stroke = 4;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
 
@@ -58,15 +64,17 @@ export default function ProgressRing({
         }
         className="transition-all"
       />
-      <text
-        x="50%"
-        y="50%"
-        dominantBaseline="central"
-        textAnchor="middle"
-        className="fill-foreground text-[10px] font-medium"
-      >
-        {total > 0 ? `${done}/${total}` : '—'}
-      </text>
+      {showLabel && (
+        <text
+          x="50%"
+          y="50%"
+          dominantBaseline="central"
+          textAnchor="middle"
+          className="fill-foreground text-[10px] font-medium"
+        >
+          {total > 0 ? `${done}/${total}` : '—'}
+        </text>
+      )}
     </svg>
   );
 }

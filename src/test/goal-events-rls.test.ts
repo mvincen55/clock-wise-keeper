@@ -71,3 +71,42 @@ describe.runIf(hasPsql)('draft training modules', () => {
     expect(allowed).toContain('draft');
   });
 });
+
+// The can_view_goal visibility matrix, asserted at the source of truth: the
+// helper every goal-facing policy calls. Level 4 item 4.3(c).
+describe.runIf(hasPsql)('can_view_goal visibility matrix', () => {
+  const body = () =>
+    q(`select pg_get_functiondef(oid) from pg_proc
+        where proname = 'can_view_goal' and pronamespace = 'public'::regnamespace`);
+
+  it('is a security definer function so policies cannot recurse', () => {
+    expect(body()).toMatch(/SECURITY DEFINER/i);
+  });
+
+  it('covers all three branches: team goals, own goals, admins', () => {
+    const def = body().replace(/\s+/g, ' ');
+    expect(def).toContain("visibility = 'team'");
+    expect(def).toContain('user_id = auth.uid()');
+    expect(def).toContain('is_org_admin');
+  });
+
+  it('scopes every branch to the goal owner org — no cross-org read', () => {
+    expect(body().replace(/\s+/g, ' ')).toContain('org_id');
+  });
+
+  it('keeps goal writes owner-scoped (no peer edits, no client deletes)', () => {
+    const rows = q(
+      `select p.polcmd::text || '|' || coalesce(pg_get_expr(p.polqual, p.polrelid), '') ||
+              '|' || coalesce(pg_get_expr(p.polwithcheck, p.polrelid), '')
+         from pg_policy p join pg_class c on c.oid = p.polrelid
+        where c.relname = 'goals'`,
+    )
+      .split('\n')
+      .filter(Boolean);
+    const updates = rows.filter((r) => r.startsWith('w'));
+    expect(updates.length).toBeGreaterThan(0);
+    for (const r of updates) expect(r).toContain('auth.uid()');
+    // Deletes are revoked outright: goals archive, they never disappear.
+    expect(rows.filter((r) => r.startsWith('d'))).toHaveLength(0);
+  });
+});

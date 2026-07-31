@@ -1,3 +1,8 @@
+import { shiftDate } from '@/lib/time-utils';
+
+// Re-exported so momentum's callers and tests keep a single import surface.
+export { shiftDate };
+
 // Streak maths for My Momentum, pulled out of the query so it can be tested.
 //
 // The one rule that matters: streaks PAUSE, never break, on verified time off —
@@ -29,12 +34,7 @@ export type StreakInput = {
   doneByDate: Map<string, number>;
 };
 
-export function shiftDate(date: string, delta: number): string {
-  const [y, m, d] = date.split('-').map(Number);
-  const t = new Date(Date.UTC(y, m - 1, d, 12));
-  t.setUTCDate(t.getUTCDate() + delta);
-  return t.toISOString().slice(0, 10);
-}
+
 
 /** What a single day counts as. */
 export function dayState(date: string, input: StreakInput): StreakDay['state'] {

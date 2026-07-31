@@ -226,10 +226,8 @@ export default function FofAssistantWidget({ context }: Props) {
                     ? 'Discuss the treatment wording or ask about the form — when you state a preference ("never say X — say Y"), I save it as a standing rule. I can also remember office facts and, if you ask, change the app itself (code goes to GitHub and Lovable picks it up). Click "Training mode" above to pause rule-saving.'
                     : 'Training is paused — I\'ll answer questions but save no wording rules. Click "Training off" above to resume. Memory and build requests still work.'
                   : 'Ask me anything about this form, the payment schedule, or office policy. Wording preferences need a manager.'}
-                <div className="mt-2 font-medium text-foreground/70">
-                  Never include patient names — I only see the procedures, not the patient.
-                </div>
               </div>
+
             )}
             {messages.map((m, i) => (
               <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
@@ -261,24 +259,31 @@ export default function FofAssistantWidget({ context }: Props) {
           </div>
           )}
 
-          <div className="flex items-center gap-2 border-t p-2">
-            <Input
-              value={input}
-              autoComplete="off"
-              onFocus={() => setView('chat')}
-              placeholder={isManager ? 'Teach me, ask me, or have me build…' : 'Ask a question…'}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-            />
-            <Button size="icon" onClick={send} disabled={busy || input.trim() === ''}>
-              <Send className="h-4 w-4" />
-            </Button>
+          <div className="border-t p-2">
+            <div className="flex items-center gap-2">
+              <Input
+                value={input}
+                autoComplete="off"
+                onFocus={() => setView('chat')}
+                placeholder={isManager ? 'Teach me, ask me, or have me build…' : 'Ask a question…'}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+              />
+              <Button size="icon" onClick={send} disabled={busy || input.trim() === ''}>
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+            {/* Persistent, at the point of typing — the accepted PHI mitigation. */}
+            <p className="mt-1.5 px-0.5 text-[11px] text-muted-foreground">
+              Never include patient names — I only see the procedures, not the patient.
+            </p>
           </div>
+
         </div>
       ) : (
         <Button
