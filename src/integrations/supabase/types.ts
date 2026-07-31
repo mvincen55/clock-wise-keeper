@@ -3576,6 +3576,7 @@ export type Database = {
           id: string
           monthly_collections_target_cents: number | null
           org_id: string
+          owners_clock_in: boolean
           roleplay_notes: string | null
           roleplay_persona_style: string
           roleplay_policy_tone: string
@@ -3588,6 +3589,7 @@ export type Database = {
           id?: string
           monthly_collections_target_cents?: number | null
           org_id: string
+          owners_clock_in?: boolean
           roleplay_notes?: string | null
           roleplay_persona_style?: string
           roleplay_policy_tone?: string
@@ -3600,6 +3602,7 @@ export type Database = {
           id?: string
           monthly_collections_target_cents?: number | null
           org_id?: string
+          owners_clock_in?: boolean
           roleplay_notes?: string | null
           roleplay_persona_style?: string
           roleplay_policy_tone?: string
