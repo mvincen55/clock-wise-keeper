@@ -31,10 +31,13 @@ import IncidentReports from "@/pages/IncidentReports";
 import MorningHuddle from "@/pages/MorningHuddle";
 import Goals from "@/pages/Goals";
 import ReminderSettings from "@/pages/ReminderSettings";
-import OfficeNudges from "@/pages/OfficeNudges";
-import Messages from './pages/Messages';
-import Requests from './pages/Requests';
+import InboxPage from "@/pages/InboxPage";
 import Training from "@/pages/Training";
+import Workplace from "@/pages/Workplace";
+import Playbook from "@/pages/Playbook";
+import Management from "@/pages/Management";
+import Help from "@/pages/Help";
+import Privacy from "@/pages/Privacy";
 import AcceptInvite from "@/pages/AcceptInvite";
 import Onboarding from "@/pages/Onboarding";
 import NotFound from "@/pages/NotFound";
@@ -89,6 +92,12 @@ const App = () => (
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/workplace" element={<ProtectedRoute><Workplace /></ProtectedRoute>} />
+            <Route path="/playbook" element={<ProtectedRoute><Playbook /></ProtectedRoute>} />
+            <Route path="/management" element={<ProtectedRoute><Management /></ProtectedRoute>} />
+            <Route path="/inbox" element={<Navigate to="/inbox/messages" replace />} />
+            <Route path="/inbox/:tab" element={<ProtectedRoute><InboxPage /></ProtectedRoute>} />
+            <Route path="/help" element={<ProtectedRoute><Help /></ProtectedRoute>} />
             <Route path="/timesheet" element={<ProtectedRoute><Timesheet /></ProtectedRoute>} />
             <Route path="/days-off" element={<ProtectedRoute><DaysOff /></ProtectedRoute>} />
             <Route path="/office-calendar" element={<ProtectedRoute><OfficeCalendar /></ProtectedRoute>} />
@@ -114,11 +123,12 @@ const App = () => (
             <Route path="/goals" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
             <Route path="/settings/reminders" element={<ProtectedRoute><ReminderSettings /></ProtectedRoute>} />
             <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
-            <Route path="/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
-            <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
-            <Route path="/nudges" element={<ProtectedRoute><OfficeNudges /></ProtectedRoute>} />
+            <Route path="/requests" element={<Navigate to="/inbox/requests" replace />} />
+            <Route path="/messages" element={<Navigate to="/inbox/messages" replace />} />
+            <Route path="/nudges" element={<Navigate to="/inbox/nudges" replace />} />
             <Route path="/onboarding" element={<OnboardingRoute />} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
+            <Route path="/privacy" element={<Privacy />} />
             <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
             <Route path="*" element={<Navigate to="/auth" replace />} />
 

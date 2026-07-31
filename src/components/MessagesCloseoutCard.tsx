@@ -33,7 +33,7 @@ export default function MessagesCloseoutCard() {
           </p>
         </div>
         {!satisfied && (
-          <Link to="/requests" className="text-xs font-medium text-primary hover:underline">
+          <Link to="/inbox/requests" className="text-xs font-medium text-primary hover:underline">
             Open
           </Link>
         )}

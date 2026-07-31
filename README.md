@@ -70,12 +70,24 @@ Manual steps that only exist in dashboards (no code representation): Supabase Au
 
 ## Application map (every route)
 
-All routes except `/auth`, `/accept-invite`, and `/.lovable/oauth/consent` are behind `ProtectedRoute`, which requires an authenticated user **and** allowlist membership (`isAllowed`), wrapping pages in `AppLayout` (nav + `NotificationBell`).
+All routes except `/auth`, `/accept-invite`, `/privacy`, and `/.lovable/oauth/consent` are behind `ProtectedRoute`, which requires an authenticated user **and** allowlist membership (`isAllowed`), wrapping pages in `AppLayout` (nav + `NotificationBell`).
+
+### Destinations (the navigation — see `docs/product-blueprint.md` §4)
+
+Navigation is a compact destination list; every feature below keeps its own route and is reached through a destination hub. The clock lives in the global time control (`GlobalTimeControl`): a header chip on desktop, a sticky bar above the bottom nav on mobile.
+
+| Route | Page | What it does |
+|---|---|---|
+| `/` | Dashboard (Home) | Role-personalized launchpad: attention items, spotlight, restrained progress summary |
+| `/workplace` | Workplace | Hub: time, attendance, PTO, calendar, policies, goals, training, team |
+| `/playbook` | Playbook | Hub: huddle, checklists, close the day, incidents, FOF, Ask AI |
+| `/inbox/:tab` | InboxPage | Unified Inbox: Messages, Doctor Requests, Nudges (legacy `/messages`, `/requests`, `/nudges` redirect here) |
+| `/management` | Management | Manager/owner command center: approvals, snapshots, vitals, admin links |
+| `/help` | Help | Help & support surface |
 
 ### Time & attendance
 | Route | Page | What it does |
 |---|---|---|
-| `/` | Dashboard | Daily command center: org attendance snapshot, who's missing a shift (`MissingShiftBanner`), notifications, location status |
 | `/timesheet` | Timesheet | Clock in/out, punch history, manager punch editing (`PunchEditorModal`), tardy reasons (`TardyReasonModal`, `TardyReviewModal`) |
 | `/work-zones` | WorkZones | Geofenced zones for location-verified clock-in (`useGeoTracking`, `LocationStatusPanel`, `process-location-event`) |
 | `/reports` | Reports | Payroll/attendance reporting; export via `export-report` |
@@ -123,6 +135,7 @@ All routes except `/auth`, `/accept-invite`, and `/.lovable/oauth/consent` are b
 | Route | Page | What it does |
 |---|---|---|
 | `/auth` | Auth | Sign in / sign up (branded Purple Envelope) |
+| `/privacy` | Privacy | Public Privacy & Terms (same document acknowledged in onboarding) |
 | `/accept-invite` | AcceptInvite | Public. Token-lookup → sign up or sign in → accept |
 | `/.lovable/oauth/consent` | OAuthConsent | Lovable OAuth consent screen |
 

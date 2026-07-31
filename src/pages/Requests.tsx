@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import AppLayout from '@/components/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -75,18 +74,16 @@ export default function Requests() {
 
   if (!settings.enabled) {
     return (
-      <AppLayout>
-        <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            Messaging is turned off for this office.
-          </CardContent>
-        </Card>
-      </AppLayout>
+      <Card>
+        <CardContent className="py-10 text-center text-sm text-muted-foreground">
+          Messaging is turned off for this office.
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <AppLayout>
+    <>
       <div className="mx-auto max-w-3xl space-y-4">
         <div className="flex items-center gap-3">
           <div className="flex-1">
@@ -199,6 +196,6 @@ export default function Requests() {
           )}
         </DialogContent>
       </Dialog>
-    </AppLayout>
+    </>
   );
 }

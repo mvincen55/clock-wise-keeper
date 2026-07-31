@@ -14,6 +14,7 @@ import { Loader2, Shield, Timer, CalendarDays, Plus, Trash2, DollarSign, Refresh
 import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/time-utils';
 import PrivacyTermsCard from '@/components/onboarding/PrivacyTermsCard';
+import OrgBrandingCard from '@/components/OrgBrandingCard';
 import EscalationPoliciesCard from '@/components/accountability/EscalationPoliciesCard';
 import MessagingSettingsCard from '@/components/settings/MessagingSettingsCard';
 import { PracticeSettingsCard } from '@/components/settings/PracticeSettingsCard';
@@ -76,8 +77,11 @@ export default function Settings() {
     <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">Configure payroll, closures, and security</p>
+        <p className="text-muted-foreground">Configure branding, payroll, closures, and security</p>
       </div>
+
+      {/* The office's identity: name, logo, accent color (blueprint 3 and 9). */}
+      <OrgBrandingCard isManager={isManager} />
 
       <PrivacyTermsCard />
 
