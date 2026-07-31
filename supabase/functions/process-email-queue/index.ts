@@ -248,7 +248,37 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Suppression list: never re-send app email to unsubscribed / bounced /
+      // complained addresses. Auth emails (password reset, magic link) are
+      // transactional-critical and are not suppressed.
+      if (queue === 'transactional_emails' && payload.to) {
+        const { data: suppressed } = await supabase
+          .from('suppressed_emails')
+          .select('email')
+          .eq('email', payload.to)
+          .maybeSingle()
+
+        if (suppressed) {
+          console.warn('Skipping suppressed recipient', { queue, msg_id: msg.msg_id })
+          await supabase.from('email_send_log').insert({
+            message_id: payload.message_id,
+            template_name: payload.label || queue,
+            recipient_email: payload.to,
+            status: 'suppressed',
+          })
+          const { error: supDelError } = await supabase.rpc('delete_email', {
+            queue_name: queue,
+            message_id: msg.msg_id,
+          })
+          if (supDelError) {
+            console.error('Failed to delete suppressed message from queue', { queue, msg_id: msg.msg_id, error: supDelError })
+          }
+          continue
+        }
+      }
+
       try {
+
         await sendLovableEmail(
           {
             run_id: payload.run_id,
