@@ -49,6 +49,7 @@ const PRACTICE: FofPracticeInfo = {
   doctorName: 'Dr. Scott',
   logoUrl: '/src/assets/practice-logo.png',
   membershipPlanName: 'Membership',
+  doctorNames: ['Dr. Scott', 'Dr. Jennie'],
 };
 
 /**

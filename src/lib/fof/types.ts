@@ -22,6 +22,8 @@ export interface FofPracticeInfo {
   logoUrl: string;
   /** Display name for the office's membership plan (e.g. "Illumitrac"). */
   membershipPlanName: string;
+  /** Treating doctors selectable on the FOF builder. */
+  doctorNames: string[];
 }
 
 export interface FofTemplate {

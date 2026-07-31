@@ -52,9 +52,10 @@ function mapTemplateRow(row: TemplateRow): FofTemplate {
 function composePracticeInfo(
   branding: BrandingRow | null,
   doctorName: string,
-  membershipPlanName: string
+  membershipPlanName: string,
+  doctorNames: string[]
 ): FofPracticeInfo {
-  if (!branding) return { ...DEFAULT_PRACTICE_INFO, doctorName, membershipPlanName };
+  if (!branding) return { ...DEFAULT_PRACTICE_INFO, doctorName, membershipPlanName, doctorNames };
   return {
     practiceName: branding.legal_name,
     addressLine1: branding.address_line1,
@@ -64,6 +65,7 @@ function composePracticeInfo(
     doctorName,
     logoUrl: branding.logo_url,
     membershipPlanName,
+    doctorNames,
   };
 }
 
@@ -177,13 +179,14 @@ export function useFofSettings() {
         return composePracticeInfo(
           branding,
           settingsResult.data.doctor_name,
-          settingsResult.data.membership_plan_name ?? 'Membership'
+          settingsResult.data.membership_plan_name ?? 'Membership',
+          toDoctorNames(settingsResult.data.doctor_names)
         );
       }
 
       // fof_settings is admin-write; employees print with the defaults
       // until an admin's first visit creates the row.
-      if (!isAdmin) return composePracticeInfo(branding, '', 'Membership');
+      if (!isAdmin) return composePracticeInfo(branding, '', 'Membership', []);
       const { data: created, error: createError } = await supabase
         .from('fof_settings')
         .insert({ org_id: ctx.org_id })
@@ -193,7 +196,8 @@ export function useFofSettings() {
       return composePracticeInfo(
         branding,
         created.doctor_name,
-        created.membership_plan_name ?? 'Membership'
+        created.membership_plan_name ?? 'Membership',
+        []
       );
     },
   });
