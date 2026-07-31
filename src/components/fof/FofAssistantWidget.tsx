@@ -226,9 +226,8 @@ export default function FofAssistantWidget({ context }: Props) {
                     ? 'Discuss the treatment wording or ask about the form — when you state a preference ("never say X — say Y"), I save it as a standing rule. I can also remember office facts and, if you ask, change the app itself (code goes to GitHub and Lovable picks it up). Click "Training mode" above to pause rule-saving.'
                     : 'Training is paused — I\'ll answer questions but save no wording rules. Click "Training off" above to resume. Memory and build requests still work.'
                   : 'Ask me anything about this form, the payment schedule, or office policy. Wording preferences need a manager.'}
-                <div className="mt-2 font-medium text-foreground/70">
-                  Never include patient names — I only see the procedures, not the patient.
-                </div>
+              </div>
+
               </div>
             )}
             {messages.map((m, i) => (
