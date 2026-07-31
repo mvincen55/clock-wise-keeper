@@ -49,6 +49,11 @@ function mapTemplateRow(row: TemplateRow): FofTemplate {
   };
 }
 
+function toDoctorNames(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.filter((v): v is string => typeof v === 'string' && v.trim() !== '');
+  return [];
+}
+
 function composePracticeInfo(
   branding: BrandingRow | null,
   doctorName: string,
