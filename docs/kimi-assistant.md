@@ -85,7 +85,7 @@ Secrets; or the Supabase dashboard → Edge Functions → Secrets):
 | `OPENROUTER_API_KEY` | yes | Create at [openrouter.ai/keys](https://openrouter.ai/settings/keys) and add credits. Without it both chat surfaces return a friendly "not configured" error. |
 | `OPENROUTER_MODEL` | no | Defaults to `moonshotai/kimi-k3`. Any OpenRouter model slug with tool-calling works, so the model can be swapped without a code change (e.g. `moonshotai/kimi-k2.7-code` for cheaper build-heavy sessions). |
 | `OPENROUTER_CHECK_MODEL` | no | Model for contradiction checking and the auditor — small, strict classification work. Defaults to `moonshotai/kimi-k2.6`. |
-| `GITHUB_TOKEN` | for build powers | GitHub → Settings → Developer settings → **Fine-grained personal access token**, scoped to **only** `mvincen55/clock-wise-keeper`, with repository permissions **Contents: Read and write** and **Pull requests: Read and write**. Without it, Kimi answers and remembers but honestly reports that build tools aren't configured. |
+| `GITHUB_FINE_GRAINED_TOKEN` (or `GITHUB_TOKEN`) | for build powers | GitHub → Settings → Developer settings → **Fine-grained personal access token**, scoped to **only** `mvincen55/clock-wise-keeper`, with repository permissions **Contents: Read and write** and **Pull requests: Read and write**. Without it, Kimi answers and remembers but honestly reports that build tools aren't configured. The function accepts either secret name; this project stores it as `GITHUB_FINE_GRAINED_TOKEN`. |
 | `GITHUB_REPO` | no | Defaults to `mvincen55/clock-wise-keeper`. |
 | `GITHUB_BRANCH` | no | The Lovable-synced branch; defaults to `main`. |
 
