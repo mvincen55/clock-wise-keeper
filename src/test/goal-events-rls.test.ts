@@ -47,7 +47,7 @@ describe.runIf(hasPsql)('goal_events visibility', () => {
     if (!orgs) return;
     expect(q(`select public.is_org_member('${orgs}')`)).not.toBe('t');
     expect(q(`select public.is_org_admin('${orgs}')`)).not.toBe('t');
-    expect(stranger).not.toBe(q('select coalesce(auth.uid()::text, $$none$$)'));
+    expect(q(`select public.can_view_goal('${stranger}'::uuid)`)).not.toBe('t');
   });
 });
 
