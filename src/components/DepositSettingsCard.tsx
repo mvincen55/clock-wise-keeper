@@ -70,6 +70,22 @@ export default function DepositSettingsCard() {
                   <Input id="dep-set-total" value={form.bankTotalLabel} onChange={set('bankTotalLabel')} />
                 </div>
                 <div className="space-y-1.5">
+                  <Label htmlFor="dep-set-membership">Membership row label</Label>
+                  <Input
+                    id="dep-set-membership"
+                    value={form.membershipRowLabel}
+                    onChange={set('membershipRowLabel')}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="dep-set-financing">Outside financing label</Label>
+                  <Input
+                    id="dep-set-financing"
+                    value={form.outsideFinancingLabel}
+                    onChange={set('outsideFinancingLabel')}
+                  />
+                </div>
+                <div className="space-y-1.5">
                   <Label htmlFor="dep-set-envelope">Envelope callout (both copies)</Label>
                   <Input
                     id="dep-set-envelope"

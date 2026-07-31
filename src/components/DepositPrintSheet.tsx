@@ -168,8 +168,8 @@ function CopyPage({
               <>
                 <SummaryRow label="Ins Credit Cards" cents={insCcCents} />
                 <SummaryRow label="Total Pt Credit Cards" cents={ptCcCents} />
-                <SummaryRow label="Illumitrac" cents={illumitracCents} />
-                <SummaryRow label="Outside Financing" cents={outsideFinancingCents} />
+                <SummaryRow label={settings.membershipRowLabel} cents={illumitracCents} />
+                <SummaryRow label={settings.outsideFinancingLabel} cents={outsideFinancingCents} />
               </>
             )}
             <div className="dep-sum-grand">

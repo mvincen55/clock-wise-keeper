@@ -38,6 +38,9 @@ interface FofPrintSheetProps {
   importedFromScreenshot?: boolean;
 }
 
+const membershipRowLabel = (practice: FofPracticeInfo): string =>
+  practice.membershipPlanName?.trim() || 'Membership';
+
 function formatNow(): string {
   const d = new Date();
   let h = d.getHours();
@@ -290,7 +293,7 @@ export default function FofPrintSheet({
           )}
           {(amounts.membershipCoveredCents ?? 0) > 0 && (
             <div className="fof-row">
-              <span>Included with Illumitrac Membership</span>
+              <span>Included with {membershipRowLabel(practice)}</span>
               <span>−{formatCents(amounts.membershipCoveredCents!)}</span>
             </div>
           )}
@@ -642,7 +645,7 @@ export default function FofPrintSheet({
             )}
             {(amounts.membershipCoveredCents ?? 0) > 0 && (
               <div className="fof-row">
-                <span>Included with Membership</span>
+                <span>Included with {membershipRowLabel(practice)}</span>
                 <span>−{formatCents(amounts.membershipCoveredCents!)}</span>
               </div>
             )}

@@ -276,11 +276,11 @@ export default function DepositLog() {
                     <Input id="dep-ptcc" inputMode="decimal" placeholder="$0.00" value={form.ptCc} onChange={e => setField('ptCc')(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="dep-illumitrac">Illumitrac</Label>
+                    <Label htmlFor="dep-illumitrac">{depositSettings?.membershipRowLabel ?? 'Membership'}</Label>
                     <Input id="dep-illumitrac" inputMode="decimal" placeholder="$0.00" value={form.illumitrac} onChange={e => setField('illumitrac')(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="dep-financing">Outside Financing</Label>
+                    <Label htmlFor="dep-financing">{depositSettings?.outsideFinancingLabel ?? 'Outside Financing'}</Label>
                     <Input id="dep-financing" inputMode="decimal" placeholder="$0.00" value={form.outsideFinancing} onChange={e => setField('outsideFinancing')(e.target.value)} />
                   </div>
                 </div>
@@ -305,8 +305,8 @@ export default function DepositLog() {
                 </div>
                 <div className="flex justify-between"><span>Insurance Credit Cards</span><span>{formatCents(totals.insCc)}</span></div>
                 <div className="flex justify-between"><span>Patient Credit Cards</span><span>{formatCents(totals.ptCc)}</span></div>
-                <div className="flex justify-between"><span>Illumitrac</span><span>{formatCents(totals.illumitrac)}</span></div>
-                <div className="flex justify-between"><span>Outside Financing</span><span>{formatCents(totals.financing)}</span></div>
+                <div className="flex justify-between"><span>{depositSettings?.membershipRowLabel ?? 'Membership'}</span><span>{formatCents(totals.illumitrac)}</span></div>
+                <div className="flex justify-between"><span>{depositSettings?.outsideFinancingLabel ?? 'Outside Financing'}</span><span>{formatCents(totals.financing)}</span></div>
                 <div className="border-t pt-1.5 mt-1.5 space-y-1.5">
                   <div className="flex justify-between text-muted-foreground">
                     <span>Bank deposit (cash + checks)</span><span>{formatCents(totals.bank)}</span>
