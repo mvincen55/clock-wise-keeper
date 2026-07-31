@@ -238,10 +238,13 @@ export default function Goals() {
         </div>
         <div className="flex flex-wrap gap-2">
           {isManager && (
-            <Button variant="ghost" size="sm" onClick={() => setPrivateOpen(true)}>
-              <Lock className="mr-2 h-4 w-4" />
-              Private goal with a member
-            </Button>
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setPrivateOpen(true)}>
+                <Lock className="mr-2 h-4 w-4" />
+                Private goal with a member
+              </Button>
+              <GoalsCsvImport />
+            </>
           )}
           <Button variant="ghost" size="sm" onClick={() => window.print()}>
             <Printer className="mr-2 h-4 w-4" />
