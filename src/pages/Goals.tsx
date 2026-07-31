@@ -26,6 +26,7 @@ import GoalStatusBadge from '@/components/goals/GoalStatusBadge';
 import MyGoalCard from '@/components/goals/MyGoalCard';
 import SetGoalCard from '@/components/goals/SetGoalCard';
 import GoalsAnalytics from '@/components/goals/GoalsAnalytics';
+import GoalsCsvImport from '@/components/goals/GoalsCsvImport';
 import TeamGoalCard from '@/components/goals/TeamGoalCard';
 import GoalsPrintSheet, { type GoalsReportRow } from '@/components/goals/GoalsPrintSheet';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
@@ -238,10 +239,13 @@ export default function Goals() {
         </div>
         <div className="flex flex-wrap gap-2">
           {isManager && (
-            <Button variant="ghost" size="sm" onClick={() => setPrivateOpen(true)}>
-              <Lock className="mr-2 h-4 w-4" />
-              Private goal with a member
-            </Button>
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setPrivateOpen(true)}>
+                <Lock className="mr-2 h-4 w-4" />
+                Private goal with a member
+              </Button>
+              <GoalsCsvImport />
+            </>
           )}
           <Button variant="ghost" size="sm" onClick={() => window.print()}>
             <Printer className="mr-2 h-4 w-4" />
