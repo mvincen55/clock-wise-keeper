@@ -17,7 +17,14 @@ import NoPhiNote from '@/components/NoPhiNote';
  * Set this month's goal. Pathfinder polishes the raw wording into one clear
  * sentence, which the member can edit or restore to their own words.
  */
-export default function SetGoalCard({ month }: { month: string }) {
+export default function SetGoalCard({
+  month,
+  onCreated,
+}: {
+  month: string;
+  /** Fires with the new goal's title so a replaced goal can be linked to it. */
+  onCreated?: (title: string) => void;
+}) {
   const createGoal = useCreateGoal();
   const [title, setTitle] = useState('');
   const [original, setOriginal] = useState<string | null>(null);
@@ -70,6 +77,7 @@ export default function SetGoalCard({ month }: { month: string }) {
       setSmart(null);
       setDescription('');
       setIsPrivate(false);
+      onCreated?.(title.trim());
       toast.success('Goal set — good luck this month.');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not save your goal');
