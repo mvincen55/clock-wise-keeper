@@ -7,25 +7,48 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Mail, Loader2, Copy, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Mail, Loader2, Copy, CheckCircle2, AlertTriangle, Check } from 'lucide-react';
+import { OPERATIONAL_ROLES, ROLE_LABELS } from '@/hooks/useOperationalRoles';
+import type { OperationalRole } from '@/lib/schedule-reader/types';
 
 export default function InviteEmployeeModal() {
   const { data: ctx } = useOrgContext();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'employee' | 'manager'>('employee');
+  const [operationalRole, setOperationalRole] = useState<OperationalRole | ''>('');
+  const [secondaryRoles, setSecondaryRoles] = useState<OperationalRole[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
   const [emailed, setEmailed] = useState(false);
   const [warning, setWarning] = useState('');
 
+  const toggleSecondary = (r: OperationalRole) =>
+    setSecondaryRoles(list => (list.includes(r) ? list.filter(x => x !== r) : [...list, r]));
+
   const handleInvite = async () => {
     if (!ctx || !email.trim()) return;
+    if (!name.trim()) {
+      toast({ title: 'Enter their name', description: 'The name goes on their profile the moment they join.', variant: 'destructive' });
+      return;
+    }
+    if (!operationalRole) {
+      toast({ title: 'Pick what they do', description: 'Their operational role sets up scheduling and staffing correctly from day one.', variant: 'destructive' });
+      return;
+    }
     setSubmitting(true);
     try {
       const { data, error } = await supabase.functions.invoke('send-org-invite', {
-        body: { email: email.toLowerCase().trim(), role, origin: window.location.origin },
+        body: {
+          email: email.toLowerCase().trim(),
+          role,
+          name: name.trim(),
+          operationalRole,
+          secondaryRoles: secondaryRoles.filter(r => r !== operationalRole),
+          origin: window.location.origin,
+        },
       });
 
       if (error) throw error;
@@ -39,8 +62,12 @@ export default function InviteEmployeeModal() {
           ? { title: 'Invite sent', description: `An invite email is on its way to ${email.toLowerCase().trim()}.` }
           : { title: 'Invite created', description: data.warning || 'Share the link manually.', variant: 'destructive' }
       );
-    } catch (e: any) {
-      toast({ title: 'Failed to create invite', description: e.message, variant: 'destructive' });
+    } catch (e) {
+      toast({
+        title: 'Failed to create invite',
+        description: e instanceof Error ? e.message : 'Unexpected error',
+        variant: 'destructive',
+      });
     }
     setSubmitting(false);
   };
@@ -51,8 +78,11 @@ export default function InviteEmployeeModal() {
   };
 
   const reset = () => {
+    setName('');
     setEmail('');
     setRole('employee');
+    setOperationalRole('');
+    setSecondaryRoles([]);
     setInviteLink('');
     setEmailed(false);
     setWarning('');
@@ -63,7 +93,7 @@ export default function InviteEmployeeModal() {
       <DialogTrigger asChild>
         <Button variant="outline"><Mail className="mr-2 h-4 w-4" />Invite</Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Invite Team Member</DialogTitle></DialogHeader>
 
         {inviteLink ? (
@@ -92,12 +122,17 @@ export default function InviteEmployeeModal() {
         ) : (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Email Address *</Label>
-              <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@company.com" />
+              <Label>Their name *</Label>
+              <Input value={name} onChange={e => setName(e.target.value)} placeholder="Jane Berry" maxLength={80} />
             </div>
             <div className="space-y-2">
-              <Label>Role</Label>
-              <Select value={role} onValueChange={(v) => setRole(v as any)}>
+              <Label>Email address (their username) *</Label>
+              <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@company.com" />
+              <p className="text-xs text-muted-foreground">They'll sign in with this address.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Permissions</Label>
+              <Select value={role} onValueChange={(v) => setRole(v as 'employee' | 'manager')}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="employee">Employee</SelectItem>
@@ -105,7 +140,49 @@ export default function InviteEmployeeModal() {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={handleInvite} disabled={submitting || !email.trim()} className="w-full">
+            <div className="space-y-2">
+              <Label>What will they do? *</Label>
+              <Select value={operationalRole} onValueChange={v => {
+                setOperationalRole(v as OperationalRole);
+                setSecondaryRoles(list => list.filter(r => r !== v));
+              }}>
+                <SelectTrigger><SelectValue placeholder="Their main role in the office" /></SelectTrigger>
+                <SelectContent>
+                  {OPERATIONAL_ROLES.map(r => (
+                    <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                The work, not the permissions — this sets up scheduling and staffing from day one.
+                You can adjust it later from the Team page.
+              </p>
+            </div>
+            {operationalRole && (
+              <div className="space-y-2">
+                <Label>Anything else they'll cover? (optional)</Label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {OPERATIONAL_ROLES.filter(r => r !== operationalRole).map(r => (
+                    <Button
+                      key={r}
+                      type="button"
+                      size="sm"
+                      variant={secondaryRoles.includes(r) ? 'secondary' : 'outline'}
+                      className="justify-start"
+                      onClick={() => toggleSecondary(r)}
+                    >
+                      {secondaryRoles.includes(r) && <Check className="mr-1.5 h-3 w-3" />}
+                      {ROLE_LABELS[r]}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <Button
+              onClick={handleInvite}
+              disabled={submitting || !email.trim() || !name.trim() || !operationalRole}
+              className="w-full"
+            >
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Send Invite Email
             </Button>

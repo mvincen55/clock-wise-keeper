@@ -101,7 +101,7 @@ All routes except `/auth`, `/accept-invite`, and `/.lovable/oauth/consent` are b
 |---|---|---|
 | `/office-calendar` | OfficeCalendar | Shared calendar, office closures (`useOfficeClosures`), Google Calendar events (`google-calendar-events`) |
 | `/checklists` | Checklists | Recurring office checklists — see Checklist data model |
-| `/deposit-log` | DepositLog | Daily deposit log + branded print sheet |
+| `/deposit-log` | DepositLog | **Close the Day**: the deposit log + branded print sheet, grown into the five-step closeout (money, vitals, local-only Privacy View Capture, staffing reality, seal) — see `docs/close-the-day-spec.md` |
 | `/incident-reports` | IncidentReports | Incident reports with signature/review workflow + print sheet |
 | `/important-numbers` | ImportantNumbers | Office contact directory with tabs |
 | `/policy-manual` | PolicyManual | Office policy manual + document Q&A (`ask-docs` / `ingest-doc`) |
@@ -220,6 +220,7 @@ Migration `20260723200000_checklists.sql`:
 
 ## Roadmap / specs in `docs/`
 
+- [`docs/close-the-day-spec.md`](docs/close-the-day-spec.md) — Close the Day + Schedule Intelligence: the three-layer architecture (local-only Schedule Reader / deterministic Metrics Referee / Office Coach), the Privacy View Capture boundary, and the metric vocabulary. **Built.** OCR assets are vendored at build time (`scripts/vendor-tesseract.mjs`, `public/tesseract/` gitignored).
 - [`docs/goals-and-bypass-spec.md`](docs/goals-and-bypass-spec.md) — Goals page ("Pathfinder" AI breakdown, team + private goals, AI-drafted meeting updates) and the checklist-bypass accountability loop. **Being built in Lovable now.**
 - [`docs/team-onboarding.md`](docs/team-onboarding.md) — Team onboarding feature list (next major build after Goals), including the stealth work-style questions that feed Pathfinder.
 

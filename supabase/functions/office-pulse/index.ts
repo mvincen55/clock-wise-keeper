@@ -1,9 +1,12 @@
 // office-pulse — the scheduled heartbeat of the office AI.
 //
-// Runs a few times a day (cron). Three jobs, all fail-open:
+// Runs a few times a day (cron). Four jobs, all fail-open:
 //   1. Reminder hooks  — schedule and fire quiet AI follow-ups.
 //   2. Team sprints    — announce, nudge mid-period, and call the result.
 //   3. Sprint ideas    — once a week, offer each manager ONE sprint suggestion.
+//   4. Close the Day   — one grounded coaching note from yesterday's closeout
+//                        (sanitized schedule aggregates + the human staffing
+//                        read; never revenue at the cost of safe workloads).
 //
 // Rules it will not break: max one reminder per person per day, dismissal
 // learning (kinds a person keeps dismissing go quiet), never blocks anything,
@@ -594,6 +597,110 @@ async function suggestSprints(db: Client, apiKey: string | undefined, orgId: str
   return made;
 }
 
+/**
+ * 4. Close the Day coaching — one grounded observation per day, to managers,
+ * on the Close the Day surface.
+ *
+ * Inputs are sanitized aggregates only: minute totals, counts, ratios, and
+ * the closer's staffing assessment. No screenshots, no schedule notes, no
+ * patient anything — those never reach this database at all. The coach's
+ * charter is the whole office doing well: it must never buy revenue with
+ * unsafe workloads, skipped lunches, chronic understaffing, or overbooking,
+ * and a human "stretched/unsafe" answer outranks a healthy-looking schedule.
+ */
+async function coachCloseDay(db: Client, apiKey: string | undefined, orgId: string, today: string) {
+  const yesterday = addDays(today, -1);
+
+  const { data: log } = await db
+    .from("deposit_logs")
+    .select("id, deposit_date, production_cents, staffing_assessment, staffing_pressure, schedule_capture_status")
+    .eq("org_id", orgId)
+    .eq("deposit_date", yesterday)
+    .maybeSingle();
+  if (!log) return 0; // No closeout, nothing to say.
+
+  const { data: metrics } = await db
+    .from("provider_day_metrics")
+    .select(
+      "provider_label, department, net_bookable_minutes, scheduled_minutes, true_open_minutes, cancellation_count, cancellation_open_minutes, no_show_count, no_show_open_minutes, unclassified_minutes, automated_workload_class, continuous_without_buffer_minutes",
+    )
+    .eq("org_id", orgId)
+    .eq("closeout_id", log.id as string);
+
+  const trueOpen = (metrics ?? []).reduce((s, m) => s + Number(m.true_open_minutes ?? 0), 0);
+  const noShowOpen = (metrics ?? []).reduce((s, m) => s + Number(m.no_show_open_minutes ?? 0), 0);
+  const cancelOpen = (metrics ?? []).reduce((s, m) => s + Number(m.cancellation_open_minutes ?? 0), 0);
+  const overloaded = (metrics ?? []).filter(m =>
+    m.automated_workload_class === "overloaded" || m.automated_workload_class === "compressed"
+  );
+  const humanStrain =
+    log.staffing_assessment === "stretched" ||
+    log.staffing_assessment === "understaffed" ||
+    log.staffing_assessment === "unsafe";
+
+  // Quiet unless there is something real: meaningful lost time, an
+  // overloaded provider, or the humans saying the day hurt.
+  if (trueOpen < 90 && overloaded.length === 0 && !humanStrain) return 0;
+
+  const facts = [
+    `Yesterday (${yesterday}) closeout for this dental office.`,
+    `Provider schedule aggregates: ${(metrics ?? [])
+      .map(m =>
+        `${m.provider_label} (${m.department}): ${m.scheduled_minutes}m booked of ${m.net_bookable_minutes}m bookable, ` +
+        `${m.true_open_minutes}m true open (${m.cancellation_open_minutes}m from ${m.cancellation_count} cancellations, ` +
+        `${m.no_show_open_minutes}m from ${m.no_show_count} no-shows), workload ${m.automated_workload_class ?? "n/a"}`)
+      .join("; ") || "no schedule capture"}`,
+    `Front desk's own read of staffing: ${log.staffing_assessment ?? "not answered"}` +
+      `${Array.isArray(log.staffing_pressure) && log.staffing_pressure.length ? `, pressure on ${log.staffing_pressure.join(", ")}` : ""}.`,
+  ].join("\n");
+
+  const content = await say(
+    apiKey,
+    `Write ONE observation for the office managers from yesterday's closeout, using only these facts:\n${facts}\n` +
+      `Cite the real minutes or counts. If the front desk said the day was stretched/understaffed/unsafe, treat that as the headline even if the schedule looked fine — the disagreement is the finding. ` +
+      `HARD RULES: never suggest overbooking, double-booking, skipping lunch or admin blocks, adding patients to an overloaded provider, or running with less staff. Recovering cancelled/no-show time, confirmation habits, and staffing adjustments are the levers. ` +
+      `"Might not be a bad idea to…" register, one or two sentences.`,
+    "",
+  );
+  if (!content) return 0;
+
+  const members = await orgMembers(db, orgId);
+  const admins = members.filter(m => m.role === "owner" || m.role === "manager");
+  let made = 0;
+  for (const a of admins) {
+    try {
+      if (await isMuted(db, a.user_id as string, "close_day_insight")) continue;
+      const { data: open } = await db
+        .from("office_nudges")
+        .select("id")
+        .eq("user_id", a.user_id as string)
+        .eq("kind", "close_day_insight")
+        .in("status", ["new", "shown"])
+        .limit(1);
+      if ((open?.length ?? 0) > 0) continue;
+      await db.from("office_nudges").insert({
+        org_id: orgId,
+        user_id: a.user_id as string,
+        surface: "deposit",
+        kind: "close_day_insight",
+        content,
+        data_refs: {
+          business_date: yesterday,
+          true_open_minutes: trueOpen,
+          cancellation_open_minutes: cancelOpen,
+          no_show_open_minutes: noShowOpen,
+          staffing_assessment: log.staffing_assessment ?? null,
+        },
+        status: "new",
+      });
+      made++;
+    } catch (e) {
+      console.warn("close-day insight skipped:", (e as Error).message);
+    }
+  }
+  return made;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -625,7 +732,8 @@ Deno.serve(async (req) => {
         const sent = await fireHooks(db, apiKey, orgId, today);
         const sprints = await runSprints(db, apiKey, orgId, today);
         const suggestions = await suggestSprints(db, apiKey, orgId, today);
-        summary.push({ org_id: orgId, scheduled, sent, sprints, suggestions });
+        const closeDay = await coachCloseDay(db, apiKey, orgId, today);
+        summary.push({ org_id: orgId, scheduled, sent, sprints, suggestions, closeDay });
       } catch (e) {
         // Fail open — one office's bad day never stops the rest.
         console.error("office-pulse org failed:", orgId, (e as Error).message);

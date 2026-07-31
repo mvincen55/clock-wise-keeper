@@ -12,6 +12,7 @@ import {
   useTagRegistry,
   useTeamOnboardingStatus,
 } from '@/hooks/useOnboarding';
+import OperationalRolesEditor from '@/components/team/OperationalRolesEditor';
 
 type Member = {
   id: string;
@@ -130,6 +131,8 @@ export default function MemberProfileRow({ employee }: { employee: Member }) {
         <Badge variant="outline" className="text-muted-foreground">Not started</Badge>
       )}
       </div>
+
+      <OperationalRolesEditor employeeId={employee.id} />
 
       {favorites.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">

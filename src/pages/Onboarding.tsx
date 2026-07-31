@@ -38,6 +38,8 @@ const STEPS = ['Privacy', 'About you', 'Basics', 'First goal'] as const;
 /**
  * The flow a new member completes after accepting their invite. Four screens,
  * in order, and the app stays closed until the last one is done.
+ * (Their operational role isn't asked here — the inviting owner/manager
+ * already answered that on the invite.)
  */
 export default function Onboarding() {
   const navigate = useNavigate();

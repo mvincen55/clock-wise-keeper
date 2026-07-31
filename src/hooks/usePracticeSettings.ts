@@ -9,6 +9,8 @@ export type PracticeSettings = {
   collections_visibility: 'admin_only' | 'everyone' | string;
   /** Monthly collections target used to pace the vitals gauge. */
   monthly_collections_target_cents: number;
+  /** Opt-in: allow the phone-photo fallback for Privacy View Capture. */
+  mobile_capture_enabled: boolean;
 };
 
 export type PracticeSettingsPatch = Partial<PracticeSettings>;
@@ -23,13 +25,16 @@ export function usePracticeSettings() {
     queryFn: async (): Promise<PracticeSettings> => {
       const { data } = await supabase
         .from('org_practice_settings')
-        .select('owners_clock_in, collections_visibility, monthly_collections_target_cents')
+        .select(
+          'owners_clock_in, collections_visibility, monthly_collections_target_cents, mobile_capture_enabled'
+        )
         .eq('org_id', ctx!.org_id)
         .maybeSingle();
       return {
         owners_clock_in: data?.owners_clock_in ?? false,
         collections_visibility: data?.collections_visibility ?? 'everyone',
         monthly_collections_target_cents: data?.monthly_collections_target_cents ?? 0,
+        mobile_capture_enabled: data?.mobile_capture_enabled ?? false,
       };
     },
   });

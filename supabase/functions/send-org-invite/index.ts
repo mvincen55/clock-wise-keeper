@@ -94,6 +94,18 @@ Deno.serve(async (req) => {
     const rawEmail = typeof body?.email === "string" ? body.email.toLowerCase().trim() : "";
     const role = body?.role;
     const origin = typeof body?.origin === "string" ? body.origin : "";
+    // The inviter answers the profile questions up front: the new member's
+    // name and what they'll actually do. Onboarding never has to ask.
+    const invitedName = typeof body?.name === "string" ? body.name.trim().slice(0, 80) : "";
+    const operationalRole = typeof body?.operationalRole === "string" ? body.operationalRole : "";
+    const secondaryRoles: string[] = Array.isArray(body?.secondaryRoles)
+      ? body.secondaryRoles.filter((r: unknown) => typeof r === "string")
+      : [];
+
+    const OPERATIONAL_ROLES = [
+      "dentist", "hygienist", "dental_assistant", "front_desk",
+      "office_manager", "sterilization", "floater", "other",
+    ];
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
       return new Response(JSON.stringify({ error: "A valid email address is required" }), {
@@ -107,6 +119,21 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    if (!invitedName) {
+      return new Response(JSON.stringify({ error: "The team member's name is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!OPERATIONAL_ROLES.includes(operationalRole)) {
+      return new Response(JSON.stringify({ error: "A valid operational role is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const cleanSecondary = [...new Set(secondaryRoles)].filter(
+      (r) => OPERATIONAL_ROLES.includes(r) && r !== operationalRole,
+    );
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
@@ -155,10 +182,11 @@ Deno.serve(async (req) => {
     const orgId = membership.org_id;
     const orgName = (membership as any).orgs?.name || "Your office";
 
-    // Reuse a live pending invite for the same org+email instead of stacking duplicates.
+    // Reuse a live pending invite for the same org+email instead of stacking
+    // duplicates — refreshed with the latest name/roles the inviter entered.
     const { data: existing } = await supabaseAdmin
       .from("org_invites")
-      .select("token")
+      .select("id, token")
       .eq("org_id", orgId)
       .eq("email", rawEmail)
       .is("accepted_at", null)
@@ -167,13 +195,21 @@ Deno.serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
+    const profileFields = {
+      invited_name: invitedName,
+      operational_role: operationalRole,
+      secondary_roles: cleanSecondary,
+      invited_by: user.id,
+    };
+
     let token: string;
     if (existing?.token) {
       token = existing.token;
+      await supabaseAdmin.from("org_invites").update(profileFields).eq("id", existing.id);
     } else {
       const { data: invite, error: inviteError } = await supabaseAdmin
         .from("org_invites")
-        .insert({ org_id: orgId, email: rawEmail, role })
+        .insert({ org_id: orgId, email: rawEmail, role, ...profileFields })
         .select("token")
         .single();
       if (inviteError || !invite) {
