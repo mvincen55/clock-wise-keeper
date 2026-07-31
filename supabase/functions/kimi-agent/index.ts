@@ -196,14 +196,23 @@ interface GithubConfig {
 }
 
 function githubConfig(): GithubConfig | null {
-  const token = Deno.env.get("GITHUB_TOKEN");
+  // Either secret name works: GITHUB_FINE_GRAINED_TOKEN is the name used in
+  // this project's backend secrets, GITHUB_TOKEN the generic one in the docs.
+  // The token must be a FINE-GRAINED PAT scoped to this one repository with
+  // Contents: read/write and Pull requests: read/write — nothing else. A
+  // classic account-wide `repo` PAT is out of policy here.
+  const token =
+    Deno.env.get("GITHUB_FINE_GRAINED_TOKEN") ?? Deno.env.get("GITHUB_TOKEN");
   if (!token) return null;
-  return {
-    token,
-    repo: Deno.env.get("GITHUB_REPO") ?? "mvincen55/clock-wise-keeper",
-    branch: Deno.env.get("GITHUB_BRANCH") ?? "main",
-  };
+  const repo = Deno.env.get("GITHUB_REPO") ?? "mvincen55/clock-wise-keeper";
+  // Repo must be a single owner/name pair — no path tricks, no cross-repo
+  // reach even if the env var is ever mis-set.
+  if (!/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(repo)) return null;
+  const branch = (Deno.env.get("GITHUB_BRANCH") ?? "main").replace(/[^A-Za-z0-9._\/-]/g, "");
+  if (!branch) return null;
+  return { token, repo, branch };
 }
+
 
 async function ghFetch(
   gh: GithubConfig,
