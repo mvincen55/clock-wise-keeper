@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { computeGating, audiencesFor } from "../_shared/checklist-gating.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -173,45 +174,45 @@ Deno.serve(async (req) => {
     //    Mirrors src/hooks/useChecklistGating: a personal item only counts for
     //    the person it belongs to, dated items only once their day has come,
     //    and a dated item completes against its own day, not today.
-    const audiences = isAdmin ? ["all", "manager"] : ["all"];
     const { data: lists } = await admin
       .from("checklists")
-      .select("id")
+      .select("id, audience")
       .eq("org_id", orgId)
-      .in("audience", audiences);
+      .in("audience", audiencesFor(isAdmin));
 
     const listIds = (lists ?? []).map((l) => l.id);
-    let gatingItems: { id: string; due_date: string | null }[] = [];
+    let incompleteCount = 0;
     if (listIds.length) {
       const { data: items } = await admin
         .from("checklist_items")
-        .select("id, owner_user_id, due_date")
+        .select("id, title, per_person, owner_user_id, due_date, checklist_id")
         .eq("org_id", orgId)
         .in("checklist_id", listIds)
         .eq("cadence", "daily")
-        .eq("is_active", true)
-        .eq("per_person", true);
-      gatingItems = (items ?? [])
-        .filter((i) =>
-          (!i.owner_user_id || i.owner_user_id === user.id) &&
-          (!i.due_date || (i.due_date as string) <= today)
-        )
-        .map((i) => ({ id: i.id as string, due_date: (i.due_date as string | null) ?? null }));
-    }
+        .eq("is_active", true);
 
-    let incompleteCount = gatingItems.length;
-    if (gatingItems.length) {
       const { data: done } = await admin
         .from("checklist_completions")
-        .select("item_id, period_key")
-        .in("item_id", gatingItems.map((i) => i.id))
-        .eq("completed_by", user.id);
-      const doneKeys = new Set((done ?? []).map((d) => `${d.item_id}:${d.period_key}`));
-      incompleteCount = gatingItems.filter(
-        (i) => !doneKeys.has(`${i.id}:${i.due_date ?? today}`),
-      ).length;
-    }
+        .select("item_id, completed_by, period_key")
+        .in("item_id", (items ?? []).map((i) => i.id));
 
+      // Same pure rule the client runs — see _shared/checklist-gating.ts.
+      incompleteCount = computeGating({
+        lists: (lists ?? []).map((l) => ({ id: l.id as string, audience: l.audience as string })),
+        items: (items ?? []).map((i) => ({
+          id: i.id as string,
+          title: (i.title as string) ?? "",
+          per_person: !!i.per_person,
+          owner_user_id: (i.owner_user_id as string | null) ?? null,
+          due_date: (i.due_date as string | null) ?? null,
+          checklist_id: i.checklist_id as string,
+        })),
+        completions: done ?? [],
+        userId: user.id,
+        today,
+        isAdmin,
+      }).incompleteCount;
+    }
 
     if (incompleteCount === 0) {
       return new Response(JSON.stringify({ recorded: false }), {
@@ -229,7 +230,7 @@ Deno.serve(async (req) => {
 
     const escalationLevel = 1 + (priorUnresolved ?? 0);
 
-    const { data: inserted } = await admin
+    const { data: inserted, error: insertError } = await admin
       .from("checklist_bypasses")
       .insert({
         org_id: orgId,
@@ -244,7 +245,18 @@ Deno.serve(async (req) => {
       .select("id, escalation_level")
       .maybeSingle();
 
-    // Already recorded today (unique user_id + checklist_date): stay quiet.
+    // A real failure is not a duplicate: only the idempotent unique-violation
+    // (user_id + checklist_date) may be swallowed. Anything else is an error —
+    // the client still writes the punch, so nobody is trapped at the office.
+    if (insertError && insertError.code !== "23505") {
+      console.error("checklist bypass insert failed", insertError.code);
+      return new Response(JSON.stringify({ error: "Could not record the bypass" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Already recorded today: stay quiet.
     if (!inserted) {
       const { data: existing } = await admin
         .from("checklist_bypasses")
