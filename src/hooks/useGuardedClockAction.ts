@@ -4,6 +4,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useClockAction } from '@/hooks/useTimeEntries';
 import { useChecklistGating } from '@/hooks/useChecklistGating';
+import { useMessagingSettings } from '@/hooks/useMessagingSettings';
+import { DEFAULT_MESSAGING_SETTINGS } from '@/lib/messaging-settings';
 
 function ordinal(n: number): string {
   const s = ['th', 'st', 'nd', 'rd'];
@@ -19,9 +21,12 @@ function ordinal(n: number): string {
 export function useGuardedClockAction() {
   const clockAction = useClockAction();
   const { data: gating } = useChecklistGating();
+  const { data: messaging } = useMessagingSettings();
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [bypassing, setBypassing] = useState(false);
+
+  const doctorLabel = messaging?.doctor_recipient_label ?? DEFAULT_MESSAGING_SETTINGS.doctor_recipient_label;
 
   const run = (action: 'clock_in' | 'clock_out') => {
     if (action === 'clock_out' && (gating?.incompleteCount ?? 0) > 0) {
@@ -51,11 +56,11 @@ export function useGuardedClockAction() {
 
     if (escalationLevel > 1) {
       toast.warning(
-        `This is your ${ordinal(escalationLevel)} clock-out with an unanswered checklist bypass. Your manager and the doctor have been notified again — this needs an answer.`,
+        `This is your ${ordinal(escalationLevel)} clock-out with an unanswered checklist bypass. Your manager and ${doctorLabel} have been notified again — this needs an answer.`,
         { duration: 10000 }
       );
     } else {
-      toast.info('Clocked out. Your manager and the doctor were notified about the open checklist items.');
+      toast.info(`Clocked out. Your manager and ${doctorLabel} were notified about the open checklist items.`);
     }
   };
 

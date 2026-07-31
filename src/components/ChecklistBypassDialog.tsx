@@ -3,6 +3,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { buttonVariants } from '@/components/ui/button';
+import { useMessagingSettings } from '@/hooks/useMessagingSettings';
+import { DEFAULT_MESSAGING_SETTINGS } from '@/lib/messaging-settings';
 
 interface Props {
   open: boolean;
@@ -27,6 +29,8 @@ export default function ChecklistBypassDialog({
   onBypass,
 }: Props) {
   const [reason, setReason] = useState('');
+  const { data: messaging } = useMessagingSettings();
+  const doctorLabel = messaging?.doctor_recipient_label ?? DEFAULT_MESSAGING_SETTINGS.doctor_recipient_label;
 
   return (
     <AlertDialog open={open} onOpenChange={o => { if (!o) onGoBack(); }}>
@@ -36,7 +40,7 @@ export default function ChecklistBypassDialog({
             {incompleteCount} checklist item{incompleteCount === 1 ? '' : 's'} still open
           </AlertDialogTitle>
           <AlertDialogDescription>
-            Your manager and the doctor will be notified that you bypassed your checklist.
+            Your manager and {doctorLabel} will be notified that you bypassed your checklist.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
