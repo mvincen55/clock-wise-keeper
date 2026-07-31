@@ -111,6 +111,12 @@ export default function MyGoalCard({
               </Badge>
             )}
             {latestUpdate && <GoalStatusBadge status={latestUpdate.status} />}
+            <Button variant="ghost" size="sm" onClick={() => setEditOpen(true)}>
+              Edit
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setArchiveOpen(true)}>
+              Let it go
+            </Button>
           </div>
         </div>
       </CardHeader>
