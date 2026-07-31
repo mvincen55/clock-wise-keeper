@@ -435,7 +435,7 @@ export function useArchiveGoal() {
           status: 'archived',
           archived_at: new Date().toISOString(),
           archived_reason: clean,
-        } as never)
+        })
         .eq('id', goal.id);
       if (error) throw error;
       const { data: event, error: evError } = await supabase
