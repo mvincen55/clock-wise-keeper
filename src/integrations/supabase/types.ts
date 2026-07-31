@@ -2163,6 +2163,39 @@ export type Database = {
           },
         ]
       }
+      goal_reminder_prefs: {
+        Row: {
+          channel: string
+          created_at: string
+          enabled: boolean
+          id: string
+          org_id: string
+          reminder_hour: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          channel?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          org_id: string
+          reminder_hour?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          org_id?: string
+          reminder_hour?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       goal_tasks: {
         Row: {
           created_at: string
