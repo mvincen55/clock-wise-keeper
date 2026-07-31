@@ -48,6 +48,8 @@ const PRACTICE: FofPracticeInfo = {
   website: 'northfielddentalgroup.example',
   doctorName: 'Dr. Scott',
   logoUrl: '/src/assets/practice-logo.png',
+  membershipPlanName: 'Membership',
+  doctorNames: ['Dr. Scott', 'Dr. Jennie'],
 };
 
 /**
@@ -231,6 +233,8 @@ describe('print invariant — reference output must never change', () => {
           bankTotalLabel: 'SB Bank Total',
           envelopeNote: 'Purple envelope — no tape',
           officeCopyNote: 'Office Copy — file with the day sheet',
+          membershipRowLabel: 'Membership',
+          outsideFinancingLabel: 'Outside Financing',
         }}
       />
     );

@@ -38,6 +38,15 @@ const MODEL = "google/gemini-3.6-flash";
 const bounded = (value: unknown, cap: number): string =>
   typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, cap) : "";
 
+function easternToday(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
 /** Last day of a "YYYY-MM" month. */
 function monthBounds(month: string): { start: string; end: string } {
   const [y, m] = month.split("-").map(Number);
@@ -115,7 +124,7 @@ Deno.serve(async (req) => {
     if (!membership) return json({ error: "Unauthorized" }, 403);
 
     // The next team meeting on the office calendar — plans are built around it.
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = easternToday();
     const { data: meetings } = await supabase
       .from("office_events")
       .select("event_date, title")
@@ -201,7 +210,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (mode === "breakdown") {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = easternToday();
       const planFrom = today > start ? today : start;
 
       const { data: daysOff } = await supabase

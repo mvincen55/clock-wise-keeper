@@ -12,6 +12,8 @@ export interface MessagingSettings {
   enabled: boolean;
   messages_label: string;
   requests_label: string;
+  /** How the office refers to the doctor in checklist/clock-out messages. */
+  doctor_recipient_label: string;
   categories: string[];
   retention_days: number;
   closeout_cutoff_minutes: number;
@@ -27,6 +29,7 @@ export const DEFAULT_MESSAGING_SETTINGS: MessagingSettings = {
   enabled: true,
   messages_label: 'Messages',
   requests_label: 'Doctor Requests',
+  doctor_recipient_label: 'the doctor',
   categories: [
     'Treatment question',
     'Lab',
@@ -59,6 +62,10 @@ export const MESSAGING_SETTING_LABELS = {
   requests_label: {
     label: 'What we call notes sent to the doctor',
     onboarding: 'What does your office call something you need the doctor to look at?',
+  },
+  doctor_recipient_label: {
+    label: 'What we call the doctor in clock-out messages',
+    onboarding: 'What does your office call the doctor in everyday messages?',
   },
   categories: {
     label: 'Kinds of notes',

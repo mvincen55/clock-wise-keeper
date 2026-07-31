@@ -46,13 +46,13 @@ export default function PTO() {
   const recalc = useRecalculatePto();
   const ptoState = useCurrentPtoBalance();
 
-  // Local form state for settings
-  const [hireDate, setHireDate] = useState('2022-02-07');
+  // Local form state for settings (neutral defaults until the DB row loads)
+  const [hireDate, setHireDate] = useState('');
   const [workedCap, setWorkedCap] = useState(40);
   const [maxBalance, setMaxBalance] = useState(100);
   const [allowNegative, setAllowNegative] = useState(false);
-  const [snapDate, setSnapDate] = useState('2026-02-14');
-  const [snapBalance, setSnapBalance] = useState(-1.63);
+  const [snapDate, setSnapDate] = useState('');
+  const [snapBalance, setSnapBalance] = useState(0);
 
   // Sync from DB
   useEffect(() => {

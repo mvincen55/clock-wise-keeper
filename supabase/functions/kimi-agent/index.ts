@@ -567,8 +567,78 @@ async function saveCodeNote(
 const SITE_PRIMER =
   "THE SITE (so you know what you're standing in and what you'd be editing): TimeVault, the office's internal web app — repo mvincen55/clock-wise-keeper on GitHub, built and hosted with Lovable, which two-way syncs the repo's default branch. Features: time clock with punches and geofenced work zones; schedules and attendance review; PTO requests and approvals; payroll export (this is the payroll system of record — time math is owned by Postgres triggers, times are America/New_York wall time, be extremely careful in that area); the FOF builder (Financial Options Forms: CDT-code fee schedules, insurance estimates, discounts, AI-named visits, print sheets, templates); Policy Manual and an office document knowledge base with AI search; Deposit Log; Important Numbers; checklists; notifications. Stack: Vite + React 18 + TypeScript + Tailwind + shadcn/ui, TanStack Query, React Router, Capacitor wrapper; backend is Supabase (Lovable Cloud): Postgres with strict RLS, Deno edge functions in supabase/functions/, migrations in supabase/migrations/. Frontend lives in src/ (pages/, components/, hooks/, lib/ — FOF logic in src/lib/fof). CI on GitHub Actions runs bun test and a production build on every push and PR.";
 
-const POLICY_SUMMARY =
-  "Office FOF policy facts you may explain: prepay-in-full earns the prepay discount (10% standard; Illumitrac seniors +5%); patient portions under $1,000 are simply paid at the visit (nothing due at scheduling); larger plans collect a full visit ahead so the patient never carries a balance, with the final visit split half ahead / half at the visit; work-up procedures and surgical guides are billed at their visit, never prepaid; most plans pay composite rates — downgrades are off by default and only turned on for plans like Altus, which pay on the amalgam fee with the patient responsible up to the office fee; finished lab work is always 'delivered' (Crown Delivery, Denture Delivery, Implant Crown Delivery — never 'seating'); fillings are described without surfaces; D4265, D4268, D5982, and D7953 are never insurance-covered.";
+const BASE_POLICY_SUMMARY =
+  "Office FOF policy facts are generated from the org's current settings and guidance rules below. The assistant must explain the live values, not assume defaults. Product-behavior rules that do not change per office: larger plans collect a full visit ahead so the patient never carries a balance, with the final visit split half ahead / half at the visit; work-up procedures and surgical guides are billed at their visit, never prepaid; finished lab work is always described as 'delivered' (crown delivery, denture delivery, implant crown delivery) — never 'seating', 'seat', 'insertion', 'placement', or 'cementation'; fillings are described without surfaces.";
+
+function formatCents(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+interface FofSettingsRow {
+  membership_plan_name: string;
+  day_of_service_threshold_cents: number;
+  min_standalone_payment_cents: number;
+  downgrade_default_on: boolean;
+}
+
+interface FofDiscountRule {
+  rule_key: string;
+  enabled: boolean;
+  percent: number;
+  extra_percent: number;
+  threshold_cents: number;
+}
+
+interface FofCodeRule {
+  code: string;
+  kind: string;
+}
+
+function buildDynamicPolicySummary(
+  settings: FofSettingsRow | null,
+  discountRules: FofDiscountRule[],
+  codeRules: FofCodeRule[],
+  guidance: string[]
+): string {
+  const parts: string[] = [BASE_POLICY_SUMMARY];
+
+  const planName = settings?.membership_plan_name?.trim() || "membership";
+  const dayOfService = settings?.day_of_service_threshold_cents ?? 100_000;
+  const minStandalone = settings?.min_standalone_payment_cents ?? 10_000;
+  const downgradeDefault = settings?.downgrade_default_on ?? false;
+
+  parts.push(
+    `Current office settings: prepay-in-full earns the standard prepay discount. Patient portions under ${formatCents(dayOfService)} are paid at the visit (nothing due at scheduling). Plans with first-visit patient portions under ${formatCents(minStandalone)} follow the same simple day-of-service rule. Downgrade-to-amalgam handling is ${downgradeDefault ? "on by default" : "off by default"}${downgradeDefault ? "" : " and only turned on for specific insurance plans"}.`
+  );
+
+  const membershipRule = discountRules.find((r) => r.rule_key === "membership" && r.enabled);
+  if (membershipRule) {
+    parts.push(
+      `${planName} membership discount: ${membershipRule.percent}% base${membershipRule.extra_percent > 0 ? ` plus an extra ${membershipRule.extra_percent}% for eligible members` : ""}. Threshold before the membership structure applies: ${formatCents(membershipRule.threshold_cents)}.`
+    );
+  } else {
+    parts.push(`No ${planName} membership discount is currently enabled.`);
+  }
+
+  const seniorRule = discountRules.find((r) => r.rule_key === "senior" && r.enabled);
+  if (seniorRule) {
+    parts.push(
+      `Senior discount: ${seniorRule.percent}% for qualifying patients${seniorRule.extra_percent > 0 ? ` plus an extra ${seniorRule.extra_percent}% when combined with ${planName}` : ""}. Threshold: ${formatCents(seniorRule.threshold_cents)}.`
+    );
+  }
+
+  const neverCovered = codeRules.filter((r) => r.kind === "never_covered").map((r) => r.code.toUpperCase());
+  if (neverCovered.length > 0) {
+    parts.push(`Codes never covered by insurance in this office: ${neverCovered.join(", ")}.`);
+  }
+
+  if (guidance.length > 0) {
+    parts.push("Office voice guidance:");
+    for (const g of guidance) parts.push(`- ${g}`);
+  }
+
+  return parts.join("\n");
+}
 
 interface PromptContext {
   mode: "fof" | "ask";
@@ -582,6 +652,7 @@ interface PromptContext {
   visits: string;
   treatment: string;
   docCount: number;
+  policySummary?: string;
 }
 
 function buildSystemPrompt(ctx: PromptContext): string {
@@ -684,7 +755,7 @@ function buildSystemPrompt(ctx: PromptContext): string {
 
   // --- mode specifics ------------------------------------------------------
   if (ctx.mode === "fof") {
-    parts.push(POLICY_SUMMARY);
+    parts.push(ctx.policySummary ?? BASE_POLICY_SUMMARY);
     if (ctx.guidance.length > 0) {
       parts.push(
         `STANDING WORDING RULES already in effect (from past training): ${ctx.guidance.map((g, i) => `(${i + 1}) ${g}`).join(" ")}`
@@ -984,7 +1055,7 @@ Deno.serve(async (req) => {
     const treatment = bounded(body.context?.treatment, MAX_TREATMENT_CHARS);
 
     // Standing knowledge, all under the caller's JWT so RLS scopes the org.
-    const [memoriesRes, guidanceRes, docsRes, codeNotes, schedulesRes] = await Promise.all([
+    const [memoriesRes, guidanceRes, docsRes, codeNotes, schedulesRes, fofSettingsRes, fofDiscountsRes, fofCodesRes] = await Promise.all([
       supabase
         .from("assistant_memories")
         .select("id, kind, content")
@@ -1007,6 +1078,25 @@ Deno.serve(async (req) => {
       supabase.from("office_docs").select("id").limit(200),
       loadCodeNotes(supabase),
       supabase.from("fee_schedules").select("name, kind").eq("is_active", true).order("sort_order"),
+      mode === "fof"
+        ? supabase
+            .from("fof_settings")
+            .select("membership_plan_name, day_of_service_threshold_cents, min_standalone_payment_cents, downgrade_default_on")
+            .eq("org_id", membership.org_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      mode === "fof"
+        ? supabase
+            .from("fof_discount_rules")
+            .select("rule_key, enabled, percent, extra_percent, threshold_cents")
+            .eq("org_id", membership.org_id)
+        : Promise.resolve({ data: [] }),
+      mode === "fof"
+        ? supabase
+            .from("fof_code_rules")
+            .select("code, kind")
+            .eq("org_id", membership.org_id)
+        : Promise.resolve({ data: [] }),
     ]);
     const memories = ((memoriesRes.data ?? []) as { id: string; kind: string; content: string }[]).map(
       (m) => ({ id: m.id, kind: m.kind, content: bounded(m.content, MAX_MEMORY_CHARS) })
@@ -1014,6 +1104,14 @@ Deno.serve(async (req) => {
     const guidance = ((guidanceRes.data ?? []) as { content: string }[])
       .map((g) => bounded(g.content, 240))
       .filter(Boolean);
+    const policySummary = mode === "fof"
+      ? buildDynamicPolicySummary(
+          (fofSettingsRes.data ?? null) as FofSettingsRow | null,
+          (fofDiscountsRes.data ?? []) as FofDiscountRule[],
+          (fofCodesRes.data ?? []) as FofCodeRule[],
+          guidance,
+        )
+      : undefined;
 
     const gh = githubConfig();
     const githubReady = isManager && gh !== null;
@@ -1032,6 +1130,7 @@ Deno.serve(async (req) => {
       visits,
       treatment,
       docCount: docsRes.data?.length ?? 0,
+      policySummary,
     });
     const tools = buildTools({ isManager, training, mode, githubReady });
 

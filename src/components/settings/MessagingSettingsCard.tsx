@@ -56,6 +56,16 @@ export default function MessagingSettingsCard() {
               className="h-9"
             />
           </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">{L.doctor_recipient_label.label}</Label>
+            <Input
+              defaultValue={settings.doctor_recipient_label}
+              onBlur={e =>
+                save.mutate({ doctor_recipient_label: e.target.value.trim() || 'the doctor' })
+              }
+              className="h-9"
+            />
+          </div>
         </div>
 
         <div className="space-y-1.5">

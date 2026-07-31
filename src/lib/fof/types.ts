@@ -20,6 +20,10 @@ export interface FofPracticeInfo {
   doctorName: string;
   /** Org logo (storage URL or data: URI); empty = no logo printed. */
   logoUrl: string;
+  /** Display name for the office's membership plan (e.g. "Illumitrac"). */
+  membershipPlanName: string;
+  /** Treating doctors selectable on the FOF builder. */
+  doctorNames: string[];
 }
 
 export interface FofTemplate {

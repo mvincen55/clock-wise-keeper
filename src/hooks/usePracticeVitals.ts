@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { getToday } from '@/lib/time-utils';
 import { depositChecks, type DepositLog } from '@/hooks/useDepositLog';
+import { usePracticeSettings } from '@/hooks/usePracticeSettings';
 
 /**
  * Practice vitals read straight off the deposit log: what the day produced,
@@ -94,10 +95,13 @@ function summarize(days: DayVitals[]): VitalsSummary {
 /** Twelve months of history, so this month can be read against the last one. */
 export function usePracticeVitals() {
   const { data: ctx } = useOrgContext();
+  const { data: practiceSettings } = usePracticeSettings();
   const today = getToday();
+  const targetCents = practiceSettings?.monthly_collections_target_cents ?? 0;
+  const visible = practiceSettings?.collections_visibility !== 'admin_only' || ctx?.role === 'owner';
 
   return useQuery({
-    queryKey: ['practice-vitals', ctx?.org_id, today.slice(0, 7)],
+    queryKey: ['practice-vitals', ctx?.org_id, today.slice(0, 7), targetCents, visible],
     enabled: !!ctx,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -110,12 +114,8 @@ export function usePracticeVitals() {
 
       const all = (data ?? []).map(toDayVitals);
       const thisMonthStart = monthStart(today);
-      const lastMonthStart = monthStart(today, -1);
 
       const thisMonthDays = all.filter(d => d.date >= thisMonthStart);
-      const lastMonthDays = all.filter(
-        d => d.date >= lastMonthStart && d.date < thisMonthStart
-      );
 
       // Month elapsed drives the pace comparison — a target is only "behind"
       // relative to how much of the month has actually happened.
@@ -133,13 +133,18 @@ export function usePracticeVitals() {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([month, days]) => ({ month, ...summarize(days) }));
 
+      const thisMonth = summarize(thisMonthDays);
+      const pacedTarget = targetCents > 0 ? Math.round(targetCents * (dayOfMonth / daysInMonth)) : 0;
+
       return {
         today: all.find(d => d.date === today) ?? null,
-        thisMonth: summarize(thisMonthDays),
-        lastMonth: summarize(lastMonthDays),
-        thisMonthDays,
+        thisMonth,
         months,
+        thisMonthDays,
         monthElapsed: dayOfMonth / daysInMonth,
+        targetCents,
+        pacedTargetCents: pacedTarget,
+        visible,
       };
     },
   });

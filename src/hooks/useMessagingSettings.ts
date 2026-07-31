@@ -29,6 +29,7 @@ export function useMessagingSettings() {
         enabled: data.enabled,
         messages_label: data.messages_label,
         requests_label: data.requests_label,
+        doctor_recipient_label: data.doctor_recipient_label ?? DEFAULT_MESSAGING_SETTINGS.doctor_recipient_label,
         categories: data.categories ?? DEFAULT_MESSAGING_SETTINGS.categories,
         retention_days: data.retention_days,
         closeout_cutoff_minutes: data.closeout_cutoff_minutes,

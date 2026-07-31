@@ -11,19 +11,17 @@ export default function PracticeVitalsCard() {
   const { data, isLoading } = usePracticeVitals();
   if (isLoading || !data) return null;
 
-  const { thisMonth, lastMonth, months, monthElapsed } = data;
+  const { thisMonth, months, monthElapsed, targetCents, pacedTargetCents, visible } = data;
 
-  // Pace against last month's same slice of the month, not the whole month.
-  const lastMonthPaced = Math.round(lastMonth.productionCents * monthElapsed);
   const delta =
-    lastMonthPaced > 0
-      ? Math.round(((thisMonth.productionCents - lastMonthPaced) / lastMonthPaced) * 100)
+    targetCents > 0
+      ? Math.round(((thisMonth.productionCents - pacedTargetCents) / pacedTargetCents) * 100)
       : null;
   const ahead = (delta ?? 0) >= 0;
 
-  const gaugeMax = Math.max(thisMonth.productionCents, lastMonth.productionCents, 1);
+  const gaugeMax = Math.max(thisMonth.productionCents, targetCents, 1);
   const producedPct = (thisMonth.productionCents / gaugeMax) * 100;
-  const collectedPct = (thisMonth.collectedCents / gaugeMax) * 100;
+  const collectedPct = visible ? (thisMonth.collectedCents / gaugeMax) * 100 : 0;
 
   const pairs = [
     { label: 'Hygiene', cancels: thisMonth.hygieneCancellations, noShows: thisMonth.hygieneNoShows },
@@ -34,17 +32,19 @@ export default function PracticeVitalsCard() {
   const trendMax = Math.max(...trendMonths.map(m => m.productionCents), 1);
   const disruptMax = Math.max(...trendMonths.map(m => m.disruptions), 1);
 
+  const prevMonth = months.length > 1 ? months[months.length - 2] : null;
+
   const pulseInput = {
     productionCents: thisMonth.productionCents,
-    pacedTargetCents: lastMonthPaced,
+    pacedTargetCents: pacedTargetCents,
     disruptions: thisMonth.disruptions,
-    disruptionBaseline: lastMonth.disruptions * monthElapsed,
+    disruptionBaseline: prevMonth ? prevMonth.disruptions * monthElapsed : 0,
     month: new Date().toISOString().slice(0, 7),
-    comparisonMonth: months.length > 1 ? months[months.length - 2].month : '—',
+    comparisonMonth: prevMonth?.month ?? '—',
     rowsThisMonth: thisMonth.days,
-    rowsComparisonMonth: lastMonth.days,
+    rowsComparisonMonth: prevMonth?.days ?? 0,
     monthElapsed,
-    comparisonProductionCents: lastMonth.productionCents,
+    comparisonProductionCents: prevMonth?.productionCents ?? 0,
     hygieneCancellations: thisMonth.hygieneCancellations,
     hygieneNoShows: thisMonth.hygieneNoShows,
     doctorCancellations: thisMonth.doctorCancellations,
@@ -76,8 +76,8 @@ export default function PracticeVitalsCard() {
             <div className="h-full rounded-full bg-primary" style={{ width: `${producedPct}%` }} />
           </div>
           <div className="flex items-baseline justify-between text-sm text-muted-foreground">
-            <span>Collected</span>
-            <span className="tabular-nums">{formatCents(thisMonth.collectedCents)}</span>
+            <span>Collected {visible ? '' : '(hidden for non-owners)'}</span>
+            <span className="tabular-nums">{visible ? formatCents(thisMonth.collectedCents) : '—'}</span>
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-muted">
             <div
@@ -93,7 +93,7 @@ export default function PracticeVitalsCard() {
               )}
             >
               {ahead ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
-              Production tracking {Math.abs(delta)}% {ahead ? 'ahead of' : 'behind'} last month
+              Production tracking {Math.abs(delta)}% {ahead ? 'ahead of' : 'behind'} target
             </p>
           )}
         </div>
