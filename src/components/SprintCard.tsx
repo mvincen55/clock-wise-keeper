@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import ProgressRing from '@/components/ProgressRing';
 import { Card, CardContent } from '@/components/ui/card';
 import { AddToMyListButton } from '@/components/copilot/AddToMyListButton';
 import { Button } from '@/components/ui/button';
@@ -44,27 +45,6 @@ function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
-}
-
-function ProgressRing({ pct }: { pct: number }) {
-  const r = 34;
-  const c = 2 * Math.PI * r;
-  return (
-    <svg viewBox="0 0 80 80" className="h-20 w-20 shrink-0 -rotate-90">
-      <circle cx="40" cy="40" r={r} fill="none" strokeWidth="8" className="stroke-muted" />
-      <circle
-        cx="40"
-        cy="40"
-        r={r}
-        fill="none"
-        strokeWidth="8"
-        strokeLinecap="round"
-        className="stroke-primary transition-all duration-700 ease-out"
-        strokeDasharray={c}
-        strokeDashoffset={c - (Math.min(100, pct) / 100) * c}
-      />
-    </svg>
-  );
 }
 
 function NewSprintDialog({
@@ -300,8 +280,10 @@ export default function SprintCard() {
     );
   }
 
-  const pct = Math.round((sprint.progress / Math.max(1, sprint.target_count)) * 100);
   const left = daysLeft(sprint.ends_on);
+  // Fraction of the sprint window already spent — drives the ring's "behind" amber.
+  const totalDays = Math.max(1, daysLeft(sprint.ends_on) + daysSince(sprint.starts_on));
+  const elapsed = Math.min(1, Math.max(0, daysSince(sprint.starts_on) / totalDays));
   const pending = sprint.status === 'pending_verification';
   const canTally = sprint.verification === 'honor' && !pending;
 
@@ -310,12 +292,13 @@ export default function SprintCard() {
       <Card className="card-elevated overflow-hidden">
         <CardContent className="p-4">
           <div className="flex items-start gap-4">
-            <div className="relative">
-              <ProgressRing pct={pct} />
-              <span className="absolute inset-0 flex items-center justify-center text-sm font-semibold tabular-nums">
-                {sprint.progress}/{sprint.target_count}
-              </span>
-            </div>
+            <ProgressRing
+              done={sprint.progress}
+              total={sprint.target_count}
+              monthElapsed={elapsed}
+              size={80}
+              stroke={8}
+            />
             <div className="min-w-0 flex-1 space-y-1.5">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-semibold truncate">{sprint.title}</span>
