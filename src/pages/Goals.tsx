@@ -13,7 +13,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Lock, Loader2, Printer, Users } from 'lucide-react';
+import { Bell, Lock, Loader2, Printer, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
@@ -247,6 +248,12 @@ export default function Goals() {
               <GoalsCsvImport />
             </>
           )}
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/settings/reminders">
+              <Bell className="mr-2 h-4 w-4" />
+              Reminder settings
+            </Link>
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => window.print()}>
             <Printer className="mr-2 h-4 w-4" />
             Print report

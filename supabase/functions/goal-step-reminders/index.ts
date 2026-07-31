@@ -9,6 +9,83 @@ const corsHeaders = {
 /** Days out that earn a nudge, plus day-of. Overdue is handled separately. */
 const LEAD_DAYS = [1, 0];
 const GOAL_LIST_NAME = "My Goal Steps";
+const SITE_NAME = "Purple Envelope";
+const FROM_DOMAIN = "purpleenvelope.app";
+const SENDER_DOMAIN = "notify.purpleenvelope.app";
+
+/** Used when someone has not customized their reminder settings. */
+const DEFAULT_PREF = { enabled: true, reminder_hour: 8, channel: "in_app" } as const;
+
+/** Eastern-local hour (0-23) right now. */
+function easternHour(): number {
+  return Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "2-digit",
+      hour12: false,
+    }).format(new Date()),
+  ) % 24;
+}
+
+/** Queues one due-notice email through the shared email queue. */
+// deno-lint-ignore no-explicit-any
+async function enqueueReminderEmail(
+  admin: any,
+  to: string,
+  heading: string,
+  line: string,
+  itemId: string,
+  today: string,
+): Promise<boolean> {
+  const messageId = crypto.randomUUID();
+  await admin.from("email_send_log").insert({
+    message_id: messageId,
+    template_name: "goal_step_due",
+    recipient_email: to,
+    status: "pending",
+  });
+
+  let unsubscribeToken = crypto.randomUUID();
+  const { data: existingToken } = await admin
+    .from("email_unsubscribe_tokens")
+    .select("token")
+    .eq("email", to)
+    .maybeSingle();
+  if (existingToken?.token) {
+    unsubscribeToken = existingToken.token;
+  } else {
+    const { data: created } = await admin
+      .from("email_unsubscribe_tokens")
+      .insert({ email: to, token: unsubscribeToken })
+      .select("token")
+      .maybeSingle();
+    if (created?.token) unsubscribeToken = created.token;
+  }
+
+  const { error } = await admin.rpc("enqueue_email", {
+    queue_name: "transactional_emails",
+    payload: {
+      idempotency_key: `goal-step-${itemId}-${today}`,
+      message_id: messageId,
+      to,
+      from: `${SITE_NAME} <noreply@${FROM_DOMAIN}>`,
+      sender_domain: SENDER_DOMAIN,
+      subject: heading,
+      html:
+        `<p style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5">${line}</p>`,
+      text: line,
+      purpose: "transactional",
+      label: "goal_step_due",
+      unsubscribe_token: unsubscribeToken,
+      queued_at: new Date().toISOString(),
+    },
+  });
+  if (error) {
+    console.error("Failed to enqueue goal step reminder email", { itemId, error: error.message });
+    return false;
+  }
+  return true;
+}
 
 /** Eastern-local day, matching src/lib/time-utils getToday(). */
 function easternToday(): string {
@@ -136,33 +213,70 @@ Deno.serve(async (req) => {
       .gte("created_at", `${today}T00:00:00Z`);
     const alreadySent = new Set((sentToday ?? []).map((n) => n.related_id));
 
+    // Per-person reminder settings: the hour they want it, and where it lands.
+    const owners = [...new Set(candidates.map((c) => c.owner_user_id as string))];
+    const { data: prefRows } = await admin
+      .from("goal_reminder_prefs")
+      .select("user_id, enabled, reminder_hour, channel")
+      .in("user_id", owners);
+    const prefs = new Map(
+      (prefRows ?? []).map((p) => [p.user_id as string, p]),
+    );
+    const hourNow = easternHour();
+
+    const wantsEmail = candidates.some((c) => {
+      const ch = prefs.get(c.owner_user_id as string)?.channel ?? DEFAULT_PREF.channel;
+      return ch !== "in_app";
+    });
+    const emailFor = new Map<string, string>();
+    if (wantsEmail) {
+      const { data: profiles } = await admin.from("profiles").select("id, email").in("id", owners);
+      for (const p of profiles ?? []) if (p.email) emailFor.set(p.id as string, p.email as string);
+    }
+
     let sent = 0;
+    let emailed = 0;
     for (const item of candidates) {
+      const ownerId = item.owner_user_id as string;
+      const pref = prefs.get(ownerId) ?? DEFAULT_PREF;
+      if (!pref.enabled) continue;
+      if ((pref.reminder_hour ?? DEFAULT_PREF.reminder_hour) !== hourNow) continue;
       if (alreadySent.has(item.id)) continue;
-      if (doneBy.has(`${item.id}:${item.owner_user_id}`)) continue;
+      if (doneBy.has(`${item.id}:${ownerId}`)) continue;
 
       const daysLeft = Math.round(
         (Date.parse(`${item.due_date}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86400000,
       );
       const { heading, line } = copyFor(item.title, item.due_date as string, daysLeft);
+      const channel = pref.channel ?? DEFAULT_PREF.channel;
 
-      const { error: nErr } = await admin.from("notifications").insert({
-        org_id: item.org_id,
-        recipient_user_id: item.owner_user_id,
-        notification_type: "goal_step_due",
-        title: heading,
-        message: line,
-        related_table: "checklist_items",
-        related_id: item.id,
-      });
-      if (nErr) {
-        console.error("Goal step reminder failed", { item: item.id, error: nErr.message });
-        continue;
+      if (channel !== "email") {
+        const { error: nErr } = await admin.from("notifications").insert({
+          org_id: item.org_id,
+          recipient_user_id: ownerId,
+          notification_type: "goal_step_due",
+          title: heading,
+          message: line,
+          related_table: "checklist_items",
+          related_id: item.id,
+        });
+        if (nErr) {
+          console.error("Goal step reminder failed", { item: item.id, error: nErr.message });
+          continue;
+        }
+        sent += 1;
       }
-      sent += 1;
+
+      if (channel !== "in_app") {
+        const to = emailFor.get(ownerId);
+        if (!to) continue;
+        const ok = await enqueueReminderEmail(admin, to, heading, line, item.id, today);
+        if (ok) emailed += 1;
+      }
     }
 
-    return new Response(JSON.stringify({ checked: candidates.length, sent }), {
+
+    return new Response(JSON.stringify({ checked: candidates.length, sent, emailed }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

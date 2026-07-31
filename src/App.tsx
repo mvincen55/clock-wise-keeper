@@ -30,6 +30,7 @@ import DepositLog from "@/pages/DepositLog";
 import IncidentReports from "@/pages/IncidentReports";
 import MorningHuddle from "@/pages/MorningHuddle";
 import Goals from "@/pages/Goals";
+import ReminderSettings from "@/pages/ReminderSettings";
 import OfficeNudges from "@/pages/OfficeNudges";
 import Messages from './pages/Messages';
 import Requests from './pages/Requests';
@@ -111,6 +112,7 @@ const App = () => (
             <Route path="/incident-reports" element={<ProtectedRoute><IncidentReports /></ProtectedRoute>} />
             <Route path="/morning-huddle" element={<ProtectedRoute><MorningHuddle /></ProtectedRoute>} />
             <Route path="/goals" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
+            <Route path="/settings/reminders" element={<ProtectedRoute><ReminderSettings /></ProtectedRoute>} />
             <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
             <Route path="/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
             <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
