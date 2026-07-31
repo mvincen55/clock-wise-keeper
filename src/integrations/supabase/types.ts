@@ -1283,15 +1283,6 @@ export type Database = {
           print_snapshot: Json | null
           production_cents: number | null
           pt_cc_cents: number
-          capture_confidence: number | null
-          needs_manager_review: boolean
-          schedule_capture_status: string
-          sealed_at: string | null
-          sealed_by: string | null
-          staffing_assessment: string | null
-          staffing_factors: string[]
-          staffing_note: string
-          staffing_pressure: string[]
           updated_at: string
         }
         Insert: {
@@ -1314,15 +1305,6 @@ export type Database = {
           print_snapshot?: Json | null
           production_cents?: number | null
           pt_cc_cents?: number
-          capture_confidence?: number | null
-          needs_manager_review?: boolean
-          schedule_capture_status?: string
-          sealed_at?: string | null
-          sealed_by?: string | null
-          staffing_assessment?: string | null
-          staffing_factors?: string[]
-          staffing_note?: string
-          staffing_pressure?: string[]
           updated_at?: string
         }
         Update: {
@@ -1345,15 +1327,6 @@ export type Database = {
           print_snapshot?: Json | null
           production_cents?: number | null
           pt_cc_cents?: number
-          capture_confidence?: number | null
-          needs_manager_review?: boolean
-          schedule_capture_status?: string
-          sealed_at?: string | null
-          sealed_by?: string | null
-          staffing_assessment?: string | null
-          staffing_factors?: string[]
-          staffing_note?: string
-          staffing_pressure?: string[]
           updated_at?: string
         }
         Relationships: [
@@ -1512,63 +1485,6 @@ export type Database = {
           used_at?: string | null
         }
         Relationships: []
-      }
-      employee_operational_roles: {
-        Row: {
-          confirmed_at: string | null
-          confirmed_by: string | null
-          created_at: string
-          created_by: string
-          employee_id: string
-          ends_on: string | null
-          id: string
-          is_primary: boolean
-          operational_role: string
-          org_id: string
-          starts_on: string | null
-        }
-        Insert: {
-          confirmed_at?: string | null
-          confirmed_by?: string | null
-          created_at?: string
-          created_by: string
-          employee_id: string
-          ends_on?: string | null
-          id?: string
-          is_primary?: boolean
-          operational_role: string
-          org_id: string
-          starts_on?: string | null
-        }
-        Update: {
-          confirmed_at?: string | null
-          confirmed_by?: string | null
-          created_at?: string
-          created_by?: string
-          employee_id?: string
-          ends_on?: string | null
-          id?: string
-          is_primary?: boolean
-          operational_role?: string
-          org_id?: string
-          starts_on?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "employee_operational_roles_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "employee_operational_roles_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "orgs"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       employee_tags: {
         Row: {
@@ -3621,12 +3537,8 @@ export type Database = {
           email: string
           expires_at: string
           id: string
-          invited_by: string | null
-          invited_name: string | null
-          operational_role: string | null
           org_id: string
           role: Database["public"]["Enums"]["app_org_role"]
-          secondary_roles: string[]
           token: string
         }
         Insert: {
@@ -3635,12 +3547,8 @@ export type Database = {
           email: string
           expires_at?: string
           id?: string
-          invited_by?: string | null
-          invited_name?: string | null
-          operational_role?: string | null
           org_id: string
           role?: Database["public"]["Enums"]["app_org_role"]
-          secondary_roles?: string[]
           token?: string
         }
         Update: {
@@ -3649,12 +3557,8 @@ export type Database = {
           email?: string
           expires_at?: string
           id?: string
-          invited_by?: string | null
-          invited_name?: string | null
-          operational_role?: string | null
           org_id?: string
           role?: Database["public"]["Enums"]["app_org_role"]
-          secondary_roles?: string[]
           token?: string
         }
         Relationships: [
@@ -3760,7 +3664,6 @@ export type Database = {
           collections_visibility: string
           created_at: string
           id: string
-          mobile_capture_enabled: boolean
           monthly_collections_target_cents: number | null
           org_id: string
           owners_clock_in: boolean
@@ -3774,7 +3677,6 @@ export type Database = {
           collections_visibility?: string
           created_at?: string
           id?: string
-          mobile_capture_enabled?: boolean
           monthly_collections_target_cents?: number | null
           org_id: string
           owners_clock_in?: boolean
@@ -3788,7 +3690,6 @@ export type Database = {
           collections_visibility?: string
           created_at?: string
           id?: string
-          mobile_capture_enabled?: boolean
           monthly_collections_target_cents?: number | null
           org_id?: string
           owners_clock_in?: boolean
@@ -4026,148 +3927,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
-      }
-      provider_day_metrics: {
-        Row: {
-          active_columns: number
-          automated_workload_class: string | null
-          business_date: string
-          cancellation_count: number
-          cancellation_open_minutes: number
-          closeout_id: string
-          confidence: number
-          continuous_without_buffer_minutes: number | null
-          created_at: string
-          created_by: string
-          department: string
-          employee_id: string | null
-          gross_available_minutes: number
-          id: string
-          intentional_unavailable_minutes: number
-          longest_booked_stretch_minutes: number | null
-          net_bookable_minutes: number
-          no_show_count: number
-          no_show_open_minutes: number
-          org_id: string
-          other_open_minutes: number
-          overlap_minutes: number | null
-          provider_label: string
-          provider_role: string
-          recovered_minutes: number | null
-          recovered_open_pct: number | null
-          review_status: string
-          same_day_additions: number | null
-          schedule_density: number | null
-          schedule_volatility: number | null
-          scheduled_minutes: number
-          simultaneous_column_minutes: number | null
-          staffing_to_column_ratio: number | null
-          support_staff_assigned: number | null
-          true_open_minutes: number
-          unclassified_minutes: number
-          updated_at: string
-        }
-        Insert: {
-          active_columns?: number
-          automated_workload_class?: string | null
-          business_date: string
-          cancellation_count?: number
-          cancellation_open_minutes?: number
-          closeout_id: string
-          confidence?: number
-          continuous_without_buffer_minutes?: number | null
-          created_at?: string
-          created_by: string
-          department: string
-          employee_id?: string | null
-          gross_available_minutes?: number
-          id?: string
-          intentional_unavailable_minutes?: number
-          longest_booked_stretch_minutes?: number | null
-          net_bookable_minutes?: number
-          no_show_count?: number
-          no_show_open_minutes?: number
-          org_id: string
-          other_open_minutes?: number
-          overlap_minutes?: number | null
-          provider_label: string
-          provider_role: string
-          recovered_minutes?: number | null
-          recovered_open_pct?: number | null
-          review_status?: string
-          same_day_additions?: number | null
-          schedule_density?: number | null
-          schedule_volatility?: number | null
-          scheduled_minutes?: number
-          simultaneous_column_minutes?: number | null
-          staffing_to_column_ratio?: number | null
-          support_staff_assigned?: number | null
-          true_open_minutes?: number
-          unclassified_minutes?: number
-          updated_at?: string
-        }
-        Update: {
-          active_columns?: number
-          automated_workload_class?: string | null
-          business_date?: string
-          cancellation_count?: number
-          cancellation_open_minutes?: number
-          closeout_id?: string
-          confidence?: number
-          continuous_without_buffer_minutes?: number | null
-          created_at?: string
-          created_by?: string
-          department?: string
-          employee_id?: string | null
-          gross_available_minutes?: number
-          id?: string
-          intentional_unavailable_minutes?: number
-          longest_booked_stretch_minutes?: number | null
-          net_bookable_minutes?: number
-          no_show_count?: number
-          no_show_open_minutes?: number
-          org_id?: string
-          other_open_minutes?: number
-          overlap_minutes?: number | null
-          provider_label?: string
-          provider_role?: string
-          recovered_minutes?: number | null
-          recovered_open_pct?: number | null
-          review_status?: string
-          same_day_additions?: number | null
-          schedule_density?: number | null
-          schedule_volatility?: number | null
-          scheduled_minutes?: number
-          simultaneous_column_minutes?: number | null
-          staffing_to_column_ratio?: number | null
-          support_staff_assigned?: number | null
-          true_open_minutes?: number
-          unclassified_minutes?: number
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "provider_day_metrics_closeout_id_fkey"
-            columns: ["closeout_id"]
-            isOneToOne: false
-            referencedRelation: "deposit_logs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "provider_day_metrics_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "provider_day_metrics_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "orgs"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       pto_accrual_tiers: {
         Row: {
@@ -4779,201 +4538,6 @@ export type Database = {
           version_id?: string
         }
         Relationships: []
-      }
-      schedule_block_entries: {
-        Row: {
-          business_date: string
-          classification_code: string
-          closeout_id: string
-          confidence: number
-          created_at: string
-          created_by: string
-          department: string | null
-          excluded_minutes: number
-          id: string
-          org_id: string
-          provider_label: string | null
-          user_confirmed: boolean
-        }
-        Insert: {
-          business_date: string
-          classification_code: string
-          closeout_id: string
-          confidence?: number
-          created_at?: string
-          created_by: string
-          department?: string | null
-          excluded_minutes?: number
-          id?: string
-          org_id: string
-          provider_label?: string | null
-          user_confirmed?: boolean
-        }
-        Update: {
-          business_date?: string
-          classification_code?: string
-          closeout_id?: string
-          confidence?: number
-          created_at?: string
-          created_by?: string
-          department?: string | null
-          excluded_minutes?: number
-          id?: string
-          org_id?: string
-          provider_label?: string | null
-          user_confirmed?: boolean
-        }
-        Relationships: [
-          {
-            foreignKeyName: "schedule_block_entries_closeout_id_fkey"
-            columns: ["closeout_id"]
-            isOneToOne: false
-            referencedRelation: "deposit_logs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "schedule_block_entries_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "orgs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      schedule_layout_profiles: {
-        Row: {
-          created_at: string
-          id: string
-          is_default: boolean
-          layout_signature: Json
-          name: string
-          org_id: string
-          pms_name: string | null
-          status_legend: Json
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          is_default?: boolean
-          layout_signature: Json
-          name: string
-          org_id: string
-          pms_name?: string | null
-          status_legend: Json
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          is_default?: boolean
-          layout_signature?: Json
-          name?: string
-          org_id?: string
-          pms_name?: string | null
-          status_legend?: Json
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "schedule_layout_profiles_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "orgs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      schedule_phrase_rules: {
-        Row: {
-          classification_code: string
-          created_at: string
-          created_by: string
-          id: string
-          is_active: boolean
-          org_id: string
-          phrase: string
-        }
-        Insert: {
-          classification_code: string
-          created_at?: string
-          created_by: string
-          id?: string
-          is_active?: boolean
-          org_id: string
-          phrase: string
-        }
-        Update: {
-          classification_code?: string
-          created_at?: string
-          created_by?: string
-          id?: string
-          is_active?: boolean
-          org_id?: string
-          phrase?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "schedule_phrase_rules_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "orgs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      schedule_staffing_rules: {
-        Row: {
-          applies_on_weekdays: number[] | null
-          created_at: string
-          department: string
-          id: string
-          is_active: boolean
-          max_simultaneous_columns: number | null
-          org_id: string
-          provider_count: number
-          provider_role: string
-          support_count: number | null
-          support_role: string | null
-          updated_at: string
-        }
-        Insert: {
-          applies_on_weekdays?: number[] | null
-          created_at?: string
-          department: string
-          id?: string
-          is_active?: boolean
-          max_simultaneous_columns?: number | null
-          org_id: string
-          provider_count: number
-          provider_role: string
-          support_count?: number | null
-          support_role?: string | null
-          updated_at?: string
-        }
-        Update: {
-          applies_on_weekdays?: number[] | null
-          created_at?: string
-          department?: string
-          id?: string
-          is_active?: boolean
-          max_simultaneous_columns?: number | null
-          org_id?: string
-          provider_count?: number
-          provider_role?: string
-          support_count?: number | null
-          support_role?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "schedule_staffing_rules_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "orgs"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       schedule_versions: {
         Row: {
