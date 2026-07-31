@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useMemo } from 'react';
+import { getToday } from '@/lib/time-utils';
 
 /* ───────── Office PTO Policy ─────────
    Accrual tiers are still hardcoded office policy; they move to
@@ -182,7 +183,7 @@ export function useRecalculatePto() {
           user_id: user.id,
           org_id: orgId,
           employee_id: employeeId,
-          hire_date: '2022-02-07',
+          hire_date: getToday(),
           worked_hours_cap_weekly: 40,
           max_balance: 100,
           allow_negative: false,

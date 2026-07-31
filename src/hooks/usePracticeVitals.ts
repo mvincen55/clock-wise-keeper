@@ -98,7 +98,10 @@ export function usePracticeVitals() {
   const { data: practiceSettings } = usePracticeSettings();
   const today = getToday();
   const targetCents = practiceSettings?.monthly_collections_target_cents ?? 0;
-  const visible = practiceSettings?.collections_visibility !== 'admin_only' || ctx?.role === 'owner';
+  const visible =
+    practiceSettings?.collections_visibility !== 'admin_only' ||
+    ctx?.role === 'owner' ||
+    ctx?.role === 'manager';
 
   return useQuery({
     queryKey: ['practice-vitals', ctx?.org_id, today.slice(0, 7), targetCents, visible],

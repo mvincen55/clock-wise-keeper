@@ -13,7 +13,7 @@
  *                      it, BCBS wants a narrative).
  *
  * loadProcedureNotes returns the universal (office) set and is what
- * name-visits, fof-assistant, and ask-docs use. loadCodeNotes returns
+ * name-visits, kimi-agent, and ask-docs use. loadCodeNotes returns
  * both, labelled, for the Kimi agent.
  */
 
@@ -96,7 +96,7 @@ export function formatCodeNote(note: CodeNote): string {
 
 /**
  * Universal (office-schedule) notes as prompt lines. Unchanged contract —
- * name-visits, fof-assistant, and ask-docs rely on this shape.
+ * name-visits, kimi-agent, and ask-docs rely on this shape.
  */
 // deno-lint-ignore no-explicit-any
 export async function loadProcedureNotes(
