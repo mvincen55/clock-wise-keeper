@@ -189,7 +189,7 @@ export function useReviewCorrectionRequest() {
             if (Object.keys(updates).length > 0) {
               await supabase
                 .from('pto_requests')
-                .update(updates)
+                .update(updates as never)
                 .eq('id', req.target_id);
             }
           }

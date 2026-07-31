@@ -1264,6 +1264,7 @@ export type Database = {
       }
       deposit_logs: {
         Row: {
+          capture_confidence: number | null
           cash_cents: number
           checks: Json
           created_at: string
@@ -1275,6 +1276,7 @@ export type Database = {
           id: string
           illumitrac_cents: number
           ins_cc_cents: number
+          needs_manager_review: boolean
           notes: string
           org_id: string
           outside_financing_cents: number
@@ -1283,8 +1285,6 @@ export type Database = {
           print_snapshot: Json | null
           production_cents: number | null
           pt_cc_cents: number
-          capture_confidence: number | null
-          needs_manager_review: boolean
           schedule_capture_status: string
           sealed_at: string | null
           sealed_by: string | null
@@ -1295,6 +1295,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          capture_confidence?: number | null
           cash_cents?: number
           checks?: Json
           created_at?: string
@@ -1306,6 +1307,7 @@ export type Database = {
           id?: string
           illumitrac_cents?: number
           ins_cc_cents?: number
+          needs_manager_review?: boolean
           notes?: string
           org_id: string
           outside_financing_cents?: number
@@ -1314,8 +1316,6 @@ export type Database = {
           print_snapshot?: Json | null
           production_cents?: number | null
           pt_cc_cents?: number
-          capture_confidence?: number | null
-          needs_manager_review?: boolean
           schedule_capture_status?: string
           sealed_at?: string | null
           sealed_by?: string | null
@@ -1326,6 +1326,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          capture_confidence?: number | null
           cash_cents?: number
           checks?: Json
           created_at?: string
@@ -1337,6 +1338,7 @@ export type Database = {
           id?: string
           illumitrac_cents?: number
           ins_cc_cents?: number
+          needs_manager_review?: boolean
           notes?: string
           org_id?: string
           outside_financing_cents?: number
@@ -1345,8 +1347,6 @@ export type Database = {
           print_snapshot?: Json | null
           production_cents?: number | null
           pt_cc_cents?: number
-          capture_confidence?: number | null
-          needs_manager_review?: boolean
           schedule_capture_status?: string
           sealed_at?: string | null
           sealed_by?: string | null
@@ -4747,39 +4747,6 @@ export type Database = {
           },
         ]
       }
-      schedule_correction_log: {
-        Row: {
-          edited_at: string
-          edited_by: string
-          employee_id: string | null
-          id: string
-          new_values: Json
-          old_values: Json
-          org_id: string | null
-          version_id: string
-        }
-        Insert: {
-          edited_at?: string
-          edited_by: string
-          employee_id?: string | null
-          id?: string
-          new_values: Json
-          old_values: Json
-          org_id?: string | null
-          version_id: string
-        }
-        Update: {
-          edited_at?: string
-          edited_by?: string
-          employee_id?: string | null
-          id?: string
-          new_values?: Json
-          old_values?: Json
-          org_id?: string | null
-          version_id?: string
-        }
-        Relationships: []
-      }
       schedule_block_entries: {
         Row: {
           business_date: string
@@ -4839,6 +4806,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      schedule_correction_log: {
+        Row: {
+          edited_at: string
+          edited_by: string
+          employee_id: string | null
+          id: string
+          new_values: Json
+          old_values: Json
+          org_id: string | null
+          version_id: string
+        }
+        Insert: {
+          edited_at?: string
+          edited_by: string
+          employee_id?: string | null
+          id?: string
+          new_values: Json
+          old_values: Json
+          org_id?: string | null
+          version_id: string
+        }
+        Update: {
+          edited_at?: string
+          edited_by?: string
+          employee_id?: string | null
+          id?: string
+          new_values?: Json
+          old_values?: Json
+          org_id?: string | null
+          version_id?: string
+        }
+        Relationships: []
       }
       schedule_layout_profiles: {
         Row: {
