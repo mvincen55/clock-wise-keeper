@@ -48,6 +48,7 @@ const PRACTICE: FofPracticeInfo = {
   website: 'northfielddentalgroup.example',
   doctorName: 'Dr. Scott',
   logoUrl: '/src/assets/practice-logo.png',
+  membershipPlanName: 'Membership',
 };
 
 /**

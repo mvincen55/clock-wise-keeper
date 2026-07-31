@@ -15,6 +15,7 @@ export const DEFAULT_PRACTICE_INFO: FofPracticeInfo = {
   website: '',
   doctorName: '',
   logoUrl: '',
+  membershipPlanName: '',
 };
 
 export const DEFAULT_SIGNATURE_INTRO =
