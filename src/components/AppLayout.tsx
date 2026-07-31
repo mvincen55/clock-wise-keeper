@@ -54,7 +54,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/important-numbers', icon: Phone, label: 'Important Numbers' },
       { to: '/morning-huddle', icon: Sunrise, label: 'Morning Huddle' },
       { to: '/checklists', icon: ListChecks, label: 'Checklists' },
-      { to: '/deposit-log', icon: Banknote, label: 'Deposit Log' },
+      { to: '/deposit-log', icon: Banknote, label: 'Close the Day' },
       { to: '/incident-reports', icon: ShieldAlert, label: 'Incident Reports' },
     ],
   },

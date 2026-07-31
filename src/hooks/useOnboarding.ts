@@ -14,16 +14,18 @@ export type OnboardingProgress = {
   terms_done_at: string | null;
   work_style_done_at: string | null;
   basics_done_at: string | null;
+  role_done_at: string | null;
   goal_done_at: string | null;
   completed_at: string | null;
 };
 
-export type OnboardingStep = 'terms' | 'work_style' | 'basics' | 'goal';
+export type OnboardingStep = 'terms' | 'work_style' | 'basics' | 'role' | 'goal';
 
 const STEP_COLUMN: Record<OnboardingStep, keyof OnboardingProgress> = {
   terms: 'terms_done_at',
   work_style: 'work_style_done_at',
   basics: 'basics_done_at',
+  role: 'role_done_at',
   goal: 'goal_done_at',
 };
 
@@ -60,6 +62,7 @@ export function useOnboardingStatus() {
         termsSigned &&
         !!progress?.work_style_done_at &&
         !!progress?.basics_done_at &&
+        !!progress?.role_done_at &&
         !!progress?.goal_done_at;
 
       return { progress, ack, termsSigned, complete };
@@ -99,7 +102,11 @@ export function useCompleteStep() {
       } as Record<string, unknown>;
 
       merged.completed_at =
-        merged.terms_done_at && merged.work_style_done_at && merged.basics_done_at && merged.goal_done_at
+        merged.terms_done_at &&
+        merged.work_style_done_at &&
+        merged.basics_done_at &&
+        merged.role_done_at &&
+        merged.goal_done_at
           ? now
           : null;
 
@@ -291,7 +298,7 @@ export function useTeamOnboardingStatus() {
       const [progress, acks] = await Promise.all([
         supabase
           .from('member_onboarding')
-          .select('user_id, terms_done_at, work_style_done_at, basics_done_at, goal_done_at, completed_at')
+          .select('user_id, terms_done_at, work_style_done_at, basics_done_at, role_done_at, goal_done_at, completed_at')
           .eq('org_id', ctx!.org_id),
         supabase
           .from('policy_acknowledgments')
@@ -307,6 +314,7 @@ export function useTeamOnboardingStatus() {
           terms: !!signed.get(p.user_id),
           work_style: !!p.work_style_done_at,
           basics: !!p.basics_done_at,
+          role: !!p.role_done_at,
           goal: !!p.goal_done_at,
         },
         signed_at: signed.get(p.user_id) ?? null,
