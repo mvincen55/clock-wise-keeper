@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
 
@@ -10,6 +10,8 @@ export type PracticeSettings = {
   /** Monthly collections target used to pace the vitals gauge. */
   monthly_collections_target_cents: number;
 };
+
+export type PracticeSettingsPatch = Partial<PracticeSettings>;
 
 /** Office-wide practice settings, readable by every member of the office. */
 export function usePracticeSettings() {
@@ -29,6 +31,24 @@ export function usePracticeSettings() {
         collections_visibility: data?.collections_visibility ?? 'everyone',
         monthly_collections_target_cents: data?.monthly_collections_target_cents ?? 0,
       };
+    },
+  });
+}
+
+export function useUpsertPracticeSettings() {
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (patch: PracticeSettingsPatch) => {
+      if (!ctx) throw new Error('Not authenticated');
+      const { error } = await supabase
+        .from('org_practice_settings')
+        .upsert({ org_id: ctx.org_id, ...patch }, { onConflict: 'org_id' });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['practice-settings'] });
     },
   });
 }
