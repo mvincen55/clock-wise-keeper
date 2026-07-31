@@ -2163,6 +2163,54 @@ export type Database = {
           },
         ]
       }
+      goal_reminder_log: {
+        Row: {
+          channel: string | null
+          created_at: string
+          days_left: number | null
+          due_date: string | null
+          id: string
+          item_id: string | null
+          item_title: string | null
+          org_id: string | null
+          outcome: string
+          owner_user_id: string | null
+          reason: string | null
+          run_date: string
+          run_hour: number
+        }
+        Insert: {
+          channel?: string | null
+          created_at?: string
+          days_left?: number | null
+          due_date?: string | null
+          id?: string
+          item_id?: string | null
+          item_title?: string | null
+          org_id?: string | null
+          outcome: string
+          owner_user_id?: string | null
+          reason?: string | null
+          run_date: string
+          run_hour: number
+        }
+        Update: {
+          channel?: string | null
+          created_at?: string
+          days_left?: number | null
+          due_date?: string | null
+          id?: string
+          item_id?: string | null
+          item_title?: string | null
+          org_id?: string | null
+          outcome?: string
+          owner_user_id?: string | null
+          reason?: string | null
+          run_date?: string
+          run_hour?: number
+        }
+        Relationships: []
+      }
       goal_reminder_prefs: {
         Row: {
           channel: string
