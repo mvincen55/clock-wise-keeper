@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
     if (!membership) return json({ error: "Unauthorized" }, 403);
 
     // The next team meeting on the office calendar — plans are built around it.
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = easternToday();
     const { data: meetings } = await supabase
       .from("office_events")
       .select("event_date, title")
@@ -210,7 +210,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (mode === "breakdown") {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = easternToday();
       const planFrom = today > start ? today : start;
 
       const { data: daysOff } = await supabase
