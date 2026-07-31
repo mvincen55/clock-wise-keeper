@@ -64,6 +64,7 @@ export default function NotificationBell() {
     incident_report_signed: '✅',
     incident_report_closed: '✅',
     training_due: '🎓',
+    goal_step_due: '🎯',
   };
 
   /** Notifications that point at a row we can open from here. */
@@ -72,7 +73,10 @@ export default function NotificationBell() {
       ? `/incident-reports?report=${n.related_id}`
       : n.related_table === 'training_assignments'
         ? '/training?tab=mine'
-        : null;
+        : n.related_table === 'checklist_items'
+          ? '/goals'
+          : null;
+
 
   return (
     <div className="relative" ref={ref}>
