@@ -136,15 +136,21 @@ export default function SetGoalCard({ month }: { month: string }) {
         />
 
         {smart && <SmartChips smart={smart} />}
+        {gate.hints.specific && (
+          <p className="text-xs text-muted-foreground">S: {gate.hints.specific}</p>
+        )}
 
         <div className="space-y-1.5">
-          <Label htmlFor="goal-target">How you'll measure it (optional)</Label>
+          <Label htmlFor="goal-target">How you'll measure it</Label>
           <Input
             id="goal-target"
             value={target}
             onChange={e => setTarget(e.target.value)}
             placeholder="e.g. 4 feedback asks"
           />
+          {gate.hints.measurable && (
+            <p className="text-xs text-muted-foreground">M: {gate.hints.measurable}</p>
+          )}
         </div>
 
         <div className="space-y-1.5">
