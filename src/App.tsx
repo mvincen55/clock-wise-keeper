@@ -30,6 +30,7 @@ import DepositLog from "@/pages/DepositLog";
 import IncidentReports from "@/pages/IncidentReports";
 import MorningHuddle from "@/pages/MorningHuddle";
 import Goals from "@/pages/Goals";
+import ReminderSettings from "@/pages/ReminderSettings";
 import OfficeNudges from "@/pages/OfficeNudges";
 import Messages from './pages/Messages';
 import Requests from './pages/Requests';
