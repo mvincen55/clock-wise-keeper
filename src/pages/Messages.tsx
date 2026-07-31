@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
-import AppLayout from '@/components/AppLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -275,8 +274,7 @@ export default function Messages() {
   };
 
   return (
-    <AppLayout>
-      <div className="space-y-4">
+    <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Messages</h1>
@@ -604,7 +602,6 @@ export default function Messages() {
             )}
           </Card>
         </div>
-      </div>
-    </AppLayout>
+    </div>
   );
 }

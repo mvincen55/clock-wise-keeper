@@ -1,160 +1,98 @@
-import { useTodayEntry, PunchRow } from '@/hooks/useTimeEntries';
-import { useGuardedClockAction } from '@/hooks/useGuardedClockAction';
-import { useClocksIn } from '@/hooks/usePracticeSettings';
-import ChecklistBypassDialog from '@/components/ChecklistBypassDialog';
-import BypassReasonDialog from '@/components/BypassReasonDialog';
-import { useUnresolvedBypasses } from '@/hooks/useChecklistBypasses';
-import { minutesToHHMM, formatTime, formatDate, getToday } from '@/lib/time-utils';
+import { Link } from 'react-router-dom';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { Clock, LogIn, LogOut, Loader2, Settings as SettingsIcon, Pencil, CalendarDays, MapPin } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { useGeoTracking } from '@/hooks/useGeoTracking';
-import { LocationStatusPanel } from '@/components/LocationStatusPanel';
-import { useWorkZones } from '@/hooks/useWorkZones';
+import {
+  Briefcase, BookOpen, Inbox, Gauge, CalendarDays, ChevronRight,
+} from 'lucide-react';
+import { formatDate, getToday } from '@/lib/time-utils';
+import { useTick } from '@/hooks/useTick';
 import { useMissingShifts } from '@/hooks/useMissingShifts';
 import { MissingShiftBanner } from '@/components/MissingShiftBanner';
-import { PunchEditorModal } from '@/components/PunchEditorModal';
-import { CorrectionRequestModal } from '@/components/CorrectionRequestModal';
 import { useCurrentPtoBalance } from '@/hooks/usePtoEngine';
-import { Link } from 'react-router-dom';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import { OrgSnapshotPanel } from '@/components/OrgSnapshotPanel';
-import PracticeVitalsCard from '@/components/PracticeVitalsCard';
-import MyMomentumCard from '@/components/MyMomentumCard';
-import SprintCard from '@/components/SprintCard';
-import UserNotesBoard from '@/components/UserNotesBoard';
+import { useApprovalCounts } from '@/hooks/useApprovalCounts';
 import TodayFocusCard from '@/components/copilot/TodayFocusCard';
 import MessagesCloseoutCard from '@/components/MessagesCloseoutCard';
 import DoctorBoardCard from '@/components/board/DoctorBoardCard';
 import RescopeCard from '@/components/copilot/RescopeCard';
-import { useClockInChase, useMiddayChase } from '@/hooks/useGentleChase';
+import SprintCard from '@/components/SprintCard';
+import MyMomentumCard from '@/components/MyMomentumCard';
 import MyAccountabilityCard from '@/components/accountability/MyAccountabilityCard';
-import AccountabilityReviewQueue from '@/components/accountability/AccountabilityReviewQueue';
+import UserNotesBoard from '@/components/UserNotesBoard';
 
-
-type ClockStatus = 'clocked_out' | 'clocked_in';
-
-function getStatus(punches: PunchRow[]): ClockStatus {
-  if (!punches.length) return 'clocked_out';
-  const last = punches[punches.length - 1];
-  if (last.punch_type === 'out') return 'clocked_out';
-  return 'clocked_in';
+function greeting(hour: number): string {
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
 }
 
-function getRunningMinutes(punches: PunchRow[]): number {
-  let total = 0;
-  const sorted = [...punches].sort((a, b) => new Date(a.punch_time).getTime() - new Date(b.punch_time).getTime());
-  for (let i = 0; i < sorted.length; i += 2) {
-    const inP = sorted[i];
-    const outP = sorted[i + 1];
-    if (inP?.punch_type === 'in') {
-      const end = outP?.punch_type === 'out' ? new Date(outP.punch_time).getTime() : Date.now();
-      total += (end - new Date(inP.punch_time).getTime()) / 60000;
-    }
-  }
-  return Math.round(total);
-}
+const SHORTCUTS = [
+  { to: '/workplace', icon: Briefcase, label: 'Workplace' },
+  { to: '/playbook', icon: BookOpen, label: 'Playbook' },
+  { to: '/inbox', icon: Inbox, label: 'Inbox' },
+];
 
-export default function Dashboard() {
-  const { data: todayEntry, isLoading } = useTodayEntry();
-  const clockAction = useGuardedClockAction();
-  // Doctors are out of the clock flow unless the office turns it on.
-  const clocksIn = useClocksIn();
-  const { data: unresolvedBypasses } = useUnresolvedBypasses();
-  const [reasonPromptOpen, setReasonPromptOpen] = useState(false);
-  const [reasonPrompted, setReasonPrompted] = useState(false);
-  const [now, setNow] = useState(new Date());
-  const [autoClockEnabled, setAutoClockEnabled] = useState(() => {
-    return localStorage.getItem('timevault_auto_clock') !== 'false';
-  });
-  const [punchEditorOpen, setPunchEditorOpen] = useState(false);
-  const [correctionOpen, setCorrectionOpen] = useState(false);
-  const { data: zones } = useWorkZones();
-  const geoState = useGeoTracking(autoClockEnabled && (zones?.length ?? 0) > 0);
+/**
+ * Home: a role-personalized launchpad (blueprint §5). It answers "what
+ * deserves my attention?" — the clock lives in the global time control,
+ * and management concerns live in Management.
+ */
+export default function Home() {
+  const now = useTick(60_000);
+  const { data: ctx } = useOrgContext();
+  const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
+  const { data: approvalCounts } = useApprovalCounts();
 
   const todayKey = getToday();
   const fourteenDaysAgo = new Date(new Date(todayKey + 'T12:00:00Z').getTime() - 14 * 24 * 3600 * 1000)
     .toISOString()
     .slice(0, 10);
   const missingDays = useMissingShifts(fourteenDaysAgo);
-
   const ptoState = useCurrentPtoBalance();
-  const { data: ctx } = useOrgContext();
-  const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
-
-  // The gentle chase: one kind note at clock-in, one mid-day if untouched.
-  const chaseAtClockIn = useClockInChase();
-  useMiddayChase();
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-
-  const punches = todayEntry?.punches || [];
-  const status = getStatus(punches);
-  const runningMinutes = getRunningMinutes(punches);
-  const isBusy = clockAction.isPending;
-
-  const statusConfig = {
-    clocked_out: { label: 'Clocked Out', color: 'text-muted-foreground', bg: 'bg-muted' },
-    clocked_in: { label: 'Clocked In', color: 'text-success', bg: 'bg-success/10' },
-  };
-  const sc = statusConfig[status];
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
+        <h1 className="text-2xl md:text-3xl font-bold">{greeting(now.getHours())}</h1>
         <p className="text-muted-foreground">{formatDate(now)}</p>
       </div>
 
-      <div className="flex gap-2">
-        {/* Schedules are managed per-employee from Team (the old
-            /settings#work-schedule section no longer exists). */}
+      {/* Where to next — the destinations, one tap away. */}
+      <div className="flex flex-wrap gap-2">
+        {SHORTCUTS.map(s => (
+          <Button key={s.to} asChild variant="outline" size="sm">
+            <Link to={s.to}><s.icon className="mr-2 h-4 w-4" />{s.label}</Link>
+          </Button>
+        ))}
         {isManager && (
-          <Link to="/team">
-            <Button variant="outline" size="sm"><SettingsIcon className="mr-2 h-4 w-4" />Edit Schedule</Button>
-          </Link>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/management">
+              <Gauge className="mr-2 h-4 w-4" />
+              Management
+              {(approvalCounts?.total ?? 0) > 0 && (
+                <span className="ml-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+                  {approvalCounts!.total}
+                </span>
+              )}
+            </Link>
+          </Button>
         )}
-        <Link to="/pto">
-          <Button variant="outline" size="sm"><CalendarDays className="mr-2 h-4 w-4" />PTO</Button>
-        </Link>
       </div>
 
-      {/* One spotlight: your next thing. Everything else stays a tap away. */}
-      <TodayFocusCard />
-
-      <DoctorBoardCard />
-
+      {/* Needs attention first. */}
+      {missingDays.length > 0 && <MissingShiftBanner missingDays={missingDays} />}
       <MessagesCloseoutCard />
 
+      {/* One spotlight: your next thing. */}
+      <TodayFocusCard />
+      <DoctorBoardCard />
       <RescopeCard />
 
-      {isManager && <OrgSnapshotPanel />}
-
-      {isManager && <PracticeVitalsCard />}
-
-      <AccountabilityReviewQueue />
-
+      {/* Restrained progress summary. */}
+      <SprintCard />
+      <MyMomentumCard />
       <MyAccountabilityCard />
 
-      <SprintCard />
-
-      <MyMomentumCard />
-
-      <UserNotesBoard />
-
-
-
-
-      {missingDays.length > 0 && <MissingShiftBanner missingDays={missingDays} />}
-
-      {/* PTO Widget */}
       <Card className="card-elevated">
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
@@ -171,7 +109,9 @@ export default function Dashboard() {
               <p className={`text-xl font-bold time-display ${ptoState.balance < 0 ? 'text-destructive' : 'text-success'}`}>
                 {ptoState.balance.toFixed(2)}h
               </p>
-              <Link to="/pto" className="text-xs text-primary hover:underline">View Details →</Link>
+              <Link to="/pto" className="inline-flex items-center text-xs text-primary hover:underline">
+                View Details <ChevronRight className="h-3 w-3" />
+              </Link>
             </div>
           </div>
           {ptoState.currentWeek && (
@@ -185,119 +125,7 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Clock display */}
-      {clocksIn && (
-      <Card className="card-elevated overflow-hidden">
-        <div className="bg-clock-bg text-clock-fg p-8 text-center">
-          <p className="time-display text-5xl md:text-6xl font-bold">
-            {now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
-          </p>
-          <div className={`mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${sc.bg} ${sc.color}`}>
-            <span className={`h-2 w-2 rounded-full ${status === 'clocked_in' ? 'bg-success animate-pulse' : 'bg-muted-foreground'}`} />
-            {sc.label}
-          </div>
-        </div>
-        <CardContent className="p-6">
-          <div className="text-center mb-6">
-            <p className="text-sm text-muted-foreground mb-1">Today's Total</p>
-            <p className="time-display text-3xl font-bold text-foreground">{minutesToHHMM(runningMinutes)}</p>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {status === 'clocked_out' && (
-              <Button className="col-span-2 h-16 text-lg font-semibold punch-glow" onClick={() => { clockAction.run('clock_in'); chaseAtClockIn(); if (!reasonPrompted && (unresolvedBypasses?.length ?? 0) > 0) { setReasonPrompted(true); setReasonPromptOpen(true); } }} disabled={isBusy}>
-                {isBusy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <LogIn className="mr-2 h-5 w-5" />}Clock In
-              </Button>
-            )}
-            {status === 'clocked_in' && (
-              /* Break tracking was removed: it clocked you out with no way back.
-                 For an unpaid break, clock out and clock back in — the gap is
-                 already excluded from paid time. */
-              <Button variant="destructive" className="col-span-2 h-16 text-lg font-semibold" onClick={() => clockAction.run('clock_out')} disabled={isBusy}>
-                {isBusy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <LogOut className="mr-2 h-5 w-5" />}Clock Out
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-      )}
-
-      {clocksIn && (
-      <Card className="card-elevated">
-        <CardContent className="p-4 flex items-center justify-between">
-          <div>
-            <p className="font-medium">Auto Clock (GPS)</p>
-            <p className="text-xs text-muted-foreground">{zones?.length ? `${zones.filter(z => z.is_active).length} active zone(s)` : 'No zones configured'}</p>
-          </div>
-          <Switch checked={autoClockEnabled} onCheckedChange={v => { setAutoClockEnabled(v); localStorage.setItem('timevault_auto_clock', String(v)); }} disabled={!zones?.length} />
-        </CardContent>
-      </Card>
-      )}
-
-      {clocksIn && autoClockEnabled && <LocationStatusPanel state={geoState} />}
-
-      <Card className="card-elevated">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2"><Clock className="h-4 w-4 text-primary" />Today's Punches</CardTitle>
-          {todayEntry && punches.length > 0 && (
-            isManager ? (
-              <Button variant="outline" size="sm" onClick={() => setPunchEditorOpen(true)}><Pencil className="h-3.5 w-3.5 mr-1" /> Edit</Button>
-            ) : (
-              /* Employees can't edit punches (append-only) — route to a correction request */
-              <Button variant="outline" size="sm" onClick={() => setCorrectionOpen(true)}><Pencil className="h-3.5 w-3.5 mr-1" /> Request Correction</Button>
-            )
-          )}
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-          ) : punches.length === 0 ? (
-            <p className="text-center text-muted-foreground py-6">No punches yet today</p>
-          ) : (
-            <div className="space-y-2">
-              {punches.map((p) => {
-                const isEdited = (p as any).is_edited;
-                const hasGps = p.location_lat != null && p.location_lng != null;
-                return (
-                  <div key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-muted/50">
-                    <span className={`text-xs font-semibold uppercase px-2 py-0.5 rounded ${p.punch_type === 'in' ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'}`}>{p.punch_type}</span>
-                    <span className={`time-display text-sm ${isEdited ? 'text-destructive font-semibold' : ''}`}>{formatTime(p.punch_time)}</span>
-                    {isEdited && <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/20 text-destructive font-medium">edited</span>}
-                    {p.source !== 'manual' && <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">{p.source === 'auto_location' ? 'GPS' : p.source}</span>}
-                    {hasGps && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary flex items-center gap-0.5"><MapPin className="h-2.5 w-2.5" /> GPS recorded</span>}
-                    {p.low_confidence && <span className="text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning">low GPS</span>}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {todayEntry && (
-        <PunchEditorModal open={punchEditorOpen} onClose={() => setPunchEditorOpen(false)} entryId={todayEntry.id} entryDate={todayEntry.entry_date} punches={punches} />
-      )}
-      {todayEntry && (
-        <CorrectionRequestModal
-          open={correctionOpen}
-          onClose={() => setCorrectionOpen(false)}
-          prefill={{ target_table: 'time_entries', target_id: todayEntry.id, entry_date: todayEntry.entry_date }}
-        />
-      )}
-
-      <ChecklistBypassDialog
-        open={clockAction.dialogOpen}
-        incompleteCount={clockAction.incompleteCount}
-        openSharedCount={clockAction.openSharedCount}
-        busy={clockAction.bypassing}
-        onGoBack={clockAction.closeDialog}
-        onBypass={clockAction.bypassAndClockOut}
-      />
-
-      <BypassReasonDialog
-        bypass={unresolvedBypasses?.[0] ?? null}
-        open={reasonPromptOpen}
-        onOpenChange={setReasonPromptOpen}
-      />
+      <UserNotesBoard />
     </div>
   );
 }

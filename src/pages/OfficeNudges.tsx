@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import AppLayout from '@/components/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import AddToMyListButton from '@/components/copilot/AddToMyListButton';
@@ -109,8 +108,7 @@ export default function OfficeNudgesPage() {
   const { data: nudges, isLoading } = useOfficeNudges(showResolved);
 
   return (
-    <AppLayout>
-      <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
+    <div className="mx-auto max-w-3xl space-y-5">
         <header className="space-y-1">
           <h1 className="flex items-center gap-2 text-2xl font-semibold">
             <Inbox className="h-5 w-5 text-primary" />
@@ -151,7 +149,6 @@ export default function OfficeNudgesPage() {
             ))}
           </div>
         )}
-      </div>
-    </AppLayout>
+    </div>
   );
 }
