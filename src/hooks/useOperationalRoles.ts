@@ -8,8 +8,10 @@ import { OPERATIONAL_ROLES } from '@/lib/schedule-reader/types';
 // Operational roles: the WORK a person does (dentist, hygienist, front desk…),
 // separate from the permission role (owner/manager/employee) that controls
 // authorization. One person can hold several; an owner may also be a working
-// dentist without ever clocking in. Members propose their own during
-// onboarding; owners/managers confirm and manage from the Team page.
+// dentist without ever clocking in. The inviting owner/manager answers the
+// role questions on the invite itself (accept-invite applies them,
+// pre-confirmed), and roles stay editable from the Team page. Members never
+// assign their own.
 
 export type EmployeeOperationalRole = {
   id: string;
@@ -53,49 +55,6 @@ export function useOperationalRoles() {
       }
       return byEmployee;
     },
-  });
-}
-
-/**
- * A member proposes their own roles (onboarding). Replaces any previous
- * unconfirmed self-proposals; confirmation stays with owners/managers.
- */
-export function useProposeMyRoles() {
-  const { user } = useAuth();
-  const { data: ctx } = useOrgContext();
-  const qc = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (input: { primary: OperationalRole; secondary: OperationalRole[] }) => {
-      if (!user || !ctx) throw new Error('No office found for your account');
-      const roles = [
-        { role: input.primary, is_primary: true },
-        ...input.secondary
-          .filter(r => r !== input.primary)
-          .map(r => ({ role: r, is_primary: false })),
-      ];
-      // Clear my own unconfirmed proposals first so re-running onboarding
-      // doesn't stack duplicates. (Admins' confirmed rows are untouched.)
-      await supabase
-        .from('employee_operational_roles')
-        .delete()
-        .eq('org_id', ctx.org_id)
-        .eq('employee_id', ctx.employee_id)
-        .is('confirmed_at', null);
-
-      const { error } = await supabase.from('employee_operational_roles').insert(
-        roles.map(r => ({
-          org_id: ctx.org_id,
-          employee_id: ctx.employee_id,
-          operational_role: r.role,
-          is_primary: r.is_primary,
-          created_by: user.id,
-        }))
-      );
-      // Duplicate role already confirmed by a manager — that's fine.
-      if (error && error.code !== '23505') throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['operational-roles'] }),
   });
 }
 
@@ -145,23 +104,3 @@ export function useSetEmployeeRoles() {
   });
 }
 
-/** Owner/manager: confirm a member's self-proposed roles as-is. */
-export function useConfirmEmployeeRoles() {
-  const { user } = useAuth();
-  const { data: ctx } = useOrgContext();
-  const qc = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (employeeId: string) => {
-      if (!user || !ctx) throw new Error('Not authenticated');
-      const { error } = await supabase
-        .from('employee_operational_roles')
-        .update({ confirmed_by: user.id, confirmed_at: new Date().toISOString() })
-        .eq('org_id', ctx.org_id)
-        .eq('employee_id', employeeId)
-        .is('confirmed_at', null);
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['operational-roles'] }),
-  });
-}

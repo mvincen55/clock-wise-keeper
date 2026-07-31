@@ -157,8 +157,8 @@ CREATE TABLE IF NOT EXISTS public.employee_operational_roles (
   is_primary boolean NOT NULL DEFAULT false,
   starts_on date,
   ends_on date,
-  -- Members propose their own roles during onboarding; an owner/manager
-  -- confirms. Unconfirmed rows are visible but marked pending in the UI.
+  -- Roles are assigned by the inviting owner/manager (on the invite) or
+  -- edited from the Team page — confirmed_by records who answered for them.
   confirmed_by uuid,
   confirmed_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -192,23 +192,15 @@ CREATE POLICY "Members read operational roles"
   TO authenticated
   USING (public.is_org_member(org_id));
 
--- A member may PROPOSE their own roles (onboarding); confirmation fields
--- must be empty on a self-insert. Admins insert anything.
+-- Operational roles are assigned by owners/managers — set at invite time
+-- (send-org-invite → accept-invite, service role) and editable from the Team
+-- page. Members never assign their own.
 DROP POLICY IF EXISTS "Self propose or admin insert operational roles" ON public.employee_operational_roles;
-CREATE POLICY "Self propose or admin insert operational roles"
+DROP POLICY IF EXISTS "Admins insert operational roles" ON public.employee_operational_roles;
+CREATE POLICY "Admins insert operational roles"
   ON public.employee_operational_roles FOR INSERT
   TO authenticated
-  WITH CHECK (
-    public.is_org_admin(org_id)
-    OR (
-      public.is_org_member(org_id)
-      AND confirmed_by IS NULL AND confirmed_at IS NULL
-      AND EXISTS (
-        SELECT 1 FROM public.employees e
-        WHERE e.id = employee_id AND e.org_id = org_id AND e.user_id = auth.uid()
-      )
-    )
-  );
+  WITH CHECK (public.is_org_admin(org_id));
 
 -- Only owners/managers assign, change, or confirm roles after that.
 DROP POLICY IF EXISTS "Admins update operational roles" ON public.employee_operational_roles;
@@ -224,9 +216,35 @@ CREATE POLICY "Admins delete operational roles"
   TO authenticated
   USING (public.is_org_admin(org_id));
 
--- Onboarding gains a "Your role" step.
-ALTER TABLE public.member_onboarding
-  ADD COLUMN IF NOT EXISTS role_done_at timestamptz;
+-- The inviter answers the role questions up front: the invite carries the
+-- person's name and operational role(s), so onboarding never has to ask.
+-- accept-invite applies them to the employees row, pre-confirmed by the
+-- inviter.
+ALTER TABLE public.org_invites
+  ADD COLUMN IF NOT EXISTS invited_name text,
+  ADD COLUMN IF NOT EXISTS operational_role text,
+  ADD COLUMN IF NOT EXISTS secondary_roles text[] NOT NULL DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS invited_by uuid;
+
+DO $$ BEGIN
+  ALTER TABLE public.org_invites
+    ADD CONSTRAINT org_invites_operational_role_check CHECK (
+      operational_role IS NULL OR operational_role = ANY (ARRAY[
+        'dentist','hygienist','dental_assistant','front_desk',
+        'office_manager','sterilization','floater','other'
+      ])
+    );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE public.org_invites
+    ADD CONSTRAINT org_invites_secondary_roles_check CHECK (
+      secondary_roles <@ ARRAY[
+        'dentist','hygienist','dental_assistant','front_desk',
+        'office_manager','sterilization','floater','other'
+      ]
+    );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ================================================================
 -- 3. Staffing expectations (configurable — every office differs)

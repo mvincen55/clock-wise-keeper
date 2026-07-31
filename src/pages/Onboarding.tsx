@@ -32,14 +32,14 @@ import {
   useSignTerms,
   useTagRegistry,
 } from '@/hooks/useOnboarding';
-import { OPERATIONAL_ROLES, ROLE_LABELS, useProposeMyRoles } from '@/hooks/useOperationalRoles';
-import type { OperationalRole } from '@/lib/schedule-reader/types';
 
-const STEPS = ['Privacy', 'About you', 'Basics', 'Your role', 'First goal'] as const;
+const STEPS = ['Privacy', 'About you', 'Basics', 'First goal'] as const;
 
 /**
- * The flow a new member completes after accepting their invite. Five screens,
+ * The flow a new member completes after accepting their invite. Four screens,
  * in order, and the app stays closed until the last one is done.
+ * (Their operational role isn't asked here — the inviting owner/manager
+ * already answered that on the invite.)
  */
 export default function Onboarding() {
   const navigate = useNavigate();
@@ -55,8 +55,7 @@ export default function Onboarding() {
     if (!status.termsSigned) setStep(0);
     else if (!status.progress?.work_style_done_at) setStep(1);
     else if (!status.progress?.basics_done_at) setStep(2);
-    else if (!status.progress?.role_done_at) setStep(3);
-    else setStep(4);
+    else setStep(3);
   }, [status]);
 
   if (isReady && status?.complete) return <Navigate to="/" replace />;
@@ -93,8 +92,6 @@ export default function Onboarding() {
           <WorkStyleStep onDone={() => setStep(2)} />
         ) : step === 2 ? (
           <BasicsStep onDone={() => setStep(3)} />
-        ) : step === 3 ? (
-          <RoleStep onDone={() => setStep(4)} />
         ) : (
           <GoalStep onDone={() => navigate('/', { replace: true })} />
         )}
@@ -345,96 +342,6 @@ function BasicsStep({ onDone }: { onDone: () => void }) {
 
         <Button onClick={submit} disabled={save.isPending || !save.isReady} className="w-full">
           {save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Continue
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
-function RoleStep({ onDone }: { onDone: () => void }) {
-  const propose = useProposeMyRoles();
-  const completeStep = useCompleteStep();
-  const [primary, setPrimary] = useState<OperationalRole | null>(null);
-  const [secondary, setSecondary] = useState<OperationalRole[]>([]);
-
-  const toggleSecondary = (role: OperationalRole) =>
-    setSecondary(list =>
-      list.includes(role) ? list.filter(r => r !== role) : [...list, role]
-    );
-
-  const submit = async () => {
-    if (!primary) {
-      toast.error('Pick the role you mostly work in.');
-      return;
-    }
-    try {
-      await propose.mutateAsync({ primary, secondary });
-      await completeStep.mutateAsync('role');
-      onDone();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not save your role');
-    }
-  };
-
-  return (
-    <Card className="card-elevated">
-      <CardHeader className="border-b">
-        <CardTitle className="text-lg">What do you do here?</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-5 p-5">
-        <p className="text-sm text-muted-foreground">
-          This is about the work, not permissions — an owner can be a working dentist, a manager
-          can cover the front desk. Your manager will confirm it, and it can always be updated
-          from the Team page.
-        </p>
-
-        <div className="space-y-1.5">
-          <Label>Your main role</Label>
-          <div className="grid grid-cols-2 gap-2">
-            {OPERATIONAL_ROLES.map(role => (
-              <Button
-                key={role}
-                type="button"
-                variant={primary === role ? 'default' : 'outline'}
-                size="sm"
-                className="justify-start"
-                onClick={() => {
-                  setPrimary(role);
-                  setSecondary(list => list.filter(r => r !== role));
-                }}
-              >
-                {ROLE_LABELS[role]}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label>Anything else you cover? (optional)</Label>
-          <div className="grid grid-cols-2 gap-2">
-            {OPERATIONAL_ROLES.filter(r => r !== primary).map(role => (
-              <Button
-                key={role}
-                type="button"
-                variant={secondary.includes(role) ? 'secondary' : 'outline'}
-                size="sm"
-                className="justify-start"
-                onClick={() => toggleSecondary(role)}
-              >
-                {secondary.includes(role) && <Check className="mr-1.5 h-3 w-3" />}
-                {ROLE_LABELS[role]}
-              </Button>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Plenty of people split their day — assisting and sterilization, hygiene and floating.
-            Pick everything that's regularly yours.
-          </p>
-        </div>
-
-        <Button onClick={submit} disabled={propose.isPending} className="w-full">
-          {propose.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Continue
         </Button>
       </CardContent>

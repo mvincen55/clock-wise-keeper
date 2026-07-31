@@ -2964,7 +2964,6 @@ export type Database = {
           goal_done_at: string | null
           id: string
           org_id: string
-          role_done_at: string | null
           terms_done_at: string | null
           updated_at: string
           user_id: string
@@ -2977,7 +2976,6 @@ export type Database = {
           goal_done_at?: string | null
           id?: string
           org_id: string
-          role_done_at?: string | null
           terms_done_at?: string | null
           updated_at?: string
           user_id: string
@@ -2990,7 +2988,6 @@ export type Database = {
           goal_done_at?: string | null
           id?: string
           org_id?: string
-          role_done_at?: string | null
           terms_done_at?: string | null
           updated_at?: string
           user_id?: string
@@ -3624,8 +3621,12 @@ export type Database = {
           email: string
           expires_at: string
           id: string
+          invited_by: string | null
+          invited_name: string | null
+          operational_role: string | null
           org_id: string
           role: Database["public"]["Enums"]["app_org_role"]
+          secondary_roles: string[]
           token: string
         }
         Insert: {
@@ -3634,8 +3635,12 @@ export type Database = {
           email: string
           expires_at?: string
           id?: string
+          invited_by?: string | null
+          invited_name?: string | null
+          operational_role?: string | null
           org_id: string
           role?: Database["public"]["Enums"]["app_org_role"]
+          secondary_roles?: string[]
           token?: string
         }
         Update: {
@@ -3644,8 +3649,12 @@ export type Database = {
           email?: string
           expires_at?: string
           id?: string
+          invited_by?: string | null
+          invited_name?: string | null
+          operational_role?: string | null
           org_id?: string
           role?: Database["public"]["Enums"]["app_org_role"]
+          secondary_roles?: string[]
           token?: string
         }
         Relationships: [

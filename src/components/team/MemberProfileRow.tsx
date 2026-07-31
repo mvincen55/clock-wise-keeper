@@ -121,10 +121,10 @@ export default function MemberProfileRow({ employee }: { employee: Member }) {
         ) : (
           <Badge variant="outline" className="border-warning/30 text-warning">
             Onboarding{' '}
-            {['terms', 'work_style', 'basics', 'role', 'goal'].filter(
+            {['terms', 'work_style', 'basics', 'goal'].filter(
               k => status.steps[k as keyof typeof status.steps],
             ).length}
-            /5
+            /4
           </Badge>
         )
       ) : (

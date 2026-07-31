@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     if (lookup === true) {
       const { data: inv } = await supabaseAdmin
         .from("org_invites")
-        .select("email, role, expires_at, accepted_at, org_id, orgs:org_id(name)")
+        .select("email, role, invited_name, expires_at, accepted_at, org_id, orgs:org_id(name)")
         .eq("token", token)
         .maybeSingle();
       if (!inv) {
@@ -176,6 +176,10 @@ Deno.serve(async (req) => {
       );
     }
 
+    // The inviter already answered the profile questions: the member's name
+    // and operational role(s) ride in on the invite itself.
+    const invitedName = typeof invite.invited_name === "string" ? invite.invited_name.trim() : "";
+
     // Link employee record if one exists with matching email
     const { data: empRecord } = await supabaseAdmin
       .from("employees")
@@ -185,20 +189,55 @@ Deno.serve(async (req) => {
       .is("user_id", null)
       .maybeSingle();
 
+    let employeeId: string | null = null;
     if (empRecord) {
+      employeeId = empRecord.id;
       await supabaseAdmin
         .from("employees")
-        .update({ user_id: user.id })
+        .update({ user_id: user.id, ...(invitedName ? { display_name: invitedName } : {}) })
         .eq("id", empRecord.id);
     } else {
-      // Create a new employee record
-      await supabaseAdmin.from("employees").insert({
+      // Create a new employee record, named by the inviter.
+      const { data: created } = await supabaseAdmin
+        .from("employees")
+        .insert({
+          org_id: invite.org_id,
+          user_id: user.id,
+          display_name:
+            invitedName || user.user_metadata?.full_name || user.email?.split("@")[0] || "Employee",
+          email: user.email,
+          employment_status: "active",
+        })
+        .select("id")
+        .single();
+      employeeId = created?.id ?? null;
+    }
+
+    // Apply the operational role(s) the inviter chose, pre-confirmed by them.
+    // Best-effort: a role hiccup must never block joining the office.
+    if (employeeId && typeof invite.operational_role === "string" && invite.operational_role) {
+      const now = new Date().toISOString();
+      const confirmer = invite.invited_by ?? user.id;
+      const secondary: string[] = Array.isArray(invite.secondary_roles) ? invite.secondary_roles : [];
+      const roleRows = [
+        { operational_role: invite.operational_role, is_primary: true },
+        ...secondary
+          .filter((r) => r !== invite.operational_role)
+          .map((r) => ({ operational_role: r, is_primary: false })),
+      ].map((r) => ({
+        ...r,
         org_id: invite.org_id,
-        user_id: user.id,
-        display_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Employee",
-        email: user.email,
-        employment_status: "active",
-      });
+        employee_id: employeeId,
+        created_by: confirmer,
+        confirmed_by: confirmer,
+        confirmed_at: now,
+      }));
+      const { error: rolesError } = await supabaseAdmin
+        .from("employee_operational_roles")
+        .upsert(roleRows, { onConflict: "org_id,employee_id,operational_role", ignoreDuplicates: true });
+      if (rolesError) {
+        console.warn("accept-invite: could not apply operational roles", rolesError.message);
+      }
     }
 
     // Mark invite accepted

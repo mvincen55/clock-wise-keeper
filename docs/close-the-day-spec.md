@@ -86,8 +86,11 @@ print sheets, snapshots, audit trigger) is unchanged.
 - `schedule_phrase_rules` — short generic phrases → codes; length + phone
   patterns constrained in the DB, sanitized again client-side.
 - `employee_operational_roles` — work roles (dentist/hygienist/…), separate
-  from permission roles; multiple per person; members propose during
-  onboarding ("Your role" step), owners/managers confirm and edit from Team.
+  from permission roles; multiple per person. The inviting owner/manager
+  answers these on the invite itself (name + email/username + role(s), stored
+  on `org_invites`); `accept-invite` names the employee record and applies
+  the roles pre-confirmed by the inviter. Onboarding never asks; managers
+  edit from the Team page.
 
 ## The five steps
 
@@ -116,13 +119,13 @@ fallback toggle.
 
 ## Known risks / follow-ups
 
-- Deploy note: `office-pulse` changes and the migration ship outside Lovable —
-  apply the migration and redeploy the function (README "How code changes
-  ship").
+- Deploy note: the migration plus the `office-pulse`, `send-org-invite`, and
+  `accept-invite` changes ship outside Lovable — apply the migration and
+  redeploy all three functions (README "How code changes ship").
 - OCR assets must be vendored at build time (`predev`/`prebuild` run
   `scripts/vendor-tesseract.mjs`; `public/tesseract/` is gitignored).
-- Onboarding gained a required step — existing members will be asked their
-  operational role once on next login. That is intended.
+- Existing members predate role-carrying invites, so they start with no
+  operational role — managers backfill from the Team page.
 - Color-legend matching assumes solid status blocks; offices with heavy
   gradients may see more unclassified time (which is safe — it is never
   counted as open).
