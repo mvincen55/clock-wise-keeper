@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { callPathfinder, useCreateGoal } from '@/hooks/useGoals';
 import SmartChips, { type SmartRead } from '@/components/goals/SmartChips';
 import RoleGoalIdeas from '@/components/goals/RoleGoalIdeas';
+import { evaluateGoalGate, flagsFromSmartText } from '@/lib/goal-gate';
 import NoPhiNote from '@/components/NoPhiNote';
 
 /**
