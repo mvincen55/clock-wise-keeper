@@ -29,7 +29,7 @@ export default function ChecklistBypassDialog({
   onBypass,
 }: Props) {
   const [reason, setReason] = useState('');
-  const { data: messaging } = useMessagingSettings();
+  const { settings: messaging } = useMessagingSettings();
   const doctorLabel = messaging?.doctor_recipient_label ?? DEFAULT_MESSAGING_SETTINGS.doctor_recipient_label;
 
   return (

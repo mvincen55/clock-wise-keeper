@@ -21,7 +21,7 @@ function ordinal(n: number): string {
 export function useGuardedClockAction() {
   const clockAction = useClockAction();
   const { data: gating } = useChecklistGating();
-  const { data: messaging } = useMessagingSettings();
+  const { settings: messaging } = useMessagingSettings();
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [bypassing, setBypassing] = useState(false);
