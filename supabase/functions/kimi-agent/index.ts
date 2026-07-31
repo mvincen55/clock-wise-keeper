@@ -1055,7 +1055,7 @@ Deno.serve(async (req) => {
     const treatment = bounded(body.context?.treatment, MAX_TREATMENT_CHARS);
 
     // Standing knowledge, all under the caller's JWT so RLS scopes the org.
-    const [memoriesRes, guidanceRes, docsRes, codeNotes, schedulesRes] = await Promise.all([
+    const [memoriesRes, guidanceRes, docsRes, codeNotes, schedulesRes, fofSettingsRes, fofDiscountsRes, fofCodesRes] = await Promise.all([
       supabase
         .from("assistant_memories")
         .select("id, kind, content")
@@ -1078,6 +1078,25 @@ Deno.serve(async (req) => {
       supabase.from("office_docs").select("id").limit(200),
       loadCodeNotes(supabase),
       supabase.from("fee_schedules").select("name, kind").eq("is_active", true).order("sort_order"),
+      mode === "fof"
+        ? supabase
+            .from("fof_settings")
+            .select("membership_plan_name, day_of_service_threshold_cents, min_standalone_payment_cents, downgrade_default_on")
+            .eq("org_id", membership.org_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      mode === "fof"
+        ? supabase
+            .from("fof_discount_rules")
+            .select("rule_key, enabled, percent, extra_percent, threshold_cents")
+            .eq("org_id", membership.org_id)
+        : Promise.resolve({ data: [] }),
+      mode === "fof"
+        ? supabase
+            .from("fof_code_rules")
+            .select("code, kind")
+            .eq("org_id", membership.org_id)
+        : Promise.resolve({ data: [] }),
     ]);
     const memories = ((memoriesRes.data ?? []) as { id: string; kind: string; content: string }[]).map(
       (m) => ({ id: m.id, kind: m.kind, content: bounded(m.content, MAX_MEMORY_CHARS) })
