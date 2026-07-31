@@ -167,7 +167,7 @@ export default function SetGoalCard({ month }: { month: string }) {
 
         <Button
           onClick={save}
-          disabled={!title.trim() || createGoal.isPending || !createGoal.isReady || polishing}
+          disabled={!gate.ok || createGoal.isPending || !createGoal.isReady || polishing}
         >
           {createGoal.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Set this month's goal
