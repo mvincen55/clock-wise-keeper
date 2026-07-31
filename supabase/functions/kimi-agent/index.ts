@@ -1104,6 +1104,14 @@ Deno.serve(async (req) => {
     const guidance = ((guidanceRes.data ?? []) as { content: string }[])
       .map((g) => bounded(g.content, 240))
       .filter(Boolean);
+    const policySummary = mode === "fof"
+      ? buildDynamicPolicySummary(
+          (fofSettingsRes.data ?? null) as FofSettingsRow | null,
+          (fofDiscountsRes.data ?? []) as FofDiscountRule[],
+          (fofCodesRes.data ?? []) as FofCodeRule[],
+          guidance,
+        )
+      : undefined;
 
     const gh = githubConfig();
     const githubReady = isManager && gh !== null;
