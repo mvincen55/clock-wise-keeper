@@ -136,31 +136,68 @@ Deno.serve(async (req) => {
       .gte("created_at", `${today}T00:00:00Z`);
     const alreadySent = new Set((sentToday ?? []).map((n) => n.related_id));
 
+    // Per-person reminder settings: the hour they want it, and where it lands.
+    const owners = [...new Set(candidates.map((c) => c.owner_user_id as string))];
+    const { data: prefRows } = await admin
+      .from("goal_reminder_prefs")
+      .select("user_id, enabled, reminder_hour, channel")
+      .in("user_id", owners);
+    const prefs = new Map(
+      (prefRows ?? []).map((p) => [p.user_id as string, p]),
+    );
+    const hourNow = easternHour();
+
+    const wantsEmail = candidates.some((c) => {
+      const ch = prefs.get(c.owner_user_id as string)?.channel ?? DEFAULT_PREF.channel;
+      return ch !== "in_app";
+    });
+    const emailFor = new Map<string, string>();
+    if (wantsEmail) {
+      const { data: profiles } = await admin.from("profiles").select("id, email").in("id", owners);
+      for (const p of profiles ?? []) if (p.email) emailFor.set(p.id as string, p.email as string);
+    }
+
     let sent = 0;
+    let emailed = 0;
     for (const item of candidates) {
+      const ownerId = item.owner_user_id as string;
+      const pref = prefs.get(ownerId) ?? DEFAULT_PREF;
+      if (!pref.enabled) continue;
+      if ((pref.reminder_hour ?? DEFAULT_PREF.reminder_hour) !== hourNow) continue;
       if (alreadySent.has(item.id)) continue;
-      if (doneBy.has(`${item.id}:${item.owner_user_id}`)) continue;
+      if (doneBy.has(`${item.id}:${ownerId}`)) continue;
 
       const daysLeft = Math.round(
         (Date.parse(`${item.due_date}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86400000,
       );
       const { heading, line } = copyFor(item.title, item.due_date as string, daysLeft);
+      const channel = pref.channel ?? DEFAULT_PREF.channel;
 
-      const { error: nErr } = await admin.from("notifications").insert({
-        org_id: item.org_id,
-        recipient_user_id: item.owner_user_id,
-        notification_type: "goal_step_due",
-        title: heading,
-        message: line,
-        related_table: "checklist_items",
-        related_id: item.id,
-      });
-      if (nErr) {
-        console.error("Goal step reminder failed", { item: item.id, error: nErr.message });
-        continue;
+      if (channel !== "email") {
+        const { error: nErr } = await admin.from("notifications").insert({
+          org_id: item.org_id,
+          recipient_user_id: ownerId,
+          notification_type: "goal_step_due",
+          title: heading,
+          message: line,
+          related_table: "checklist_items",
+          related_id: item.id,
+        });
+        if (nErr) {
+          console.error("Goal step reminder failed", { item: item.id, error: nErr.message });
+          continue;
+        }
+        sent += 1;
       }
-      sent += 1;
+
+      if (channel !== "in_app") {
+        const to = emailFor.get(ownerId);
+        if (!to) continue;
+        const ok = await enqueueReminderEmail(admin, to, heading, line, item.id, today);
+        if (ok) emailed += 1;
+      }
     }
+
 
     return new Response(JSON.stringify({ checked: candidates.length, sent }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
