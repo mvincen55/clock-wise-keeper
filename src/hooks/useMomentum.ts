@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import { getToday } from '@/lib/time-utils';
+import { getToday, easternWallToUtcIso } from '@/lib/time-utils';
 import {
   bestStreak as computeBestStreak,
   currentStreak as computeCurrentStreak,
@@ -163,8 +163,9 @@ export function useMomentum() {
       const updates = (updatesRes.data ?? []).map((u) => new Date(u.created_at).getTime());
       let sharedBeforeMeeting = 0;
       for (const m of meetingsRes.data ?? []) {
+        const startH = (m.start_time ?? '09:00:00').slice(0, 5).split(':');
         const cutoff = new Date(
-          easternWallToUtcIso(m.event_date, m.start_time?.slice(0, 5) ?? '09:00')
+          easternWallToUtcIso(m.event_date, parseInt(startH[0], 10), parseInt(startH[1], 10))
         ).getTime();
         const windowStart = cutoff - 7 * 24 * 3600 * 1000;
         if (updates.some((u) => u > windowStart && u <= cutoff)) sharedBeforeMeeting++;

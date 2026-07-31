@@ -75,7 +75,11 @@ export default function Dashboard() {
   const { data: zones } = useWorkZones();
   const geoState = useGeoTracking(autoClockEnabled && (zones?.length ?? 0) > 0);
 
-  const missingDays = useMissingShifts(getToday(-14));
+  const todayKey = getToday();
+  const fourteenDaysAgo = new Date(new Date(todayKey + 'T12:00:00Z').getTime() - 14 * 24 * 3600 * 1000)
+    .toISOString()
+    .slice(0, 10);
+  const missingDays = useMissingShifts(fourteenDaysAgo);
 
   const ptoState = useCurrentPtoBalance();
   const { data: ctx } = useOrgContext();
