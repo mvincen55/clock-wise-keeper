@@ -144,6 +144,11 @@ const NO_PREPAY_CODES = new Set(['D5982']);
 // list comes from fof_settings.doctor_names; the literal fallback is used
 // only when settings have not yet been configured.
 const FOF_NO_DOCTOR = 'No specific doctor';
+
+// Procedures the office membership plan includes at no charge. Per-line
+// toggle covers used-up yearly allowances. In production the plan name is
+// read from fof_settings.membership_plan_name.
+const MEMBERSHIP_INCLUDED = new Set([
   'D0120', 'D0140', 'D0150', // exams + emergency exam
   'D0210', 'D0220', 'D0230', 'D0272', 'D0274', 'D0330', // X-rays (no CBCT)
   'D1110', 'D1120', 'D4910', // cleanings incl. perio maintenance
