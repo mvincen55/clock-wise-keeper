@@ -38,6 +38,15 @@ const MODEL = "google/gemini-3.6-flash";
 const bounded = (value: unknown, cap: number): string =>
   typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, cap) : "";
 
+function easternToday(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
 /** Last day of a "YYYY-MM" month. */
 function monthBounds(month: string): { start: string; end: string } {
   const [y, m] = month.split("-").map(Number);
