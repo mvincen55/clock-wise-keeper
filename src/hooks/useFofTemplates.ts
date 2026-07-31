@@ -231,10 +231,14 @@ export function useUpsertFofSettings() {
           .upsert({ org_id: ctx.org_id, ...brandingPatch }, { onConflict: 'org_id' });
         if (error) throw error;
       }
-      if (updates.doctorName !== undefined) {
+      if (updates.doctorName !== undefined || updates.membershipPlanName !== undefined || updates.doctorNames !== undefined) {
+        const patch: Record<string, unknown> = {};
+        if (updates.doctorName !== undefined) patch.doctor_name = updates.doctorName;
+        if (updates.membershipPlanName !== undefined) patch.membership_plan_name = updates.membershipPlanName;
+        if (updates.doctorNames !== undefined) patch.doctor_names = updates.doctorNames;
         const { error } = await supabase
           .from('fof_settings')
-          .upsert({ org_id: ctx.org_id, doctor_name: updates.doctorName }, { onConflict: 'org_id' });
+          .upsert({ org_id: ctx.org_id, ...patch }, { onConflict: 'org_id' });
         if (error) throw error;
       }
     },
