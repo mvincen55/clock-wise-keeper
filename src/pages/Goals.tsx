@@ -25,6 +25,7 @@ import TargetProgress from '@/components/goals/TargetProgress';
 import GoalStatusBadge from '@/components/goals/GoalStatusBadge';
 import MyGoalCard from '@/components/goals/MyGoalCard';
 import SetGoalCard from '@/components/goals/SetGoalCard';
+import GoalsAnalytics from '@/components/goals/GoalsAnalytics';
 import TeamGoalCard from '@/components/goals/TeamGoalCard';
 import GoalsPrintSheet, { type GoalsReportRow } from '@/components/goals/GoalsPrintSheet';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
@@ -280,6 +281,8 @@ export default function Goals() {
           ))}
         </section>
       )}
+
+      <GoalsAnalytics />
 
       <section className="space-y-4">
         <h2 className="text-lg font-semibold">The team this month</h2>
