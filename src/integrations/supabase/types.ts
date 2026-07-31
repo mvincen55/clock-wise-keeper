@@ -5852,6 +5852,10 @@ export type Database = {
         Args: { _message_id: string; _note?: string }
         Returns: undefined
       }
+      request_attendance_recompute: {
+        Args: { p_end_date: string; p_start_date: string; p_user_id: string }
+        Returns: number
+      }
       search_office_doc_chunks: {
         Args: { p_limit?: number; p_query: string }
         Returns: {
