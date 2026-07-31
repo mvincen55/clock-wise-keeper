@@ -16,6 +16,8 @@ import { formatDate } from '@/lib/time-utils';
 import PrivacyTermsCard from '@/components/onboarding/PrivacyTermsCard';
 import EscalationPoliciesCard from '@/components/accountability/EscalationPoliciesCard';
 import MessagingSettingsCard from '@/components/settings/MessagingSettingsCard';
+import { PracticeSettingsCard } from '@/components/settings/PracticeSettingsCard';
+import { FofPolicySettingsCard } from '@/components/settings/FofPolicySettingsCard';
 
 const WEEKDAY_OPTIONS = [
   { value: '0', label: 'Sunday' },
