@@ -10,11 +10,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   AI_SCOPES,
+  canEditLibraryDocs,
   docInScope,
   isImportantNumbersTitle,
   legacyCategoryFor,
   locateQueryBlock,
+  outlineAncestors,
   outlineFromBlocks,
+  outlineTree,
   parseAiScope,
   placementForLegacyCategory,
   readerDocsFor,
@@ -238,6 +241,69 @@ describe('section resolution for search hits', () => {
 
   it('returns -1 when nothing matches', () => {
     expect(locateQueryBlock(blocks, 'crown remake')).toBe(-1);
+  });
+});
+
+describe('outline tree (folding contents list)', () => {
+  const md = [
+    '# Policy Handbook',
+    '## Employee Policies',
+    'General expectations for everyone employed at the office are described below.',
+    '### Paid Time Off Policy',
+    'Accrual begins on the first day of the month after hire.',
+    '#### Time Off Request Form',
+    'Submit the form at least two weeks in advance.',
+    '### Attendance Policy',
+    'Arrive on time for every scheduled shift.',
+    '## Patient Policies',
+    '### Illumitrac',
+    'Eligibility is verified before every visit.',
+  ].join('\n');
+  const outline = outlineFromBlocks(parseDocBlocks(md));
+  const tree = outlineTree(outline);
+
+  it('nests headings under their parent category', () => {
+    expect(tree.map(n => n.item.text)).toEqual(['Policy Handbook']);
+    const [root] = tree;
+    expect(root.children.map(n => n.item.text)).toEqual(['Employee Policies', 'Patient Policies']);
+    const employee = root.children[0];
+    expect(employee.children.map(n => n.item.text)).toEqual([
+      'Paid Time Off Policy',
+      'Attendance Policy',
+    ]);
+    expect(employee.children[0].children.map(n => n.item.text)).toEqual(['Time Off Request Form']);
+  });
+
+  it('keeps a single-level document flat', () => {
+    const flat = outlineTree([
+      { id: 'a', text: 'A', blockIndex: 0, level: 3 },
+      { id: 'b', text: 'B', blockIndex: 2, level: 3 },
+    ]);
+    expect(flat).toHaveLength(2);
+    expect(flat.every(n => n.children.length === 0)).toBe(true);
+  });
+
+  it('maps every entry to its ancestor chain for auto-unfolding', () => {
+    const ancestors = outlineAncestors(tree);
+    const timeOff = outline.find(o => o.text === 'Time Off Request Form')!;
+    const chain = (ancestors.get(timeOff.id) ?? []).map(
+      id => outline.find(o => o.id === id)!.text
+    );
+    expect(chain).toEqual(['Policy Handbook', 'Employee Policies', 'Paid Time Off Policy']);
+    const top = outline.find(o => o.text === 'Policy Handbook')!;
+    expect(ancestors.get(top.id)).toEqual([]);
+  });
+});
+
+describe('canEditLibraryDocs', () => {
+  it('owner always edits; managers only when the owner allows it; staff never', () => {
+    expect(canEditLibraryDocs('owner', false)).toBe(true);
+    expect(canEditLibraryDocs('owner', true)).toBe(true);
+    expect(canEditLibraryDocs('manager', false)).toBe(false);
+    expect(canEditLibraryDocs('manager', true)).toBe(true);
+    expect(canEditLibraryDocs('member', true)).toBe(false);
+    expect(canEditLibraryDocs(null, true)).toBe(false);
+    expect(canEditLibraryDocs(undefined, false)).toBe(false);
   });
 });
 

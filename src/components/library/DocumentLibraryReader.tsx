@@ -33,8 +33,20 @@ import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
 import {
   ArrowLeft,
   ArrowRight,
@@ -44,18 +56,30 @@ import {
   List,
   ListTree,
   Loader2,
+  Pencil,
   Search,
+  Settings2,
   Sparkles,
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { useOfficeDocs, type OfficeDoc } from '@/hooks/useOfficeDocs';
+import {
+  useDocLibrarySettings,
+  useEditOfficeDocContent,
+  useOfficeDocs,
+  useUpdateDocLibrarySettings,
+  type OfficeDoc,
+} from '@/hooks/useOfficeDocs';
+import { useOrgContext } from '@/hooks/useOrgContext';
 import { parseDocBlocks, type DocBlock } from '@/lib/doc-format';
 import {
   DOC_COLLECTION_LABELS,
+  canEditLibraryDocs,
   escapeRegExp,
   locateQueryBlock,
+  outlineAncestors,
   outlineFromBlocks,
+  outlineTree,
   readerDocsFor,
   resolveDocPlacement,
   sectionAnchorId,
@@ -65,6 +89,7 @@ import {
   type AiScope,
   type LibraryScope,
   type OutlineItem,
+  type OutlineTreeNode,
 } from '@/lib/doc-library';
 
 export interface LibraryQuickLink {
@@ -180,7 +205,80 @@ const ReaderBody = memo(function ReaderBody({
   );
 });
 
-/** Searchable table of contents with the active section marked. */
+function tocLabelClass(active: boolean): string {
+  return `min-w-0 flex-1 rounded-md px-2 py-1.5 text-left text-[13px] leading-snug transition-colors ${
+    active
+      ? 'bg-primary/10 font-medium text-primary'
+      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+  }`;
+}
+
+/** One row of the contents tree — a fold chevron when it has children. */
+function TocRow({
+  node,
+  activeId,
+  expanded,
+  onToggle,
+  onJump,
+}: {
+  node: OutlineTreeNode;
+  activeId: string;
+  expanded: Set<string>;
+  onToggle: (id: string) => void;
+  onJump: (item: OutlineItem) => void;
+}) {
+  const { item, children } = node;
+  const isOpen = expanded.has(item.id);
+  return (
+    <div>
+      <div className="flex items-start">
+        {children.length > 0 ? (
+          <button
+            type="button"
+            aria-label={isOpen ? 'Collapse section' : 'Expand section'}
+            aria-expanded={isOpen}
+            onClick={() => onToggle(item.id)}
+            className="mt-1 flex h-6 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-primary"
+          >
+            <ChevronRight
+              className={`h-3.5 w-3.5 transition-transform ${isOpen ? 'rotate-90' : ''}`}
+            />
+          </button>
+        ) : (
+          <span className="w-5 shrink-0" />
+        )}
+        <button
+          type="button"
+          data-toc-id={item.id}
+          onClick={() => onJump(item)}
+          className={tocLabelClass(item.id === activeId)}
+        >
+          {item.text}
+        </button>
+      </div>
+      {children.length > 0 && isOpen && (
+        <div className="ml-[9px] border-l border-border pl-1.5">
+          {children.map(child => (
+            <TocRow
+              key={child.item.id}
+              node={child}
+              activeId={activeId}
+              expanded={expanded}
+              onToggle={onToggle}
+              onJump={onJump}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Searchable table of contents. Headings nest by level and fold under
+ * their parent category; the path to the active section unfolds itself as
+ * you read. Filtering searches every section as a flat list.
+ */
 function TableOfContents({
   outline,
   activeId,
@@ -191,11 +289,42 @@ function TableOfContents({
   onJump: (item: OutlineItem) => void;
 }) {
   const [filter, setFilter] = useState('');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const listRef = useRef<HTMLDivElement>(null);
-  const topLevel = outline.length > 0 ? Math.min(...outline.map(o => o.level)) : 0;
-  const shown = filter.trim()
+  const tree = useMemo(() => outlineTree(outline), [outline]);
+  const ancestors = useMemo(() => outlineAncestors(tree), [tree]);
+  const hasTree = useMemo(() => tree.some(n => n.children.length > 0), [tree]);
+  const filtering = filter.trim().length > 0;
+  const shown = filtering
     ? outline.filter(o => o.text.toLowerCase().includes(filter.trim().toLowerCase()))
     : outline;
+
+  // The active section's ancestors unfold so its row is always reachable.
+  useEffect(() => {
+    if (!activeId) return;
+    const chain = ancestors.get(activeId);
+    if (!chain || chain.length === 0) return;
+    setExpanded(prev => {
+      if (chain.every(id => prev.has(id))) return prev;
+      const next = new Set(prev);
+      for (const id of chain) next.add(id);
+      return next;
+    });
+  }, [activeId, ancestors]);
+
+  const toggle = (id: string) =>
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  // Jumping to a category also unfolds it.
+  const jump = (item: OutlineItem) => {
+    setExpanded(prev => (prev.has(item.id) ? prev : new Set(prev).add(item.id)));
+    onJump(item);
+  };
 
   // Keep the active section visible by moving ONLY this list's scrollTop.
   // scrollIntoView is deliberately avoided: it can chain to outer scrollers
@@ -210,7 +339,7 @@ function TableOfContents({
     if (elRect.top < boxRect.top + 8 || elRect.bottom > boxRect.bottom - 8) {
       box.scrollTop += elRect.top - boxRect.top - box.clientHeight / 2 + el.clientHeight / 2;
     }
-  }, [activeId]);
+  }, [activeId, expanded]);
 
   if (outline.length === 0) {
     return <p className="px-2 py-1 text-xs text-muted-foreground">No sections detected.</p>;
@@ -231,31 +360,158 @@ function TableOfContents({
         ref={listRef}
         className="min-h-0 flex-1 space-y-0.5 overscroll-contain pr-1 lg:overflow-y-auto"
       >
-        {shown.length === 0 && (
-          <p className="px-2 py-1 text-xs text-muted-foreground">No section matches.</p>
-        )}
-        {shown.map(item => {
-          const active = item.id === activeId;
-          return (
+        {filtering ? (
+          shown.length === 0 ? (
+            <p className="px-2 py-1 text-xs text-muted-foreground">No section matches.</p>
+          ) : (
+            shown.map(item => (
+              <button
+                key={item.id}
+                type="button"
+                data-toc-id={item.id}
+                onClick={() => jump(item)}
+                className={`block w-full ${tocLabelClass(item.id === activeId)}`}
+              >
+                {item.text}
+              </button>
+            ))
+          )
+        ) : hasTree ? (
+          tree.map(node => (
+            <TocRow
+              key={node.item.id}
+              node={node}
+              activeId={activeId}
+              expanded={expanded}
+              onToggle={toggle}
+              onJump={jump}
+            />
+          ))
+        ) : (
+          outline.map(item => (
             <button
               key={item.id}
               type="button"
               data-toc-id={item.id}
               onClick={() => onJump(item)}
-              className={`block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] leading-snug transition-colors ${
-                item.level > topLevel ? 'pl-5' : ''
-              } ${
-                active
-                  ? 'border-l-2 border-primary bg-primary/10 font-medium text-primary'
-                  : 'border-l-2 border-transparent text-muted-foreground hover:bg-muted hover:text-foreground'
-              }`}
+              className={`block w-full ${tocLabelClass(item.id === activeId)}`}
             >
               {item.text}
             </button>
-          );
-        })}
+          ))
+        )}
       </div>
     </div>
+  );
+}
+
+/** Edit a document's text in place — markdown headings become the fold structure. */
+function EditDocDialog({
+  doc,
+  content,
+  open,
+  onClose,
+}: {
+  doc: OfficeDoc | null;
+  content: string;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const edit = useEditOfficeDocContent();
+  const [text, setText] = useState('');
+  const [seededFor, setSeededFor] = useState<string | null>(null);
+
+  // Seed the editor from the current document each time it opens.
+  if (open && doc && seededFor !== doc.id) {
+    setSeededFor(doc.id);
+    setText(content);
+  }
+  if (!open && seededFor !== null) {
+    setSeededFor(null);
+  }
+
+  const save = () => {
+    if (!doc) return;
+    edit.mutate(
+      { docId: doc.id, text },
+      {
+        onSuccess: result => {
+          toast.success(`Saved — ${result.chunks} sections re-indexed`);
+          onClose();
+        },
+        onError: err => toast.error(err.message),
+      }
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={isOpen => !isOpen && onClose()}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Edit — {doc?.title}</DialogTitle>
+        </DialogHeader>
+        <p className="text-xs text-muted-foreground">
+          Markdown headings shape the contents list: <code className="rounded bg-muted px-1"># title</code>,{' '}
+          <code className="rounded bg-muted px-1">## category</code>,{' '}
+          <code className="rounded bg-muted px-1">### policy</code> — deeper headings fold under
+          their category. Use <code className="rounded bg-muted px-1">-</code> for bullets and{' '}
+          <code className="rounded bg-muted px-1">1.</code> for steps. Internal business documents
+          only — never patient information.
+        </p>
+        <Textarea
+          value={text}
+          onChange={e => setText(e.target.value)}
+          spellCheck={false}
+          className="min-h-[55vh] font-mono text-[13px] leading-relaxed focus-visible:ring-primary"
+        />
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={edit.isPending}>
+            Cancel
+          </Button>
+          <Button onClick={save} disabled={edit.isPending || !text.trim()}>
+            {edit.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Save Changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Owner-only: decide whether managers may edit documents here too. */
+function EditingSettingsPopover() {
+  const { data: settings } = useDocLibrarySettings();
+  const update = useUpdateDocLibrarySettings();
+  const managersCanEdit = settings?.managers_can_edit ?? false;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label="Editing settings">
+          <Settings2 className="h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72 space-y-2.5">
+        <p className="text-sm font-medium">Editing</p>
+        <div className="flex items-center justify-between gap-3">
+          <Label htmlFor="managers-can-edit" className="text-sm font-normal leading-snug">
+            Managers can edit documents
+          </Label>
+          <Switch
+            id="managers-can-edit"
+            checked={managersCanEdit}
+            disabled={update.isPending}
+            onCheckedChange={value =>
+              update.mutate(value, { onError: err => toast.error(err.message) })
+            }
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          As the owner you can always edit. This also lets managers change document text from
+          the reader.
+        </p>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -321,6 +577,8 @@ export default function DocumentLibraryReader({
   documentsLabel = 'Documents',
 }: DocumentLibraryReaderProps) {
   const { data: allDocs, isLoading } = useOfficeDocs();
+  const { data: ctx } = useOrgContext();
+  const { data: librarySettings } = useDocLibrarySettings();
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -328,9 +586,13 @@ export default function DocumentLibraryReader({
   const [pendingJump, setPendingJump] = useState<{ docId: string; blockIndex: number } | null>(null);
   const [activeSectionId, setActiveSectionId] = useState('');
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const scrollRaf = useRef(0);
   const paneRef = useRef<HTMLElement | null>(null);
   const progressRef = useRef<HTMLDivElement | null>(null);
+
+  const isOwner = ctx?.role === 'owner';
+  const canEdit = canEditLibraryDocs(ctx?.role, librarySettings?.managers_can_edit ?? false);
 
   const docs = useMemo(() => readerDocsFor(allDocs ?? [], scope), [allDocs, scope]);
   const activeDoc = docs.find(d => d.id === selectedId) ?? docs[0] ?? null;
@@ -749,41 +1011,52 @@ export default function DocumentLibraryReader({
                 ) : activeDoc ? (
                   <article>
                     <header className="mb-7">
-                      <div className="flex items-start gap-3">
-                        <span className="mt-1 hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:flex">
-                          <Icon className="h-4 w-4 text-primary" />
-                        </span>
-                        <div className="min-w-0">
-                          <h2 className="text-2xl font-bold tracking-tight">{activeDoc.title}</h2>
-                          <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                            {updatedAt && (
-                              <span className="inline-flex items-center gap-1">
-                                <CalendarDays className="h-3.5 w-3.5" />
-                                Updated{' '}
-                                {updatedAt.toLocaleDateString(undefined, {
-                                  year: 'numeric',
-                                  month: 'long',
-                                  day: 'numeric',
-                                })}
-                              </span>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <span className="mt-1 hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:flex">
+                            <Icon className="h-4 w-4 text-primary" />
+                          </span>
+                          <div className="min-w-0">
+                            <h2 className="text-2xl font-bold tracking-tight">{activeDoc.title}</h2>
+                            <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                              {updatedAt && (
+                                <span className="inline-flex items-center gap-1">
+                                  <CalendarDays className="h-3.5 w-3.5" />
+                                  Updated{' '}
+                                  {updatedAt.toLocaleDateString(undefined, {
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric',
+                                  })}
+                                </span>
+                              )}
+                              {outline.length > 0 && (
+                                <span className="inline-flex items-center gap-1">
+                                  <ListTree className="h-3.5 w-3.5" />
+                                  {outline.length} sections
+                                </span>
+                              )}
+                            </p>
+                            {readerHighlight && (
+                              <button
+                                type="button"
+                                onClick={() => setReaderHighlight('')}
+                                className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/15"
+                              >
+                                Highlighting “{readerHighlight}”
+                                <X className="h-3 w-3" />
+                              </button>
                             )}
-                            {outline.length > 0 && (
-                              <span className="inline-flex items-center gap-1">
-                                <ListTree className="h-3.5 w-3.5" />
-                                {outline.length} sections
-                              </span>
-                            )}
-                          </p>
-                          {readerHighlight && (
-                            <button
-                              type="button"
-                              onClick={() => setReaderHighlight('')}
-                              className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/15"
-                            >
-                              Highlighting “{readerHighlight}”
-                              <X className="h-3 w-3" />
-                            </button>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          {canEdit && (
+                            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                              <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                              Edit
+                            </Button>
                           )}
+                          {isOwner && <EditingSettingsPopover />}
                         </div>
                       </div>
                       <div className="mt-4 h-1 w-12 rounded-full bg-primary/60" />
@@ -841,6 +1114,13 @@ export default function DocumentLibraryReader({
               </div>
             </main>
           </div>
+
+          <EditDocDialog
+            doc={activeDoc}
+            content={activeDoc ? contents?.get(activeDoc.id) ?? '' : ''}
+            open={editOpen}
+            onClose={() => setEditOpen(false)}
+          />
         </>
       )}
     </div>
