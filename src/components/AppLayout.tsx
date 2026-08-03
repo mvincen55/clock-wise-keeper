@@ -43,12 +43,12 @@ const DESTINATIONS: Destination[] = [
   {
     to: '/workplace', icon: Briefcase, label: 'Workplace',
     match: ['/timesheet', '/days-off', '/pto', '/my-requests', '/office-calendar',
-            '/handbook', '/policy-manual', '/important-numbers', '/goals', '/training', '/team'],
+            '/handbook', '/policy-manual', '/goals', '/training', '/team'],
   },
   {
     to: '/playbook', icon: BookOpen, label: 'Practice Playbook', shortLabel: 'Playbook',
     match: ['/morning-huddle', '/checklists', '/deposit-log', '/incident-reports', '/fof',
-            '/insurance-desk', '/assistant'],
+            '/insurance-desk', '/important-numbers', '/assistant'],
   },
   {
     to: '/inbox', icon: Inbox, label: 'Inbox',

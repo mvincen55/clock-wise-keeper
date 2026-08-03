@@ -1,5 +1,5 @@
 import {
-  Table2, CalendarDays, Clock, Send, Calendar, BookOpen, Phone, Users,
+  Table2, CalendarDays, Clock, Send, Calendar, BookOpen, Users,
   Target, GraduationCap,
 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
@@ -22,7 +22,6 @@ const SECTIONS: HubSection[] = [
     links: [
       { to: '/office-calendar', icon: Calendar, label: 'Office Calendar', description: 'Closures, events, and the office schedule.' },
       { to: '/handbook', icon: BookOpen, label: 'Office Handbook', description: 'Policies, benefits, expectations, and information for working here.' },
-      { to: '/important-numbers', icon: Phone, label: 'Important Numbers', description: 'Key contacts and office information.' },
       { to: '/team', icon: Users, label: 'Team', description: 'The team roster and member details.', managerOnly: true },
     ],
   },
