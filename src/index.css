@@ -1690,14 +1690,20 @@
 }
 
 /* Sparse forms: roomier type and spacing, with leftover height
-   distributed between sections so the page always looks fully used. */
+   distributed between sections so the page always looks fully used.
+   Spacing here is capped so the tallest sparse form (a blank
+   membership-style template: footnote block + both payment options)
+   stays under the 10in printable box with slack to spare — the
+   signature block carries page-break-inside: avoid, so even a 1px
+   overflow would push it to a nearly-empty second page. Verified by
+   scripts/print-layout-check.mjs. */
 .fof-roomy {
   font-size: 9.5pt;
 }
 
 .fof-roomy .fof-head {
-  padding-bottom: 12pt;
-  margin-bottom: 14pt;
+  padding-bottom: 10pt;
+  margin-bottom: 11pt;
 }
 
 .fof-roomy .fof-treatment-text {
@@ -1713,7 +1719,7 @@
 .fof-roomy .fof-options,
 .fof-roomy .fof-agreement,
 .fof-roomy .fof-band {
-  margin-bottom: 14pt;
+  margin-bottom: 11pt;
 }
 
 .fof-roomy .fof-card {
@@ -1731,15 +1737,15 @@
 .fof-roomy .fof-footnotes {
   padding: 8pt 10pt;
   font-size: 7.8pt;
-  margin-bottom: 14pt;
+  margin-bottom: 11pt;
 }
 
 .fof-roomy .fof-sig-ack {
-  margin-bottom: 20pt;
+  margin-bottom: 14pt;
 }
 
 .fof-roomy .fof-choices {
-  margin: 10pt 0 18pt;
+  margin: 10pt 0 12pt;
 }
 
 .fof-roomy .fof-sig-line {
@@ -1962,6 +1968,17 @@
   font-size: 7.2pt;
   color: var(--fof-muted);
   margin: 0;
+}
+
+/* Blank-form office copy: the page still prints, stating why the line
+   table is absent instead of silently dropping the office record. */
+.fof-office-empty {
+  border: 0.75pt dashed var(--fof-line);
+  border-radius: 4pt;
+  padding: 10pt 12pt;
+  margin: 0 0 10pt;
+  font-size: 8.5pt;
+  color: var(--fof-muted);
 }
 
 @page fof {

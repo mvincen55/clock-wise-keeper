@@ -122,6 +122,23 @@ describe('parseDocBlocks — wrapped sentence fragments are not headings', () =>
     ).toEqual([]);
   });
 
+  it('never guesses headings inside a structured (markdown) document', () => {
+    const blocks = parseDocBlocks(
+      [
+        '## Workflow Policies',
+        '### Call Light System',
+        '2nd buzz, go and get the person if needed w/in 5 minutes',
+        'IF INSURANCE NOT RUNNING',
+        'Flag the route slip and speak to the OM or AOM before seating the patient today.',
+        'V1) NP Prophy (D1110), EL (D0140) Plus Appropriate Xrays',
+        'No Same Day SRP',
+        'Another long sentence follows here so the short lines above look heading-like.',
+      ].join('\n')
+    );
+    const headings = blocks.filter(b => b.type === 'heading').map(b => (b as { text: string }).text);
+    expect(headings).toEqual(['Workflow Policies', 'Call Light System']);
+  });
+
   it('still detects real topic headings around the tightened rules', () => {
     expect(
       headingsOf(

@@ -6405,13 +6405,13 @@ export type Database = {
         Returns: {
           category: string
           chunk_index: number
-          chunk_type: string | null
+          chunk_type: string
           collection: string
           content: string
           doc_id: string
           library_area: string
           page_number: number | null
-          parse_version: number | null
+          parse_version: number
           rank: number
           section_id: string | null
           section_title: string | null
