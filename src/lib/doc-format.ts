@@ -71,6 +71,12 @@ function looksLikeHeading(line: string, lines: string[], i: number): boolean {
 
 export function parseDocBlocks(content: string): DocBlock[] {
   const lines = content.replace(/\r\n?/g, '\n').split('\n');
+  // A document with real markdown headings is structured: its author (or
+  // extractor) already decided what the sections are. Never GUESS extra
+  // headings from plain lines there — ALL-CAPS callouts, "V1) ..." visit
+  // plans, and instruction lines would pollute the outline. The heuristic
+  // exists only for legacy plain-text extractions with no structure at all.
+  const hasMarkdownHeadings = lines.some(l => MD_HEADING.test(l.trim()));
   const blocks: DocBlock[] = [];
   let para: string[] = [];
   let listItems: string[] | null = null;
@@ -160,7 +166,7 @@ export function parseDocBlocks(content: string): DocBlock[] {
     }
     flushList();
 
-    if (looksLikeHeading(line, lines, i)) {
+    if (!hasMarkdownHeadings && looksLikeHeading(line, lines, i)) {
       flushPara();
       blocks.push({ type: 'heading', level: 3, text: line });
       continue;
