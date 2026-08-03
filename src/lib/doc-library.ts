@@ -168,6 +168,41 @@ export function readerDocsFor<T extends PlacementSource & Pick<OfficeDoc, 'title
 
 export const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/**
+ * Reassemble a document from its search chunks WITHOUT duplicating the
+ * retrieval overlap. ingest-doc seeds each chunk with the tail (~200 chars)
+ * of the previous one so answers spanning a boundary stay retrievable —
+ * naively joining chunks therefore repeats that tail in the reader. Here
+ * the longest suffix-of-previous / prefix-of-next match is dropped before
+ * appending; chunks with no detectable overlap fall back to a paragraph
+ * join.
+ */
+export function stitchChunks(parts: string[], maxOverlap = 260, minOverlap = 20): string {
+  if (parts.length === 0) return '';
+  let out = parts[0];
+  for (let p = 1; p < parts.length; p++) {
+    const chunk = parts[p];
+    const window = out.slice(-maxOverlap);
+    let overlap = 0;
+    for (let k = Math.min(window.length, chunk.length); k >= minOverlap; k--) {
+      if (window.endsWith(chunk.slice(0, k))) {
+        overlap = k;
+        break;
+      }
+    }
+    if (overlap === 0) {
+      out += '\n\n' + chunk;
+      continue;
+    }
+    const rest = chunk.slice(overlap);
+    if (!rest) continue;
+    // The seam inside a chunk is a single newline; restore the paragraph
+    // break the original text had there.
+    out += rest.startsWith('\n') && !rest.startsWith('\n\n') ? '\n' + rest : rest;
+  }
+  return out;
+}
+
 export const blockText = (b: DocBlock): string =>
   b.type === 'bullets' || b.type === 'numbered' ? b.items.join(' ') : b.text;
 

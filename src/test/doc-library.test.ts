@@ -21,10 +21,12 @@ import {
   resolveDocPlacement,
   sectionHeadingForBlock,
   snippetAround,
+  stitchChunks,
   type LibraryScope,
   type OfficeDoc,
 } from '../lib/doc-library';
 import { parseDocBlocks } from '../lib/doc-format';
+import { chunkText } from '../../supabase/functions/ingest-doc/lib';
 
 const HANDBOOK_SCOPE: LibraryScope = AI_SCOPES.handbook.scope;
 const INSURANCE_SCOPE: LibraryScope = AI_SCOPES.insurance.scope;
@@ -236,6 +238,43 @@ describe('section resolution for search hits', () => {
 
   it('returns -1 when nothing matches', () => {
     expect(locateQueryBlock(blocks, 'crown remake')).toBe(-1);
+  });
+});
+
+describe('stitchChunks', () => {
+  it('drops the retrieval overlap instead of repeating it in the reader', () => {
+    const first =
+      'Fire extinguishers are located by the pano machine by the back door and shelf across from the server.';
+    const second = `${first.slice(-60)}\nWhen ALL call lights are lit, this means there is an emergency of some kind in the office.`;
+    const stitched = stitchChunks([first, second]);
+    expect(stitched.split('shelf across from the server.').length - 1).toBe(1);
+    expect(stitched).toContain('When ALL call lights are lit');
+    // The seam keeps a paragraph break so blocks stay separate.
+    expect(stitched).toContain('server.\n\nWhen ALL call lights');
+  });
+
+  it('falls back to a paragraph join when chunks do not overlap', () => {
+    expect(stitchChunks(['Para one is here.', 'Para two is here.'])).toBe(
+      'Para one is here.\n\nPara two is here.'
+    );
+  });
+
+  it('swallows a trailing chunk that is pure overlap', () => {
+    const text = 'A long enough sentence used as the base chunk for the stitcher to work with here.';
+    expect(stitchChunks([text, text.slice(-40)])).toBe(text);
+  });
+
+  it('round-trips real chunker output without duplicating any passage', () => {
+    const sections = Array.from(
+      { length: 30 },
+      (_, i) => `Policy clause ${i} states that unique-marker-${i} applies to every member of the team.`
+    );
+    const chunks = chunkText(sections.join('\n\n'), { maxChars: 300, overlapChars: 60 });
+    expect(chunks.length).toBeGreaterThan(2);
+    const stitched = stitchChunks(chunks);
+    for (let i = 0; i < 30; i++) {
+      expect(stitched.split(`unique-marker-${i} applies`).length - 1).toBe(1);
+    }
   });
 });
 

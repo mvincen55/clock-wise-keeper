@@ -61,6 +61,7 @@ import {
   sectionAnchorId,
   sectionHeadingForBlock,
   snippetAround,
+  stitchChunks,
   type AiScope,
   type LibraryScope,
   type OutlineItem,
@@ -359,7 +360,9 @@ export default function DocumentLibraryReader({
       for (const chunk of data ?? []) {
         parts.set(chunk.doc_id, [...(parts.get(chunk.doc_id) ?? []), chunk.content]);
       }
-      return new Map([...parts.entries()].map(([id, list]) => [id, list.join('\n\n')]));
+      // Stitch, don't join: chunks overlap by design for retrieval, and a
+      // naive join repeats every overlap in the reading pane.
+      return new Map([...parts.entries()].map(([id, list]) => [id, stitchChunks(list)]));
     },
   });
 
