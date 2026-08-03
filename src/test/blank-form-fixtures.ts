@@ -22,6 +22,8 @@ export const PRACTICE_DEFAULT_BRANDING: FofPracticeInfo = {
   phone: '(508) 993-0515',
   website: 'drharelick.com',
   doctorName: 'Dr. Scott',
+  doctorNames: ['Dr. Scott'],
+  membershipPlanName: 'Illumitrac',
   logoUrl: '/src/assets/harelick-logo.png',
 };
 

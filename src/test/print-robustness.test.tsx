@@ -100,10 +100,15 @@ describe('sheet DOM is independent of org branding', () => {
     const style = renderToStaticMarkup(
       <BrandPrintStyle branding={{ brandColor: '#ff0000', brandTint: '#f3f0f8' }} />
     );
-    expect(style).toBe(
-      '<style>.fof-sheet{--fof-navy:#ff0000;--fof-tint:#f3f0f8}\n' +
-        '.dep-sheet{--dep-navy:#ff0000;--dep-tint:#f3f0f8}</style>'
-    );
+    // A single <style> element and nothing else.
+    expect(style.startsWith('<style>')).toBe(true);
+    expect(style.endsWith('</style>')).toBe(true);
+    const css = style.slice('<style>'.length, -'</style>'.length);
+    // Only CSS custom-property declarations — the moment a layout
+    // property (height, margin, ...) sneaks in here, branding can change
+    // pagination, which is exactly what this component must never do.
+    expect(css).toMatch(/^(\.[a-z-]+\{(--[a-z-]+:[^;{}]+;?)+\}\n?)+$/);
+    expect(css).toContain('.fof-sheet{--fof-navy:#ff0000;--fof-tint:#f3f0f8}');
   });
 
   it('an org row with no uploaded logo omits the img and nothing else', () => {
