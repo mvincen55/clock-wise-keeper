@@ -126,7 +126,7 @@ describe('Broken Appointments wizard', () => {
     expect(screen.getByText(/Pending management decision/i)).toBeInTheDocument();
     expect(screen.queryByText(/Letter 910/i)).not.toBeInTheDocument();
     // The holding reply is the only reply offered.
-    expect(screen.getByText(/Holding reply/i)).toBeInTheDocument();
+    expect(screen.getByText('Holding reply (the only reply for Rung 5)')).toBeInTheDocument();
     cleanup();
   });
 
@@ -151,6 +151,42 @@ describe('Broken Appointments wizard', () => {
     const note = screen.getByText(/Patient texted to cancel/i);
     expect(note.textContent).toContain("'Running behind, cancel me please'");
     expect(screen.getByText(/Ledger checklist/i)).toBeInTheDocument();
+    // Phase 5 gate: the pasted content appears nowhere except the note
+    // block — not in the reply, the letter (preview or print portal),
+    // the Pop-Up, or the ledger.
+    const occurrences =
+      document.body.textContent!.split('Running behind, cancel me please').length - 1;
+    expect(occurrences).toBe(1);
+    cleanup();
+  });
+
+  it('the copy button writes exactly the rendered text, dateline included', async () => {
+    const written: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: (t: string) => (written.push(t), Promise.resolve()) },
+    });
+    render(<BrokenAppointments />);
+    fireEvent.change(screen.getByLabelText(/your initials/i), { target: { value: 'MV' } });
+    fireEvent.click(screen.getByRole('button', { name: /broken appointment/i }));
+    fireEvent.click(screen.getByLabelText(/No-show, or no retrievable record/i));
+    clickContinue();
+    fillCalculator({ date: '2026-08-10', time: '09:00' }, { date: '2026-08-09', time: '10:00' });
+    clickContinue();
+    clickContinue(); // no priors → first NS → Rung 2
+    setValue('First name', 'Ann');
+    fireEvent.click(screen.getByRole('button', { name: /continue to outputs/i }));
+
+    // Copy the Pop-Up and compare against the rendered block.
+    const popUpTitle = screen.getByText(/Pop-Up \(Dentrix\)/i);
+    const popUpCard = popUpTitle.closest('div[class*="rounded-"]')!;
+    const rendered = popUpCard.querySelector('pre')!.textContent!;
+    fireEvent.click(popUpTitle.parentElement!.querySelector('button')!);
+    await screen.findByText('Copied');
+    expect(written).toHaveLength(1);
+    expect(written[0]).toBe(rendered);
+    expect(written[0]).toContain('Rung 2 / No-show');
+    expect(written[0].endsWith('- MV')).toBe(true);
     cleanup();
   });
 });

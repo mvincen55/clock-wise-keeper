@@ -1146,6 +1146,325 @@ export type Database = {
           },
         ]
       }
+      consent_audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          actor_name: string
+          created_at: string
+          detail: Json
+          entity_id: string | null
+          entity_name: string
+          entity_type: string
+          id: string
+          org_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          actor_name?: string
+          created_at?: string
+          detail?: Json
+          entity_id?: string | null
+          entity_name?: string
+          entity_type: string
+          id?: string
+          org_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          actor_name?: string
+          created_at?: string
+          detail?: Json
+          entity_id?: string | null
+          entity_name?: string
+          entity_type?: string
+          id?: string
+          org_id?: string
+        }
+        Relationships: []
+      }
+      consent_bundle_items: {
+        Row: {
+          bundle_id: string
+          condition_label: string
+          form_id: string
+          id: string
+          org_id: string
+          requirement: string
+          sort_order: number
+        }
+        Insert: {
+          bundle_id: string
+          condition_label?: string
+          form_id: string
+          id?: string
+          org_id: string
+          requirement?: string
+          sort_order?: number
+        }
+        Update: {
+          bundle_id?: string
+          condition_label?: string
+          form_id?: string
+          id?: string
+          org_id?: string
+          requirement?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consent_bundle_items_bundle_id_fkey"
+            columns: ["bundle_id"]
+            isOneToOne: false
+            referencedRelation: "consent_bundles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consent_bundle_items_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "consent_forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consent_bundles: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string
+          id: string
+          is_sample: boolean
+          name: string
+          org_id: string
+          procedure_codes: string[]
+          sort_order: number
+          status: string
+          updated_at: string
+          use_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          is_sample?: boolean
+          name: string
+          org_id: string
+          procedure_codes?: string[]
+          sort_order?: number
+          status?: string
+          updated_at?: string
+          use_count?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          is_sample?: boolean
+          name?: string
+          org_id?: string
+          procedure_codes?: string[]
+          sort_order?: number
+          status?: string
+          updated_at?: string
+          use_count?: number
+        }
+        Relationships: []
+      }
+      consent_form_versions: {
+        Row: {
+          change_notes: string
+          content: Json
+          form_id: string
+          id: string
+          org_id: string
+          published_at: string
+          published_by: string | null
+          version: number
+        }
+        Insert: {
+          change_notes?: string
+          content: Json
+          form_id: string
+          id?: string
+          org_id: string
+          published_at?: string
+          published_by?: string | null
+          version: number
+        }
+        Update: {
+          change_notes?: string
+          content?: Json
+          form_id?: string
+          id?: string
+          org_id?: string
+          published_at?: string
+          published_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consent_form_versions_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "consent_forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consent_forms: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string | null
+          current_version: number
+          draft_content: Json | null
+          editable_by: string
+          hygienist_may_complete: boolean
+          id: string
+          includes_cost: boolean
+          is_financial: boolean
+          is_sample: boolean
+          name: string
+          needs_review: boolean
+          org_id: string
+          procedure_codes: string[]
+          published_content: Json | null
+          requires_doctor_signature: boolean
+          requires_guardian_signature: boolean
+          requires_patient_signature: boolean
+          requires_witness_signature: boolean
+          source: string
+          status: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          current_version?: number
+          draft_content?: Json | null
+          editable_by?: string
+          hygienist_may_complete?: boolean
+          id?: string
+          includes_cost?: boolean
+          is_financial?: boolean
+          is_sample?: boolean
+          name: string
+          needs_review?: boolean
+          org_id: string
+          procedure_codes?: string[]
+          published_content?: Json | null
+          requires_doctor_signature?: boolean
+          requires_guardian_signature?: boolean
+          requires_patient_signature?: boolean
+          requires_witness_signature?: boolean
+          source?: string
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          current_version?: number
+          draft_content?: Json | null
+          editable_by?: string
+          hygienist_may_complete?: boolean
+          id?: string
+          includes_cost?: boolean
+          is_financial?: boolean
+          is_sample?: boolean
+          name?: string
+          needs_review?: boolean
+          org_id?: string
+          procedure_codes?: string[]
+          published_content?: Json | null
+          requires_doctor_signature?: boolean
+          requires_guardian_signature?: boolean
+          requires_patient_signature?: boolean
+          requires_witness_signature?: boolean
+          source?: string
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      consent_settings: {
+        Row: {
+          always_offer_financial: boolean
+          clear_timeout_minutes: number
+          financial_form_id: string | null
+          org_id: string
+          require_guardian_for_minors: boolean
+          require_witness_default: boolean
+          team_can_archive: boolean
+          team_can_change_signatures: boolean
+          team_can_create_bundles: boolean
+          team_can_edit_templates: boolean
+          team_can_override_fees: boolean
+          team_can_print: boolean
+          team_can_publish: boolean
+          team_can_upload: boolean
+          updated_at: string
+          updated_by: string | null
+          warn_before_clear: boolean
+        }
+        Insert: {
+          always_offer_financial?: boolean
+          clear_timeout_minutes?: number
+          financial_form_id?: string | null
+          org_id: string
+          require_guardian_for_minors?: boolean
+          require_witness_default?: boolean
+          team_can_archive?: boolean
+          team_can_change_signatures?: boolean
+          team_can_create_bundles?: boolean
+          team_can_edit_templates?: boolean
+          team_can_override_fees?: boolean
+          team_can_print?: boolean
+          team_can_publish?: boolean
+          team_can_upload?: boolean
+          updated_at?: string
+          updated_by?: string | null
+          warn_before_clear?: boolean
+        }
+        Update: {
+          always_offer_financial?: boolean
+          clear_timeout_minutes?: number
+          financial_form_id?: string | null
+          org_id?: string
+          require_guardian_for_minors?: boolean
+          require_witness_default?: boolean
+          team_can_archive?: boolean
+          team_can_change_signatures?: boolean
+          team_can_create_bundles?: boolean
+          team_can_edit_templates?: boolean
+          team_can_override_fees?: boolean
+          team_can_print?: boolean
+          team_can_publish?: boolean
+          team_can_upload?: boolean
+          updated_at?: string
+          updated_by?: string | null
+          warn_before_clear?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consent_settings_financial_form_id_fkey"
+            columns: ["financial_form_id"]
+            isOneToOne: false
+            referencedRelation: "consent_forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_participants: {
         Row: {
           conversation_id: string
@@ -6335,6 +6654,11 @@ export type Database = {
       can_read_conv: { Args: { _conv: string }; Returns: boolean }
       can_view_goal: { Args: { _goal_id: string }; Returns: boolean }
       can_view_team_goal: { Args: { _goal_id: string }; Returns: boolean }
+      consent_bundle_used: { Args: { p_bundle_id: string }; Returns: undefined }
+      consent_team_can: {
+        Args: { p_org_id: string; p_perm: string }
+        Returns: boolean
+      }
       conv_created_by: { Args: { _conv: string }; Returns: string }
       conv_type: { Args: { _conv: string }; Returns: string }
       countersign_accountability_report: {
@@ -6513,11 +6837,11 @@ export type Database = {
           content: string
           doc_id: string
           library_area: string
-          page_number: number | null
+          page_number: number
           parse_version: number
           rank: number
-          section_id: string | null
-          section_title: string | null
+          section_id: string
+          section_title: string
           title: string
         }[]
       }

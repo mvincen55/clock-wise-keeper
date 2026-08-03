@@ -1,8 +1,8 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+<!doctype html><html><head><meta charset="utf-8"><style>*,::before,::after{box-sizing:border-box;border-width:0;border-style:solid}body{margin:0;line-height:inherit}h1,h2,h3,h4,p{margin:0}table{border-collapse:collapse}img{display:block;max-width:100%;height:auto}</style><style>@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+
+
+
 
 
 @layer base {
@@ -108,15 +108,15 @@
 
 @layer base {
   * {
-    @apply border-border;
+    
   }
 
   body {
-    @apply bg-background text-foreground font-sans antialiased;
+    
   }
 
   h1, h2, h3 {
-    @apply font-semibold tracking-tight;
+    
   }
 }
 
@@ -127,7 +127,7 @@
 
   .time-display {
     font-family: 'JetBrains Mono', monospace;
-    @apply tabular-nums tracking-wider;
+    
   }
 
   .punch-glow {
@@ -173,392 +173,6 @@
    open report. Same document language as the deposit sheet. */
 .incident-print-root {
   display: none;
-}
-
-/* Printable Consent Forms packet — one master layout for every template
-   (Forms & Consents). Hidden on screen; shown only when printing from the
-   library, builder, or Complete Forms workflow. Deep purple on white,
-   grayscale-safe, letter pages with 0.5in margins. */
-.consent-print-root {
-  display: none;
-}
-
-@page consent {
-  size: letter;
-  margin: 0.5in;
-}
-
-.cf-sheet {
-  --cf-navy: #53406e; /* brand accent default; org_branding overrides */
-  --cf-ink: #2b2733;
-  --cf-muted: #6b6577;
-  --cf-line: #d5cfe0;
-  --cf-tint: #f3f0f8;
-  page: consent;
-  width: 7.5in;
-  min-height: 10in;
-  display: flex;
-  flex-direction: column;
-  margin: 0 auto;
-  background: white;
-  color: var(--cf-ink);
-  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  font-size: 10pt;
-  line-height: 1.45;
-  print-color-adjust: exact;
-  -webkit-print-color-adjust: exact;
-  break-after: page;
-}
-
-.cf-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16pt;
-  padding-bottom: 8pt;
-  border-bottom: 1.25pt solid var(--cf-navy);
-  margin-bottom: 10pt;
-}
-
-.cf-head-continued {
-  padding-bottom: 4pt;
-  border-bottom: 0.75pt solid var(--cf-line);
-}
-
-.cf-head-office {
-  display: flex;
-  align-items: center;
-  gap: 10pt;
-  min-width: 0;
-}
-
-.cf-logo {
-  display: block;
-  height: 0.9in;
-  width: auto;
-  max-width: 2.4in;
-  object-fit: contain;
-}
-
-.cf-logo-mark {
-  width: 0.55in;
-  height: 0.55in;
-  border-radius: 6pt;
-  background: var(--cf-navy);
-  color: white;
-  font-size: 20pt;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.cf-office-name {
-  font-size: 13pt;
-  font-weight: 700;
-  color: var(--cf-navy);
-}
-
-.cf-office-line {
-  font-size: 8pt;
-  color: var(--cf-muted);
-}
-
-.cf-head-doc {
-  text-align: right;
-  flex-shrink: 0;
-}
-
-.cf-doc-name {
-  font-size: 11pt;
-  font-weight: 700;
-  max-width: 3in;
-}
-
-.cf-doc-version {
-  font-size: 8pt;
-  color: var(--cf-muted);
-}
-
-.cf-office-name-sm,
-.cf-doc-name-sm {
-  font-size: 8.5pt;
-  color: var(--cf-muted);
-}
-
-.cf-sample-banner {
-  border: 1pt dashed var(--cf-navy);
-  background: var(--cf-tint);
-  color: var(--cf-navy);
-  font-size: 8.5pt;
-  font-weight: 700;
-  letter-spacing: 0.5pt;
-  text-align: center;
-  padding: 3pt 6pt;
-  margin-bottom: 8pt;
-}
-
-.cf-body {
-  flex: 1 1 auto;
-}
-
-.cf-title {
-  font-size: 14pt;
-  font-weight: 700;
-  color: var(--cf-navy);
-  text-align: center;
-  margin: 2pt 0 8pt;
-}
-
-.cf-section {
-  font-size: 10.5pt;
-  font-weight: 700;
-  color: var(--cf-navy);
-  text-transform: uppercase;
-  letter-spacing: 0.4pt;
-  border-bottom: 0.75pt solid var(--cf-line);
-  padding-bottom: 1.5pt;
-  margin: 9pt 0 4pt;
-}
-
-.cf-para {
-  margin: 3pt 0;
-}
-
-.cf-instruction {
-  margin: 5pt 0;
-  padding: 4pt 8pt;
-  background: var(--cf-tint);
-  border-left: 2pt solid var(--cf-navy);
-  font-weight: 600;
-}
-
-.cf-bullets {
-  margin: 3pt 0 5pt;
-  padding-left: 16pt;
-  list-style: disc;
-}
-
-.cf-bullets li {
-  margin: 1.5pt 0;
-}
-
-.cf-box {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 10pt;
-  height: 10pt;
-  border: 1pt solid var(--cf-ink);
-  font-size: 8pt;
-  font-weight: 700;
-  line-height: 1;
-  margin-right: 4pt;
-  vertical-align: -1pt;
-}
-
-.cf-check {
-  margin: 3pt 0;
-  display: flex;
-  align-items: baseline;
-  gap: 2pt;
-}
-
-.cf-yesno {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10pt;
-  margin: 4pt 0;
-}
-
-.cf-yesno-opts {
-  white-space: nowrap;
-  display: inline-flex;
-  gap: 4pt;
-  align-items: baseline;
-  font-weight: 600;
-}
-
-.cf-yesno-opts .cf-box {
-  margin-left: 8pt;
-}
-
-.cf-field {
-  margin: 4pt 0;
-}
-
-.cf-field-label {
-  font-weight: 700;
-}
-
-.cf-fill {
-  display: inline-block;
-  min-width: 1.6in;
-  border-bottom: 0.75pt solid var(--cf-ink);
-  padding: 0 4pt 1pt;
-  font-weight: 600;
-}
-
-.cf-fill-wide {
-  min-width: 3.4in;
-}
-
-.cf-longline {
-  border-bottom: 0.75pt solid var(--cf-ink);
-  min-height: 14pt;
-  margin: 6pt 0;
-  padding: 0 2pt;
-}
-
-.cf-initials {
-  display: flex;
-  align-items: baseline;
-  gap: 6pt;
-  margin: 6pt 0;
-}
-
-.cf-initialbox {
-  flex-shrink: 0;
-  display: inline-block;
-  width: 0.6in;
-  border-bottom: 0.75pt solid var(--cf-ink);
-  min-height: 12pt;
-}
-
-.cf-sig {
-  margin-top: 12pt;
-}
-
-.cf-sigline {
-  display: flex;
-  gap: 24pt;
-}
-
-.cf-sigcell {
-  flex: 1 1 auto;
-}
-
-.cf-sigdate {
-  flex: 0 0 1.6in;
-}
-
-.cf-sigrule {
-  border-bottom: 0.9pt solid var(--cf-ink);
-  height: 18pt;
-}
-
-.cf-sigcaption {
-  font-size: 7.5pt;
-  text-transform: uppercase;
-  letter-spacing: 0.5pt;
-  color: var(--cf-muted);
-  margin-top: 2pt;
-}
-
-.cf-meds {
-  margin: 3pt 0 5pt;
-  padding-left: 2pt;
-  list-style: none;
-}
-
-.cf-meds li {
-  margin: 2.5pt 0;
-}
-
-.cf-divider {
-  border: none;
-  border-top: 0.75pt solid var(--cf-line);
-  margin: 8pt 0;
-}
-
-.cf-feetable {
-  margin: 5pt 0;
-}
-
-.cf-feetable table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.cf-feetable th {
-  font-size: 7.5pt;
-  text-transform: uppercase;
-  letter-spacing: 0.5pt;
-  color: var(--cf-navy);
-  text-align: left;
-  border-bottom: 1pt solid var(--cf-navy);
-  padding: 2pt 4pt;
-}
-
-.cf-feetable td {
-  border-bottom: 0.5pt solid var(--cf-line);
-  padding: 2.5pt 4pt;
-  font-size: 9.5pt;
-}
-
-.cf-num {
-  text-align: right;
-  white-space: nowrap;
-}
-
-.cf-override {
-  font-size: 8pt;
-  font-style: italic;
-  color: var(--cf-muted);
-}
-
-.cf-feeblank {
-  color: var(--cf-muted);
-  font-style: italic;
-}
-
-.cf-feetotals {
-  margin-top: 4pt;
-  margin-left: auto;
-  width: 3.4in;
-}
-
-.cf-feerow {
-  display: flex;
-  justify-content: space-between;
-  padding: 1.5pt 4pt;
-  font-size: 9.5pt;
-}
-
-.cf-feetotal {
-  font-weight: 700;
-  border-top: 0.9pt solid var(--cf-navy);
-}
-
-.cf-feearrangement {
-  margin-top: 5pt;
-  font-size: 9.5pt;
-}
-
-.cf-foot {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8pt;
-  margin-top: 10pt;
-  padding-top: 5pt;
-  border-top: 0.75pt solid var(--cf-line);
-  font-size: 7.5pt;
-  color: var(--cf-muted);
-}
-
-.cf-foot-notice {
-  text-align: center;
-}
-
-/* Signature areas, headed sections, and single fields never split across
-   a page boundary. */
-.cf-keep,
-.cf-sig,
-.cf-feetable {
-  break-inside: avoid;
-  page-break-inside: avoid;
 }
 
 @page incident {
@@ -2421,7 +2035,6 @@
   body:has(.deposit-print-root) > *:not(.deposit-print-root),
   body:has(.incident-print-root) > *:not(.incident-print-root),
   body:has(.goals-print-root) > *:not(.goals-print-root),
-  body:has(.consent-print-root) > *:not(.consent-print-root),
   body:has(.ba-print-root) > *:not(.ba-print-root) {
     display: none !important;
   }
@@ -2430,24 +2043,8 @@
   .deposit-print-root,
   .incident-print-root,
   .goals-print-root,
-  .consent-print-root,
   .ba-print-root {
     display: block !important;
-  }
-
-  /* The consent sheet draws its own rules — exempt it from the generic
-     print table borders below, then restate its own. */
-  .cf-sheet th,
-  .cf-sheet td {
-    border: none;
-  }
-
-  .cf-feetable th {
-    border-bottom: 1pt solid var(--cf-navy);
-  }
-
-  .cf-feetable td {
-    border-bottom: 0.5pt solid var(--cf-line);
   }
 
   /* The goals sheet draws its own rules — exempt from generic table borders. */
@@ -2601,3 +2198,8 @@
     box-shadow: none !important;
   }
 }
+</style></head><body><style>.fof-sheet{--fof-navy:#53406e;--fof-tint:#f3f0f8}
+.dep-sheet{--dep-navy:#53406e;--dep-tint:#f3f0f8}
+.inc-sheet{--inc-navy:#53406e;--inc-tint:#f3f0f8}
+.goal-sheet{--goal-navy:#53406e;--goal-tint:#f3f0f8}
+.ba-letter{--ba-navy:#53406e;--ba-tint:#f3f0f8}</style><div class="ba-print-root"><div class="ba-letter"><header class="ba-letterhead"><div style="display:flex;align-items:center;gap:10pt"><div class="ba-letterhead-name">Northfield Dental Group, LLC</div></div><div class="ba-letterhead-meta">41 Northfield Avenue<br/>Springvale, MA 02100<br/>(555) 010-0142</div></header><div class="ba-dateline">8/3/2026</div><div class="ba-address-block">Ann Example<br/>12 Test Lane<br/>Springvale, MA 02100</div><p class="ba-salutation">Dear Ann,</p><div class="ba-body"><p>We&#x27;re writing regarding your appointment scheduled for 8/10/2026. Per our broken-appointment policy, <strong>a $75 scheduling fee has been charged to the card we have on file.</strong> The enclosed statement reflects this charge.</p><p><strong>We have canceled all currently reserved future appointments. Those appointments are listed below.</strong></p><p><strong>A full appointment list is attached.</strong></p><p><strong>Cleanings and hygiene visits:</strong> we&#x27;ve added you to our VIP list — we&#x27;ll text you when an opening fits your schedule. Share your best days and times with us and we&#x27;ll watch for them.</p><p><strong>Doctor and treatment visits:</strong> these can be booked ahead with a prepayment of <strong>$150 or your estimated patient portion, whichever is greater.</strong> The prepayment is applied to your treatment — if insurance covers more than expected, we&#x27;ll refund the difference. It is <strong>forfeited</strong> if the appointment is missed or canceled without 48 business hours&#x27; notice.</p><p>Keep a few visits with us and we&#x27;ll gladly return to normal scheduling.</p><p>If you have questions, call us at (555) 010-0142 — we&#x27;re glad to talk it through.</p></div><p class="ba-auto-line">This letter is generated automatically by our scheduling system as part of our standard record-keeping for every patient.</p><div class="ba-closing">Warm regards,<div class="ba-signature-name">Megan Vincent</div><div class="ba-signature-title">Office Manager</div></div><div class="ba-enclosure">Enclosure: Account Statement</div><div class="ba-attach-page"><div class="ba-attach-title">Attached Appointment List</div><div class="ba-attach-sub">Ann Example · Prepared 8/3/2026 · 12 canceled appointments</div><table class="ba-appt-table"><thead><tr><th>Date</th><th>Time</th><th>Provider</th><th>Visit Type</th></tr></thead><tbody><tr><td>9/1/2026</td><td>9:00 AM</td><td>Hygiene — Kelly</td><td>Prophy + exam</td></tr><tr><td>9/2/2026</td><td>9:00 AM</td><td>Dr. Scott</td><td>Crown prep and delivery</td></tr><tr><td>9/3/2026</td><td>9:00 AM</td><td>Hygiene — Kelly</td><td>Prophy + exam</td></tr><tr><td>9/4/2026</td><td>9:00 AM</td><td>Dr. Scott</td><td>Crown prep and delivery</td></tr><tr><td>9/5/2026</td><td>9:00 AM</td><td>Hygiene — Kelly</td><td>Prophy + exam</td></tr><tr><td>9/6/2026</td><td>9:00 AM</td><td>Dr. Scott</td><td>Crown prep and delivery</td></tr><tr><td>9/7/2026</td><td>9:00 AM</td><td>Hygiene — Kelly</td><td>Prophy + exam</td></tr><tr><td>9/8/2026</td><td>9:00 AM</td><td>Dr. Scott</td><td>Crown prep and delivery</td></tr><tr><td>9/9/2026</td><td>9:00 AM</td><td>Hygiene — Kelly</td><td>Prophy + exam</td></tr><tr><td>9/10/2026</td><td>9:00 AM</td><td>Dr. Scott</td><td>Crown prep and delivery</td></tr><tr><td>9/11/2026</td><td>9:00 AM</td><td>Hygiene — Kelly</td><td>Prophy + exam</td></tr><tr><td>9/12/2026</td><td>9:00 AM</td><td>Dr. Scott</td><td>Crown prep and delivery</td></tr></tbody></table></div></div></div></body></html>

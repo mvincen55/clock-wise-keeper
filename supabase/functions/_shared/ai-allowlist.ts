@@ -75,6 +75,11 @@ export const AI_GATEWAY_ALLOWLIST: Record<string, GatewayEntry> = {
     handler: "scrub",
     reason: "Drafts neutral records from staff-authored event context.",
   },
+  "consent-ai": {
+    handler: "scrub",
+    reason:
+      "Converts and reviews the office's blank consent templates. Uploads are supposed to be blank masters; scrubbing catches a filled form uploaded by mistake.",
+  },
 
   // ---- consented: the person-level content is the request ---------------
   "parse-pdf": {

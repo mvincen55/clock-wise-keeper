@@ -127,6 +127,16 @@ Navigation is a compact destination list; every feature below keeps its own rout
 | `/fof/templates` | FofTemplates | Saved FOF templates |
 | `/fof/fees` | FofFees | Fee schedule management: office + carrier schedules, imports, per-code patient-facing names |
 
+### Forms & Consents (`docs/consent-forms-spec.md`)
+| Route | Page | What it does |
+|---|---|---|
+| `/consents` | ConsentsHub | Forms & Consents home: section doors, housekeeping widgets, sample-library install |
+| `/consents/library` | ConsentLibrary | Searchable template library: filters, preview, duplicate, archive, print blank, upload & AI-convert |
+| `/consents/builder/:formId?` | ConsentBuilder | Drag-drop block builder on one master print layout; drafts, publish with change notes, version history/compare/restore, AI drafting help (review-gated) |
+| `/consents/bundles` | ConsentBundles | Treatment bundles: required/recommended/optional/conditional forms in default print order |
+| `/consents/complete` | CompleteForms | Guided 6-step packet workflow (Treatment → Forms → Patient Details → Financial → Review → Print). **Patient values live in component memory only** and clear after printing, on leave, and on the office's inactivity timeout |
+| `/consents/settings` | ConsentSettings | Team permissions, signature rules, privacy timeout, financial-form choice, template audit trail |
+
 ### AI
 | Route | Page | What it does |
 |---|---|---|
@@ -220,7 +230,7 @@ Migration `20260723200000_checklists.sql`:
 
 ## Edge functions (JWT gating per `supabase/config.toml`)
 
-`verify_jwt = true` means the gateway requires a valid user JWT: `send-org-invite`, `process-email-queue`, `fof-assistant`, `kimi-agent`, `assistant-auditor`, `name-visits`.
+`verify_jwt = true` means the gateway requires a valid user JWT: `send-org-invite`, `process-email-queue`, `fof-assistant`, `kimi-agent`, `assistant-auditor`, `name-visits`, `consent-ai`.
 `verify_jwt = false` does **not** mean unauthenticated — each does its own verification (webhook signature, service-role bearer, invite-token-as-secret): `accept-invite`, `auth-email-hook`, `ask-docs`, `ingest-doc`, `confirm-import`, `export-report`, `mcp`, `parse-pdf`, `process-location-event`, `parse-treatment`.
 **Adding a function? Add its `[functions.<name>]` block to `config.toml` in the same commit, or the gateway default may not match the function's own auth model.**
 

@@ -1,6 +1,7 @@
 import {
   Sunrise, ListChecks, Banknote, ShieldAlert, ReceiptText, FileStack,
-  DollarSign, Sparkles, ShieldCheck, Phone, CalendarX,
+  DollarSign, Sparkles, ShieldCheck, Phone, CalendarX, FileSignature,
+  Library, Layers, ClipboardList,
 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useBrokenApptSettings } from '@/hooks/useBrokenApptSettings';
@@ -19,6 +20,15 @@ const buildSections = (brokenApptLabel: string): HubSection[] => [
       { to: '/deposit-log', icon: Banknote, label: 'Close the Day', description: 'Deposit log and end-of-day closeout.' },
       { to: '/incident-reports', icon: ShieldAlert, label: 'Incident Reports', description: 'Document and review office incidents.' },
       { to: '/broken-appointments', icon: CalendarX, label: brokenApptLabel, description: 'No-shows and late cancellations: letters, replies, and Dentrix blocks. Nothing patient-specific is stored.' },
+    ],
+  },
+  {
+    title: 'Forms and Consents',
+    links: [
+      { to: '/consents/complete', icon: ClipboardList, label: 'Complete Forms', description: 'Guided consent packet: select, fill, print, and clear.' },
+      { to: '/consents/library', icon: Library, label: 'Form Library', description: 'Every office consent and instruction form, versioned.' },
+      { to: '/consents/bundles', icon: Layers, label: 'Treatment Bundles', description: 'The forms each treatment needs, in print order.' },
+      { to: '/consents', icon: FileSignature, label: 'Forms & Consents Home', description: 'Dashboard, uploads, builder, and office settings.' },
     ],
   },
   {
