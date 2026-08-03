@@ -2,20 +2,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import type { Tables } from '@/integrations/supabase/types';
+import {
+  legacyCategoryFor,
+  type AiScope,
+  type DocCollection,
+  type LibraryArea,
+  type OfficeDoc,
+  type OfficeDocCategory,
+} from '@/lib/doc-library';
 
 // Office knowledge base: internal business documents (policies, HR info,
 // insurance handbooks) powering the AI assistant. Not patient data.
+// Placement types and labels live in @/lib/doc-library.
 
-export type OfficeDoc = Tables<'office_docs'>;
-export type OfficeDocCategory = 'policy' | 'hr' | 'insurance' | 'other';
-
-export const DOC_CATEGORY_LABELS: Record<OfficeDocCategory, string> = {
-  policy: 'Office Policy',
-  hr: 'HR',
-  insurance: 'Insurance',
-  other: 'Other',
-};
+export type { OfficeDoc, OfficeDocCategory, LibraryArea, DocCollection };
 
 export interface AskSource {
   id: string;
@@ -61,29 +61,10 @@ export function useOfficeDocs() {
   });
 }
 
-/** Full text of one document, reassembled from its indexed chunks. */
-export function useOfficeDocContent(docId: string | null) {
-  const { user } = useAuth();
-  const { data: ctx } = useOrgContext();
-
-  return useQuery({
-    queryKey: ['office-doc-content', docId],
-    enabled: !!user && !!ctx && !!docId,
-    queryFn: async (): Promise<string> => {
-      const { data, error } = await supabase
-        .from('office_doc_chunks')
-        .select('chunk_index, content')
-        .eq('doc_id', docId!)
-        .order('chunk_index');
-      if (error) throw error;
-      return (data ?? []).map(c => c.content).join('\n\n');
-    },
-  });
-}
-
 export interface UploadDocInput {
   title: string;
-  category: OfficeDocCategory;
+  libraryArea: LibraryArea;
+  collection: DocCollection;
   file?: File;
   text?: string;
 }
@@ -107,7 +88,10 @@ export function useUploadOfficeDoc() {
     mutationFn: async (input: UploadDocInput) => {
       const payload: Record<string, unknown> = {
         title: input.title,
-        category: input.category,
+        library_area: input.libraryArea,
+        collection: input.collection,
+        // Legacy flat category, kept in sync for backwards compatibility.
+        category: legacyCategoryFor(input.collection),
       };
       if (input.file) {
         payload.filename = input.file.name;
@@ -122,6 +106,35 @@ export function useUploadOfficeDoc() {
       if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.error);
       return data as { id: string; chunks: number; chars: number };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['office-docs'] }),
+  });
+}
+
+export interface UpdateDocPlacementInput {
+  id: string;
+  title?: string;
+  libraryArea: LibraryArea;
+  collection: DocCollection;
+}
+
+/**
+ * Managers move a document (or fix its title) without re-uploading it.
+ * The legacy category follows the collection so older surfaces stay honest.
+ */
+export function useUpdateOfficeDoc() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: UpdateDocPlacementInput) => {
+      const update: Record<string, unknown> = {
+        library_area: input.libraryArea,
+        collection: input.collection,
+        category: legacyCategoryFor(input.collection),
+      };
+      if (input.title?.trim()) update.title = input.title.trim();
+      const { error } = await supabase.from('office_docs').update(update).eq('id', input.id);
+      if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['office-docs'] }),
   });
@@ -149,10 +162,16 @@ export function useDeleteOfficeDoc() {
  */
 export function useAskDocs() {
   return useMutation({
-    mutationFn: async (input: { question: string; history: ChatMessage[] }): Promise<AskResult> => {
+    mutationFn: async (input: {
+      question: string;
+      history: ChatMessage[];
+      /** Contextual scope: limit document search to one library surface. */
+      scope?: AiScope | null;
+    }): Promise<AskResult> => {
       const { data, error } = await supabase.functions.invoke('kimi-agent', {
         body: {
           mode: 'ask',
+          ...(input.scope ? { scope: input.scope } : {}),
           messages: [
             ...input.history.slice(-12).map(m => ({ role: m.role, content: m.content })),
             { role: 'user', content: input.question },

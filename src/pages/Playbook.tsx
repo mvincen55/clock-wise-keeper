@@ -1,6 +1,6 @@
 import {
   Sunrise, ListChecks, Banknote, ShieldAlert, ReceiptText, FileStack,
-  DollarSign, Sparkles,
+  DollarSign, Sparkles, ShieldCheck,
 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import HubLinkGrid, { HubSection } from '@/components/HubLinkGrid';
@@ -23,6 +23,12 @@ const SECTIONS: HubSection[] = [
       { to: '/fof', icon: ReceiptText, label: 'Financial Options Form', description: 'Prepare treatment financial options. Nothing patient-specific is stored.' },
       { to: '/fof/templates', icon: FileStack, label: 'Form Templates', description: 'Blank templates and office document styling.', managerOnly: true },
       { to: '/fof/fees', icon: DollarSign, label: 'Fee Schedule', description: 'Office fees, plans, and bundles.', managerOnly: true },
+    ],
+  },
+  {
+    title: 'Reference',
+    links: [
+      { to: '/insurance-desk', icon: ShieldCheck, label: 'Insurance Desk', description: 'Carrier manuals, claims guidance, plan rules, and provider references.' },
     ],
   },
   {

@@ -3261,34 +3261,43 @@ export type Database = {
         Row: {
           category: string
           char_count: number
+          collection: string
           created_at: string
           file_path: string | null
           id: string
+          library_area: string
           mime_type: string | null
           org_id: string
           title: string
+          updated_at: string
           uploaded_by: string | null
         }
         Insert: {
           category?: string
           char_count?: number
+          collection?: string
           created_at?: string
           file_path?: string | null
           id?: string
+          library_area?: string
           mime_type?: string | null
           org_id: string
           title: string
+          updated_at?: string
           uploaded_by?: string | null
         }
         Update: {
           category?: string
           char_count?: number
+          collection?: string
           created_at?: string
           file_path?: string | null
           id?: string
+          library_area?: string
           mime_type?: string | null
           org_id?: string
           title?: string
+          updated_at?: string
           uploaded_by?: string | null
         }
         Relationships: [
@@ -6293,12 +6302,20 @@ export type Database = {
         Returns: number
       }
       search_office_doc_chunks: {
-        Args: { p_limit?: number; p_query: string }
+        Args: {
+          p_collections?: string[]
+          p_doc_ids?: string[]
+          p_library_areas?: string[]
+          p_limit?: number
+          p_query: string
+        }
         Returns: {
           category: string
           chunk_index: number
+          collection: string
           content: string
           doc_id: string
+          library_area: string
           rank: number
           title: string
         }[]

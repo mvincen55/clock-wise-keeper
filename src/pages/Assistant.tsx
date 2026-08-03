@@ -8,6 +8,7 @@
  * business documents — the UI reminds staff not to upload patient records.
  */
 import { useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,23 +34,35 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import {
   FileText,
+  FolderInput,
   Info,
   Loader2,
   Plus,
   Send,
   Sparkles,
   Trash2,
+  X,
 } from 'lucide-react';
 import {
-  DOC_CATEGORY_LABELS,
   useAskDocs,
   useDeleteOfficeDoc,
   useOfficeDocs,
+  useUpdateOfficeDoc,
   useUploadOfficeDoc,
   type ChatMessage,
   type OfficeDoc,
-  type OfficeDocCategory,
 } from '@/hooks/useOfficeDocs';
+import {
+  AI_SCOPES,
+  DOC_COLLECTION_LABELS,
+  DOC_COLLECTION_OPTIONS,
+  LIBRARY_AREA_LABELS,
+  LIBRARY_AREA_OPTIONS,
+  parseAiScope,
+  resolveDocPlacement,
+  type DocCollection,
+  type LibraryArea,
+} from '@/lib/doc-library';
 import { ActionChips } from '@/components/fof/FofAssistantWidget';
 import AssistantMemoryPanel from '@/components/AssistantMemoryPanel';
 import { useAssistantMemories, useAuditFindings } from '@/hooks/useAssistantMemory';
@@ -63,7 +76,7 @@ const SUGGESTED_QUESTIONS = [
   'What is the office late-arrival policy?',
 ];
 
-function ChatPanel() {
+function ChatPanel({ scope, onClearScope }: { scope: ReturnType<typeof parseAiScope>; onClearScope: () => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const ask = useAskDocs();
@@ -82,7 +95,7 @@ function ChatPanel() {
     // hold it for them. Never blocks or delays the answer.
     listen.mutate(trimmed);
     ask.mutate(
-      { question: trimmed, history },
+      { question: trimmed, history, scope },
       {
         onSuccess: result => {
           setMessages(prev => [
@@ -110,6 +123,18 @@ function ChatPanel() {
 
   return (
     <Card className="flex flex-col h-[calc(100vh-16rem)] min-h-[24rem]">
+      {scope && (
+        <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2 text-xs">
+          <span className="text-muted-foreground">Searching only:</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 font-medium text-primary">
+            {AI_SCOPES[scope].label}
+            <button type="button" onClick={onClearScope} aria-label="Search all documents">
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+          <span className="text-muted-foreground">Remove to search every approved document.</span>
+        </div>
+      )}
       <CardContent ref={scrollRef} className="flex-1 overflow-y-auto pt-4 space-y-4">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-4 text-center">
@@ -201,17 +226,73 @@ function ChatPanel() {
   );
 }
 
+/**
+ * The two placement questions every new document answers:
+ * where it lives in the product, and what kind of document it is.
+ * Also reused by the "Move" dialog so placement can change later.
+ */
+function PlacementFields({
+  libraryArea,
+  collection,
+  onLibraryArea,
+  onCollection,
+}: {
+  libraryArea: LibraryArea;
+  collection: DocCollection;
+  onLibraryArea: (value: LibraryArea) => void;
+  onCollection: (value: DocCollection) => void;
+}) {
+  const areaHint = LIBRARY_AREA_OPTIONS.find(o => o.value === libraryArea)?.hint;
+  return (
+    <>
+      <div className="space-y-1.5">
+        <Label>Where should this document live?</Label>
+        <Select value={libraryArea} onValueChange={v => onLibraryArea(v as LibraryArea)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {LIBRARY_AREA_OPTIONS.map(option => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {areaHint && <p className="text-xs text-muted-foreground">{areaHint}</p>}
+      </div>
+      <div className="space-y-1.5">
+        <Label>What kind of document is it?</Label>
+        <Select value={collection} onValueChange={v => onCollection(v as DocCollection)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {DOC_COLLECTION_OPTIONS.map(option => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </>
+  );
+}
+
 function UploadDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const upload = useUploadOfficeDoc();
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState<OfficeDocCategory>('policy');
+  const [libraryArea, setLibraryArea] = useState<LibraryArea>('workplace');
+  const [collection, setCollection] = useState<DocCollection>('handbook');
   const [file, setFile] = useState<File | null>(null);
   const [pastedText, setPastedText] = useState('');
   const [mode, setMode] = useState<'file' | 'text'>('file');
 
   const reset = () => {
     setTitle('');
-    setCategory('policy');
+    setLibraryArea('workplace');
+    setCollection('handbook');
     setFile(null);
     setPastedText('');
     setMode('file');
@@ -224,7 +305,8 @@ function UploadDialog({ open, onClose }: { open: boolean; onClose: () => void })
     upload.mutate(
       {
         title: title.trim(),
-        category,
+        libraryArea,
+        collection,
         file: mode === 'file' ? file ?? undefined : undefined,
         text: mode === 'text' ? pastedText : undefined,
       },
@@ -255,21 +337,12 @@ function UploadDialog({ open, onClose }: { open: boolean; onClose: () => void })
               onChange={e => setTitle(e.target.value)}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label>Category</Label>
-            <Select value={category} onValueChange={v => setCategory(v as OfficeDocCategory)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(DOC_CATEGORY_LABELS) as OfficeDocCategory[]).map(key => (
-                  <SelectItem key={key} value={key}>
-                    {DOC_CATEGORY_LABELS[key]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <PlacementFields
+            libraryArea={libraryArea}
+            collection={collection}
+            onLibraryArea={setLibraryArea}
+            onCollection={setCollection}
+          />
           <Tabs value={mode} onValueChange={v => setMode(v as 'file' | 'text')}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="file">Upload File</TabsTrigger>
@@ -316,13 +389,76 @@ function UploadDialog({ open, onClose }: { open: boolean; onClose: () => void })
   );
 }
 
+/** Managers change where a document lives without re-uploading it. */
+function MoveDialog({ doc, onClose }: { doc: OfficeDoc | null; onClose: () => void }) {
+  const update = useUpdateOfficeDoc();
+  const placement = doc ? resolveDocPlacement(doc) : null;
+  const [libraryArea, setLibraryArea] = useState<LibraryArea>('workplace');
+  const [collection, setCollection] = useState<DocCollection>('handbook');
+  const [openedFor, setOpenedFor] = useState<string | null>(null);
+
+  // Seed the selects from the document each time a new one is opened.
+  if (doc && placement && openedFor !== doc.id) {
+    setOpenedFor(doc.id);
+    setLibraryArea(placement.libraryArea);
+    setCollection(placement.collection);
+  }
+
+  const submit = () => {
+    if (!doc) return;
+    update.mutate(
+      { id: doc.id, libraryArea, collection },
+      {
+        onSuccess: () => {
+          toast.success(`Moved "${doc.title}" to ${LIBRARY_AREA_LABELS[libraryArea]}`);
+          onClose();
+        },
+        onError: err => toast.error(err.message),
+      }
+    );
+  };
+
+  return (
+    <Dialog open={!!doc} onOpenChange={isOpen => !isOpen && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Move Document</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Choose where “{doc?.title}” lives and what kind of document it is. Readers update
+          immediately — nothing is re-uploaded.
+        </p>
+        <div className="space-y-3">
+          <PlacementFields
+            libraryArea={libraryArea}
+            collection={collection}
+            onLibraryArea={setLibraryArea}
+            onCollection={setCollection}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={submit} disabled={update.isPending}>
+            {update.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Save Placement
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function DocsPanel() {
   const { data: docs, isLoading } = useOfficeDocs();
   const { data: ctx } = useOrgContext();
   const deleteDoc = useDeleteOfficeDoc();
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [moveDoc, setMoveDoc] = useState<OfficeDoc | null>(null);
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
+  const unplacedCount = (docs ?? []).filter(
+    d => resolveDocPlacement(d).libraryArea === 'unassigned'
+  ).length;
 
   return (
     <div className="space-y-3">
@@ -342,6 +478,16 @@ function DocsPanel() {
           Only managers can add or remove documents. Ask a manager if something is missing.
         </p>
       )}
+      {isManager && unplacedCount > 0 && (
+        <Alert>
+          <FolderInput className="h-4 w-4" />
+          <AlertDescription>
+            {unplacedCount === 1 ? 'One document needs' : `${unplacedCount} documents need`} a
+            home. Unplaced documents stay out of the Office Handbook and Insurance Desk until
+            you move them — use the move button on a document to place it.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center py-10">
@@ -356,37 +502,62 @@ function DocsPanel() {
         </Card>
       ) : (
         <div className="space-y-2">
-          {(docs ?? []).map((doc: OfficeDoc) => (
-            <Card key={doc.id}>
-              <CardContent className="py-3 flex items-center gap-3">
-                <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm truncate">{doc.title}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {DOC_CATEGORY_LABELS[(doc.category as OfficeDocCategory) ?? 'other']} ·{' '}
-                    {new Date(doc.created_at).toLocaleDateString()} ·{' '}
-                    {Math.max(1, Math.round(doc.char_count / 1000))}k characters
+          {(docs ?? []).map((doc: OfficeDoc) => {
+            const placement = resolveDocPlacement(doc);
+            const unplaced = placement.libraryArea === 'unassigned';
+            return (
+              <Card key={doc.id}>
+                <CardContent className="py-3 flex items-center gap-3">
+                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm truncate">{doc.title}</div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                      <Badge
+                        variant={unplaced ? 'destructive' : 'secondary'}
+                        className="font-normal"
+                      >
+                        {LIBRARY_AREA_LABELS[placement.libraryArea]}
+                      </Badge>
+                      <Badge variant="outline" className="font-normal">
+                        {DOC_COLLECTION_LABELS[placement.collection]}
+                      </Badge>
+                      <span>
+                        {new Date(doc.created_at).toLocaleDateString()} ·{' '}
+                        {Math.max(1, Math.round(doc.char_count / 1000))}k characters
+                      </span>
+                    </div>
                   </div>
-                </div>
-                {isManager && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive shrink-0"
-                    onClick={() => {
-                      if (confirm(`Remove "${doc.title}" from the knowledge base?`)) {
-                        deleteDoc.mutate(doc, {
-                          onError: err => toast.error(`Delete failed: ${err.message}`),
-                        });
-                      }
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                  {isManager && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0"
+                        title="Move — change where this document lives"
+                        onClick={() => setMoveDoc(doc)}
+                      >
+                        <FolderInput className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive shrink-0"
+                        onClick={() => {
+                          if (confirm(`Remove "${doc.title}" from the knowledge base?`)) {
+                            deleteDoc.mutate(doc, {
+                              onError: err => toast.error(`Delete failed: ${err.message}`),
+                            });
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -400,6 +571,7 @@ function DocsPanel() {
       </Alert>
 
       <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} />
+      <MoveDialog doc={moveDoc} onClose={() => setMoveDoc(null)} />
     </div>
   );
 }
@@ -411,6 +583,11 @@ export default function Assistant() {
   const { data: findings } = useAuditFindings();
   const pendingCount =
     (memories ?? []).filter(m => m.status === 'pending').length + (findings ?? []).length;
+
+  // Contextual scope: arriving from the Office Handbook or Insurance Desk
+  // limits document search to that surface until the chip is removed.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const scope = parseAiScope(searchParams.get('scope'));
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-4xl mx-auto">
@@ -433,7 +610,7 @@ export default function Assistant() {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="chat">
-          <ChatPanel />
+          <ChatPanel scope={scope} onClearScope={() => setSearchParams({}, { replace: true })} />
         </TabsContent>
         <TabsContent value="documents">
           <DocsPanel />
