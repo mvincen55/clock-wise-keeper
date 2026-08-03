@@ -84,6 +84,10 @@ interface DocMatch {
   chunk_index: number;
   content: string;
   rank: number;
+  // Structured-parse provenance (null on legacy extractions).
+  section_title?: string | null;
+  page_number?: number | null;
+  parse_version?: number;
 }
 
 interface AgentAction {
@@ -96,6 +100,9 @@ interface AgentSource {
   id: string;
   title: string;
   category: string;
+  /** Best-ranked citation into the document, when known. */
+  section_title?: string | null;
+  page_number?: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,7 +136,8 @@ async function searchOfficeDocs(
   supabase: any,
   queries: string[],
   sources: Map<string, AgentSource>,
-  scope: SearchScope | null
+  scope: SearchScope | null,
+  scopeDocIds: string[] | null
 ): Promise<string> {
   const cleaned = queries
     .map((q) => bounded(q, 60))
@@ -145,6 +153,7 @@ async function searchOfficeDocs(
         ...(scope
           ? { p_library_areas: scope.areas, p_collections: scope.collections }
           : {}),
+        ...(scopeDocIds && scopeDocIds.length > 0 ? { p_doc_ids: scopeDocIds } : {}),
       })
     )
   );
@@ -162,11 +171,17 @@ async function searchOfficeDocs(
   }
 
   // Pull neighboring chunks for the strongest hits so rules that span a
-  // chunk boundary arrive intact.
-  const docMeta = new Map<string, { title: string; category: string }>();
+  // chunk boundary arrive intact. Neighbors stay within the SAME parse
+  // version and skip furniture (headers/footers/TOC rows are provenance,
+  // not content).
+  const docMeta = new Map<string, { title: string; category: string; version: number }>();
   const wanted = new Map<string, Set<number>>();
   for (const match of matches.slice(0, 5)) {
-    docMeta.set(match.doc_id, { title: match.title, category: match.category });
+    docMeta.set(match.doc_id, {
+      title: match.title,
+      category: match.category,
+      version: match.parse_version ?? 1,
+    });
     const set = wanted.get(match.doc_id) ?? new Set<number>();
     if (match.chunk_index > 0) set.add(match.chunk_index - 1);
     set.add(match.chunk_index + 1);
@@ -179,8 +194,9 @@ async function searchOfficeDocs(
       .map(([docId, set]) =>
         supabase
           .from("office_doc_chunks")
-          .select("doc_id, chunk_index, content")
+          .select("doc_id, chunk_index, content, section_title, page_number, chunk_type")
           .eq("doc_id", docId)
+          .eq("parse_version", docMeta.get(docId)?.version ?? 1)
           .in("chunk_index", [...set])
       )
   );
@@ -188,6 +204,7 @@ async function searchOfficeDocs(
     for (const chunk of result.data ?? []) {
       const meta = docMeta.get(chunk.doc_id);
       if (!meta) continue;
+      if (["header", "footer", "table_of_contents"].includes(chunk.chunk_type ?? "")) continue;
       matches.push({
         doc_id: chunk.doc_id,
         title: meta.title,
@@ -195,6 +212,8 @@ async function searchOfficeDocs(
         chunk_index: chunk.chunk_index,
         content: chunk.content,
         rank: 0,
+        section_title: chunk.section_title,
+        page_number: chunk.page_number,
       });
     }
   }
@@ -208,12 +227,30 @@ async function searchOfficeDocs(
   }
   kept.sort((a, b) => a.title.localeCompare(b.title) || a.chunk_index - b.chunk_index);
   for (const m of kept) {
-    if (!sources.has(m.doc_id)) {
-      sources.set(m.doc_id, { id: m.doc_id, title: m.title, category: m.category });
+    // The best-ranked hit per document supplies the citation shown in the
+    // UI (kept is rank-ordered before the sort above rearranged it, so
+    // fill section/page only if missing or this match has better info).
+    const existing = sources.get(m.doc_id);
+    if (!existing) {
+      sources.set(m.doc_id, {
+        id: m.doc_id,
+        title: m.title,
+        category: m.category,
+        section_title: m.section_title ?? null,
+        page_number: m.page_number ?? null,
+      });
+    } else if (!existing.section_title && m.section_title) {
+      existing.section_title = m.section_title;
+      existing.page_number = m.page_number ?? existing.page_number ?? null;
     }
   }
   return kept
-    .map((m) => `[${m.title} — section ${m.chunk_index}] (${m.category})\n${m.content}`)
+    .map((m) => {
+      const where = m.section_title
+        ? `${m.section_title}${m.page_number ? `, page ${m.page_number}` : ""}`
+        : `section ${m.chunk_index}`;
+      return `[${m.title} — ${where}] (${m.category})\n${m.content}`;
+    })
     .join("\n\n---\n\n");
 }
 
@@ -696,6 +733,10 @@ interface PromptContext {
   policySummary?: string;
   /** When set, document search is limited to this surface's content. */
   searchScopeLabel?: string;
+  /** When set, search is pinned to specific manual(s) by title. */
+  scopeDocLabel?: string | null;
+  /** True when the scope is the Insurance Desk (carrier-manual rules). */
+  insuranceScope?: boolean;
 }
 
 function buildSystemPrompt(ctx: PromptContext): string {
@@ -819,7 +860,14 @@ function buildSystemPrompt(ctx: PromptContext): string {
     );
     if (ctx.searchScopeLabel) {
       parts.push(
-        `SEARCH SCOPE: this conversation started from a specific page, so search_office_docs only covers the ${ctx.searchScopeLabel}. If the user asks about something outside that scope, say the answer may live elsewhere and that removing the scope chip (or opening Ask AI directly) searches every approved document.`
+        `SEARCH SCOPE: this conversation started from a specific page, so search_office_docs only covers the ${ctx.searchScopeLabel}${
+          ctx.scopeDocLabel ? ` — pinned to: ${ctx.scopeDocLabel}` : ""
+        }. If the user asks about something outside that scope, say the answer may live elsewhere and that removing the scope chip (or opening Ask AI directly) searches every approved document.`
+      );
+    }
+    if (ctx.insuranceScope) {
+      parts.push(
+        "CARRIER MANUAL RULES (hard requirements): (1) Answer ONLY from the excerpts search returns — never invent carrier rules or fill gaps from general dental-insurance knowledge. (2) Every excerpt is labeled [Manual — Section, page N]; cite that manual, section, and page in your answer ('per the DD MA Processing Manual, Timely Filing, p. 12'). (3) NEVER apply one carrier's rule to another carrier — if the scoped manual doesn't cover it, say THIS manual doesn't contain it rather than borrowing from elsewhere. (4) If the manual has both current and archived versions, treat only the current one as in force. (5) You cannot determine coverage for a specific patient — answer what the manual says in general and remind the user that member-specific benefits require an eligibility check. (6) If a user includes patient names, member IDs, dates of birth, or other patient details, do not repeat or use them and remind the user this desk is for general carrier questions only."
       );
     }
   }
@@ -1058,6 +1106,7 @@ Deno.serve(async (req) => {
     const body = (await req.json()) as {
       mode?: string;
       scope?: string;
+      scope_doc_ids?: unknown;
       messages?: { role?: string; content?: string }[];
       context?: { visits?: { procedures?: string[] }[]; treatment?: string };
       trainingEnabled?: boolean;
@@ -1069,6 +1118,23 @@ Deno.serve(async (req) => {
       mode === "ask" && typeof body.scope === "string"
         ? SEARCH_SCOPES[body.scope] ?? null
         : null;
+    // Manual-level scope: the Insurance Desk reader pins search to the open
+    // manual so one carrier's rules never answer for another. Only honored
+    // alongside a page scope, and RLS still applies to every id.
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const scopeDocIds: string[] | null =
+      searchScope && Array.isArray(body.scope_doc_ids)
+        ? body.scope_doc_ids.filter((v): v is string => typeof v === "string" && uuidRe.test(v)).slice(0, 4)
+        : null;
+    let scopeDocLabel: string | null = null;
+    if (scopeDocIds && scopeDocIds.length > 0) {
+      const { data: scopeDocs } = await supabase
+        .from("office_docs")
+        .select("title")
+        .in("id", scopeDocIds);
+      scopeDocLabel =
+        (scopeDocs ?? []).map((d: { title: string }) => d.title).join(", ") || null;
+    }
     const chat = (Array.isArray(body.messages) ? body.messages.slice(-MAX_MESSAGES) : [])
       .map((m) => ({
         role: m?.role === "assistant" ? "assistant" : "user",
@@ -1187,6 +1253,8 @@ Deno.serve(async (req) => {
       docCount: docsRes.data?.length ?? 0,
       policySummary,
       searchScopeLabel: searchScope?.label,
+      scopeDocLabel,
+      insuranceScope: mode === "ask" && body.scope === "insurance",
     });
     const tools = buildTools({ isManager, training, mode, githubReady });
 
@@ -1202,7 +1270,8 @@ Deno.serve(async (req) => {
             supabase,
             Array.isArray(args?.queries) ? args.queries : [],
             sources,
-            searchScope
+            searchScope,
+            scopeDocIds
           );
         case "save_memory": {
           if (!isManager) return "ERROR: only managers can save memories.";

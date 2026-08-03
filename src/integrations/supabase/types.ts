@@ -3218,26 +3218,53 @@ export type Database = {
       office_doc_chunks: {
         Row: {
           chunk_index: number
+          chunk_type: string
           content: string
           doc_id: string
+          heading_level: number | null
           id: string
+          meta: Json | null
           org_id: string
+          page_end: number | null
+          page_number: number | null
+          parent_section_title: string | null
+          parse_version: number
+          section_id: string | null
+          section_title: string | null
           tsv: unknown
         }
         Insert: {
           chunk_index: number
+          chunk_type?: string
           content: string
           doc_id: string
+          heading_level?: number | null
           id?: string
+          meta?: Json | null
           org_id: string
+          page_end?: number | null
+          page_number?: number | null
+          parent_section_title?: string | null
+          parse_version?: number
+          section_id?: string | null
+          section_title?: string | null
           tsv?: unknown
         }
         Update: {
           chunk_index?: number
+          chunk_type?: string
           content?: string
           doc_id?: string
+          heading_level?: number | null
           id?: string
+          meta?: Json | null
           org_id?: string
+          page_end?: number | null
+          page_number?: number | null
+          parent_section_title?: string | null
+          parse_version?: number
+          section_id?: string | null
+          section_title?: string | null
           tsv?: unknown
         }
         Relationships: [
@@ -3259,43 +3286,79 @@ export type Database = {
       }
       office_docs: {
         Row: {
+          carrier: string | null
           category: string
           char_count: number
           collection: string
           created_at: string
+          current_parse_version: number
+          doc_status: string
+          effective_date: string | null
           file_path: string | null
           id: string
           library_area: string
+          manual_type: string | null
           mime_type: string | null
           org_id: string
+          page_count: number | null
+          parse_confidence: string | null
+          parse_meta: Json | null
+          parse_status: string
+          replaces_doc_id: string | null
+          section_count: number | null
+          section_overrides: Json
           title: string
           updated_at: string
           uploaded_by: string | null
         }
         Insert: {
+          carrier?: string | null
           category?: string
           char_count?: number
           collection?: string
           created_at?: string
+          current_parse_version?: number
+          doc_status?: string
+          effective_date?: string | null
           file_path?: string | null
           id?: string
           library_area?: string
+          manual_type?: string | null
           mime_type?: string | null
           org_id: string
+          page_count?: number | null
+          parse_confidence?: string | null
+          parse_meta?: Json | null
+          parse_status?: string
+          replaces_doc_id?: string | null
+          section_count?: number | null
+          section_overrides?: Json
           title: string
           updated_at?: string
           uploaded_by?: string | null
         }
         Update: {
+          carrier?: string | null
           category?: string
           char_count?: number
           collection?: string
           created_at?: string
+          current_parse_version?: number
+          doc_status?: string
+          effective_date?: string | null
           file_path?: string | null
           id?: string
           library_area?: string
+          manual_type?: string | null
           mime_type?: string | null
           org_id?: string
+          page_count?: number | null
+          parse_confidence?: string | null
+          parse_meta?: Json | null
+          parse_status?: string
+          replaces_doc_id?: string | null
+          section_count?: number | null
+          section_overrides?: Json
           title?: string
           updated_at?: string
           uploaded_by?: string | null
@@ -3306,6 +3369,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "office_docs_replaces_doc_id_fkey"
+            columns: ["replaces_doc_id"]
+            isOneToOne: false
+            referencedRelation: "office_docs"
             referencedColumns: ["id"]
           },
         ]
@@ -6312,11 +6382,16 @@ export type Database = {
         Returns: {
           category: string
           chunk_index: number
+          chunk_type: string
           collection: string
           content: string
           doc_id: string
           library_area: string
+          page_number: number | null
+          parse_version: number
           rank: number
+          section_id: string | null
+          section_title: string | null
           title: string
         }[]
       }

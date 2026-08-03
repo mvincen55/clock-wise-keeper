@@ -21,6 +21,9 @@ export interface AskSource {
   id: string;
   title: string;
   category: string;
+  /** Citation into the document, when the source is a structured manual. */
+  section_title?: string | null;
+  page_number?: number | null;
 }
 
 /** Something the assistant actually did this turn (memory save, commit, PR). */
