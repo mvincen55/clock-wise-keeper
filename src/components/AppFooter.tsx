@@ -4,8 +4,9 @@ import { useOrgBranding } from '@/hooks/useOrgBranding';
 import { useOrgContext } from '@/hooks/useOrgContext';
 
 /**
- * Discreet product attribution (blueprint §3): the office owns the shell,
- * Purple Envelope signs the footer alongside Help, privacy, and support.
+ * Discreet product attribution (blueprint §3): the office owns the shell —
+ * its name stands alone on the left — and Purple Envelope signs the right
+ * side, carrying the copyright alongside Help, privacy, and support.
  */
 export default function AppFooter() {
   const { data: branding } = useOrgBranding();
@@ -14,13 +15,13 @@ export default function AppFooter() {
 
   return (
     <footer className="hidden md:flex items-center justify-between gap-4 border-t bg-card px-6 py-3 text-xs text-muted-foreground">
-      <p className="truncate">{officeName && `© ${new Date().getFullYear()} ${officeName}`}</p>
+      <p className="truncate">{officeName}</p>
       <nav className="flex items-center gap-4 shrink-0">
         <Link to="/help" className="hover:text-foreground transition-colors">Help &amp; Support</Link>
         <Link to="/privacy" className="hover:text-foreground transition-colors">Privacy &amp; Terms</Link>
         <span className="flex items-center gap-1.5">
           <Mail className="h-3 w-3 text-primary" />
-          Powered by Purple Envelope
+          © {new Date().getFullYear()} Purple Envelope
         </span>
       </nav>
     </footer>
