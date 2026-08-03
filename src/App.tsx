@@ -23,15 +23,28 @@ import FofBuilder from "@/pages/FofBuilder";
 import FofTemplates from "@/pages/FofTemplates";
 import FofFees from "@/pages/FofFees";
 import Assistant from "@/pages/Assistant";
-import PolicyManual from "@/pages/PolicyManual";
+import OfficeHandbook from "@/pages/OfficeHandbook";
+import InsuranceDesk from "@/pages/InsuranceDesk";
 import ImportantNumbers from "@/pages/ImportantNumbers";
 import Checklists from "@/pages/Checklists";
 import DepositLog from "@/pages/DepositLog";
+import IncidentReports from "@/pages/IncidentReports";
 import MorningHuddle from "@/pages/MorningHuddle";
+import Goals from "@/pages/Goals";
+import ReminderSettings from "@/pages/ReminderSettings";
+import InboxPage from "@/pages/InboxPage";
+import Training from "@/pages/Training";
+import Workplace from "@/pages/Workplace";
+import Playbook from "@/pages/Playbook";
+import Management from "@/pages/Management";
+import Help from "@/pages/Help";
+import Privacy from "@/pages/Privacy";
 import AcceptInvite from "@/pages/AcceptInvite";
+import Onboarding from "@/pages/Onboarding";
 import NotFound from "@/pages/NotFound";
 import OAuthConsent from "@/pages/OAuthConsent";
 import { Loader2 } from "lucide-react";
+import { useOnboardingStatus } from "@/hooks/useOnboarding";
 
 const queryClient = new QueryClient();
 
@@ -43,7 +56,31 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     </div>
   );
   if (!user || !isAllowed) return <Navigate to="/auth" replace />;
+  return <OnboardingGate>{children}</OnboardingGate>;
+}
+
+/**
+ * Members with unfinished onboarding land on /onboarding until it's done.
+ * Fails open: if the check can't run, the app opens normally.
+ */
+function OnboardingGate({ children }: { children: React.ReactNode }) {
+  const { data: status, isReady, hasOrg } = useOnboardingStatus();
+  if (isReady && hasOrg && status && !status.complete) {
+    return <Navigate to="/onboarding" replace />;
+  }
   return <AppLayout>{children}</AppLayout>;
+}
+
+/** The flow itself renders outside the app shell — no nav until it's finished. */
+function OnboardingRoute() {
+  const { user, loading, isAllowed } = useAuth();
+  if (loading) return (
+    <div className="flex min-h-screen items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
+  if (!user || !isAllowed) return <Navigate to="/auth" replace />;
+  return <Onboarding />;
 }
 
 const App = () => (
@@ -56,6 +93,12 @@ const App = () => (
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/workplace" element={<ProtectedRoute><Workplace /></ProtectedRoute>} />
+            <Route path="/playbook" element={<ProtectedRoute><Playbook /></ProtectedRoute>} />
+            <Route path="/management" element={<ProtectedRoute><Management /></ProtectedRoute>} />
+            <Route path="/inbox" element={<Navigate to="/inbox/messages" replace />} />
+            <Route path="/inbox/:tab" element={<ProtectedRoute><InboxPage /></ProtectedRoute>} />
+            <Route path="/help" element={<ProtectedRoute><Help /></ProtectedRoute>} />
             <Route path="/timesheet" element={<ProtectedRoute><Timesheet /></ProtectedRoute>} />
             <Route path="/days-off" element={<ProtectedRoute><DaysOff /></ProtectedRoute>} />
             <Route path="/office-calendar" element={<ProtectedRoute><OfficeCalendar /></ProtectedRoute>} />
@@ -72,12 +115,24 @@ const App = () => (
             <Route path="/fof/templates" element={<ProtectedRoute><FofTemplates /></ProtectedRoute>} />
             <Route path="/fof/fees" element={<ProtectedRoute><FofFees /></ProtectedRoute>} />
             <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
-            <Route path="/policy-manual" element={<ProtectedRoute><PolicyManual /></ProtectedRoute>} />
+            <Route path="/handbook" element={<ProtectedRoute><OfficeHandbook /></ProtectedRoute>} />
+            <Route path="/insurance-desk" element={<ProtectedRoute><InsuranceDesk /></ProtectedRoute>} />
+            {/* Old bookmark-safe path for the rebuilt handbook. */}
+            <Route path="/policy-manual" element={<Navigate to="/handbook" replace />} />
             <Route path="/important-numbers" element={<ProtectedRoute><ImportantNumbers /></ProtectedRoute>} />
             <Route path="/checklists" element={<ProtectedRoute><Checklists /></ProtectedRoute>} />
             <Route path="/deposit-log" element={<ProtectedRoute><DepositLog /></ProtectedRoute>} />
+            <Route path="/incident-reports" element={<ProtectedRoute><IncidentReports /></ProtectedRoute>} />
             <Route path="/morning-huddle" element={<ProtectedRoute><MorningHuddle /></ProtectedRoute>} />
+            <Route path="/goals" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
+            <Route path="/settings/reminders" element={<ProtectedRoute><ReminderSettings /></ProtectedRoute>} />
+            <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
+            <Route path="/requests" element={<Navigate to="/inbox/requests" replace />} />
+            <Route path="/messages" element={<Navigate to="/inbox/messages" replace />} />
+            <Route path="/nudges" element={<Navigate to="/inbox/nudges" replace />} />
+            <Route path="/onboarding" element={<OnboardingRoute />} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
+            <Route path="/privacy" element={<Privacy />} />
             <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
             <Route path="*" element={<Navigate to="/auth" replace />} />
 

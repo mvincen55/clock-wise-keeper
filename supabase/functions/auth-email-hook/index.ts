@@ -44,10 +44,10 @@ const EMAIL_TEMPLATES: Record<string, React.ComponentType<any>> = {
 }
 
 // Configuration
-const SITE_NAME = "clock-wise-keeper"
-const SENDER_DOMAIN = "notify.timekeepers.me"
-const ROOT_DOMAIN = "timekeepers.me"
-const FROM_DOMAIN = "timekeepers.me" // Domain shown in From address (may be root or sender subdomain)
+const SITE_NAME = "Purple Envelope"
+const SENDER_DOMAIN = "notify.purpleenvelope.app"
+const ROOT_DOMAIN = "purpleenvelope.app"
+const FROM_DOMAIN = "purpleenvelope.app" // Domain shown in From address (may be root or sender subdomain)
 
 // Sample data for preview mode ONLY (not used in actual email sending).
 // URLs are baked in at scaffold time from the project's real data.
@@ -73,7 +73,6 @@ const SAMPLE_DATA: Record<string, object> = {
   },
   invite: {
     siteName: SITE_NAME,
-    siteUrl: SAMPLE_PROJECT_URL,
     confirmationUrl: SAMPLE_PROJECT_URL,
   },
   email_change: {

@@ -12,7 +12,7 @@ export default defineTool({
   name: "whoami",
   title: "Who am I",
   description:
-    "Returns the signed-in user's TimeVault identity: email, employee id, org id, org name, and role (owner, manager, or employee).",
+    "Returns the signed-in user's Purple Envelope identity: email, employee id, org id, org name, and role (owner, manager, or employee).",
   inputSchema: {},
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async (_input, ctx) => {

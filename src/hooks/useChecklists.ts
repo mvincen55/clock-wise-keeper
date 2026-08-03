@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import type { Tables } from '@/integrations/supabase/types';
 import { DEFAULT_CHECKLISTS, type ChecklistCadence } from '@/lib/checklist-defaults';
-import { getToday } from '@/lib/time-utils';
+import { getToday, mondayOf } from '@/lib/time-utils';
 
 // Office checklists: recurring tasks with per-period completion history.
 // Periods are Eastern-local, matching the rest of the app.
@@ -21,15 +21,6 @@ export const CADENCE_LABELS: Record<ChecklistCadence, string> = {
   monthly: 'Monthly',
   yearly: 'Yearly',
 };
-
-/** Monday (Eastern) of the week containing the given ET date string. */
-function mondayOf(etDate: string): string {
-  const [y, m, d] = etDate.split('-').map(Number);
-  const noonUtc = new Date(Date.UTC(y, m - 1, d, 12));
-  const dow = noonUtc.getUTCDay(); // 0=Sun..6=Sat, date math on the plain date
-  noonUtc.setUTCDate(noonUtc.getUTCDate() - ((dow + 6) % 7));
-  return noonUtc.toISOString().slice(0, 10);
-}
 
 /** period_key for a cadence, anchored to an ET date ('YYYY-MM-DD'). */
 export function periodKeyFor(cadence: ChecklistCadence, etDate: string): string {

@@ -24,7 +24,6 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { ArrowLeft, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import FofTemplateEditor from '@/components/fof/FofTemplateEditor';
-import OrgBrandingCard from '@/components/OrgBrandingCard';
 import {
   useDeleteFofTemplate,
   useFofTemplates,
@@ -87,8 +86,6 @@ export default function FofTemplates() {
           </div>
         )}
       </div>
-
-      <OrgBrandingCard isManager={isManager} />
 
       {isLoading ? (
         <div className="flex items-center justify-center py-16">

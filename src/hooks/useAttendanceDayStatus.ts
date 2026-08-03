@@ -57,7 +57,9 @@ export function useRecomputeAttendance() {
   return useMutation({
     mutationFn: async ({ startDate, endDate }: { startDate: string; endDate: string }) => {
       if (!user) throw new Error('Not authenticated');
-      const { data, error } = await supabase.rpc('recompute_attendance_range', {
+      // Server-side authorized entry point: self, or an admin/manager of the
+      // target's org. The raw engine is no longer callable by clients.
+      const { data, error } = await supabase.rpc('request_attendance_recompute', {
         p_user_id: user.id,
         p_start_date: startDate,
         p_end_date: endDate,

@@ -2,7 +2,7 @@
  * Genericization-pass safety net: the printed output for the reference
  * records must stay BYTE-FOR-BYTE identical across every refactor phase.
  * These render the exact print components with fixed, known inputs
- * (mirroring Harelick's live configuration and a saved deposit record)
+ * (a neutral reference practice configuration and a saved deposit record)
  * and snapshot the full print DOM. Any diff in these snapshots means a
  * phase changed what the office prints — the phase fails.
  *
@@ -15,6 +15,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import FofPrintSheet from '@/components/fof/FofPrintSheet';
 import DepositPrintSheet from '@/components/DepositPrintSheet';
+import IncidentReportPrintSheet from '@/components/IncidentReportPrintSheet';
 import type {
   FofAmounts,
   FofComputation,
@@ -34,19 +35,21 @@ afterAll(() => {
 });
 
 /**
- * Harelick's live practice configuration (org_branding / fof_settings
+ * A neutral reference practice configuration (org_branding / fof_settings
  * rows). logoUrl pins the value the original bundled asset resolved to
  * in this test environment, keeping the reference DOM byte-identical;
  * in production the same PNG now comes from the org's branding row.
  */
 const PRACTICE: FofPracticeInfo = {
-  practiceName: 'Harelick Dental Associates, LLC',
-  addressLine1: '278 Alden Road',
-  addressLine2: 'Fairhaven, MA 02719',
-  phone: '(508) 993-0515',
-  website: 'drharelick.com',
+  practiceName: 'Northfield Dental Group, LLC',
+  addressLine1: '41 Northfield Avenue',
+  addressLine2: 'Springvale, MA 02100',
+  phone: '(555) 010-0142',
+  website: 'northfielddentalgroup.example',
   doctorName: 'Dr. Scott',
-  logoUrl: '/src/assets/harelick-logo.png',
+  logoUrl: '/src/assets/practice-logo.png',
+  membershipPlanName: 'Membership',
+  doctorNames: ['Dr. Scott', 'Dr. Jennie'],
 };
 
 /**
@@ -74,7 +77,7 @@ const TEMPLATE: FofTemplate = {
   insuranceNote:
     'Please note that the calculated insurance payment, including any write-offs, is only an estimate. While we have made every effort to calculate this amount accurately, any insurance underpayment will remain your responsibility. If you believe there has been a change to your insurance coverage, please notify us as soon as possible.',
   contactNote:
-    "Questions about this form, or interested in another payment arrangement such as outside financing? Call us at (508) 993-0515 — we're happy to help. Please mail your signed copy, along with your payment, to Harelick Dental Associates, LLC, 278 Alden Road, Fairhaven, MA 02719.",
+    "Questions about this form, or interested in another payment arrangement such as outside financing? Call us at (555) 010-0142 — we're happy to help. Please mail your signed copy, along with your payment, to Northfield Dental Group, LLC, 41 Northfield Avenue, Springvale, MA 02100.",
   footnotes: [
     'Your dental plan applies an "alternate benefit" to tooth-colored (composite) fillings on back teeth: insurance pays as if a silver (amalgam) filling were placed. You still receive the tooth-colored filling; the difference up to our standard fee is included in your portion.',
     "Because this treatment continues into your next insurance benefit year, part of the estimate is paid from next year's renewed benefits: your annual maximum starts over for the visits after renewal, and your deductible applies again. If your coverage changes at renewal, this estimate may change as well.",
@@ -191,7 +194,7 @@ describe('print invariant — reference output must never change', () => {
         amounts={AMOUNTS}
         computation={COMPUTATION}
         officeLines={OFFICE_LINES}
-        createdBy="Megan Vincent"
+        createdBy="Jordan Rivera"
         doctorName="Dr. Scott"
       />
     );
@@ -216,26 +219,88 @@ describe('print invariant — reference output must never change', () => {
         ptCcCents={0}
         illumitracCents={0}
         outsideFinancingCents={0}
-        preparedBy="Megan Vincent"
+        preparedBy="Jordan Rivera"
         initials="MV"
         branding={{
-          displayName: 'Harelick Dental Associates',
-          legalName: 'Harelick Dental Associates, LLC',
-          logoUrl: '/src/assets/harelick-logo.png',
+          displayName: 'Northfield Dental Group',
+          legalName: 'Northfield Dental Group, LLC',
+          logoUrl: '/src/assets/practice-logo.png',
         }}
         settings={{
-          accountLine: 'Bay Coast Account #841845805',
-          bankSplitCashLabel: 'BC Bank — cash & checks',
+          accountLine: 'Sample Bank Account #000000000',
+          bankSplitCashLabel: 'SB Bank — cash & checks',
           bankSplitCardsLabel: 'F Bank — card deposits',
-          bankTotalLabel: 'BC Bank Total',
+          bankTotalLabel: 'SB Bank Total',
           envelopeNote: 'Purple envelope — no tape',
           officeCopyNote: 'Office Copy — file with the day sheet',
+          membershipRowLabel: 'Membership',
+          outsideFinancingLabel: 'Outside Financing',
         }}
       />
     );
-    expect(html).toContain('Bay Coast Account #841845805');
+    expect(html).toContain('Sample Bank Account #000000000');
     expect(html).toContain('Purple envelope — no tape');
-    expect(html).toContain('Harelick Dental Associates, LLC · Daily Deposit Log');
+    expect(html).toContain('Northfield Dental Group, LLC · Daily Deposit Log');
+    expect(html).toMatchSnapshot();
+  });
+
+  it('Incident report sheet renders byte-for-byte identically', () => {
+    // The filed safety record: letterhead with the office logo, the
+    // incident grid, the narrative blocks, the review card, and both
+    // signatures. Any diff here changed what goes in the binder.
+    const report = {
+      id: 'incident-fixture',
+      org_id: 'org',
+      employee_id: 'emp',
+      reported_by: 'user',
+      reported_by_employee_id: 'emp',
+      reported_by_name: 'Jordan Rivera',
+      incident_date: '2026-07-27',
+      incident_time: '14:45:00',
+      category: 'sharps_injury',
+      severity: 'moderate',
+      location: 'Operatory 2',
+      description: 'Stuck on an instrument while cleaning up after an extraction.',
+      body_part: 'Left index finger',
+      device_involved: 'Hu-Friedy scaler',
+      ppe_worn: 'yes',
+      witnesses: 'Dr. Avery',
+      immediate_action: 'Washed with soap and water, reported to the doctor immediately.',
+      medical_treatment: 'first_aid',
+      follow_up_required: true,
+      follow_up_notes: 'Bloodwork scheduled; source evaluation requested.',
+      work_related: true,
+      days_away: 0,
+      status: 'closed',
+      reviewed_by: 'user',
+      reviewed_by_name: 'Jordan Rivera',
+      reviewed_at: '2026-07-28T18:00:00Z',
+      review_notes: 'Reviewed with the team; sharps container relocated to the counter.',
+      employee_signature: 'Test Employee',
+      employee_signed_at: '2026-07-28T17:00:00Z',
+      manager_signature: 'Jordan Rivera',
+      manager_signed_at: '2026-07-28T21:16:00Z',
+      manager_signed_role: 'owner',
+      countersign_role: 'manager',
+      created_at: '2026-07-28T16:00:00Z',
+      updated_at: '2026-07-28T21:16:00Z',
+    } as never;
+
+    const html = renderToStaticMarkup(
+      <IncidentReportPrintSheet
+        report={report}
+        employeeName="Test Employee"
+        branding={{
+          displayName: 'Northfield Dental Group',
+          legalName: 'Northfield Dental Group, LLC',
+          addressLine1: '41 Northfield Avenue',
+          addressLine2: 'Springvale, MA 02100',
+          phone: '(555) 010-0142',
+          website: 'northfielddentalgroup.example',
+          logoUrl: 'https://example.invalid/logo.png',
+        }}
+      />
+    );
     expect(html).toMatchSnapshot();
   });
 });

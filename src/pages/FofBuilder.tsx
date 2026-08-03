@@ -11,7 +11,7 @@
  * network. Keep it that way — the practice has no BAA covering patient
  * data in this app.
  */
-import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -64,11 +64,11 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
-import FofAssistantWidget from '@/components/fof/FofAssistantWidget';
 import FofPrintSheet from '@/components/fof/FofPrintSheet';
 import { useFofSettings, useFofTemplates } from '@/hooks/useFofTemplates';
 import {
   useDeleteProcedureBundle,
+  useCodeNames,
   useFeeScheduleItems,
   useFeeSchedules,
   useProcedureBundles,
@@ -77,6 +77,7 @@ import {
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { computeFof } from '@/lib/fof/compute';
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
+import { resolveImportedFee } from '@/lib/fof/import-fee';
 import {
   estimateInsurance,
   type FeeCategory,
@@ -84,7 +85,7 @@ import {
   type PlanRules,
 } from '@/lib/fof/insurance';
 import { categorizeCdtCode } from '@/lib/fof/cdt';
-import { friendlyCdtName } from '@/lib/fof/cdt-names';
+import { resolvePatientName } from '@/lib/fof/cdt-names';
 import { computeFofDiscounts } from '@/lib/fof/discounts';
 import { buildNameVisitsPayload, safeProcedureLabel } from '@/lib/fof/ai';
 import {
@@ -98,6 +99,7 @@ import {
 } from '@/lib/fof/visits';
 import { DEFAULT_PRACTICE_INFO } from '@/lib/fof/defaults';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
+import ScaledPrintPreview from '@/components/ScaledPrintPreview';
 import { useOrgBranding } from '@/hooks/useOrgBranding';
 import type { Cents, FofAmounts, FofOverrides, FofTemplate } from '@/lib/fof/types';
 
@@ -137,17 +139,15 @@ const RENEWAL_NOTE =
 // schedule — per office policy the surgical guide isn't prepaid.
 const NO_PREPAY_CODES = new Set(['D5982']);
 
-// Doctors the treatment wording can be attributed to.
-const FOF_DOCTORS = ['Dr. Scott', 'Dr. Jennie', 'Dr. Robert', 'Dr. Nicole', 'Dr. Natalie'];
-/** Dropdown option when treatment isn't tied to one doctor — the AI
- * writes in the practice's collective voice ("We'll…") instead. */
+// Doctors the treatment wording can be attributed to. In production the
+// list comes from fof_settings.doctor_names; the literal fallback is used
+// only when settings have not yet been configured.
 const FOF_NO_DOCTOR = 'No specific doctor';
 
-// Procedures the Illumitrac membership plans include at no charge (per the
-// office Policy Handbook / 2025 flyer): cleanings (adult/child/perio),
-// exams, emergency exam, needed X-rays (CBCT D0367 excluded), fluoride and
-// sealants (child plan). Per-line toggle covers used-up yearly allowances.
-const ILLUMITRAC_INCLUDED = new Set([
+// Procedures the office membership plan includes at no charge. Per-line
+// toggle covers used-up yearly allowances. In production the plan name is
+// read from fof_settings.membership_plan_name.
+const MEMBERSHIP_INCLUDED = new Set([
   'D0120', 'D0140', 'D0150', // exams + emergency exam
   'D0210', 'D0220', 'D0230', 'D0272', 'D0274', 'D0330', // X-rays (no CBCT)
   'D1110', 'D1120', 'D4910', // cleanings incl. perio maintenance
@@ -363,44 +363,6 @@ function parseOverride(input: string): Cents | undefined {
   return parseCurrencyInput(input) ?? undefined;
 }
 
-/** Scales the fixed-width print sheet to fit its container. */
-function ScaledPreview({ children }: { children: React.ReactNode }) {
-  const outerRef = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
-  const [layout, setLayout] = useState({ scale: 1, height: 0 });
-
-  useLayoutEffect(() => {
-    const outer = outerRef.current;
-    const inner = innerRef.current;
-    if (!outer || !inner) return;
-    const update = () => {
-      const available = outer.clientWidth;
-      const natural = inner.scrollWidth;
-      const scale = natural > 0 ? Math.min(1, available / natural) : 1;
-      setLayout({ scale, height: inner.scrollHeight * scale });
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(outer);
-    observer.observe(inner);
-    return () => observer.disconnect();
-  }, []);
-
-  return (
-    <div ref={outerRef} className="w-full overflow-hidden">
-      <div style={{ height: layout.height || undefined }}>
-        <div
-          ref={innerRef}
-          style={{ transform: `scale(${layout.scale})`, transformOrigin: 'top left', width: 'fit-content' }}
-          className="border shadow-sm"
-        >
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 interface SectionHeaderProps {
   title: string;
   open: boolean;
@@ -467,6 +429,9 @@ export default function FofBuilder() {
   const { data: practice } = useFofSettings();
   const { data: branding } = useOrgBranding();
   const { data: schedules } = useFeeSchedules();
+  // Office wording for what patients see. Display and print only —
+  // the AI payload stays code-derived (see safeProcedureLabel).
+  const { data: codeNames } = useCodeNames();
 
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [templateId, setTemplateId] = useState<string | null>(null);
@@ -486,7 +451,14 @@ export default function FofBuilder() {
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
   const [bundleName, setBundleName] = useState('');
   const [aiNaming, setAiNaming] = useState(false);
-  const [doctorName, setDoctorName] = useState(FOF_DOCTORS[0]);
+  const [doctorName, setDoctorName] = useState(FOF_NO_DOCTOR);
+  useEffect(() => {
+    const doctors = practice?.doctorNames ?? [];
+    const defaultDoctor = practice?.doctorName && doctors.includes(practice.doctorName)
+      ? practice.doctorName
+      : doctors[0] ?? FOF_NO_DOCTOR;
+    setDoctorName(defaultDoctor);
+  }, [practice?.doctorName, practice?.doctorNames?.join('|')]);
   const [importing, setImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   // In-app confirm dialog (native confirm() shows ugly browser chrome).
@@ -549,12 +521,22 @@ export default function FofBuilder() {
 
   const allowedByCode = useMemo(() => {
     const map = new Map<string, Cents>();
-    for (const item of carrierItems ?? []) map.set(item.code.toUpperCase(), item.feeCents);
+    for (const item of carrierItems ?? []) {
+      // A row marked as the office fee is not a rate the carrier agreed
+      // to, so it is not an allowable. Leaving it out lets the estimate
+      // fall back to the CURRENT office fee (allowedCents ?? officeFee in
+      // lib/fof/insurance.ts) and keeps the write-off at zero, instead of
+      // inventing one the day the office raises that fee.
+      if (item.isOfficeFee) continue;
+      map.set(item.code.toUpperCase(), item.feeCents);
+    }
     return map;
   }, [carrierItems]);
 
   const payByCode = useMemo(() => {
     const map = new Map<string, Cents>();
+    // Unlike the allowable map, a missing entry here means a benefit basis
+    // of 0, not the office fee — so office-fee rows keep their number.
     for (const item of payItems ?? []) map.set(item.code.toUpperCase(), item.feeCents);
     return map;
   }, [payItems]);
@@ -571,7 +553,7 @@ export default function FofBuilder() {
             code: match.code,
             // Auto-fill with the patient-friendly wording that prints on
             // the form (schedule description as fallback).
-            description: friendlyCdtName(match.code) || match.description,
+            description: resolvePatientName(match.code, codeNames) || match.description,
             feeInput: formatCents(match.feeCents),
             ...resolveCategory(match.category),
           }
@@ -615,7 +597,7 @@ export default function FofBuilder() {
     const items = officeItems ?? [];
     const matchesText = (it: (typeof items)[number]) =>
       it.description.toLowerCase().includes(q) ||
-      (friendlyCdtName(it.code) || '').toLowerCase().includes(q);
+      (resolvePatientName(it.code, codeNames) || '').toLowerCase().includes(q);
     const byCode = items.filter(it => it.code.toLowerCase().startsWith(q));
     const byDesc = items.filter(it => !it.code.toLowerCase().startsWith(q) && matchesText(it));
     return [...byCode, ...byDesc].slice(0, 6);
@@ -637,8 +619,8 @@ export default function FofBuilder() {
       ...newLine(),
       code: match?.code ?? rawCode.toUpperCase(),
       description: match
-        ? friendlyCdtName(match.code) || match.description
-        : friendlyCdtName(rawCode.toUpperCase()) || '',
+        ? resolvePatientName(match.code, codeNames) || match.description
+        : resolvePatientName(rawCode.toUpperCase(), codeNames) || '',
       feeInput: match ? formatCents(match.feeCents) : '',
       ...resolveCategory(match?.category ?? categorizeCdtCode(rawCode.toUpperCase())),
     };
@@ -698,7 +680,7 @@ export default function FofBuilder() {
   const membershipActive = (template?.membershipDiscountPercent ?? 0) > 0;
   const freeUnderMembership = (l: BuilderLine) =>
     membershipActive &&
-    ILLUMITRAC_INCLUDED.has(l.code.trim().toUpperCase()) &&
+    MEMBERSHIP_INCLUDED.has(l.code.trim().toUpperCase()) &&
     l.membershipFree !== 'off';
 
   const feeLineEntries = useMemo(
@@ -928,7 +910,7 @@ export default function FofBuilder() {
     for (const l of active) {
       // Membership-covered procedures owe nothing at their visit.
       const fee = freeUnderMembership(l) ? 0 : parseCurrencyInput(l.feeInput) ?? 0;
-      const base = friendlyCdtName(l.code) || l.description.trim();
+      const base = resolvePatientName(l.code, codeNames) || l.description.trim();
       const lineLabel =
         isSurgical(l.code) && !/surger/i.test(base) ? `${base} Surgery` : base;
       // Parallel label built from the code alone: typed descriptions may
@@ -1056,7 +1038,7 @@ export default function FofBuilder() {
   ];
   if (membershipFreeLabels.length > 0) {
     extraFootnotes.push(
-      `Included at no charge with your Illumitrac membership: ${membershipFreeLabels.join(', ')}.`
+      `Included at no charge with your ${practice?.membershipPlanName || 'membership'}: ${membershipFreeLabels.join(', ')}.`
     );
   }
   const effectiveTemplate: FofTemplate | undefined = template
@@ -1110,7 +1092,7 @@ export default function FofBuilder() {
   // request is built ONLY from CDT codes, code-derived labels, and
   // strictly-validated tooth numbers (src/lib/fof/ai.ts) — staff-typed
   // descriptions, edited labels, patient fields, and dollar amounts never
-  // leave the browser. The doctor name comes from the fixed FOF_DOCTORS
+  // leave the browser. The doctor name comes from the org's fof_settings
   // dropdown, never free text.
   const aiCall = async (wantTreatment: boolean) => {
     if (!computation) return null;
@@ -1296,47 +1278,49 @@ export default function FofBuilder() {
         .map(r => r.visit)
         .filter((v): v is number => typeof v === 'number' && isFinite(v));
       const minVisit = visitNumbers.length > 0 ? Math.min(...visitNumbers) : null;
-      let flagged = 0;
+      let differed = 0;
+      let unpriced = 0;
       const lines = rows.map(r => {
         const base = lineFromCode(r.code);
         const code = r.code.trim().toUpperCase();
-        const contractedFee = r.fee !== null ? Math.round(r.fee * 100) : null;
-        const pmsOfficeFee = r.officeFee !== null ? Math.round(r.officeFee * 100) : null;
-        const onFileFee = officeByCode.get(code)?.feeCents ?? null;
-        // The PMS OFFICE column is the office's current fee — it wins.
-        // Our schedule fee backs it up, and the contracted "Fee" column is
-        // only a last resort. Disagreements with our schedule get flagged.
-        let feeFlag = '';
-        if (pmsOfficeFee !== null && onFileFee !== null && pmsOfficeFee !== onFileFee) {
-          feeFlag = `PMS office fee ${formatCents(pmsOfficeFee)} differs from our fee schedule ${formatCents(onFileFee)} — using the PMS office fee`;
-        } else if (
-          pmsOfficeFee === null &&
-          contractedFee !== null &&
-          onFileFee !== null &&
-          contractedFee !== onFileFee
-        ) {
-          feeFlag = `PMS shows ${formatCents(contractedFee)} — using our office fee ${formatCents(onFileFee)}`;
-        }
-        if (feeFlag) flagged++;
-        const fee = pmsOfficeFee ?? onFileFee ?? contractedFee;
+        // OFFICE column → our own fee schedule → the plain "Fee" column,
+        // which may be a carrier's contracted rate. See resolveImportedFee.
+        const resolved = resolveImportedFee({
+          code,
+          pmsOfficeFeeCents: r.officeFee !== null ? Math.round(r.officeFee * 100) : null,
+          onFileFeeCents: officeByCode.get(code)?.feeCents ?? null,
+          contractedFeeCents: r.fee !== null ? Math.round(r.fee * 100) : null,
+        });
+        if (resolved.unpriced) unpriced++;
+        else if (resolved.flag) differed++;
         return {
           ...base,
           tooth: r.tooth,
           description: base.description || r.description,
-          feeInput: fee !== null ? formatCents(fee) : base.feeInput,
+          feeInput:
+            resolved.feeCents !== null ? formatCents(resolved.feeCents) : base.feeInput,
           entryDate: r.entryDate,
           visit:
             r.visit !== null && minVisit !== null ? String(r.visit - minVisit + 1) : base.visit,
-          feeFlag,
+          feeFlag: resolved.flag,
         };
       });
       dispatch({ type: 'addLines', lines });
       dispatch({ type: 'set', field: 'importUsed', value: 'yes' });
-      toast.success(
-        `Imported ${lines.length} procedure${lines.length === 1 ? '' : 's'}${
-          flagged ? ` — ${flagged} fee difference${flagged === 1 ? '' : 's'} flagged` : ''
-        }. Estimates come from your fee schedules, not the screenshot.`
-      );
+      const notes: string[] = [];
+      if (differed > 0) {
+        notes.push(`${differed} fee difference${differed === 1 ? '' : 's'} flagged`);
+      }
+      if (unpriced > 0) {
+        notes.push(`${unpriced} with no office fee on file`);
+      }
+      const summary = `Imported ${lines.length} procedure${lines.length === 1 ? '' : 's'}${
+        notes.length ? ` — ${notes.join(', ')}` : ''
+      }. Estimates come from your fee schedules, not the screenshot.`;
+      // A row priced off the screenshot needs a look before it prints, so
+      // it does not get a green tick.
+      if (unpriced > 0) toast.warning(summary);
+      else toast.success(summary);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Screenshot import failed');
     } finally {
@@ -1410,30 +1394,6 @@ export default function FofBuilder() {
   const aiTreatment = aiText && aiText.signature === aiSignature ? aiText.treatment : '';
   const printedTreatment = noteEdited ? state.note : aiTreatment || autoTreatment;
 
-  // Context for the floating FOF assistant — de-identified BY
-  // CONSTRUCTION: code-derived procedure wording (never typed
-  // descriptions) plus the AI's own generated treatment text (never the
-  // staff-edited note, which could name the patient).
-  const assistantContext = useMemo(() => {
-    const byVisit = new Map<number, { code: string; tooth: string }[]>();
-    for (const l of state.lines) {
-      if (!l.code.trim()) continue;
-      byVisit.set(effectiveVisit(l), [
-        ...(byVisit.get(effectiveVisit(l)) ?? []),
-        { code: l.code, tooth: l.tooth },
-      ]);
-    }
-    if (byVisit.size === 0) return null;
-    const visitEntries = [...byVisit.entries()]
-      .sort((a, b) => a[0] - b[0])
-      .map(([, entries]) => entries);
-    return {
-      visits: buildNameVisitsPayload(visitEntries, []).visits,
-      treatment: aiTreatment,
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.lines, aiTreatment]);
-
   const isDirty =
     state.patientName.trim() !== '' ||
     state.note.trim() !== '' ||
@@ -1465,7 +1425,7 @@ export default function FofBuilder() {
       // friendly name; other codes keep whatever staff typed.
       const fillMatch = /^D2(1[4-6]\d|3[0-9]\d)$/.exec(code);
       const description = fillMatch
-        ? friendlyCdtName(code) || l.description.trim()
+        ? resolvePatientName(code, codeNames) || l.description.trim()
         : l.description.trim();
       return {
         code,
@@ -1505,7 +1465,6 @@ export default function FofBuilder() {
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-7xl mx-auto">
-      <FofAssistantWidget context={assistantContext} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">Financial Options Form</h1>
         <div className="flex gap-2">
@@ -1541,10 +1500,22 @@ export default function FofBuilder() {
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
+      ) : !orgCtx ? (
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            You're not part of an office yet. Ask your office manager to resend your
+            invite, then open the invite link to join — the office's forms appear here
+            automatically once you're in.
+          </CardContent>
+        </Card>
       ) : !template ? (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
-            No active templates. <Link className="underline" to="/fof/templates">Create one</Link> to get started.
+            {isManager ? (
+              <>No active templates. <Link className="underline" to="/fof/templates">Create one</Link> to get started.</>
+            ) : (
+              <>No active forms yet. Your office manager sets these up on the Templates page.</>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -1582,7 +1553,7 @@ export default function FofBuilder() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {FOF_DOCTORS.map(d => (
+                        {(practice?.doctorNames?.length ? practice.doctorNames : []).map(d => (
                           <SelectItem key={d} value={d}>{d}</SelectItem>
                         ))}
                         <SelectItem value={FOF_NO_DOCTOR}>{FOF_NO_DOCTOR}</SelectItem>
@@ -2074,7 +2045,7 @@ export default function FofBuilder() {
                           </Label>
                         </div>
                       )}
-                      {membershipActive && ILLUMITRAC_INCLUDED.has(lineCode) && (
+                      {membershipActive && MEMBERSHIP_INCLUDED.has(lineCode) && (
                         <div className="flex items-center gap-2">
                           <Switch
                             id={`fof-mem-${line.key}`}
@@ -2087,7 +2058,7 @@ export default function FofBuilder() {
                             htmlFor={`fof-mem-${line.key}`}
                             className="text-xs text-muted-foreground font-normal"
                           >
-                            Included with Illumitrac — no charge (turn off if this year's
+                            Included with {practice?.membershipPlanName || 'membership'} — no charge (turn off if this year's
                             allowance is used up)
                           </Label>
                         </div>
@@ -2456,7 +2427,7 @@ export default function FofBuilder() {
               <CardTitle className="text-base">Print Preview</CardTitle>
             </CardHeader>
             <CardContent>
-              <ScaledPreview>{sheet}</ScaledPreview>
+              <ScaledPrintPreview>{sheet}</ScaledPrintPreview>
             </CardContent>
           </Card>
         </div>

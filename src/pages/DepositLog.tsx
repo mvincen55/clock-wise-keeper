@@ -1,37 +1,61 @@
 /**
- * Deposit Log — the daily deposit sheet. Cash, numbered checks, card and
- * financing totals, split across the two banks like the paper version
- * (checks + cash to one, cards to the other). Amounts only — no payer
- * names, no account numbers.
+ * Close the Day — the end-of-day workflow, grown out of the Deposit Log.
+ *
+ * Five steps: Money (the original deposit sheet, untouched), Practice Vitals,
+ * Privacy View Capture (local-only schedule intelligence), Staffing Reality
+ * (the human read of the day), and Seal the Day. One record per office day —
+ * the deposit_logs row is the closeout identity.
+ *
+ * Money rules are unchanged: amounts only, no payer names, printing always
+ * comes from the saved record.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Banknote, ChevronLeft, ChevronRight, Loader2, Plus, Printer, Trash2 } from 'lucide-react';
+import {
+  Activity,
+  Banknote,
+  Camera,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Lock,
+  Plus,
+  Printer,
+  Stamp,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import DepositPrintSheet from '@/components/DepositPrintSheet';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
-import { getToday } from '@/lib/time-utils';
+import { getToday, shiftDate } from '@/lib/time-utils';
 import { formatCents, parseCurrencyInput } from '@/lib/money';
 import {
   depositChecks,
   useDepositLog,
   useSaveDepositLog,
+  type StaffingAssessment,
 } from '@/hooks/useDepositLog';
 import { useOrgBranding, useOrgDepositSettings } from '@/hooks/useOrgBranding';
 import DepositSettingsCard from '@/components/DepositSettingsCard';
+import DailyVitalsCard, { type VitalsForm } from '@/components/DailyVitalsCard';
+import PrivacyViewCapture from '@/components/close-day/PrivacyViewCapture';
+import StaffingRealityCard, {
+  EMPTY_STAFFING,
+  type StaffingForm,
+} from '@/components/close-day/StaffingRealityCard';
+import SealDayCard from '@/components/close-day/SealDayCard';
+import CloseDayCoachCard from '@/components/close-day/CloseDayCoachCard';
+import ScheduleIntelligenceSetupCard from '@/components/close-day/ScheduleIntelligenceSetupCard';
+import { useProviderDayMetrics } from '@/hooks/useScheduleIntelligence';
 import { useOrgContext } from '@/hooks/useOrgContext';
-
-function shiftDate(date: string, delta: number): string {
-  const [y, m, d] = date.split('-').map(Number);
-  const noonUtc = new Date(Date.UTC(y, m - 1, d, 12));
-  noonUtc.setUTCDate(noonUtc.getUTCDate() + delta);
-  return noonUtc.toISOString().slice(0, 10);
-}
 
 function dateLabel(date: string): string {
   if (date === getToday()) return 'Today';
@@ -53,6 +77,8 @@ interface FormState {
   illumitrac: string;
   outsideFinancing: string;
   notes: string;
+  vitals: VitalsForm;
+  staffing: StaffingForm;
 }
 
 const centsToInput = (cents: number): string => (cents > 0 ? (cents / 100).toFixed(2) : '');
@@ -67,13 +93,23 @@ const initialsOf = (name: string): string =>
     .toUpperCase()
     .slice(0, 4);
 
+const STEPS = [
+  { label: 'Money', icon: Banknote },
+  { label: 'Practice Vitals', icon: Activity },
+  { label: 'Schedule', icon: Camera },
+  { label: 'Staffing', icon: Users },
+  { label: 'Seal', icon: Stamp },
+] as const;
+
 export default function DepositLog() {
   const [date, setDate] = useState(getToday());
+  const [step, setStep] = useState(0);
   const { data: log, isLoading } = useDepositLog(date);
   const save = useSaveDepositLog();
   const { data: branding } = useOrgBranding();
   const { data: depositSettings } = useOrgDepositSettings();
   const { data: orgCtx } = useOrgContext();
+  const { data: metrics } = useProviderDayMetrics(log?.id ?? null);
   const isManager = orgCtx?.role === 'owner' || orgCtx?.role === 'manager';
 
   const [form, setForm] = useState<FormState | null>(null);
@@ -95,6 +131,19 @@ export default function DepositLog() {
       illumitrac: centsToInput(log?.illumitrac_cents ?? 0),
       outsideFinancing: centsToInput(log?.outside_financing_cents ?? 0),
       notes: log?.notes ?? '',
+      vitals: {
+        production: centsToInput(log?.production_cents ?? 0),
+        hygieneCancellations: log?.hygiene_cancellations ?? 0,
+        hygieneNoShows: log?.hygiene_no_shows ?? 0,
+        doctorCancellations: log?.doctor_cancellations ?? 0,
+        doctorNoShows: log?.doctor_no_shows ?? 0,
+      },
+      staffing: {
+        assessment: (log?.staffing_assessment as StaffingAssessment | null) ?? null,
+        pressure: log?.staffing_pressure ?? [],
+        factors: log?.staffing_factors ?? [],
+        note: log?.staffing_note ?? '',
+      },
     });
     setDirty(false);
   }, [log, isLoading, date]);
@@ -128,7 +177,7 @@ export default function DepositLog() {
     };
   }, [form]);
 
-  const setField = (field: keyof Omit<FormState, 'checks'>) => (value: string) =>
+  const setField = (field: keyof Omit<FormState, 'checks' | 'vitals' | 'staffing'>) => (value: string) =>
     updateForm(f => ({ ...f, [field]: value }));
 
   const handleSave = () => {
@@ -143,9 +192,18 @@ export default function DepositLog() {
         illumitracCents: totals.illumitrac,
         outsideFinancingCents: totals.financing,
         notes: form.notes,
+        productionCents: parseCurrencyInput(form.vitals.production),
+        hygieneCancellations: form.vitals.hygieneCancellations,
+        hygieneNoShows: form.vitals.hygieneNoShows,
+        doctorCancellations: form.vitals.doctorCancellations,
+        doctorNoShows: form.vitals.doctorNoShows,
+        staffingAssessment: form.staffing.assessment,
+        staffingPressure: form.staffing.pressure,
+        staffingFactors: form.staffing.factors,
+        staffingNote: form.staffing.note,
       },
       {
-        onSuccess: () => toast.success('Deposit log saved'),
+        onSuccess: () => toast.success('Saved'),
         onError: err => toast.error(`Save failed: ${err.message}`),
       }
     );
@@ -157,17 +215,20 @@ export default function DepositLog() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Banknote className="h-6 w-6" />
-            Deposit Log
+            Close the Day
           </h1>
           <p className="text-muted-foreground text-sm">
-            Daily deposit sheet — amounts only, one record per day.
+            Money, vitals, schedule, staffing — then seal it. One record per day.
           </p>
         </div>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" onClick={() => setDate(shiftDate(date, -1))}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-sm font-medium min-w-36 text-center">{dateLabel(date)}</span>
+          <span className="text-sm font-medium min-w-36 text-center">
+            {dateLabel(date)}
+            {log?.sealed_at && <Lock className="ml-1 inline h-3 w-3 text-success" />}
+          </span>
           <Button
             variant="ghost"
             size="icon"
@@ -179,11 +240,27 @@ export default function DepositLog() {
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-1.5">
+        {STEPS.map((s, i) => (
+          <Button
+            key={s.label}
+            size="sm"
+            variant={i === step ? 'default' : 'outline'}
+            onClick={() => setStep(i)}
+          >
+            <s.icon className="mr-1.5 h-3.5 w-3.5" />
+            {i + 1}. {s.label}
+          </Button>
+        ))}
+      </div>
+
+      <CloseDayCoachCard />
+
       {!form || !totals ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
-      ) : (
+      ) : step === 0 ? (
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-4">
             <Card>
@@ -257,11 +334,11 @@ export default function DepositLog() {
                     <Input id="dep-ptcc" inputMode="decimal" placeholder="$0.00" value={form.ptCc} onChange={e => setField('ptCc')(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="dep-illumitrac">Illumitrac</Label>
+                    <Label htmlFor="dep-illumitrac">{depositSettings?.membershipRowLabel ?? 'Membership'}</Label>
                     <Input id="dep-illumitrac" inputMode="decimal" placeholder="$0.00" value={form.illumitrac} onChange={e => setField('illumitrac')(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="dep-financing">Outside Financing</Label>
+                    <Label htmlFor="dep-financing">{depositSettings?.outsideFinancingLabel ?? 'Outside Financing'}</Label>
                     <Input id="dep-financing" inputMode="decimal" placeholder="$0.00" value={form.outsideFinancing} onChange={e => setField('outsideFinancing')(e.target.value)} />
                   </div>
                 </div>
@@ -286,8 +363,8 @@ export default function DepositLog() {
                 </div>
                 <div className="flex justify-between"><span>Insurance Credit Cards</span><span>{formatCents(totals.insCc)}</span></div>
                 <div className="flex justify-between"><span>Patient Credit Cards</span><span>{formatCents(totals.ptCc)}</span></div>
-                <div className="flex justify-between"><span>Illumitrac</span><span>{formatCents(totals.illumitrac)}</span></div>
-                <div className="flex justify-between"><span>Outside Financing</span><span>{formatCents(totals.financing)}</span></div>
+                <div className="flex justify-between"><span>{depositSettings?.membershipRowLabel ?? 'Membership'}</span><span>{formatCents(totals.illumitrac)}</span></div>
+                <div className="flex justify-between"><span>{depositSettings?.outsideFinancingLabel ?? 'Outside Financing'}</span><span>{formatCents(totals.financing)}</span></div>
                 <div className="border-t pt-1.5 mt-1.5 space-y-1.5">
                   <div className="flex justify-between text-muted-foreground">
                     <span>Bank deposit (cash + checks)</span><span>{formatCents(totals.bank)}</span>
@@ -320,7 +397,7 @@ export default function DepositLog() {
                 </Button>
                 <Button onClick={handleSave} disabled={save.isPending || (!dirty && !!log)}>
                   {save.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Save Deposit Log
+                  Save
                 </Button>
               </div>
             </div>
@@ -333,9 +410,81 @@ export default function DepositLog() {
             </p>
           </div>
         </div>
+      ) : step === 1 ? (
+        <div className="max-w-xl space-y-4">
+          {(metrics ?? []).length > 0 && (
+            <Badge variant="outline" className="text-xs">
+              <Check className="mr-1 h-3 w-3 text-success" />
+              Prefilled from the confirmed schedule capture — correct anything it missed.
+            </Badge>
+          )}
+          <DailyVitalsCard
+            value={form.vitals}
+            onChange={v => updateForm(f => ({ ...f, vitals: v }))}
+          />
+        </div>
+      ) : step === 2 ? (
+        <div className="max-w-2xl">
+          <PrivacyViewCapture
+            closeoutId={log?.id ?? null}
+            date={date}
+            onVitalsFromSchedule={counts =>
+              updateForm(f => ({
+                ...f,
+                vitals: {
+                  ...f.vitals,
+                  hygieneCancellations: counts.hygieneCancellations,
+                  hygieneNoShows: counts.hygieneNoShows,
+                  doctorCancellations: counts.doctorCancellations,
+                  doctorNoShows: counts.doctorNoShows,
+                },
+              }))
+            }
+          />
+        </div>
+      ) : step === 3 ? (
+        <div className="max-w-xl">
+          <StaffingRealityCard
+            value={form.staffing}
+            onChange={s => updateForm(f => ({ ...f, staffing: s }))}
+          />
+        </div>
+      ) : (
+        <div className="max-w-xl">
+          <SealDayCard
+            log={log ?? null}
+            date={date}
+            collectionsCents={totals.grand}
+            staffing={form.staffing}
+            metrics={metrics ?? []}
+            dirty={dirty}
+          />
+        </div>
       )}
 
-      {isManager && <DepositSettingsCard />}
+      {form && step > 0 && step < 4 && (
+        <div className="flex items-center justify-between gap-2 border-t pt-3">
+          <p className="text-xs text-muted-foreground">
+            {dirty ? 'Unsaved changes.' : 'All changes saved.'}
+          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setStep(s => s + 1)}>
+              Next step
+            </Button>
+            <Button size="sm" onClick={handleSave} disabled={save.isPending || (!dirty && !!log)}>
+              {save.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {isManager && (
+        <div className="space-y-4">
+          <ScheduleIntelligenceSetupCard />
+          <DepositSettingsCard />
+        </div>
+      )}
 
       {/* Print-only: the two paper copies, fed from the SAVED record so
           what's on paper is exactly what's on file. Portaled so printing

@@ -53,6 +53,10 @@ export interface OrgDepositSettings {
   /** Callout printed on both copies; empty = omitted. */
   envelopeNote: string;
   officeCopyNote: string;
+  /** Label for the membership row on the deposit log and printed forms. */
+  membershipRowLabel: string;
+  /** Label for the outside financing row on the deposit log and printed forms. */
+  outsideFinancingLabel: string;
 }
 
 export const GENERIC_DEPOSIT_SETTINGS: OrgDepositSettings = {
@@ -62,6 +66,8 @@ export const GENERIC_DEPOSIT_SETTINGS: OrgDepositSettings = {
   bankTotalLabel: 'Bank Total',
   envelopeNote: '',
   officeCopyNote: 'Office Copy — file with the day sheet',
+  membershipRowLabel: 'Membership',
+  outsideFinancingLabel: 'Outside Financing',
 };
 
 type BrandingRow = Tables<'org_branding'>;
@@ -91,6 +97,8 @@ function mapDepositSettingsRow(row: DepositSettingsRow): OrgDepositSettings {
     bankTotalLabel: row.bank_total_label,
     envelopeNote: row.envelope_note,
     officeCopyNote: row.office_copy_note,
+    membershipRowLabel: row.membership_row_label,
+    outsideFinancingLabel: row.outside_financing_label,
   };
 }
 
@@ -185,6 +193,8 @@ export function useUpsertOrgDepositSettings() {
           ...(updates.bankTotalLabel !== undefined && { bank_total_label: updates.bankTotalLabel }),
           ...(updates.envelopeNote !== undefined && { envelope_note: updates.envelopeNote }),
           ...(updates.officeCopyNote !== undefined && { office_copy_note: updates.officeCopyNote }),
+          ...(updates.membershipRowLabel !== undefined && { membership_row_label: updates.membershipRowLabel }),
+          ...(updates.outsideFinancingLabel !== undefined && { outside_financing_label: updates.outsideFinancingLabel }),
         },
         { onConflict: 'org_id' }
       );

@@ -1,12 +1,27 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useEmployeeDetail, useEmployeeAttendance, useEmployeeTimeEntries } from '@/hooks/useEmployees';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, ArrowLeft, Clock, CalendarDays } from 'lucide-react';
+import { Loader2, ArrowLeft, Clock, CalendarDays, Plus, ShieldAlert } from 'lucide-react';
 import { formatDate, formatTime, minutesToHHMM } from '@/lib/time-utils';
+import AccountabilityHistory from '@/components/accountability/AccountabilityHistory';
+import IncidentReportModal from '@/components/IncidentReportModal';
+import IncidentReportDetail from '@/components/IncidentReportDetail';
+import { useEmployeeIncidentReports, type IncidentReport } from '@/hooks/useIncidentReports';
+import {
+  CATEGORY_LABELS,
+  SEVERITY_CLASSES,
+  SEVERITY_LABELS,
+  STATUS_CLASSES,
+  STATUS_LABELS,
+  formatClockTime,
+  labelFor,
+  type IncidentSeverity,
+  type IncidentStatus,
+} from '@/lib/incidents';
 
 function getLast14Days() {
   const end = new Date();
@@ -37,6 +52,11 @@ export default function EmployeeDetail() {
   const range = useMemo(() => getLast14Days(), []);
   const { data: attendance, isLoading: attLoading } = useEmployeeAttendance(employeeId, range);
   const { data: entries } = useEmployeeTimeEntries(employeeId, range);
+  const { data: incidents } = useEmployeeIncidentReports(employeeId);
+
+  const [incidentFormOpen, setIncidentFormOpen] = useState(false);
+  const [editingIncident, setEditingIncident] = useState<IncidentReport | null>(null);
+  const [selectedIncident, setSelectedIncident] = useState<IncidentReport | null>(null);
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
@@ -109,6 +129,96 @@ export default function EmployeeDetail() {
         </Card>
       </div>
 
+      {/* Incident Reports — injuries and exposures filed to this record. */}
+      <Card className="card-elevated">
+        <CardHeader className="border-b">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5" />Incident Reports
+            </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setEditingIncident(null);
+                setIncidentFormOpen(true);
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" /> File Report
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {!incidents?.length ? (
+            <p className="text-center text-muted-foreground py-8">No incident reports.</p>
+          ) : (
+            <div className="divide-y">
+              {incidents.map(report => {
+                const time = formatClockTime(report.incident_time);
+                return (
+                  <button
+                    key={report.id}
+                    onClick={() => setSelectedIncident(report)}
+                    className="w-full px-4 py-3 text-left transition-colors hover:bg-muted/50"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-medium">
+                        {labelFor(CATEGORY_LABELS, report.category)}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(report.incident_date)}
+                          {time ? ` · ${time}` : ''}
+                        </span>
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded font-medium ${
+                            SEVERITY_CLASSES[report.severity as IncidentSeverity] ??
+                            'bg-muted text-muted-foreground'
+                          }`}
+                        >
+                          {labelFor(SEVERITY_LABELS, report.severity)}
+                        </span>
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded font-medium ${
+                            STATUS_CLASSES[report.status as IncidentStatus] ??
+                            'bg-muted text-muted-foreground'
+                          }`}
+                        >
+                          {labelFor(STATUS_LABELS, report.status)}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">{report.description}</p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <IncidentReportModal
+        open={incidentFormOpen}
+        report={editingIncident}
+        defaultEmployeeId={employee.id}
+        employees={[{ id: employee.id, display_name: employee.display_name }]}
+        onClose={() => {
+          setIncidentFormOpen(false);
+          setEditingIncident(null);
+        }}
+      />
+
+      <IncidentReportDetail
+        report={selectedIncident}
+        employeeName={employee.display_name}
+        onClose={() => setSelectedIncident(null)}
+        onEdit={report => {
+          setSelectedIncident(null);
+          setEditingIncident(report);
+          setIncidentFormOpen(true);
+        }}
+      />
+
       {/* Attendance Timeline */}
       <Card className="card-elevated">
         <CardHeader className="border-b">
@@ -174,6 +284,8 @@ export default function EmployeeDetail() {
           )}
         </CardContent>
       </Card>
+
+      <AccountabilityHistory employeeId={employeeId} />
     </div>
   );
 }

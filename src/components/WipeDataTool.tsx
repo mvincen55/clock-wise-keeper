@@ -93,7 +93,7 @@ export default function WipeDataTool() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `timevault-backup-${startDate}-to-${endDate}.json`;
+      a.download = `purple-envelope-backup-${startDate}-to-${endDate}.json`;
       a.click();
       URL.revokeObjectURL(url);
 

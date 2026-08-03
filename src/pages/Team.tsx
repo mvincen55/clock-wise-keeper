@@ -9,6 +9,7 @@ import { useAddEmployee } from '@/hooks/useEmployees';
 import InviteEmployeeModal from '@/components/InviteEmployeeModal';
 import TeamEmployeeCard from '@/components/TeamEmployeeCard';
 import ArchivedMembersDialog from '@/components/ArchivedMembersDialog';
+import ChecklistBypassesSection from '@/components/ChecklistBypassesSection';
 import { Users, Plus, Loader2, CalendarDays } from 'lucide-react';
 
 function getDefaultRange() {
@@ -164,6 +165,10 @@ export default function Team() {
             />
           ))}
         </div>
+      )}
+
+      {(ctx?.role === 'owner' || ctx?.role === 'manager') && (
+        <ChecklistBypassesSection orgId={ctx.org_id} />
       )}
     </div>
   );

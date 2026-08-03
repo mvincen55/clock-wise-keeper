@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Clock, Loader2, ShieldAlert } from 'lucide-react';
+import { Loader2, Mail, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 function safeNext(raw: string | null): string {
@@ -53,14 +53,14 @@ export default function Auth() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md card-elevated">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-primary">
-            <Clock className="h-7 w-7 text-primary-foreground" />
+            <Mail className="h-7 w-7 text-primary-foreground" />
           </div>
-          <CardTitle className="text-2xl">TimeVault</CardTitle>
-          <CardDescription>Sign in to your account</CardDescription>
+          <h1 className="text-2xl font-semibold leading-none tracking-tight">Welcome back</h1>
+          <CardDescription>Sign in to your office on Purple Envelope</CardDescription>
         </CardHeader>
         <CardContent>
           {denied && (
@@ -85,6 +85,10 @@ export default function Auth() {
           </form>
         </CardContent>
       </Card>
+      <p className="mt-6 text-center text-xs text-muted-foreground">
+        Only your business, never your patients ·{' '}
+        <Link to="/privacy" className="underline hover:text-foreground">Privacy &amp; Terms</Link>
+      </p>
     </div>
   );
 }

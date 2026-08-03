@@ -34,25 +34,22 @@ function getRetryAfterSeconds(error: unknown): number {
   return 60
 }
 
-// Constant-time bearer check against the service-role key itself. Decoding
-// JWT claims without verifying the signature proves nothing on its own —
-// this way the in-code gate holds even if verify_jwt were ever misconfigured.
-async function isServiceRoleToken(token: string, serviceKey: string): Promise<boolean> {
-  const enc = new TextEncoder()
-  const [a, b] = await Promise.all([
-    crypto.subtle.digest('SHA-256', enc.encode(token)),
-    crypto.subtle.digest('SHA-256', enc.encode(serviceKey)),
-  ])
-  const av = new Uint8Array(a)
-  const bv = new Uint8Array(b)
-  let diff = 0
-  for (let i = 0; i < av.length; i++) diff |= av[i] ^ bv[i]
-  return diff === 0
-}
+function parseJwtClaims(token: string): Record<string, unknown> | null {
+  const parts = token.split('.')
+  if (parts.length < 2) {
+    return null
+  }
 
-// Escape LIKE wildcards so ilike behaves as case-insensitive equality.
-function likeExact(value: string): string {
-  return value.replace(/[\\%_]/g, (m) => `\\${m}`)
+  try {
+    const payload = parts[1]
+      .replaceAll('-', '+')
+      .replaceAll('_', '/')
+      .padEnd(Math.ceil(parts[1].length / 4) * 4, '=')
+
+    return JSON.parse(atob(payload)) as Record<string, unknown>
+  } catch {
+    return null
+  }
 }
 
 // Move a message to the dead letter queue and log the reason.
@@ -103,11 +100,11 @@ Deno.serve(async (req) => {
   }
 
   // Defense in depth: verify_jwt=true already requires a valid JWT at the
-  // gateway layer. The in-code gate compares the bearer token to the
-  // service-role key (the cron job sends exactly that), so only
-  // service-role callers can trigger queue processing.
+  // gateway layer. This adds an explicit role check so only service-role
+  // callers can trigger queue processing.
   const token = authHeader.slice('Bearer '.length).trim()
-  if (!(await isServiceRoleToken(token, supabaseServiceKey))) {
+  const claims = parseJwtClaims(token)
+  if (claims?.role !== 'service_role') {
     return new Response(
       JSON.stringify({ error: 'Forbidden' }),
       { status: 403, headers: { 'Content-Type': 'application/json' } }
@@ -225,35 +222,6 @@ Deno.serve(async (req) => {
         continue
       }
 
-      // Never send to a suppressed recipient (bounce/complaint/unsubscribe):
-      // log it and drop the message from the queue.
-      if (payload.to && typeof payload.to === 'string') {
-        const { data: suppressed, error: suppressedError } = await supabase
-          .from('suppressed_emails')
-          .select('reason')
-          .ilike('email', likeExact(payload.to))
-          .maybeSingle()
-        if (suppressedError) {
-          console.error('Suppression lookup failed', { queue, msg_id: msg.msg_id, error: suppressedError })
-        } else if (suppressed) {
-          await supabase.from('email_send_log').insert({
-            message_id: payload.message_id,
-            template_name: payload.label || queue,
-            recipient_email: payload.to,
-            status: 'suppressed',
-            error_message: `Recipient suppressed (${suppressed.reason})`,
-          })
-          const { error: supDelError } = await supabase.rpc('delete_email', {
-            queue_name: queue,
-            message_id: msg.msg_id,
-          })
-          if (supDelError) {
-            console.error('Failed to delete suppressed message from queue', { queue, msg_id: msg.msg_id, error: supDelError })
-          }
-          continue
-        }
-      }
-
       // Guard: skip if another worker already sent this message (VT expired race)
       if (payload.message_id) {
         const { data: alreadySent } = await supabase
@@ -280,7 +248,37 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Suppression list: never re-send app email to unsubscribed / bounced /
+      // complained addresses. Auth emails (password reset, magic link) are
+      // transactional-critical and are not suppressed.
+      if (queue === 'transactional_emails' && payload.to) {
+        const { data: suppressed } = await supabase
+          .from('suppressed_emails')
+          .select('email')
+          .eq('email', payload.to)
+          .maybeSingle()
+
+        if (suppressed) {
+          console.warn('Skipping suppressed recipient', { queue, msg_id: msg.msg_id })
+          await supabase.from('email_send_log').insert({
+            message_id: payload.message_id,
+            template_name: payload.label || queue,
+            recipient_email: payload.to,
+            status: 'suppressed',
+          })
+          const { error: supDelError } = await supabase.rpc('delete_email', {
+            queue_name: queue,
+            message_id: msg.msg_id,
+          })
+          if (supDelError) {
+            console.error('Failed to delete suppressed message from queue', { queue, msg_id: msg.msg_id, error: supDelError })
+          }
+          continue
+        }
+      }
+
       try {
+
         await sendLovableEmail(
           {
             run_id: payload.run_id,

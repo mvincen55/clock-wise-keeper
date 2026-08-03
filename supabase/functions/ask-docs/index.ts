@@ -1,6 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { guardAiInput, JAILBREAK_REFUSAL } from "../_shared/jailbreak-guard.ts";
 import { loadProcedureNotes } from "../_shared/procedure-notes.ts";
+import { withDoctrine } from "../_shared/office-doctrine.ts";
 
+import { scrubMessages } from "../_shared/ai-safe.ts";
 // AI assistant over the office knowledge base (policies, HR info,
 // insurance handbooks). Two-step retrieval: an AI call first turns the
 // staff question into several short search queries (expanding dental and
@@ -42,7 +45,7 @@ async function callGateway(apiKey: string, messages: unknown[], maxTokens?: numb
   const response = await fetch(GATEWAY_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: MODEL, messages, ...(maxTokens ? { max_tokens: maxTokens } : {}) }),
+    body: JSON.stringify({ model: MODEL, messages: scrubMessages(messages, "ask-docs"), ...(maxTokens ? { max_tokens: maxTokens } : {}) }),
   });
   return response;
 }
@@ -128,6 +131,27 @@ Deno.serve(async (req) => {
           .slice(-10)
           .map((m: HistoryMessage) => ({ role: m.role, content: String(m.content).slice(0, 4000) }))
       : [];
+
+    // Integrity: signature-only jailbreak check before anything is grounded or
+    // sent to the model. The question text is never stored — only the matched
+    // pattern — and the refusal reads like an ordinary "can't help with that".
+    const { data: askerOrg } = await supabase
+      .from("org_members")
+      .select("org_id")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle();
+    if (
+      await guardAiInput({
+        orgId: askerOrg?.org_id as string | undefined,
+        actorUserId: user.id,
+        surface: "office-insights:ask-docs",
+        input: question,
+      })
+    ) {
+      return json({ answer: JAILBREAK_REFUSAL, sources: [] });
+    }
 
     const { data: docs } = await supabase
       .from("office_docs")
@@ -245,7 +269,7 @@ Rules:
 ${excerpts ? `Relevant excerpts:\n\n${excerpts}` : "No excerpts matched this question."}`;
 
     const aiResponse = await callGateway(LOVABLE_API_KEY, [
-      { role: "system", content: systemPrompt },
+      { role: "system", content: withDoctrine(systemPrompt) },
       ...history,
       { role: "user", content: question },
     ]);

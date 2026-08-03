@@ -295,8 +295,8 @@ export function useReviewPtoRequest() {
             created_by: user.id,
           });
 
-          // Recompute attendance
-          await supabase.rpc('recompute_attendance_range', {
+          // Recompute attendance (authorized entry point: approver must be an org admin)
+          await supabase.rpc('request_attendance_recompute', {
             p_user_id: emp.user_id,
             p_start_date: request.start_date,
             p_end_date: request.end_date,

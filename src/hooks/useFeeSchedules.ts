@@ -30,6 +30,13 @@ export interface FeeScheduleItem {
   description: string;
   feeCents: Cents;
   category: FeeCategory;
+  /**
+   * Carrier schedules only: this row is the office's own fee, not a rate
+   * the carrier negotiated (Dentrix prints those with a trailing '*').
+   * The FOF treats it as "no allowable" so the estimate follows the
+   * current office fee instead of a copy that goes stale.
+   */
+  isOfficeFee: boolean;
   /** Wording & policy notes for the team and the AI (FOF + Ask AI). */
   notes: string;
 }
@@ -65,6 +72,7 @@ function mapItem(row: Tables<'fee_schedule_items'>): FeeScheduleItem {
     description: row.description,
     feeCents: row.fee_cents,
     category: (row.category as FeeCategory) ?? 'other',
+    isOfficeFee: row.is_office_fee ?? false,
     notes: row.notes ?? '',
   };
 }
@@ -190,6 +198,8 @@ export interface ImportRow {
   description: string;
   feeCents: Cents;
   category?: FeeCategory;
+  /** Fee carried a trailing '*': the office fee, not a contracted rate. */
+  isOfficeFee?: boolean;
 }
 
 /** Bulk upsert of imported/edited rows into a schedule (matched on code). */
@@ -208,6 +218,7 @@ export function useImportFeeScheduleItems() {
         description: row.description,
         fee_cents: row.feeCents,
         category: row.category ?? 'other',
+        is_office_fee: row.isOfficeFee ?? false,
       }));
       // Chunk inserts to stay under request limits on big schedules.
       for (let i = 0; i < payload.length; i += 500) {
@@ -238,6 +249,9 @@ export function useUpsertFeeScheduleItem() {
           description: item.description ?? '',
           fee_cents: item.feeCents ?? 0,
           category: item.category ?? 'other',
+          // Conditional like notes: editing a fee by hand must not clear
+          // the office-fee marker that came in from the import.
+          ...(item.isOfficeFee !== undefined ? { is_office_fee: item.isOfficeFee } : {}),
           ...(item.notes !== undefined ? { notes: item.notes } : {}),
         },
         { onConflict: 'schedule_id,code' }
@@ -319,6 +333,64 @@ export function useDeleteInsurancePlan() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['insurance-plans'] }),
+  });
+}
+
+// Office overrides for the patient-facing name of a code — what prints on
+// the form. Owners/managers edit them; everyone can read them (RLS).
+
+/**
+ * Overrides keyed by uppercase code, ready for resolvePatientName.
+ * Absent overrides simply fall back to the built-in CDT names.
+ */
+export function useCodeNames() {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+
+  return useQuery({
+    queryKey: ['fof-code-names', ctx?.org_id],
+    enabled: !!user && !!ctx,
+    queryFn: async (): Promise<Record<string, string>> => {
+      const { data, error } = await supabase.from('fof_code_names').select('code, patient_name');
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      for (const row of data ?? []) {
+        const name = (row.patient_name ?? '').trim();
+        if (name) map[row.code.trim().toUpperCase()] = name;
+      }
+      return map;
+    },
+  });
+}
+
+export function useUpsertCodeName() {
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ code, patientName }: { code: string; patientName: string }) => {
+      if (!ctx) throw new Error('Not authenticated');
+      const key = code.trim().toUpperCase();
+      if (!key) throw new Error('Missing code');
+      const name = patientName.trim();
+      // Clearing the field means "go back to the built-in name", not
+      // "print an empty label".
+      if (name === '') {
+        const { error } = await supabase
+          .from('fof_code_names')
+          .delete()
+          .eq('org_id', ctx.org_id)
+          .eq('code', key);
+        if (error) throw error;
+        return;
+      }
+      const { error } = await supabase.from('fof_code_names').upsert(
+        { org_id: ctx.org_id, code: key, patient_name: name },
+        { onConflict: 'org_id,code' }
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['fof-code-names'] }),
   });
 }
 

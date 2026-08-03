@@ -3,19 +3,27 @@ project_id = "lfiplzmxpmybtbzhmnkp"
 [functions]
   [functions.accept-invite]
     verify_jwt = false
+  [functions.assistant-auditor]
+    verify_jwt = true
   [functions.ask-docs]
     verify_jwt = false
   [functions.ingest-doc]
     verify_jwt = false
+  [functions.edit-doc]
+    verify_jwt = true
   [functions.auth-email-hook]
     verify_jwt = false
+  [functions.checklist-bypass]
+    verify_jwt = true
   [functions.confirm-import]
     verify_jwt = false
   [functions.export-report]
     verify_jwt = false
   [functions.mcp]
     verify_jwt = false
-  [functions.fof-assistant]
+  [functions.goal-assistant]
+    verify_jwt = true
+  [functions.kimi-agent]
     verify_jwt = true
   [functions.name-visits]
     verify_jwt = true
@@ -25,3 +33,29 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = true
   [functions.process-location-event]
     verify_jwt = false
+  [functions.send-org-invite]
+    verify_jwt = true
+  [functions.training-builder]
+    verify_jwt = true
+  [functions.accountability-engine]
+    verify_jwt = false
+  [functions.commitment-listen]
+    verify_jwt = true
+  [functions.google-calendar-events]
+    verify_jwt = true
+  [functions.integrity-digest]
+    verify_jwt = false
+  [functions.office-pulse]
+    verify_jwt = false
+  [functions.parse-treatment]
+    verify_jwt = true
+  [functions.reports-analyst]
+    verify_jwt = true
+  [functions.sprint-verify]
+    verify_jwt = true
+  [functions.support-agent]
+    verify_jwt = true
+  [functions.training-reminders]
+    verify_jwt = false
+  [functions.training-roleplay]
+    verify_jwt = true

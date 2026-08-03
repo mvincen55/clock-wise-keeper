@@ -3,9 +3,22 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import type { Tables } from '@/integrations/supabase/types';
+import { scrubFreeText } from '../../supabase/functions/_shared/phi-scrub';
 
 // Daily deposit sheet: one record per office day. Check amounts only —
 // no payer names, no account numbers.
+//
+// The same row is the Close the Day record: staffing reality (the front
+// desk's human assessment — never overwritten by automated results) and the
+// seal. The staffing note is business-operations text only and runs through
+// the PHI scrubber before it is persisted.
+
+export type StaffingAssessment =
+  | 'extra_coverage'
+  | 'about_right'
+  | 'stretched'
+  | 'understaffed'
+  | 'unsafe';
 
 export type DepositLog = Tables<'deposit_logs'>;
 
@@ -42,6 +55,15 @@ export interface DepositLogSave {
   illumitracCents: number;
   outsideFinancingCents: number;
   notes: string;
+  productionCents: number | null;
+  hygieneCancellations: number;
+  hygieneNoShows: number;
+  doctorCancellations: number;
+  doctorNoShows: number;
+  staffingAssessment?: StaffingAssessment | null;
+  staffingPressure?: string[];
+  staffingFactors?: string[];
+  staffingNote?: string;
 }
 
 export function useSaveDepositLog() {
@@ -69,6 +91,19 @@ export function useSaveDepositLog() {
           illumitrac_cents: input.illumitracCents,
           outside_financing_cents: input.outsideFinancingCents,
           notes: input.notes.trim(),
+          production_cents: input.productionCents,
+          hygiene_cancellations: input.hygieneCancellations,
+          hygiene_no_shows: input.hygieneNoShows,
+          doctor_cancellations: input.doctorCancellations,
+          doctor_no_shows: input.doctorNoShows,
+          ...(input.staffingAssessment !== undefined && {
+            staffing_assessment: input.staffingAssessment,
+          }),
+          ...(input.staffingPressure !== undefined && { staffing_pressure: input.staffingPressure }),
+          ...(input.staffingFactors !== undefined && { staffing_factors: input.staffingFactors }),
+          ...(input.staffingNote !== undefined && {
+            staffing_note: scrubFreeText(input.staffingNote, 1000).text,
+          }),
           prepared_by: user.id,
           prepared_by_name: employee?.display_name || user.email || '',
         },
@@ -76,7 +111,37 @@ export function useSaveDepositLog() {
       );
       if (error) throw error;
     },
-    onSuccess: (_, input) =>
-      qc.invalidateQueries({ queryKey: ['deposit-log', ctx?.org_id, input.depositDate] }),
+    onSuccess: (_, input) => {
+      qc.invalidateQueries({ queryKey: ['deposit-log', ctx?.org_id, input.depositDate] });
+      qc.invalidateQueries({ queryKey: ['practice-vitals'] });
+    },
+  });
+}
+
+/**
+ * Seal the day. Same-day sealing by whoever closes; unsealing or later edits
+ * are owner/manager territory (RLS + the audit trigger enforce it).
+ */
+export function useSealDay() {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { closeoutId: string; depositDate: string; seal: boolean }) => {
+      if (!ctx || !user) throw new Error('Not authenticated');
+      const { error } = await supabase
+        .from('deposit_logs')
+        .update(
+          input.seal
+            ? { sealed_at: new Date().toISOString(), sealed_by: user.id }
+            : { sealed_at: null, sealed_by: null }
+        )
+        .eq('id', input.closeoutId);
+      if (error) throw error;
+    },
+    onSuccess: (_, input) => {
+      qc.invalidateQueries({ queryKey: ['deposit-log', ctx?.org_id, input.depositDate] });
+    },
   });
 }

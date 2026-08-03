@@ -12,6 +12,8 @@ export default function BrandPrintStyle({
   branding: Pick<OrgBranding, 'brandColor' | 'brandTint'>;
 }) {
   const css = `.fof-sheet{--fof-navy:${branding.brandColor};--fof-tint:${branding.brandTint}}
-.dep-sheet{--dep-navy:${branding.brandColor};--dep-tint:${branding.brandTint}}`;
+.dep-sheet{--dep-navy:${branding.brandColor};--dep-tint:${branding.brandTint}}
+.inc-sheet{--inc-navy:${branding.brandColor};--inc-tint:${branding.brandTint}}
+.goal-sheet{--goal-navy:${branding.brandColor};--goal-tint:${branding.brandTint}}`;
   return <style>{css}</style>;
 }

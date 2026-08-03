@@ -17,7 +17,7 @@ function supabaseForUser(ctx) {
 var whoami_default = defineTool({
   name: "whoami",
   title: "Who am I",
-  description: "Returns the signed-in user's TimeVault identity: email, employee id, org id, org name, and role (owner, manager, or employee).",
+  description: "Returns the signed-in user's Purple Envelope identity: email, employee id, org id, org name, and role (owner, manager, or employee).",
   inputSchema: {},
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async (_input, ctx) => {
@@ -137,10 +137,10 @@ var list_pto_requests_default = defineTool3({
 // src/lib/mcp/index.ts
 var projectRef = "lfiplzmxpmybtbzhmnkp";
 var mcp_default = defineMcp({
-  name: "timevault-mcp",
-  title: "TimeVault",
+  name: "purple-envelope-mcp",
+  title: "Purple Envelope",
   version: "0.1.0",
-  instructions: "Tools for TimeVault, a workforce time tracking app. Use `whoami` to check identity, `list_time_entries` to read the caller's daily hours, and `list_pto_requests` to read their PTO requests. All tools act as the signed-in user; row-level security scopes results to that user's org and employee.",
+  instructions: "Tools for Purple Envelope, a workforce time tracking app. Use `whoami` to check identity, `list_time_entries` to read the caller's daily hours, and `list_pto_requests` to read their PTO requests. All tools act as the signed-in user; row-level security scopes results to that user's org and employee.",
   auth: auth.oauth.issuer({
     issuer: `https://${projectRef}.supabase.co/auth/v1`,
     acceptedAudiences: "authenticated"
