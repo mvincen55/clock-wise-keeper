@@ -74,10 +74,24 @@ Deno.serve(async (req) => {
     // RLS scopes this read to the caller's org.
     const { data: doc } = await supabase
       .from("office_docs")
-      .select("id, org_id")
+      .select("id, org_id, parse_status")
       .eq("id", docId)
       .maybeSingle();
     if (!doc) return json({ error: "Document not found" }, 404);
+
+    // Structured manuals (Insurance Desk) carry page/section provenance in
+    // typed chunk rows across parse versions. Re-chunking them as flat text
+    // would delete that structure — and the rollback copy with it. Their
+    // corrections live in Manage manuals (rename/hide/merge, re-parse).
+    if (doc.parse_status === "parsed" || doc.parse_status === "fallback") {
+      return json(
+        {
+          error:
+            "This manual uses structured parsing with page and section sources. Edit its sections from Insurance Desk → Manage manuals (or re-parse the original PDF) instead of flat text editing.",
+        },
+        409
+      );
+    }
 
     // Keep the previous chunks in hand so a failed re-index can restore
     // them instead of leaving the document empty.

@@ -179,6 +179,12 @@ function ChatPanel({ scope, onClearScope }: { scope: ReturnType<typeof parseAiSc
                       <Badge key={source.id} variant="secondary" className="font-normal">
                         <FileText className="h-3 w-3 mr-1" />
                         {source.title}
+                        {source.section_title && (
+                          <span className="ml-1 text-muted-foreground">
+                            · {source.section_title}
+                            {source.page_number ? ` (p. ${source.page_number})` : ''}
+                          </span>
+                        )}
                       </Badge>
                     ))}
                   </div>
