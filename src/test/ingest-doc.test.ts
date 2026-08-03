@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { chunkText, normalizeText } from '../../supabase/functions/ingest-doc/lib';
+import { chunkText, normalizeText } from '../../supabase/functions/_shared/doc-chunking';
 
 describe('normalizeText', () => {
   it('normalizes line endings and collapses whitespace', () => {
