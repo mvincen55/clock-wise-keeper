@@ -22,6 +22,12 @@ import OrgSetup from "@/pages/OrgSetup";
 import FofBuilder from "@/pages/FofBuilder";
 import FofTemplates from "@/pages/FofTemplates";
 import FofFees from "@/pages/FofFees";
+import ConsentsHub from "@/pages/ConsentsHub";
+import ConsentLibrary from "@/pages/ConsentLibrary";
+import ConsentBuilder from "@/pages/ConsentBuilder";
+import ConsentBundles from "@/pages/ConsentBundles";
+import CompleteForms from "@/pages/CompleteForms";
+import ConsentSettings from "@/pages/ConsentSettings";
 import Assistant from "@/pages/Assistant";
 import OfficeHandbook from "@/pages/OfficeHandbook";
 import InsuranceDesk from "@/pages/InsuranceDesk";
@@ -114,6 +120,13 @@ const App = () => (
             <Route path="/fof" element={<ProtectedRoute><FofBuilder /></ProtectedRoute>} />
             <Route path="/fof/templates" element={<ProtectedRoute><FofTemplates /></ProtectedRoute>} />
             <Route path="/fof/fees" element={<ProtectedRoute><FofFees /></ProtectedRoute>} />
+            <Route path="/consents" element={<ProtectedRoute><ConsentsHub /></ProtectedRoute>} />
+            <Route path="/consents/library" element={<ProtectedRoute><ConsentLibrary /></ProtectedRoute>} />
+            <Route path="/consents/builder" element={<ProtectedRoute><ConsentBuilder /></ProtectedRoute>} />
+            <Route path="/consents/builder/:formId" element={<ProtectedRoute><ConsentBuilder /></ProtectedRoute>} />
+            <Route path="/consents/bundles" element={<ProtectedRoute><ConsentBundles /></ProtectedRoute>} />
+            <Route path="/consents/complete" element={<ProtectedRoute><CompleteForms /></ProtectedRoute>} />
+            <Route path="/consents/settings" element={<ProtectedRoute><ConsentSettings /></ProtectedRoute>} />
             <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
             <Route path="/handbook" element={<ProtectedRoute><OfficeHandbook /></ProtectedRoute>} />
             <Route path="/insurance-desk" element={<ProtectedRoute><InsuranceDesk /></ProtectedRoute>} />

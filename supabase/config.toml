@@ -41,6 +41,8 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = false
   [functions.commitment-listen]
     verify_jwt = true
+  [functions.consent-ai]
+    verify_jwt = true
   [functions.google-calendar-events]
     verify_jwt = true
   [functions.integrity-digest]
