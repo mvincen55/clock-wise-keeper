@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { chunkText, normalizeText } from "./lib.ts";
+import { chunkText, normalizeText } from "../_shared/doc-chunking.ts";
 import { validateStructured, type StructuredChunkRow } from "./structured.ts";
 
 // Ingest an office document (policy / HR / insurance manual) for the

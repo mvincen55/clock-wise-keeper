@@ -154,20 +154,14 @@ Deno.serve(async (req) => {
 
     const today = easternToday();
 
-    // Doctors/owners carry no assigned checklists unless the office opts them
-    // into the clock flow — nothing to bypass, so nothing is recorded.
+    // Owners are never in the clock/closeout flow — of the three membership
+    // types (Owner, Manager, Team) they're the only ones who don't punch, so
+    // there's nothing to bypass and nothing is recorded.
     if (membership.role === "owner") {
-      const { data: practice } = await admin
-        .from("org_practice_settings")
-        .select("owners_clock_in")
-        .eq("org_id", orgId)
-        .maybeSingle();
-      if (!practice?.owners_clock_in) {
-        return new Response(JSON.stringify({ ok: true, gated: false, items: [] }), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+      return new Response(JSON.stringify({ ok: true, gated: false, items: [] }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // 1. Re-verify gating items server-side — never trust the client count.

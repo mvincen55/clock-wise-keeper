@@ -1366,6 +1366,32 @@ export type Database = {
           },
         ]
       }
+      doc_library_settings: {
+        Row: {
+          managers_can_edit: boolean
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          managers_can_edit?: boolean
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          managers_can_edit?: boolean
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doc_library_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       doctor_board_items: {
         Row: {
           completed_at: string | null
@@ -3842,7 +3868,6 @@ export type Database = {
           mobile_capture_enabled: boolean
           monthly_collections_target_cents: number | null
           org_id: string
-          owners_clock_in: boolean
           roleplay_notes: string | null
           roleplay_persona_style: string
           roleplay_policy_tone: string
@@ -3856,7 +3881,6 @@ export type Database = {
           mobile_capture_enabled?: boolean
           monthly_collections_target_cents?: number | null
           org_id: string
-          owners_clock_in?: boolean
           roleplay_notes?: string | null
           roleplay_persona_style?: string
           roleplay_policy_tone?: string
@@ -3870,7 +3894,6 @@ export type Database = {
           mobile_capture_enabled?: boolean
           monthly_collections_target_cents?: number | null
           org_id?: string
-          owners_clock_in?: boolean
           roleplay_notes?: string | null
           roleplay_persona_style?: string
           roleplay_policy_tone?: string

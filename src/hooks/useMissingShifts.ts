@@ -6,6 +6,7 @@ import { useDaysOff, DayOffRow } from '@/hooks/useDaysOff';
 import { useOfficeClosures, OfficeClosureRow } from '@/hooks/useOfficeClosures';
 import { useAttendanceExceptions, AttendanceExceptionRow } from '@/hooks/useAttendanceExceptions';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
+import { useClocksIn } from '@/hooks/usePracticeSettings';
 
 export type MissingShiftDay = {
   date: string;
@@ -18,6 +19,7 @@ export type MissingShiftDay = {
  * Falls back to legacy work_schedule if no versions exist.
  */
 export function useMissingShifts(startDate?: string, endDate?: string) {
+  const clocksIn = useClocksIn();
   const { data: versions } = useScheduleVersions();
   const { data: legacySchedule } = useWorkSchedule();
   const { data: entries } = useTimeEntries(startDate, endDate);
@@ -30,6 +32,9 @@ export function useMissingShifts(startDate?: string, endDate?: string) {
   const bufferMinutes = payrollSettings?.missing_shift_buffer_minutes ?? 60;
 
   return useMemo(() => {
+    // Members outside the clock flow (owners) can't punch, so no day of
+    // theirs is ever "missing".
+    if (!clocksIn) return [];
     const hasVersions = versions && versions.length > 0;
     const hasLegacy = legacySchedule && legacySchedule.length > 0;
     if (!hasVersions && !hasLegacy) return [];
@@ -105,5 +110,5 @@ export function useMissingShifts(startDate?: string, endDate?: string) {
     }
 
     return missing;
-  }, [versions, legacySchedule, entries, daysOff, closures, exceptions, startDate, endDate, bufferMinutes]);
+  }, [clocksIn, versions, legacySchedule, entries, daysOff, closures, exceptions, startDate, endDate, bufferMinutes]);
 }

@@ -168,6 +168,41 @@ export function readerDocsFor<T extends PlacementSource & Pick<OfficeDoc, 'title
 
 export const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/**
+ * Reassemble a document from its search chunks WITHOUT duplicating the
+ * retrieval overlap. ingest-doc seeds each chunk with the tail (~200 chars)
+ * of the previous one so answers spanning a boundary stay retrievable —
+ * naively joining chunks therefore repeats that tail in the reader. Here
+ * the longest suffix-of-previous / prefix-of-next match is dropped before
+ * appending; chunks with no detectable overlap fall back to a paragraph
+ * join.
+ */
+export function stitchChunks(parts: string[], maxOverlap = 260, minOverlap = 20): string {
+  if (parts.length === 0) return '';
+  let out = parts[0];
+  for (let p = 1; p < parts.length; p++) {
+    const chunk = parts[p];
+    const window = out.slice(-maxOverlap);
+    let overlap = 0;
+    for (let k = Math.min(window.length, chunk.length); k >= minOverlap; k--) {
+      if (window.endsWith(chunk.slice(0, k))) {
+        overlap = k;
+        break;
+      }
+    }
+    if (overlap === 0) {
+      out += '\n\n' + chunk;
+      continue;
+    }
+    const rest = chunk.slice(overlap);
+    if (!rest) continue;
+    // The seam inside a chunk is a single newline; restore the paragraph
+    // break the original text had there.
+    out += rest.startsWith('\n') && !rest.startsWith('\n\n') ? '\n' + rest : rest;
+  }
+  return out;
+}
+
 export const blockText = (b: DocBlock): string =>
   b.type === 'bullets' || b.type === 'numbered' ? b.items.join(' ') : b.text;
 
@@ -199,6 +234,56 @@ export function outlineFromBlocks(blocks: DocBlock[]): OutlineItem[] {
       blockIndex,
       level: (block as { level: number }).level,
     }));
+}
+
+export interface OutlineTreeNode {
+  item: OutlineItem;
+  children: OutlineTreeNode[];
+}
+
+/**
+ * Nest the flat outline by heading level so the contents list can fold
+ * subsections under their parent category (## Employee Policies →
+ * ### Paid Time Off Policy → #### Time Off Request Form). Levels may skip;
+ * a document whose headings are all one level stays a flat list of roots.
+ */
+export function outlineTree(outline: OutlineItem[]): OutlineTreeNode[] {
+  const roots: OutlineTreeNode[] = [];
+  const stack: OutlineTreeNode[] = [];
+  for (const item of outline) {
+    const node: OutlineTreeNode = { item, children: [] };
+    while (stack.length > 0 && stack[stack.length - 1].item.level >= item.level) stack.pop();
+    if (stack.length === 0) roots.push(node);
+    else stack[stack.length - 1].children.push(node);
+    stack.push(node);
+  }
+  return roots;
+}
+
+/** Ancestor chain for every outline entry — used to auto-unfold the path to the active section. */
+export function outlineAncestors(tree: OutlineTreeNode[]): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  const walk = (nodes: OutlineTreeNode[], trail: string[]) => {
+    for (const node of nodes) {
+      map.set(node.item.id, trail);
+      walk(node.children, [...trail, node.item.id]);
+    }
+  };
+  walk(tree, []);
+  return map;
+}
+
+/**
+ * Who may edit library document text in place: the owner always; managers
+ * only when the owner has switched that on in doc_library_settings.
+ */
+export function canEditLibraryDocs(
+  role: string | null | undefined,
+  managersCanEdit: boolean
+): boolean {
+  if (role === 'owner') return true;
+  if (role === 'manager') return managersCanEdit;
+  return false;
 }
 
 /** Nearest heading at or before a block — the section a passage belongs to. */

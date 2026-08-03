@@ -9,6 +9,8 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = false
   [functions.ingest-doc]
     verify_jwt = false
+  [functions.edit-doc]
+    verify_jwt = true
   [functions.auth-email-hook]
     verify_jwt = false
   [functions.checklist-bypass]

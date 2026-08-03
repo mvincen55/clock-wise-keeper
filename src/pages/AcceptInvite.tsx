@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Clock, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { memberRoleLabel } from '@/lib/roles';
 
 type Step = 'loading' | 'signup' | 'accepting' | 'success' | 'error';
 
@@ -207,7 +208,7 @@ export default function AcceptInvite() {
             <Clock className="h-7 w-7 text-primary-foreground" />
           </div>
           <CardTitle className="text-2xl">Join {orgName}</CardTitle>
-          <CardDescription>You've been invited as <strong>{invite?.role}</strong>. Create an account or sign in to accept.</CardDescription>
+          <CardDescription>You've been invited as <strong>{memberRoleLabel(invite?.role)}</strong>. Create an account or sign in to accept.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Sign Up form */}

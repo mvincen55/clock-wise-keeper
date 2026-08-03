@@ -19,18 +19,51 @@ const MD_HEADING = /^(#{1,4})\s+(.*)$/;
 const BULLET_START = /^[•·▪◦]\s+|^[-*]\s+/;
 const NUMBER_START = /^\d{1,2}[.)]\s+/;
 const SHORT = 60;
+const HEADING_MIN = 3;
 
 const isBlank = (line: string) => line.trim() === '';
 
+// Words a real section title never ends on: a short line ending in one of
+// these is a sentence wrapped mid-thought ("Front desk will be responsible
+// for clearing the…"), not a heading.
+const TRAILING_CONNECTIVE = new Set([
+  'the', 'a', 'an', 'and', 'or', 'but', 'nor',
+  'to', 'of', 'in', 'on', 'at', 'for', 'with', 'by', 'from', 'into', 'onto',
+  'about', 'after', 'before', 'during', 'per', 'via', 'as', 'than', 'then',
+  'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'has', 'have', 'had', 'will', 'would', 'shall', 'should',
+  'can', 'could', 'may', 'might', 'must',
+  'that', 'this', 'these', 'those', 'their', 'your', 'our', 'its', 'his', 'her',
+  'if', 'when', 'while', 'where', 'which', 'who', 'whom', 'whose', 'what', 'how', 'why',
+]);
+
+function nextNonBlank(lines: string[], from: number): string | undefined {
+  for (let j = from; j < lines.length && j <= from + 3; j++) {
+    if (!isBlank(lines[j])) return lines[j];
+  }
+  return undefined;
+}
+
 /** Heading heuristic for plain-text lines (see module comment). */
-function looksLikeHeading(line: string, next: string | undefined): boolean {
+function looksLikeHeading(line: string, lines: string[], i: number): boolean {
   const t = line.trim();
-  if (t.length === 0 || t.length > SHORT) return false;
+  if (t.length < HEADING_MIN || t.length > SHORT) return false;
   if (/[.,;:!?]$/.test(t)) return false;
   if (!/^[A-Z0-9]/.test(t)) return false;
+  // Titles don't end on articles, prepositions, or auxiliaries — wrapped
+  // sentences do ("…responsible for clearing the" / "…can range from
+  // counseling to").
+  const lastWord = (t.split(/\s+/).pop() ?? '').replace(/[^A-Za-z']/g, '').toLowerCase();
+  if (TRAILING_CONNECTIVE.has(lastWord)) return false;
+  // A continuation that starts lowercase means this line is the head of a
+  // wrapped sentence, never a section boundary ("The back door near Pano
+  // machine is" / "not a legal fire exit…").
+  const continuation = nextNonBlank(lines, i + 1);
+  if (continuation !== undefined && /^[a-z]/.test(continuation.trim())) return false;
   // A heading introduces something longer than itself — a long line, a
   // list, or a break. Short-line neighbors mean we're inside a block of
   // short lines (a letterhead/address), not at a heading.
+  const next = lines[i + 1];
   if (next === undefined || isBlank(next)) return true;
   const n = next.trim();
   return n.length > SHORT || BULLET_START.test(n) || LONE_BULLET.test(n) || NUMBER_START.test(n);
@@ -127,7 +160,7 @@ export function parseDocBlocks(content: string): DocBlock[] {
     }
     flushList();
 
-    if (looksLikeHeading(line, lines[i + 1])) {
+    if (looksLikeHeading(line, lines, i)) {
       flushPara();
       blocks.push({ type: 'heading', level: 3, text: line });
       continue;

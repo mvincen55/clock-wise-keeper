@@ -2,7 +2,6 @@ import { usePracticeSettings, useUpsertPracticeSettings } from '@/hooks/usePract
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Building2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -26,12 +25,6 @@ export function PracticeSettingsCard() {
 
   const handleVisibilityChange = (value: string) => {
     upsert.mutate({ collections_visibility: value }, {
-      onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
-    });
-  };
-
-  const handleOwnersClockInChange = (checked: boolean) => {
-    upsert.mutate({ owners_clock_in: checked }, {
       onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
     });
   };
@@ -88,19 +81,6 @@ export function PracticeSettingsCard() {
               <p className="text-xs text-muted-foreground">
                 Employees won't see collections figures when set to admins only.
               </p>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
-              <div className="space-y-0.5">
-                <Label className="text-sm">Owners clock in</Label>
-                <p className="text-xs text-muted-foreground">
-                  When off, owners and doctors skip clock-in and checklist closeout gating.
-                </p>
-              </div>
-              <Switch
-                checked={!!settings?.owners_clock_in}
-                onCheckedChange={handleOwnersClockInChange}
-              />
             </div>
           </>
         )}
