@@ -64,7 +64,6 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
-import FofAssistantWidget from '@/components/fof/FofAssistantWidget';
 import FofPrintSheet from '@/components/fof/FofPrintSheet';
 import { useFofSettings, useFofTemplates } from '@/hooks/useFofTemplates';
 import {
@@ -1395,30 +1394,6 @@ export default function FofBuilder() {
   const aiTreatment = aiText && aiText.signature === aiSignature ? aiText.treatment : '';
   const printedTreatment = noteEdited ? state.note : aiTreatment || autoTreatment;
 
-  // Context for the floating FOF assistant — de-identified BY
-  // CONSTRUCTION: code-derived procedure wording (never typed
-  // descriptions) plus the AI's own generated treatment text (never the
-  // staff-edited note, which could name the patient).
-  const assistantContext = useMemo(() => {
-    const byVisit = new Map<number, { code: string; tooth: string }[]>();
-    for (const l of state.lines) {
-      if (!l.code.trim()) continue;
-      byVisit.set(effectiveVisit(l), [
-        ...(byVisit.get(effectiveVisit(l)) ?? []),
-        { code: l.code, tooth: l.tooth },
-      ]);
-    }
-    if (byVisit.size === 0) return null;
-    const visitEntries = [...byVisit.entries()]
-      .sort((a, b) => a[0] - b[0])
-      .map(([, entries]) => entries);
-    return {
-      visits: buildNameVisitsPayload(visitEntries, []).visits,
-      treatment: aiTreatment,
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.lines, aiTreatment]);
-
   const isDirty =
     state.patientName.trim() !== '' ||
     state.note.trim() !== '' ||
@@ -1490,7 +1465,6 @@ export default function FofBuilder() {
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-7xl mx-auto">
-      <FofAssistantWidget context={assistantContext} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">Financial Options Form</h1>
         <div className="flex gap-2">
