@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesUpdate } from '@/integrations/supabase/types';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import {
@@ -127,7 +128,7 @@ export function useUpdateOfficeDoc() {
 
   return useMutation({
     mutationFn: async (input: UpdateDocPlacementInput) => {
-      const update: Record<string, unknown> = {
+      const update: TablesUpdate<'office_docs'> = {
         library_area: input.libraryArea,
         collection: input.collection,
         category: legacyCategoryFor(input.collection),

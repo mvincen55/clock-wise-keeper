@@ -136,7 +136,7 @@ Mobile placement:
 
 - Compact sticky clock bar above the bottom navigation
 
-Only employees who track time see it.
+Only members who track time see it. Of the three membership types — Owner, Manager, Team — Owners are the only ones who never clock in; Managers and Team always do.
 
 ## 7. Management
 

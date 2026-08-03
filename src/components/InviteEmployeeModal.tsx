@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Mail, Loader2, Copy, CheckCircle2, AlertTriangle, Check } from 'lucide-react';
 import { OPERATIONAL_ROLES, ROLE_LABELS } from '@/hooks/useOperationalRoles';
+import { MEMBER_ROLE_LABELS } from '@/lib/roles';
 import type { OperationalRole } from '@/lib/schedule-reader/types';
 
 export default function InviteEmployeeModal() {
@@ -135,10 +136,13 @@ export default function InviteEmployeeModal() {
               <Select value={role} onValueChange={(v) => setRole(v as 'employee' | 'manager')}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="employee">Employee</SelectItem>
-                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="employee">{MEMBER_ROLE_LABELS.employee}</SelectItem>
+                  <SelectItem value="manager">{MEMBER_ROLE_LABELS.manager}</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Managers and Team both clock in and out — only the owner doesn't.
+              </p>
             </div>
             <div className="space-y-2">
               <Label>What will they do? *</Label>
