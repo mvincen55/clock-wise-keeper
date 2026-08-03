@@ -48,6 +48,25 @@ const json = (body: unknown, status = 200) =>
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const CATEGORIES = new Set(["policy", "hr", "insurance", "other"]);
+// Placement (see the document_library_areas migration): where the document
+// lives in the product, and what kind of document it is.
+const LIBRARY_AREAS = new Set(["workplace", "playbook", "shared", "unassigned"]);
+const COLLECTIONS = new Set([
+  "handbook",
+  "hr",
+  "insurance",
+  "operations",
+  "training",
+  "reference",
+  "other",
+]);
+
+/** Legacy flat category kept in sync with the collection. */
+function legacyCategoryFor(collection: string): string {
+  if (collection === "handbook") return "policy";
+  if (collection === "hr" || collection === "insurance") return collection;
+  return "other";
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -89,7 +108,12 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const title = String(body.title ?? "").trim();
-    const category = CATEGORIES.has(body.category) ? body.category : "other";
+    const libraryArea = LIBRARY_AREAS.has(body.library_area) ? body.library_area : "unassigned";
+    const collection = COLLECTIONS.has(body.collection) ? body.collection : "other";
+    // Explicit legacy category wins (old clients); otherwise derived.
+    const category = CATEGORIES.has(body.category)
+      ? body.category
+      : legacyCategoryFor(collection);
     if (!title) return json({ error: "Missing title" }, 400);
 
     let text = "";
@@ -144,6 +168,8 @@ Deno.serve(async (req) => {
         org_id: orgId,
         title,
         category,
+        library_area: libraryArea,
+        collection,
         file_path: filePath,
         mime_type: mimeType,
         char_count: text.length,

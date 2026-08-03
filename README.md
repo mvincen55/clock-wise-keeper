@@ -116,7 +116,8 @@ Navigation is a compact destination list; every feature below keeps its own rout
 | `/deposit-log` | DepositLog | **Close the Day**: the deposit log + branded print sheet, grown into the five-step closeout (money, vitals, local-only Privacy View Capture, staffing reality, seal) — see `docs/close-the-day-spec.md` |
 | `/incident-reports` | IncidentReports | Incident reports with signature/review workflow + print sheet |
 | `/important-numbers` | ImportantNumbers | Office contact directory with tabs |
-| `/policy-manual` | PolicyManual | Office policy manual + document Q&A (`ask-docs` / `ingest-doc`) |
+| `/handbook` | OfficeHandbook | Office Handbook reader (Workplace policies + HR) over the shared `DocumentLibraryReader`; `/policy-manual` redirects here |
+| `/insurance-desk` | InsuranceDesk | Insurance Desk reader (carrier manuals, Practice Playbook) over the same `DocumentLibraryReader` (`ingest-doc` indexes uploads) |
 | `/morning-huddle` | MorningHuddle | Early stub — intended home for daily team huddle |
 
 ### Money & forms (FOF)

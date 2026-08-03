@@ -102,11 +102,34 @@ interface AgentSource {
 // Office document retrieval (same FTS + neighbor-chunk approach as ask-docs)
 // ---------------------------------------------------------------------------
 
+// Contextual search scopes. Mirrors AI_SCOPES in src/lib/doc-library.ts —
+// edge functions cannot import from src/. Global Ask AI (no scope) still
+// searches every approved document.
+interface SearchScope {
+  label: string;
+  areas: string[];
+  collections: string[];
+}
+
+const SEARCH_SCOPES: Record<string, SearchScope> = {
+  handbook: {
+    label: "Office Handbook (Workplace handbook + HR documents)",
+    areas: ["workplace"],
+    collections: ["handbook", "hr"],
+  },
+  insurance: {
+    label: "Insurance Desk (carrier manuals and insurance references)",
+    areas: ["playbook"],
+    collections: ["insurance"],
+  },
+};
+
 // deno-lint-ignore no-explicit-any
 async function searchOfficeDocs(
   supabase: any,
   queries: string[],
-  sources: Map<string, AgentSource>
+  sources: Map<string, AgentSource>,
+  scope: SearchScope | null
 ): Promise<string> {
   const cleaned = queries
     .map((q) => bounded(q, 60))
@@ -115,7 +138,15 @@ async function searchOfficeDocs(
   if (cleaned.length === 0) return "ERROR: provide 1-5 short keyword queries.";
 
   const results = await Promise.all(
-    cleaned.map((q) => supabase.rpc("search_office_doc_chunks", { p_query: q, p_limit: 8 }))
+    cleaned.map((q) =>
+      supabase.rpc("search_office_doc_chunks", {
+        p_query: q,
+        p_limit: 8,
+        ...(scope
+          ? { p_library_areas: scope.areas, p_collections: scope.collections }
+          : {}),
+      })
+    )
   );
   const byKey = new Map<string, DocMatch>();
   for (const result of results) {
@@ -575,7 +606,7 @@ async function saveCodeNote(
 // ---------------------------------------------------------------------------
 
 const SITE_PRIMER =
-  "THE SITE (so you know what you are standing in and what you would be editing): Purple Envelope, the office's internal web app — repo mvincen55/clock-wise-keeper on GitHub, built and hosted with Lovable, which two-way syncs the repo's default branch. Features: time clock with punches and geofenced work zones; schedules and attendance review; PTO requests and approvals; payroll export (this is the payroll system of record — time math is owned by Postgres triggers, times are America/New_York wall time, be extremely careful in that area); the FOF builder (Financial Options Forms: CDT-code fee schedules, insurance estimates, discounts, AI-named visits, print sheets, templates); Policy Manual and an office document knowledge base with AI search; Deposit Log; Important Numbers; checklists; notifications. Stack: Vite + React 18 + TypeScript + Tailwind + shadcn/ui, TanStack Query, React Router, Capacitor wrapper; backend is Supabase (Lovable Cloud): Postgres with strict RLS, Deno edge functions in supabase/functions/, migrations in supabase/migrations/. Frontend lives in src/ (pages/, components/, hooks/, lib/ — FOF logic in src/lib/fof). CI on GitHub Actions runs bun test and a production build on every push and PR.";
+  "THE SITE (so you know what you are standing in and what you would be editing): Purple Envelope, the office's internal web app — repo mvincen55/clock-wise-keeper on GitHub, built and hosted with Lovable, which two-way syncs the repo's default branch. Features: time clock with punches and geofenced work zones; schedules and attendance review; PTO requests and approvals; payroll export (this is the payroll system of record — time math is owned by Postgres triggers, times are America/New_York wall time, be extremely careful in that area); the FOF builder (Financial Options Forms: CDT-code fee schedules, insurance estimates, discounts, AI-named visits, print sheets, templates); an office document knowledge base with AI search, read through the Office Handbook (/handbook — Workplace policies + HR) and the Insurance Desk (/insurance-desk — carrier manuals in the Practice Playbook); Deposit Log; Important Numbers; checklists; notifications. Stack: Vite + React 18 + TypeScript + Tailwind + shadcn/ui, TanStack Query, React Router, Capacitor wrapper; backend is Supabase (Lovable Cloud): Postgres with strict RLS, Deno edge functions in supabase/functions/, migrations in supabase/migrations/. Frontend lives in src/ (pages/, components/, hooks/, lib/ — FOF logic in src/lib/fof). CI on GitHub Actions runs bun test and a production build on every push and PR.";
 
 const BASE_POLICY_SUMMARY =
   "Office FOF policy facts are generated from the org's current settings and guidance rules below. The assistant must explain the live values, not assume defaults. Product-behavior rules that do not change per office: larger plans collect a full visit ahead so the patient never carries a balance, with the final visit split half ahead / half at the visit; work-up procedures and surgical guides are billed at their visit, never prepaid; finished lab work is always described as 'delivered' (crown delivery, denture delivery, implant crown delivery) — never 'seating', 'seat', 'insertion', 'placement', or 'cementation'; fillings are described without surfaces.";
@@ -663,6 +694,8 @@ interface PromptContext {
   treatment: string;
   docCount: number;
   policySummary?: string;
+  /** When set, document search is limited to this surface's content. */
+  searchScopeLabel?: string;
 }
 
 function buildSystemPrompt(ctx: PromptContext): string {
@@ -784,6 +817,11 @@ function buildSystemPrompt(ctx: PromptContext): string {
     parts.push(
       "ANSWERING FROM DOCUMENTS: for questions about office policy, HR, PTO rules, or insurance, call search_office_docs FIRST with 2-5 short keyword queries (expand shorthand: 'DD MA' → Delta Dental, 'pt' → patient) and answer ONLY from what comes back — never invent policy details or rates. Apply the returned rules to the user's scenario and give your read; if the excerpts don't settle it, say what they do establish and what to check. If nothing matches, say so in one sentence and point to which document might have it, or suggest a manager upload it."
     );
+    if (ctx.searchScopeLabel) {
+      parts.push(
+        `SEARCH SCOPE: this conversation started from a specific page, so search_office_docs only covers the ${ctx.searchScopeLabel}. If the user asks about something outside that scope, say the answer may live elsewhere and that removing the scope chip (or opening Ask AI directly) searches every approved document.`
+      );
+    }
   }
 
   // --- voice + privacy -----------------------------------------------------
@@ -1019,11 +1057,18 @@ Deno.serve(async (req) => {
 
     const body = (await req.json()) as {
       mode?: string;
+      scope?: string;
       messages?: { role?: string; content?: string }[];
       context?: { visits?: { procedures?: string[] }[]; treatment?: string };
       trainingEnabled?: boolean;
     };
     const mode: "fof" | "ask" = body.mode === "fof" ? "fof" : "ask";
+    // Contextual scope: the Office Handbook and Insurance Desk limit document
+    // search to their own content. Unknown/absent scope = full knowledge base.
+    const searchScope: SearchScope | null =
+      mode === "ask" && typeof body.scope === "string"
+        ? SEARCH_SCOPES[body.scope] ?? null
+        : null;
     const chat = (Array.isArray(body.messages) ? body.messages.slice(-MAX_MESSAGES) : [])
       .map((m) => ({
         role: m?.role === "assistant" ? "assistant" : "user",
@@ -1141,6 +1186,7 @@ Deno.serve(async (req) => {
       treatment,
       docCount: docsRes.data?.length ?? 0,
       policySummary,
+      searchScopeLabel: searchScope?.label,
     });
     const tools = buildTools({ isManager, training, mode, githubReady });
 
@@ -1152,7 +1198,12 @@ Deno.serve(async (req) => {
     const executeTool = async (name: string, args: any): Promise<string> => {
       switch (name) {
         case "search_office_docs":
-          return await searchOfficeDocs(supabase, Array.isArray(args?.queries) ? args.queries : [], sources);
+          return await searchOfficeDocs(
+            supabase,
+            Array.isArray(args?.queries) ? args.queries : [],
+            sources,
+            searchScope
+          );
         case "save_memory": {
           if (!isManager) return "ERROR: only managers can save memories.";
           const kind = args?.kind === "site" ? "site" : args?.kind === "office" ? "office" : null;

@@ -23,7 +23,8 @@ import FofBuilder from "@/pages/FofBuilder";
 import FofTemplates from "@/pages/FofTemplates";
 import FofFees from "@/pages/FofFees";
 import Assistant from "@/pages/Assistant";
-import PolicyManual from "@/pages/PolicyManual";
+import OfficeHandbook from "@/pages/OfficeHandbook";
+import InsuranceDesk from "@/pages/InsuranceDesk";
 import ImportantNumbers from "@/pages/ImportantNumbers";
 import Checklists from "@/pages/Checklists";
 import DepositLog from "@/pages/DepositLog";
@@ -114,7 +115,10 @@ const App = () => (
             <Route path="/fof/templates" element={<ProtectedRoute><FofTemplates /></ProtectedRoute>} />
             <Route path="/fof/fees" element={<ProtectedRoute><FofFees /></ProtectedRoute>} />
             <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
-            <Route path="/policy-manual" element={<ProtectedRoute><PolicyManual /></ProtectedRoute>} />
+            <Route path="/handbook" element={<ProtectedRoute><OfficeHandbook /></ProtectedRoute>} />
+            <Route path="/insurance-desk" element={<ProtectedRoute><InsuranceDesk /></ProtectedRoute>} />
+            {/* Old bookmark-safe path for the rebuilt handbook. */}
+            <Route path="/policy-manual" element={<Navigate to="/handbook" replace />} />
             <Route path="/important-numbers" element={<ProtectedRoute><ImportantNumbers /></ProtectedRoute>} />
             <Route path="/checklists" element={<ProtectedRoute><Checklists /></ProtectedRoute>} />
             <Route path="/deposit-log" element={<ProtectedRoute><DepositLog /></ProtectedRoute>} />
