@@ -1,6 +1,6 @@
 import {
   Sunrise, ListChecks, Banknote, ShieldAlert, ReceiptText, FileStack,
-  DollarSign, Sparkles, ShieldCheck,
+  DollarSign, Sparkles, ShieldCheck, Phone,
 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import HubLinkGrid, { HubSection } from '@/components/HubLinkGrid';
@@ -28,6 +28,7 @@ const SECTIONS: HubSection[] = [
   {
     title: 'Reference',
     links: [
+      { to: '/important-numbers', icon: Phone, label: 'Important Numbers', description: 'Practice credentials, team, referral offices, labs, and carriers.' },
       { to: '/insurance-desk', icon: ShieldCheck, label: 'Insurance Desk', description: 'Carrier manuals, claims guidance, plan rules, and provider references.' },
     ],
   },

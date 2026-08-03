@@ -392,7 +392,10 @@ export default function ImportantNumbers() {
     ) : null;
 
   const renderEntry = (entry: ImportantNumber) => (
-    <div key={entry.id} className="group flex items-start gap-2 border-b border-[#efeaf4] py-2 last:border-0">
+    <div
+      key={entry.id}
+      className="group flex break-inside-avoid items-start gap-2 border-b border-[#efeaf4] py-2 last:border-0"
+    >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-2">
           <span className="text-sm font-medium">{entry.label}</span>
@@ -502,7 +505,8 @@ export default function ImportantNumbers() {
                 <CardTitle className={KICKER}>{HERO_SECTION}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+                {/* auto-fit: entries share the full row — no empty trailing cells. */}
+                <div className="grid gap-x-8 gap-y-4 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
                   {heroRows.map(entry => (
                     <div key={entry.id} className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -541,9 +545,9 @@ export default function ImportantNumbers() {
             </Card>
           )}
 
-          {/* NPI / License / DEA side by side. */}
+          {/* NPI / License / DEA side by side, equal heights so the row reads as one band. */}
           {credentialCards.length > 0 && (
-            <div className="grid items-start gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-3">
               {credentialCards.map(([name, rows]) => (
                 <Card key={name} className={CARD}>
                   <CardHeader className="pb-2">
@@ -567,13 +571,18 @@ export default function ImportantNumbers() {
                     <span className={RULE} />
                   </div>
                 )}
-                <div className="grid items-start gap-4 md:grid-cols-2">
+                {/* One full-width card per group; rows flow into two balanced
+                    columns like the printed sheet, so unequal groups never
+                    leave holes beside each other. */}
+                <div className="space-y-4">
                   {sections.map(([section, rows]) => (
                     <Card key={section} className={CARD}>
                       <CardHeader className="pb-2">
                         <CardTitle className={KICKER_MUTED}>{section}</CardTitle>
                       </CardHeader>
-                      <CardContent className="space-y-0.5">{rows.map(renderEntry)}</CardContent>
+                      <CardContent className="sm:columns-2 sm:gap-x-10">
+                        {rows.map(renderEntry)}
+                      </CardContent>
                     </Card>
                   ))}
                 </div>
