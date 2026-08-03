@@ -266,8 +266,7 @@ function ItemEditorDialog({
                 <p className="text-[11px] text-muted-foreground">
                   {rulesHere.length > 0 ? 'Plus ' : ''}
                   {globalRules.length} other standing wording rule
-                  {globalRules.length === 1 ? '' : 's'} the AI follows across all codes —
-                  see them in the FOF Assistant.
+                  {globalRules.length === 1 ? '' : 's'} the AI follows across all codes.
                 </p>
               )}
             </div>
