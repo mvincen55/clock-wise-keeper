@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
   BookOpenCheck,
@@ -81,6 +81,33 @@ export default function KnowledgeWorkspace() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<KnowledgeWorkspaceItem | null>(null);
 
+  const items = data?.items ?? [];
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredItems = items.filter(item => {
+    const version = item.workingVersion;
+    if (!version) return false;
+
+    const matchesFilter =
+      filter === 'all' ||
+      (filter === 'needs_action' && ['draft', 'in_review', 'approved'].includes(version.status)) ||
+      (filter === 'published' && !!item.publishedVersion) ||
+      (filter === 'handbook' && item.kind === 'policy') ||
+      (filter === 'playbook' && item.kind === 'procedure');
+
+    const matchesQuery =
+      !normalizedQuery ||
+      item.title.toLowerCase().includes(normalizedQuery) ||
+      item.summary.toLowerCase().includes(normalizedQuery) ||
+      item.category?.name.toLowerCase().includes(normalizedQuery);
+
+    return matchesFilter && matchesQuery;
+  });
+
+  const publishedCount = items.filter(item => !!item.publishedVersion).length;
+  const needsActionCount = items.filter(item =>
+    ['draft', 'in_review', 'approved'].includes(item.workingVersion?.status ?? ''),
+  ).length;
+
   if (contextLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -91,35 +118,6 @@ export default function KnowledgeWorkspace() {
 
   const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
   if (ctx && !isAdmin) return <Navigate to="/" replace />;
-
-  const items = data?.items ?? [];
-  const filteredItems = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return items.filter(item => {
-      const version = item.workingVersion;
-      if (!version) return false;
-
-      const matchesFilter =
-        filter === 'all' ||
-        (filter === 'needs_action' && ['draft', 'in_review', 'approved'].includes(version.status)) ||
-        (filter === 'published' && !!item.publishedVersion) ||
-        (filter === 'handbook' && item.kind === 'policy') ||
-        (filter === 'playbook' && item.kind === 'procedure');
-
-      const matchesQuery =
-        !normalizedQuery ||
-        item.title.toLowerCase().includes(normalizedQuery) ||
-        item.summary.toLowerCase().includes(normalizedQuery) ||
-        item.category?.name.toLowerCase().includes(normalizedQuery);
-
-      return matchesFilter && matchesQuery;
-    });
-  }, [items, filter, query]);
-
-  const publishedCount = items.filter(item => !!item.publishedVersion).length;
-  const needsActionCount = items.filter(item =>
-    ['draft', 'in_review', 'approved'].includes(item.workingVersion?.status ?? ''),
-  ).length;
 
   const startNew = () => {
     setSelectedItem(null);
@@ -156,11 +154,14 @@ export default function KnowledgeWorkspace() {
     }
     if (action === 'revise') {
       try {
-        const newVersionId = await createRevision.mutateAsync(item.id);
+        await createRevision.mutateAsync(item.id);
+        const refreshedResult = await refetch();
+        const refreshed = refreshedResult.data?.items.find(candidate => candidate.id === item.id);
+        if (!refreshed || refreshed.workingVersion?.status !== 'draft') {
+          throw new Error('The revision was created but could not be opened. Refresh and try again.');
+        }
         toast.success('New revision created');
-        await refetch();
-        const refreshed = data?.items.find(candidate => candidate.id === item.id);
-        setSelectedItem(refreshed ?? { ...item, workingVersion: { ...version, id: newVersionId, status: 'draft' } });
+        setSelectedItem(refreshed);
         setEditorOpen(true);
       } catch (revisionError) {
         toast.error(revisionError instanceof Error ? revisionError.message : 'Could not create a revision');
