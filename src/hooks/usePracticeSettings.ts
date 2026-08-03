@@ -1,10 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import { roleClocksIn } from '@/lib/roles';
 
 export type PracticeSettings = {
-  /** Doctors/owners are only in the clock + closeout flow if the office says so. */
-  owners_clock_in: boolean;
   /** Office decides whether employees see the practice-vitals collections bar. */
   collections_visibility: 'admin_only' | 'everyone' | string;
   /** Monthly collections target used to pace the vitals gauge. */
@@ -37,12 +36,11 @@ export function usePracticeSettings() {
       const { data } = await supabase
         .from('org_practice_settings')
         .select(
-          'owners_clock_in, collections_visibility, monthly_collections_target_cents, mobile_capture_enabled'
+          'collections_visibility, monthly_collections_target_cents, mobile_capture_enabled'
         )
         .eq('org_id', ctx!.org_id)
         .maybeSingle();
       return {
-        owners_clock_in: data?.owners_clock_in ?? false,
         collections_visibility: normalizeCollectionsVisibility(data?.collections_visibility),
         monthly_collections_target_cents: data?.monthly_collections_target_cents ?? 0,
         mobile_capture_enabled: data?.mobile_capture_enabled ?? false,
@@ -69,11 +67,12 @@ export function useUpsertPracticeSettings() {
   });
 }
 
-/** True when this member should see the clock and be held to closeout rules. */
+/**
+ * True when this member should see the clock and be held to closeout rules.
+ * Of the three membership types — Owner, Manager, Team — owners are the only
+ * ones who never punch; Managers and Team always do.
+ */
 export function useClocksIn() {
   const { data: ctx } = useOrgContext();
-  const { data: settings } = usePracticeSettings();
-  if (!ctx) return false;
-  if (ctx.role !== 'owner') return true;
-  return !!settings?.owners_clock_in;
+  return roleClocksIn(ctx?.role);
 }
