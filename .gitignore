@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# bun.lock is the tracked lockfile; keep npm's out of the tree
+package-lock.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
