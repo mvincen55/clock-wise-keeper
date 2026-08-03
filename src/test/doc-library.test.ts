@@ -29,7 +29,7 @@ import {
   type OfficeDoc,
 } from '../lib/doc-library';
 import { parseDocBlocks } from '../lib/doc-format';
-import { chunkText } from '../../supabase/functions/ingest-doc/lib';
+import { chunkText } from '../../supabase/functions/_shared/doc-chunking';
 
 const HANDBOOK_SCOPE: LibraryScope = AI_SCOPES.handbook.scope;
 const INSURANCE_SCOPE: LibraryScope = AI_SCOPES.insurance.scope;

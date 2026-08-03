@@ -6,7 +6,7 @@
 // never patient records.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { chunkText, normalizeText } from "../ingest-doc/lib.ts";
+import { chunkText, normalizeText } from "../_shared/doc-chunking.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { chunkText, normalizeText } from "./lib.ts";
+import { chunkText, normalizeText } from "../_shared/doc-chunking.ts";
 
 async function extractPdfTextViaAI(base64: string, filename: string): Promise<string> {
   const key = Deno.env.get("LOVABLE_API_KEY");
