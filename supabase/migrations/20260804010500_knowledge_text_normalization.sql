@@ -1,25 +1,36 @@
--- Keep the knowledge slug helper deterministic without depending on the
--- database's ambient search_path. Supabase commonly installs extensions in
--- the extensions schema, while application functions intentionally use a
--- locked public-only search_path.
+-- knowledge_slugify runs with a locked public-only search_path. Keep text
+-- normalization self-contained so the migration does not depend on where a
+-- hosted Supabase project installed optional extensions.
 
-CREATE SCHEMA IF NOT EXISTS extensions;
-CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA extensions;
-
-CREATE OR REPLACE FUNCTION public.unaccent(text)
+CREATE OR REPLACE FUNCTION public.knowledge_normalize_text(value text)
 RETURNS text
 LANGUAGE sql
 IMMUTABLE
 STRICT
 PARALLEL SAFE
-SET search_path = extensions, pg_catalog
+SET search_path = pg_catalog
 AS $$
-  SELECT extensions.unaccent($1);
+  SELECT translate(
+    lower(value),
+    'áàâäãåéèêëíìîïóòôöõúùûüýÿçñ',
+    'aaaaaaeeeeiiiiooooouuuuyycn'
+  );
 $$;
 
-REVOKE ALL ON FUNCTION public.unaccent(text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.unaccent(text) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.unaccent(text) TO service_role;
+CREATE OR REPLACE FUNCTION public.unaccent(value text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+STRICT
+PARALLEL SAFE
+SET search_path = public, pg_catalog
+AS $$
+  SELECT public.knowledge_normalize_text(value);
+$$;
 
-COMMENT ON FUNCTION public.unaccent(text) IS
-  'Stable public wrapper used by knowledge_slugify while its search_path remains locked.';
+REVOKE ALL ON FUNCTION public.knowledge_normalize_text(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.knowledge_normalize_text(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.knowledge_normalize_text(text) TO service_role;
+
+COMMENT ON FUNCTION public.knowledge_normalize_text(text) IS
+  'Deterministic text normalization for knowledge slugs without optional extension dependencies.';
