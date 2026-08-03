@@ -159,10 +159,12 @@ export default function FofAssistantWidget({ context }: Props) {
     }
   };
 
+  // Sits just above the global "Report a problem" bubble (bottom-4 right-4,
+  // h-11) so the two corner widgets stack instead of overlapping.
   return (
-    <div className="fixed bottom-6 right-6 z-50 print:hidden">
+    <div className="fixed bottom-[4.5rem] right-4 z-50 print:hidden">
       {open ? (
-        <div className="flex h-[28rem] w-96 max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-xl border bg-card shadow-2xl">
+        <div className="flex h-[28rem] max-h-[calc(100vh-5.5rem)] w-96 max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-xl border bg-card shadow-2xl">
           <div className="flex items-center gap-2 border-b bg-primary px-4 py-3 text-primary-foreground">
             <Sparkles className="h-4 w-4" />
             <span className="text-sm font-semibold">FOF Assistant</span>
