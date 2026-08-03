@@ -17,13 +17,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, MonitorUp, Pipette } from 'lucide-react';
+import { ImageUp, Loader2, MonitorUp, Pipette } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   captureDisplayFrame,
   captureSupported,
   destroyCapture,
   draftColumnsFromFrame,
+  frameFromFile,
   ScheduleReaderError,
   type CaptureFrame,
   type ColumnKind,
@@ -60,6 +61,17 @@ const STATUSES: { status: ScheduleStatus; label: string }[] = [
 
 type DraftColumn = LayoutColumn & { pxStart: number; pxEnd: number };
 
+const CAPTURE_ERROR_COPY: Record<string, string> = {
+  CAPTURE_PERMISSION_DENIED:
+    'Screen capture was declined or blocked by this browser. Use a screenshot instead — it is still read only on this device.',
+  CAPTURE_UNSUPPORTED: "This browser can't capture a window. Use a screenshot instead.",
+  CAPTURE_FAILED:
+    'Could not read the schedule image. Try again, or use a screenshot of the privacy-view schedule.',
+  OCR_ASSETS_MISSING: 'The on-device reader is not installed in this build.',
+  OCR_FAILED:
+    'The on-device reader could not make out the image. Try a sharper, full-window screenshot.',
+};
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -80,7 +92,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
   const [step, setStep] = useState(0);
   const [pms, setPms] = useState<string>('Other');
   const [confirmed, setConfirmed] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<'window' | 'screenshot' | null>(null);
   const [columns, setColumns] = useState<DraftColumn[]>([]);
   const [legend, setLegend] = useState<Partial<Record<ScheduleStatus, StatusLegendEntry>>>({});
   const [sampling, setSampling] = useState<ScheduleStatus | null>(null);
@@ -92,6 +104,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
 
   const frameRef = useRef<CaptureFrame | null>(null);
   const previewRef = useRef<HTMLCanvasElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const reset = () => {
     setStep(0);
@@ -128,37 +141,55 @@ export default function CalibrationWizard({ open, onClose }: Props) {
     if (ctx) ctx.drawImage(frame.canvas, 0, 0, preview.width, preview.height);
   }, [step, columns.length]);
 
+  /** Same pipeline whichever way the image arrived: OCR, draft columns, step 1. */
+  const runCalibration = async (frame: CaptureFrame) => {
+    await teardown(); // a retry never leaks the previous frame
+    frameRef.current = frame;
+    const { words } = await recognizeFrame(frame.canvas);
+    const drafts = draftColumnsFromFrame(words, frame.width, frame.height);
+    setColumns(
+      drafts.map(d => ({
+        xStart: d.xStart,
+        xEnd: d.xEnd,
+        pxStart: d.xStart * frame.width,
+        pxEnd: d.xEnd * frame.width,
+        kind: 'provider' as ColumnKind,
+        providerLabel: null,
+        providerRole: null,
+        department: null,
+        employeeId: null,
+      }))
+    );
+    setStep(1);
+  };
+
+  const fail = async (err: unknown) => {
+    const code = err instanceof ScheduleReaderError ? err.code : 'CAPTURE_FAILED';
+    toast.error(CAPTURE_ERROR_COPY[code] ?? 'Something went wrong. Nothing was uploaded.');
+    await teardown();
+  };
+
   const capture = async () => {
-    setBusy(true);
+    setBusy('window');
     try {
-      const frame = await captureDisplayFrame();
-      frameRef.current = frame;
-      const { words } = await recognizeFrame(frame.canvas);
-      const drafts = draftColumnsFromFrame(words, frame.width, frame.height);
-      setColumns(
-        drafts.map(d => ({
-          xStart: d.xStart,
-          xEnd: d.xEnd,
-          pxStart: d.xStart * frame.width,
-          pxEnd: d.xEnd * frame.width,
-          kind: 'provider' as ColumnKind,
-          providerLabel: null,
-          providerRole: null,
-          department: null,
-          employeeId: null,
-        }))
-      );
-      setStep(1);
+      await runCalibration(await captureDisplayFrame());
     } catch (err) {
-      const code = err instanceof ScheduleReaderError ? err.code : 'CAPTURE_FAILED';
-      toast.error(
-        code === 'OCR_ASSETS_MISSING'
-          ? 'The on-device reader is not installed in this build.'
-          : 'Could not capture the schedule window. Nothing was uploaded.'
-      );
-      await teardown();
+      await fail(err);
     } finally {
-      setBusy(false);
+      setBusy(null);
+    }
+  };
+
+  const onScreenshotPicked = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy('screenshot');
+    try {
+      await runCalibration(await frameFromFile(file));
+    } catch (err) {
+      await fail(err);
+    } finally {
+      setBusy(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -267,19 +298,53 @@ export default function CalibrationWizard({ open, onClose }: Props) {
                 numbers, insurance details, and identifying notes are hidden.
               </Label>
             </div>
-            <Button disabled={!confirmed || busy || !captureSupported()} onClick={capture}>
-              {busy ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <MonitorUp className="mr-2 h-4 w-4" />
+            <div className="flex flex-wrap gap-2">
+              {captureSupported() && (
+                <Button disabled={!confirmed || !!busy} onClick={capture}>
+                  {busy === 'window' ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <MonitorUp className="mr-2 h-4 w-4" />
+                  )}
+                  Capture a privacy-view schedule
+                </Button>
               )}
-              Capture a privacy-view schedule
-            </Button>
-            {!captureSupported() && (
+              <Button
+                variant={captureSupported() ? 'outline' : 'default'}
+                disabled={!confirmed || !!busy}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {busy === 'screenshot' ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <ImageUp className="mr-2 h-4 w-4" />
+                )}
+                Use a screenshot from this device
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => onScreenshotPicked(e.target.files?.[0])}
+              />
+            </div>
+            {busy && (
               <p className="text-xs text-muted-foreground">
-                This browser can't capture a window — run calibration from a desktop browser.
+                Reading the schedule on this device — nothing leaves this computer.
               </p>
             )}
+            {!captureSupported() && (
+              <p className="text-xs text-muted-foreground">
+                This browser can't capture a window directly — take a screenshot of the
+                privacy-view schedule and use it here instead.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Either way the image is read on this device, then destroyed — never stored or
+              uploaded. If you use a screenshot file, delete the original afterward; Purple
+              Envelope can't do that for you.
+            </p>
           </div>
         )}
 
