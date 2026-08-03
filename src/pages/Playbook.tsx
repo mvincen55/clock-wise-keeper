@@ -1,13 +1,16 @@
 import {
   Sunrise, ListChecks, Banknote, ShieldAlert, ReceiptText, FileStack,
-  DollarSign, Sparkles, ShieldCheck, Phone,
+  DollarSign, Sparkles, ShieldCheck, Phone, CalendarX,
 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import { useBrokenApptSettings } from '@/hooks/useBrokenApptSettings';
+import { DEFAULT_BA_SETTINGS } from '@/lib/broken-appts/defaults';
 import HubLinkGrid, { HubSection } from '@/components/HubLinkGrid';
 
 // Practice Playbook: how the office performs excellent work (blueprint §2).
 // Blank templates and de-identified configuration only — never patient data.
-const SECTIONS: HubSection[] = [
+// The Broken Appointments entry is labeled per office (module_nav_label).
+const buildSections = (brokenApptLabel: string): HubSection[] => [
   {
     title: 'Daily Operations',
     links: [
@@ -15,6 +18,7 @@ const SECTIONS: HubSection[] = [
       { to: '/checklists', icon: ListChecks, label: 'Checklists', description: 'Daily, weekly, and role-based checklists.' },
       { to: '/deposit-log', icon: Banknote, label: 'Close the Day', description: 'Deposit log and end-of-day closeout.' },
       { to: '/incident-reports', icon: ShieldAlert, label: 'Incident Reports', description: 'Document and review office incidents.' },
+      { to: '/broken-appointments', icon: CalendarX, label: brokenApptLabel, description: 'No-shows and late cancellations: letters, replies, and Dentrix blocks. Nothing patient-specific is stored.' },
     ],
   },
   {
@@ -42,7 +46,11 @@ const SECTIONS: HubSection[] = [
 
 export default function Playbook() {
   const { data: ctx } = useOrgContext();
+  const { data: baSettings } = useBrokenApptSettings();
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
+  const sections = buildSections(
+    baSettings?.moduleNavLabel || DEFAULT_BA_SETTINGS.moduleNavLabel
+  );
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
@@ -50,7 +58,7 @@ export default function Playbook() {
         <h1 className="text-2xl md:text-3xl font-bold">Practice Playbook</h1>
         <p className="text-muted-foreground">How this office does excellent work.</p>
       </div>
-      <HubLinkGrid sections={SECTIONS} isManager={isManager} />
+      <HubLinkGrid sections={sections} isManager={isManager} />
     </div>
   );
 }

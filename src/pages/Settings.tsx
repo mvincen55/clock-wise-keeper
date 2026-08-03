@@ -19,6 +19,7 @@ import EscalationPoliciesCard from '@/components/accountability/EscalationPolici
 import MessagingSettingsCard from '@/components/settings/MessagingSettingsCard';
 import { PracticeSettingsCard } from '@/components/settings/PracticeSettingsCard';
 import { FofPolicySettingsCard } from '@/components/settings/FofPolicySettingsCard';
+import { BrokenApptSettingsCard } from '@/components/settings/BrokenApptSettingsCard';
 
 const WEEKDAY_OPTIONS = [
   { value: '0', label: 'Sunday' },
@@ -92,6 +93,9 @@ export default function Settings() {
 
       {/* FOF policy wording (manager only) */}
       {isManager && <FofPolicySettingsCard />}
+
+      {/* Broken-appointment policy parameters (manager only) */}
+      {isManager && <BrokenApptSettingsCard />}
 
       {/* Payroll Settings (manager only) */}
       {isManager && <MessagingSettingsCard />}

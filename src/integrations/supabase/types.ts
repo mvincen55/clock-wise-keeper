@@ -711,6 +711,109 @@ export type Database = {
           },
         ]
       }
+      broken_appt_settings: {
+        Row: {
+          created_at: string
+          fee_amount: number
+          history_window_years: number
+          id: string
+          module_nav_label: string
+          notice_business_hours: number
+          office_closed_dates: Json
+          office_phone: string
+          org_id: string
+          signature_name: string
+          signature_title: string
+          updated_at: string
+          vip_prepay_floor: number
+        }
+        Insert: {
+          created_at?: string
+          fee_amount?: number
+          history_window_years?: number
+          id?: string
+          module_nav_label?: string
+          notice_business_hours?: number
+          office_closed_dates?: Json
+          office_phone?: string
+          org_id: string
+          signature_name?: string
+          signature_title?: string
+          updated_at?: string
+          vip_prepay_floor?: number
+        }
+        Update: {
+          created_at?: string
+          fee_amount?: number
+          history_window_years?: number
+          id?: string
+          module_nav_label?: string
+          notice_business_hours?: number
+          office_closed_dates?: Json
+          office_phone?: string
+          org_id?: string
+          signature_name?: string
+          signature_title?: string
+          updated_at?: string
+          vip_prepay_floor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broken_appt_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      broken_appt_templates: {
+        Row: {
+          body: string
+          code: string
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          org_id: string
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          code: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          org_id: string
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          org_id?: string
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broken_appt_templates_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       capture_proposals: {
         Row: {
           created_at: string
