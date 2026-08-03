@@ -548,8 +548,9 @@ export default function FofPrintSheet({
 
     {/* OFFICE COPY — auto-printed second page recording exactly what was
         behind this FOF (codes, fees, insurance math). Never persisted;
-        filed on paper with the signed form. */}
-    {officeLines && officeLines.length > 0 && (
+        filed on paper with the signed form. Always printed — a form with
+        no line detail states so explicitly rather than dropping the page. */}
+    {(
       <div className="fof-sheet fof-office-page">
         <div className="fof-office-head">
           <div>
@@ -576,6 +577,7 @@ export default function FofPrintSheet({
           <div className="fof-office-stamp">Office Use Only</div>
         </div>
 
+        {officeLines && officeLines.length > 0 ? (
         <table className="fof-office-table">
           <thead>
             <tr>
@@ -623,6 +625,12 @@ export default function FofPrintSheet({
             </tr>
           </tbody>
         </table>
+        ) : (
+          <p className="fof-office-empty">
+            No procedure lines were entered — this form printed blank. Record any
+            handwritten codes and amounts on this page when filing.
+          </p>
+        )}
 
         <div className="fof-office-summary">
           <div className="fof-office-col">
