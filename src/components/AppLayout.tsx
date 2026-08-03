@@ -48,7 +48,7 @@ const DESTINATIONS: Destination[] = [
   {
     to: '/playbook', icon: BookOpen, label: 'Practice Playbook', shortLabel: 'Playbook',
     match: ['/morning-huddle', '/checklists', '/deposit-log', '/incident-reports', '/fof',
-            '/insurance-desk', '/important-numbers', '/assistant'],
+            '/consents', '/insurance-desk', '/important-numbers', '/assistant'],
   },
   {
     to: '/inbox', icon: Inbox, label: 'Inbox',

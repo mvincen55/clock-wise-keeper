@@ -1,6 +1,7 @@
 import {
   Sunrise, ListChecks, Banknote, ShieldAlert, ReceiptText, FileStack,
-  DollarSign, Sparkles, ShieldCheck, Phone,
+  DollarSign, Sparkles, ShieldCheck, Phone, FileSignature, Library,
+  Layers, ClipboardList,
 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import HubLinkGrid, { HubSection } from '@/components/HubLinkGrid';
@@ -15,6 +16,15 @@ const SECTIONS: HubSection[] = [
       { to: '/checklists', icon: ListChecks, label: 'Checklists', description: 'Daily, weekly, and role-based checklists.' },
       { to: '/deposit-log', icon: Banknote, label: 'Close the Day', description: 'Deposit log and end-of-day closeout.' },
       { to: '/incident-reports', icon: ShieldAlert, label: 'Incident Reports', description: 'Document and review office incidents.' },
+    ],
+  },
+  {
+    title: 'Forms and Consents',
+    links: [
+      { to: '/consents/complete', icon: ClipboardList, label: 'Complete Forms', description: 'Guided consent packet: select, fill, print, and clear.' },
+      { to: '/consents/library', icon: Library, label: 'Form Library', description: 'Every office consent and instruction form, versioned.' },
+      { to: '/consents/bundles', icon: Layers, label: 'Treatment Bundles', description: 'The forms each treatment needs, in print order.' },
+      { to: '/consents', icon: FileSignature, label: 'Forms & Consents Home', description: 'Dashboard, uploads, builder, and office settings.' },
     ],
   },
   {

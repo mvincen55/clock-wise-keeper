@@ -9,6 +9,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesUpdate } from '@/integrations/supabase/types';
 import { useOfficeDocs, type OfficeDoc } from '@/hooks/useOfficeDocs';
 import { readerDocsFor, type LibraryScope } from '@/lib/doc-library';
 import {
@@ -248,13 +249,13 @@ export function useUpdateManualMeta() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: ManualMetaInput) => {
-      const update: Record<string, unknown> = {};
+      const update: TablesUpdate<'office_docs'> = {};
       if (input.title?.trim()) update.title = input.title.trim();
       if (input.carrier !== undefined) update.carrier = input.carrier;
       if (input.manualType !== undefined) update.manual_type = input.manualType;
       if (input.effectiveDate !== undefined) update.effective_date = input.effectiveDate;
       if (input.docStatus !== undefined) update.doc_status = input.docStatus;
-      if (input.sectionOverrides !== undefined) update.section_overrides = input.sectionOverrides;
+      if (input.sectionOverrides !== undefined) update.section_overrides = input.sectionOverrides as never;
       const { error } = await supabase.from('office_docs').update(update).eq('id', input.id);
       if (error) throw error;
     },
