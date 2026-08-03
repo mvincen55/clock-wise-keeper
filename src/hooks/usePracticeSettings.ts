@@ -15,6 +15,17 @@ export type PracticeSettings = {
 
 export type PracticeSettingsPatch = Partial<PracticeSettings>;
 
+/**
+ * Rows written before the 20260803 visibility-token migration stored
+ * 'team'/'admins'; every consumer (dropdown, vitals gating) expects
+ * 'everyone'/'admin_only', so map the legacy tokens on read.
+ */
+export function normalizeCollectionsVisibility(value: string | null | undefined): string {
+  if (value === 'team') return 'everyone';
+  if (value === 'admins') return 'admin_only';
+  return value || 'everyone';
+}
+
 /** Office-wide practice settings, readable by every member of the office. */
 export function usePracticeSettings() {
   const { data: ctx } = useOrgContext();
@@ -32,7 +43,7 @@ export function usePracticeSettings() {
         .maybeSingle();
       return {
         owners_clock_in: data?.owners_clock_in ?? false,
-        collections_visibility: data?.collections_visibility ?? 'everyone',
+        collections_visibility: normalizeCollectionsVisibility(data?.collections_visibility),
         monthly_collections_target_cents: data?.monthly_collections_target_cents ?? 0,
         mobile_capture_enabled: data?.mobile_capture_enabled ?? false,
       };
