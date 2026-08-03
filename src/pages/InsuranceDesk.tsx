@@ -7,20 +7,22 @@
  * insurance references only. Internal business references — never
  * patient records.
  */
-import { ShieldCheck } from 'lucide-react';
-import DocumentLibraryReader from '@/components/library/DocumentLibraryReader';
+import {
+  ArrowDownRight, BadgeCheck, FileCheck, Repeat, Scale, ShieldCheck, Users,
+} from 'lucide-react';
+import DocumentLibraryReader, { type LibraryQuickLink } from '@/components/library/DocumentLibraryReader';
 import type { LibraryScope } from '@/lib/doc-library';
 
 const SCOPE: LibraryScope = { areas: ['playbook'], collections: ['insurance'] };
 
 // Each shortcut is a real scoped search into the carrier manuals.
-const QUICK_LINKS = [
-  { label: 'Claims & attachments', query: 'claim' },
-  { label: 'Eligibility & benefits', query: 'eligibility' },
-  { label: 'Frequencies & limitations', query: 'frequency' },
-  { label: 'Downgrades & alternate benefits', query: 'downgrade' },
-  { label: 'Provider participation', query: 'participating provider' },
-  { label: 'Appeals & corrections', query: 'appeal' },
+const QUICK_LINKS: LibraryQuickLink[] = [
+  { label: 'Claims & attachments', query: 'claim', icon: FileCheck },
+  { label: 'Eligibility & benefits', query: 'eligibility', icon: BadgeCheck },
+  { label: 'Frequencies & limitations', query: 'frequency', icon: Repeat },
+  { label: 'Downgrades & alternate benefits', query: 'downgrade', icon: ArrowDownRight },
+  { label: 'Provider participation', query: 'participating provider', icon: Users },
+  { label: 'Appeals & corrections', query: 'appeal', icon: Scale },
 ];
 
 export default function InsuranceDesk() {

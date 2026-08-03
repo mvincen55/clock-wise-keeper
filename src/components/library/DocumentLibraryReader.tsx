@@ -4,19 +4,29 @@
  *
  * One configuration in, one working reference tool out:
  *   - opens the primary document immediately (no cover-card shelf)
- *   - sticky left navigation: compact document switcher (only when there is
- *     more than one document), searchable table of contents, active-section
- *     indicator
+ *   - desktop is a LOCKED two-pane layout: the page never scrolls — the
+ *     sections column keeps its place while the document scrolls inside
+ *     its own reading pane (with a thin purple reading-progress line)
+ *   - left navigation: compact document switcher (only when there is more
+ *     than one document), searchable table of contents, active-section
+ *     indicator that follows the reading position
  *   - reading pane: comfortable width, heading hierarchy, section anchors,
  *     previous/next section navigation, match highlighting
  *   - full-text search scoped to the surface's library areas/collections,
  *     with passage + document + section on every result
  *   - mobile: search up top, sections in a bottom sheet, no chip rows
  *
+ * Scroll behavior notes (the details that keep it glitch-free):
+ *   - the document body is memoized, so scrollspy updates never re-render
+ *     hundreds of blocks mid-scroll
+ *   - the TOC keeps its active item visible by adjusting ONLY its own
+ *     list's scrollTop — never scrollIntoView, which can chain upward and
+ *     yank the page while someone is reading
+ *
  * All staff read; management lives in Ask AI → Documents. The office purple
- * (design-token `primary`) marks active navigation, focus, and actions only.
+ * (design-token `primary`) marks active navigation, focus, and progress.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,9 +38,11 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import {
   ArrowLeft,
   ArrowRight,
+  CalendarDays,
   ChevronRight,
   FileText,
   List,
+  ListTree,
   Loader2,
   Search,
   Sparkles,
@@ -42,7 +54,6 @@ import { parseDocBlocks, type DocBlock } from '@/lib/doc-format';
 import {
   DOC_COLLECTION_LABELS,
   escapeRegExp,
-  isImportantNumbersTitle,
   locateQueryBlock,
   outlineFromBlocks,
   readerDocsFor,
@@ -58,6 +69,7 @@ import {
 export interface LibraryQuickLink {
   label: string;
   query: string;
+  icon?: LucideIcon;
 }
 
 export interface DocumentLibraryReaderProps {
@@ -103,15 +115,18 @@ function highlighted(text: string, query: string) {
 }
 
 function BlockView({ block, id, query }: { block: DocBlock; id: string; query: string }) {
-  const anchor = 'scroll-mt-28 lg:scroll-mt-20';
+  // Anchor offset: below the sticky bars when the window scrolls (mobile),
+  // just inside the pane when the pane scrolls (desktop).
+  const anchor = 'scroll-mt-28 lg:scroll-mt-6';
   switch (block.type) {
     case 'heading':
       return block.level <= 2 ? (
         <h2
           id={id}
-          className={`${anchor} mb-3 mt-9 border-b border-border pb-2 text-xl font-bold tracking-tight text-foreground first:mt-0`}
+          className={`${anchor} mb-3 mt-10 flex items-center gap-2.5 border-b border-border/70 pb-2 text-xl font-bold tracking-tight text-foreground first:mt-0`}
         >
-          {highlighted(block.text, query)}
+          <span aria-hidden className="h-4 w-1 shrink-0 rounded-full bg-primary/60" />
+          <span className="min-w-0">{highlighted(block.text, query)}</span>
         </h2>
       ) : (
         <h3 id={id} className={`${anchor} mb-2 mt-6 text-base font-semibold text-foreground first:mt-0`}>
@@ -120,7 +135,7 @@ function BlockView({ block, id, query }: { block: DocBlock; id: string; query: s
       );
     case 'bullets':
       return (
-        <ul id={id} className={`${anchor} mb-4 list-disc space-y-1.5 pl-5 text-[15px] leading-7`}>
+        <ul id={id} className={`${anchor} mb-4 list-disc space-y-1.5 pl-5 text-[15px] leading-7 marker:text-primary/50`}>
           {block.items.map((item, j) => (
             <li key={j}>{highlighted(item, query)}</li>
           ))}
@@ -128,7 +143,7 @@ function BlockView({ block, id, query }: { block: DocBlock; id: string; query: s
       );
     case 'numbered':
       return (
-        <ol id={id} className={`${anchor} mb-4 list-decimal space-y-1.5 pl-5 text-[15px] leading-7`}>
+        <ol id={id} className={`${anchor} mb-4 list-decimal space-y-1.5 pl-5 text-[15px] leading-7 marker:font-medium marker:text-primary/70`}>
           {block.items.map((item, j) => (
             <li key={j}>{highlighted(item, query)}</li>
           ))}
@@ -143,7 +158,28 @@ function BlockView({ block, id, query }: { block: DocBlock; id: string; query: s
   }
 }
 
-/** Searchable, grouped table of contents with the active section marked. */
+/**
+ * The document body, memoized hard: scrollspy state changes many times per
+ * scroll, and re-rendering a 67-section handbook on every tick is exactly
+ * the jank this avoids.
+ */
+const ReaderBody = memo(function ReaderBody({
+  blocks,
+  highlight,
+}: {
+  blocks: DocBlock[];
+  highlight: string;
+}) {
+  return (
+    <div className="max-w-[46rem]">
+      {blocks.map((block, i) => (
+        <BlockView key={i} id={sectionAnchorId(i)} block={block} query={highlight} />
+      ))}
+    </div>
+  );
+});
+
+/** Searchable table of contents with the active section marked. */
 function TableOfContents({
   outline,
   activeId,
@@ -155,16 +191,24 @@ function TableOfContents({
 }) {
   const [filter, setFilter] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
-  const topLevel = Math.min(...outline.map(o => o.level));
+  const topLevel = outline.length > 0 ? Math.min(...outline.map(o => o.level)) : 0;
   const shown = filter.trim()
     ? outline.filter(o => o.text.toLowerCase().includes(filter.trim().toLowerCase()))
     : outline;
 
-  // Keep the active section visible inside the (long) list.
+  // Keep the active section visible by moving ONLY this list's scrollTop.
+  // scrollIntoView is deliberately avoided: it can chain to outer scrollers
+  // and shove the page around while the user is reading.
   useEffect(() => {
-    listRef.current
-      ?.querySelector(`[data-toc-id="${CSS.escape(activeId)}"]`)
-      ?.scrollIntoView({ block: 'nearest' });
+    const box = listRef.current;
+    if (!box || !activeId || box.scrollHeight <= box.clientHeight) return;
+    const el = box.querySelector<HTMLElement>(`[data-toc-id="${CSS.escape(activeId)}"]`);
+    if (!el) return;
+    const boxRect = box.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    if (elRect.top < boxRect.top + 8 || elRect.bottom > boxRect.bottom - 8) {
+      box.scrollTop += elRect.top - boxRect.top - box.clientHeight / 2 + el.clientHeight / 2;
+    }
   }, [activeId]);
 
   if (outline.length === 0) {
@@ -172,17 +216,20 @@ function TableOfContents({
   }
 
   return (
-    <div className="space-y-2">
-      <div className="relative">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <div className="relative shrink-0">
         <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={filter}
           onChange={e => setFilter(e.target.value)}
           placeholder="Filter sections…"
-          className="h-8 rounded-lg pl-8 text-xs"
+          className="h-8 rounded-lg pl-8 text-xs focus-visible:ring-primary"
         />
       </div>
-      <div ref={listRef} className="space-y-0.5">
+      <div
+        ref={listRef}
+        className="min-h-0 flex-1 space-y-0.5 overscroll-contain pr-1 lg:overflow-y-auto"
+      >
         {shown.length === 0 && (
           <p className="px-2 py-1 text-xs text-muted-foreground">No section matches.</p>
         )}
@@ -225,7 +272,7 @@ function DocSwitcher({
 }) {
   if (docs.length <= 1) return null;
   return (
-    <div className="space-y-1">
+    <div className="shrink-0 space-y-1">
       <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </p>
@@ -236,15 +283,22 @@ function DocSwitcher({
             key={doc.id}
             type="button"
             onClick={() => onSelect(doc)}
-            className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-sm leading-snug transition-colors ${
+            className={`flex w-full items-start gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm leading-snug transition-colors ${
               active
-                ? 'bg-primary font-medium text-primary-foreground'
+                ? 'bg-primary font-medium text-primary-foreground shadow-sm'
                 : 'text-foreground/80 hover:bg-muted'
             }`}
           >
-            <span className="block">{doc.title}</span>
-            <span className={`block text-[11px] ${active ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-              {DOC_COLLECTION_LABELS[resolveDocPlacement(doc).collection]}
+            <FileText
+              className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${active ? 'text-primary-foreground/80' : 'text-primary/60'}`}
+            />
+            <span className="min-w-0">
+              <span className="block">{doc.title}</span>
+              <span
+                className={`block text-[11px] ${active ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}
+              >
+                {DOC_COLLECTION_LABELS[resolveDocPlacement(doc).collection]}
+              </span>
             </span>
           </button>
         );
@@ -274,6 +328,8 @@ export default function DocumentLibraryReader({
   const [activeSectionId, setActiveSectionId] = useState('');
   const [sheetOpen, setSheetOpen] = useState(false);
   const scrollRaf = useRef(0);
+  const paneRef = useRef<HTMLElement | null>(null);
+  const progressRef = useRef<HTMLDivElement | null>(null);
 
   const docs = useMemo(() => readerDocsFor(allDocs ?? [], scope), [allDocs, scope]);
   const activeDoc = docs.find(d => d.id === selectedId) ?? docs[0] ?? null;
@@ -389,6 +445,7 @@ export default function DocumentLibraryReader({
     setActiveSectionId('');
     setSheetOpen(false);
     window.scrollTo({ top: 0 });
+    paneRef.current?.scrollTo({ top: 0 });
   };
 
   const openFromSearch = (hit: SearchHit) => {
@@ -421,18 +478,29 @@ export default function DocumentLibraryReader({
     );
   }, [pendingJump, activeDoc, blocks, outline]);
 
-  // Scrollspy: the last heading above the reading line is the active section.
+  // Scrollspy + reading progress, one rAF-throttled listener. Captured on
+  // window so it hears both the desktop reading pane and mobile page scroll.
+  // The reading line sits just inside the pane (desktop) or just below the
+  // sticky bars (mobile) — the last heading above it is the active section.
   useEffect(() => {
     if (outline.length === 0) return;
     const onScroll = () => {
       if (scrollRaf.current) return;
       scrollRaf.current = requestAnimationFrame(() => {
         scrollRaf.current = 0;
+        const pane = paneRef.current;
+        if (pane && progressRef.current) {
+          const max = pane.scrollHeight - pane.clientHeight;
+          progressRef.current.style.width =
+            max > 0 ? `${Math.min(100, (pane.scrollTop / max) * 100)}%` : '0%';
+        }
+        const paneTop = pane ? Math.max(pane.getBoundingClientRect().top, 0) : 0;
+        const threshold = paneTop + 120;
         let current = outline[0].id;
         for (const item of outline) {
           const el = document.getElementById(item.id);
           if (!el) continue;
-          if (el.getBoundingClientRect().top <= 140) current = item.id;
+          if (el.getBoundingClientRect().top <= threshold) current = item.id;
           else break;
         }
         setActiveSectionId(prev => (prev === current ? prev : current));
@@ -457,10 +525,10 @@ export default function DocumentLibraryReader({
   const updatedAt = activeDoc ? new Date(activeDoc.updated_at ?? activeDoc.created_at) : null;
 
   const sidebar = (
-    <div className="space-y-4">
+    <div className="flex min-h-0 flex-col gap-4 lg:h-full">
       <DocSwitcher docs={docs} activeId={activeDoc?.id ?? ''} label={documentsLabel} onSelect={openDoc} />
-      <div className="space-y-1">
-        <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="flex min-h-0 flex-col gap-1 lg:flex-1">
+        <p className="shrink-0 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Contents
         </p>
         <TableOfContents outline={outline} activeId={activeSectionId} onJump={jumpToSection} />
@@ -469,11 +537,11 @@ export default function DocumentLibraryReader({
   );
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 p-4 md:p-6">
+    <div className="mx-auto max-w-6xl space-y-4 p-4 md:p-6 lg:flex lg:h-[calc(100vh-3.75rem)] lg:flex-col lg:overflow-hidden">
       {/* Compact header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/15">
             <Icon className="h-5 w-5 text-primary" />
           </div>
           <div className="min-w-0">
@@ -490,10 +558,10 @@ export default function DocumentLibraryReader({
       </div>
 
       {/* Search across this library */}
-      <div className="relative">
+      <div className="relative shrink-0">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          className="h-11 rounded-xl pl-9 pr-9 focus-visible:ring-primary"
+          className="h-11 rounded-xl border-border bg-card pl-9 pr-9 shadow-sm focus-visible:ring-primary"
           placeholder={searchPlaceholder}
           value={query}
           onChange={e => setQuery(e.target.value)}
@@ -512,20 +580,24 @@ export default function DocumentLibraryReader({
 
       {/* Quick access — a handful of real searches, nothing more */}
       {!searching && docs.length > 0 && quickLinks.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
           <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             Quick access
           </span>
-          {quickLinks.slice(0, 6).map(link => (
-            <button
-              key={link.label}
-              type="button"
-              onClick={() => setQuery(link.query)}
-              className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
-            >
-              {link.label}
-            </button>
-          ))}
+          {quickLinks.slice(0, 6).map(link => {
+            const LinkIcon = link.icon;
+            return (
+              <button
+                key={link.label}
+                type="button"
+                onClick={() => setQuery(link.query)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:text-primary"
+              >
+                {LinkIcon && <LinkIcon className="h-3.5 w-3.5 text-primary/70" />}
+                {link.label}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -535,7 +607,7 @@ export default function DocumentLibraryReader({
         </div>
       ) : searching ? (
         /* ---------------- Search results ---------------- */
-        <div className="space-y-2">
+        <div className="space-y-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium">
               Results for “{debounced}”
@@ -573,7 +645,7 @@ export default function DocumentLibraryReader({
                     key={`${hit.doc_id}:${hit.chunk_index}`}
                     type="button"
                     onClick={() => openFromSearch(hit)}
-                    className="block w-full rounded-xl border border-border bg-card p-3.5 text-left transition-colors hover:border-primary/40"
+                    className="block w-full rounded-xl border border-border bg-card p-3.5 text-left transition-all hover:border-primary/40 hover:shadow-sm"
                   >
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                       <FileText className="h-3.5 w-3.5 shrink-0 text-primary" />
@@ -606,7 +678,7 @@ export default function DocumentLibraryReader({
                     openDoc(doc);
                     setQuery('');
                   }}
-                  className="flex w-full items-center gap-2 rounded-xl border border-border bg-card p-3.5 text-left transition-colors hover:border-primary/40"
+                  className="flex w-full items-center gap-2 rounded-xl border border-border bg-card p-3.5 text-left transition-all hover:border-primary/40 hover:shadow-sm"
                 >
                   <FileText className="h-4 w-4 shrink-0 text-primary" />
                   <span className="text-sm font-medium">{highlighted(doc.title, debounced)}</span>
@@ -620,7 +692,9 @@ export default function DocumentLibraryReader({
         /* ---------------- Empty library ---------------- */
         <Card>
           <CardContent className="py-14 text-center">
-            <Icon className="mx-auto h-8 w-8 text-muted-foreground/50" />
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/5">
+              <Icon className="h-6 w-6 text-muted-foreground/60" />
+            </div>
             <p className="mt-3 font-medium">{emptyState.title}</p>
             <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{emptyState.body}</p>
           </CardContent>
@@ -644,100 +718,124 @@ export default function DocumentLibraryReader({
                 <SheetHeader className="text-left">
                   <SheetTitle className="text-base">{activeDoc?.title}</SheetTitle>
                 </SheetHeader>
-                <div className="mt-2 flex-1 overflow-y-auto pb-4">{sidebar}</div>
+                <div className="mt-2 min-h-0 flex-1 overflow-y-auto pb-2">{sidebar}</div>
               </SheetContent>
             </Sheet>
           </div>
 
-          <div className="grid items-start gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-            {/* Sticky desktop navigation */}
-            <aside className="sticky top-16 hidden max-h-[calc(100vh-5rem)] overflow-y-auto pb-6 pr-1 lg:block">
-              {sidebar}
-            </aside>
+          {/* Desktop: locked two-pane layout — the page itself never
+              scrolls; the sections column holds its place and the document
+              scrolls inside the reading pane. */}
+          <div className="grid items-start gap-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-stretch">
+            <aside className="hidden lg:block lg:h-full lg:min-h-0">{sidebar}</aside>
 
-            <main className="min-w-0">
-              {contentsLoading ? (
-                <div className="flex justify-center py-16">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                </div>
-              ) : activeDoc ? (
-                <article>
-                  <header className="mb-6 border-b border-border pb-4">
-                    <h2 className="text-2xl font-bold tracking-tight">{activeDoc.title}</h2>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {updatedAt &&
-                        `Updated ${updatedAt.toLocaleDateString(undefined, {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })}`}
-                      {outline.length > 0 && ` · ${outline.length} sections`}
-                    </p>
-                    {readerHighlight && (
-                      <button
-                        type="button"
-                        onClick={() => setReaderHighlight('')}
-                        className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/15"
-                      >
-                        Highlighting “{readerHighlight}”
-                        <X className="h-3 w-3" />
-                      </button>
+            <main
+              ref={paneRef}
+              className="min-w-0 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:shadow-sm"
+            >
+              {/* Reading progress — a quiet purple line along the pane's top */}
+              <div className="pointer-events-none sticky top-0 z-10 hidden lg:block">
+                <div ref={progressRef} className="h-[3px] w-0 rounded-r-full bg-primary/60" />
+              </div>
+
+              <div className="lg:px-8 lg:pb-10 lg:pt-5 xl:px-10">
+                {contentsLoading ? (
+                  <div className="flex justify-center py-16">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                ) : activeDoc ? (
+                  <article>
+                    <header className="mb-7">
+                      <div className="flex items-start gap-3">
+                        <span className="mt-1 hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:flex">
+                          <Icon className="h-4 w-4 text-primary" />
+                        </span>
+                        <div className="min-w-0">
+                          <h2 className="text-2xl font-bold tracking-tight">{activeDoc.title}</h2>
+                          <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                            {updatedAt && (
+                              <span className="inline-flex items-center gap-1">
+                                <CalendarDays className="h-3.5 w-3.5" />
+                                Updated{' '}
+                                {updatedAt.toLocaleDateString(undefined, {
+                                  year: 'numeric',
+                                  month: 'long',
+                                  day: 'numeric',
+                                })}
+                              </span>
+                            )}
+                            {outline.length > 0 && (
+                              <span className="inline-flex items-center gap-1">
+                                <ListTree className="h-3.5 w-3.5" />
+                                {outline.length} sections
+                              </span>
+                            )}
+                          </p>
+                          {readerHighlight && (
+                            <button
+                              type="button"
+                              onClick={() => setReaderHighlight('')}
+                              className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/15"
+                            >
+                              Highlighting “{readerHighlight}”
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-4 h-1 w-12 rounded-full bg-primary/60" />
+                    </header>
+
+                    {blocks.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        This document has no readable text.
+                      </p>
+                    ) : (
+                      <ReaderBody blocks={blocks} highlight={readerHighlight} />
                     )}
-                  </header>
 
-                  {blocks.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      This document has no readable text.
-                    </p>
-                  ) : (
-                    <div className="max-w-[46rem]">
-                      {blocks.map((block, i) => (
-                        <BlockView key={i} id={sectionAnchorId(i)} block={block} query={readerHighlight} />
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Previous / next section */}
-                  {outline.length > 1 && (
-                    <nav className="mt-10 flex max-w-[46rem] items-stretch gap-3 border-t border-border pt-4">
-                      {prevSection ? (
-                        <button
-                          type="button"
-                          onClick={() => jumpToSection(prevSection)}
-                          className="flex-1 rounded-xl border border-border bg-card p-3 text-left transition-colors hover:border-primary/40"
-                        >
-                          <span className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                            <ArrowLeft className="h-3 w-3" />
-                            Previous
-                          </span>
-                          <span className="mt-1 line-clamp-2 block text-sm font-medium">
-                            {prevSection.text}
-                          </span>
-                        </button>
-                      ) : (
-                        <div className="flex-1" />
-                      )}
-                      {nextSection ? (
-                        <button
-                          type="button"
-                          onClick={() => jumpToSection(nextSection)}
-                          className="flex-1 rounded-xl border border-border bg-card p-3 text-right transition-colors hover:border-primary/40"
-                        >
-                          <span className="flex items-center justify-end gap-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                            Next
-                            <ArrowRight className="h-3 w-3" />
-                          </span>
-                          <span className="mt-1 line-clamp-2 block text-sm font-medium">
-                            {nextSection.text}
-                          </span>
-                        </button>
-                      ) : (
-                        <div className="flex-1" />
-                      )}
-                    </nav>
-                  )}
-                </article>
-              ) : null}
+                    {/* Previous / next section */}
+                    {outline.length > 1 && (
+                      <nav className="mt-10 flex max-w-[46rem] items-stretch gap-3 border-t border-border pt-4">
+                        {prevSection ? (
+                          <button
+                            type="button"
+                            onClick={() => jumpToSection(prevSection)}
+                            className="group flex-1 rounded-xl border border-border bg-card p-3 text-left transition-all hover:border-primary/40 hover:shadow-sm"
+                          >
+                            <span className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              <ArrowLeft className="h-3 w-3 transition-transform group-hover:-translate-x-0.5" />
+                              Previous
+                            </span>
+                            <span className="mt-1 line-clamp-2 block text-sm font-medium">
+                              {prevSection.text}
+                            </span>
+                          </button>
+                        ) : (
+                          <div className="flex-1" />
+                        )}
+                        {nextSection ? (
+                          <button
+                            type="button"
+                            onClick={() => jumpToSection(nextSection)}
+                            className="group flex-1 rounded-xl border border-border bg-card p-3 text-right transition-all hover:border-primary/40 hover:shadow-sm"
+                          >
+                            <span className="flex items-center justify-end gap-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              Next
+                              <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                            </span>
+                            <span className="mt-1 line-clamp-2 block text-sm font-medium">
+                              {nextSection.text}
+                            </span>
+                          </button>
+                        ) : (
+                          <div className="flex-1" />
+                        )}
+                      </nav>
+                    )}
+                  </article>
+                ) : null}
+              </div>
             </main>
           </div>
         </>

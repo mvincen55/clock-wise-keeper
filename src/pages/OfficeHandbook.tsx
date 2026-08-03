@@ -6,20 +6,22 @@
  * Workplace handbook + HR content only — insurance manuals and other
  * Practice Playbook references live in the Insurance Desk.
  */
-import { BookOpen } from 'lucide-react';
-import DocumentLibraryReader from '@/components/library/DocumentLibraryReader';
+import {
+  AlarmClock, Banknote, BookOpen, CalendarOff, ClipboardCheck, HeartPulse, Siren,
+} from 'lucide-react';
+import DocumentLibraryReader, { type LibraryQuickLink } from '@/components/library/DocumentLibraryReader';
 import type { LibraryScope } from '@/lib/doc-library';
 
 const SCOPE: LibraryScope = { areas: ['workplace'], collections: ['handbook', 'hr'] };
 
 // Frequently used policies — each fires a scoped full-text search.
-const QUICK_LINKS = [
-  { label: 'Late arrivals & no-shows', query: 'late arrival' },
-  { label: 'PTO & time off', query: 'time off' },
-  { label: 'Attendance', query: 'attendance' },
-  { label: 'Payroll & punches', query: 'payroll' },
-  { label: 'Benefits', query: 'benefits' },
-  { label: 'Emergencies', query: 'emergency' },
+const QUICK_LINKS: LibraryQuickLink[] = [
+  { label: 'Late arrivals & no-shows', query: 'late arrival', icon: AlarmClock },
+  { label: 'PTO & time off', query: 'time off', icon: CalendarOff },
+  { label: 'Attendance', query: 'attendance', icon: ClipboardCheck },
+  { label: 'Payroll & punches', query: 'payroll', icon: Banknote },
+  { label: 'Benefits', query: 'benefits', icon: HeartPulse },
+  { label: 'Emergencies', query: 'emergency', icon: Siren },
 ];
 
 export default function OfficeHandbook() {
