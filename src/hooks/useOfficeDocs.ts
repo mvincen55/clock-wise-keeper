@@ -141,6 +141,67 @@ export function useUpdateOfficeDoc() {
   });
 }
 
+/** Library editing settings: owner-controlled "managers can edit" flag. */
+export function useDocLibrarySettings() {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+
+  return useQuery({
+    queryKey: ['doc-library-settings', ctx?.org_id],
+    enabled: !!user && !!ctx,
+    queryFn: async (): Promise<{ managers_can_edit: boolean }> => {
+      const { data, error } = await supabase
+        .from('doc_library_settings')
+        .select('managers_can_edit')
+        .maybeSingle();
+      if (error) throw error;
+      return data ?? { managers_can_edit: false };
+    },
+  });
+}
+
+/** Owner-only (enforced by RLS): allow or revoke manager editing. */
+export function useUpdateDocLibrarySettings() {
+  const qc = useQueryClient();
+  const { data: ctx } = useOrgContext();
+
+  return useMutation({
+    mutationFn: async (managersCanEdit: boolean) => {
+      if (!ctx?.org_id) throw new Error('No organization');
+      const { error } = await supabase
+        .from('doc_library_settings')
+        .upsert({ org_id: ctx.org_id, managers_can_edit: managersCanEdit });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['doc-library-settings'] }),
+  });
+}
+
+/**
+ * Replace a document's text in place (owner always; managers when allowed —
+ * both checked again server-side). Re-chunks and re-indexes, so the reader,
+ * search, and Ask AI all pick the change up together.
+ */
+export function useEditOfficeDocContent() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { docId: string; text: string }) => {
+      const { data, error } = await supabase.functions.invoke('edit-doc', {
+        body: { doc_id: input.docId, text: input.text },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      return data as { id: string; chunks: number; chars: number };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['office-docs'] });
+      qc.invalidateQueries({ queryKey: ['library-doc-contents'] });
+      qc.invalidateQueries({ queryKey: ['library-search'] });
+    },
+  });
+}
+
 export function useDeleteOfficeDoc() {
   const qc = useQueryClient();
 

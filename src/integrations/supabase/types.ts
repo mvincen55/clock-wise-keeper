@@ -3257,6 +3257,32 @@ export type Database = {
           },
         ]
       }
+      doc_library_settings: {
+        Row: {
+          managers_can_edit: boolean
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          managers_can_edit?: boolean
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          managers_can_edit?: boolean
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doc_library_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       office_docs: {
         Row: {
           category: string
