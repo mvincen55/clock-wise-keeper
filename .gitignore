@@ -25,6 +25,3 @@ package-lock.json
 *.njsproj
 *.sln
 *.sw?
-
-# Vendored OCR engine (rebuilt by scripts/vendor-tesseract.mjs)
-public/tesseract/

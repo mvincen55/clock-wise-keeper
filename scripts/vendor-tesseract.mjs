@@ -8,7 +8,11 @@
  * traineddata once at build/dev time (build machines have network; user
  * browsers only ever talk to our own origin for these files).
  *
- * Wired into predev/prebuild. Assets are gitignored — rerun after install.
+ * The vendored assets are COMMITTED so every build pipeline ships them —
+ * Bun-based builds (Lovable) skip npm pre/post hooks, and a build without
+ * these files deploys a reader that can only say OCR_ASSETS_MISSING. This
+ * script runs inside `build`/`build:dev` (not just hooks) to refresh the
+ * copies when tesseract.js versions bump; commit whatever it changes.
  */
 import { createWriteStream } from 'node:fs';
 import { access, copyFile, mkdir } from 'node:fs/promises';
