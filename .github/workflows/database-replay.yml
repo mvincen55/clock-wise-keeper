@@ -75,13 +75,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install npm dependencies used by Deno npm imports
-        run: bun install --frozen-lockfile
-
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
@@ -91,5 +84,5 @@ jobs:
         run: |
           while IFS= read -r file; do
             echo "Checking $file"
-            deno check "$file"
+            deno check --node-modules-dir=auto "$file"
           done < <(find supabase/functions -mindepth 2 -maxdepth 2 -name index.ts -print | sort)
