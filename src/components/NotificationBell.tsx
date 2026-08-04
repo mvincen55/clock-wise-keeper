@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Check, CheckCheck } from 'lucide-react';
+import { Bell, CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -24,7 +24,7 @@ export default function NotificationBell() {
   const markAllRead = useMarkAllRead();
   const { user } = useAuth();
 
-  // The problem reports this person filed — so they can see where each one stands
+  // The problem reports this person filed, so they can see where each one stands
   // without having to reopen the widget and ask.
   const { data: tickets } = useQuery({
     queryKey: ['my-support-tickets', user?.id],
@@ -65,9 +65,10 @@ export default function NotificationBell() {
     incident_report_closed: '✅',
     training_due: '🎓',
     goal_step_due: '🎯',
+    knowledge_acknowledgment_required: '📖',
   };
 
-  /** Notifications that point at a row we can open from here. */
+  /** Notifications that point at a row or workspace the recipient can open. */
   const linkFor = (n: { related_table: string | null; related_id: string | null }) =>
     n.related_table === 'incident_reports' && n.related_id
       ? `/incident-reports?report=${n.related_id}`
@@ -75,8 +76,9 @@ export default function NotificationBell() {
         ? '/training?tab=mine'
         : n.related_table === 'checklist_items'
           ? '/goals'
-          : null;
-
+          : n.related_table === 'knowledge_acknowledgments'
+            ? '/acknowledgments'
+            : null;
 
   return (
     <div className="relative" ref={ref}>

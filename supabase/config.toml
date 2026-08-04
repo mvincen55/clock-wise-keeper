@@ -39,6 +39,8 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = true
   [functions.accountability-engine]
     verify_jwt = false
+  [functions.acknowledgment-escalation]
+    verify_jwt = false
   [functions.commitment-listen]
     verify_jwt = true
   [functions.consent-ai]

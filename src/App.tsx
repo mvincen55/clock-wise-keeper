@@ -43,12 +43,15 @@ import InboxPage from "@/pages/InboxPage";
 import Training from "@/pages/Training";
 import Workplace from "@/pages/Workplace";
 import Playbook from "@/pages/Playbook";
+import PracticeProcedures from "@/pages/PracticeProcedures";
 import Management from "@/pages/Management";
+import KnowledgeWorkspace from "@/pages/KnowledgeWorkspace";
+import KnowledgeAcknowledgments from "@/pages/KnowledgeAcknowledgments";
+import PracticeSetup from "@/pages/PracticeSetup";
 import Help from "@/pages/Help";
 import Privacy from "@/pages/Privacy";
 import AcceptInvite from "@/pages/AcceptInvite";
 import Onboarding from "@/pages/Onboarding";
-import NotFound from "@/pages/NotFound";
 import OAuthConsent from "@/pages/OAuthConsent";
 import { Loader2 } from "lucide-react";
 import { useOnboardingStatus } from "@/hooks/useOnboarding";
@@ -102,7 +105,11 @@ const App = () => (
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/workplace" element={<ProtectedRoute><Workplace /></ProtectedRoute>} />
             <Route path="/playbook" element={<ProtectedRoute><Playbook /></ProtectedRoute>} />
+            <Route path="/playbook/procedures" element={<ProtectedRoute><PracticeProcedures /></ProtectedRoute>} />
             <Route path="/management" element={<ProtectedRoute><Management /></ProtectedRoute>} />
+            <Route path="/management/knowledge" element={<ProtectedRoute><KnowledgeWorkspace /></ProtectedRoute>} />
+            <Route path="/practice-setup" element={<ProtectedRoute><PracticeSetup /></ProtectedRoute>} />
+            <Route path="/acknowledgments" element={<ProtectedRoute><KnowledgeAcknowledgments /></ProtectedRoute>} />
             <Route path="/inbox" element={<Navigate to="/inbox/messages" replace />} />
             <Route path="/inbox/:tab" element={<ProtectedRoute><InboxPage /></ProtectedRoute>} />
             <Route path="/help" element={<ProtectedRoute><Help /></ProtectedRoute>} />
@@ -150,7 +157,6 @@ const App = () => (
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
             <Route path="*" element={<Navigate to="/auth" replace />} />
-
           </Routes>
         </BrowserRouter>
       </TooltipProvider>

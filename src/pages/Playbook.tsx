@@ -1,7 +1,7 @@
 import {
   Sunrise, ListChecks, Banknote, ShieldAlert, ReceiptText, FileStack,
   DollarSign, Sparkles, ShieldCheck, Phone, CalendarX, FileSignature,
-  Library, Layers, ClipboardList,
+  Library, Layers, ClipboardList, BookOpenCheck,
 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useBrokenApptSettings } from '@/hooks/useBrokenApptSettings';
@@ -15,6 +15,7 @@ const buildSections = (brokenApptLabel: string): HubSection[] => [
   {
     title: 'Daily Operations',
     links: [
+      { to: '/playbook/procedures', icon: BookOpenCheck, label: 'Office Procedures', description: 'The reviewed, published steps for how this dental office performs work.' },
       { to: '/morning-huddle', icon: Sunrise, label: 'Morning Huddle', description: 'Start the day aligned as a team.' },
       { to: '/checklists', icon: ListChecks, label: 'Checklists', description: 'Daily, weekly, and role-based checklists.' },
       { to: '/deposit-log', icon: Banknote, label: 'Close the Day', description: 'Deposit log and end-of-day closeout.' },
