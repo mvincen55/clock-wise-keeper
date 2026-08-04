@@ -7,7 +7,7 @@ import {
   formatMoney,
   mergeFields,
 } from '@/lib/broken-appts/outputs';
-import { DEFAULT_BA_SETTINGS, DEFAULT_BA_TEMPLATES } from '@/lib/broken-appts/defaults';
+import { DEFAULT_BA_SETTINGS, DEFAULT_BA_TEMPLATES, RUNG_BEHAVIOR } from '@/lib/broken-appts/defaults';
 
 // The copy-paste blocks are checked as exact strings — what staff pastes
 // into Dentrix must match what the screen renders, dateline included.
@@ -35,6 +35,13 @@ describe('buildPopUp', () => {
     expect(
       buildPopUp({ rung: 5, todayType: 'NS', settings, todayMDY: '8/3/2026', initials: 'MV' })
     ).toBeNull();
+  });
+
+  it('Rung 5 never sends a letter and only offers the holding reply', () => {
+    // Management ruling: no letter at Rung 5 ever — not even for a
+    // first-ever no-show that happens after 0005 hit the ledger.
+    expect(RUNG_BEHAVIOR[5].letterCode).toBeNull();
+    expect(RUNG_BEHAVIOR[5].replyCode).toBe('rung5');
   });
 
   it('Rung 2 block matches the spec exactly, dateline included', () => {

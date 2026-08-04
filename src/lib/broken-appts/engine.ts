@@ -14,7 +14,12 @@ export interface RungInput {
   priorLC: number;
   /** Prior no-shows within the history window. */
   priorNS: number;
-  /** Already on VIP-only scheduling — the Office Manager owns it. */
+  /**
+   * 0005 has ever appeared on the patient's ledger (VIP-only / Office
+   * Manager process). Terminal by management ruling: a return to regular
+   * scheduling never resets it — every subsequent break is Rung 5, both
+   * event types, and no letter is ever sent.
+   */
   onVip: boolean;
 }
 

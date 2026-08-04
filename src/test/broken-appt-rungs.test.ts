@@ -36,8 +36,13 @@ describe('computeRung', () => {
     expect(computeRung({ todayType: 'NS', priorLC: 2, priorNS: 0, onVip: false })).toBe(4);
   });
 
-  it('anything while on VIP → Rung 5, regardless of history', () => {
+  it('0005 on the ledger → Rung 5 always, both event types, regardless of history', () => {
+    // Management ruling: 0005 is TERMINAL. Once it has ever appeared —
+    // including for patients later returned to regular scheduling — every
+    // subsequent broken appointment routes to Rung 5 / OM, with no letter.
     expect(computeRung({ todayType: 'LC', priorLC: 0, priorNS: 0, onVip: true })).toBe(5);
+    expect(computeRung({ todayType: 'NS', priorLC: 0, priorNS: 0, onVip: true })).toBe(5);
+    expect(computeRung({ todayType: 'LC', priorLC: 5, priorNS: 5, onVip: true })).toBe(5);
     expect(computeRung({ todayType: 'NS', priorLC: 5, priorNS: 5, onVip: true })).toBe(5);
   });
 });

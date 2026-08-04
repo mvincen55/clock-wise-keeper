@@ -255,12 +255,15 @@ export default function BrokenAppointments() {
   };
 
   // Mode B is always LC (Rule 3); mode A no-shows reuse the outreach text.
+  // Rung 5 always uses the holding reply — never outreach, never a promise.
   const replyCode =
     onTime && step === 'ontime'
       ? 'on_time'
-      : mode === 'A' && todayType === 'NS'
-        ? 'ns_outreach'
-        : behavior.replyCode;
+      : rung === 5
+        ? behavior.replyCode
+        : mode === 'A' && todayType === 'NS'
+          ? 'ns_outreach'
+          : behavior.replyCode;
   const replyText = replyCode ? replyFor(replyCode) : null;
 
   const apptNote = buildApptNote({
@@ -378,7 +381,11 @@ export default function BrokenAppointments() {
               <p>Rung 2 — first no-show: {formatMoney(s.feeAmount)} outstanding, letter 9100A, Pop-Up, scheduling blocked.</p>
               <p>Rung 3 — second break: {formatMoney(s.feeAmount)} outstanding, letter 9106, card on file required.</p>
               <p>Rung 4 — third break (or repeat no-show): card charged, letter 9107, VIP-only scheduling.</p>
-              <p>Rung 5 — already on VIP: hard stop, Office Manager handles.</p>
+              <p>
+                Rung 5 — 0005 on the ledger (now or ever): hard stop, Office Manager
+                handles, no letter. Terminal — a return to regular scheduling never
+                resets it.
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -630,10 +637,13 @@ export default function BrokenAppointments() {
       <div className="flex items-center gap-3 rounded-lg border p-3">
         <Switch id="ba-vip" checked={onVip} onCheckedChange={setOnVip} />
         <Label htmlFor="ba-vip" className="font-normal cursor-pointer">
-          <span className="font-medium">Patient is currently on VIP-only scheduling</span>
+          <span className="font-medium">
+            0005 is on the patient's ledger (VIP-only scheduling — now or ever)
+          </span>
           <br />
           <span className="text-sm text-muted-foreground">
-            Hard stop — the Office Manager handles everything from here.
+            0005 is terminal: even after a return to regular scheduling, every broken
+            appointment goes to the Office Manager.
           </span>
         </Label>
       </div>
@@ -809,14 +819,19 @@ export default function BrokenAppointments() {
     </StepShell>
   );
 
+  // Rung 5 rulings (management, final): no letter is EVER sent at Rung 5
+  // — not even a first-no-show letter — so the screen carries only the
+  // OM instructions and the holding reply. 0005 is terminal: once it has
+  // appeared on the ledger, every subsequent break lands here.
   const stopScreen = (
     <div className="space-y-4">
       <Alert variant="destructive">
         <OctagonX className="h-4 w-4" />
         <AlertTitle>HARD STOP — front desk does not handle</AlertTitle>
         <AlertDescription>
-          This patient is on VIP-only scheduling. Everything from here is the Office
-          Manager's process: do not post fees, do not send a letter, do not reschedule.
+          0005 is on this patient's ledger — everything from here is the Office
+          Manager's process: do not post fees, do not send any letter (no letter ever
+          goes out at Rung 5), do not reschedule.
         </AlertDescription>
       </Alert>
 
@@ -824,40 +839,29 @@ export default function BrokenAppointments() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">For the Office Manager</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm">
+        <CardContent className="text-sm">
           <ul className="list-disc pl-5 space-y-1">
             {ledgerSteps.map((line, i) => (
               <li key={i}>{line}</li>
             ))}
           </ul>
-          <Alert>
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              Pending management decision: if this is the patient's first-ever no-show,
-              current default is to also send 9100A — confirm with the Office Manager.
-            </AlertDescription>
-          </Alert>
         </CardContent>
       </Card>
 
-      {mode === 'B' && (
-        <>
-          <div className="space-y-1.5 max-w-sm">
-            <Label htmlFor="ba-stop-first">Patient first name (for the holding reply)</Label>
-            <Input
-              id="ba-stop-first"
-              value={patient.firstName}
-              onChange={e => setPatient(p => ({ ...p, firstName: e.target.value }))}
-            />
-          </div>
-          {replyText && (
-            <OutputBlock
-              title="Holding reply (the only reply for Rung 5)"
-              text={replyText}
-              hint="No scheduling promises — the Office Manager reaches out directly."
-            />
-          )}
-        </>
+      <div className="space-y-1.5 max-w-sm">
+        <Label htmlFor="ba-stop-first">Patient first name (for the holding reply)</Label>
+        <Input
+          id="ba-stop-first"
+          value={patient.firstName}
+          onChange={e => setPatient(p => ({ ...p, firstName: e.target.value }))}
+        />
+      </div>
+      {replyText && (
+        <OutputBlock
+          title="Holding reply (the only reply for Rung 5)"
+          text={replyText}
+          hint="No scheduling promises — the Office Manager reaches out directly."
+        />
       )}
     </div>
   );
