@@ -51,6 +51,7 @@ import PracticeSetup from "@/pages/PracticeSetup";
 import Help from "@/pages/Help";
 import Privacy from "@/pages/Privacy";
 import AcceptInvite from "@/pages/AcceptInvite";
+import ResetPassword from "@/pages/ResetPassword";
 import Onboarding from "@/pages/Onboarding";
 import OAuthConsent from "@/pages/OAuthConsent";
 import { Loader2 } from "lucide-react";
@@ -154,6 +155,7 @@ const App = () => (
             <Route path="/nudges" element={<Navigate to="/inbox/nudges" replace />} />
             <Route path="/onboarding" element={<OnboardingRoute />} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
             <Route path="*" element={<Navigate to="/auth" replace />} />

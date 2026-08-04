@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { isInviteCompletionRoute } from '@/lib/invite-auth';
 
 const DEFAULT_TIMEOUT_MINUTES = 0; // 0 = never auto-logout
 const TIMEOUT_STORAGE_KEY = 'timevault_session_timeout_minutes';
@@ -68,7 +69,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [sessionTimeoutMinutes, clearInactivityTimer, signOutClean]);
 
-  // Set up inactivity listeners
   useEffect(() => {
     if (!user || !isAllowed) return;
 
@@ -86,48 +86,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    let evaluationVersion = 0;
 
-    const evaluate = (session: Session | null) => {
-      setSession(session);
-      const u = session?.user ?? null;
-      setUser(u);
-      if (!u) {
+    const evaluate = (nextSession: Session | null) => {
+      const version = ++evaluationVersion;
+      setSession(nextSession);
+      const nextUser = nextSession?.user ?? null;
+      setUser(nextUser);
+
+      if (!nextUser) {
         setIsAllowed(false);
         setLoading(false);
         return;
       }
-      // The allowlist check hits the server; defer it out of the auth
-      // callback (supabase-js deadlocks on awaited calls inside it).
+
+      setIsAllowed(false);
+      setLoading(true);
+
+      // The allowlist check hits the server; defer it out of the auth callback
+      // because supabase-js can deadlock on awaited calls inside that callback.
       setTimeout(async () => {
-        try {
-          const allowed = await checkAllowed(u);
-          if (cancelled) return;
-          setIsAllowed(allowed);
-          // Logged in but not allowed: immediately sign out.
-          if (!allowed) {
+        const allowed = await checkAllowed(nextUser);
+        if (cancelled || version !== evaluationVersion) return;
+
+        setIsAllowed(allowed);
+        if (!allowed) {
+          // Keep a not-yet-allowlisted session only on the narrow public routes
+          // required to complete a valid token-backed invitation. Protected
+          // application routes still require isAllowed.
+          const completingInvite = isInviteCompletionRoute(
+            window.location.pathname,
+            window.location.search,
+          );
+
+          if (!completingInvite) {
             await supabase.auth.signOut();
-            if (cancelled) return;
+            if (cancelled || version !== evaluationVersion) return;
             setUser(null);
             setSession(null);
           }
-        } catch {
-          if (cancelled) return;
-          setIsAllowed(false);
-        } finally {
-          // Never leave the app stuck on a loading screen.
-          if (!cancelled) setLoading(false);
+        }
+
+        if (!cancelled && version === evaluationVersion) {
+          setLoading(false);
         }
       }, 0);
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      evaluate(session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      evaluate(nextSession);
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => evaluate(session));
+    supabase.auth.getSession().then(({ data: { session: nextSession } }) => evaluate(nextSession));
 
     return () => {
       cancelled = true;
+      evaluationVersion += 1;
       subscription.unsubscribe();
     };
   }, []);
