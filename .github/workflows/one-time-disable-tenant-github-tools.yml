@@ -1,17 +1,16 @@
 name: One-time tenant GitHub tool removal
 
 on:
-  pull_request:
-    branches:
-      - main
-    types: [opened, synchronize, reopened]
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
 
 permissions:
   contents: write
 
 jobs:
   remove-tenant-code-tools:
-    if: ${{ github.head_ref == 'openai/fix-publish-security' }}
+    if: ${{ github.event.workflow_run.head_branch == 'openai/fix-publish-security' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -83,12 +82,16 @@ jobs:
           text = text.replace(old_comment, new_comment, 1)
 
           path.write_text(text)
-          workflow = Path('.github/workflows/one-time-disable-tenant-github-tools.yml')
-          if workflow.exists():
-              workflow.unlink()
+          for temporary in (
+              '.github/workflows/one-time-disable-tenant-github-tools.yml',
+              '.github/security-patch-trigger',
+          ):
+              candidate = Path(temporary)
+              if candidate.exists():
+                  candidate.unlink()
           PY
 
-      - name: Verify and commit only the intended source-tool removal
+      - name: Verify and commit the security branch patch
         shell: bash
         run: |
           set -euo pipefail
@@ -105,3 +108,15 @@ jobs:
           git add -A
           git commit -m 'Disable source tools for office tenant roles'
           git push origin HEAD:openai/fix-publish-security
+
+      - name: Remove this one-time runner from main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout -B main origin/main
+          git rm .github/workflows/one-time-disable-tenant-github-tools.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Remove one-time tenant tool patch runner'
+          git push origin HEAD:main
