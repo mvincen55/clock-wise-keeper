@@ -22,6 +22,8 @@ export const KNOWLEDGE_BLOCK_TYPES = [
   'divider',
 ] as const;
 export const KNOWLEDGE_AUDIENCE_ROLES = ['owner', 'manager', 'employee'] as const;
+export const DEFAULT_ACKNOWLEDGMENT_STATEMENT =
+  'I acknowledge that I received and read this office policy or procedure.';
 
 export type KnowledgeArea = (typeof KNOWLEDGE_AREAS)[number];
 export type KnowledgeKind = (typeof KNOWLEDGE_KINDS)[number];
@@ -44,10 +46,13 @@ export type KnowledgeDraftInput = {
   audienceRoles: KnowledgeAudienceRole[];
   changeSummary: string;
   blocks: KnowledgeBlockDraft[];
+  acknowledgmentRequired: boolean;
+  acknowledgmentDueDays: number | null;
+  acknowledgmentStatement: string;
 };
 
 export type KnowledgeValidationError = {
-  field: 'title' | 'audienceRoles' | 'blocks';
+  field: 'title' | 'audienceRoles' | 'blocks' | 'acknowledgment';
   message: string;
 };
 
@@ -120,6 +125,9 @@ export function createBlankKnowledgeDraft(kind: KnowledgeKind = 'policy'): Knowl
     audienceRoles: ['owner', 'manager', 'employee'],
     changeSummary: '',
     blocks: [createKnowledgeBlock('paragraph')],
+    acknowledgmentRequired: false,
+    acknowledgmentDueDays: null,
+    acknowledgmentStatement: DEFAULT_ACKNOWLEDGMENT_STATEMENT,
   };
 }
 
@@ -144,6 +152,28 @@ export function validateKnowledgeDraft(input: KnowledgeDraftInput): KnowledgeVal
       errors.push({
         field: 'blocks',
         message: `Block ${emptyIndex + 1} is empty. Add content or remove the block.`,
+      });
+    }
+  }
+
+  if (input.acknowledgmentRequired) {
+    if (
+      input.acknowledgmentDueDays === null
+      || !Number.isInteger(input.acknowledgmentDueDays)
+      || input.acknowledgmentDueDays < 1
+      || input.acknowledgmentDueDays > 90
+    ) {
+      errors.push({
+        field: 'acknowledgment',
+        message: 'Choose an acknowledgment deadline from 1 to 90 days.',
+      });
+    }
+
+    const statementLength = input.acknowledgmentStatement.trim().length;
+    if (statementLength < 10 || statementLength > 1000) {
+      errors.push({
+        field: 'acknowledgment',
+        message: 'The acknowledgment statement must be 10 to 1,000 characters.',
       });
     }
   }
