@@ -17,6 +17,8 @@ export type KnowledgeAcknowledgmentRow = {
   user_id: string;
   employee_id: string | null;
   role_at_assignment: 'owner' | 'manager' | 'employee';
+  title_snapshot: string;
+  version_number_snapshot: number;
   statement_snapshot: string;
   assigned_at: string;
   due_at: string;
