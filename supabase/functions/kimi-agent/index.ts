@@ -8,12 +8,8 @@
 //              as we go") about the office and about this site/app
 //   managers   save_wording_rule — FOF "train as we go" (mode "fof" only,
 //              honors the widget's training toggle)
-//   managers   github_list_files / github_read_file / github_commit_files /
-//              github_open_pr — read and change this app's own source on
-//              GitHub. Pushes to the default branch sync into Lovable
-//              automatically (that is the machine channel to Lovable);
-//              publishing the production site stays a human click in
-//              Lovable, and the prompt tells the model to be honest there.
+//   source-code tools are intentionally unavailable to every office tenant
+//              role. Product development uses a separate audited channel.
 //
 // HIPAA note: unchanged from ask-docs — the AI must NEVER
 // see a patient's identity. Chat is bounded and never stored; the only
@@ -782,7 +778,7 @@ function buildSystemPrompt(ctx: PromptContext): string {
       );
     } else {
       parts.push(
-        "BUILD TOOLS NOT CONFIGURED: GitHub access is not set up (missing GITHUB_FINE_GRAINED_TOKEN secret), so you cannot read or change the app's code right now. If asked to build, explain a manager must add the GITHUB_FINE_GRAINED_TOKEN secret per docs/kimi-assistant.md, and offer a ready-to-paste 'Prompt for Lovable:' as the alternative."
+        "SOURCE-CODE TOOLS DISABLED: office tenant roles cannot read or change Purple Envelope's product source. Product development must use the separate approved development channel outside the customer app."
       );
     }
     parts.push(
@@ -985,79 +981,6 @@ function buildTools(ctx: { isManager: boolean; training: boolean; mode: string; 
     });
   }
 
-  if (ctx.githubReady) {
-    tools.push(
-      {
-        type: "function",
-        function: {
-          name: "github_list_files",
-          description: "List files in the app's GitHub repo (Lovable-synced source of this very app).",
-          parameters: {
-            type: "object",
-            properties: {
-              prefix: { type: "string", description: "Optional path prefix filter, e.g. \"src/pages/\"" },
-            },
-          },
-        },
-      },
-      {
-        type: "function",
-        function: {
-          name: "github_read_file",
-          description: "Read one text file from the repo. Always read a file before editing it.",
-          parameters: {
-            type: "object",
-            properties: { path: { type: "string", description: "Repo-relative path, e.g. \"src/pages/Assistant.tsx\"" } },
-            required: ["path"],
-          },
-        },
-      },
-      {
-        type: "function",
-        function: {
-          name: "github_commit_files",
-          description:
-            "Commit up to 10 complete text files to the repo in one atomic commit. Each file's content REPLACES the whole file. Omit branch to push to the Lovable-synced default branch (app updates automatically); pass a new branch name to stage work for a PR instead. Text files only.",
-          parameters: {
-            type: "object",
-            properties: {
-              message: { type: "string", description: "Imperative commit message, first line under 70 chars." },
-              files: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    path: { type: "string" },
-                    content: { type: "string", description: "FULL new file content." },
-                  },
-                  required: ["path", "content"],
-                },
-              },
-              delete_paths: { type: "array", items: { type: "string" }, description: "Optional paths to delete." },
-              branch: { type: "string", description: "Optional branch; created from the default branch if missing." },
-            },
-            required: ["message", "files"],
-          },
-        },
-      },
-      {
-        type: "function",
-        function: {
-          name: "github_open_pr",
-          description: "Open a pull request from a branch you committed to, into the default branch, for CI + human review.",
-          parameters: {
-            type: "object",
-            properties: {
-              title: { type: "string" },
-              body: { type: "string", description: "What changed and why, plus anything the reviewer should check." },
-              branch: { type: "string", description: "Head branch with your commits." },
-              base: { type: "string", description: "Optional base branch; defaults to the repo's default branch." },
-            },
-            required: ["title", "branch"],
-          },
-        },
-      }
-    );
   }
   return tools;
 }
@@ -1234,8 +1157,11 @@ Deno.serve(async (req) => {
         )
       : undefined;
 
-    const gh = githubConfig();
-    const githubReady = isManager && gh !== null;
+    // Tenant office roles must never receive product-repository credentials or
+    // source-changing tools. Product development happens through the separate,
+    // audited development channel, outside the customer assistant.
+    const gh: GithubConfig | null = null;
+    const githubReady = false;
     const systemPrompt = buildSystemPrompt({
       mode,
       isManager,
@@ -1370,53 +1296,11 @@ Deno.serve(async (req) => {
           actions.push({ type: "rule_saved", summary: `Saved wording rule: ${bounded(rule, 80)}` });
           return `Saved standing wording rule: ${rule}`;
         }
-        case "github_list_files": {
-          if (!isManager) return "ERROR: managers only.";
-          if (!gh) return NOT_CONFIGURED;
-          const prefix = safeRepoPath(args?.prefix) ?? "";
-          return await githubListFiles(gh, prefix);
-        }
-        case "github_read_file": {
-          if (!isManager) return "ERROR: managers only.";
-          if (!gh) return NOT_CONFIGURED;
-          const path = safeRepoPath(args?.path);
-          if (!path) return "ERROR: invalid path.";
-          return await githubReadFile(gh, path);
-        }
-        case "github_commit_files": {
-          if (!isManager) return "ERROR: managers only.";
-          if (!gh) return NOT_CONFIGURED;
-          const message = bounded(args?.message, 500);
-          const rawFiles = Array.isArray(args?.files) ? args.files.slice(0, MAX_COMMIT_FILES) : [];
-          const files: { path: string; content: string }[] = [];
-          for (const f of rawFiles) {
-            const path = safeRepoPath(f?.path);
-            const content = typeof f?.content === "string" ? f.content : null;
-            if (!path || content === null) return `ERROR: invalid file entry ${JSON.stringify(f?.path ?? null)}.`;
-            if (content.length > MAX_FILE_CHARS) return `ERROR: ${path} exceeds ${MAX_FILE_CHARS} chars.`;
-            files.push({ path, content });
-          }
-          const deletePaths = (Array.isArray(args?.delete_paths) ? args.delete_paths.slice(0, 10) : [])
-            .map((p: unknown) => safeRepoPath(p))
-            .filter((p: string | null): p is string => p !== null);
-          if (!message || (files.length === 0 && deletePaths.length === 0)) {
-            return "ERROR: github_commit_files needs a message and at least one file or delete_path.";
-          }
-          const branch = bounded(args?.branch, 120).replace(/[^A-Za-z0-9._\/-]/g, "");
-          return await githubCommitFiles(gh, { message, files, deletePaths, branch }, user.email ?? user.id, actions);
-        }
-        case "github_open_pr": {
-          if (!isManager) return "ERROR: managers only.";
-          if (!gh) return NOT_CONFIGURED;
-          const title = bounded(args?.title, 200);
-          const branch = bounded(args?.branch, 120);
-          if (!title || !branch) return "ERROR: github_open_pr needs title and branch.";
-          return await githubOpenPr(
-            gh,
-            { title, body: boundedText(args?.body, 4000), branch, base: bounded(args?.base, 120) },
-            actions
-          );
-        }
+        case "github_list_files":
+        case "github_read_file":
+        case "github_commit_files":
+        case "github_open_pr":
+          return "ERROR: Source-code tools are disabled inside tenant office assistants.";
         default:
           return `ERROR: unknown tool ${name}.`;
       }
