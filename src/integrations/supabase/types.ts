@@ -3327,6 +3327,665 @@ export type Database = {
           },
         ]
       }
+      knowledge_acknowledgment_escalation_settings: {
+        Row: {
+          created_at: string
+          email_after_workdays: number
+          manager_after_workdays: number
+          max_snooze_workdays: number
+          max_snoozes: number
+          org_id: string
+          owner_after_workdays: number
+          question_pauses_escalation: boolean
+          quiet_hours_end: string
+          quiet_hours_start: string
+          routine_reminders_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email_after_workdays?: number
+          manager_after_workdays?: number
+          max_snooze_workdays?: number
+          max_snoozes?: number
+          org_id: string
+          owner_after_workdays?: number
+          question_pauses_escalation?: boolean
+          quiet_hours_end?: string
+          quiet_hours_start?: string
+          routine_reminders_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email_after_workdays?: number
+          manager_after_workdays?: number
+          max_snooze_workdays?: number
+          max_snoozes?: number
+          org_id?: string
+          owner_after_workdays?: number
+          question_pauses_escalation?: boolean
+          quiet_hours_end?: string
+          quiet_hours_start?: string
+          routine_reminders_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_acknowledgment_escalation_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_acknowledgment_events: {
+        Row: {
+          actor_user_id: string | null
+          assignment_id: string
+          channel: string
+          created_at: string
+          detail: string
+          event_key: string
+          event_type: string
+          id: string
+          metadata: Json
+          org_id: string
+          recipient_user_id: string | null
+        }
+        Insert: {
+          actor_user_id?: string | null
+          assignment_id: string
+          channel?: string
+          created_at?: string
+          detail?: string
+          event_key: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          org_id: string
+          recipient_user_id?: string | null
+        }
+        Update: {
+          actor_user_id?: string | null
+          assignment_id?: string
+          channel?: string
+          created_at?: string
+          detail?: string
+          event_key?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          org_id?: string
+          recipient_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_acknowledgment_events_assignment_fk"
+            columns: ["assignment_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_acknowledgments"
+            referencedColumns: ["id", "org_id"]
+          },
+          {
+            foreignKeyName: "knowledge_acknowledgment_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_acknowledgments: {
+        Row: {
+          acknowledged_at: string | null
+          assigned_at: string
+          blocked_at: string | null
+          blocked_reason: string
+          blocking_user_id: string | null
+          created_at: string
+          due_at: string
+          employee_id: string | null
+          escalation_level: number
+          first_viewed_at: string | null
+          id: string
+          last_escalated_at: string | null
+          next_escalation_at: string | null
+          org_id: string
+          overdue_at: string | null
+          question_asked_at: string | null
+          question_resolution: string
+          question_resolved_at: string | null
+          question_text: string
+          role_at_assignment: string
+          signed_name: string
+          snooze_count: number
+          snooze_reason: string
+          snoozed_until: string | null
+          statement_snapshot: string
+          title_snapshot: string
+          updated_at: string
+          user_id: string
+          version_id: string
+          version_number_snapshot: number
+          waived_at: string | null
+          waived_reason: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          assigned_at?: string
+          blocked_at?: string | null
+          blocked_reason?: string
+          blocking_user_id?: string | null
+          created_at?: string
+          due_at: string
+          employee_id?: string | null
+          escalation_level?: number
+          first_viewed_at?: string | null
+          id?: string
+          last_escalated_at?: string | null
+          next_escalation_at?: string | null
+          org_id: string
+          overdue_at?: string | null
+          question_asked_at?: string | null
+          question_resolution?: string
+          question_resolved_at?: string | null
+          question_text?: string
+          role_at_assignment: string
+          signed_name?: string
+          snooze_count?: number
+          snooze_reason?: string
+          snoozed_until?: string | null
+          statement_snapshot: string
+          title_snapshot?: string
+          updated_at?: string
+          user_id: string
+          version_id: string
+          version_number_snapshot?: number
+          waived_at?: string | null
+          waived_reason?: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          assigned_at?: string
+          blocked_at?: string | null
+          blocked_reason?: string
+          blocking_user_id?: string | null
+          created_at?: string
+          due_at?: string
+          employee_id?: string | null
+          escalation_level?: number
+          first_viewed_at?: string | null
+          id?: string
+          last_escalated_at?: string | null
+          next_escalation_at?: string | null
+          org_id?: string
+          overdue_at?: string | null
+          question_asked_at?: string | null
+          question_resolution?: string
+          question_resolved_at?: string | null
+          question_text?: string
+          role_at_assignment?: string
+          signed_name?: string
+          snooze_count?: number
+          snooze_reason?: string
+          snoozed_until?: string | null
+          statement_snapshot?: string
+          title_snapshot?: string
+          updated_at?: string
+          user_id?: string
+          version_id?: string
+          version_number_snapshot?: number
+          waived_at?: string | null
+          waived_reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_acknowledgments_employee_fk"
+            columns: ["employee_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id", "org_id"]
+          },
+          {
+            foreignKeyName: "knowledge_acknowledgments_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_acknowledgments_version_fk"
+            columns: ["version_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_versions"
+            referencedColumns: ["id", "org_id"]
+          },
+        ]
+      }
+      knowledge_blocks: {
+        Row: {
+          block_key: string
+          block_type: string
+          created_at: string
+          data: Json
+          id: string
+          org_id: string
+          plain_text: string
+          sort_order: number
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          block_key?: string
+          block_type: string
+          created_at?: string
+          data?: Json
+          id?: string
+          org_id: string
+          plain_text?: string
+          sort_order?: number
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          block_key?: string
+          block_type?: string
+          created_at?: string
+          data?: Json
+          id?: string
+          org_id?: string
+          plain_text?: string
+          sort_order?: number
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_blocks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_blocks_version_fk"
+            columns: ["version_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_versions"
+            referencedColumns: ["id", "org_id"]
+          },
+        ]
+      }
+      knowledge_categories: {
+        Row: {
+          area: string
+          created_at: string
+          created_by: string
+          description: string
+          id: string
+          is_active: boolean
+          name: string
+          org_id: string
+          parent_id: string | null
+          slug: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          area: string
+          created_at?: string
+          created_by: string
+          description?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          org_id: string
+          parent_id?: string | null
+          slug: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          area?: string
+          created_at?: string
+          created_by?: string
+          description?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          org_id?: string
+          parent_id?: string | null
+          slug?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_categories_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_categories_parent_org_fk"
+            columns: ["parent_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_categories"
+            referencedColumns: ["id", "org_id"]
+          },
+        ]
+      }
+      knowledge_evidence: {
+        Row: {
+          confidence: number
+          created_at: string
+          created_by: string
+          excerpt: string
+          id: string
+          office_doc_chunk_id: string | null
+          office_doc_id: string | null
+          org_id: string
+          relation: string
+          source_label: string
+          source_page: number | null
+          version_id: string
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          created_by: string
+          excerpt?: string
+          id?: string
+          office_doc_chunk_id?: string | null
+          office_doc_id?: string | null
+          org_id: string
+          relation?: string
+          source_label?: string
+          source_page?: number | null
+          version_id: string
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          created_by?: string
+          excerpt?: string
+          id?: string
+          office_doc_chunk_id?: string | null
+          office_doc_id?: string | null
+          org_id?: string
+          relation?: string
+          source_label?: string
+          source_page?: number | null
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_evidence_office_doc_chunk_org_fk"
+            columns: ["office_doc_chunk_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "office_doc_chunks"
+            referencedColumns: ["id", "org_id"]
+          },
+          {
+            foreignKeyName: "knowledge_evidence_office_doc_org_fk"
+            columns: ["office_doc_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "office_docs"
+            referencedColumns: ["id", "org_id"]
+          },
+          {
+            foreignKeyName: "knowledge_evidence_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_evidence_version_fk"
+            columns: ["version_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_versions"
+            referencedColumns: ["id", "org_id"]
+          },
+        ]
+      }
+      knowledge_items: {
+        Row: {
+          archived_at: string | null
+          archived_by: string | null
+          audience_roles: string[]
+          category_id: string | null
+          created_at: string
+          created_by: string
+          current_published_version_id: string | null
+          id: string
+          kind: string
+          org_id: string
+          slug: string
+          summary: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          archived_by?: string | null
+          audience_roles?: string[]
+          category_id?: string | null
+          created_at?: string
+          created_by: string
+          current_published_version_id?: string | null
+          id?: string
+          kind: string
+          org_id: string
+          slug: string
+          summary?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          archived_by?: string | null
+          audience_roles?: string[]
+          category_id?: string | null
+          created_at?: string
+          created_by?: string
+          current_published_version_id?: string | null
+          id?: string
+          kind?: string
+          org_id?: string
+          slug?: string
+          summary?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_items_category_fk"
+            columns: ["category_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_categories"
+            referencedColumns: ["id", "org_id"]
+          },
+          {
+            foreignKeyName: "knowledge_items_current_version_same_item_fk"
+            columns: ["current_published_version_id", "org_id", "id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_versions"
+            referencedColumns: ["id", "org_id", "item_id"]
+          },
+          {
+            foreignKeyName: "knowledge_items_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_reviews: {
+        Row: {
+          decided_at: string
+          decision: string
+          id: string
+          note: string
+          org_id: string
+          reviewer_user_id: string
+          version_id: string
+        }
+        Insert: {
+          decided_at?: string
+          decision: string
+          id?: string
+          note?: string
+          org_id: string
+          reviewer_user_id: string
+          version_id: string
+        }
+        Update: {
+          decided_at?: string
+          decision?: string
+          id?: string
+          note?: string
+          org_id?: string
+          reviewer_user_id?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_reviews_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_reviews_version_fk"
+            columns: ["version_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_versions"
+            referencedColumns: ["id", "org_id"]
+          },
+        ]
+      }
+      knowledge_versions: {
+        Row: {
+          acknowledgment_due_days: number | null
+          acknowledgment_required: boolean
+          acknowledgment_statement: string
+          approved_at: string | null
+          approved_by: string | null
+          audience_roles: string[]
+          based_on_version_id: string | null
+          category_id: string | null
+          change_summary: string
+          created_at: string
+          created_by: string
+          effective_on: string | null
+          id: string
+          item_id: string
+          org_id: string
+          published_at: string | null
+          published_by: string | null
+          review_due_on: string | null
+          source_kind: string
+          status: string
+          submitted_at: string | null
+          submitted_by: string | null
+          summary: string
+          title: string
+          updated_at: string
+          version_number: number
+        }
+        Insert: {
+          acknowledgment_due_days?: number | null
+          acknowledgment_required?: boolean
+          acknowledgment_statement?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          audience_roles?: string[]
+          based_on_version_id?: string | null
+          category_id?: string | null
+          change_summary?: string
+          created_at?: string
+          created_by: string
+          effective_on?: string | null
+          id?: string
+          item_id: string
+          org_id: string
+          published_at?: string | null
+          published_by?: string | null
+          review_due_on?: string | null
+          source_kind?: string
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          summary?: string
+          title: string
+          updated_at?: string
+          version_number: number
+        }
+        Update: {
+          acknowledgment_due_days?: number | null
+          acknowledgment_required?: boolean
+          acknowledgment_statement?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          audience_roles?: string[]
+          based_on_version_id?: string | null
+          category_id?: string | null
+          change_summary?: string
+          created_at?: string
+          created_by?: string
+          effective_on?: string | null
+          id?: string
+          item_id?: string
+          org_id?: string
+          published_at?: string | null
+          published_by?: string | null
+          review_due_on?: string | null
+          source_kind?: string
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          summary?: string
+          title?: string
+          updated_at?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_versions_based_on_same_item_fk"
+            columns: ["based_on_version_id", "org_id", "item_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_versions"
+            referencedColumns: ["id", "org_id", "item_id"]
+          },
+          {
+            foreignKeyName: "knowledge_versions_category_fk"
+            columns: ["category_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_categories"
+            referencedColumns: ["id", "org_id"]
+          },
+          {
+            foreignKeyName: "knowledge_versions_item_fk"
+            columns: ["item_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_items"
+            referencedColumns: ["id", "org_id"]
+          },
+          {
+            foreignKeyName: "knowledge_versions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       location_events: {
         Row: {
           accuracy: number | null
@@ -4524,6 +5183,259 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "orgs"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      practice_setup_finding_sources: {
+        Row: {
+          created_at: string
+          finding_id: string
+          org_id: string
+          source_id: string
+        }
+        Insert: {
+          created_at?: string
+          finding_id: string
+          org_id: string
+          source_id: string
+        }
+        Update: {
+          created_at?: string
+          finding_id?: string
+          org_id?: string
+          source_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "practice_setup_finding_sources_finding_fk"
+            columns: ["finding_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "practice_setup_findings"
+            referencedColumns: ["id", "org_id"]
+          },
+          {
+            foreignKeyName: "practice_setup_finding_sources_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "practice_setup_finding_sources_source_fk"
+            columns: ["source_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "practice_setup_sources"
+            referencedColumns: ["id", "org_id"]
+          },
+        ]
+      }
+      practice_setup_findings: {
+        Row: {
+          created_at: string
+          detail: string
+          finding_type: string
+          group_key: string
+          id: string
+          org_id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          session_id: string
+          severity: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: string
+          finding_type: string
+          group_key: string
+          id?: string
+          org_id: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          session_id: string
+          severity?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          detail?: string
+          finding_type?: string
+          group_key?: string
+          id?: string
+          org_id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          session_id?: string
+          severity?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "practice_setup_findings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "practice_setup_findings_session_fk"
+            columns: ["session_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "practice_setup_sessions"
+            referencedColumns: ["id", "org_id"]
+          },
+        ]
+      }
+      practice_setup_sessions: {
+        Row: {
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          created_by: string
+          id: string
+          last_scanned_at: string | null
+          org_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by: string
+          id?: string
+          last_scanned_at?: string | null
+          org_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          last_scanned_at?: string | null
+          org_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "practice_setup_sessions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      practice_setup_sources: {
+        Row: {
+          confidence: number
+          confirmed_action: string | null
+          confirmed_category_id: string | null
+          converted_item_id: string | null
+          converted_version_id: string | null
+          created_at: string
+          duplicate_key: string
+          id: string
+          office_doc_id: string
+          org_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          session_id: string
+          status: string
+          suggested_action: string
+          suggestion_reason: string
+          updated_at: string
+        }
+        Insert: {
+          confidence?: number
+          confirmed_action?: string | null
+          confirmed_category_id?: string | null
+          converted_item_id?: string | null
+          converted_version_id?: string | null
+          created_at?: string
+          duplicate_key?: string
+          id?: string
+          office_doc_id: string
+          org_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          session_id: string
+          status?: string
+          suggested_action: string
+          suggestion_reason?: string
+          updated_at?: string
+        }
+        Update: {
+          confidence?: number
+          confirmed_action?: string | null
+          confirmed_category_id?: string | null
+          converted_item_id?: string | null
+          converted_version_id?: string | null
+          created_at?: string
+          duplicate_key?: string
+          id?: string
+          office_doc_id?: string
+          org_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          session_id?: string
+          status?: string
+          suggested_action?: string
+          suggestion_reason?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "practice_setup_sources_category_fk"
+            columns: ["confirmed_category_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_categories"
+            referencedColumns: ["id", "org_id"]
+          },
+          {
+            foreignKeyName: "practice_setup_sources_doc_fk"
+            columns: ["office_doc_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "office_docs"
+            referencedColumns: ["id", "org_id"]
+          },
+          {
+            foreignKeyName: "practice_setup_sources_item_fk"
+            columns: ["converted_item_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_items"
+            referencedColumns: ["id", "org_id"]
+          },
+          {
+            foreignKeyName: "practice_setup_sources_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "practice_setup_sources_session_fk"
+            columns: ["session_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "practice_setup_sessions"
+            referencedColumns: ["id", "org_id"]
+          },
+          {
+            foreignKeyName: "practice_setup_sources_version_item_fk"
+            columns: ["converted_version_id", "org_id", "converted_item_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_versions"
+            referencedColumns: ["id", "org_id", "item_id"]
           },
         ]
       }
@@ -6608,6 +7520,186 @@ export type Database = {
         Args: { p_end: string; p_start: string; p_user_id: string }
         Returns: undefined
       }
+      acknowledge_knowledge_version: {
+        Args: { p_assignment_id: string; p_typed_name: string }
+        Returns: {
+          acknowledged_at: string | null
+          assigned_at: string
+          blocked_at: string | null
+          blocked_reason: string
+          blocking_user_id: string | null
+          created_at: string
+          due_at: string
+          employee_id: string | null
+          escalation_level: number
+          first_viewed_at: string | null
+          id: string
+          last_escalated_at: string | null
+          next_escalation_at: string | null
+          org_id: string
+          overdue_at: string | null
+          question_asked_at: string | null
+          question_resolution: string
+          question_resolved_at: string | null
+          question_text: string
+          role_at_assignment: string
+          signed_name: string
+          snooze_count: number
+          snooze_reason: string
+          snoozed_until: string | null
+          statement_snapshot: string
+          title_snapshot: string
+          updated_at: string
+          user_id: string
+          version_id: string
+          version_number_snapshot: number
+          waived_at: string | null
+          waived_reason: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_acknowledgments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      acknowledge_knowledge_version_with_question: {
+        Args: {
+          p_assignment_id: string
+          p_question?: string
+          p_typed_name: string
+        }
+        Returns: {
+          acknowledged_at: string | null
+          assigned_at: string
+          blocked_at: string | null
+          blocked_reason: string
+          blocking_user_id: string | null
+          created_at: string
+          due_at: string
+          employee_id: string | null
+          escalation_level: number
+          first_viewed_at: string | null
+          id: string
+          last_escalated_at: string | null
+          next_escalation_at: string | null
+          org_id: string
+          overdue_at: string | null
+          question_asked_at: string | null
+          question_resolution: string
+          question_resolved_at: string | null
+          question_text: string
+          role_at_assignment: string
+          signed_name: string
+          snooze_count: number
+          snooze_reason: string
+          snoozed_until: string | null
+          statement_snapshot: string
+          title_snapshot: string
+          updated_at: string
+          user_id: string
+          version_id: string
+          version_number_snapshot: number
+          waived_at: string | null
+          waived_reason: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_acknowledgments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      ask_knowledge_acknowledgment_question: {
+        Args: { p_assignment_id: string; p_question: string }
+        Returns: {
+          acknowledged_at: string | null
+          assigned_at: string
+          blocked_at: string | null
+          blocked_reason: string
+          blocking_user_id: string | null
+          created_at: string
+          due_at: string
+          employee_id: string | null
+          escalation_level: number
+          first_viewed_at: string | null
+          id: string
+          last_escalated_at: string | null
+          next_escalation_at: string | null
+          org_id: string
+          overdue_at: string | null
+          question_asked_at: string | null
+          question_resolution: string
+          question_resolved_at: string | null
+          question_text: string
+          role_at_assignment: string
+          signed_name: string
+          snooze_count: number
+          snooze_reason: string
+          snoozed_until: string | null
+          statement_snapshot: string
+          title_snapshot: string
+          updated_at: string
+          user_id: string
+          version_id: string
+          version_number_snapshot: number
+          waived_at: string | null
+          waived_reason: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_acknowledgments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      block_knowledge_acknowledgment: {
+        Args: {
+          p_assignment_id: string
+          p_blocking_user_id?: string
+          p_reason: string
+        }
+        Returns: {
+          acknowledged_at: string | null
+          assigned_at: string
+          blocked_at: string | null
+          blocked_reason: string
+          blocking_user_id: string | null
+          created_at: string
+          due_at: string
+          employee_id: string | null
+          escalation_level: number
+          first_viewed_at: string | null
+          id: string
+          last_escalated_at: string | null
+          next_escalation_at: string | null
+          org_id: string
+          overdue_at: string | null
+          question_asked_at: string | null
+          question_resolution: string
+          question_resolved_at: string | null
+          question_text: string
+          role_at_assignment: string
+          signed_name: string
+          snooze_count: number
+          snooze_reason: string
+          snoozed_until: string | null
+          statement_snapshot: string
+          title_snapshot: string
+          updated_at: string
+          user_id: string
+          version_id: string
+          version_number_snapshot: number
+          waived_at: string | null
+          waived_reason: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_acknowledgments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       board_shared_with_manager: {
         Args: { _owner_user_id: string }
         Returns: boolean
@@ -6654,6 +7746,76 @@ export type Database = {
       can_read_conv: { Args: { _conv: string }; Returns: boolean }
       can_view_goal: { Args: { _goal_id: string }; Returns: boolean }
       can_view_team_goal: { Args: { _goal_id: string }; Returns: boolean }
+      configure_knowledge_acknowledgment: {
+        Args: {
+          p_due_days?: number
+          p_required: boolean
+          p_statement?: string
+          p_version_id: string
+        }
+        Returns: {
+          acknowledgment_due_days: number | null
+          acknowledgment_required: boolean
+          acknowledgment_statement: string
+          approved_at: string | null
+          approved_by: string | null
+          audience_roles: string[]
+          based_on_version_id: string | null
+          category_id: string | null
+          change_summary: string
+          created_at: string
+          created_by: string
+          effective_on: string | null
+          id: string
+          item_id: string
+          org_id: string
+          published_at: string | null
+          published_by: string | null
+          review_due_on: string | null
+          source_kind: string
+          status: string
+          submitted_at: string | null
+          submitted_by: string | null
+          summary: string
+          title: string
+          updated_at: string
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_versions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      confirm_practice_setup_source: {
+        Args: { p_action: string; p_category_id?: string; p_source_id: string }
+        Returns: {
+          confidence: number
+          confirmed_action: string | null
+          confirmed_category_id: string | null
+          converted_item_id: string | null
+          converted_version_id: string | null
+          created_at: string
+          duplicate_key: string
+          id: string
+          office_doc_id: string
+          org_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          session_id: string
+          status: string
+          suggested_action: string
+          suggestion_reason: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "practice_setup_sources"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       consent_bundle_used: { Args: { p_bundle_id: string }; Returns: undefined }
       consent_team_can: {
         Args: { p_org_id: string; p_perm: string }
@@ -6661,6 +7823,15 @@ export type Database = {
       }
       conv_created_by: { Args: { _conv: string }; Returns: string }
       conv_type: { Args: { _conv: string }; Returns: string }
+      convert_practice_setup_source: {
+        Args: {
+          p_blocks: Json
+          p_source_id: string
+          p_summary: string
+          p_title: string
+        }
+        Returns: string
+      }
       countersign_accountability_report: {
         Args: { _note: string; _report_id: string; _typed_name: string }
         Returns: undefined
@@ -6713,6 +7884,41 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_knowledge_acknowledgment_assignments: {
+        Args: { p_only_user_id?: string; p_version_id: string }
+        Returns: number
+      }
+      create_knowledge_draft: {
+        Args: {
+          p_audience_roles?: string[]
+          p_blocks?: Json
+          p_category_id?: string
+          p_kind: string
+          p_org_id: string
+          p_summary?: string
+          p_title: string
+        }
+        Returns: string
+      }
+      create_knowledge_draft_with_acknowledgment: {
+        Args: {
+          p_acknowledgment_due_days?: number
+          p_acknowledgment_required?: boolean
+          p_acknowledgment_statement?: string
+          p_audience_roles?: string[]
+          p_blocks?: Json
+          p_category_id?: string
+          p_kind: string
+          p_org_id: string
+          p_summary?: string
+          p_title: string
+        }
+        Returns: string
+      }
+      create_knowledge_revision: {
+        Args: { p_item_id: string }
+        Returns: string
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -6723,6 +7929,29 @@ export type Database = {
         Returns: number
       }
       ensure_ai_conversation: { Args: never; Returns: string }
+      ensure_default_knowledge_categories: {
+        Args: { p_org_id: string }
+        Returns: {
+          area: string
+          created_at: string
+          created_by: string
+          description: string
+          id: string
+          is_active: boolean
+          name: string
+          org_id: string
+          parent_id: string | null
+          slug: string
+          sort_order: number
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_categories"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       ensure_dm: { Args: { _other_user: string }; Returns: string }
       get_employee_timezone: {
         Args: { p_employee_id: string }
@@ -6754,12 +7983,124 @@ export type Database = {
         Args: { _employee_id: string }
         Returns: string
       }
+      initialize_practice_setup: { Args: { p_org_id: string }; Returns: string }
       is_allowed_user: { Args: never; Returns: boolean }
       is_conv_participant: { Args: { _conv: string }; Returns: boolean }
       is_org_admin: { Args: { _org_id: string }; Returns: boolean }
       is_org_member: { Args: { _org_id: string }; Returns: boolean }
       is_org_owner: { Args: { _org_id: string }; Returns: boolean }
+      knowledge_acknowledgment_user_is_eligible: {
+        Args: {
+          p_assignment: Database["public"]["Tables"]["knowledge_acknowledgments"]["Row"]
+        }
+        Returns: boolean
+      }
+      knowledge_add_working_days: {
+        Args: {
+          p_org_id: string
+          p_start: string
+          p_target_time?: string
+          p_user_id: string
+          p_workdays: number
+        }
+        Returns: string
+      }
+      knowledge_assert_category_matches_kind: {
+        Args: { p_category_id: string; p_kind: string; p_org_id: string }
+        Returns: undefined
+      }
+      knowledge_can_read_item: { Args: { p_item_id: string }; Returns: boolean }
+      knowledge_can_read_version: {
+        Args: { p_version_id: string }
+        Returns: boolean
+      }
+      knowledge_current_role: { Args: { p_org_id: string }; Returns: string }
+      knowledge_normalize_text: { Args: { value: string }; Returns: string }
+      knowledge_record_acknowledgment_event: {
+        Args: {
+          p_actor_user_id?: string
+          p_assignment_id: string
+          p_channel?: string
+          p_detail?: string
+          p_event_key: string
+          p_event_type: string
+          p_metadata?: Json
+          p_recipient_user_id?: string
+        }
+        Returns: boolean
+      }
+      knowledge_routine_notice_window: {
+        Args: { p_at?: string; p_org_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      knowledge_slugify: { Args: { p_value: string }; Returns: string }
+      knowledge_unique_slug: {
+        Args: {
+          p_exclude_item_id?: string
+          p_kind: string
+          p_org_id: string
+          p_title: string
+        }
+        Returns: string
+      }
+      knowledge_user_work_context: {
+        Args: { p_date: string; p_org_id: string; p_user_id: string }
+        Returns: {
+          is_working: boolean
+          reason: string
+          work_end: string
+          work_start: string
+          work_timezone: string
+        }[]
+      }
+      knowledge_validate_blocks: {
+        Args: { p_blocks: Json }
+        Returns: undefined
+      }
       mark_conversation_read: { Args: { _conv: string }; Returns: undefined }
+      mark_knowledge_acknowledgment_viewed: {
+        Args: { p_assignment_id: string }
+        Returns: {
+          acknowledged_at: string | null
+          assigned_at: string
+          blocked_at: string | null
+          blocked_reason: string
+          blocking_user_id: string | null
+          created_at: string
+          due_at: string
+          employee_id: string | null
+          escalation_level: number
+          first_viewed_at: string | null
+          id: string
+          last_escalated_at: string | null
+          next_escalation_at: string | null
+          org_id: string
+          overdue_at: string | null
+          question_asked_at: string | null
+          question_resolution: string
+          question_resolved_at: string | null
+          question_text: string
+          role_at_assignment: string
+          signed_name: string
+          snooze_count: number
+          snooze_reason: string
+          snoozed_until: string | null
+          statement_snapshot: string
+          title_snapshot: string
+          updated_at: string
+          user_id: string
+          version_id: string
+          version_number_snapshot: number
+          waived_at: string | null
+          waived_reason: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_acknowledgments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       move_to_dlq: {
         Args: {
           dlq_name: string
@@ -6792,6 +8133,60 @@ export type Database = {
       my_department: { Args: never; Returns: string }
       my_team: { Args: never; Returns: string }
       owns_goal: { Args: { _goal_id: string }; Returns: boolean }
+      practice_setup_duplicate_key: {
+        Args: { p_title: string }
+        Returns: string
+      }
+      practice_setup_suggest_action: {
+        Args: {
+          p_char_count: number
+          p_collection: string
+          p_library_area: string
+          p_title: string
+        }
+        Returns: {
+          action: string
+          confidence: number
+          reason: string
+        }[]
+      }
+      publish_knowledge_version: {
+        Args: { p_version_id: string }
+        Returns: {
+          acknowledgment_due_days: number | null
+          acknowledgment_required: boolean
+          acknowledgment_statement: string
+          approved_at: string | null
+          approved_by: string | null
+          audience_roles: string[]
+          based_on_version_id: string | null
+          category_id: string | null
+          change_summary: string
+          created_at: string
+          created_by: string
+          effective_on: string | null
+          id: string
+          item_id: string
+          org_id: string
+          published_at: string | null
+          published_by: string | null
+          review_due_on: string | null
+          source_kind: string
+          status: string
+          submitted_at: string | null
+          submitted_by: string | null
+          summary: string
+          title: string
+          updated_at: string
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_versions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       purge_messaging_retention: { Args: never; Returns: number }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
@@ -6820,6 +8215,237 @@ export type Database = {
       request_attendance_recompute: {
         Args: { p_end_date: string; p_start_date: string; p_user_id: string }
         Returns: number
+      }
+      resolve_knowledge_acknowledgment_question: {
+        Args: { p_assignment_id: string; p_resolution: string }
+        Returns: {
+          acknowledged_at: string | null
+          assigned_at: string
+          blocked_at: string | null
+          blocked_reason: string
+          blocking_user_id: string | null
+          created_at: string
+          due_at: string
+          employee_id: string | null
+          escalation_level: number
+          first_viewed_at: string | null
+          id: string
+          last_escalated_at: string | null
+          next_escalation_at: string | null
+          org_id: string
+          overdue_at: string | null
+          question_asked_at: string | null
+          question_resolution: string
+          question_resolved_at: string | null
+          question_text: string
+          role_at_assignment: string
+          signed_name: string
+          snooze_count: number
+          snooze_reason: string
+          snoozed_until: string | null
+          statement_snapshot: string
+          title_snapshot: string
+          updated_at: string
+          user_id: string
+          version_id: string
+          version_number_snapshot: number
+          waived_at: string | null
+          waived_reason: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_acknowledgments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      resolve_practice_setup_finding: {
+        Args: { p_finding_id: string; p_status: string }
+        Returns: {
+          created_at: string
+          detail: string
+          finding_type: string
+          group_key: string
+          id: string
+          org_id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          session_id: string
+          severity: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "practice_setup_findings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      review_knowledge_version: {
+        Args: { p_decision: string; p_note?: string; p_version_id: string }
+        Returns: {
+          acknowledgment_due_days: number | null
+          acknowledgment_required: boolean
+          acknowledgment_statement: string
+          approved_at: string | null
+          approved_by: string | null
+          audience_roles: string[]
+          based_on_version_id: string | null
+          category_id: string | null
+          change_summary: string
+          created_at: string
+          created_by: string
+          effective_on: string | null
+          id: string
+          item_id: string
+          org_id: string
+          published_at: string | null
+          published_by: string | null
+          review_due_on: string | null
+          source_kind: string
+          status: string
+          submitted_at: string | null
+          submitted_by: string | null
+          summary: string
+          title: string
+          updated_at: string
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_versions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      save_knowledge_acknowledgment_escalation_settings: {
+        Args: {
+          p_email_after_workdays: number
+          p_manager_after_workdays: number
+          p_max_snooze_workdays: number
+          p_max_snoozes: number
+          p_org_id: string
+          p_owner_after_workdays: number
+          p_question_pauses_escalation: boolean
+          p_quiet_hours_end: string
+          p_quiet_hours_start: string
+          p_routine_reminders_enabled: boolean
+        }
+        Returns: {
+          created_at: string
+          email_after_workdays: number
+          manager_after_workdays: number
+          max_snooze_workdays: number
+          max_snoozes: number
+          org_id: string
+          owner_after_workdays: number
+          question_pauses_escalation: boolean
+          quiet_hours_end: string
+          quiet_hours_start: string
+          routine_reminders_enabled: boolean
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_acknowledgment_escalation_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      save_knowledge_draft: {
+        Args: {
+          p_audience_roles?: string[]
+          p_blocks?: Json
+          p_category_id?: string
+          p_change_summary?: string
+          p_summary?: string
+          p_title: string
+          p_version_id: string
+        }
+        Returns: {
+          acknowledgment_due_days: number | null
+          acknowledgment_required: boolean
+          acknowledgment_statement: string
+          approved_at: string | null
+          approved_by: string | null
+          audience_roles: string[]
+          based_on_version_id: string | null
+          category_id: string | null
+          change_summary: string
+          created_at: string
+          created_by: string
+          effective_on: string | null
+          id: string
+          item_id: string
+          org_id: string
+          published_at: string | null
+          published_by: string | null
+          review_due_on: string | null
+          source_kind: string
+          status: string
+          submitted_at: string | null
+          submitted_by: string | null
+          summary: string
+          title: string
+          updated_at: string
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_versions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      save_knowledge_draft_with_acknowledgment: {
+        Args: {
+          p_acknowledgment_due_days?: number
+          p_acknowledgment_required?: boolean
+          p_acknowledgment_statement?: string
+          p_audience_roles?: string[]
+          p_blocks?: Json
+          p_category_id?: string
+          p_change_summary?: string
+          p_summary?: string
+          p_title: string
+          p_version_id: string
+        }
+        Returns: {
+          acknowledgment_due_days: number | null
+          acknowledgment_required: boolean
+          acknowledgment_statement: string
+          approved_at: string | null
+          approved_by: string | null
+          audience_roles: string[]
+          based_on_version_id: string | null
+          category_id: string | null
+          change_summary: string
+          created_at: string
+          created_by: string
+          effective_on: string | null
+          id: string
+          item_id: string
+          org_id: string
+          published_at: string | null
+          published_by: string | null
+          review_due_on: string | null
+          source_kind: string
+          status: string
+          submitted_at: string | null
+          submitted_by: string | null
+          summary: string
+          title: string
+          updated_at: string
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_versions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       search_office_doc_chunks: {
         Args: {
@@ -6899,6 +8525,86 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      snooze_knowledge_acknowledgment: {
+        Args: { p_assignment_id: string; p_reason: string; p_workdays: number }
+        Returns: {
+          acknowledged_at: string | null
+          assigned_at: string
+          blocked_at: string | null
+          blocked_reason: string
+          blocking_user_id: string | null
+          created_at: string
+          due_at: string
+          employee_id: string | null
+          escalation_level: number
+          first_viewed_at: string | null
+          id: string
+          last_escalated_at: string | null
+          next_escalation_at: string | null
+          org_id: string
+          overdue_at: string | null
+          question_asked_at: string | null
+          question_resolution: string
+          question_resolved_at: string | null
+          question_text: string
+          role_at_assignment: string
+          signed_name: string
+          snooze_count: number
+          snooze_reason: string
+          snoozed_until: string | null
+          statement_snapshot: string
+          title_snapshot: string
+          updated_at: string
+          user_id: string
+          version_id: string
+          version_number_snapshot: number
+          waived_at: string | null
+          waived_reason: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_acknowledgments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      submit_knowledge_version_for_review: {
+        Args: { p_version_id: string }
+        Returns: {
+          acknowledgment_due_days: number | null
+          acknowledgment_required: boolean
+          acknowledgment_statement: string
+          approved_at: string | null
+          approved_by: string | null
+          audience_roles: string[]
+          based_on_version_id: string | null
+          category_id: string | null
+          change_summary: string
+          created_at: string
+          created_by: string
+          effective_on: string | null
+          id: string
+          item_id: string
+          org_id: string
+          published_at: string | null
+          published_by: string | null
+          review_due_on: string | null
+          source_kind: string
+          status: string
+          submitted_at: string | null
+          submitted_by: string | null
+          summary: string
+          title: string
+          updated_at: string
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_versions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       sweep_accountability_escalations: { Args: never; Returns: number }
       sweep_attendance: { Args: { p_days?: number }; Returns: string }
       training_attempt_summaries: {
@@ -6913,6 +8619,50 @@ export type Database = {
           type: string
           user_id: string
         }[]
+      }
+      unaccent: { Args: { value: string }; Returns: string }
+      unblock_knowledge_acknowledgment: {
+        Args: { p_assignment_id: string; p_note?: string }
+        Returns: {
+          acknowledged_at: string | null
+          assigned_at: string
+          blocked_at: string | null
+          blocked_reason: string
+          blocking_user_id: string | null
+          created_at: string
+          due_at: string
+          employee_id: string | null
+          escalation_level: number
+          first_viewed_at: string | null
+          id: string
+          last_escalated_at: string | null
+          next_escalation_at: string | null
+          org_id: string
+          overdue_at: string | null
+          question_asked_at: string | null
+          question_resolution: string
+          question_resolved_at: string | null
+          question_text: string
+          role_at_assignment: string
+          signed_name: string
+          snooze_count: number
+          snooze_reason: string
+          snoozed_until: string | null
+          statement_snapshot: string
+          title_snapshot: string
+          updated_at: string
+          user_id: string
+          version_id: string
+          version_number_snapshot: number
+          waived_at: string | null
+          waived_reason: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_acknowledgments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       user_owns_import: { Args: { _import_id: string }; Returns: boolean }
       user_owns_schedule_version: {
