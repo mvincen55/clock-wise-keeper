@@ -72,7 +72,7 @@ function formatMoment(value: string): string {
 }
 
 export default function KnowledgeAcknowledgmentPanel({ assignment, versionTitle, versionNumber }: Props) {
-  const markViewed = useMarkKnowledgeAcknowledgmentViewed();
+  const { mutate: recordViewed } = useMarkKnowledgeAcknowledgmentViewed();
   const acknowledge = useAcknowledgeKnowledgeVersion();
   const block = useBlockKnowledgeAcknowledgment();
   const unblock = useUnblockKnowledgeAcknowledgment();
@@ -95,10 +95,15 @@ export default function KnowledgeAcknowledgmentPanel({ assignment, versionTitle,
   const [questionOpen, setQuestionOpen] = useState(false);
   const [question, setQuestion] = useState('');
 
+  const assignmentId = assignment?.id;
+  const firstViewedAt = assignment?.first_viewed_at;
+  const acknowledgedAt = assignment?.acknowledged_at;
+  const waivedAt = assignment?.waived_at;
+
   useEffect(() => {
-    if (!assignment || assignment.first_viewed_at || assignment.acknowledged_at || assignment.waived_at) return;
-    markViewed.mutate(assignment.id);
-  }, [assignment?.id, assignment?.first_viewed_at, assignment?.acknowledged_at, assignment?.waived_at]);
+    if (!assignmentId || firstViewedAt || acknowledgedAt || waivedAt) return;
+    recordViewed(assignmentId);
+  }, [assignmentId, firstViewedAt, acknowledgedAt, waivedAt, recordViewed]);
 
   const blockerOptions = useMemo(
     () => employees
