@@ -62,8 +62,8 @@ import {
   Upload,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { useMyProfile } from '@/hooks/useMyProfile';
 import FofAssistantWidget from '@/components/fof/FofAssistantWidget';
 import FofPrintSheet from '@/components/fof/FofPrintSheet';
 import { useFofSettings, useFofTemplates } from '@/hooks/useFofTemplates';
@@ -477,14 +477,8 @@ export default function FofBuilder() {
   const isManager = orgCtx?.role === 'owner' || orgCtx?.role === 'manager';
   // Who's signed in — printed on the office copy's created-by line.
   const { user } = useAuth();
-  const { data: myProfile } = useQuery({
-    queryKey: ['my-profile', user?.id],
-    enabled: !!user,
-    queryFn: async () =>
-      (await supabase.from('profiles').select('full_name, email').eq('id', user!.id).maybeSingle())
-        .data,
-  });
-  const createdBy = myProfile?.full_name || myProfile?.email || user?.email || '';
+  const { data: myProfile } = useMyProfile();
+  const createdBy = myProfile?.fullName || myProfile?.email || user?.email || '';
 
   const activeTemplates = useMemo(
     () => (templates ?? []).filter(t => t.isActive),

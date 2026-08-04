@@ -20,6 +20,7 @@ import MessagingSettingsCard from '@/components/settings/MessagingSettingsCard';
 import { PracticeSettingsCard } from '@/components/settings/PracticeSettingsCard';
 import { FofPolicySettingsCard } from '@/components/settings/FofPolicySettingsCard';
 import { BrokenApptSettingsCard } from '@/components/settings/BrokenApptSettingsCard';
+import { StaffInitialsCard } from '@/components/settings/StaffInitialsCard';
 
 const WEEKDAY_OPTIONS = [
   { value: '0', label: 'Sunday' },
@@ -85,6 +86,9 @@ export default function Settings() {
       <OrgBrandingCard isManager={isManager} />
 
       <PrivacyTermsCard />
+
+      {/* Personal: initials stamped into Broken Appointments outputs */}
+      <StaffInitialsCard />
 
       {isManager && <EscalationPoliciesCard />}
 
