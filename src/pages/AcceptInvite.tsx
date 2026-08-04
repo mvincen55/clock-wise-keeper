@@ -40,17 +40,38 @@ export default function AcceptInvite() {
   const [fullName, setFullName] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Step 1: Load invite details
+  // Step 1: Load invite details.
+  // Runs once per token, and only after auth has settled, so a slow lookup
+  // started while auth was still loading can never race a newer one and
+  // push the page back to the spinner.
+  const lookupTokenRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!token) {
       setErrorMsg('No invite token provided.');
       setStep('error');
       return;
     }
+    if (authLoading) return;
+    if (lookupTokenRef.current === token) return;
+    lookupTokenRef.current = token;
+
+    let cancelled = false;
+
     (async () => {
-      const { data, error } = await supabase.functions.invoke('accept-invite', {
-        body: { token, lookup: true },
-      });
+      let data: any = null;
+      let error: any = null;
+      try {
+        const res = await supabase.functions.invoke('accept-invite', {
+          body: { token, lookup: true },
+        });
+        data = res.data;
+        error = res.error;
+      } catch (e) {
+        error = e;
+      }
+      if (cancelled) return;
+
       const inv = data?.invite;
 
       if (error || !inv) {
@@ -73,9 +94,7 @@ export default function AcceptInvite() {
       setOrgName((inv as any).orgs?.name || 'Organization');
 
       // If user is already logged in, go straight to accept
-      if (authLoading) {
-        setStep('loading');
-      } else if (user && canonicalEmail(user.email) === canonicalEmail(inv.email)) {
+      if (user && canonicalEmail(user.email) === canonicalEmail(inv.email)) {
         acceptInvite();
       } else if (user) {
         setErrorMsg(`You're signed in as ${user.email} but this invite is for ${inv.email}. Please sign out first.`);
@@ -84,7 +103,11 @@ export default function AcceptInvite() {
         setStep('signup');
       }
     })();
-  }, [token, user, authLoading]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, authLoading]);
 
   // If user logs in after signup, auto-accept
   useEffect(() => {
@@ -97,6 +120,7 @@ export default function AcceptInvite() {
       }
     }
   }, [user, invite]);
+
 
   const acceptInvite = async () => {
     setStep('accepting');
