@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { resolveAllowedUser } from '@/lib/auth-access';
 
 const DEFAULT_TIMEOUT_MINUTES = 0; // 0 = never auto-logout
 const TIMEOUT_STORAGE_KEY = 'timevault_session_timeout_minutes';
@@ -33,11 +34,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Access is decided server-side: the allowed_users table (maintained by
   // the invite flow) via the SECURITY DEFINER is_allowed_user(), the same
   // check RLS applies to every table. No emails live in client code.
-  const checkAllowed = async (u: User | null): Promise<boolean> => {
-    if (!u) return false;
-    const { data, error } = await supabase.rpc('is_allowed_user');
-    return !error && data === true;
-  };
+  const checkAllowed = async (u: User | null): Promise<boolean> =>
+    resolveAllowedUser(u, () => supabase.rpc('is_allowed_user'));
 
   const clearInactivityTimer = useCallback(() => {
     if (timeoutRef.current) {
@@ -63,7 +61,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [sessionTimeoutMinutes, clearInactivityTimer, signOutClean]);
 
-  // Set up inactivity listeners
   useEffect(() => {
     if (!user || !isAllowed) return;
 
@@ -81,41 +78,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    let evaluationVersion = 0;
 
-    const evaluate = (session: Session | null) => {
-      setSession(session);
-      const u = session?.user ?? null;
-      setUser(u);
-      if (!u) {
+    const evaluate = (nextSession: Session | null) => {
+      const version = ++evaluationVersion;
+      setSession(nextSession);
+      const nextUser = nextSession?.user ?? null;
+      setUser(nextUser);
+
+      if (!nextUser) {
         setIsAllowed(false);
         setLoading(false);
         return;
       }
-      // The allowlist check hits the server; defer it out of the auth
-      // callback (supabase-js deadlocks on awaited calls inside it).
+
+      setIsAllowed(false);
+      setLoading(true);
+
+      // The allowlist check hits the server; defer it out of the auth callback
+      // because supabase-js can deadlock on awaited calls inside that callback.
       setTimeout(async () => {
-        const allowed = await checkAllowed(u);
-        if (cancelled) return;
-        setIsAllowed(allowed);
-        // Logged in but not allowed: immediately sign out.
-        if (!allowed) {
-          await supabase.auth.signOut();
-          if (cancelled) return;
-          setUser(null);
-          setSession(null);
+        try {
+          const allowed = await checkAllowed(nextUser);
+          if (cancelled || version !== evaluationVersion) return;
+
+          setIsAllowed(allowed);
+          if (!allowed) {
+            await supabase.auth.signOut();
+            if (cancelled || version !== evaluationVersion) return;
+            setUser(null);
+            setSession(null);
+          }
+        } finally {
+          // A rejected or failed allowlist request must never leave the whole
+          // application, including invite acceptance, spinning forever.
+          if (!cancelled && version === evaluationVersion) {
+            setLoading(false);
+          }
         }
-        setLoading(false);
       }, 0);
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      evaluate(session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      evaluate(nextSession);
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => evaluate(session));
+    supabase.auth.getSession().then(({ data: { session: nextSession } }) => evaluate(nextSession));
 
     return () => {
       cancelled = true;
+      evaluationVersion += 1;
       subscription.unsubscribe();
     };
   }, []);
