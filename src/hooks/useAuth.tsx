@@ -99,17 +99,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // The allowlist check hits the server; defer it out of the auth
       // callback (supabase-js deadlocks on awaited calls inside it).
       setTimeout(async () => {
-        const allowed = await checkAllowed(u);
-        if (cancelled) return;
-        setIsAllowed(allowed);
-        // Logged in but not allowed: immediately sign out.
-        if (!allowed) {
-          await supabase.auth.signOut();
+        try {
+          const allowed = await checkAllowed(u);
           if (cancelled) return;
-          setUser(null);
-          setSession(null);
+          setIsAllowed(allowed);
+          // Logged in but not allowed: immediately sign out.
+          if (!allowed) {
+            await supabase.auth.signOut();
+            if (cancelled) return;
+            setUser(null);
+            setSession(null);
+          }
+        } catch {
+          if (cancelled) return;
+          setIsAllowed(false);
+        } finally {
+          // Never leave the app stuck on a loading screen.
+          if (!cancelled) setLoading(false);
         }
-        setLoading(false);
       }, 0);
     };
 
