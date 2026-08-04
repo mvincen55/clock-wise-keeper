@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, FilePlus2, Loader2, Plus, Trash2 } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  FileCheck2,
+  FilePlus2,
+  Loader2,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -23,14 +31,18 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import {
   asKnowledgeAudienceRoles,
-  useCreateKnowledgeDraft,
   useKnowledgeBlocks,
-  useSaveKnowledgeDraft,
   useSubmitKnowledgeReview,
   type KnowledgeWorkspaceItem,
 } from '@/hooks/useKnowledge';
+import {
+  useCreateKnowledgeDraftWithAcknowledgment,
+  useKnowledgeAcknowledgmentSettings,
+  useSaveKnowledgeDraftWithAcknowledgment,
+} from '@/hooks/useKnowledgeAcknowledgments';
 import type { KnowledgeCategoryRow } from '@/integrations/supabase/knowledge-client';
 import {
+  DEFAULT_ACKNOWLEDGMENT_STATEMENT,
   KNOWLEDGE_AUDIENCE_ROLES,
   KNOWLEDGE_BLOCK_LABELS,
   KNOWLEDGE_BLOCK_TYPES,
@@ -80,19 +92,30 @@ function move<T>(items: T[], index: number, direction: -1 | 1): T[] {
 export default function KnowledgeEditorDialog({ open, onOpenChange, categories, item }: Props) {
   const version = item?.workingVersion ?? null;
   const isExistingDraft = version?.status === 'draft';
-  const { data: storedBlocks = [], isLoading: blocksLoading } = useKnowledgeBlocks(
-    isExistingDraft ? version.id : null,
-  );
-  const createDraft = useCreateKnowledgeDraft();
-  const saveDraft = useSaveKnowledgeDraft();
+  const versionId = isExistingDraft ? version.id : null;
+  const { data: storedBlocks = [], isLoading: blocksLoading } = useKnowledgeBlocks(versionId);
+  const { data: acknowledgmentSettings, isLoading: settingsLoading } =
+    useKnowledgeAcknowledgmentSettings(versionId);
+  const createDraft = useCreateKnowledgeDraftWithAcknowledgment();
+  const saveDraft = useSaveKnowledgeDraftWithAcknowledgment();
   const submitReview = useSubmitKnowledgeReview();
   const [input, setInput] = useState<KnowledgeDraftInput>(() => createBlankKnowledgeDraft());
   const [seededKey, setSeededKey] = useState('');
 
-  const seedKey = open ? `${item?.id ?? 'new'}:${version?.id ?? 'none'}:${storedBlocks.length}` : '';
+  const seedKey = open
+    ? [
+        item?.id ?? 'new',
+        version?.id ?? 'none',
+        storedBlocks.length,
+        acknowledgmentSettings?.acknowledgment_required ?? false,
+        acknowledgmentSettings?.acknowledgment_due_days ?? 'none',
+        acknowledgmentSettings?.acknowledgment_statement ?? 'default',
+      ].join(':')
+    : '';
+
   useEffect(() => {
     if (!open || seedKey === seededKey) return;
-    if (item && isExistingDraft && blocksLoading) return;
+    if (item && isExistingDraft && (blocksLoading || settingsLoading)) return;
 
     if (item && isExistingDraft && version) {
       setInput({
@@ -114,6 +137,11 @@ export default function KnowledgeEditorDialog({ open, onOpenChange, categories, 
                     : {},
               }))
             : [createKnowledgeBlock('paragraph')],
+        acknowledgmentRequired: acknowledgmentSettings?.acknowledgment_required ?? false,
+        acknowledgmentDueDays: acknowledgmentSettings?.acknowledgment_due_days ?? null,
+        acknowledgmentStatement:
+          acknowledgmentSettings?.acknowledgment_statement
+          ?? DEFAULT_ACKNOWLEDGMENT_STATEMENT,
       });
     } else {
       setInput(createBlankKnowledgeDraft('policy'));
@@ -128,6 +156,8 @@ export default function KnowledgeEditorDialog({ open, onOpenChange, categories, 
     isExistingDraft,
     storedBlocks,
     blocksLoading,
+    settingsLoading,
+    acknowledgmentSettings,
   ]);
 
   useEffect(() => {
@@ -140,6 +170,7 @@ export default function KnowledgeEditorDialog({ open, onOpenChange, categories, 
     [categories, area],
   );
   const errors = validateKnowledgeDraft(input);
+  const loadingExisting = !!item && (blocksLoading || settingsLoading);
   const saving = createDraft.isPending || saveDraft.isPending || submitReview.isPending;
 
   const setKind = (kind: KnowledgeKind) => {
@@ -204,7 +235,7 @@ export default function KnowledgeEditorDialog({ open, onOpenChange, categories, 
           </DialogDescription>
         </DialogHeader>
 
-        {blocksLoading && item ? (
+        {loadingExisting ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
@@ -291,6 +322,77 @@ export default function KnowledgeEditorDialog({ open, onOpenChange, categories, 
               </div>
             </section>
 
+            <section className="space-y-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
+              <label className="flex cursor-pointer items-start gap-3">
+                <Checkbox
+                  checked={input.acknowledgmentRequired}
+                  onCheckedChange={value =>
+                    setInput(current => ({
+                      ...current,
+                      acknowledgmentRequired: value === true,
+                      acknowledgmentDueDays: value === true
+                        ? current.acknowledgmentDueDays ?? 7
+                        : null,
+                      acknowledgmentStatement: value === true
+                        ? current.acknowledgmentStatement || DEFAULT_ACKNOWLEDGMENT_STATEMENT
+                        : DEFAULT_ACKNOWLEDGMENT_STATEMENT,
+                    }))
+                  }
+                />
+                <div>
+                  <div className="flex items-center gap-2 font-medium">
+                    <FileCheck2 className="h-4 w-4 text-primary" />
+                    Require each person to acknowledge this exact published version
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    This records receipt and reading. It does not automatically prove agreement, understanding, or misconduct.
+                  </p>
+                </div>
+              </label>
+
+              {input.acknowledgmentRequired && (
+                <div className="grid gap-4 border-t border-primary/15 pt-4 md:grid-cols-[180px_minmax(0,1fr)]">
+                  <div className="space-y-2">
+                    <Label htmlFor="ack-due-days">Deadline after publication</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="ack-due-days"
+                        type="number"
+                        min={1}
+                        max={90}
+                        step={1}
+                        value={input.acknowledgmentDueDays ?? ''}
+                        onChange={event => {
+                          const nextValue = event.target.value;
+                          setInput(current => ({
+                            ...current,
+                            acknowledgmentDueDays: nextValue === '' ? null : Number(nextValue),
+                          }));
+                        }}
+                      />
+                      <span className="text-sm text-muted-foreground">days</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ack-statement">Statement shown above the signature</Label>
+                    <Textarea
+                      id="ack-statement"
+                      rows={3}
+                      maxLength={1000}
+                      value={input.acknowledgmentStatement}
+                      onChange={event => setInput(current => ({
+                        ...current,
+                        acknowledgmentStatement: event.target.value,
+                      }))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Keep this factual and neutral. The signer will type their own name after opening the full version.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </section>
+
             <section className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
@@ -372,12 +474,12 @@ export default function KnowledgeEditorDialog({ open, onOpenChange, categories, 
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving || blocksLoading || errors.length > 0}>
+          <Button onClick={handleSave} disabled={saving || loadingExisting || errors.length > 0}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Save draft
           </Button>
           {item && isExistingDraft && (
-            <Button onClick={handleSubmit} disabled={saving || blocksLoading || errors.length > 0}>
+            <Button onClick={handleSubmit} disabled={saving || loadingExisting || errors.length > 0}>
               Send for review
             </Button>
           )}
