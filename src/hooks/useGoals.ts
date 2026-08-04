@@ -476,6 +476,45 @@ export function useLinkReplacement() {
 }
 
 
+/** A goal starter grounded in a real office policy — basis names the source. */
+export type GroundedGoalIdea = { title: string; target: string; basis: string };
+export type RoleGoalIdeaSet = { ideas: GroundedGoalIdea[]; targets: string[] };
+
+/**
+ * Role goal starters grounded in the office's actual policy material
+ * (Pathfinder mode "role_ideas"). Throws when nothing grounded comes back so
+ * callers can fall back to the shipped example presets.
+ */
+export function useRoleGoalIdeas(role: string | null) {
+  const { data: ctx } = useOrgContext();
+  return useQuery({
+    queryKey: ['role-goal-ideas', ctx?.org_id, role],
+    enabled: !!ctx && !!role,
+    staleTime: 30 * 60_000,
+    retry: 1,
+    queryFn: async (): Promise<RoleGoalIdeaSet> => {
+      const { data, error } = await supabase.functions.invoke('goal-assistant', {
+        body: { mode: 'role_ideas', role },
+      });
+      if (error) throw new Error('Pathfinder is unavailable right now');
+      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      const raw = data as { ideas?: unknown; targets?: unknown };
+      const ideas = (Array.isArray(raw?.ideas) ? raw.ideas : [])
+        .map((i: Record<string, unknown>) => ({
+          title: typeof i?.title === 'string' ? i.title : '',
+          target: typeof i?.target === 'string' ? i.target : '',
+          basis: typeof i?.basis === 'string' ? i.basis : '',
+        }))
+        .filter(i => i.title !== '');
+      const targets = (Array.isArray(raw?.targets) ? raw.targets : []).filter(
+        (t: unknown): t is string => typeof t === 'string' && t !== ''
+      );
+      if (ideas.length === 0) throw new Error('No policy-grounded ideas available');
+      return { ideas, targets };
+    },
+  });
+}
+
 /** Pathfinder calls. */
 export async function callPathfinder(payload: {
   mode: 'breakdown' | 'draft_update' | 'polish_goal' | 'chat';
