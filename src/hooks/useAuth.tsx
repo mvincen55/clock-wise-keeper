@@ -35,8 +35,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // check RLS applies to every table. No emails live in client code.
   const checkAllowed = async (u: User | null): Promise<boolean> => {
     if (!u) return false;
-    const { data, error } = await supabase.rpc('is_allowed_user');
-    return !error && data === true;
+    try {
+      const { data, error } = await supabase.rpc('is_allowed_user');
+      return !error && data === true;
+    } catch {
+      // Network/transient failure: treat as not allowed, never hang the app.
+      return false;
+    }
   };
 
   const clearInactivityTimer = useCallback(() => {
@@ -94,17 +99,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // The allowlist check hits the server; defer it out of the auth
       // callback (supabase-js deadlocks on awaited calls inside it).
       setTimeout(async () => {
-        const allowed = await checkAllowed(u);
-        if (cancelled) return;
-        setIsAllowed(allowed);
-        // Logged in but not allowed: immediately sign out.
-        if (!allowed) {
-          await supabase.auth.signOut();
+        try {
+          const allowed = await checkAllowed(u);
           if (cancelled) return;
-          setUser(null);
-          setSession(null);
+          setIsAllowed(allowed);
+          // Logged in but not allowed: immediately sign out.
+          if (!allowed) {
+            await supabase.auth.signOut();
+            if (cancelled) return;
+            setUser(null);
+            setSession(null);
+          }
+        } catch {
+          if (cancelled) return;
+          setIsAllowed(false);
+        } finally {
+          // Never leave the app stuck on a loading screen.
+          if (!cancelled) setLoading(false);
         }
-        setLoading(false);
       }, 0);
     };
 
