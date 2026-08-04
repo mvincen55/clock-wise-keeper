@@ -31,6 +31,8 @@ type Props = {
   fallback: ReactNode;
 };
 
+const EMPTY_ENTRIES: PublishedKnowledgeEntry[] = [];
+
 function lines(text: string): string[] {
   return text
     .split(/\r?\n/)
@@ -160,7 +162,7 @@ export default function PublishedKnowledgeReader({ area, title, subtitle, fallba
   const [query, setQuery] = useState('');
   const [activeId, setActiveId] = useState('');
 
-  const entries = data?.entries ?? [];
+  const entries = data?.entries ?? EMPTY_ENTRIES;
   const normalizedQuery = query.trim().toLowerCase();
   const filteredEntries = useMemo(
     () => entries.filter(entry => !normalizedQuery || searchText(entry).includes(normalizedQuery)),
