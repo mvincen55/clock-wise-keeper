@@ -44,6 +44,13 @@ vi.mock('@/hooks/useBrokenApptTemplates', async () => {
   };
 });
 
+// The Rung 4 provider dropdown pulls from the FOF doctor list; read lazily
+// so individual tests can swap the list (e.g. empty → free-text fallback).
+let fofDoctorNames = ['Dr. Scott', 'Dr. Taylor'];
+vi.mock('@/hooks/useFofTemplates', () => ({
+  useFofSettings: () => ({ data: { doctorNames: fofDoctorNames } }),
+}));
+
 beforeAll(() => {
   // jsdom has no ResizeObserver (ScaledPrintPreview needs one).
   (globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
@@ -51,6 +58,10 @@ beforeAll(() => {
     unobserve() {}
     disconnect() {}
   };
+  // Radix Select needs these DOM APIs jsdom lacks.
+  Element.prototype.scrollIntoView ??= () => {};
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.releasePointerCapture ??= () => {};
 });
 
 const setValue = (label: string, value: string) =>
@@ -158,6 +169,48 @@ describe('Broken Appointments wizard', () => {
       document.body.textContent!.split('Running behind, cancel me please').length - 1;
     expect(occurrences).toBe(1);
     cleanup();
+  });
+
+  it('rung 4 provider choice is a dropdown fed by the FOF doctor list', async () => {
+    render(<BrokenAppointments />);
+    fireEvent.click(screen.getByRole('button', { name: /broken appointment/i }));
+    fireEvent.click(screen.getByLabelText(/No-show, or no retrievable record/i));
+    clickContinue();
+    fillCalculator({ date: '2026-08-10', time: '09:00' }, { date: '2026-08-09', time: '10:00' });
+    clickContinue();
+    // Two priors + today = 3 → Rung 4, which asks for the canceled rows.
+    setValue('Prior late cancellations', '2');
+    clickContinue();
+    // The provider cell is a dropdown now, not free text.
+    expect(screen.queryByPlaceholderText('Provider')).not.toBeInTheDocument();
+    const trigger = screen.getByRole('combobox', { name: 'Appointment 1 provider' });
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    const option = await screen.findByRole('option', { name: 'Dr. Scott' });
+    expect(screen.getByRole('option', { name: 'Dr. Taylor' })).toBeInTheDocument();
+    fireEvent.keyDown(option, { key: 'Enter' });
+    expect(trigger.textContent).toContain('Dr. Scott');
+    cleanup();
+  });
+
+  it('rung 4 provider falls back to free text when no FOF doctors are configured', () => {
+    fofDoctorNames = [];
+    try {
+      render(<BrokenAppointments />);
+      fireEvent.click(screen.getByRole('button', { name: /broken appointment/i }));
+      fireEvent.click(screen.getByLabelText(/No-show, or no retrievable record/i));
+      clickContinue();
+      fillCalculator({ date: '2026-08-10', time: '09:00' }, { date: '2026-08-09', time: '10:00' });
+      clickContinue();
+      setValue('Prior late cancellations', '2');
+      clickContinue();
+      expect(screen.getByPlaceholderText('Provider')).toBeInTheDocument();
+      expect(
+        screen.queryByRole('combobox', { name: 'Appointment 1 provider' })
+      ).not.toBeInTheDocument();
+    } finally {
+      fofDoctorNames = ['Dr. Scott', 'Dr. Taylor'];
+      cleanup();
+    }
   });
 
   it('the copy button writes exactly the rendered text, dateline included', async () => {

@@ -15,6 +15,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
@@ -24,6 +27,7 @@ import { GENERIC_BRANDING, useOrgBranding } from '@/hooks/useOrgBranding';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useBrokenApptSettings } from '@/hooks/useBrokenApptSettings';
 import { useBrokenApptTemplates } from '@/hooks/useBrokenApptTemplates';
+import { useFofSettings } from '@/hooks/useFofTemplates';
 import { businessHoursCutoff, isOnTime } from '@/lib/broken-appts/business-hours';
 import { computeRung } from '@/lib/broken-appts/engine';
 import { DEFAULT_BA_SETTINGS, RUNG_BEHAVIOR, todayEventCode } from '@/lib/broken-appts/defaults';
@@ -149,6 +153,11 @@ export default function BrokenAppointments() {
   const { data: branding } = useOrgBranding();
   const { data: settings } = useBrokenApptSettings();
   const { data: templates, isLoading: templatesLoading } = useBrokenApptTemplates();
+  // Doctor options for the 9107 rows come from the FOF builder's list
+  // (fof_settings.doctor_names) — org config, not patient data, so reading
+  // it stays inside the HIPAA boundary above.
+  const { data: fofPractice } = useFofSettings();
+  const fofDoctors = fofPractice?.doctorNames ?? [];
 
   const s = settings ?? DEFAULT_BA_SETTINGS;
   const brand = branding ?? GENERIC_BRANDING;
@@ -739,13 +748,30 @@ export default function BrokenAppointments() {
                 className="w-28"
                 aria-label={`Appointment ${i + 1} time`}
               />
-              <Input
-                placeholder="Provider"
-                value={row.provider}
-                onChange={e => updateApptRow(i, { provider: e.target.value })}
-                className="w-36"
-                aria-label={`Appointment ${i + 1} provider`}
-              />
+              {fofDoctors.length > 0 ? (
+                <Select
+                  value={row.provider}
+                  onValueChange={v => updateApptRow(i, { provider: v })}
+                >
+                  <SelectTrigger className="w-36" aria-label={`Appointment ${i + 1} provider`}>
+                    <SelectValue placeholder="Provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {fofDoctors.map(d => (
+                      <SelectItem key={d} value={d}>{d}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                // Free text only until an admin fills in the FOF doctor list.
+                <Input
+                  placeholder="Provider"
+                  value={row.provider}
+                  onChange={e => updateApptRow(i, { provider: e.target.value })}
+                  className="w-36"
+                  aria-label={`Appointment ${i + 1} provider`}
+                />
+              )}
               <Input
                 placeholder="Visit type"
                 value={row.visitType}
