@@ -26,9 +26,11 @@ export const ROLE_PRESETS: RolePreset[] = [
     label: 'Front desk',
     ideas: [
       {
+        // Office policy confirms two days ahead (matches the 48-business-hour
+        // notice window in Broken Appointments) — not the day before.
         title:
-          'Confirm every next-day appointment by 4pm each workday this month so the schedule stays full',
-        target: '100% of next-day appointments confirmed',
+          'Confirm every appointment two days ahead by 4pm each workday this month so the schedule stays full',
+        target: '100% of appointments confirmed two days out',
       },
       {
         title:
@@ -42,7 +44,7 @@ export const ROLE_PRESETS: RolePreset[] = [
       },
     ],
     targets: [
-      '100% next-day confirmations',
+      '100% two-day-out confirmations',
       '8 same-call reschedules',
       '20 recall calls',
       '5 reviews requested',
