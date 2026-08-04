@@ -61,6 +61,10 @@ export type KnowledgeVersionRow = {
   item_id: string;
   version_number: number;
   status: KnowledgeVersionStatus;
+  title: string;
+  summary: string;
+  category_id: string | null;
+  audience_roles: Array<'owner' | 'manager' | 'employee'>;
   change_summary: string;
   source_kind: 'manual' | 'imported' | 'ai_assisted' | 'migrated';
   based_on_version_id: string | null;
@@ -126,7 +130,7 @@ type KnowledgeDatabase = {
       >;
       knowledge_versions: TableDefinition<
         KnowledgeVersionRow,
-        Partial<KnowledgeVersionRow> & Pick<KnowledgeVersionRow, 'org_id' | 'item_id' | 'version_number' | 'created_by'>,
+        Partial<KnowledgeVersionRow> & Pick<KnowledgeVersionRow, 'org_id' | 'item_id' | 'version_number' | 'created_by' | 'title'>,
         Partial<KnowledgeVersionRow>
       >;
       knowledge_blocks: TableDefinition<
