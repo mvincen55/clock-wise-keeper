@@ -34,7 +34,7 @@ export function PracticeSettingsCard() {
     // 1–14 mirrors the database check constraint.
     if (!Number.isFinite(days) || days < 1 || days > 14) return;
     upsert.mutate({ confirmation_lead_days: days }, {
-      onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
+      onError: (err: Error) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
     });
   };
 
