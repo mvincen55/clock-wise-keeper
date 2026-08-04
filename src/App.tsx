@@ -43,6 +43,7 @@ import InboxPage from "@/pages/InboxPage";
 import Training from "@/pages/Training";
 import Workplace from "@/pages/Workplace";
 import Playbook from "@/pages/Playbook";
+import PracticeProcedures from "@/pages/PracticeProcedures";
 import Management from "@/pages/Management";
 import KnowledgeWorkspace from "@/pages/KnowledgeWorkspace";
 import Help from "@/pages/Help";
@@ -102,6 +103,7 @@ const App = () => (
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/workplace" element={<ProtectedRoute><Workplace /></ProtectedRoute>} />
             <Route path="/playbook" element={<ProtectedRoute><Playbook /></ProtectedRoute>} />
+            <Route path="/playbook/procedures" element={<ProtectedRoute><PracticeProcedures /></ProtectedRoute>} />
             <Route path="/management" element={<ProtectedRoute><Management /></ProtectedRoute>} />
             <Route path="/management/knowledge" element={<ProtectedRoute><KnowledgeWorkspace /></ProtectedRoute>} />
             <Route path="/inbox" element={<Navigate to="/inbox/messages" replace />} />
