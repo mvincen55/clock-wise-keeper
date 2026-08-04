@@ -1,0 +1,107 @@
+name: One-time tenant GitHub tool removal
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  remove-tenant-code-tools:
+    if: ${{ github.head_ref == 'openai/fix-publish-security' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: openai/fix-publish-security
+          fetch-depth: 0
+
+      - name: Remove tenant access to product source tools
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('supabase/functions/kimi-agent/index.ts')
+          text = path.read_text()
+
+          old_handler = '''    const gh = githubConfig();
+    const githubReady = isManager && gh !== null;'''
+          new_handler = '''    // Tenant office roles must never receive product-repository credentials or
+    // source-changing tools. Product development happens through the separate,
+    // audited development channel, outside the customer assistant.
+    const gh: GithubConfig | null = null;
+    const githubReady = false;'''
+          if text.count(old_handler) != 1:
+              raise SystemExit('Expected exactly one tenant GitHub readiness block')
+          text = text.replace(old_handler, new_handler, 1)
+
+          schema_pattern = re.compile(
+              r'\n  if \(ctx\.githubReady\) \{\n    tools\.push\(\n.*?\n    \);\n  \}\n  return tools;',
+              re.S,
+          )
+          text, count = schema_pattern.subn('\n  return tools;', text, count=1)
+          if count != 1:
+              raise SystemExit(f'Expected exactly one GitHub tool-schema block, found {count}')
+
+          executor_pattern = re.compile(
+              r'        case "github_list_files": \{.*?        default:',
+              re.S,
+          )
+          replacement = '''        case "github_list_files":
+        case "github_read_file":
+        case "github_commit_files":
+        case "github_open_pr":
+          return "ERROR: Source-code tools are disabled inside tenant office assistants.";
+        default:'''
+          text, count = executor_pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'Expected exactly one GitHub executor block, found {count}')
+
+          old_prompt = '''BUILD TOOLS NOT CONFIGURED: GitHub access is not set up (missing GITHUB_FINE_GRAINED_TOKEN secret), so you cannot read or change the app's code right now. If asked to build, explain a manager must add the GITHUB_FINE_GRAINED_TOKEN secret per docs/kimi-assistant.md, and offer a ready-to-paste 'Prompt for Lovable:' as the alternative.'''
+          new_prompt = '''SOURCE-CODE TOOLS DISABLED: office tenant roles cannot read or change Purple Envelope's product source. Product development must use the separate approved development channel outside the customer app.'''
+          if text.count(old_prompt) != 1:
+              raise SystemExit('Expected exactly one disabled-build prompt')
+          text = text.replace(old_prompt, new_prompt, 1)
+
+          old_comment = '''//   managers   github_list_files / github_read_file / github_commit_files /
+//              github_open_pr — read and change this app's own source on
+//              GitHub. Pushes to the default branch sync into Lovable
+//              automatically (that is the machine channel to Lovable);
+//              publishing the production site stays a human click in
+//              Lovable, and the prompt tells the model to be honest there.
+'''
+          new_comment = '''//   source-code tools are intentionally unavailable to every office tenant
+//              role. Product development uses a separate audited channel.
+'''
+          if text.count(old_comment) != 1:
+              raise SystemExit('Expected exactly one source-tool capability comment')
+          text = text.replace(old_comment, new_comment, 1)
+
+          path.write_text(text)
+          workflow = Path('.github/workflows/one-time-disable-tenant-github-tools.yml')
+          if workflow.exists():
+              workflow.unlink()
+          PY
+
+      - name: Verify and commit only the intended source-tool removal
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git status --short)"
+          printf '%s\n' "$changed"
+          echo "$changed" | grep -F 'supabase/functions/kimi-agent/index.ts'
+          grep -F 'const githubReady = false;' supabase/functions/kimi-agent/index.ts
+          ! grep -F 'name: "github_commit_files"' supabase/functions/kimi-agent/index.ts
+          ! grep -F 'name: "github_open_pr"' supabase/functions/kimi-agent/index.ts
+          grep -F 'Source-code tools are disabled inside tenant office assistants.' supabase/functions/kimi-agent/index.ts
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Disable source tools for office tenant roles'
+          git push origin HEAD:openai/fix-publish-security
