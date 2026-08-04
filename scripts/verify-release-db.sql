@@ -32,13 +32,31 @@ BEGIN
       RAISE EXCEPTION 'RLS is not enabled on public.%', v_table;
     END IF;
 
-    IF has_table_privilege('anon', v_oid, 'SELECT')
-       OR has_table_privilege('anon', v_oid, 'INSERT')
-       OR has_table_privilege('anon', v_oid, 'UPDATE')
-       OR has_table_privilege('anon', v_oid, 'DELETE') THEN
-      RAISE EXCEPTION 'anon has direct privileges on public.%', v_table;
+    -- Supabase's default grants give anon table privileges everywhere; the
+    -- security model is RLS. The enforceable invariant (true in production)
+    -- is that NO policy on these tables applies to anon or to PUBLIC.
+    IF EXISTS (
+      SELECT 1 FROM pg_policy p
+      WHERE p.polrelid = v_oid
+        AND (
+          p.polroles = '{0}'::oid[]
+          OR p.polroles @> ARRAY[(SELECT oid FROM pg_roles WHERE rolname = 'anon')]
+        )
+    ) THEN
+      RAISE EXCEPTION 'a policy on public.% applies to anon', v_table;
     END IF;
+  END LOOP;
 
+  -- The governed authoring tables take writes only through the SECURITY
+  -- DEFINER workflow RPCs (20260804011800_knowledge_rpc_only_writes):
+  -- direct authenticated writes must stay revoked. The acknowledgment and
+  -- practice-setup tables are deliberately excluded — they take direct,
+  -- RLS-guarded writes by design.
+  FOREACH v_table IN ARRAY ARRAY[
+    'knowledge_categories','knowledge_items','knowledge_versions',
+    'knowledge_blocks','knowledge_evidence','knowledge_reviews'
+  ] LOOP
+    v_oid := to_regclass('public.' || v_table);
     IF has_table_privilege('authenticated', v_oid, 'INSERT')
        OR has_table_privilege('authenticated', v_oid, 'UPDATE')
        OR has_table_privilege('authenticated', v_oid, 'DELETE') THEN
