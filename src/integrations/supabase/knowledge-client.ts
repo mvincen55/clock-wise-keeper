@@ -116,6 +116,9 @@ export type KnowledgeReviewRow = {
 };
 
 type KnowledgeDatabase = {
+  __InternalSupabase: {
+    PostgrestVersion: '14.1';
+  };
   public: {
     Tables: {
       knowledge_categories: TableDefinition<
