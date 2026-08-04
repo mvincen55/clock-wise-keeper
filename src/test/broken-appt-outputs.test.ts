@@ -3,11 +3,18 @@ import {
   buildApptNote,
   buildLedgerChecklist,
   buildPopUp,
+  deriveInitials,
   formatDateMDY,
+  formatLedgerChecklist,
   formatMoney,
   mergeFields,
 } from '@/lib/broken-appts/outputs';
-import { DEFAULT_BA_SETTINGS, DEFAULT_BA_TEMPLATES, RUNG_BEHAVIOR } from '@/lib/broken-appts/defaults';
+import {
+  DEFAULT_BA_SETTINGS,
+  DEFAULT_BA_TEMPLATES,
+  missingTemplateSeeds,
+  RUNG_BEHAVIOR,
+} from '@/lib/broken-appts/defaults';
 
 // The copy-paste blocks are checked as exact strings — what staff pastes
 // into Dentrix must match what the screen renders, dateline included.
@@ -114,6 +121,22 @@ describe('buildApptNote', () => {
   });
 });
 
+describe('deriveInitials', () => {
+  it('derives from a two-word name', () => {
+    expect(deriveInitials('Ann Smith')).toBe('AS');
+  });
+  it('uses the first and LAST word, skipping middle names', () => {
+    expect(deriveInitials('Mary Jo Parker')).toBe('MP');
+  });
+  it('a single word yields its first letter, uppercased', () => {
+    expect(deriveInitials('cher')).toBe('C');
+  });
+  it('a missing name yields empty — callers prompt instead of stamping blanks', () => {
+    expect(deriveInitials('')).toBe('');
+    expect(deriveInitials('   ')).toBe('');
+  });
+});
+
 describe('buildLedgerChecklist', () => {
   it('Rung 1 posts, credits, and letters', () => {
     expect(buildLedgerChecklist(1, 'LC', settings)).toEqual([
@@ -128,6 +151,16 @@ describe('buildLedgerChecklist', () => {
     expect(buildLedgerChecklist(3, 'NS', settings)[0]).toBe('Post 9100 (auto-fee)');
   });
 
+  it('Rung 3 letters the code actually printed (0002 for LC when seeded)', () => {
+    expect(buildLedgerChecklist(3, 'LC', settings, '0002')[1]).toBe('Post 0002 (letter sent)');
+    expect(buildLedgerChecklist(3, 'NS', settings)[1]).toBe('Post 9106 (letter sent)');
+  });
+
+  it('the copy-paste checklist is stamped with the staff initials', () => {
+    const text = formatLedgerChecklist(['Post 9100 (auto-fee)', 'Post 9100A (letter sent)'], 'MV');
+    expect(text).toBe('☐ Post 9100 (auto-fee)\n☐ Post 9100A (letter sent)\n— MV');
+  });
+
   it('Rung 4 creates the unscheduled hygiene appointment', () => {
     expect(buildLedgerChecklist(4, 'NS', settings)).toContain(
       'Create unscheduled hygiene appointment'
@@ -138,6 +171,38 @@ describe('buildLedgerChecklist', () => {
     const steps = buildLedgerChecklist(5, 'NS', settings);
     expect(steps).toContain('Update Pop-Up');
     expect(steps).toContain('Notify Office Manager');
+  });
+});
+
+describe('template seed — the five letters', () => {
+  const letters = DEFAULT_BA_TEMPLATES.filter(t => t.kind === 'letter');
+
+  it('seeds all five letters of the canonical set', () => {
+    // 0001 First Late Cancellation (9101A), 0002 Late Cancellation with
+    // Prior History, 0003 First No-Show (9100A), 0004 Additional Broken
+    // Appointment (9106), 0005 VIP Scheduling (9107).
+    expect(letters.map(l => l.code).sort()).toEqual(
+      ['0002', '9100A', '9101A', '9106', '9107'].sort()
+    );
+    expect(letters.find(l => l.code === '0002')!.title).toBe(
+      'Late Cancellation with Prior History'
+    );
+  });
+
+  it('the top-up inserts only what an org is missing — never touching existing rows', () => {
+    // An org seeded before 0002 shipped: four letters + all replies.
+    const preExisting = DEFAULT_BA_TEMPLATES.filter(
+      t => !(t.kind === 'letter' && t.code === '0002')
+    );
+    const missing = missingTemplateSeeds(preExisting);
+    expect(missing.map(t => `${t.kind}:${t.code}`)).toEqual(['letter:0002']);
+    // Fully seeded org: nothing to add.
+    expect(missingTemplateSeeds(DEFAULT_BA_TEMPLATES)).toEqual([]);
+  });
+
+  it('Rung 3 routes a late cancel to 0002 and keeps 9106 for the rest', () => {
+    expect(RUNG_BEHAVIOR[3].letterCodeLC).toBe('0002');
+    expect(RUNG_BEHAVIOR[3].letterCode).toBe('9106');
   });
 });
 

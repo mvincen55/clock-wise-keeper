@@ -3,7 +3,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import type { Tables, TablesInsert } from '@/integrations/supabase/types';
-import { DEFAULT_BA_TEMPLATES, type BaTemplateSeed } from '@/lib/broken-appts/defaults';
+import {
+  DEFAULT_BA_TEMPLATES,
+  missingTemplateSeeds,
+  type BaTemplateSeed,
+} from '@/lib/broken-appts/defaults';
 import type { BaTemplate } from '@/lib/broken-appts/types';
 
 // De-identified letter/reply templates only — bodies carry {{merge_field}}
@@ -72,7 +76,24 @@ export function useBrokenApptTemplates() {
         if (seedError) throw seedError;
         return (seeded ?? []).map(mapRow);
       }
-      return data.map(mapRow);
+
+      // Additive top-up: factory templates that shipped after this org
+      // seeded (e.g. letter 0002) are inserted; existing rows — edited or
+      // not — are never touched. Employees get them in-memory until an
+      // admin's visit persists them.
+      const rows = data.map(mapRow);
+      const missing = missingTemplateSeeds(rows);
+      if (missing.length === 0) return rows;
+      if (!isAdmin) {
+        return [...rows, ...missing.map((t, i) => ({ ...t, id: `default-${i}` }))];
+      }
+      const topUp = missing.map(t => seedToInsert(t, ctx.org_id, user?.id));
+      const { data: added, error: topUpError } = await supabase
+        .from('broken_appt_templates')
+        .insert(topUp)
+        .select('*');
+      if (topUpError) throw topUpError;
+      return [...rows, ...(added ?? []).map(mapRow)];
     },
   });
 }

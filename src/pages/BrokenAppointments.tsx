@@ -32,9 +32,10 @@ import { businessHoursCutoff, isOnTime } from '@/lib/broken-appts/business-hours
 import { computeRung } from '@/lib/broken-appts/engine';
 import { DEFAULT_BA_SETTINGS, RUNG_BEHAVIOR, todayEventCode } from '@/lib/broken-appts/defaults';
 import {
-  buildApptNote, buildLedgerChecklist, buildPopUp, formatDateMDY, formatDateTimeMDY,
-  formatMoney, mergeFields, resolveBehaviorText,
+  buildApptNote, buildLedgerChecklist, buildPopUp, deriveInitials, formatDateMDY,
+  formatDateTimeMDY, formatLedgerChecklist, formatMoney, mergeFields, resolveBehaviorText,
 } from '@/lib/broken-appts/outputs';
+import { useMyProfile } from '@/hooks/useMyProfile';
 import type {
   BaCanceledAppt, BaPatientFields, BrokenApptType, Rung,
 } from '@/lib/broken-appts/types';
@@ -153,6 +154,7 @@ export default function BrokenAppointments() {
   const { data: branding } = useOrgBranding();
   const { data: settings } = useBrokenApptSettings();
   const { data: templates, isLoading: templatesLoading } = useBrokenApptTemplates();
+  const { data: myProfile } = useMyProfile();
   // Doctor options for the 9107 rows come from the FOF builder's list
   // (fof_settings.doctor_names) — org config, not patient data, so reading
   // it stays inside the HIPAA boundary above.
@@ -187,8 +189,12 @@ export default function BrokenAppointments() {
   const [canceledAppts, setCanceledAppts] = useState<BaCanceledAppt[]>([{ ...EMPTY_APPT_ROW }]);
   const [wantLetter, setWantLetter] = useState(true);
 
-  // One initials field feeds every dateline and the Pop-Up.
-  const [initials, setInitials] = useState('');
+  // One initials value stamps every output block (Pop-Up, note, datelines,
+  // ledger checklist). Auto-derived from the signed-in user — an explicit
+  // profile `initials` wins over deriving from the full name — and shown
+  // pre-filled; an inline edit here wins over both. Never persisted
+  // per-generation: the value only lands in the copy-paste text.
+  const [initialsEdit, setInitialsEdit] = useState<string | null>(null);
   const [personalLine, setPersonalLine] = useState('');
   const [includeReplyA, setIncludeReplyA] = useState(false);
   const [followUp, setFollowUp] = useState<'reply' | 'call' | null>(null);
@@ -211,6 +217,7 @@ export default function BrokenAppointments() {
     setPersonalLine('');
     setIncludeReplyA(false);
     setFollowUp(null);
+    setInitialsEdit(null);
   };
 
   // ------- derived values -------
@@ -234,10 +241,21 @@ export default function BrokenAppointments() {
     : apptDateISO
       ? formatDateMDY(apptDateISO)
       : '—';
-  const initialsText = initials.trim() || '__';
+  const autoInitials =
+    myProfile?.initials.trim() || deriveInitials(myProfile?.fullName ?? '');
+  const initials = initialsEdit ?? autoInitials;
+  // Blanks are never stamped — the outputs prompt for entry instead.
+  const initialsText = initials.trim().toUpperCase();
 
-  const letterTemplate = behavior.letterCode
-    ? templates?.find(t => t.kind === 'letter' && t.code === behavior.letterCode)
+  // Rung 3's late cancel gets its own letter (0002) when the org has it.
+  const letterCode =
+    todayType === 'LC' &&
+    behavior.letterCodeLC &&
+    templates?.some(t => t.kind === 'letter' && t.code === behavior.letterCodeLC)
+      ? behavior.letterCodeLC
+      : behavior.letterCode;
+  const letterTemplate = letterCode
+    ? templates?.find(t => t.kind === 'letter' && t.code === letterCode)
     : undefined;
 
   const replyFields = {
@@ -286,14 +304,14 @@ export default function BrokenAppointments() {
   });
 
   const ledgerSteps = useMemo(() => {
-    const steps = buildLedgerChecklist(rung, todayType, s);
+    const steps = buildLedgerChecklist(rung, todayType, s, letterCode ?? undefined);
     // Late arrival the provider couldn't seat: 9104b posts alongside the
     // no-show code (the "dual-post" reminder from step 1).
     if (mode === 'A' && happened === 'LATE') {
       return ['Post 9104b (late arrival)', ...steps];
     }
     return steps;
-  }, [rung, todayType, s, mode, happened]);
+  }, [rung, todayType, s, mode, happened, letterCode]);
 
   const letterSheet =
     letterTemplate && (mode === 'A' || wantLetter) && step === 'outputs' && rung !== 5 ? (
@@ -334,6 +352,21 @@ export default function BrokenAppointments() {
   };
 
   // ------- screens -------
+  // Blanks are never stamped into an output block — when neither the
+  // profile nor the name yields initials and nothing was typed, the
+  // stamped blocks give way to this prompt.
+  const initialsPrompt = (
+    <Alert variant="destructive">
+      <AlertTriangle className="h-4 w-4" />
+      <AlertTitle>Enter your initials to finish</AlertTitle>
+      <AlertDescription>
+        The note, Pop-Up, and ledger checklist are stamped with your initials — add
+        them in the field at the top right (or set them once on your profile in
+        Settings).
+      </AlertDescription>
+    </Alert>
+  );
+
   const trustLine = (
     <Alert>
       <ShieldCheck className="h-4 w-4" />
@@ -596,11 +629,15 @@ export default function BrokenAppointments() {
             </div>
           </div>
           {replyText && <OutputBlock title="Reply to copy-paste" text={replyText} />}
-          <OutputBlock
-            title="Appointment note (Dentrix)"
-            text={apptNote}
-            hint="Paste into the appointment note."
-          />
+          {initialsText === '' ? (
+            initialsPrompt
+          ) : (
+            <OutputBlock
+              title="Appointment note (Dentrix)"
+              text={apptNote}
+              hint="Paste into the appointment note."
+            />
+          )}
         </>
       )}
     </StepShell>
@@ -895,11 +932,11 @@ export default function BrokenAppointments() {
           </CardContent>
         </Card>
 
-        {(mode === 'A' || wantLetter) && behavior.letterCode && (
+        {(mode === 'A' || wantLetter) && letterCode && (
           <Card>
             <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base">
-                Letter {behavior.letterCode} — print &amp; mail with the account statement
+                Letter {letterCode} — print &amp; mail with the account statement
               </CardTitle>
               <Button onClick={() => window.print()} disabled={!letterSheet}>
                 <Printer className="h-4 w-4 mr-2" />
@@ -911,7 +948,7 @@ export default function BrokenAppointments() {
                 <ScaledPrintPreview>{letterSheet}</ScaledPrintPreview>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Letter template {behavior.letterCode} isn't set up for this office yet —
+                  Letter template {letterCode} isn't set up for this office yet —
                   an owner or manager can open this page once to seed the defaults.
                 </p>
               )}
@@ -967,32 +1004,38 @@ export default function BrokenAppointments() {
           </RadioGroup>
         </div>
 
-        <OutputBlock
-          title="Appointment note (Dentrix)"
-          text={apptNote}
-          hint="Paste into the appointment note."
-        />
-
-        {popUpText ? (
-          <OutputBlock
-            title={`Pop-Up (Dentrix)${rung === 4 ? ' — VIP variant' : ''}`}
-            text={popUpText}
-            hint="Create or update the patient's Pop-Up alert."
-          />
+        {initialsText === '' ? (
+          initialsPrompt
         ) : (
-          <Card>
-            <CardContent className="py-4 text-sm text-muted-foreground">
-              Rung 1 gets <strong>no Pop-Up</strong> — the courtesy credit means there's
-              nothing to block.
-            </CardContent>
-          </Card>
-        )}
+          <>
+            <OutputBlock
+              title="Appointment note (Dentrix)"
+              text={apptNote}
+              hint="Paste into the appointment note."
+            />
 
-        <OutputBlock
-          title="Ledger checklist"
-          text={ledgerSteps.map(line => `☐ ${line}`).join('\n')}
-          hint={`Today's event code: ${todayEventCode(todayType)}.`}
-        />
+            {popUpText ? (
+              <OutputBlock
+                title={`Pop-Up (Dentrix)${rung === 4 ? ' — VIP variant' : ''}`}
+                text={popUpText}
+                hint="Create or update the patient's Pop-Up alert."
+              />
+            ) : (
+              <Card>
+                <CardContent className="py-4 text-sm text-muted-foreground">
+                  Rung 1 gets <strong>no Pop-Up</strong> — the courtesy credit means
+                  there's nothing to block.
+                </CardContent>
+              </Card>
+            )}
+
+            <OutputBlock
+              title="Ledger checklist"
+              text={formatLedgerChecklist(ledgerSteps, initialsText)}
+              hint={`Today's event code: ${todayEventCode(todayType)}.`}
+            />
+          </>
+        )}
       </div>
     );
 
@@ -1018,10 +1061,22 @@ export default function BrokenAppointments() {
           <Input
             id="ba-initials"
             value={initials}
-            onChange={e => setInitials(e.target.value)}
-            className="w-20"
+            onChange={e => setInitialsEdit(e.target.value)}
+            className={`w-20 ${initialsText === '' ? 'border-destructive' : ''}`}
             maxLength={4}
+            placeholder="??"
           />
+          {initialsEdit !== null && initialsEdit !== autoInitials && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={() => setInitialsEdit(null)}
+              title="Back to the initials from your profile"
+            >
+              Auto
+            </Button>
+          )}
           {step !== 'entry' && (
             <Button variant="outline" size="sm" onClick={reset}>
               <RotateCcw className="h-4 w-4 mr-1.5" />

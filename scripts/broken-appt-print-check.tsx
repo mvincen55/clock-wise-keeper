@@ -1,9 +1,9 @@
 /**
- * Broken Appointments print check — renders the four shipped letters with
+ * Broken Appointments print check — renders the shipped letters with
  * test data exactly as the page's print portal does (real index.css),
  * prints them through real Chromium, and FAILS unless:
  *
- *   - 9101A / 9100A / 9106 / 9107-with-3-rows are each exactly ONE page,
+ *   - 9101A / 0002 / 9100A / 9106 / 9107-with-3-rows are each exactly ONE page,
  *   - 9107 with 12 canceled appointments is exactly TWO pages (letter +
  *     "Attached Appointment List" page) with the inline table replaced by
  *     the attachment note,
@@ -77,6 +77,7 @@ interface Variant {
 
 const VARIANTS: Variant[] = [
   { name: '9101a', code: '9101A', canceledAppts: [], expectedPages: 1, expectAttachment: false },
+  { name: '0002', code: '0002', canceledAppts: [], expectedPages: 1, expectAttachment: false },
   { name: '9100a', code: '9100A', canceledAppts: [], expectedPages: 1, expectAttachment: false },
   { name: '9106', code: '9106', canceledAppts: [], expectedPages: 1, expectAttachment: false },
   { name: '9107-3rows', code: '9107', canceledAppts: rows(3), expectedPages: 1, expectAttachment: false },

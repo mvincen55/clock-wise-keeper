@@ -31,6 +31,8 @@ export interface RungBehavior {
   transactionLine: string;
   /** Letter template code, or null (Rung 5 sends no letter). */
   letterCode: string | null;
+  /** Letter used instead when today's event is a late cancel, if seeded. */
+  letterCodeLC?: string;
   /** Scheduling guidance shown to staff. */
   schedulingStatus: string;
   /** Reply template code offered in text mode. */
@@ -61,6 +63,9 @@ export const RUNG_BEHAVIOR: Record<Rung, RungBehavior> = {
   3: {
     transactionLine: '{{fee}} posted as outstanding balance',
     letterCode: '9106',
+    // A late cancel with prior history gets its own letter (0002) when the
+    // org has it; offices seeded before it shipped fall back to 9106.
+    letterCodeLC: '0002',
     schedulingStatus:
       'BLOCKED until balance paid + card on file (collect card now if missing).',
     replyCode: 'rung3',
@@ -92,7 +97,12 @@ export type BaTemplateSeed = Omit<BaTemplate, 'id'>;
 const POLICY_PARAGRAPH =
   "Like most dental offices, we ask for at least {{notice_hours}} business hours' notice to cancel or reschedule, so we can offer your reserved time to another patient. Business hours don't include weekends — so for a Monday morning appointment, we'd need to hear from you by Thursday morning the week before.";
 
-/** The four patient letters. Bold runs use **double asterisks**. */
+/**
+ * The five patient letters — under the office's canonical numbering:
+ * 0001 First Late Cancellation (9101A), 0002 Late Cancellation with Prior
+ * History, 0003 First No-Show (9100A), 0004 Additional Broken Appointment
+ * (9106), 0005 VIP Scheduling (9107). Bold runs use **double asterisks**.
+ */
 const LETTER_SEEDS: BaTemplateSeed[] = [
   {
     kind: 'letter',
@@ -122,9 +132,22 @@ const LETTER_SEEDS: BaTemplateSeed[] = [
   },
   {
     kind: 'letter',
-    code: '9106',
-    title: 'Rung 3 — second broken appointment',
+    code: '0002',
+    title: 'Late Cancellation with Prior History',
     sortOrder: 2,
+    body: [
+      "We're writing about your appointment on {{appt_date}}, which was canceled without the required notice. Because your account shows a prior broken appointment, **a {{fee_amount}} scheduling fee has been posted to your account as an outstanding balance.** The enclosed statement reflects this charge.",
+      POLICY_PARAGRAPH,
+      "We understand schedules shift, and we're grateful you let us know when they do. At the same time, reserved time that is released without enough notice is time another patient could have had — and this is not the first occasion on your account.",
+      '**A credit card on file is now required before scheduling your next visit.** If we already have yours, nothing more is needed. Once the balance is settled and a card is on file, we can get you scheduled right away.',
+      "Call us at {{office_phone}} and we'll get everything squared away.",
+    ].join('\n\n'),
+  },
+  {
+    kind: 'letter',
+    code: '9106',
+    title: 'Rung 3 — additional broken appointment',
+    sortOrder: 3,
     body: [
       "We're writing regarding your appointment on {{appt_date}}, which was missed or canceled without the required notice. Because this is the second time, **a {{fee_amount}} scheduling fee has been posted to your account as an outstanding balance.** The enclosed statement reflects this charge.",
       'We understand how quickly life fills up, and we truly value having you as a patient. At the same time, when an appointment is reserved for you, that time is set aside with our doctors and hygienists and turned away from other patients who needed it — when it goes unused without notice, it is simply lost.',
@@ -136,7 +159,7 @@ const LETTER_SEEDS: BaTemplateSeed[] = [
     kind: 'letter',
     code: '9107',
     title: 'Rung 4 — third broken appointment (VIP scheduling)',
-    sortOrder: 3,
+    sortOrder: 4,
     body: [
       "We're writing regarding your appointment scheduled for {{appt_date}}. Per our broken-appointment policy, **a {{fee_amount}} scheduling fee has been charged to the card we have on file.** The enclosed statement reflects this charge.",
       '**We have canceled all currently reserved future appointments. Those appointments are listed below.**',
@@ -199,3 +222,16 @@ const REPLY_SEEDS: BaTemplateSeed[] = [
 ];
 
 export const DEFAULT_BA_TEMPLATES: BaTemplateSeed[] = [...LETTER_SEEDS, ...REPLY_SEEDS];
+
+/**
+ * Factory seeds an org's rows are missing (matched by kind + code). Powers
+ * the additive top-up for orgs seeded before a template shipped (e.g.
+ * letter 0002): missing rows are inserted, existing rows — edited or not —
+ * are never touched.
+ */
+export function missingTemplateSeeds(
+  existing: Pick<BaTemplate, 'kind' | 'code'>[]
+): BaTemplateSeed[] {
+  const have = new Set(existing.map(t => `${t.kind}:${t.code}`));
+  return DEFAULT_BA_TEMPLATES.filter(t => !have.has(`${t.kind}:${t.code}`));
+}

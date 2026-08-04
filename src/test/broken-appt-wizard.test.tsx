@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import BrokenAppointments from '@/pages/BrokenAppointments';
 
@@ -49,6 +49,13 @@ vi.mock('@/hooks/useBrokenApptTemplates', async () => {
 let fofDoctorNames = ['Dr. Scott', 'Dr. Taylor'];
 vi.mock('@/hooks/useFofTemplates', () => ({
   useFofSettings: () => ({ data: { doctorNames: fofDoctorNames } }),
+}));
+
+// Signed-in profile for the auto-initials derivation; individual tests
+// swap it (profile override, missing name).
+let myProfile = { fullName: 'Ann Smith', email: 'ann@example.com', initials: '' };
+vi.mock('@/hooks/useMyProfile', () => ({
+  useMyProfile: () => ({ data: myProfile }),
 }));
 
 beforeAll(() => {
@@ -259,6 +266,75 @@ describe('Broken Appointments wizard', () => {
     expect(written[0]).toBe(rendered);
     expect(written[0]).toContain('Rung 2 / No-show');
     expect(written[0].endsWith('- MV')).toBe(true);
+    cleanup();
+  });
+});
+
+describe('auto-initials', () => {
+  beforeEach(() => {
+    myProfile = { fullName: 'Ann Smith', email: 'ann@example.com', initials: '' };
+  });
+
+  // Mode A no-show with no priors → Rung 2, which renders all three
+  // stamped blocks (note, Pop-Up, ledger checklist).
+  const runToRung2Outputs = () => {
+    fireEvent.click(screen.getByRole('button', { name: /broken appointment/i }));
+    fireEvent.click(screen.getByLabelText(/No-show, or no retrievable record/i));
+    clickContinue();
+    fillCalculator({ date: '2026-08-10', time: '09:00' }, { date: '2026-08-09', time: '10:00' });
+    clickContinue();
+    clickContinue();
+    setValue('First name', 'Ann');
+    fireEvent.click(screen.getByRole('button', { name: /continue to outputs/i }));
+  };
+
+  it('derives the initials from a two-word name', () => {
+    render(<BrokenAppointments />);
+    expect(screen.getByLabelText(/your initials/i)).toHaveValue('AS');
+    cleanup();
+  });
+
+  it('an explicit profile value wins over derivation', () => {
+    myProfile = { ...myProfile, initials: 'ZZ' };
+    render(<BrokenAppointments />);
+    expect(screen.getByLabelText(/your initials/i)).toHaveValue('ZZ');
+    cleanup();
+  });
+
+  it('an inline edit wins over both', () => {
+    myProfile = { ...myProfile, initials: 'ZZ' };
+    render(<BrokenAppointments />);
+    fireEvent.change(screen.getByLabelText(/your initials/i), { target: { value: 'QQ' } });
+    runToRung2Outputs();
+    const note = screen.getByText(/Patient no-showed/i);
+    expect(note.textContent!.endsWith('- QQ')).toBe(true);
+    cleanup();
+  });
+
+  it('every output block in one run carries the same stamped initials', () => {
+    render(<BrokenAppointments />);
+    runToRung2Outputs();
+    const blocks = [...document.querySelectorAll('pre')].map(p => p.textContent!);
+    // Note, Pop-Up, and ledger checklist — stamped identically.
+    expect(blocks).toHaveLength(3);
+    expect(blocks[0].endsWith('- AS')).toBe(true);
+    expect(blocks[1].endsWith('- AS')).toBe(true);
+    expect(blocks[2].endsWith('— AS')).toBe(true);
+    cleanup();
+  });
+
+  it('a missing name prompts for entry rather than stamping blanks', () => {
+    myProfile = { fullName: '', email: 'front@office.example', initials: '' };
+    render(<BrokenAppointments />);
+    runToRung2Outputs();
+    expect(screen.getByText(/Enter your initials to finish/i)).toBeInTheDocument();
+    expect(screen.queryByText('Appointment note (Dentrix)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ledger checklist')).not.toBeInTheDocument();
+    // Typing initials brings the stamped blocks back.
+    fireEvent.change(screen.getByLabelText(/your initials/i), { target: { value: 'mv' } });
+    expect(screen.queryByText(/Enter your initials to finish/i)).not.toBeInTheDocument();
+    const note = screen.getByText(/Patient no-showed/i);
+    expect(note.textContent!.endsWith('- MV')).toBe(true);
     cleanup();
   });
 });

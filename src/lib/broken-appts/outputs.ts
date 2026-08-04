@@ -13,6 +13,20 @@ export function formatMoney(amount: number): string {
   return Number.isInteger(amount) ? `$${amount}` : `$${amount.toFixed(2)}`;
 }
 
+/**
+ * Staff initials derived from a full name: first letters of the first and
+ * last words, uppercased ("Ann Smith" → "AS", middle names ignored). A
+ * single word yields its first letter; blank yields '' — callers must
+ * prompt for entry rather than stamping blanks.
+ */
+export function deriveInitials(fullName: string): string {
+  const words = fullName.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '';
+  const first = words[0][0];
+  const last = words.length > 1 ? words[words.length - 1][0] : '';
+  return (first + last).toUpperCase();
+}
+
 /** ISO YYYY-MM-DD → M/D/YYYY (unparseable input passes through). */
 export function formatDateMDY(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number);
@@ -125,7 +139,9 @@ export function buildApptNote({
 export function buildLedgerChecklist(
   rung: Rung,
   todayType: BrokenApptType,
-  settings: Pick<BaSettings, 'feeAmount'>
+  settings: Pick<BaSettings, 'feeAmount'>,
+  /** The letter actually printed (Rung 3 uses 0002 for LC when seeded). */
+  letterCode?: string
 ): string[] {
   const fee = formatMoney(settings.feeAmount);
   switch (rung) {
@@ -138,7 +154,7 @@ export function buildLedgerChecklist(
     case 2:
       return ['Post 9100 (auto-fee)', 'Post 9100A (letter sent)'];
     case 3:
-      return [postEventStep(todayType, fee), 'Post 9106 (letter sent)'];
+      return [postEventStep(todayType, fee), `Post ${letterCode ?? '9106'} (letter sent)`];
     case 4:
       return [
         postEventStep(todayType, fee),
@@ -148,6 +164,14 @@ export function buildLedgerChecklist(
     case 5:
       return [postEventStep(todayType, fee), 'Update Pop-Up', 'Notify Office Manager'];
   }
+}
+
+/**
+ * The copy-paste form of the checklist, stamped with the staff initials
+ * like every other output block.
+ */
+export function formatLedgerChecklist(steps: string[], initials: string): string {
+  return [...steps.map(line => `☐ ${line}`), `— ${initials}`].join('\n');
 }
 
 /** Behavior-table strings with {{fee}} / {{prepay_floor}} resolved. */
