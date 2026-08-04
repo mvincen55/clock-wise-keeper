@@ -20,6 +20,9 @@ BEGIN
   IF length(v_reason) NOT BETWEEN 5 AND 900 THEN
     RAISE EXCEPTION 'Explain what is blocking this in 5 to 900 characters';
   END IF;
+  IF p_blocking_user_id = auth.uid() THEN
+    RAISE EXCEPTION 'You cannot identify yourself as the person blocking your own acknowledgment';
+  END IF;
 
   SELECT * INTO v_assignment
   FROM public.knowledge_acknowledgments
@@ -37,7 +40,7 @@ BEGIN
   END IF;
 
   IF p_blocking_user_id IS NOT NULL THEN
-    SELECT e.display_name INTO v_blocker_name
+    SELECT left(e.display_name, 120) INTO v_blocker_name
     FROM public.org_members m
     LEFT JOIN public.employees e
       ON e.org_id = m.org_id
