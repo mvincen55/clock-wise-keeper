@@ -210,13 +210,23 @@ export function useDeleteOfficeDoc() {
 
   return useMutation({
     mutationFn: async (doc: OfficeDoc) => {
-      if (doc.file_path) {
-        await supabase.storage.from('office-docs').remove([doc.file_path]);
-      }
+      // Delete the database record first. Governed knowledge evidence uses an
+      // ON DELETE RESTRICT source link, so a cited document fails here before
+      // its storage object is touched.
       const { error } = await supabase.from('office_docs').delete().eq('id', doc.id);
       if (error) throw error;
+
+      if (doc.file_path) {
+        const { error: storageError } = await supabase.storage.from('office-docs').remove([doc.file_path]);
+        if (storageError) {
+          throw new Error('The document record was deleted, but the old storage file could not be cleaned up.');
+        }
+      }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['office-docs'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['office-docs'] });
+      qc.invalidateQueries({ queryKey: ['practice-setup'] });
+    },
   });
 }
 
