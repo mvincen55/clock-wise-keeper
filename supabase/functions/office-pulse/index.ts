@@ -13,6 +13,10 @@
 // never mentions patients.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// ReturnType<typeof createClient> resolves the parameterless overload,
+// whose tables type as never; alias the real call's inferred client type.
+const makeDbClient = (url: string, key: string) => createClient(url, key);
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
 import { logScrub, scrubFreeText } from "../_shared/phi-scrub.ts";
@@ -56,7 +60,7 @@ function easternWeekday(): number {
   return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(name);
 }
 
-type Client = ReturnType<typeof createClient>;
+type Client = ReturnType<typeof makeDbClient>;
 
 /**
  * One short line from the office AI. Falls back to the template on any failure.
@@ -171,7 +175,7 @@ async function scheduleHooks(db: Client, orgId: string, today: string) {
     .gte("due_date", today)
     .lte("due_date", addDays(today, 1));
   for (const t of tasks ?? []) {
-    const goal = (t as Record<string, never>).goals as unknown as
+    const goal = t.goals as unknown as
       | { user_id: string; status: string }
       | null;
     if (!goal || goal.status !== "active") continue;
@@ -195,7 +199,7 @@ async function scheduleHooks(db: Client, orgId: string, today: string) {
     .gte("due_date", today)
     .lte("due_date", addDays(today, 2));
   for (const a of assignments ?? []) {
-    const mod = (a as Record<string, never>).training_modules as unknown as
+    const mod = a.training_modules as unknown as
       | { title: string }
       | null;
     hooks.push({

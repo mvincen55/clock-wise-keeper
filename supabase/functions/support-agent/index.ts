@@ -11,6 +11,11 @@
 // never guesses, and it never touches message content or patient data.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// ReturnType<typeof createClient> resolves the parameterless overload,
+// whose tables type as never; alias the real call's inferred client type.
+const makeDbClient = (url: string, key: string) => createClient(url, key);
+type DbClient = ReturnType<typeof makeDbClient>;
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
 import { guardAiInput, JAILBREAK_REFUSAL } from "../_shared/jailbreak-guard.ts";
@@ -68,7 +73,7 @@ type Msg = { role: string; content: unknown };
 
 /** Everything the agent is allowed to know about this person's situation. */
 async function buildContext(
-  db: ReturnType<typeof createClient>,
+  db: DbClient,
   orgId: string,
   userId: string,
   role: string,
