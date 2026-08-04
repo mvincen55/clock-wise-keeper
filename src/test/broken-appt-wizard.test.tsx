@@ -130,14 +130,33 @@ describe('Broken Appointments wizard', () => {
     clickContinue();
     fillCalculator({ date: '2026-08-10', time: '09:00' }, { date: '2026-08-09', time: '10:00' });
     clickContinue();
-    // History: flip VIP — the rung engine must land on 5.
+    // History: flip the 0005 toggle — the rung engine must land on 5.
     fireEvent.click(screen.getByRole('switch', { name: /VIP-only scheduling/i }));
     clickContinue();
     expect(screen.getByText(/HARD STOP — front desk does not handle/i)).toBeInTheDocument();
-    expect(screen.getByText(/Pending management decision/i)).toBeInTheDocument();
+    // Rung 5 ruling: no letter ever, and no pending-decision flag — the
+    // screen is OM instructions plus the holding reply only.
+    expect(screen.queryByText(/Pending management decision/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Letter 910/i)).not.toBeInTheDocument();
-    // The holding reply is the only reply offered.
     expect(screen.getByText('Holding reply (the only reply for Rung 5)')).toBeInTheDocument();
+    cleanup();
+  });
+
+  it('mode A no-show at Rung 5 offers the holding reply, never outreach', () => {
+    render(<BrokenAppointments />);
+    fireEvent.click(screen.getByRole('button', { name: /broken appointment/i }));
+    fireEvent.click(screen.getByLabelText(/No-show, or no retrievable record/i));
+    clickContinue();
+    fillCalculator({ date: '2026-08-10', time: '09:00' }, { date: '2026-08-09', time: '10:00' });
+    clickContinue();
+    fireEvent.click(screen.getByRole('switch', { name: /VIP-only scheduling/i }));
+    clickContinue();
+    expect(screen.getByText(/HARD STOP — front desk does not handle/i)).toBeInTheDocument();
+    setValue('Patient first name (for the holding reply)', 'Ann');
+    expect(screen.getByText('Holding reply (the only reply for Rung 5)')).toBeInTheDocument();
+    expect(screen.getByText(/Got your message, Ann/i)).toBeInTheDocument();
+    // The no-show outreach text must not appear at Rung 5.
+    expect(screen.queryByText(/missed you at your appointment/i)).not.toBeInTheDocument();
     cleanup();
   });
 
