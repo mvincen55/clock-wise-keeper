@@ -29,6 +29,15 @@ export function PracticeSettingsCard() {
     });
   };
 
+  const handleLeadDaysChange = (value: string) => {
+    const days = Math.round(parseFloat(value));
+    // 1–14 mirrors the database check constraint.
+    if (!Number.isFinite(days) || days < 1 || days > 14) return;
+    upsert.mutate({ confirmation_lead_days: days }, {
+      onError: (err: Error) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
+    });
+  };
+
   return (
     <Card className="card-elevated">
       <CardHeader className="border-b">
@@ -80,6 +89,23 @@ export function PracticeSettingsCard() {
               </Select>
               <p className="text-xs text-muted-foreground">
                 Employees won't see collections figures when set to admins only.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs">Appointment Confirmation Window (days ahead)</Label>
+              <Input
+                type="number"
+                min={1}
+                max={14}
+                step="1"
+                value={settings?.confirmation_lead_days ?? 2}
+                onChange={(e) => handleLeadDaysChange(e.target.value)}
+                className="w-24"
+              />
+              <p className="text-xs text-muted-foreground">
+                How many days before the visit your team confirms appointments. Goal
+                starters and coaching prompts word themselves around this.
               </p>
             </div>
           </>

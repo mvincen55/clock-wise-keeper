@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Lightbulb, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { GENERIC_TARGETS, ROLE_PRESETS, type RoleKey } from './goal-examples';
+import { usePracticeSettings } from '@/hooks/usePracticeSettings';
+import { GENERIC_TARGETS, getRolePresets, type RoleKey } from './goal-examples';
 
 /**
  * Role-based SMART examples plus one-tap measurable targets. Purely a helper:
@@ -17,7 +18,14 @@ export default function RoleGoalIdeas({
   onPickTarget: (target: string) => void;
 }) {
   const [role, setRole] = useState<RoleKey | null>(null);
-  const preset = ROLE_PRESETS.find(r => r.key === role) ?? null;
+  // Wording follows the office's confirmation policy; falls back to the
+  // shipped default until the settings query resolves.
+  const { data: practice } = usePracticeSettings();
+  const presets = useMemo(
+    () => getRolePresets(practice?.confirmation_lead_days),
+    [practice?.confirmation_lead_days]
+  );
+  const preset = presets.find(r => r.key === role) ?? null;
   const targets = preset ? preset.targets : GENERIC_TARGETS;
 
   return (
@@ -28,7 +36,7 @@ export default function RoleGoalIdeas({
       </div>
 
       <div className="flex flex-wrap gap-1.5">
-        {ROLE_PRESETS.map(r => (
+        {presets.map(r => (
           <button
             key={r.key}
             type="button"
