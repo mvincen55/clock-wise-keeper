@@ -2310,9 +2310,22 @@
   line-height: 1.45;
 }
 
+/* Org logo above the practice name (org_branding.logo_url; the FOF print
+   pipeline's asset). Constrained to the letterhead band, aspect preserved;
+   no logo = the img is simply absent, so the text letterhead closes up. */
+.ba-letterhead-id {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4pt;
+}
+
 .ba-logo {
-  height: 0.55in;
+  display: block;
+  max-height: 0.6in;
   max-width: 2.2in;
+  width: auto;
+  height: auto;
   object-fit: contain;
 }
 
@@ -2369,10 +2382,12 @@
   font-size: 9.5pt;
 }
 
+/* Neutral correspondence styling — the brand accent stays in the
+   letterhead; body content (including this table) never picks it up. */
 .ba-appt-table th {
   text-align: left;
-  background: var(--ba-tint);
-  color: var(--ba-navy);
+  background: #f2f1f4;
+  color: var(--ba-ink);
   padding: 3pt 6pt;
   border: 0.75pt solid var(--ba-line);
 }
@@ -2393,7 +2408,7 @@
 
 .ba-attach-title {
   font-weight: 700;
-  color: var(--ba-navy);
+  color: var(--ba-ink);
   font-size: 12pt;
   margin-bottom: 2pt;
 }

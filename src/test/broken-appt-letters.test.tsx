@@ -2,13 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import BaLetterSheet, { INLINE_APPT_ROWS_MAX } from '@/components/broken-appts/BaLetterSheet';
 import { DEFAULT_BA_SETTINGS, DEFAULT_BA_TEMPLATES } from '@/lib/broken-appts/defaults';
+import { formatMoney, mergeFields } from '@/lib/broken-appts/outputs';
 import type { BaCanceledAppt, BaPatientFields } from '@/lib/broken-appts/types';
 
-// Renders all four shipped letters with test data and checks the Phase 3
-// gates: merge fields resolve, the automatic-letter italic line and the
-// enclosure footer appear on every letter, bold markers become <strong>,
-// and a 12-row Rung 4 produces the attachment page instead of the inline
-// table.
+// Renders all five shipped letters with test data and checks the Phase 3
+// gates: merge fields resolve (including the card-state snippets), the
+// automatic-letter italic line and the enclosure footer appear on every
+// letter, bold markers become <strong>, a 12-row Rung 4 produces the
+// attachment page instead of the inline table, and the letterhead holds up
+// with and without an org logo.
 
 const BRANDING = {
   displayName: 'Northfield Dental',
@@ -32,16 +34,38 @@ const PATIENT: BaPatientFields = {
 };
 
 const LETTERS = DEFAULT_BA_TEMPLATES.filter(t => t.kind === 'letter');
+const LETTER_CODES = ['0001', '0002', '0003', '0004', '0005'];
 
-const render = (code: string, canceledAppts: BaCanceledAppt[] = []) =>
+const snippet = (code: string) =>
+  mergeFields(DEFAULT_BA_TEMPLATES.find(t => t.kind === 'snippet' && t.code === code)!.body, {
+    fee_amount: formatMoney(SETTINGS.feeAmount),
+  });
+
+// The card-state fields each letter needs, resolved as the page resolves
+// them (defaults: no card yet at Rung 2–3, posted at Rung 3, charged at 4).
+const DEFAULT_EXTRAS: Record<string, Record<string, string>> = {
+  '0001': {},
+  '0002': { card_sentence: snippet('card_needed') },
+  '0003': { card_sentence: snippet('card_needed') },
+  '0004': { transaction_snippet: snippet('txn_posted') },
+  '0005': { transaction_snippet: snippet('txn_charged') },
+};
+
+const render = (
+  code: string,
+  canceledAppts: BaCanceledAppt[] = [],
+  extraFields: Record<string, string> = DEFAULT_EXTRAS[code],
+  logoUrl = ''
+) =>
   renderToStaticMarkup(
     <BaLetterSheet
-      branding={BRANDING}
+      branding={{ ...BRANDING, logoUrl }}
       settings={SETTINGS}
       body={LETTERS.find(l => l.code === code)!.body}
       patient={PATIENT}
       canceledAppts={canceledAppts}
       todayMDY="8/3/2026"
+      extraFields={extraFields}
     />
   );
 
@@ -53,9 +77,13 @@ const APPT_ROWS = (n: number): BaCanceledAppt[] =>
     visitType: i % 2 ? 'Crown prep' : 'Prophy',
   }));
 
-describe('BaLetterSheet — the four shipped letters', () => {
-  it.each(['9101A', '9100A', '9106', '9107'])('%s resolves every merge field', code => {
-    const html = render(code, code === '9107' ? APPT_ROWS(3) : []);
+describe('BaLetterSheet — the five shipped letters', () => {
+  it('ships exactly the five 0001–0005 letters', () => {
+    expect(LETTERS.map(l => l.code).sort()).toEqual(LETTER_CODES);
+  });
+
+  it.each(LETTER_CODES)('%s resolves every merge field', code => {
+    const html = render(code, code === '0005' ? APPT_ROWS(3) : []);
     expect(html).not.toContain('{{');
     expect(html).toContain('Dear Ann,');
     expect(html).toContain('8/10/2026'); // appt_date
@@ -63,10 +91,10 @@ describe('BaLetterSheet — the four shipped letters', () => {
     expect(html).toContain('(555) 010-0142'); // office_phone fallback from branding
   });
 
-  it.each(['9101A', '9100A', '9106', '9107'])(
+  it.each(LETTER_CODES)(
     '%s carries the automatic-letter line and the enclosure footer',
     code => {
-      const html = render(code, code === '9107' ? APPT_ROWS(3) : []);
+      const html = render(code, code === '0005' ? APPT_ROWS(3) : []);
       expect(html).toContain(
         'This letter is generated automatically by our scheduling system as part of our standard record-keeping for every patient.'
       );
@@ -76,23 +104,45 @@ describe('BaLetterSheet — the four shipped letters', () => {
     }
   );
 
-  it.each(['9101A', '9100A', '9106', '9107'])('%s renders bold runs, not ** markers', code => {
-    const html = render(code, code === '9107' ? APPT_ROWS(3) : []);
+  it.each(LETTER_CODES)('%s renders bold runs, not ** markers', code => {
+    const html = render(code, code === '0005' ? APPT_ROWS(3) : []);
     expect(html).toContain('<strong>');
     expect(html).not.toContain('**');
   });
 
-  it('9107 with a few rows prints the table inline', () => {
-    const html = render('9107', APPT_ROWS(3));
+  it('0002 swaps the card sentence per the card state', () => {
+    expect(render('0002')).toContain('a credit card on file will be required');
+    expect(render('0002', [], { card_sentence: snippet('card_have') })).toContain(
+      'we already have a card on file, so nothing more is needed there'
+    );
+  });
+
+  it('0004 with a successful charge reads "charged to the card we have on file"', () => {
+    const html = render('0004', [], { transaction_snippet: snippet('txn_charged') });
+    expect(html).toContain('Because this has happened again,');
+    expect(html).toContain('charged to the card we have on file');
+  });
+
+  it('a failed card puts the 7-business-day sentence in the letter', () => {
+    const html = render('0005', APPT_ROWS(3), {
+      transaction_snippet: snippet('txn_posted_card_failed'),
+    });
+    expect(html).toContain('unable to be processed');
+    expect(html).toContain('7 business days');
+    expect(html).not.toContain('charged to the card');
+  });
+
+  it('0005 with a few rows prints the table inline', () => {
+    const html = render('0005', APPT_ROWS(3));
     expect(html).toContain('ba-appt-table');
     expect(html).not.toContain('A full appointment list is attached');
     expect(html).not.toContain('ba-attach-page');
   });
 
-  it('9107 with 12 rows moves the table to the attachment page', () => {
+  it('0005 with 12 rows moves the table to the attachment page', () => {
     const rows = APPT_ROWS(12);
     expect(rows.length).toBeGreaterThan(INLINE_APPT_ROWS_MAX);
-    const html = render('9107', rows);
+    const html = render('0005', rows);
     expect(html).toContain('A full appointment list is attached');
     expect(html).toContain('ba-attach-page');
     expect(html).toContain('Attached Appointment List');
@@ -100,9 +150,19 @@ describe('BaLetterSheet — the four shipped letters', () => {
     for (let i = 1; i <= 12; i++) expect(html).toContain(`9/${i}/2026`);
   });
 
-  it('the prepay floor merges into 9107 from settings', () => {
-    const html = render('9107', APPT_ROWS(2));
+  it('the prepay floor merges into 0005 from settings', () => {
+    const html = render('0005', APPT_ROWS(2));
     expect(html).toContain('$150 or your estimated patient portion');
+  });
+
+  it.each(LETTER_CODES)('%s letterhead renders the org logo when one exists — and not otherwise', code => {
+    const rows = code === '0005' ? APPT_ROWS(3) : [];
+    const withLogo = render(code, rows, DEFAULT_EXTRAS[code], 'https://example.test/logo.png');
+    expect(withLogo).toContain('ba-logo');
+    expect(withLogo).toContain('https://example.test/logo.png');
+    const withoutLogo = render(code, rows);
+    expect(withoutLogo).not.toContain('ba-logo');
+    expect(withoutLogo).toContain('Northfield Dental Group, LLC');
   });
 
   it('a blank signature name falls back to the practice name', () => {

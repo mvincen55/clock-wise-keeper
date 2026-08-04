@@ -722,6 +722,7 @@ export type Database = {
           office_closed_dates: Json
           office_phone: string
           org_id: string
+          policy_effective_date: string | null
           signature_name: string
           signature_title: string
           updated_at: string
@@ -737,6 +738,7 @@ export type Database = {
           office_closed_dates?: Json
           office_phone?: string
           org_id: string
+          policy_effective_date?: string | null
           signature_name?: string
           signature_title?: string
           updated_at?: string
@@ -752,6 +754,7 @@ export type Database = {
           office_closed_dates?: Json
           office_phone?: string
           org_id?: string
+          policy_effective_date?: string | null
           signature_name?: string
           signature_title?: string
           updated_at?: string

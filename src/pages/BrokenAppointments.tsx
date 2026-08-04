@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  AlertTriangle, ArrowLeft, ArrowRight, CalendarX, Check, ChevronDown, Copy,
+  ArrowLeft, ArrowRight, CalendarX, Check, ChevronDown, Copy,
   Loader2, OctagonX, Plus, Printer, RotateCcw, ShieldCheck, Trash2,
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -23,28 +23,36 @@ import { Textarea } from '@/components/ui/textarea';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
 import ScaledPrintPreview from '@/components/ScaledPrintPreview';
 import BaLetterSheet from '@/components/broken-appts/BaLetterSheet';
+import BaCutoffCalculator, {
+  type BaCutoffValue,
+} from '@/components/broken-appts/BaCutoffCalculator';
 import { GENERIC_BRANDING, useOrgBranding } from '@/hooks/useOrgBranding';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useBrokenApptSettings } from '@/hooks/useBrokenApptSettings';
 import { useBrokenApptTemplates } from '@/hooks/useBrokenApptTemplates';
 import { useFofSettings } from '@/hooks/useFofTemplates';
-import { businessHoursCutoff, isOnTime } from '@/lib/broken-appts/business-hours';
+import {
+  businessHoursCutoff, isOnTime, parseLocalDateTime,
+} from '@/lib/broken-appts/business-hours';
 import { computeRung } from '@/lib/broken-appts/engine';
 import { DEFAULT_BA_SETTINGS, RUNG_BEHAVIOR, todayEventCode } from '@/lib/broken-appts/defaults';
 import {
-  buildApptNote, buildLedgerChecklist, buildPopUp, formatDateMDY, formatDateTimeMDY,
-  formatMoney, mergeFields, resolveBehaviorText,
+  buildApptNote, buildLedgerChecklist, buildPopUp, buildTransactionLine, cardSentenceCode,
+  feeClauseShort, formatCutoff, formatDateMDY, formatMoney, mergeFields, resolveBehaviorText,
+  transactionSnippetCode,
 } from '@/lib/broken-appts/outputs';
 import type {
-  BaCanceledAppt, BaPatientFields, BrokenApptType, Rung,
+  BaCanceledAppt, BaCardState, BaLetterCode, BaPatientFields, BrokenApptType,
 } from '@/lib/broken-appts/types';
 
 /**
  * Broken Appointments — the front-desk workflow for no-shows and late
  * cancellations. Staff answers a short wizard and the page produces the
  * correct patient letter (printable), a copy-paste text reply, and the
- * Dentrix Pop-Up / appointment-note / ledger blocks, plus the
- * 48-business-hour cutoff so nobody miscounts.
+ * Dentrix Pop-Up / appointment-note / ledger blocks. The ladder is driven
+ * by the letter codes already on the ledger (the paper trail is the
+ * progression driver); the business-hours calculator is an assist — never
+ * a required entry step.
  *
  * HIPAA boundary (FOF precedent, src/lib/broken-appts/types.ts): every
  * patient-entered value on this page lives in React state only and dies on
@@ -55,7 +63,7 @@ import type {
 
 type Mode = 'A' | 'B';
 type Happened = 'LC' | 'NS' | 'LATE';
-type Step = 'entry' | 'what' | 'paste' | 'calc' | 'ontime' | 'history' | 'patient' | 'outputs';
+type Step = 'entry' | 'what' | 'paste' | 'notice' | 'ontime' | 'history' | 'card' | 'patient' | 'outputs';
 
 const EMPTY_PATIENT: BaPatientFields = {
   firstName: '',
@@ -69,6 +77,14 @@ const EMPTY_PATIENT: BaPatientFields = {
 
 const EMPTY_APPT_ROW: BaCanceledAppt = { date: '', time: '', provider: '', visitType: '' };
 
+const LETTER_CODE_INFO: { code: BaLetterCode; label: string }[] = [
+  { code: '0001', label: 'First late cancellation (fee credited)' },
+  { code: '0002', label: 'Late cancellation with prior history' },
+  { code: '0003', label: 'First no-show' },
+  { code: '0004', label: 'Additional broken appointment' },
+  { code: '0005', label: 'VIP scheduling — terminal, now or ever' },
+];
+
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
@@ -79,12 +95,6 @@ function isoDateOf(d: Date): string {
 
 function timeOf(d: Date): string {
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-}
-
-function parseLocal(dateISO: string, time: string): Date | null {
-  if (!dateISO || !time) return null;
-  const d = new Date(`${dateISO}T${time}`);
-  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 /** Copies exactly the string it renders — never a re-serialization. */
@@ -153,9 +163,9 @@ export default function BrokenAppointments() {
   const { data: branding } = useOrgBranding();
   const { data: settings } = useBrokenApptSettings();
   const { data: templates, isLoading: templatesLoading } = useBrokenApptTemplates();
-  // Doctor options for the 9107 rows come from the FOF builder's list
-  // (fof_settings.doctor_names) — org config, not patient data, so reading
-  // it stays inside the HIPAA boundary above.
+  // Doctor options for the canceled-appointment rows come from the FOF
+  // builder's list (fof_settings.doctor_names) — org config, not patient
+  // data, so reading it stays inside the HIPAA boundary above.
   const { data: fofPractice } = useFofSettings();
   const fofDoctors = fofPractice?.doctorNames ?? [];
 
@@ -170,17 +180,26 @@ export default function BrokenAppointments() {
   const [happened, setHappened] = useState<Happened | null>(null);
   const [pastedText, setPastedText] = useState('');
 
-  // Calculator — notice defaults to "now" (page-load time).
+  // Step 2 — the notice question. The calculator is an optional assist
+  // (the expander) whose verdict auto-selects the answer; entering dates
+  // is never required.
+  const [noticeAnswer, setNoticeAnswer] = useState<'yes' | 'no' | null>(null);
+  const [calcOpen, setCalcOpen] = useState(false);
   const now = useMemo(() => new Date(), []);
   const [apptDateISO, setApptDateISO] = useState('');
   const [apptTime, setApptTime] = useState('');
   const [noticeDateISO, setNoticeDateISO] = useState(() => isoDateOf(new Date()));
   const [noticeTime, setNoticeTime] = useState(() => timeOf(new Date()));
 
-  // History within the rolling window.
-  const [priorLCInput, setPriorLCInput] = useState('0');
-  const [priorNSInput, setPriorNSInput] = useState('0');
-  const [onVip, setOnVip] = useState(false);
+  // Step 3 — history: the letter codes already on the ledger, plus the
+  // transition (pre-policy) follow-up.
+  const [selectedCodes, setSelectedCodes] = useState<BaLetterCode[]>([]);
+  const [noneChecked, setNoneChecked] = useState(false);
+  const [prePolicyPriors, setPrePolicyPriors] = useState(false);
+
+  // Step 3½ — card state (rungs 2–5 only).
+  const [cardAnswer, setCardAnswer] = useState<'yes' | 'no' | null>(null);
+  const [chargeAnswer, setChargeAnswer] = useState<'yes' | 'no' | null>(null);
 
   // Patient info + Rung 4 canceled-appointment rows.
   const [patient, setPatient] = useState<BaPatientFields>(EMPTY_PATIENT);
@@ -193,18 +212,32 @@ export default function BrokenAppointments() {
   const [includeReplyA, setIncludeReplyA] = useState(false);
   const [followUp, setFollowUp] = useState<'reply' | 'call' | null>(null);
 
+  // The standalone cutoff tool (side panel) — usable outside the wizard,
+  // e.g. a patient calls asking their last day to cancel without a fee.
+  const [toolOpen, setToolOpen] = useState(false);
+  const [toolValue, setToolValue] = useState<BaCutoffValue>(() => ({
+    apptDate: '',
+    apptTime: '',
+    noticeDate: isoDateOf(new Date()),
+    noticeTime: timeOf(new Date()),
+  }));
+
   const reset = () => {
     setStep('entry');
     setHappened(null);
     setPastedText('');
+    setNoticeAnswer(null);
+    setCalcOpen(false);
     setApptDateISO('');
     setApptTime('');
     const n = new Date();
     setNoticeDateISO(isoDateOf(n));
     setNoticeTime(timeOf(n));
-    setPriorLCInput('0');
-    setPriorNSInput('0');
-    setOnVip(false);
+    setSelectedCodes([]);
+    setNoneChecked(false);
+    setPrePolicyPriors(false);
+    setCardAnswer(null);
+    setChargeAnswer(null);
     setPatient(EMPTY_PATIENT);
     setCanceledAppts([{ ...EMPTY_APPT_ROW }]);
     setWantLetter(true);
@@ -215,18 +248,34 @@ export default function BrokenAppointments() {
 
   // ------- derived values -------
   const todayType: BrokenApptType = mode === 'B' ? 'LC' : happened === 'LC' ? 'LC' : 'NS';
-  const apptAt = parseLocal(apptDateISO, apptTime);
-  const noticeAt = parseLocal(noticeDateISO, noticeTime);
+  const apptAt = parseLocalDateTime(apptDateISO, apptTime);
+  const noticeAt = parseLocalDateTime(noticeDateISO, noticeTime);
   const cutoff = apptAt ? businessHoursCutoff(apptAt, s.noticeBusinessHours, s.officeClosedDates) : null;
-  const onTime =
+  const calcVerdict =
     apptAt && noticeAt
       ? isOnTime(noticeAt, apptAt, s.noticeBusinessHours, s.officeClosedDates)
       : null;
 
-  const priorLC = Math.max(0, parseInt(priorLCInput, 10) || 0);
-  const priorNS = Math.max(0, parseInt(priorNSInput, 10) || 0);
-  const rung: Rung = computeRung({ todayType, priorLC, priorNS, onVip });
+  // The expander's verdict auto-selects the Yes/No (staff can override).
+  useEffect(() => {
+    if (calcVerdict !== null) setNoticeAnswer(calcVerdict ? 'yes' : 'no');
+  }, [calcVerdict]);
+
+  const highestLetterCode =
+    LETTER_CODE_INFO.map(o => o.code)
+      .filter(c => selectedCodes.includes(c))
+      .pop() ?? null;
+  const { rung, letterCode } = computeRung({
+    todayType,
+    highestLetterCode,
+    hasPrePolicyPriors: noneChecked && prePolicyPriors,
+  });
   const behavior = RUNG_BEHAVIOR[rung];
+
+  const card: BaCardState = {
+    cardOnFile: cardAnswer === null ? null : cardAnswer === 'yes',
+    chargeSucceeded: cardAnswer === 'yes' && chargeAnswer !== null ? chargeAnswer === 'yes' : null,
+  };
 
   const todayMDY = formatDateMDY(isoDateOf(now));
   const apptDateMDY = patient.apptDateISO
@@ -235,15 +284,30 @@ export default function BrokenAppointments() {
       ? formatDateMDY(apptDateISO)
       : '—';
   const initialsText = initials.trim() || '__';
+  const feeText = formatMoney(s.feeAmount);
+  const policyDateLabel = s.policyEffectiveDate
+    ? formatDateMDY(s.policyEffectiveDate)
+    : 'the current policy took effect';
 
-  const letterTemplate = behavior.letterCode
-    ? templates?.find(t => t.kind === 'letter' && t.code === behavior.letterCode)
+  const letterTemplate = letterCode
+    ? templates?.find(t => t.kind === 'letter' && t.code === letterCode)
     : undefined;
+
+  // Card-state snippets (org-editable rows) → letter merge fields.
+  const snippetFields = { fee_amount: feeText };
+  const snippetBody = (code: string) =>
+    templates?.find(t => t.kind === 'snippet' && t.code === code)?.body ?? '';
+  const letterExtraFields = {
+    transaction_snippet: mergeFields(snippetBody(transactionSnippetCode(card)), snippetFields),
+    card_sentence: mergeFields(snippetBody(cardSentenceCode(card)), snippetFields),
+  };
 
   const replyFields = {
     first_name: patient.firstName.trim() || 'there',
     office_phone: effectivePhone,
-    fee_amount: formatMoney(s.feeAmount),
+    fee_amount: feeText,
+    fee_clause: feeClauseShort(card, rung === 3),
+    notice_hours: String(s.noticeBusinessHours),
     appt_date: apptDateMDY,
     doctor_name: practiceName || 'We',
     personal_line: personalLine.trim(),
@@ -255,12 +319,15 @@ export default function BrokenAppointments() {
   };
 
   // Mode B is always LC (Rule 3); mode A no-shows reuse the outreach text.
+  // Rung 5 always uses the holding reply — never outreach, never a promise.
   const replyCode =
-    onTime && step === 'ontime'
+    step === 'ontime'
       ? 'on_time'
-      : mode === 'A' && todayType === 'NS'
-        ? 'ns_outreach'
-        : behavior.replyCode;
+      : rung === 5
+        ? behavior.replyCode
+        : mode === 'A' && todayType === 'NS'
+          ? 'ns_outreach'
+          : behavior.replyCode;
   const replyText = replyCode ? replyFor(replyCode) : null;
 
   const apptNote = buildApptNote({
@@ -277,20 +344,19 @@ export default function BrokenAppointments() {
   const popUpText = buildPopUp({
     rung,
     todayType,
+    card,
     settings: s,
     todayMDY,
     initials: initialsText,
   });
 
-  const ledgerSteps = useMemo(() => {
-    const steps = buildLedgerChecklist(rung, todayType, s);
-    // Late arrival the provider couldn't seat: 9104b posts alongside the
-    // no-show code (the "dual-post" reminder from step 1).
-    if (mode === 'A' && happened === 'LATE') {
-      return ['Post 9104b (late arrival)', ...steps];
-    }
-    return steps;
-  }, [rung, todayType, s, mode, happened]);
+  // Late arrival the provider couldn't seat: 9104b posts alongside the
+  // no-show code (the "dual-post" reminder from step 1).
+  const baseLedgerSteps = buildLedgerChecklist({ rung, todayType, letterCode, card, settings: s });
+  const ledgerSteps =
+    mode === 'A' && happened === 'LATE'
+      ? ['Post 9104b (late arrival)', ...baseLedgerSteps]
+      : baseLedgerSteps;
 
   const letterSheet =
     letterTemplate && (mode === 'A' || wantLetter) && step === 'outputs' && rung !== 5 ? (
@@ -301,6 +367,7 @@ export default function BrokenAppointments() {
         patient={patient}
         canceledAppts={rung === 4 ? canceledAppts.filter(r => r.date || r.provider || r.visitType) : []}
         todayMDY={todayMDY}
+        extraFields={letterExtraFields}
       />
     ) : null;
 
@@ -311,23 +378,37 @@ export default function BrokenAppointments() {
     setStep(m === 'B' ? 'paste' : 'what');
   };
 
-  const continueFromCalc = () => {
-    if (onTime === null) return;
-    if (onTime) {
-      setStep('ontime');
-    } else {
-      setStep('history');
-    }
+  const goPatient = () => {
+    setPatient(p => ({ ...p, apptDateISO: p.apptDateISO || apptDateISO }));
+    setStep('patient');
   };
 
+  // Rung 1 never asks the card question; Rung 5 collects no letter details.
   const continueFromHistory = () => {
-    // VIP → hard stop; the front desk never collects letter details.
-    if (onVip) {
-      setStep('outputs');
-    } else {
-      setPatient(p => ({ ...p, apptDateISO: p.apptDateISO || apptDateISO }));
-      setStep('patient');
-    }
+    if (rung === 1) goPatient();
+    else setStep('card');
+  };
+  const continueFromCard = () => {
+    if (rung === 5) setStep('outputs');
+    else goPatient();
+  };
+
+  const historyAnswered = selectedCodes.length > 0 || noneChecked;
+  const cardAnswered =
+    cardAnswer !== null && (rung < 3 || cardAnswer === 'no' || chargeAnswer !== null);
+
+  const applyCalcPatch = (patch: Partial<BaCutoffValue>) => {
+    if (patch.apptDate !== undefined) setApptDateISO(patch.apptDate);
+    if (patch.apptTime !== undefined) setApptTime(patch.apptTime);
+    if (patch.noticeDate !== undefined) setNoticeDateISO(patch.noticeDate);
+    if (patch.noticeTime !== undefined) setNoticeTime(patch.noticeTime);
+  };
+
+  const toggleCode = (code: BaLetterCode, checked: boolean) => {
+    setNoneChecked(false);
+    setSelectedCodes(prev =>
+      checked ? [...prev.filter(c => c !== code), code] : prev.filter(c => c !== code)
+    );
   };
 
   // ------- screens -------
@@ -356,7 +437,9 @@ export default function BrokenAppointments() {
             <p>
               <strong>1.</strong> Broken appointments (no-shows + late cancels) count
               cumulatively within a rolling {s.historyWindowYears}-year window. When more
-              than one rung could apply, the highest rung wins.
+              than one rung could apply, the highest rung wins — and the ladder is driven
+              by the letter codes already on the ledger, so the paper trail is the
+              progression driver.
             </p>
             <p>
               <strong>2.</strong> Notice window = {s.noticeBusinessHours} business hours,
@@ -373,13 +456,47 @@ export default function BrokenAppointments() {
             <p>
               <strong>4.</strong> Confirmation never waives the policy.
             </p>
+            <p>
+              <strong>5.</strong> Transition: broken appointments before {policyDateLabel}{' '}
+              never count toward the ladder and get no retroactive letters — they only
+              set the entry point. The first post-policy break is handled at Rung 2
+              (0002 for a late cancel — no courtesy credit; 0003 for a no-show).
+            </p>
             <div className="pt-1 text-xs text-muted-foreground space-y-1">
-              <p>Rung 1 — first late cancel: {formatMoney(s.feeAmount)} posted + courtesy credit (net $0), letter 9101A.</p>
-              <p>Rung 2 — first no-show: {formatMoney(s.feeAmount)} outstanding, letter 9100A, Pop-Up, scheduling blocked.</p>
-              <p>Rung 3 — second break: {formatMoney(s.feeAmount)} outstanding, letter 9106, card on file required.</p>
-              <p>Rung 4 — third break (or repeat no-show): card charged, letter 9107, VIP-only scheduling.</p>
-              <p>Rung 5 — already on VIP: hard stop, Office Manager handles.</p>
+              <p>Rung 1 — first late cancel, clean history: {feeText} posted + courtesy credit (net $0), letter 0001, no Pop-Up.</p>
+              <p>Rung 2 — first no-show (letter 0003) or first late cancel with pre-policy priors (letter 0002): {feeText} outstanding, Pop-Up, scheduling blocked. Never charged — the card promise starts here.</p>
+              <p>Rung 3 — a 0001/0002 on the ledger (or 0003 + late cancel): letter 0004, card charged per the prior promise (else posted), card on file required.</p>
+              <p>Rung 4 — 0003 + no-show (double no-show) or 0004 on the ledger: letter 0005, VIP-only scheduling.</p>
+              <p>
+                Rung 5 — 0005 on the ledger (now or ever): hard stop, Office Manager
+                handles, no letter. Terminal — a return to regular scheduling never
+                resets it.
+              </p>
             </div>
+          </CardContent>
+        </Card>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+
+  const cutoffTool = (
+    <Collapsible open={toolOpen} onOpenChange={setToolOpen}>
+      <CollapsibleTrigger asChild>
+        <Button variant="ghost" size="sm" className="text-muted-foreground">
+          <ChevronDown className="h-4 w-4 mr-1.5" />
+          Cutoff calculator — a patient's last day to cancel without a fee
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <Card className="mt-2">
+          <CardContent className="pt-4">
+            <BaCutoffCalculator
+              value={toolValue}
+              onChange={patch => setToolValue(v => ({ ...v, ...patch }))}
+              noticeBusinessHours={s.noticeBusinessHours}
+              officeClosedDates={s.officeClosedDates}
+              ariaPrefix="Tool "
+            />
           </CardContent>
         </Card>
       </CollapsibleContent>
@@ -454,7 +571,7 @@ export default function BrokenAppointments() {
         </div>
       </RadioGroup>
       <div className="flex justify-end">
-        <Button disabled={!happened} onClick={() => setStep('calc')}>
+        <Button disabled={!happened} onClick={() => setStep('notice')}>
           Continue
           <ArrowRight className="h-4 w-4 ml-1.5" />
         </Button>
@@ -475,7 +592,7 @@ export default function BrokenAppointments() {
         rows={4}
       />
       <div className="flex justify-end">
-        <Button disabled={pastedText.trim() === ''} onClick={() => setStep('calc')}>
+        <Button disabled={pastedText.trim() === ''} onClick={() => setStep('notice')}>
           Continue
           <ArrowRight className="h-4 w-4 ml-1.5" />
         </Button>
@@ -483,73 +600,65 @@ export default function BrokenAppointments() {
     </StepShell>
   );
 
-  const calcScreen = (
+  const noticeScreen = (
     <StepShell
       title="Step 2 — Was there enough notice?"
       onBack={() => setStep(mode === 'B' ? 'paste' : 'what')}
     >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label>Appointment date &amp; time</Label>
-          <div className="flex gap-2">
-            <Input
-              type="date"
-              aria-label="Appointment date"
-              value={apptDateISO}
-              onChange={e => setApptDateISO(e.target.value)}
-            />
-            <Input
-              type="time"
-              aria-label="Appointment time"
-              value={apptTime}
-              onChange={e => setApptTime(e.target.value)}
-              className="w-32"
-            />
-          </div>
+      <p className="text-sm text-muted-foreground">
+        Did the patient give at least {s.noticeBusinessHours} business hours' notice?
+        Weekends{s.officeClosedDates.length > 0 ? ' and office closed dates' : ''} don't
+        count toward the window.
+      </p>
+      <RadioGroup value={noticeAnswer ?? ''} onValueChange={v => setNoticeAnswer(v as 'yes' | 'no')}>
+        <div className="flex items-start gap-2 rounded-lg border p-3">
+          <RadioGroupItem value="yes" id="ba-notice-yes" className="mt-0.5" />
+          <Label htmlFor="ba-notice-yes" className="font-normal cursor-pointer">
+            <span className="font-medium">
+              Yes — at least {s.noticeBusinessHours} business hours before the appointment
+            </span>
+            <br />
+            <span className="text-sm text-muted-foreground">
+              No fee — post 9102 and reschedule normally.
+            </span>
+          </Label>
         </div>
-        <div className="space-y-1.5">
-          <Label>When the notice arrived</Label>
-          <div className="flex gap-2">
-            <Input
-              type="date"
-              aria-label="Notice date"
-              value={noticeDateISO}
-              onChange={e => setNoticeDateISO(e.target.value)}
-            />
-            <Input
-              type="time"
-              aria-label="Notice time"
-              value={noticeTime}
-              onChange={e => setNoticeTime(e.target.value)}
-              className="w-32"
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Defaults to now. Use the message's timestamp when it arrived earlier
-            {mode === 'A' && happened === 'NS' ? ' — for a pure no-show, leave it as now' : ''}.
-          </p>
+        <div className="flex items-start gap-2 rounded-lg border p-3">
+          <RadioGroupItem value="no" id="ba-notice-no" className="mt-0.5" />
+          <Label htmlFor="ba-notice-no" className="font-normal cursor-pointer">
+            <span className="font-medium">No — inside the window, or no notice at all</span>
+            <br />
+            <span className="text-sm text-muted-foreground">The policy applies.</span>
+          </Label>
         </div>
-      </div>
-
+      </RadioGroup>
       {cutoff && (
-        <Alert variant={onTime === false ? 'destructive' : 'default'}>
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>
-            Cutoff for enough notice: {formatDateTimeMDY(cutoff)}
-          </AlertTitle>
-          <AlertDescription>
-            {s.noticeBusinessHours} business hours before the appointment — weekends
-            {s.officeClosedDates.length > 0 ? ' and office closed dates' : ''} don't count.
-            {onTime !== null &&
-              (onTime
-                ? ' This notice made it in time.'
-                : ' This notice is inside the window — the policy applies.')}
-          </AlertDescription>
-        </Alert>
+        <p className="text-xs text-muted-foreground">
+          Cutoff was {formatCutoff(cutoff)}
+          {calcVerdict !== null && (calcVerdict ? ' — the notice made it in time.' : ' — this notice is late.')}
+        </p>
       )}
-
+      <Collapsible open={calcOpen} onOpenChange={setCalcOpen}>
+        <CollapsibleTrigger asChild>
+          <Button variant="ghost" size="sm" className="text-muted-foreground">
+            <ChevronDown className="h-4 w-4 mr-1.5" />
+            Not sure? Check the cutoff
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-2">
+          <BaCutoffCalculator
+            value={{ apptDate: apptDateISO, apptTime, noticeDate: noticeDateISO, noticeTime }}
+            onChange={applyCalcPatch}
+            noticeBusinessHours={s.noticeBusinessHours}
+            officeClosedDates={s.officeClosedDates}
+          />
+        </CollapsibleContent>
+      </Collapsible>
       <div className="flex justify-end">
-        <Button disabled={onTime === null} onClick={continueFromCalc}>
+        <Button
+          disabled={noticeAnswer === null}
+          onClick={() => setStep(noticeAnswer === 'yes' ? 'ontime' : 'history')}
+        >
           Continue
           <ArrowRight className="h-4 w-4 ml-1.5" />
         </Button>
@@ -558,7 +667,7 @@ export default function BrokenAppointments() {
   );
 
   const onTimeScreen = (
-    <StepShell title="On time — no fee" onBack={() => setStep('calc')}>
+    <StepShell title="On time — no fee" onBack={() => setStep('notice')}>
       <Alert>
         <Check className="h-4 w-4" />
         <AlertTitle>No fee — post 9102, reschedule normally</AlertTitle>
@@ -600,45 +709,125 @@ export default function BrokenAppointments() {
   );
 
   const historyScreen = (
-    <StepShell title="Step 3 — Patient history" onBack={() => setStep('calc')}>
+    <StepShell title="Step 3 — Patient history" onBack={() => setStep('notice')}>
       <p className="text-sm text-muted-foreground">
-        Count broken appointments (late cancels and no-shows) in the last{' '}
-        {s.historyWindowYears} years — check the Office Journal and family file.
+        Check the patient's ledger. Which of these letter codes appear within the last{' '}
+        {s.historyWindowYears} years? The highest code drives today's rung.
       </p>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="ba-prior-lc">Prior late cancellations</Label>
-          <Input
-            id="ba-prior-lc"
-            type="number"
-            min={0}
-            value={priorLCInput}
-            onChange={e => setPriorLCInput(e.target.value)}
+      <div className="space-y-2">
+        {LETTER_CODE_INFO.map(({ code, label }) => (
+          <div key={code} className="flex items-start gap-2 rounded-lg border p-3">
+            <Checkbox
+              id={`ba-code-${code}`}
+              checked={selectedCodes.includes(code)}
+              onCheckedChange={v => toggleCode(code, v === true)}
+              className="mt-0.5"
+            />
+            <Label htmlFor={`ba-code-${code}`} className="font-normal cursor-pointer">
+              <span className="font-medium">{code}</span>
+              <span className="text-muted-foreground"> — {label}</span>
+            </Label>
+          </div>
+        ))}
+        <div className="flex items-start gap-2 rounded-lg border p-3">
+          <Checkbox
+            id="ba-code-none"
+            checked={noneChecked}
+            onCheckedChange={v => {
+              setNoneChecked(v === true);
+              if (v === true) setSelectedCodes([]);
+            }}
+            className="mt-0.5"
           />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="ba-prior-ns">Prior no-shows</Label>
-          <Input
-            id="ba-prior-ns"
-            type="number"
-            min={0}
-            value={priorNSInput}
-            onChange={e => setPriorNSInput(e.target.value)}
-          />
+          <Label htmlFor="ba-code-none" className="font-normal cursor-pointer">
+            <span className="font-medium">None of these letter codes appear</span>
+          </Label>
         </div>
       </div>
-      <div className="flex items-center gap-3 rounded-lg border p-3">
-        <Switch id="ba-vip" checked={onVip} onCheckedChange={setOnVip} />
-        <Label htmlFor="ba-vip" className="font-normal cursor-pointer">
-          <span className="font-medium">Patient is currently on VIP-only scheduling</span>
-          <br />
-          <span className="text-sm text-muted-foreground">
-            Hard stop — the Office Manager handles everything from here.
-          </span>
-        </Label>
-      </div>
+
+      {noneChecked && (
+        <div className="flex items-center gap-3 rounded-lg border p-3">
+          <Switch id="ba-prepolicy" checked={prePolicyPriors} onCheckedChange={setPrePolicyPriors} />
+          <Label htmlFor="ba-prepolicy" className="font-normal cursor-pointer">
+            <span className="font-medium">
+              Any broken appointments before {policyDateLabel}?
+            </span>
+            <br />
+            <span className="text-sm text-muted-foreground">
+              Pre-policy breaks get no retroactive letters and never climb the ladder —
+              they only set the entry point (first post-policy break lands at Rung 2, no
+              courtesy credit).
+            </span>
+          </Label>
+        </div>
+      )}
+
+      {selectedCodes.includes('0005') && (
+        <p className="text-sm text-muted-foreground rounded-lg border p-3">
+          0005 is terminal: even after a return to regular scheduling, every broken
+          appointment goes to the Office Manager.
+        </p>
+      )}
+
       <div className="flex justify-end">
-        <Button onClick={continueFromHistory}>
+        <Button disabled={!historyAnswered} onClick={continueFromHistory}>
+          Continue
+          <ArrowRight className="h-4 w-4 ml-1.5" />
+        </Button>
+      </div>
+    </StepShell>
+  );
+
+  const cardScreen = (
+    <StepShell title="Step 3½ — Is a credit card on file?" onBack={() => setStep('history')}>
+      <RadioGroup value={cardAnswer ?? ''} onValueChange={v => setCardAnswer(v as 'yes' | 'no')}>
+        <div className="flex items-center gap-2 rounded-lg border p-3">
+          <RadioGroupItem value="yes" id="ba-card-yes" />
+          <Label htmlFor="ba-card-yes" className="font-normal cursor-pointer">
+            Yes — a credit card is on file
+          </Label>
+        </div>
+        <div className="flex items-center gap-2 rounded-lg border p-3">
+          <RadioGroupItem value="no" id="ba-card-no" />
+          <Label htmlFor="ba-card-no" className="font-normal cursor-pointer">
+            No card on file
+          </Label>
+        </div>
+      </RadioGroup>
+
+      {rung === 2 && (
+        <p className="text-sm text-muted-foreground">
+          Rung 2 is never charged — the card is only ever charged after a prior Pop-Up
+          promised it, and that promise starts today. This answer only adjusts the letter
+          wording and the checklist.
+        </p>
+      )}
+
+      {rung >= 3 && cardAnswer === 'yes' && (
+        <div className="space-y-2 rounded-lg border p-3">
+          <Label className="font-medium">Did the {feeText} charge go through?</Label>
+          <RadioGroup
+            value={chargeAnswer ?? ''}
+            onValueChange={v => setChargeAnswer(v as 'yes' | 'no')}
+          >
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="yes" id="ba-charge-yes" />
+              <Label htmlFor="ba-charge-yes" className="font-normal cursor-pointer">
+                Yes — the charge went through
+              </Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="no" id="ba-charge-no" />
+              <Label htmlFor="ba-charge-no" className="font-normal cursor-pointer">
+                No — the card failed
+              </Label>
+            </div>
+          </RadioGroup>
+        </div>
+      )}
+
+      <div className="flex justify-end">
+        <Button disabled={!cardAnswered} onClick={continueFromCard}>
           Continue
           <ArrowRight className="h-4 w-4 ml-1.5" />
         </Button>
@@ -650,7 +839,10 @@ export default function BrokenAppointments() {
     setCanceledAppts(rows => rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
   const patientScreen = (
-    <StepShell title="Step 4 — Patient info" onBack={() => setStep('history')}>
+    <StepShell
+      title="Step 4 — Patient info"
+      onBack={() => setStep(rung === 1 ? 'history' : 'card')}
+    >
       {mode === 'B' && (
         <div className="flex items-center gap-3 rounded-lg border p-3">
           <Switch id="ba-want-letter" checked={wantLetter} onCheckedChange={setWantLetter} />
@@ -731,7 +923,7 @@ export default function BrokenAppointments() {
 
       {rung === 4 && (mode === 'A' || wantLetter) && (
         <div className="space-y-2">
-          <Label>Canceled future appointments (listed in the 9107 letter)</Label>
+          <Label>Canceled future appointments (listed in the 0005 letter)</Label>
           {canceledAppts.map((row, i) => (
             <div key={i} className="flex flex-wrap items-end gap-2">
               <Input
@@ -809,14 +1001,31 @@ export default function BrokenAppointments() {
     </StepShell>
   );
 
+  const cardStateSummary =
+    card.cardOnFile === null
+      ? 'Not checked.'
+      : card.cardOnFile === false
+        ? 'No card on file.'
+        : card.chargeSucceeded === true
+          ? `Card on file — the ${feeText} charge went through.`
+          : card.chargeSucceeded === false
+            ? `Card on file, but the ${feeText} charge failed.`
+            : 'Card on file.';
+
+  // Rung 5 rulings (management, final): no letter is EVER sent at Rung 5
+  // — not even a first-no-show letter — so the screen carries only the OM
+  // instructions and the holding reply (offered in both modes; a Rung 5
+  // no-show never gets the outreach text). 0005 is terminal: once it has
+  // appeared on the ledger, every subsequent break lands here.
   const stopScreen = (
     <div className="space-y-4">
       <Alert variant="destructive">
         <OctagonX className="h-4 w-4" />
         <AlertTitle>HARD STOP — front desk does not handle</AlertTitle>
         <AlertDescription>
-          This patient is on VIP-only scheduling. Everything from here is the Office
-          Manager's process: do not post fees, do not send a letter, do not reschedule.
+          0005 is on this patient's ledger — everything from here is the Office
+          Manager's process: do not post fees, do not send any letter (no letter ever
+          goes out at Rung 5), do not reschedule.
         </AlertDescription>
       </Alert>
 
@@ -825,39 +1034,40 @@ export default function BrokenAppointments() {
           <CardTitle className="text-base">For the Office Manager</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
+          <p>
+            <span className="font-medium">Card state: </span>
+            {cardStateSummary}
+          </p>
           <ul className="list-disc pl-5 space-y-1">
             {ledgerSteps.map((line, i) => (
               <li key={i}>{line}</li>
             ))}
           </ul>
-          <Alert>
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              Pending management decision: if this is the patient's first-ever no-show,
-              current default is to also send 9100A — confirm with the Office Manager.
-            </AlertDescription>
-          </Alert>
         </CardContent>
       </Card>
 
-      {mode === 'B' && (
-        <>
-          <div className="space-y-1.5 max-w-sm">
-            <Label htmlFor="ba-stop-first">Patient first name (for the holding reply)</Label>
-            <Input
-              id="ba-stop-first"
-              value={patient.firstName}
-              onChange={e => setPatient(p => ({ ...p, firstName: e.target.value }))}
-            />
-          </div>
-          {replyText && (
-            <OutputBlock
-              title="Holding reply (the only reply for Rung 5)"
-              text={replyText}
-              hint="No scheduling promises — the Office Manager reaches out directly."
-            />
-          )}
-        </>
+      {popUpText && (
+        <OutputBlock
+          title="Pop-Up update (Dentrix)"
+          text={popUpText}
+          hint="Update the existing VIP Pop-Up with today's event — do not create a new one."
+        />
+      )}
+
+      <div className="space-y-1.5 max-w-sm">
+        <Label htmlFor="ba-stop-first">Patient first name (for the holding reply)</Label>
+        <Input
+          id="ba-stop-first"
+          value={patient.firstName}
+          onChange={e => setPatient(p => ({ ...p, firstName: e.target.value }))}
+        />
+      </div>
+      {replyText && (
+        <OutputBlock
+          title="Holding reply (the only reply for Rung 5)"
+          text={replyText}
+          hint="No scheduling promises — the Office Manager reaches out directly."
+        />
       )}
     </div>
   );
@@ -874,6 +1084,7 @@ export default function BrokenAppointments() {
               <Badge variant="outline">
                 {todayType === 'LC' ? 'Late cancellation' : 'No-show'}
               </Badge>
+              {letterCode && <Badge variant="outline">{`Letter ${letterCode}`}</Badge>}
               {mode === 'A' && happened === 'LATE' && (
                 <Badge variant="outline">dual-post 9104b + 9100</Badge>
               )}
@@ -882,7 +1093,7 @@ export default function BrokenAppointments() {
           <CardContent className="text-sm space-y-1">
             <p>
               <span className="font-medium">Transaction: </span>
-              {resolveBehaviorText(behavior.transactionLine, s)}
+              {buildTransactionLine(rung, todayType, card, s)}
             </p>
             <p>
               <span className="font-medium">Scheduling: </span>
@@ -891,11 +1102,11 @@ export default function BrokenAppointments() {
           </CardContent>
         </Card>
 
-        {(mode === 'A' || wantLetter) && behavior.letterCode && (
+        {(mode === 'A' || wantLetter) && letterCode && (
           <Card>
             <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base">
-                Letter {behavior.letterCode} — print &amp; mail with the account statement
+                Letter {letterCode} — print &amp; mail with the account statement
               </CardTitle>
               <Button onClick={() => window.print()} disabled={!letterSheet}>
                 <Printer className="h-4 w-4 mr-2" />
@@ -907,7 +1118,7 @@ export default function BrokenAppointments() {
                 <ScaledPrintPreview>{letterSheet}</ScaledPrintPreview>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Letter template {behavior.letterCode} isn't set up for this office yet —
+                  Letter template {letterCode} isn't set up for this office yet —
                   an owner or manager can open this page once to seed the defaults.
                 </p>
               )}
@@ -996,9 +1207,10 @@ export default function BrokenAppointments() {
     entry: entryScreen,
     what: whatScreen,
     paste: pasteScreen,
-    calc: calcScreen,
+    notice: noticeScreen,
     ontime: onTimeScreen,
     history: historyScreen,
+    card: cardScreen,
     patient: patientScreen,
     outputs: outputsScreen,
   };
@@ -1029,6 +1241,7 @@ export default function BrokenAppointments() {
 
       {trustLine}
       {referencePanel}
+      {cutoffTool}
 
       {!ctx ? (
         <Card>

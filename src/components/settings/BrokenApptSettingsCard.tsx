@@ -133,6 +133,23 @@ export function BrokenApptSettingsCard() {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <Label className="text-xs">Policy Effective Date (the transition rule)</Label>
+              <Input
+                type="date"
+                value={settings?.policyEffectiveDate ?? ''}
+                onChange={e => update({ policyEffectiveDate: e.target.value })}
+                className="max-w-sm"
+                aria-label="Policy effective date"
+              />
+              <p className="text-xs text-muted-foreground">
+                Broken appointments before this date never count toward the ladder and get
+                no retroactive letters — they only set the entry point: the first
+                post-policy break is handled at Rung 2 (0002 for a late cancel, no
+                courtesy credit; 0003 for a no-show).
+              </p>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-xs">Module Name in Navigation</Label>

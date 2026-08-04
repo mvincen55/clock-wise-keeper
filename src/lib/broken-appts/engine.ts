@@ -1,32 +1,58 @@
-import type { BrokenApptType, Rung } from './types';
+import type { BaLetterCode, BrokenApptType, Rung } from './types';
 
 /**
  * The rung engine — which step of the broken-appointment policy today's
- * event lands on. Broken appointments (late cancels + no-shows) count
- * cumulatively within the org's rolling history window; when more than
- * one rung could apply, the highest wins (Rule 1).
+ * event lands on, and which letter it produces. The ladder is driven by
+ * the letter codes already on the ledger within the history window, not by
+ * counting events; when more than one rung could apply, the highest wins
+ * (Rule 1). Pre-policy broken appointments have no letter codes, so they
+ * never inflate the rung — they only set the entry point (the transition
+ * rule): the first post-policy break is handled at Rung 2 with no courtesy
+ * credit.
+ *
+ * 0005 is TERMINAL (management ruling, final): once it has ever appeared
+ * on the ledger — including for patients later returned to regular
+ * scheduling — every subsequent broken appointment routes to Rung 5 / the
+ * Office Manager, both event types, and no letter is ever sent.
  */
 
 export interface RungInput {
   /** What happened today (a late arrival the provider couldn't seat is NS). */
   todayType: BrokenApptType;
-  /** Prior late cancellations within the history window. */
-  priorLC: number;
-  /** Prior no-shows within the history window. */
-  priorNS: number;
-  /** Already on VIP-only scheduling — the Office Manager owns it. */
-  onVip: boolean;
+  /** Highest letter code on the ledger within the window (null = none). */
+  highestLetterCode: BaLetterCode | null;
+  /** Any broken appointments before policy_effective_date, within the window. */
+  hasPrePolicyPriors: boolean;
 }
 
-export function computeRung({ todayType, priorLC, priorNS, onVip }: RungInput): Rung {
-  if (onVip) return 5;
-  const total = priorLC + priorNS + 1;
-  if (total >= 3) return 4;
-  if (total === 2) {
-    // Second-ever break: a repeat no-show jumps to Rung 4; every other
-    // combination — including LC-then-NS — is Rung 3 (letter 9106).
-    if (todayType === 'NS' && priorNS >= 1) return 4;
-    return 3;
+export interface RungResult {
+  rung: Rung;
+  /** The letter today's event produces (null — Rung 5 sends no letter, ever). */
+  letterCode: BaLetterCode | null;
+}
+
+export function computeRung({
+  todayType,
+  highestLetterCode,
+  hasPrePolicyPriors,
+}: RungInput): RungResult {
+  switch (highestLetterCode) {
+    case '0005':
+      // Terminal — the Office Manager owns every break from here on.
+      return { rung: 5, letterCode: null };
+    case '0004':
+      return { rung: 4, letterCode: '0005' };
+    case '0003':
+      // The double no-show shortcut — only a ledgered 0003 triggers it.
+      return todayType === 'NS' ? { rung: 4, letterCode: '0005' } : { rung: 3, letterCode: '0004' };
+    case '0001':
+    case '0002':
+      return { rung: 3, letterCode: '0004' };
+    case null:
+      if (todayType === 'NS') return { rung: 2, letterCode: '0003' };
+      // First-ever late cancel: pre-policy priors skip the courtesy rung.
+      return hasPrePolicyPriors
+        ? { rung: 2, letterCode: '0002' }
+        : { rung: 1, letterCode: '0001' };
   }
-  return todayType === 'NS' ? 2 : 1;
 }

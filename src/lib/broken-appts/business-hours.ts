@@ -49,6 +49,13 @@ export function businessHoursCutoff(
   return cutoff;
 }
 
+/** "YYYY-MM-DD" + "HH:mm" → local Date (null while either field is blank). */
+export function parseLocalDateTime(dateISO: string, time: string): Date | null {
+  if (!dateISO || !time) return null;
+  const d = new Date(`${dateISO}T${time}`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 /** Rule 2 verdict: notice timestamp ≤ cutoff → on time. */
 export function isOnTime(
   noticeAt: Date,

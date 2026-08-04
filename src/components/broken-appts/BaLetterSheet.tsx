@@ -4,13 +4,16 @@ import { formatDateMDY, formatMoney, mergeFields } from '@/lib/broken-appts/outp
 import type { BaCanceledAppt, BaPatientFields, BaSettings } from '@/lib/broken-appts/types';
 
 /**
- * The printed broken-appointment letter — letterhead, dateline, patient
- * address block, salutation, merged body, automatic-letter line, closing,
- * and enclosure footer. Pure props → JSX with no hooks or fetching
- * (FofPrintSheet pattern); rendered once as the on-screen preview and once
- * via portal as the print output so the two can never diverge. Styled by
- * the .ba-* rules in index.css (pt/in units, one letter page; Rung 4's
- * appointment table overflows to an attachment page automatically).
+ * The printed broken-appointment letter — letterhead (org logo above the
+ * practice name when one is uploaded), dateline, patient address block,
+ * salutation, merged body, automatic-letter line, closing, and enclosure
+ * footer. Pure props → JSX with no hooks or fetching (FofPrintSheet
+ * pattern); rendered once as the on-screen preview and once via portal as
+ * the print output so the two can never diverge. Styled by the .ba-* rules
+ * in index.css (pt/in units, one letter page; Rung 4's appointment table
+ * overflows to an attachment page automatically). The org brand accent
+ * stays in the letterhead — body typography is neutral correspondence
+ * styling.
  *
  * HIPAA boundary: patient values arrive as props from React state only —
  * never persisted or transmitted (see src/lib/broken-appts/types.ts).
@@ -32,6 +35,11 @@ interface BaLetterSheetProps {
   canceledAppts?: BaCanceledAppt[];
   /** Dateline, e.g. "8/3/2026" — computed once by the page. */
   todayMDY: string;
+  /**
+   * Caller-resolved merge values the card state selects —
+   * transaction_snippet and card_sentence (already fee-resolved).
+   */
+  extraFields?: Record<string, string>;
 }
 
 /** **bold** runs → <strong>; everything else passes through verbatim. */
@@ -72,6 +80,7 @@ export default function BaLetterSheet({
   patient,
   canceledAppts = [],
   todayMDY,
+  extraFields = {},
 }: BaLetterSheetProps) {
   const practiceName = branding.legalName.trim() || branding.displayName.trim();
   const phone = settings.officePhone.trim() || branding.phone.trim();
@@ -84,6 +93,7 @@ export default function BaLetterSheet({
     fee_amount: formatMoney(settings.feeAmount),
     prepay_floor: formatMoney(settings.vipPrepayFloor),
     notice_hours: String(settings.noticeBusinessHours),
+    ...extraFields,
   });
 
   const paragraphs = merged.split(/\n\n+/).filter(p => p.trim() !== '');
@@ -98,7 +108,9 @@ export default function BaLetterSheet({
   return (
     <div className="ba-letter">
       <header className="ba-letterhead">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10pt' }}>
+        <div className="ba-letterhead-id">
+          {/* Org-branding asset (same pipeline as the FOF print); absent
+              logo falls back to the text-only letterhead with no gap. */}
           {branding.logoUrl !== '' && (
             <img className="ba-logo" src={branding.logoUrl} alt={practiceName} />
           )}

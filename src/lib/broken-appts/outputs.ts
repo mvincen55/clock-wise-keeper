@@ -1,5 +1,5 @@
-import { RUNG_BEHAVIOR, todayEventCode } from './defaults';
-import type { BaSettings, BrokenApptType, Rung } from './types';
+import { todayEventCode } from './defaults';
+import type { BaCardState, BaLetterCode, BaSettings, BrokenApptType, Rung } from './types';
 
 /**
  * Pure builders for the copy-paste blocks on the outputs screen (Pop-Up,
@@ -28,6 +28,13 @@ export function formatDateTimeMDY(d: Date): string {
   return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()} ${h}:${mm} ${ampm}`;
 }
 
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** "Thu 7/30/2026 9:00 AM" — the cutoff helper-text format. */
+export function formatCutoff(d: Date): string {
+  return `${WEEKDAYS[d.getDay()]} ${formatDateTimeMDY(d)}`;
+}
+
 /**
  * Resolve {{merge_field}} placeholders. personal_line gets special
  * treatment: a blank value removes the placeholder and collapses the
@@ -45,6 +52,78 @@ export function mergeFields(body: string, fields: Record<string, string>): strin
     .trim();
 }
 
+// ---------------------------------------------------------------------------
+// Card state (the second axis, rungs 2–5). The card is only ever charged
+// after a prior Pop-Up promised it — first offenses are posted, never
+// charged, so the transaction snippets only apply from Rung 3 up.
+// ---------------------------------------------------------------------------
+
+export type TransactionSnippetCode = 'txn_charged' | 'txn_posted' | 'txn_posted_card_failed';
+
+/** Which transaction snippet the card state selects (rungs 3–5). */
+export function transactionSnippetCode({
+  cardOnFile,
+  chargeSucceeded,
+}: BaCardState): TransactionSnippetCode {
+  if (cardOnFile && chargeSucceeded === true) return 'txn_charged';
+  if (cardOnFile && chargeSucceeded === false) return 'txn_posted_card_failed';
+  return 'txn_posted';
+}
+
+/** Which card sentence a Rung 2–3 letter carries. */
+export function cardSentenceCode({ cardOnFile }: BaCardState): 'card_have' | 'card_needed' {
+  return cardOnFile ? 'card_have' : 'card_needed';
+}
+
+/**
+ * Short-form fee clause for the Rung 3–4 replies, from the same card-state
+ * logic as the letter snippets. `askForCard` folds the card requirement
+ * into the no-card variant (Rung 3); Rung 4 replies announce the
+ * scheduling change instead.
+ */
+export function feeClauseShort(card: BaCardState, askForCard: boolean): string {
+  if (card.cardOnFile && card.chargeSucceeded === true) return 'charged to your card on file';
+  if (card.cardOnFile && card.chargeSucceeded === false)
+    return "posted to your account — the card on file didn't go through, so we'll need an updated card";
+  return askForCard
+    ? "posted to your account, and we'll need a card on file before your next visit"
+    : 'posted to your account';
+}
+
+/** True only when the fee actually went on the card (never at Rung 2). */
+export function chargedToCard(rung: Rung, card: BaCardState): boolean {
+  return rung >= 3 && card.cardOnFile === true && card.chargeSucceeded === true;
+}
+
+/** The outputs screen's transaction line, resolved per rung + card state. */
+export function buildTransactionLine(
+  rung: Rung,
+  todayType: BrokenApptType,
+  card: BaCardState,
+  settings: Pick<BaSettings, 'feeAmount'>
+): string {
+  const fee = formatMoney(settings.feeAmount);
+  switch (rung) {
+    case 1:
+      return `${fee} posted by staff, courtesy credit applied — net $0`;
+    case 2:
+      return todayType === 'NS'
+        ? `${fee} auto-posted as outstanding balance`
+        : `${fee} posted by staff as outstanding balance`;
+    case 3:
+    case 4: {
+      if (chargedToCard(rung, card))
+        return `${fee} charged to the card on file (per the prior Pop-Up promise)`;
+      const flagOm = rung === 4 ? ' + flag Office Manager' : '';
+      if (card.cardOnFile)
+        return `${fee} posted as outstanding — card failed, start the 7-business-day card update procedure${flagOm}`;
+      return `${fee} posted as outstanding balance — collect a card on file${flagOm}`;
+    }
+    case 5:
+      return 'Handled under Office Manager process';
+  }
+}
+
 const WHAT_HAPPENED: Record<BrokenApptType, string> = {
   LC: 'Late cancellation',
   NS: 'No-show',
@@ -60,6 +139,7 @@ function postEventStep(todayType: BrokenApptType, feeText: string): string {
 export interface PopUpInput {
   rung: Rung;
   todayType: BrokenApptType;
+  card: BaCardState;
   settings: Pick<BaSettings, 'feeAmount' | 'vipPrepayFloor'>;
   /** Today's dateline, e.g. "8/3/2026". */
   todayMDY: string;
@@ -67,18 +147,26 @@ export interface PopUpInput {
 }
 
 /**
- * The Dentrix Pop-Up block for rungs 2–4. Rung 1 has no Pop-Up and
- * Rung 5 only updates the existing one (stop screen) — both return null.
+ * The Dentrix Pop-Up block for rungs 2–5 (Rung 1 has none — returns null;
+ * Rung 5 is an update to the existing VIP Pop-Up). "charged to card"
+ * appears only when the charge actually went through.
  */
-export function buildPopUp({ rung, todayType, settings, todayMDY, initials }: PopUpInput): string | null {
-  if (rung === 1 || rung === 5) return null;
+export function buildPopUp({
+  rung,
+  todayType,
+  card,
+  settings,
+  todayMDY,
+  initials,
+}: PopUpInput): string | null {
+  if (rung === 1) return null;
   const fee = formatMoney(settings.feeAmount);
-  const feeAction = rung === 4 ? `${fee} charged to card` : `${fee} posted`;
+  const feeAction = chargedToCard(rung, card) ? `${fee} charged to card` : `${fee} posted`;
   let body =
     `Rung ${rung} / ${WHAT_HAPPENED[todayType]}. ${feeAction}. ` +
     `DO NOT reschedule until: (1) balance paid in full, (2) card on file. ` +
     `Card will be charged ${fee} for future broken appointments.`;
-  if (rung === 4) {
+  if (rung >= 4) {
     body +=
       ` Patient is VIP ONLY. All future appts canceled. Hygiene = VIP list. ` +
       `Doctor = prepay greater of ${formatMoney(settings.vipPrepayFloor)} or est. patient portion; forfeited if broken.`;
@@ -121,29 +209,59 @@ export function buildApptNote({
   return `${todayMDY} - "${event}. ${verdict}. ${followUp}." - ${initials}`;
 }
 
-/** The ledger checklist for the rung (per the behavior table). */
-export function buildLedgerChecklist(
-  rung: Rung,
-  todayType: BrokenApptType,
-  settings: Pick<BaSettings, 'feeAmount'>
-): string[] {
+/** The card-failure procedure step (rungs 3–4 when the charge bounced). */
+const CARD_FAILURE_STEP =
+  'Card failure procedure: run the failure script — updated card required within 7 business days';
+
+export interface LedgerChecklistInput {
+  rung: Rung;
+  todayType: BrokenApptType;
+  /** Letter code today's event posts (from the rung engine). */
+  letterCode: BaLetterCode | null;
+  card: BaCardState;
+  settings: Pick<BaSettings, 'feeAmount'>;
+}
+
+/** The ledger checklist for the rung (per the behavior table + card state). */
+export function buildLedgerChecklist({
+  rung,
+  todayType,
+  letterCode,
+  card,
+  settings,
+}: LedgerChecklistInput): string[] {
   const fee = formatMoney(settings.feeAmount);
+  const chargeFailed = card.cardOnFile === true && card.chargeSucceeded === false;
+  const letterStep = letterCode ? [`Post ${letterCode} (letter sent)`] : [];
   switch (rung) {
     case 1:
       return [
         `Post 9101 + ${fee} fee`,
         'Apply courtesy credit (net $0)',
-        'Post 9101A (letter sent)',
+        ...letterStep,
       ];
     case 2:
-      return ['Post 9100 (auto-fee)', 'Post 9100A (letter sent)'];
+      // Never charged at Rung 2 — the first Pop-Up promise starts today.
+      return [
+        postEventStep(todayType, fee),
+        ...(card.cardOnFile ? [] : ['Collect card on file — required before the next visit']),
+        ...letterStep,
+      ];
     case 3:
-      return [postEventStep(todayType, fee), 'Post 9106 (letter sent)'];
+      return [
+        postEventStep(todayType, fee),
+        ...letterStep,
+        ...(chargeFailed ? [CARD_FAILURE_STEP] : []),
+      ];
     case 4:
       return [
         postEventStep(todayType, fee),
-        'Post 9107 (letter sent)',
+        ...letterStep,
         'Create unscheduled hygiene appointment',
+        ...(chargeFailed ? [CARD_FAILURE_STEP] : []),
+        ...(chargeFailed || !card.cardOnFile
+          ? ['Flag Office Manager — card failed or missing']
+          : []),
       ];
     case 5:
       return [postEventStep(todayType, fee), 'Update Pop-Up', 'Notify Office Manager'];

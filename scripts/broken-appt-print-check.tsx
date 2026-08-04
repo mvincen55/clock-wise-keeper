@@ -1,12 +1,15 @@
 /**
- * Broken Appointments print check — renders the four shipped letters with
- * test data exactly as the page's print portal does (real index.css),
- * prints them through real Chromium, and FAILS unless:
+ * Broken Appointments print check — renders the shipped letters with test
+ * data exactly as the page's print portal does (real index.css), prints
+ * them through real Chromium, and FAILS unless:
  *
- *   - 9101A / 9100A / 9106 / 9107-with-3-rows are each exactly ONE page,
- *   - 9107 with 12 canceled appointments is exactly TWO pages (letter +
+ *   - 0001 / 0002 / 0003 / 0004 / 0005-with-3-rows (including the
+ *     failed-card 0005 variant) are each exactly ONE page,
+ *   - 0005 with 12 canceled appointments is exactly TWO pages (letter +
  *     "Attached Appointment List" page) with the inline table replaced by
  *     the attachment note,
+ *   - every letter passes both with an org logo and with none (text-only
+ *     letterhead fallback),
  *   - no letter carries an unresolved {{merge_field}}.
  *
  * Run:  npx vite-node scripts/broken-appt-print-check.tsx
@@ -19,6 +22,7 @@ import path from 'node:path';
 import BaLetterSheet from '@/components/broken-appts/BaLetterSheet';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
 import { DEFAULT_BA_SETTINGS, DEFAULT_BA_TEMPLATES } from '@/lib/broken-appts/defaults';
+import { formatMoney, mergeFields } from '@/lib/broken-appts/outputs';
 import type { BaCanceledAppt, BaPatientFields } from '@/lib/broken-appts/types';
 
 const OUT = path.resolve(__dirname, '../.repro-ba');
@@ -34,6 +38,17 @@ const preflight =
   '*,::before,::after{box-sizing:border-box;border-width:0;border-style:solid}' +
   'body{margin:0;line-height:inherit}h1,h2,h3,h4,p{margin:0}' +
   'table{border-collapse:collapse}img{display:block;max-width:100%;height:auto}';
+
+// A wide-ish inline SVG stand-in for an uploaded org logo (data URI so the
+// check needs no network).
+const TEST_LOGO =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="80">' +
+      '<rect width="240" height="80" rx="8" fill="#53406e"/>' +
+      '<text x="120" y="50" font-family="Helvetica" font-size="28" fill="white" text-anchor="middle">LOGO</text>' +
+      '</svg>'
+  );
 
 const BRANDING = {
   displayName: 'Northfield Dental',
@@ -67,21 +82,75 @@ const rows = (n: number): BaCanceledAppt[] =>
 const letters = DEFAULT_BA_TEMPLATES.filter(t => t.kind === 'letter');
 const body = (code: string) => letters.find(l => l.code === code)!.body;
 
+// Card-state snippets resolve exactly as the page resolves them.
+const snippetFields = { fee_amount: formatMoney(DEFAULT_BA_SETTINGS.feeAmount) };
+const snippet = (code: string) =>
+  mergeFields(DEFAULT_BA_TEMPLATES.find(t => t.kind === 'snippet' && t.code === code)!.body, snippetFields);
+
 interface Variant {
   name: string;
   code: string;
   canceledAppts: BaCanceledAppt[];
+  extraFields: Record<string, string>;
   expectedPages: number;
   expectAttachment: boolean;
 }
 
-const VARIANTS: Variant[] = [
-  { name: '9101a', code: '9101A', canceledAppts: [], expectedPages: 1, expectAttachment: false },
-  { name: '9100a', code: '9100A', canceledAppts: [], expectedPages: 1, expectAttachment: false },
-  { name: '9106', code: '9106', canceledAppts: [], expectedPages: 1, expectAttachment: false },
-  { name: '9107-3rows', code: '9107', canceledAppts: rows(3), expectedPages: 1, expectAttachment: false },
-  { name: '9107-12rows', code: '9107', canceledAppts: rows(12), expectedPages: 2, expectAttachment: true },
+const BASE_VARIANTS: Omit<Variant, 'name'>[] = [
+  { code: '0001', canceledAppts: [], extraFields: {}, expectedPages: 1, expectAttachment: false },
+  {
+    code: '0002',
+    canceledAppts: [],
+    extraFields: { card_sentence: snippet('card_needed') },
+    expectedPages: 1,
+    expectAttachment: false,
+  },
+  {
+    code: '0003',
+    canceledAppts: [],
+    extraFields: { card_sentence: snippet('card_have') },
+    expectedPages: 1,
+    expectAttachment: false,
+  },
+  {
+    code: '0004',
+    canceledAppts: [],
+    extraFields: { transaction_snippet: snippet('txn_posted') },
+    expectedPages: 1,
+    expectAttachment: false,
+  },
+  {
+    code: '0005',
+    canceledAppts: rows(3),
+    extraFields: { transaction_snippet: snippet('txn_charged') },
+    expectedPages: 1,
+    expectAttachment: false,
+  },
+  {
+    code: '0005',
+    canceledAppts: rows(3),
+    extraFields: { transaction_snippet: snippet('txn_posted_card_failed') },
+    expectedPages: 1,
+    expectAttachment: false,
+  },
+  {
+    code: '0005',
+    canceledAppts: rows(12),
+    extraFields: { transaction_snippet: snippet('txn_charged') },
+    expectedPages: 2,
+    expectAttachment: true,
+  },
 ];
+
+// Every variant prints once with the test logo and once without — the
+// letterhead must hold up (and stay one page) both ways.
+const VARIANTS: (Variant & { logo: boolean })[] = BASE_VARIANTS.flatMap((v, i) =>
+  [false, true].map(logo => ({
+    ...v,
+    name: `${v.code}-${i}${v.expectAttachment ? '-12rows' : ''}${logo ? '-logo' : ''}`,
+    logo,
+  }))
+);
 
 for (const v of VARIANTS) {
   const markup = renderToStaticMarkup(
@@ -89,12 +158,13 @@ for (const v of VARIANTS) {
       <BrandPrintStyle branding={BRANDING} />
       <div className="ba-print-root">
         <BaLetterSheet
-          branding={BRANDING}
+          branding={{ ...BRANDING, logoUrl: v.logo ? TEST_LOGO : '' }}
           settings={DEFAULT_BA_SETTINGS}
           body={body(v.code)}
           patient={PATIENT}
           canceledAppts={v.canceledAppts}
           todayMDY="8/3/2026"
+          extraFields={v.extraFields}
         />
       </div>
     </>
@@ -133,10 +203,13 @@ for (const v of VARIANTS) {
   await page.emulateMedia({ media: 'print' });
   const info = await page.evaluate(() => {
     const letter = document.querySelector('.ba-letter');
+    const logo = document.querySelector<HTMLImageElement>('.ba-logo');
     return {
       text: letter?.textContent ?? '',
       hasAttachment: !!document.querySelector('.ba-attach-page'),
       hasInlineNote: (letter?.textContent ?? '').includes('A full appointment list is attached'),
+      hasLogo: !!logo,
+      logoLoaded: !!logo && logo.complete && logo.naturalWidth > 0,
     };
   });
   const pdf = await page.pdf({ format: 'Letter', printBackground: true, preferCSSPageSize: true });
@@ -152,6 +225,8 @@ for (const v of VARIANTS) {
   if (v.expectAttachment && !info.hasInlineNote)
     problems.push('letter body missing the "full appointment list is attached" note');
   if (info.text.includes('{{')) problems.push('unresolved merge field in rendered letter');
+  if (v.logo && !info.logoLoaded) problems.push('org logo missing or failed to load');
+  if (!v.logo && info.hasLogo) problems.push('logo img rendered with no logo configured');
 
   if (problems.length) {
     failures++;
