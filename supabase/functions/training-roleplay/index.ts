@@ -182,7 +182,7 @@ Deno.serve(async (req) => {
     const rawTurns: Turn[] = Array.isArray(body?.turns) ? (body.turns as Turn[]) : [];
     const turns: Turn[] = rawTurns
       .slice(-2 * MAX_EXCHANGES)
-      .map((t) => ({
+      .map((t): Turn => ({
         role: t?.role === "member" ? "member" : "persona",
         content: t?.role === "member"
           ? safeMemberText(t?.content, 1200, mode)

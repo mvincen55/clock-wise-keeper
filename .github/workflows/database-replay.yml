@@ -1,0 +1,88 @@
+name: Database and edge release gate
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/functions/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/**'
+      - 'scripts/verify-migration-files.mjs'
+      - 'scripts/verify-release-db.sql'
+      - 'scripts/verify-workflow-safety.mjs'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/functions/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/**'
+      - 'scripts/verify-migration-files.mjs'
+      - 'scripts/verify-release-db.sql'
+      - 'scripts/verify-workflow-safety.mjs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-structure:
+    name: Release structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reject duplicate migration versions
+        run: node scripts/verify-migration-files.mjs
+
+      - name: Reject repository-writing workflows
+        run: node scripts/verify-workflow-safety.mjs
+
+  migration-replay:
+    name: Replay every migration from zero
+    needs: release-structure
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v2
+        with:
+          version: 2.84.2
+          github-token: ${{ github.token }}
+
+      - name: Start a fresh local Supabase database
+        run: supabase db start
+
+      - name: Destroy and replay the full migration chain
+        run: supabase db reset --local
+
+      - name: Verify release permissions and scheduled jobs
+        run: psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' -v ON_ERROR_STOP=1 -f scripts/verify-release-db.sql
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup
+
+  edge-function-check:
+    name: Typecheck every edge function
+    needs: release-structure
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Deno check all function entry points
+        shell: bash
+        run: |
+          while IFS= read -r file; do
+            echo "Checking $file"
+            deno check --node-modules-dir=auto "$file"
+          done < <(find supabase/functions -mindepth 2 -maxdepth 2 -name index.ts -print | sort)
