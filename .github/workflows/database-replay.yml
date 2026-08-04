@@ -77,7 +77,10 @@ jobs:
 
       - uses: denoland/setup-deno@v2
         with:
-          deno-version: v2.x
+          # Pinned to the version that produced the committed deno.lock, so
+          # resolution never chases a just-published release (the minimum-
+          # dependency-age policy refuses those and fails the job).
+          deno-version: v2.9.4
 
       - name: Deno check all function entry points
         shell: bash

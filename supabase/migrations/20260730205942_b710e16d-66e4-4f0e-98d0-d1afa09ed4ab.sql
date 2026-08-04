@@ -2,6 +2,23 @@
 -- Messaging, Doctor Requests & the Doctor's Board
 -- ============================================================
 
+-- Replay repair: is_org_owner() reached production through a platform edit
+-- that never became a migration file; the policies below are its first
+-- in-chain use. Definition matches production (pg_get_functiondef).
+CREATE OR REPLACE FUNCTION public.is_org_owner(_org_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+  SELECT EXISTS (
+    SELECT 1 FROM public.org_members
+    WHERE org_id = _org_id AND user_id = auth.uid()
+      AND status = 'active' AND role = 'owner'
+  );
+$function$;
+
+
 -- ---------- Org-level settings ----------
 CREATE TABLE public.org_messaging_settings (
   org_id uuid PRIMARY KEY REFERENCES public.orgs(id) ON DELETE CASCADE,

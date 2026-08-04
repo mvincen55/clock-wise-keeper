@@ -27,4 +27,3 @@ package-lock.json
 *.sw?
 .repro/
 .repro-ba/
-deno.lock
