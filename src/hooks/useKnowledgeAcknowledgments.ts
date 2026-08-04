@@ -3,6 +3,8 @@ import type { Json } from '@/integrations/supabase/types';
 import { supabase } from '@/integrations/supabase/client';
 import {
   acknowledgmentSupabase,
+  type KnowledgeAcknowledgmentEscalationSettingsRow,
+  type KnowledgeAcknowledgmentEventRow,
   type KnowledgeAcknowledgmentRow,
   type KnowledgeAcknowledgmentSettingsRow,
 } from '@/integrations/supabase/knowledge-acknowledgment-client';
@@ -23,6 +25,10 @@ const documentKey = (versionId?: string | null) =>
   ['knowledge-acknowledgment-document', versionId] as const;
 const settingsKey = (versionId?: string | null) =>
   ['knowledge-acknowledgment-settings', versionId] as const;
+const eventsKey = (assignmentId?: string | null) =>
+  ['knowledge-acknowledgment-events', assignmentId] as const;
+const escalationSettingsKey = (orgId?: string | null) =>
+  ['knowledge-acknowledgment-escalation-settings', orgId] as const;
 
 export type KnowledgeAcknowledgmentDocument = {
   item: KnowledgeItemRow;
@@ -57,6 +63,24 @@ export function useKnowledgeAcknowledgmentSettings(versionId?: string | null) {
         .from('knowledge_versions')
         .select('id, org_id, acknowledgment_required, acknowledgment_due_days, acknowledgment_statement')
         .eq('id', versionId)
+        .maybeSingle();
+      throwIfError(error);
+      return data ?? null;
+    },
+  });
+}
+
+export function useKnowledgeAcknowledgmentEscalationSettings() {
+  const { data: ctx } = useOrgContext();
+  return useQuery({
+    queryKey: escalationSettingsKey(ctx?.org_id),
+    enabled: !!ctx?.org_id,
+    queryFn: async (): Promise<KnowledgeAcknowledgmentEscalationSettingsRow | null> => {
+      if (!ctx?.org_id) return null;
+      const { data, error } = await acknowledgmentSupabase
+        .from('knowledge_acknowledgment_escalation_settings')
+        .select('*')
+        .eq('org_id', ctx.org_id)
         .maybeSingle();
       throwIfError(error);
       return data ?? null;
@@ -128,6 +152,24 @@ export function useKnowledgeAcknowledgmentRoster() {
   });
 }
 
+export function useKnowledgeAcknowledgmentEvents(assignmentId?: string | null) {
+  return useQuery({
+    queryKey: eventsKey(assignmentId),
+    enabled: !!assignmentId,
+    queryFn: async (): Promise<KnowledgeAcknowledgmentEventRow[]> => {
+      if (!assignmentId) return [];
+      const { data, error } = await acknowledgmentSupabase
+        .from('knowledge_acknowledgment_events')
+        .select('*')
+        .eq('assignment_id', assignmentId)
+        .order('created_at')
+        .order('id');
+      throwIfError(error);
+      return data ?? [];
+    },
+  });
+}
+
 export function useKnowledgeAcknowledgmentDocument(versionId?: string | null) {
   return useQuery({
     queryKey: documentKey(versionId),
@@ -174,11 +216,15 @@ function useAcknowledgmentInvalidation() {
   const { user } = useAuth();
   const { data: ctx } = useOrgContext();
   const queryClient = useQueryClient();
-  return async (versionId?: string | null) => {
+  return async (versionId?: string | null, assignmentId?: string | null) => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['knowledge-workspace', ctx?.org_id] }),
       queryClient.invalidateQueries({ queryKey: acknowledgmentKey(ctx?.org_id, user?.id) }),
       queryClient.invalidateQueries({ queryKey: rosterKey(ctx?.org_id) }),
+      queryClient.invalidateQueries({ queryKey: escalationSettingsKey(ctx?.org_id) }),
+      assignmentId
+        ? queryClient.invalidateQueries({ queryKey: eventsKey(assignmentId) })
+        : Promise.resolve(),
       versionId
         ? Promise.all([
             queryClient.invalidateQueries({ queryKey: settingsKey(versionId) }),
@@ -267,22 +313,161 @@ export function useMarkKnowledgeAcknowledgmentViewed() {
       if (!data) throw new Error('Could not record that this version was viewed');
       return data;
     },
-    onSuccess: data => invalidate(data.version_id),
+    onSuccess: data => invalidate(data.version_id, data.id),
   });
 }
 
 export function useAcknowledgeKnowledgeVersion() {
   const invalidate = useAcknowledgmentInvalidation();
   return useMutation({
-    mutationFn: async ({ assignmentId, typedName }: { assignmentId: string; typedName: string }) => {
-      const { data, error } = await acknowledgmentSupabase.rpc('acknowledge_knowledge_version', {
-        p_assignment_id: assignmentId,
-        p_typed_name: typedName.trim(),
-      });
+    mutationFn: async ({
+      assignmentId,
+      typedName,
+      question,
+    }: {
+      assignmentId: string;
+      typedName: string;
+      question?: string;
+    }) => {
+      const { data, error } = await acknowledgmentSupabase.rpc(
+        'acknowledge_knowledge_version_with_question',
+        {
+          p_assignment_id: assignmentId,
+          p_typed_name: typedName.trim(),
+          p_question: question?.trim() || null,
+        },
+      );
       throwIfError(error);
       if (!data) throw new Error('The acknowledgment was not saved');
       return data;
     },
-    onSuccess: data => invalidate(data.version_id),
+    onSuccess: data => invalidate(data.version_id, data.id),
+  });
+}
+
+export function useBlockKnowledgeAcknowledgment() {
+  const invalidate = useAcknowledgmentInvalidation();
+  return useMutation({
+    mutationFn: async ({
+      assignmentId,
+      reason,
+      blockingUserId,
+    }: {
+      assignmentId: string;
+      reason: string;
+      blockingUserId?: string | null;
+    }) => {
+      const { data, error } = await acknowledgmentSupabase.rpc('block_knowledge_acknowledgment', {
+        p_assignment_id: assignmentId,
+        p_reason: reason.trim(),
+        p_blocking_user_id: blockingUserId ?? null,
+      });
+      throwIfError(error);
+      if (!data) throw new Error('The block was not saved');
+      return data;
+    },
+    onSuccess: data => invalidate(data.version_id, data.id),
+  });
+}
+
+export function useUnblockKnowledgeAcknowledgment() {
+  const invalidate = useAcknowledgmentInvalidation();
+  return useMutation({
+    mutationFn: async ({ assignmentId, note }: { assignmentId: string; note?: string }) => {
+      const { data, error } = await acknowledgmentSupabase.rpc('unblock_knowledge_acknowledgment', {
+        p_assignment_id: assignmentId,
+        p_note: note?.trim() ?? '',
+      });
+      throwIfError(error);
+      if (!data) throw new Error('The block was not cleared');
+      return data;
+    },
+    onSuccess: data => invalidate(data.version_id, data.id),
+  });
+}
+
+export function useSnoozeKnowledgeAcknowledgment() {
+  const invalidate = useAcknowledgmentInvalidation();
+  return useMutation({
+    mutationFn: async ({
+      assignmentId,
+      reason,
+      workdays,
+    }: {
+      assignmentId: string;
+      reason: string;
+      workdays: number;
+    }) => {
+      const { data, error } = await acknowledgmentSupabase.rpc('snooze_knowledge_acknowledgment', {
+        p_assignment_id: assignmentId,
+        p_reason: reason.trim(),
+        p_workdays: workdays,
+      });
+      throwIfError(error);
+      if (!data) throw new Error('The snooze was not saved');
+      return data;
+    },
+    onSuccess: data => invalidate(data.version_id, data.id),
+  });
+}
+
+export function useAskKnowledgeAcknowledgmentQuestion() {
+  const invalidate = useAcknowledgmentInvalidation();
+  return useMutation({
+    mutationFn: async ({ assignmentId, question }: { assignmentId: string; question: string }) => {
+      const { data, error } = await acknowledgmentSupabase.rpc('ask_knowledge_acknowledgment_question', {
+        p_assignment_id: assignmentId,
+        p_question: question.trim(),
+      });
+      throwIfError(error);
+      if (!data) throw new Error('The question was not saved');
+      return data;
+    },
+    onSuccess: data => invalidate(data.version_id, data.id),
+  });
+}
+
+export function useResolveKnowledgeAcknowledgmentQuestion() {
+  const invalidate = useAcknowledgmentInvalidation();
+  return useMutation({
+    mutationFn: async ({ assignmentId, resolution }: { assignmentId: string; resolution: string }) => {
+      const { data, error } = await acknowledgmentSupabase.rpc('resolve_knowledge_acknowledgment_question', {
+        p_assignment_id: assignmentId,
+        p_resolution: resolution.trim(),
+      });
+      throwIfError(error);
+      if (!data) throw new Error('The answer was not saved');
+      return data;
+    },
+    onSuccess: data => invalidate(data.version_id, data.id),
+  });
+}
+
+export function useSaveKnowledgeAcknowledgmentEscalationSettings() {
+  const { data: ctx } = useOrgContext();
+  const invalidate = useAcknowledgmentInvalidation();
+  return useMutation({
+    mutationFn: async (input: Omit<KnowledgeAcknowledgmentEscalationSettingsRow, 'org_id' | 'created_at' | 'updated_at'>) => {
+      if (!ctx?.org_id) throw new Error('No organization selected');
+      const { data, error } = await acknowledgmentSupabase.rpc(
+        'save_knowledge_acknowledgment_escalation_settings',
+        {
+          p_org_id: ctx.org_id,
+          p_routine_reminders_enabled: input.routine_reminders_enabled,
+          p_quiet_hours_start: input.quiet_hours_start,
+          p_quiet_hours_end: input.quiet_hours_end,
+          p_email_after_workdays: input.email_after_workdays,
+          p_manager_after_workdays: input.manager_after_workdays,
+          p_owner_after_workdays: input.owner_after_workdays,
+          p_max_snoozes: input.max_snoozes,
+          p_max_snooze_workdays: input.max_snooze_workdays,
+          p_question_pauses_escalation: input.question_pauses_escalation,
+        },
+      );
+      throwIfError(error);
+      if (!data) throw new Error('The escalation settings were not saved');
+      return data;
+    },
+    onSuccess: () => invalidate(),
   });
 }
