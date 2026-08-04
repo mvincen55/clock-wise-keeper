@@ -35,8 +35,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // check RLS applies to every table. No emails live in client code.
   const checkAllowed = async (u: User | null): Promise<boolean> => {
     if (!u) return false;
-    const { data, error } = await supabase.rpc('is_allowed_user');
-    return !error && data === true;
+    try {
+      const { data, error } = await supabase.rpc('is_allowed_user');
+      return !error && data === true;
+    } catch {
+      // Network/transient failure: treat as not allowed, never hang the app.
+      return false;
+    }
   };
 
   const clearInactivityTimer = useCallback(() => {
