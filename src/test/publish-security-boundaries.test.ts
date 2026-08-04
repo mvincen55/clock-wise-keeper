@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const readRepoFile = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
+const readRepoFile = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
 describe('production publish security boundaries', () => {
   it('does not expose repository write tools through the tenant office assistant', () => {
