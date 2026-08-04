@@ -205,18 +205,41 @@ export function useEditOfficeDocContent() {
   });
 }
 
+export type DeleteOfficeDocResult = {
+  storageCleanupFailed: boolean;
+};
+
 export function useDeleteOfficeDoc() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (doc: OfficeDoc) => {
-      if (doc.file_path) {
-        await supabase.storage.from('office-docs').remove([doc.file_path]);
-      }
-      const { error } = await supabase.from('office_docs').delete().eq('id', doc.id);
-      if (error) throw error;
+    mutationFn: async (doc: OfficeDoc): Promise<DeleteOfficeDocResult> => {
+      // Delete the governed database record first. Foreign keys may correctly
+      // block deletion when a published/draft knowledge item cites this source.
+      // Removing storage first would leave a broken database row when that
+      // protection fires.
+      const { error: databaseError } = await supabase
+        .from('office_docs')
+        .delete()
+        .eq('id', doc.id);
+      if (databaseError) throw databaseError;
+
+      if (!doc.file_path) return { storageCleanupFailed: false };
+
+      const { error: storageError } = await supabase.storage
+        .from('office-docs')
+        .remove([doc.file_path]);
+
+      // The authoritative record is already gone. A storage cleanup failure is
+      // reported as a warning rather than pretending the document still exists.
+      return { storageCleanupFailed: !!storageError };
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['office-docs'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['office-docs'] });
+      qc.invalidateQueries({ queryKey: ['library-doc-contents'] });
+      qc.invalidateQueries({ queryKey: ['library-search'] });
+      qc.invalidateQueries({ queryKey: ['practice-setup'] });
+    },
   });
 }
 
