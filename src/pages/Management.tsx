@@ -2,7 +2,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
-  BookOpenCheck, CheckSquare, FileText, Users, MapPin, Settings, BellRing, ChevronRight, Loader2,
+  BookOpenCheck, CheckSquare, FileText, Users, UserCheck, MapPin, Settings, BellRing, ChevronRight, Loader2,
 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useApprovalCounts } from '@/hooks/useApprovalCounts';
@@ -13,6 +13,7 @@ import AccountabilityReviewQueue from '@/components/accountability/Accountabilit
 const ADMIN_LINKS = [
   { to: '/approvals', icon: CheckSquare, label: 'Approvals', description: 'Review pending requests' },
   { to: '/management/knowledge', icon: BookOpenCheck, label: 'Knowledge Workspace', description: 'Draft, review, and publish the office handbook and playbook' },
+  { to: '/acknowledgments', icon: UserCheck, label: 'Office Acknowledgments', description: 'See who has opened, signed, or missed a required office version' },
   { to: '/team', icon: Users, label: 'Team', description: 'Roster, schedules, and details' },
   { to: '/reports', icon: FileText, label: 'Reports', description: 'Hours, payroll, and exports' },
   { to: '/work-zones', icon: MapPin, label: 'Work Zones', description: 'GPS auto-clock zones' },
