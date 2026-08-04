@@ -414,7 +414,7 @@ SET search_path = public
 AS $$
 DECLARE
   v_org_id uuid;
-  v_inserted boolean := false;
+  v_row_count integer := 0;
 BEGIN
   SELECT org_id INTO v_org_id
   FROM public.knowledge_acknowledgments
@@ -432,8 +432,8 @@ BEGIN
   )
   ON CONFLICT (org_id, event_key) DO NOTHING;
 
-  GET DIAGNOSTICS v_inserted = ROW_COUNT;
-  RETURN v_inserted;
+  GET DIAGNOSTICS v_row_count = ROW_COUNT;
+  RETURN v_row_count > 0;
 END;
 $$;
 
@@ -866,14 +866,15 @@ SET search_path = public
 AS $$
 DECLARE
   v_assignment public.knowledge_acknowledgments;
-  v_was_viewed boolean;
+  v_was_viewed boolean := false;
 BEGIN
-  SELECT *, first_viewed_at IS NOT NULL INTO v_assignment, v_was_viewed
+  SELECT * INTO v_assignment
   FROM public.knowledge_acknowledgments
   WHERE id = p_assignment_id
   FOR UPDATE;
 
   IF NOT FOUND THEN RAISE EXCEPTION 'Acknowledgment assignment not found'; END IF;
+  v_was_viewed := v_assignment.first_viewed_at IS NOT NULL;
   IF v_assignment.user_id <> auth.uid() THEN
     RAISE EXCEPTION 'Only the assigned person can mark this version viewed';
   END IF;
