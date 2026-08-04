@@ -1,0 +1,69 @@
+name: One-time escalation migration compile fix
+
+on:
+  push:
+    branches:
+      - openai/fix-escalation-migration
+
+permissions:
+  contents: write
+
+jobs:
+  fix-migration:
+    if: ${{ !contains(github.event.head_commit.message, 'Apply escalation migration compile fix') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: openai/fix-escalation-migration
+          fetch-depth: 0
+
+      - name: Apply exact reviewed substitutions
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('supabase/migrations/20260804050000_acknowledgment_escalation.sql')
+          text = path.read_text()
+
+          replacements = [
+              (
+                  '  v_inserted boolean := false;',
+                  '  v_row_count integer := 0;',
+              ),
+              (
+                  '  GET DIAGNOSTICS v_inserted = ROW_COUNT;\n  RETURN v_inserted;',
+                  '  GET DIAGNOSTICS v_row_count = ROW_COUNT;\n  RETURN v_row_count > 0;',
+              ),
+              (
+                  "  v_was_viewed boolean;\nBEGIN\n  SELECT *, first_viewed_at IS NOT NULL INTO v_assignment, v_was_viewed\n  FROM public.knowledge_acknowledgments\n  WHERE id = p_assignment_id\n  FOR UPDATE;\n\n  IF NOT FOUND THEN RAISE EXCEPTION 'Acknowledgment assignment not found'; END IF;",
+                  "  v_was_viewed boolean := false;\nBEGIN\n  SELECT * INTO v_assignment\n  FROM public.knowledge_acknowledgments\n  WHERE id = p_assignment_id\n  FOR UPDATE;\n\n  IF NOT FOUND THEN RAISE EXCEPTION 'Acknowledgment assignment not found'; END IF;\n  v_was_viewed := v_assignment.first_viewed_at IS NOT NULL;",
+              ),
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected exactly one occurrence, found {count}: {old[:80]!r}')
+              text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          Path('.github/workflows/one-time-fix-escalation.yml').unlink()
+          PY
+
+      - name: Verify and commit only the intended fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git status --short)"
+          printf '%s\n' "$changed"
+          echo "$changed" | grep -F 'supabase/migrations/20260804050000_acknowledgment_escalation.sql'
+          echo "$changed" | grep -F '.github/workflows/one-time-fix-escalation.yml'
+          test "$(printf '%s\n' "$changed" | sed '/^$/d' | wc -l)" -eq 2
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Apply escalation migration compile fix'
+          git push origin HEAD:openai/fix-escalation-migration
