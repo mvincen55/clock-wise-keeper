@@ -11,7 +11,11 @@ const FROM_DOMAIN = "purpleenvelope.app";
 const SENDER_DOMAIN = "notify.purpleenvelope.app";
 const APP_URL = "https://purpleenvelope.app/acknowledgments";
 
-type AdminClient = ReturnType<typeof createClient>;
+function makeAdminClient(supabaseUrl: string, serviceKey: string) {
+  return createClient(supabaseUrl, serviceKey);
+}
+
+type AdminClient = ReturnType<typeof makeAdminClient>;
 
 type EscalationSettings = {
   org_id: string;
@@ -276,6 +280,15 @@ async function queueEmail(
     .single();
   if (pendingError) throw new Error(pendingError.message);
 
+  const pendingLogId =
+    pendingLog &&
+    typeof pendingLog === "object" &&
+    "id" in pendingLog &&
+    typeof pendingLog.id === "string"
+      ? pendingLog.id
+      : null;
+  if (!pendingLogId) throw new Error("Email reservation did not return an id");
+
   const { error: enqueueError } = await admin.rpc("enqueue_email", {
     queue_name: "transactional_emails",
     payload: {
@@ -298,7 +311,7 @@ async function queueEmail(
     await admin
       .from("email_send_log")
       .update({ status: "failed", error_message: "Failed to enqueue acknowledgment email" })
-      .eq("id", pendingLog.id);
+      .eq("id", pendingLogId);
     console.error("Failed to enqueue acknowledgment email", {
       assignment_id: input.assignment.id,
       email: maskEmail(email),
@@ -385,7 +398,7 @@ Deno.serve(async (req) => {
   const bearer = req.headers.get("Authorization")?.replace("Bearer ", "").trim();
   if (!bearer || bearer !== serviceKey) return json({ error: "Not authorized" }, 401);
 
-  const admin = createClient(supabaseUrl, serviceKey);
+  const admin = makeAdminClient(supabaseUrl, serviceKey);
 
   try {
     const now = new Date();
