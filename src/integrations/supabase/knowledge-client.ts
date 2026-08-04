@@ -150,11 +150,12 @@ type KnowledgeDatabase = {
     Views: Record<string, never>;
     Functions: {
       ensure_default_knowledge_categories: {
-        Args: Record<string, never>;
+        Args: { p_org_id: string };
         Returns: KnowledgeCategoryRow[];
       };
       create_knowledge_draft: {
         Args: {
+          p_org_id: string;
           p_kind: 'policy' | 'procedure';
           p_title: string;
           p_summary?: string;
