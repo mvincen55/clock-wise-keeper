@@ -10,12 +10,12 @@ permissions:
 
 jobs:
   remove-tenant-code-tools:
-    if: ${{ github.event.workflow_run.head_branch == 'openai/fix-publish-security' }}
+    if: ${{ github.event.workflow_run.head_branch == 'openai/fix-publish-security-v2' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: openai/fix-publish-security
+          ref: openai/fix-publish-security-v2
           fetch-depth: 0
 
       - name: Remove tenant access to product source tools
@@ -82,13 +82,6 @@ jobs:
           text = text.replace(old_comment, new_comment, 1)
 
           path.write_text(text)
-          for temporary in (
-              '.github/workflows/one-time-disable-tenant-github-tools.yml',
-              '.github/security-patch-trigger',
-          ):
-              candidate = Path(temporary)
-              if candidate.exists():
-                  candidate.unlink()
           PY
 
       - name: Verify and commit the security branch patch
@@ -97,6 +90,7 @@ jobs:
           set -euo pipefail
           changed="$(git status --short)"
           printf '%s\n' "$changed"
+          test "$(printf '%s\n' "$changed" | sed '/^$/d' | wc -l)" -eq 1
           echo "$changed" | grep -F 'supabase/functions/kimi-agent/index.ts'
           grep -F 'const githubReady = false;' supabase/functions/kimi-agent/index.ts
           ! grep -F 'name: "github_commit_files"' supabase/functions/kimi-agent/index.ts
@@ -105,9 +99,9 @@ jobs:
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
+          git add supabase/functions/kimi-agent/index.ts
           git commit -m 'Disable source tools for office tenant roles'
-          git push origin HEAD:openai/fix-publish-security
+          git push origin HEAD:openai/fix-publish-security-v2
 
       - name: Remove this one-time runner from main
         shell: bash
