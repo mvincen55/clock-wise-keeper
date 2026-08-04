@@ -9,11 +9,12 @@ import { useApprovalCounts } from '@/hooks/useApprovalCounts';
 import { OrgSnapshotPanel } from '@/components/OrgSnapshotPanel';
 import PracticeVitalsCard from '@/components/PracticeVitalsCard';
 import AccountabilityReviewQueue from '@/components/accountability/AccountabilityReviewQueue';
+import AcknowledgmentEscalationSettingsCard from '@/components/knowledge/AcknowledgmentEscalationSettingsCard';
 
 const ADMIN_LINKS = [
   { to: '/approvals', icon: CheckSquare, label: 'Approvals', description: 'Review pending requests' },
   { to: '/management/knowledge', icon: BookOpenCheck, label: 'Knowledge Workspace', description: 'Draft, review, and publish the office handbook and playbook' },
-  { to: '/acknowledgments', icon: UserCheck, label: 'Office Acknowledgments', description: 'See who has opened, signed, or missed a required office version' },
+  { to: '/acknowledgments', icon: UserCheck, label: 'Office Acknowledgments', description: 'See who has opened, signed, paused, or missed a required office version' },
   { to: '/team', icon: Users, label: 'Team', description: 'Roster, schedules, and details' },
   { to: '/reports', icon: FileText, label: 'Reports', description: 'Hours, payroll, and exports' },
   { to: '/work-zones', icon: MapPin, label: 'Work Zones', description: 'GPS auto-clock zones' },
@@ -79,6 +80,8 @@ export default function Management() {
       </Card>
 
       <AccountabilityReviewQueue />
+
+      <AcknowledgmentEscalationSettingsCard />
 
       <OrgSnapshotPanel />
 
