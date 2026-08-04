@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -39,66 +39,12 @@ export default function AcceptInvite() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const acceptStartedRef = useRef(false);
 
-  // Step 1: Load invite details
-  useEffect(() => {
-    if (!token) {
-      setErrorMsg('No invite token provided.');
-      setStep('error');
-      return;
-    }
-    (async () => {
-      const { data, error } = await supabase.functions.invoke('accept-invite', {
-        body: { token, lookup: true },
-      });
-      const inv = data?.invite;
+  const acceptInvite = useCallback(async () => {
+    if (!token || acceptStartedRef.current) return;
 
-      if (error || !inv) {
-        setErrorMsg('Invite not found or already used.');
-        setStep('error');
-        return;
-      }
-      if (new Date(inv.expires_at) < new Date()) {
-        setErrorMsg('This invite has expired.');
-        setStep('error');
-        return;
-      }
-      if (inv.accepted_at) {
-        setErrorMsg('This invite has already been accepted.');
-        setStep('error');
-        return;
-      }
-      setInvite(inv);
-      setEmail(inv.email);
-      setOrgName((inv as any).orgs?.name || 'Organization');
-
-      // If user is already logged in, go straight to accept
-      if (authLoading) {
-        setStep('loading');
-      } else if (user && canonicalEmail(user.email) === canonicalEmail(inv.email)) {
-        acceptInvite();
-      } else if (user) {
-        setErrorMsg(`You're signed in as ${user.email} but this invite is for ${inv.email}. Please sign out first.`);
-        setStep('error');
-      } else {
-        setStep('signup');
-      }
-    })();
-  }, [token, user, authLoading]);
-
-  // If user logs in after signup, auto-accept
-  useEffect(() => {
-    if (user && invite && step === 'signup') {
-      if (canonicalEmail(user.email) === canonicalEmail(invite.email)) {
-        acceptInvite();
-      } else {
-        setErrorMsg(`You're signed in as ${user.email} but this invite is for ${invite.email}. Please sign out first.`);
-        setStep('error');
-      }
-    }
-  }, [user, invite]);
-
-  const acceptInvite = async () => {
+    acceptStartedRef.current = true;
     setStep('accepting');
     try {
       const { data, error } = await supabase.functions.invoke('accept-invite', {
@@ -123,7 +69,76 @@ export default function AcceptInvite() {
       setErrorMsg(e.message || 'Failed to accept invite');
       setStep('error');
     }
-  };
+  }, [token]);
+
+  // Load invite details once per token. Auth state is handled separately so a
+  // stale lookup cannot finish late and put the screen back into loading.
+  useEffect(() => {
+    let cancelled = false;
+    acceptStartedRef.current = false;
+    setInvite(null);
+    setErrorMsg('');
+    setStep('loading');
+
+    if (!token) {
+      setErrorMsg('No invite token provided.');
+      setStep('error');
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void (async () => {
+      const { data, error } = await supabase.functions.invoke('accept-invite', {
+        body: { token, lookup: true },
+      });
+      if (cancelled) return;
+
+      const inv = data?.invite;
+      if (error || !inv) {
+        setErrorMsg('Invite not found or already used.');
+        setStep('error');
+        return;
+      }
+      if (new Date(inv.expires_at) < new Date()) {
+        setErrorMsg('This invite has expired.');
+        setStep('error');
+        return;
+      }
+      if (inv.accepted_at) {
+        setErrorMsg('This invite has already been accepted.');
+        setStep('error');
+        return;
+      }
+
+      setInvite(inv);
+      setEmail(inv.email);
+      setOrgName((inv as any).orgs?.name || 'Organization');
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  // Once both the invite and auth state are settled, choose the next action.
+  // Signing in later re-runs only this decision; it never repeats the lookup.
+  useEffect(() => {
+    if (!invite || authLoading) return;
+
+    if (user && canonicalEmail(user.email) === canonicalEmail(invite.email)) {
+      void acceptInvite();
+      return;
+    }
+
+    if (user) {
+      setErrorMsg(`You're signed in as ${user.email} but this invite is for ${invite.email}. Please sign out first.`);
+      setStep('error');
+      return;
+    }
+
+    setStep('signup');
+  }, [acceptInvite, authLoading, invite, user]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,7 +166,7 @@ export default function AcceptInvite() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      // useEffect will auto-accept
+      // The auth decision effect accepts the invite after user state updates.
     } catch (e: any) {
       toast({ title: 'Sign in failed', description: e.message, variant: 'destructive' });
     }
@@ -199,7 +214,6 @@ export default function AcceptInvite() {
     );
   }
 
-  // signup step
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md card-elevated">
@@ -211,7 +225,6 @@ export default function AcceptInvite() {
           <CardDescription>You've been invited as <strong>{memberRoleLabel(invite?.role)}</strong>. Create an account or sign in to accept.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Sign Up form */}
           <form onSubmit={handleSignUp} className="space-y-4">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Create Account</h3>
             <div className="space-y-2">
