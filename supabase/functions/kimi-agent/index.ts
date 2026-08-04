@@ -981,7 +981,6 @@ function buildTools(ctx: { isManager: boolean; training: boolean; mode: string; 
     });
   }
 
-  }
   return tools;
 }
 
