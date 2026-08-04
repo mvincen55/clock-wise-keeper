@@ -8,7 +8,13 @@ const authState = { user: null as any, loading: true };
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     functions: { invoke: (...args: any[]) => invoke(...args) },
-    auth: { signUp: vi.fn(), signInWithPassword: vi.fn() },
+    auth: {
+      signUp: vi.fn(),
+      signInWithPassword: vi.fn(),
+      refreshSession: vi.fn(),
+      resetPasswordForEmail: vi.fn(),
+      resend: vi.fn(),
+    },
   },
 }));
 
@@ -47,14 +53,15 @@ describe('AcceptInvite loading behaviour', () => {
     authState.loading = true;
   });
 
-  it('does not fire the lookup until auth has settled, then renders the join form once', async () => {
+  it('loads the public invite once while waiting for auth, then renders the join form', async () => {
     invoke.mockResolvedValue({ data: { invite }, error: null });
 
     const view = renderPage();
-    expect(invoke).not.toHaveBeenCalled();
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
     expect(screen.getByText(/Loading invite/i)).toBeTruthy();
 
-    // Auth settles (slow-auth case)
+    // Auth settles after the token lookup. This changes only the decision step
+    // and must not start another lookup.
     authState.loading = false;
     view.rerender(
       <MemoryRouter initialEntries={['/accept-invite?token=abcdef123456']}>
