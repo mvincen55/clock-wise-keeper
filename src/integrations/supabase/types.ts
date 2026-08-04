@@ -7516,6 +7516,10 @@ export type Database = {
       }
     }
     Functions: {
+      _recompute_attendance_range_internal: {
+        Args: { p_end_date: string; p_start_date: string; p_user_id: string }
+        Returns: number
+      }
       _recompute_schedule_window: {
         Args: { p_end: string; p_start: string; p_user_id: string }
         Returns: undefined
