@@ -1,18 +1,38 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Json } from '@/integrations/supabase/types';
+import { supabase } from '@/integrations/supabase/client';
 import {
   acknowledgmentSupabase,
   type KnowledgeAcknowledgmentRow,
   type KnowledgeAcknowledgmentSettingsRow,
 } from '@/integrations/supabase/knowledge-acknowledgment-client';
+import {
+  knowledgeSupabase,
+  type KnowledgeBlockRow,
+  type KnowledgeItemRow,
+  type KnowledgeVersionRow,
+} from '@/integrations/supabase/knowledge-client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import type { KnowledgeDraftInput } from '@/lib/knowledge';
 
 const acknowledgmentKey = (orgId?: string, userId?: string) =>
   ['knowledge-acknowledgments', orgId, userId] as const;
+const rosterKey = (orgId?: string) => ['knowledge-acknowledgment-roster', orgId] as const;
+const documentKey = (versionId?: string | null) =>
+  ['knowledge-acknowledgment-document', versionId] as const;
 const settingsKey = (versionId?: string | null) =>
   ['knowledge-acknowledgment-settings', versionId] as const;
+
+export type KnowledgeAcknowledgmentDocument = {
+  item: KnowledgeItemRow;
+  version: KnowledgeVersionRow;
+  blocks: KnowledgeBlockRow[];
+};
+
+export type KnowledgeAcknowledgmentRosterRow = KnowledgeAcknowledgmentRow & {
+  displayName: string;
+};
 
 function throwIfError(error: { message: string } | null): void {
   if (error) throw new Error(error.message);
@@ -66,6 +86,90 @@ export function useMyKnowledgeAcknowledgments() {
   });
 }
 
+export function useKnowledgeAcknowledgmentRoster() {
+  const { data: ctx } = useOrgContext();
+  const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
+
+  return useQuery({
+    queryKey: rosterKey(ctx?.org_id),
+    enabled: !!ctx?.org_id && isAdmin,
+    staleTime: 20_000,
+    queryFn: async (): Promise<KnowledgeAcknowledgmentRosterRow[]> => {
+      if (!ctx?.org_id || !isAdmin) return [];
+
+      const [assignmentResult, employeeResult] = await Promise.all([
+        acknowledgmentSupabase
+          .from('knowledge_acknowledgments')
+          .select('*')
+          .eq('org_id', ctx.org_id)
+          .order('due_at'),
+        supabase
+          .from('employees')
+          .select('id, display_name')
+          .eq('org_id', ctx.org_id),
+      ]);
+
+      throwIfError(assignmentResult.error);
+      throwIfError(employeeResult.error);
+
+      const displayNameByEmployee = new Map(
+        (employeeResult.data ?? []).map(employee => [employee.id, employee.display_name]),
+      );
+
+      return (assignmentResult.data ?? []).map(assignment => ({
+        ...assignment,
+        displayName:
+          (assignment.employee_id
+            ? displayNameByEmployee.get(assignment.employee_id)
+            : undefined)
+          ?? `${assignment.role_at_assignment === 'employee' ? 'Team member' : assignment.role_at_assignment[0].toUpperCase() + assignment.role_at_assignment.slice(1)} ${assignment.user_id.slice(0, 6)}`,
+      }));
+    },
+  });
+}
+
+export function useKnowledgeAcknowledgmentDocument(versionId?: string | null) {
+  return useQuery({
+    queryKey: documentKey(versionId),
+    enabled: !!versionId,
+    queryFn: async (): Promise<KnowledgeAcknowledgmentDocument | null> => {
+      if (!versionId) return null;
+
+      const versionResult = await knowledgeSupabase
+        .from('knowledge_versions')
+        .select('*')
+        .eq('id', versionId)
+        .maybeSingle();
+      throwIfError(versionResult.error);
+      if (!versionResult.data) return null;
+
+      const [itemResult, blockResult] = await Promise.all([
+        knowledgeSupabase
+          .from('knowledge_items')
+          .select('*')
+          .eq('id', versionResult.data.item_id)
+          .maybeSingle(),
+        knowledgeSupabase
+          .from('knowledge_blocks')
+          .select('*')
+          .eq('version_id', versionId)
+          .order('sort_order')
+          .order('id'),
+      ]);
+
+      throwIfError(itemResult.error);
+      throwIfError(blockResult.error);
+      if (!itemResult.data) return null;
+
+      return {
+        item: itemResult.data,
+        version: versionResult.data,
+        blocks: blockResult.data ?? [],
+      };
+    },
+  });
+}
+
 function useAcknowledgmentInvalidation() {
   const { user } = useAuth();
   const { data: ctx } = useOrgContext();
@@ -74,8 +178,12 @@ function useAcknowledgmentInvalidation() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['knowledge-workspace', ctx?.org_id] }),
       queryClient.invalidateQueries({ queryKey: acknowledgmentKey(ctx?.org_id, user?.id) }),
+      queryClient.invalidateQueries({ queryKey: rosterKey(ctx?.org_id) }),
       versionId
-        ? queryClient.invalidateQueries({ queryKey: settingsKey(versionId) })
+        ? Promise.all([
+            queryClient.invalidateQueries({ queryKey: settingsKey(versionId) }),
+            queryClient.invalidateQueries({ queryKey: documentKey(versionId) }),
+          ])
         : Promise.resolve(),
     ]);
   };
