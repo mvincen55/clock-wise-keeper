@@ -97,17 +97,26 @@ export function useKnowledgeWorkspace() {
           const statusDifference = knowledgeStatusPriority(a.status) - knowledgeStatusPriority(b.status);
           return statusDifference || b.version_number - a.version_number;
         });
+        const workingVersion =
+          versions.find(version => ['draft', 'in_review', 'approved'].includes(version.status)) ??
+          versions.find(version => version.status === 'published') ??
+          versions[0] ??
+          null;
+        const publishedVersion =
+          versions.find(version => version.id === item.current_published_version_id) ?? null;
+        const metadataVersion = workingVersion ?? publishedVersion;
+        const categoryId = metadataVersion?.category_id ?? item.category_id;
+
         return {
           ...item,
-          category: item.category_id ? categoryById.get(item.category_id) ?? null : null,
+          title: metadataVersion?.title ?? item.title,
+          summary: metadataVersion?.summary ?? item.summary,
+          category_id: categoryId,
+          audience_roles: metadataVersion?.audience_roles ?? item.audience_roles,
+          category: categoryId ? categoryById.get(categoryId) ?? null : null,
           versions,
-          workingVersion:
-            versions.find(version => ['draft', 'in_review', 'approved'].includes(version.status)) ??
-            versions.find(version => version.status === 'published') ??
-            versions[0] ??
-            null,
-          publishedVersion:
-            versions.find(version => version.id === item.current_published_version_id) ?? null,
+          workingVersion,
+          publishedVersion,
         } satisfies KnowledgeWorkspaceItem;
       });
 
