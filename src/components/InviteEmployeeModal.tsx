@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -10,17 +10,27 @@ import { useToast } from '@/hooks/use-toast';
 import { Mail, Loader2, Copy, CheckCircle2, AlertTriangle, Check } from 'lucide-react';
 import { OPERATIONAL_ROLES, ROLE_LABELS } from '@/hooks/useOperationalRoles';
 import { MEMBER_ROLE_LABELS } from '@/lib/roles';
+import { freeTag, suggestTag, TAG_PATTERN, useTagRegistry } from '@/hooks/useOnboarding';
 import type { OperationalRole } from '@/lib/schedule-reader/types';
+
+/** The desk roles sit on the clerical side; everyone else starts clinical. */
+const CLERICAL_ROLES: OperationalRole[] = ['front_desk', 'office_manager'];
 
 export default function InviteEmployeeModal() {
   const { data: ctx } = useOrgContext();
+  const { data: registry } = useTagRegistry();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
+  const [preferredName, setPreferredName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'employee' | 'manager'>('employee');
   const [operationalRole, setOperationalRole] = useState<OperationalRole | ''>('');
   const [secondaryRoles, setSecondaryRoles] = useState<OperationalRole[]>([]);
+  const [team, setTeam] = useState<'clinical' | 'clerical'>('clinical');
+  const [touchedTeam, setTouchedTeam] = useState(false);
+  const [tag, setTag] = useState('');
+  const [touchedTag, setTouchedTag] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
   const [emailed, setEmailed] = useState(false);
@@ -28,6 +38,22 @@ export default function InviteEmployeeModal() {
 
   const toggleSecondary = (r: OperationalRole) =>
     setSecondaryRoles(list => (list.includes(r) ? list.filter(x => x !== r) : [...list, r]));
+
+  const taken = useMemo(
+    () => new Set((registry ?? []).map(r => String(r.tag).toUpperCase())),
+    [registry],
+  );
+
+  // Suggest a tag from their name until the inviter types their own.
+  useEffect(() => {
+    if (touchedTag) return;
+    const base = suggestTag(name);
+    setTag(base ? freeTag(base, taken) : '');
+  }, [name, taken, touchedTag]);
+
+  const tagValid = TAG_PATTERN.test(tag);
+  const tagFree = tagValid && !taken.has(tag.toUpperCase());
+  const firstName = name.trim().split(/\s+/)[0] ?? '';
 
   const handleInvite = async () => {
     if (!ctx || !email.trim()) return;
@@ -39,6 +65,10 @@ export default function InviteEmployeeModal() {
       toast({ title: 'Pick what they do', description: 'Their operational role sets up scheduling and staffing correctly from day one.', variant: 'destructive' });
       return;
     }
+    if (!tagFree) {
+      toast({ title: 'Pick a free tag', description: 'Tags are 2–4 letters or numbers, and never reused.', variant: 'destructive' });
+      return;
+    }
     setSubmitting(true);
     try {
       const { data, error } = await supabase.functions.invoke('send-org-invite', {
@@ -46,8 +76,11 @@ export default function InviteEmployeeModal() {
           email: email.toLowerCase().trim(),
           role,
           name: name.trim(),
+          preferredName: preferredName.trim(),
           operationalRole,
           secondaryRoles: secondaryRoles.filter(r => r !== operationalRole),
+          team,
+          tag,
           origin: window.location.origin,
         },
       });
@@ -80,10 +113,15 @@ export default function InviteEmployeeModal() {
 
   const reset = () => {
     setName('');
+    setPreferredName('');
     setEmail('');
     setRole('employee');
     setOperationalRole('');
     setSecondaryRoles([]);
+    setTeam('clinical');
+    setTouchedTeam(false);
+    setTag('');
+    setTouchedTag(false);
     setInviteLink('');
     setEmailed(false);
     setWarning('');
@@ -127,6 +165,18 @@ export default function InviteEmployeeModal() {
               <Input value={name} onChange={e => setName(e.target.value)} placeholder="Jane Berry" maxLength={80} />
             </div>
             <div className="space-y-2">
+              <Label>What does everyone call them? (optional)</Label>
+              <Input
+                value={preferredName}
+                onChange={e => setPreferredName(e.target.value)}
+                placeholder={firstName || 'Their everyday name'}
+                maxLength={40}
+              />
+              <p className="text-xs text-muted-foreground">
+                The name used across the app. Leave blank to use their first name.
+              </p>
+            </div>
+            <div className="space-y-2">
               <Label>Email address (their username) *</Label>
               <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@company.com" />
               <p className="text-xs text-muted-foreground">They'll sign in with this address.</p>
@@ -149,6 +199,7 @@ export default function InviteEmployeeModal() {
               <Select value={operationalRole} onValueChange={v => {
                 setOperationalRole(v as OperationalRole);
                 setSecondaryRoles(list => list.filter(r => r !== v));
+                if (!touchedTeam) setTeam(CLERICAL_ROLES.includes(v as OperationalRole) ? 'clerical' : 'clinical');
               }}>
                 <SelectTrigger><SelectValue placeholder="Their main role in the office" /></SelectTrigger>
                 <SelectContent>
@@ -182,9 +233,47 @@ export default function InviteEmployeeModal() {
                 </div>
               </div>
             )}
+            <div className="space-y-2">
+              <Label>Which side of the office are they on? *</Label>
+              <Select value={team} onValueChange={v => {
+                setTouchedTeam(true);
+                setTeam(v as 'clinical' | 'clerical');
+              }}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="clinical">Clinical</SelectItem>
+                  <SelectItem value="clerical">Clerical</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                This decides which team announcements reach them.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Their tag *</Label>
+              <Input
+                value={tag}
+                onChange={e => {
+                  setTouchedTag(true);
+                  setTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4));
+                }}
+                placeholder="JR"
+                className="w-24 font-mono tracking-widest"
+              />
+              <p className="text-xs text-muted-foreground">
+                2–4 characters, suggested from their name. Used on reports, print sheets, and
+                exports instead of their full name. A tag is never reused, so it stays theirs.
+              </p>
+              {tag && !tagValid && (
+                <p className="text-xs text-destructive">Tags are 2–4 letters or numbers.</p>
+              )}
+              {tagValid && !tagFree && (
+                <p className="text-xs text-destructive">That tag is already taken in this office.</p>
+              )}
+            </div>
             <Button
               onClick={handleInvite}
-              disabled={submitting || !email.trim() || !name.trim() || !operationalRole}
+              disabled={submitting || !email.trim() || !name.trim() || !operationalRole || !tagFree}
               className="w-full"
             >
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

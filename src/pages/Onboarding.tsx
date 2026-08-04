@@ -39,7 +39,9 @@ const STEPS = ['Privacy', 'About you', 'Basics', 'First goal'] as const;
  * The flow a new member completes after accepting their invite. Four screens,
  * in order, and the app stays closed until the last one is done.
  * (Their operational role isn't asked here — the inviting owner/manager
- * already answered that on the invite.)
+ * already answered that on the invite. The basics — name, side of office,
+ * tag — ride in on the invite too, so that step is normally already done;
+ * it only appears for members whose invite predates those fields.)
  */
 export default function Onboarding() {
   const navigate = useNavigate();
@@ -89,7 +91,7 @@ export default function Onboarding() {
         ) : step === 0 ? (
           <TermsStep onDone={() => setStep(1)} />
         ) : step === 1 ? (
-          <WorkStyleStep onDone={() => setStep(2)} />
+          <WorkStyleStep onDone={() => setStep(status?.progress?.basics_done_at ? 3 : 2)} />
         ) : step === 2 ? (
           <BasicsStep onDone={() => setStep(3)} />
         ) : (
@@ -233,8 +235,12 @@ function WorkStyleStep({ onDone }: { onDone: () => void }) {
 }
 
 
+/**
+ * Fallback only: new invites carry these answers (the inviting owner/manager
+ * fills them in), so this screen is skipped. It still shows for members whose
+ * invite predates that.
+ */
 function BasicsStep({ onDone }: { onDone: () => void }) {
-  const { data: ctx } = useOrgContext();
   const { data: registry } = useTagRegistry();
   const save = useSaveBasics();
 
@@ -251,9 +257,9 @@ function BasicsStep({ onDone }: { onDone: () => void }) {
   // Suggest a tag from their name until they type their own.
   useEffect(() => {
     if (touchedTag) return;
-    const base = suggestTag(preferred || ctx?.org_name === undefined ? preferred : preferred);
+    const base = suggestTag(preferred);
     setTag(base ? freeTag(base, taken) : '');
-  }, [preferred, taken, touchedTag, ctx?.org_name]);
+  }, [preferred, taken, touchedTag]);
 
   const tagValid = TAG_PATTERN.test(tag);
   const tagFree = tagValid && !taken.has(tag.toUpperCase());
@@ -292,7 +298,7 @@ function BasicsStep({ onDone }: { onDone: () => void }) {
             id="preferred"
             value={preferred}
             onChange={e => setPreferred(e.target.value)}
-            placeholder="Megan"
+            placeholder="Your everyday name"
             maxLength={40}
           />
           <p className="text-xs text-muted-foreground">
@@ -324,7 +330,7 @@ function BasicsStep({ onDone }: { onDone: () => void }) {
               setTouchedTag(true);
               setTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4));
             }}
-            placeholder="MV"
+            placeholder="TAG"
             className="w-24 font-mono tracking-widest"
           />
           <p className="text-xs text-muted-foreground">

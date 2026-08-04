@@ -21,6 +21,33 @@ function canonicalEmail(email: unknown): string {
   return normalized;
 }
 
+/** "Jordan Rivera" -> "JR". Mirrors the client-side suggestion. */
+function suggestTagFromName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "";
+  const letters =
+    parts.length === 1 ? parts[0].slice(0, 2) : `${parts[0][0]}${parts[parts.length - 1][0]}`;
+  return letters.toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+/**
+ * The tag the inviter picked — or the nearest free variant (JR, JR2, JR3…)
+ * if someone claimed it between the invite going out and being accepted.
+ */
+function pickFreeTag(wanted: string, fallbackName: string, taken: Set<string>): string | null {
+  const base = (wanted || suggestTagFromName(fallbackName))
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 4);
+  if (!/^[A-Z0-9]{2,4}$/.test(base)) return null;
+  if (!taken.has(base)) return base;
+  for (let i = 2; i < 100; i++) {
+    const candidate = `${base.slice(0, 4 - String(i).length)}${i}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -176,26 +203,46 @@ Deno.serve(async (req) => {
       );
     }
 
-    // The inviter already answered the profile questions: the member's name
-    // and operational role(s) ride in on the invite itself.
+    // The inviter already answered the profile questions: the member's name,
+    // operational role(s), side of office, preferred name, and report tag all
+    // ride in on the invite itself. Older pending invites may lack the basics
+    // fields — those members are asked in onboarding instead.
     const invitedName = typeof invite.invited_name === "string" ? invite.invited_name.trim() : "";
+    const invitedTeam =
+      invite.invited_team === "clinical" || invite.invited_team === "clerical"
+        ? invite.invited_team
+        : null;
+    const invitedPreferred =
+      typeof invite.invited_preferred_name === "string" && invite.invited_preferred_name.trim()
+        ? invite.invited_preferred_name.trim()
+        : invitedName.split(/\s+/)[0] ?? "";
+    const basicsPatch = invitedTeam
+      ? { team: invitedTeam, ...(invitedPreferred ? { preferred_name: invitedPreferred } : {}) }
+      : {};
 
     // Link employee record if one exists with matching email
     const { data: empRecord } = await supabaseAdmin
       .from("employees")
-      .select("id, user_id")
+      .select("id, user_id, tag")
       .eq("org_id", invite.org_id)
       .eq("email", invite.email.toLowerCase())
       .is("user_id", null)
       .maybeSingle();
 
     let employeeId: string | null = null;
+    let basicsWritten = false;
     if (empRecord) {
       employeeId = empRecord.id;
-      await supabaseAdmin
+      const { error: linkError } = await supabaseAdmin
         .from("employees")
-        .update({ user_id: user.id, ...(invitedName ? { display_name: invitedName } : {}) })
+        .update({
+          user_id: user.id,
+          ...(invitedName ? { display_name: invitedName } : {}),
+          ...basicsPatch,
+        })
         .eq("id", empRecord.id);
+      basicsWritten = !linkError;
+      if (linkError) console.warn("accept-invite: could not link employee", linkError.message);
     } else {
       // Create a new employee record, named by the inviter.
       const { data: created } = await supabaseAdmin
@@ -207,10 +254,55 @@ Deno.serve(async (req) => {
             invitedName || user.user_metadata?.full_name || user.email?.split("@")[0] || "Employee",
           email: user.email,
           employment_status: "active",
+          ...basicsPatch,
         })
         .select("id")
         .single();
       employeeId = created?.id ?? null;
+      basicsWritten = !!created;
+    }
+
+    // Apply the tag the inviter picked. A tag already on the record wins —
+    // tags are permanent, an invite never overwrites one. Best-effort: a tag
+    // hiccup must never block joining the office.
+    let tagSettled = false;
+    if (employeeId && invitedTeam) {
+      if (empRecord?.tag) {
+        tagSettled = true;
+      } else {
+        const wanted = typeof invite.invited_tag === "string" ? invite.invited_tag : "";
+        const { data: tagRows } = await supabaseAdmin
+          .from("employee_tags")
+          .select("tag, employee_id")
+          .eq("org_id", invite.org_id);
+        const taken = new Set(
+          (tagRows ?? [])
+            .filter((r) => r.employee_id !== employeeId)
+            .map((r) => String(r.tag).toUpperCase()),
+        );
+        const finalTag = pickFreeTag(wanted, invitedName || user.email || "", taken);
+        if (finalTag) {
+          const { error: tagError } = await supabaseAdmin
+            .from("employees")
+            .update({ tag: finalTag })
+            .eq("id", employeeId);
+          if (tagError) console.warn("accept-invite: could not apply tag", tagError.message);
+          else tagSettled = true;
+        }
+      }
+    }
+
+    // These fields are exactly what the Basics onboarding step used to collect.
+    // The inviter answered it, so the step is done before the member starts —
+    // if anything above fell through, onboarding falls back to asking them.
+    if (employeeId && invitedTeam && basicsWritten && tagSettled) {
+      const { error: onboardingError } = await supabaseAdmin.from("member_onboarding").upsert(
+        { org_id: invite.org_id, user_id: user.id, basics_done_at: new Date().toISOString() },
+        { onConflict: "org_id,user_id" },
+      );
+      if (onboardingError) {
+        console.warn("accept-invite: could not mark basics done", onboardingError.message);
+      }
     }
 
     // Apply the operational role(s) the inviter chose, pre-confirmed by them.

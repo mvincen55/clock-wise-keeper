@@ -95,12 +95,18 @@ Deno.serve(async (req) => {
     const role = body?.role;
     const origin = typeof body?.origin === "string" ? body.origin : "";
     // The inviter answers the profile questions up front: the new member's
-    // name and what they'll actually do. Onboarding never has to ask.
+    // name, what they'll actually do, which side of the office they're on,
+    // and their report tag. Onboarding never has to ask.
     const invitedName = typeof body?.name === "string" ? body.name.trim().slice(0, 80) : "";
+    const preferredName = typeof body?.preferredName === "string" ? body.preferredName.trim().slice(0, 40) : "";
     const operationalRole = typeof body?.operationalRole === "string" ? body.operationalRole : "";
     const secondaryRoles: string[] = Array.isArray(body?.secondaryRoles)
       ? body.secondaryRoles.filter((r: unknown) => typeof r === "string")
       : [];
+    const team = typeof body?.team === "string" ? body.team : "";
+    const tag = typeof body?.tag === "string"
+      ? body.tag.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4)
+      : "";
 
     const OPERATIONAL_ROLES = [
       "dentist", "hygienist", "dental_assistant", "front_desk",
@@ -127,6 +133,18 @@ Deno.serve(async (req) => {
     }
     if (!OPERATIONAL_ROLES.includes(operationalRole)) {
       return new Response(JSON.stringify({ error: "A valid operational role is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (team !== "clinical" && team !== "clerical") {
+      return new Response(JSON.stringify({ error: "Team must be clinical or clerical" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (tag && !/^[A-Z0-9]{2,4}$/.test(tag)) {
+      return new Response(JSON.stringify({ error: "Tags are 2–4 letters or numbers" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -197,8 +215,11 @@ Deno.serve(async (req) => {
 
     const profileFields = {
       invited_name: invitedName,
+      invited_preferred_name: preferredName || null,
       operational_role: operationalRole,
       secondary_roles: cleanSecondary,
+      invited_team: team,
+      invited_tag: tag || null,
       invited_by: user.id,
     };
 

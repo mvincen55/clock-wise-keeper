@@ -4809,6 +4809,9 @@ export type Database = {
           id: string
           invited_by: string | null
           invited_name: string | null
+          invited_preferred_name: string | null
+          invited_tag: string | null
+          invited_team: string | null
           operational_role: string | null
           org_id: string
           role: Database["public"]["Enums"]["app_org_role"]
@@ -4823,6 +4826,9 @@ export type Database = {
           id?: string
           invited_by?: string | null
           invited_name?: string | null
+          invited_preferred_name?: string | null
+          invited_tag?: string | null
+          invited_team?: string | null
           operational_role?: string | null
           org_id: string
           role?: Database["public"]["Enums"]["app_org_role"]
@@ -4837,6 +4843,9 @@ export type Database = {
           id?: string
           invited_by?: string | null
           invited_name?: string | null
+          invited_preferred_name?: string | null
+          invited_tag?: string | null
+          invited_team?: string | null
           operational_role?: string | null
           org_id?: string
           role?: Database["public"]["Enums"]["app_org_role"]
