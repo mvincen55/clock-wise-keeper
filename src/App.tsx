@@ -47,6 +47,7 @@ import PracticeProcedures from "@/pages/PracticeProcedures";
 import Management from "@/pages/Management";
 import KnowledgeWorkspace from "@/pages/KnowledgeWorkspace";
 import KnowledgeAcknowledgments from "@/pages/KnowledgeAcknowledgments";
+import PracticeSetup from "@/pages/PracticeSetup";
 import Help from "@/pages/Help";
 import Privacy from "@/pages/Privacy";
 import AcceptInvite from "@/pages/AcceptInvite";
@@ -107,6 +108,7 @@ const App = () => (
             <Route path="/playbook/procedures" element={<ProtectedRoute><PracticeProcedures /></ProtectedRoute>} />
             <Route path="/management" element={<ProtectedRoute><Management /></ProtectedRoute>} />
             <Route path="/management/knowledge" element={<ProtectedRoute><KnowledgeWorkspace /></ProtectedRoute>} />
+            <Route path="/practice-setup" element={<ProtectedRoute><PracticeSetup /></ProtectedRoute>} />
             <Route path="/acknowledgments" element={<ProtectedRoute><KnowledgeAcknowledgments /></ProtectedRoute>} />
             <Route path="/inbox" element={<Navigate to="/inbox/messages" replace />} />
             <Route path="/inbox/:tab" element={<ProtectedRoute><InboxPage /></ProtectedRoute>} />
