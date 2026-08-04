@@ -167,10 +167,14 @@ function useKnowledgeInvalidation() {
 }
 
 export function useEnsureKnowledgeCategories() {
+  const { data: ctx } = useOrgContext();
   const invalidate = useKnowledgeInvalidation();
   return useMutation({
     mutationFn: async () => {
-      const { data, error } = await knowledgeSupabase.rpc('ensure_default_knowledge_categories', {});
+      if (!ctx?.org_id) throw new Error('No organization selected');
+      const { data, error } = await knowledgeSupabase.rpc('ensure_default_knowledge_categories', {
+        p_org_id: ctx.org_id,
+      });
       throwIfError(error);
       return data ?? [];
     },
@@ -179,10 +183,13 @@ export function useEnsureKnowledgeCategories() {
 }
 
 export function useCreateKnowledgeDraft() {
+  const { data: ctx } = useOrgContext();
   const invalidate = useKnowledgeInvalidation();
   return useMutation({
     mutationFn: async (input: KnowledgeDraftInput) => {
+      if (!ctx?.org_id) throw new Error('No organization selected');
       const { data, error } = await knowledgeSupabase.rpc('create_knowledge_draft', {
+        p_org_id: ctx.org_id,
         p_kind: input.kind,
         p_title: input.title.trim(),
         p_summary: input.summary.trim(),
