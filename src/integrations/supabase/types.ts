@@ -5495,6 +5495,62 @@ export type Database = {
           },
         ]
       }
+      procedure_meta: {
+        Row: {
+          active: boolean
+          code: string
+          created_at: string
+          id: string
+          internal_description: string
+          keywords: string[]
+          needs_surfaces: boolean
+          needs_teeth: boolean
+          org_id: string
+          patient_name: string
+          quantity_strategy: string
+          unit_type: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          code: string
+          created_at?: string
+          id?: string
+          internal_description?: string
+          keywords?: string[]
+          needs_surfaces?: boolean
+          needs_teeth?: boolean
+          org_id: string
+          patient_name?: string
+          quantity_strategy?: string
+          unit_type?: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          code?: string
+          created_at?: string
+          id?: string
+          internal_description?: string
+          keywords?: string[]
+          needs_surfaces?: boolean
+          needs_teeth?: boolean
+          org_id?: string
+          patient_name?: string
+          quantity_strategy?: string
+          unit_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "procedure_meta_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
