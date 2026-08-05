@@ -9,6 +9,7 @@ import { useAddEmployee } from '@/hooks/useEmployees';
 import InviteEmployeeModal from '@/components/InviteEmployeeModal';
 import TeamEmployeeCard from '@/components/TeamEmployeeCard';
 import ArchivedMembersDialog from '@/components/ArchivedMembersDialog';
+import PendingInvitesCard from '@/components/PendingInvitesCard';
 import ChecklistBypassesSection from '@/components/ChecklistBypassesSection';
 import { Users, Plus, Loader2, CalendarDays } from 'lucide-react';
 
@@ -118,6 +119,8 @@ export default function Team() {
           <ArchivedMembersDialog />
         </div>
       </div>
+
+      <PendingInvitesCard />
 
       {/* Date Range */}
       <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 px-4 py-2.5">
