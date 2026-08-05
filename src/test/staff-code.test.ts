@@ -11,6 +11,7 @@ import {
   staffCodeLabel,
   attributionLabel,
   suggestStaffCode,
+  buildReservedSet,
 } from '@/lib/staff-code';
 
 describe('staff code patterns', () => {
@@ -95,6 +96,31 @@ describe('suggestStaffCode', () => {
     const s = suggestStaffCode('Megan Vincent', taken);
     expect(taken.has(s)).toBe(false);
     expect(STAFF_CODE_PATTERN.test(s)).toBe(true);
+  });
+});
+
+describe('buildReservedSet (current tags + permanent registry)', () => {
+  it('normalizes and dedupes case-insensitively, so case cannot bypass uniqueness', () => {
+    const reserved = buildReservedSet(['meg', 'ME', 'MEG', ' meg ', '', null, undefined]);
+    expect([...reserved].sort()).toEqual(['ME', 'MEG']);
+    expect(reserved.has('MEG')).toBe(true);
+    expect(reserved.has('meg' as unknown as string)).toBe(false); // set stores normalized only
+  });
+
+  it('rejects an active duplicate (a live tag is reserved)', () => {
+    const reserved = buildReservedSet(['MEG']); // MEG is a current employee's tag
+    expect(reserved.has('MEG')).toBe(true);
+  });
+
+  it("rejects a former employee's permanently reserved code, and suggestions skip it", () => {
+    // 'GON' belonged to a departed employee — still in the registry.
+    const reserved = buildReservedSet(['MEG', 'GON']);
+    expect(reserved.has('GON')).toBe(true);
+    // A suggestion for someone named "Gonzalo" must not reuse GON.
+    const suggestion = suggestStaffCode('Gonzalo', reserved);
+    expect(suggestion).not.toBe('GON');
+    expect(reserved.has(suggestion)).toBe(false);
+    expect(STAFF_CODE_PATTERN.test(suggestion)).toBe(true);
   });
 });
 

@@ -8107,6 +8107,17 @@ export type Database = {
       is_conv_participant: { Args: { _conv: string }; Returns: boolean }
       is_org_admin: { Args: { _org_id: string }; Returns: boolean }
       is_org_member: { Args: { _org_id: string }; Returns: boolean }
+      org_staff_directory: {
+        Args: { p_org_id: string }
+        Returns: {
+          employee_id: string
+          user_id: string
+          display_name: string
+          tag: string
+          employment_status: string
+          membership_status: string
+        }[]
+      }
       is_org_owner: { Args: { _org_id: string }; Returns: boolean }
       knowledge_acknowledgment_user_is_eligible: {
         Args: {

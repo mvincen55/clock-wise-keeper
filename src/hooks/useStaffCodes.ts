@@ -2,17 +2,20 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import { normalizeStaffCode, isLegacyStaffCode } from '@/lib/staff-code';
+import { useTagRegistry } from '@/hooks/useOnboarding';
+import { normalizeStaffCode, isLegacyStaffCode, buildReservedSet } from '@/lib/staff-code';
 
 /**
  * How an employee record relates to current auditable activity:
- * - `active`   — active employment + a linked login: performs auditable actions.
- * - `loginless`— roster record with no login (cannot act).
- * - `inactive` — archived/inactive employment.
- * - `former`   — terminated.
+ * - `active`    — active employment + a linked login + ACTIVE org membership.
+ * - `loginless` — roster record with no login (cannot act).
+ * - `inactive`  — archived/inactive employment.
+ * - `former`    — terminated employment.
+ * - `nonmember` — has a login but no active org membership (removed, suspended,
+ *                 disabled, or only invited — cannot currently act).
  * Only `active` members need a staff code for current attribution.
  */
-export type StaffKind = 'active' | 'loginless' | 'inactive' | 'former';
+export type StaffKind = 'active' | 'loginless' | 'inactive' | 'former' | 'nonmember';
 
 export type OrgStaffMember = {
   employeeId: string;
@@ -20,27 +23,35 @@ export type OrgStaffMember = {
   displayName: string;
   code: string | null;
   employmentStatus: string;
+  membershipStatus: string | null;
   kind: StaffKind;
   /** True only for employees who currently perform auditable actions. */
   isActiveActor: boolean;
 };
 
-function classify(employmentStatus: string, userId: string | null): StaffKind {
+/**
+ * Classifies a staff record using employment status, login linkage, AND real
+ * org-membership status. Never treats `user_id !== null` as proof of active
+ * membership.
+ */
+export function classifyStaff(
+  employmentStatus: string,
+  userId: string | null,
+  membershipStatus: string | null,
+): StaffKind {
   if (employmentStatus === 'terminated') return 'former';
   if (employmentStatus !== 'active') return 'inactive';
   if (!userId) return 'loginless';
+  if (membershipStatus !== 'active') return 'nonmember';
   return 'active';
 }
 
 /**
  * Loads every employee in the current org with their canonical staff code
- * (`employees.tag`) and an accurate activity classification. This is the single
- * source of truth other modules use to attribute actions — no module should
- * query tags or invent fallbacks itself.
- *
- * We classify by `employees.employment_status` (the app's active-roster signal,
- * also used by `useOrgEmployees`) combined with login linkage — never by
- * `user_id !== null` alone. RLS: org members may read `employees`.
+ * (`employees.tag`) and an accurate activity classification driven by REAL
+ * org-membership status (via the `org_staff_directory` SECURITY DEFINER RPC,
+ * since the org_members read policies only expose your own + admin rows). This
+ * is the single source of truth other modules use to attribute actions.
  */
 export function useOrgStaff() {
   const { data: ctx } = useOrgContext();
@@ -49,19 +60,17 @@ export function useOrgStaff() {
     enabled: !!ctx?.org_id,
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<OrgStaffMember[]> => {
-      const { data, error } = await supabase
-        .from('employees')
-        .select('id, user_id, display_name, tag, employment_status')
-        .eq('org_id', ctx!.org_id);
+      const { data, error } = await supabase.rpc('org_staff_directory', { p_org_id: ctx!.org_id });
       if (error) throw error;
-      return (data ?? []).map((e) => {
-        const kind = classify(e.employment_status, e.user_id);
+      return (data ?? []).map((r) => {
+        const kind = classifyStaff(r.employment_status, r.user_id, r.membership_status);
         return {
-          employeeId: e.id,
-          userId: e.user_id,
-          displayName: e.display_name,
-          code: e.tag ? normalizeStaffCode(e.tag) : null,
-          employmentStatus: e.employment_status,
+          employeeId: r.employee_id,
+          userId: r.user_id,
+          displayName: r.display_name,
+          code: r.tag ? normalizeStaffCode(r.tag) : null,
+          employmentStatus: r.employment_status,
+          membershipStatus: r.membership_status,
           kind,
           isActiveActor: kind === 'active',
         };
@@ -106,12 +115,28 @@ export function useStaffCodesNeedingAttention(): OrgStaffMember[] {
   );
 }
 
-/** All codes currently reserved in the org (uppercased), for duplicate checks. */
-export function useReservedStaffCodes(): ReadonlySet<string> {
+/**
+ * Every code reserved in the org (uppercased) — the union of current
+ * `employees.tag` values AND the permanent `employee_tags` registry (which
+ * keeps codes retired to former employees). This is the ONE shared reserved-set
+ * helper used by suggestions and duplicate checks so no screen rolls its own.
+ * Pass `excludeEmployeeId` when editing a specific member so their own current
+ * code is not treated as a conflict. The database (unique index + tag registry
+ * trigger) remains the authoritative check against simultaneous writes.
+ */
+export function useReservedStaffCodes(excludeEmployeeId?: string): ReadonlySet<string> {
   const { data: staff } = useOrgStaff();
+  const { data: registry } = useTagRegistry();
   return useMemo(() => {
-    const set = new Set<string>();
-    for (const m of staff ?? []) if (m.code) set.add(m.code);
-    return set;
-  }, [staff]);
+    const codes: (string | null | undefined)[] = [];
+    for (const m of staff ?? []) {
+      if (m.employeeId === excludeEmployeeId) continue;
+      codes.push(m.code);
+    }
+    for (const r of registry ?? []) {
+      if (excludeEmployeeId && r.employee_id === excludeEmployeeId) continue;
+      codes.push(r.tag as string);
+    }
+    return buildReservedSet(codes);
+  }, [staff, registry, excludeEmployeeId]);
 }

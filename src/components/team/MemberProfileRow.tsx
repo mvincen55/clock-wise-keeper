@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,9 +8,9 @@ import {
   freeTag,
   suggestTag,
   useSaveBasics,
-  useTagRegistry,
   useTeamOnboardingStatus,
 } from '@/hooks/useOnboarding';
+import { useReservedStaffCodes } from '@/hooks/useStaffCodes';
 import OperationalRolesEditor from '@/components/team/OperationalRolesEditor';
 import { validateStaffCodeInput, isLegacyStaffCode, normalizeStaffCode } from '@/lib/staff-code';
 
@@ -39,22 +39,15 @@ const FAVORITE_LABELS: Record<string, string> = {
  * Progress only — never the answers themselves.
  */
 export default function MemberProfileRow({ employee }: { employee: Member }) {
-  const { data: registry } = useTagRegistry();
   const { data: team } = useTeamOnboardingStatus();
   const save = useSaveBasics();
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(employee.tag ?? '');
 
-  const taken = useMemo(
-    () =>
-      new Set(
-        (registry ?? [])
-          .filter(r => r.employee_id !== employee.id)
-          .map(r => String(r.tag).toUpperCase()),
-      ),
-    [registry, employee.id],
-  );
+  // Shared reserved set: current tags + the permanent registry, excluding this
+  // member's own code so they can keep it.
+  const taken = useReservedStaffCodes(employee.id);
 
   const status = team?.find(t => t.user_id === employee.user_id);
   const formatCheck = validateStaffCodeInput(draft);

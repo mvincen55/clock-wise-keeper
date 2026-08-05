@@ -81,6 +81,21 @@ export function attributionLabel(action: string, code: string | null | undefined
 }
 
 /**
+ * Normalizes a collection of codes into an uppercased, deduped reserved set.
+ * Callers feed BOTH the current `employees.tag` values AND the permanent
+ * `employee_tags` registry so a code retired to a former employee is never
+ * suggested for or assigned to someone else. Case differences never bypass it.
+ */
+export function buildReservedSet(codes: Iterable<string | null | undefined>): Set<string> {
+  const set = new Set<string>();
+  for (const c of codes) {
+    const n = normalizeStaffCode(c);
+    if (n) set.add(n);
+  }
+  return set;
+}
+
+/**
  * A suggested 3-4 char code from a display name, avoiding any codes already
  * `taken` (uppercased). This is only ever a suggestion — a manager confirms or
  * edits it before it is saved; the system never persists a generated code on

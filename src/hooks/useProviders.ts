@@ -9,6 +9,7 @@ import {
   type Provider,
   type ProviderType,
 } from '@/lib/providers';
+import type { TablesUpdate } from '@/integrations/supabase/types';
 
 function mapRow(r: {
   id: string;
@@ -101,12 +102,14 @@ export function useUpdateProvider() {
       id: string;
       displayName?: string;
       providerType?: ProviderType;
+      employeeId?: string | null;
       active?: boolean;
       sortOrder?: number;
     }) => {
-      const patch: Record<string, unknown> = {};
+      const patch: TablesUpdate<'org_providers'> = {};
       if (input.displayName !== undefined) patch.display_name = input.displayName.trim();
       if (input.providerType !== undefined) patch.provider_type = input.providerType;
+      if (input.employeeId !== undefined) patch.employee_id = input.employeeId;
       if (input.active !== undefined) patch.active = input.active;
       if (input.sortOrder !== undefined) patch.sort_order = input.sortOrder;
       const { error } = await supabase.from('org_providers').update(patch).eq('id', input.id);

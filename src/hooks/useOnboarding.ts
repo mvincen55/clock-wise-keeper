@@ -225,7 +225,7 @@ export function suggestTag(fullName: string): string {
 }
 
 /** First free 3-4 char variant of a suggestion (MEG, MEG2, MEG3…). */
-export function freeTag(base: string, taken: Set<string>): string {
+export function freeTag(base: string, taken: ReadonlySet<string>): string {
   const seed = base.toUpperCase().replace(/[^A-Z0-9]/g, '');
   return suggestStaffCode(seed || 'XXX', taken);
 }
