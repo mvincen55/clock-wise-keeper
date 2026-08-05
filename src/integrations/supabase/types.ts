@@ -4807,13 +4807,16 @@ export type Database = {
           email: string
           expires_at: string
           id: string
+          initial_pto_hours: number | null
           invited_by: string | null
           invited_name: string | null
           operational_role: string | null
           org_id: string
           role: Database["public"]["Enums"]["app_org_role"]
           secondary_roles: string[]
+          start_date: string | null
           token: string
+          weekly_schedule: Json
         }
         Insert: {
           accepted_at?: string | null
@@ -4821,13 +4824,16 @@ export type Database = {
           email: string
           expires_at?: string
           id?: string
+          initial_pto_hours?: number | null
           invited_by?: string | null
           invited_name?: string | null
           operational_role?: string | null
           org_id: string
           role?: Database["public"]["Enums"]["app_org_role"]
           secondary_roles?: string[]
+          start_date?: string | null
           token?: string
+          weekly_schedule?: Json
         }
         Update: {
           accepted_at?: string | null
@@ -4835,13 +4841,16 @@ export type Database = {
           email?: string
           expires_at?: string
           id?: string
+          initial_pto_hours?: number | null
           invited_by?: string | null
           invited_name?: string | null
           operational_role?: string | null
           org_id?: string
           role?: Database["public"]["Enums"]["app_org_role"]
           secondary_roles?: string[]
+          start_date?: string | null
           token?: string
+          weekly_schedule?: Json
         }
         Relationships: [
           {
