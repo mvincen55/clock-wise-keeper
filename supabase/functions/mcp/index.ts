@@ -8,8 +8,8 @@ import { auth, defineMcp } from "npm:@lovable.dev/mcp-js@0.24.0";
 // src/lib/mcp/tools/whoami.ts
 import { defineTool } from "npm:@lovable.dev/mcp-js@0.24.0";
 import { createClient } from "npm:@supabase/supabase-js@^2.96.0";
-function supabaseForUser(ctx: { getToken(): string | null | undefined }) {
-  return createClient(process.env.SUPABASE_URL ?? "", process.env.SUPABASE_PUBLISHABLE_KEY ?? "", {
+function supabaseForUser(ctx) {
+  return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY, {
     global: { headers: { Authorization: `Bearer ${ctx.getToken()}` } },
     auth: { persistSession: false, autoRefreshToken: false }
   });
@@ -55,8 +55,8 @@ var whoami_default = defineTool({
 import { defineTool as defineTool2 } from "npm:@lovable.dev/mcp-js@0.24.0";
 import { createClient as createClient2 } from "npm:@supabase/supabase-js@^2.96.0";
 import { z } from "npm:zod@^3.25.76";
-function supabaseForUser2(ctx: { getToken(): string | null | undefined }) {
-  return createClient2(process.env.SUPABASE_URL ?? "", process.env.SUPABASE_PUBLISHABLE_KEY ?? "", {
+function supabaseForUser2(ctx) {
+  return createClient2(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY, {
     global: { headers: { Authorization: `Bearer ${ctx.getToken()}` } },
     auth: { persistSession: false, autoRefreshToken: false }
   });
@@ -102,8 +102,8 @@ var list_time_entries_default = defineTool2({
 import { defineTool as defineTool3 } from "npm:@lovable.dev/mcp-js@0.24.0";
 import { createClient as createClient3 } from "npm:@supabase/supabase-js@^2.96.0";
 import { z as z2 } from "npm:zod@^3.25.76";
-function supabaseForUser3(ctx: { getToken(): string | null | undefined }) {
-  return createClient3(process.env.SUPABASE_URL ?? "", process.env.SUPABASE_PUBLISHABLE_KEY ?? "", {
+function supabaseForUser3(ctx) {
+  return createClient3(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY, {
     global: { headers: { Authorization: `Bearer ${ctx.getToken()}` } },
     auth: { persistSession: false, autoRefreshToken: false }
   });
