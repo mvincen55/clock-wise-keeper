@@ -4862,6 +4862,50 @@ export type Database = {
           },
         ]
       }
+      org_providers: {
+        Row: {
+          active: boolean
+          created_at: string
+          display_name: string
+          employee_id: string | null
+          id: string
+          org_id: string
+          provider_type: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          display_name: string
+          employee_id?: string | null
+          id?: string
+          org_id: string
+          provider_type?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          display_name?: string
+          employee_id?: string | null
+          id?: string
+          org_id?: string
+          provider_type?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_providers_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_members: {
         Row: {
           created_at: string
