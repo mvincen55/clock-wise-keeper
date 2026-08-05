@@ -264,7 +264,7 @@ function BasicsStep({ onDone }: { onDone: () => void }) {
       return;
     }
     if (!tagFree) {
-      toast.error('Pick a free 2–4 character tag.');
+      toast.error('Pick a free 3–4 character staff code.');
       return;
     }
     try {
@@ -324,16 +324,16 @@ function BasicsStep({ onDone }: { onDone: () => void }) {
               setTouchedTag(true);
               setTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4));
             }}
-            placeholder="MV"
+            placeholder="MEG"
             className="w-24 font-mono tracking-widest"
           />
           <p className="text-xs text-muted-foreground">
-            2–4 characters. Used on reports, print sheets, and exports instead of your full name —
-            everywhere else you're just {preferred || 'you'}. A tag is never reused, so it stays
+            3–4 characters. Used on reports, print sheets, and exports instead of your full name —
+            everywhere else you're just {preferred || 'you'}. A code is never reused, so it stays
             yours.
           </p>
           {tag && !tagValid && (
-            <p className="text-xs text-destructive">Tags are 2–4 letters or numbers.</p>
+            <p className="text-xs text-destructive">Staff codes are 3–4 letters or numbers.</p>
           )}
           {tagValid && !tagFree && (
             <p className="text-xs text-destructive">That tag is already taken in this office.</p>

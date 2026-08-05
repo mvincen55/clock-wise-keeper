@@ -10,6 +10,7 @@ import {
   resolveStaffCode,
   staffCodeLabel,
   attributionLabel,
+  suggestStaffCode,
 } from '@/lib/staff-code';
 
 describe('staff code patterns', () => {
@@ -70,6 +71,30 @@ describe('resolveStaffCode', () => {
     expect(resolveStaffCode(map, 'nope')).toEqual({ code: null });
     expect(resolveStaffCode(map, null)).toEqual({ code: null });
     expect(resolveStaffCode(map, undefined)).toEqual({ code: null });
+  });
+});
+
+describe('suggestStaffCode', () => {
+  it('takes the first three alphanumerics of the name, uppercased', () => {
+    expect(suggestStaffCode('Megan Vincent')).toBe('MEG');
+    expect(suggestStaffCode('soleil baptiste')).toBe('SOL');
+    expect(suggestStaffCode("O'Brien")).toBe('OBR');
+  });
+  it('pads short names to 3 characters', () => {
+    expect(suggestStaffCode('Jo')).toBe('JOX');
+    expect(suggestStaffCode('')).toBe('XXX');
+  });
+  it('always returns a valid 3-4 char code, even when avoiding collisions', () => {
+    const taken = new Set(['MEG']);
+    const s = suggestStaffCode('Megan Vincent', taken);
+    expect(s).toBe('MEG2');
+    expect(STAFF_CODE_PATTERN.test(s)).toBe(true);
+  });
+  it('keeps trying until it finds a free code', () => {
+    const taken = new Set(['MEG', 'MEG2', 'MEG3']);
+    const s = suggestStaffCode('Megan Vincent', taken);
+    expect(taken.has(s)).toBe(false);
+    expect(STAFF_CODE_PATTERN.test(s)).toBe(true);
   });
 });
 

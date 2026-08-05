@@ -79,3 +79,25 @@ export function staffCodeLabel(code: string | null | undefined): string {
 export function attributionLabel(action: string, code: string | null | undefined): string {
   return `${action} by ${staffCodeLabel(code)}`;
 }
+
+/**
+ * A suggested 3-4 char code from a display name, avoiding any codes already
+ * `taken` (uppercased). This is only ever a suggestion — a manager confirms or
+ * edits it before it is saved; the system never persists a generated code on
+ * its own.
+ */
+export function suggestStaffCode(
+  name: string | null | undefined,
+  taken: ReadonlySet<string> = new Set(),
+): string {
+  const alnum = (name ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  let base = alnum.slice(0, 3);
+  while (base.length < 3) base += 'X';
+  if (!taken.has(base)) return base;
+  for (let i = 2; i < 100; i++) {
+    const suffix = String(i);
+    const candidate = base.slice(0, 4 - suffix.length) + suffix; // stays 3-4 chars
+    if (!taken.has(candidate)) return candidate;
+  }
+  return base;
+}
