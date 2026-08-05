@@ -21,6 +21,141 @@ function canonicalEmail(email: unknown): string {
   return normalized;
 }
 
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+// Today's date (UTC) as a fallback anchor when the inviter left start date blank.
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function isValidStartDate(input: unknown): input is string {
+  return typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input);
+}
+
+// The invite stores an already-sanitized array of enabled weekday rows, but be
+// defensive: keep only well-formed, enabled entries with valid times.
+function sanitizeInviteSchedule(
+  input: unknown,
+): Array<{ weekday: number; start_time: string; end_time: string }> {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<number>();
+  const rows: Array<{ weekday: number; start_time: string; end_time: string }> = [];
+  for (const raw of input) {
+    if (!raw || typeof raw !== "object") continue;
+    const day = Number((raw as { weekday?: unknown }).weekday);
+    if (!Number.isInteger(day) || day < 0 || day > 6 || seen.has(day)) continue;
+    if (!(raw as { enabled?: unknown }).enabled) continue;
+    const start = (raw as { start_time?: unknown }).start_time;
+    const end = (raw as { end_time?: unknown }).end_time;
+    if (typeof start !== "string" || !TIME_RE.test(start)) continue;
+    if (typeof end !== "string" || !TIME_RE.test(end)) continue;
+    seen.add(day);
+    rows.push({ weekday: day, start_time: start, end_time: end });
+  }
+  return rows;
+}
+
+// Seeds hire date, PTO settings/opening balance, and a starting schedule from
+// the invite. Best-effort: a hiccup here must never block someone from joining,
+// so every step is wrapped and only logged on failure.
+async function applyOnboardingDetails(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  invite: Record<string, unknown>,
+  employeeId: string,
+  userId: string,
+): Promise<void> {
+  const startDate = isValidStartDate(invite.start_date) ? (invite.start_date as string) : null;
+  const anchorDate = startDate ?? todayIso();
+  const orgId = invite.org_id as string;
+  const timezone = "America/New_York";
+
+  // 1. Hire date on the employee record.
+  if (startDate) {
+    const { error } = await supabaseAdmin
+      .from("employees")
+      .update({ hire_date: startDate })
+      .eq("id", employeeId);
+    if (error) console.warn("accept-invite: could not set hire_date", error.message);
+  }
+
+  // 2. PTO settings hire date (drives accrual tier). Only when we know a date.
+  if (startDate) {
+    const { error } = await supabaseAdmin
+      .from("pto_settings")
+      .upsert(
+        { user_id: userId, org_id: orgId, employee_id: employeeId, hire_date: startDate },
+        { onConflict: "user_id" },
+      );
+    if (error) console.warn("accept-invite: could not seed pto_settings", error.message);
+  }
+
+  // 3. Opening PTO balance as a snapshot anchor the engine recalculates from.
+  const ptoHours =
+    typeof invite.initial_pto_hours === "number" && Number.isFinite(invite.initial_pto_hours)
+      ? invite.initial_pto_hours
+      : null;
+  if (ptoHours !== null) {
+    const { error } = await supabaseAdmin
+      .from("pto_snapshots")
+      .upsert(
+        {
+          user_id: userId,
+          org_id: orgId,
+          employee_id: employeeId,
+          snapshot_date: anchorDate,
+          snapshot_balance_hours: ptoHours,
+        },
+        { onConflict: "user_id,snapshot_date" },
+      );
+    if (error) console.warn("accept-invite: could not seed pto_snapshot", error.message);
+  }
+
+  // 4. Starting weekly schedule → version + weekdays + assignment. DB triggers
+  //    recompute attendance from these.
+  const scheduleDays = sanitizeInviteSchedule(invite.weekly_schedule);
+  if (scheduleDays.length > 0) {
+    const { data: version, error: versionError } = await supabaseAdmin
+      .from("schedule_versions")
+      .insert({
+        org_id: orgId,
+        employee_id: employeeId,
+        user_id: userId,
+        name: "Starting schedule",
+        effective_start_date: anchorDate,
+        timezone,
+        week_start_day: 1,
+      })
+      .select("id")
+      .single();
+
+    if (versionError || !version) {
+      console.warn("accept-invite: could not create schedule version", versionError?.message);
+    } else {
+      const weekdayRows = scheduleDays.map((d) => ({
+        schedule_version_id: version.id,
+        weekday: d.weekday,
+        enabled: true,
+        start_time: d.start_time,
+        end_time: d.end_time,
+      }));
+      const { error: weekdaysError } = await supabaseAdmin
+        .from("schedule_weekdays")
+        .insert(weekdayRows);
+      if (weekdaysError) console.warn("accept-invite: could not add schedule weekdays", weekdaysError.message);
+
+      const { error: assignError } = await supabaseAdmin
+        .from("schedule_assignments")
+        .insert({
+          org_id: orgId,
+          employee_id: employeeId,
+          schedule_version_id: version.id,
+          effective_start: anchorDate,
+        });
+      if (assignError) console.warn("accept-invite: could not assign schedule", assignError.message);
+    }
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -237,6 +372,19 @@ Deno.serve(async (req) => {
         .upsert(roleRows, { onConflict: "org_id,employee_id,operational_role", ignoreDuplicates: true });
       if (rolesError) {
         console.warn("accept-invite: could not apply operational roles", rolesError.message);
+      }
+    }
+
+    // Seed hire date, PTO opening balance, and starting schedule from the invite
+    // so tracking is correct from day one. Best-effort — never blocks joining.
+    if (employeeId) {
+      try {
+        await applyOnboardingDetails(supabaseAdmin, invite, employeeId, user.id);
+      } catch (detailsError) {
+        console.warn(
+          "accept-invite: could not apply onboarding details",
+          detailsError instanceof Error ? detailsError.message : String(detailsError),
+        );
       }
     }
 

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -11,16 +12,28 @@ import { Mail, Loader2, Copy, CheckCircle2, AlertTriangle, Check } from 'lucide-
 import { OPERATIONAL_ROLES, ROLE_LABELS } from '@/hooks/useOperationalRoles';
 import { MEMBER_ROLE_LABELS } from '@/lib/roles';
 import type { OperationalRole } from '@/lib/schedule-reader/types';
+import WeeklyScheduleEditor from '@/components/WeeklyScheduleEditor';
+import {
+  defaultWeeklySchedule,
+  parseInitialPtoHours,
+  parseStartDate,
+  scheduleHasAnyEnabled,
+  type WeekdaySchedule,
+} from '@/lib/invite-details';
 
 export default function InviteEmployeeModal() {
   const { data: ctx } = useOrgContext();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'employee' | 'manager'>('employee');
   const [operationalRole, setOperationalRole] = useState<OperationalRole | ''>('');
   const [secondaryRoles, setSecondaryRoles] = useState<OperationalRole[]>([]);
+  const [startDate, setStartDate] = useState('');
+  const [ptoHours, setPtoHours] = useState('');
+  const [schedule, setSchedule] = useState<WeekdaySchedule[]>(() => defaultWeeklySchedule());
   const [submitting, setSubmitting] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
   const [emailed, setEmailed] = useState(false);
@@ -39,6 +52,10 @@ export default function InviteEmployeeModal() {
       toast({ title: 'Pick what they do', description: 'Their operational role sets up scheduling and staffing correctly from day one.', variant: 'destructive' });
       return;
     }
+    if (startDate && !parseStartDate(startDate)) {
+      toast({ title: 'Check the start date', description: 'Use a valid calendar date, or leave it blank.', variant: 'destructive' });
+      return;
+    }
     setSubmitting(true);
     try {
       const { data, error } = await supabase.functions.invoke('send-org-invite', {
@@ -48,6 +65,9 @@ export default function InviteEmployeeModal() {
           name: name.trim(),
           operationalRole,
           secondaryRoles: secondaryRoles.filter(r => r !== operationalRole),
+          startDate: parseStartDate(startDate) ?? undefined,
+          initialPtoHours: parseInitialPtoHours(ptoHours) ?? undefined,
+          schedule: scheduleHasAnyEnabled(schedule) ? schedule : [],
           origin: window.location.origin,
         },
       });
@@ -58,6 +78,7 @@ export default function InviteEmployeeModal() {
       setInviteLink(data.link);
       setEmailed(!!data.emailed);
       setWarning(data.warning || '');
+      queryClient.invalidateQueries({ queryKey: ['pending-invites', ctx.org_id] });
       toast(
         data.emailed
           ? { title: 'Invite sent', description: `An invite email is on its way to ${email.toLowerCase().trim()}.` }
@@ -84,6 +105,9 @@ export default function InviteEmployeeModal() {
     setRole('employee');
     setOperationalRole('');
     setSecondaryRoles([]);
+    setStartDate('');
+    setPtoHours('');
+    setSchedule(defaultWeeklySchedule());
     setInviteLink('');
     setEmailed(false);
     setWarning('');
@@ -182,6 +206,42 @@ export default function InviteEmployeeModal() {
                 </div>
               </div>
             )}
+
+            <div className="rounded-lg border border-dashed p-3 space-y-4">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Onboarding details (optional)
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Start date</Label>
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={e => setStartDate(e.target.value)}
+                    className="h-9"
+                  />
+                  <p className="text-xs text-muted-foreground">Sets their hire date &amp; PTO accrual start.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Current PTO (hours)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={ptoHours}
+                    onChange={e => setPtoHours(e.target.value)}
+                    placeholder="e.g. 40"
+                    className="h-9"
+                  />
+                  <p className="text-xs text-muted-foreground">Their balance today, carried in as the opening number.</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Weekly schedule</Label>
+                <WeeklyScheduleEditor value={schedule} onChange={setSchedule} />
+              </div>
+            </div>
+
             <Button
               onClick={handleInvite}
               disabled={submitting || !email.trim() || !name.trim() || !operationalRole}

@@ -34,6 +34,57 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// Mirrors src/lib/invite-details.ts (edge functions cannot import from src/).
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function parseStartDate(input: unknown): string | null {
+  if (typeof input !== "string") return null;
+  const trimmed = input.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+  const [y, m, d] = trimmed.split("-").map(Number);
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+  return trimmed;
+}
+
+function parseInitialPtoHours(input: unknown): number | null {
+  if (input === null || input === undefined) return null;
+  if (typeof input === "string" && input.trim() === "") return null;
+  const n = typeof input === "number" ? input : Number(input);
+  if (!Number.isFinite(n)) return null;
+  const clamped = Math.max(-9999, Math.min(99999, n));
+  return Math.round(clamped * 100) / 100;
+}
+
+function coerceTime(value: unknown, fallback: string): string {
+  return typeof value === "string" && TIME_RE.test(value) ? value : fallback;
+}
+
+// Normalizes into exactly one row per weekday (0-6); only enabled days are kept
+// for storage so accept-invite materializes a clean schedule.
+function sanitizeWeeklySchedule(input: unknown): Array<{ weekday: number; enabled: boolean; start_time: string; end_time: string }> {
+  const byDay = new Map<number, Record<string, unknown>>();
+  if (Array.isArray(input)) {
+    for (const raw of input) {
+      if (!raw || typeof raw !== "object") continue;
+      const day = Number((raw as { weekday?: unknown }).weekday);
+      if (!Number.isInteger(day) || day < 0 || day > 6) continue;
+      byDay.set(day, raw as Record<string, unknown>);
+    }
+  }
+  const full = [0, 1, 2, 3, 4, 5, 6].map((weekday) => {
+    const row = byDay.get(weekday);
+    return {
+      weekday,
+      enabled: row ? Boolean(row.enabled) : false,
+      start_time: coerceTime(row?.start_time, "08:00"),
+      end_time: coerceTime(row?.end_time, "17:00"),
+    };
+  });
+  return full.filter((d) => d.enabled);
+}
+
 function inviteEmailHtml(orgName: string, role: string, link: string): string {
   const org = escapeHtml(orgName);
   return `<!doctype html>
@@ -101,6 +152,11 @@ Deno.serve(async (req) => {
     const secondaryRoles: string[] = Array.isArray(body?.secondaryRoles)
       ? body.secondaryRoles.filter((r: unknown) => typeof r === "string")
       : [];
+    // Onboarding details the inviter fills in up front so PTO/attendance
+    // tracking is correct from the moment the new hire joins.
+    const startDate = parseStartDate(body?.startDate);
+    const initialPtoHours = parseInitialPtoHours(body?.initialPtoHours);
+    const weeklySchedule = sanitizeWeeklySchedule(body?.schedule);
 
     const OPERATIONAL_ROLES = [
       "dentist", "hygienist", "dental_assistant", "front_desk",
@@ -200,6 +256,9 @@ Deno.serve(async (req) => {
       operational_role: operationalRole,
       secondary_roles: cleanSecondary,
       invited_by: user.id,
+      start_date: startDate,
+      initial_pto_hours: initialPtoHours,
+      weekly_schedule: weeklySchedule,
     };
 
     let token: string;
