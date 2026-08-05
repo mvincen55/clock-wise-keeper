@@ -4944,6 +4944,7 @@ export type Database = {
       org_practice_settings: {
         Row: {
           collections_visibility: string
+          confirmation_lead_days: number
           created_at: string
           id: string
           mobile_capture_enabled: boolean
@@ -4957,6 +4958,7 @@ export type Database = {
         }
         Insert: {
           collections_visibility?: string
+          confirmation_lead_days?: number
           created_at?: string
           id?: string
           mobile_capture_enabled?: boolean
@@ -4970,6 +4972,7 @@ export type Database = {
         }
         Update: {
           collections_visibility?: string
+          confirmation_lead_days?: number
           created_at?: string
           id?: string
           mobile_capture_enabled?: boolean
@@ -5445,6 +5448,7 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
+          initials: string
           updated_at: string
         }
         Insert: {
@@ -5452,6 +5456,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id: string
+          initials?: string
           updated_at?: string
         }
         Update: {
@@ -5459,6 +5464,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          initials?: string
           updated_at?: string
         }
         Relationships: []

@@ -128,6 +128,142 @@ CREATE INDEX IF NOT EXISTS messages_content_trgm_idx ON public.messages USING gi
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.conversations TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.conversation_participants TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.messages TO authenticated;
+
+-- Replay repair: the messaging feature's helper functions reached production
+-- through platform edits that never became migration files, yet the policies
+-- and triggers below depend on them. Definitions match production
+-- (pg_get_functiondef). Content-only edit to an applied migration — the live
+-- ledger never re-runs it.
+CREATE OR REPLACE FUNCTION public.my_team()
+RETURNS text
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+  SELECT e.team FROM public.employees e WHERE e.user_id = auth.uid() LIMIT 1;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.is_conv_participant(_conv uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+  SELECT EXISTS (
+    SELECT 1 FROM public.conversation_participants p
+    WHERE p.conversation_id = _conv AND p.user_id = auth.uid()
+  );
+$function$;
+
+CREATE OR REPLACE FUNCTION public.conv_type(_conv uuid)
+RETURNS text
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+  SELECT c.type FROM public.conversations c WHERE c.id = _conv;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.conv_created_by(_conv uuid)
+RETURNS uuid
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+  SELECT c.created_by FROM public.conversations c WHERE c.id = _conv;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.can_read_conv(_conv uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+  SELECT EXISTS (
+    SELECT 1 FROM public.conversations c
+    WHERE c.id = _conv
+      AND (
+        public.is_conv_participant(c.id)
+        OR (
+          c.type = 'announcement'
+          AND public.is_org_member(c.org_id)
+          AND (c.audience = 'all' OR c.audience IS NULL OR c.audience = public.my_team())
+        )
+      )
+  );
+$function$;
+
+CREATE OR REPLACE FUNCTION public.guard_message_update()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF current_user <> 'authenticated' THEN RETURN NEW; END IF;
+  IF NEW.org_id IS DISTINCT FROM OLD.org_id
+     OR NEW.conversation_id IS DISTINCT FROM OLD.conversation_id
+     OR NEW.sender_id IS DISTINCT FROM OLD.sender_id
+     OR NEW.sender_kind IS DISTINCT FROM OLD.sender_kind
+     OR NEW.content IS DISTINCT FROM OLD.content
+     OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+    RAISE EXCEPTION 'Messages cannot be edited';
+  END IF;
+  IF OLD.reported_at IS NOT NULL AND NEW.reported_at IS DISTINCT FROM OLD.reported_at THEN
+    RAISE EXCEPTION 'A reported message cannot be un-reported';
+  END IF;
+  IF NEW.reported_at IS NOT NULL THEN
+    NEW.reported_by := auth.uid();
+    NEW.reported_at := now();
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.notify_new_message()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_conv public.conversations;
+  v_name text;
+  v_title text;
+  v_preview text;
+BEGIN
+  SELECT * INTO v_conv FROM public.conversations WHERE id = NEW.conversation_id;
+  UPDATE public.conversations SET updated_at = now() WHERE id = NEW.conversation_id;
+
+  v_preview := left(regexp_replace(NEW.content, '\s+', ' ', 'g'), 140);
+
+  IF NEW.sender_kind = 'pathfinder' THEN
+    v_name := 'Office AI';
+  ELSE
+    SELECT e.display_name INTO v_name FROM public.employees e WHERE e.user_id = NEW.sender_id LIMIT 1;
+    v_name := COALESCE(v_name, 'A teammate');
+  END IF;
+
+  IF v_conv.type = 'announcement' THEN
+    v_title := 'Announcement: ' || COALESCE(v_conv.title, 'Team update');
+    INSERT INTO public.notifications (org_id, recipient_user_id, actor_user_id, notification_type, title, message, related_table, related_id)
+    SELECT v_conv.org_id, m.user_id, NEW.sender_id, 'message', v_title, v_preview, 'conversations', v_conv.id
+    FROM public.org_members m
+    LEFT JOIN public.employees e ON e.user_id = m.user_id AND e.org_id = m.org_id
+    WHERE m.org_id = v_conv.org_id AND m.status = 'active'
+      AND m.user_id IS DISTINCT FROM NEW.sender_id
+      AND (v_conv.audience = 'all' OR v_conv.audience IS NULL OR e.team = v_conv.audience);
+  ELSE
+    v_title := CASE WHEN v_conv.type = 'ai' THEN 'Office AI' ELSE 'New message from ' || v_name END;
+    INSERT INTO public.notifications (org_id, recipient_user_id, actor_user_id, notification_type, title, message, related_table, related_id)
+    SELECT v_conv.org_id, p.user_id, NEW.sender_id, 'message', v_title, v_preview, 'conversations', v_conv.id
+    FROM public.conversation_participants p
+    WHERE p.conversation_id = v_conv.id AND p.user_id IS DISTINCT FROM NEW.sender_id;
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
+
 GRANT ALL ON public.conversations TO service_role;
 GRANT ALL ON public.conversation_participants TO service_role;
 GRANT ALL ON public.messages TO service_role;
@@ -313,3 +449,84 @@ CREATE TRIGGER update_user_notes_updated_at BEFORE UPDATE ON public.user_notes
 
 -- -------------------------------------------------------------- employees.team
 ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS team text;
+
+-- Replay repair: message_attachments (20260730172500) predates the messaging
+-- tables above in file order, so that migration now no-ops on a clean replay
+-- and the same objects are (re)created here, idempotently, once their
+-- prerequisites exist. Identical end state to production.
+CREATE TABLE IF NOT EXISTS public.message_attachments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id uuid NOT NULL,
+  conversation_id uuid NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
+  message_id uuid NOT NULL REFERENCES public.messages(id) ON DELETE CASCADE,
+  uploaded_by uuid NOT NULL DEFAULT auth.uid(),
+  storage_path text NOT NULL UNIQUE,
+  file_name text NOT NULL,
+  mime_type text NOT NULL,
+  size_bytes integer NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT message_attachments_mime_allowed CHECK (
+    mime_type IN ('image/png','image/jpeg','image/webp','image/gif','application/pdf')
+  ),
+  CONSTRAINT message_attachments_size_limit CHECK (size_bytes > 0 AND size_bytes <= 20971520)
+);
+
+GRANT SELECT, INSERT, DELETE ON public.message_attachments TO authenticated;
+GRANT ALL ON public.message_attachments TO service_role;
+
+ALTER TABLE public.message_attachments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Participants read conversation attachments" ON public.message_attachments;
+CREATE POLICY "Participants read conversation attachments"
+ON public.message_attachments FOR SELECT TO authenticated
+USING (public.is_conv_participant(conversation_id));
+
+DROP POLICY IF EXISTS "Participants add their own attachments" ON public.message_attachments;
+CREATE POLICY "Participants add their own attachments"
+ON public.message_attachments FOR INSERT TO authenticated
+WITH CHECK (
+  uploaded_by = auth.uid()
+  AND public.is_conv_participant(conversation_id)
+  AND storage_path = org_id::text || '/' || conversation_id::text || '/' || split_part(storage_path, '/', 3)
+);
+
+DROP POLICY IF EXISTS "Uploader deletes own attachment" ON public.message_attachments;
+CREATE POLICY "Uploader deletes own attachment"
+ON public.message_attachments FOR DELETE TO authenticated
+USING (uploaded_by = auth.uid() AND public.is_conv_participant(conversation_id));
+
+CREATE INDEX IF NOT EXISTS idx_message_attachments_message ON public.message_attachments(message_id);
+CREATE INDEX IF NOT EXISTS idx_message_attachments_conversation ON public.message_attachments(conversation_id);
+
+DROP TRIGGER IF EXISTS update_message_attachments_updated_at ON public.message_attachments;
+CREATE TRIGGER update_message_attachments_updated_at
+BEFORE UPDATE ON public.message_attachments
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+DROP POLICY IF EXISTS "Participants read message files" ON storage.objects;
+CREATE POLICY "Participants read message files"
+ON storage.objects FOR SELECT TO authenticated
+USING (
+  bucket_id = 'message-attachments'
+  AND public.is_conv_participant(((storage.foldername(name))[2])::uuid)
+);
+
+DROP POLICY IF EXISTS "Participants upload message files" ON storage.objects;
+CREATE POLICY "Participants upload message files"
+ON storage.objects FOR INSERT TO authenticated
+WITH CHECK (
+  bucket_id = 'message-attachments'
+  AND owner = auth.uid()
+  AND array_length(storage.foldername(name), 1) = 2
+  AND public.is_conv_participant(((storage.foldername(name))[2])::uuid)
+);
+
+DROP POLICY IF EXISTS "Uploader deletes message files" ON storage.objects;
+CREATE POLICY "Uploader deletes message files"
+ON storage.objects FOR DELETE TO authenticated
+USING (
+  bucket_id = 'message-attachments'
+  AND owner = auth.uid()
+  AND public.is_conv_participant(((storage.foldername(name))[2])::uuid)
+);

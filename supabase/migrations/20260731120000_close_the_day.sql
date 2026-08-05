@@ -67,6 +67,10 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 -- After the business day, only owners/managers may edit — and the audit
 -- trigger below records what changed.
 DROP POLICY IF EXISTS "Members update deposit_logs" ON public.deposit_logs;
+-- Replay repair: 20260731035439 (applied earlier in filename order) already
+-- creates this policy under the same name; drop it first so the replay's
+-- second create succeeds. Applied ledgers never re-run this file.
+DROP POLICY IF EXISTS "Members update deposit_logs same day, admins later" ON public.deposit_logs;
 CREATE POLICY "Members update deposit_logs same day, admins later"
   ON public.deposit_logs FOR UPDATE
   TO authenticated
@@ -316,7 +320,7 @@ CREATE POLICY "Admins manage staffing rules"
   WITH CHECK (public.is_org_admin(org_id));
 
 DO $$ BEGIN
-  CREATE TRIGGER trg_schedule_staffing_rules_updated_at
+CREATE TRIGGER trg_schedule_staffing_rules_updated_at
     BEFORE UPDATE ON public.schedule_staffing_rules
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -363,7 +367,7 @@ CREATE POLICY "Admins manage layout profiles"
   WITH CHECK (public.is_org_admin(org_id));
 
 DO $$ BEGIN
-  CREATE TRIGGER trg_schedule_layout_profiles_updated_at
+CREATE TRIGGER trg_schedule_layout_profiles_updated_at
     BEFORE UPDATE ON public.schedule_layout_profiles
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -514,7 +518,7 @@ CREATE POLICY "Admins delete provider metrics"
   USING (public.is_org_admin(org_id));
 
 DO $$ BEGIN
-  CREATE TRIGGER trg_provider_day_metrics_updated_at
+CREATE TRIGGER trg_provider_day_metrics_updated_at
     BEFORE UPDATE ON public.provider_day_metrics
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;

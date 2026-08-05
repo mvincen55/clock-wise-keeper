@@ -4,7 +4,7 @@ import BaLetterSheet, { INLINE_APPT_ROWS_MAX } from '@/components/broken-appts/B
 import { DEFAULT_BA_SETTINGS, DEFAULT_BA_TEMPLATES } from '@/lib/broken-appts/defaults';
 import type { BaCanceledAppt, BaPatientFields } from '@/lib/broken-appts/types';
 
-// Renders all four shipped letters with test data and checks the Phase 3
+// Renders all five shipped letters with test data and checks the Phase 3
 // gates: merge fields resolve, the automatic-letter italic line and the
 // enclosure footer appear on every letter, bold markers become <strong>,
 // and a 12-row Rung 4 produces the attachment page instead of the inline
@@ -53,8 +53,8 @@ const APPT_ROWS = (n: number): BaCanceledAppt[] =>
     visitType: i % 2 ? 'Crown prep' : 'Prophy',
   }));
 
-describe('BaLetterSheet — the four shipped letters', () => {
-  it.each(['9101A', '9100A', '9106', '9107'])('%s resolves every merge field', code => {
+describe('BaLetterSheet — the five shipped letters', () => {
+  it.each(['9101A', '0002', '9100A', '9106', '9107'])('%s resolves every merge field', code => {
     const html = render(code, code === '9107' ? APPT_ROWS(3) : []);
     expect(html).not.toContain('{{');
     expect(html).toContain('Dear Ann,');
@@ -63,7 +63,7 @@ describe('BaLetterSheet — the four shipped letters', () => {
     expect(html).toContain('(555) 010-0142'); // office_phone fallback from branding
   });
 
-  it.each(['9101A', '9100A', '9106', '9107'])(
+  it.each(['9101A', '0002', '9100A', '9106', '9107'])(
     '%s carries the automatic-letter line and the enclosure footer',
     code => {
       const html = render(code, code === '9107' ? APPT_ROWS(3) : []);
@@ -76,7 +76,7 @@ describe('BaLetterSheet — the four shipped letters', () => {
     }
   );
 
-  it.each(['9101A', '9100A', '9106', '9107'])('%s renders bold runs, not ** markers', code => {
+  it.each(['9101A', '0002', '9100A', '9106', '9107'])('%s renders bold runs, not ** markers', code => {
     const html = render(code, code === '9107' ? APPT_ROWS(3) : []);
     expect(html).toContain('<strong>');
     expect(html).not.toContain('**');

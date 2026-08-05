@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import BrokenAppointments from '@/pages/BrokenAppointments';
 
@@ -44,6 +44,20 @@ vi.mock('@/hooks/useBrokenApptTemplates', async () => {
   };
 });
 
+// The Rung 4 provider dropdown pulls from the FOF doctor list; read lazily
+// so individual tests can swap the list (e.g. empty → free-text fallback).
+let fofDoctorNames = ['Dr. Scott', 'Dr. Taylor'];
+vi.mock('@/hooks/useFofTemplates', () => ({
+  useFofSettings: () => ({ data: { doctorNames: fofDoctorNames } }),
+}));
+
+// Signed-in profile for the auto-initials derivation; individual tests
+// swap it (profile override, missing name).
+let myProfile = { fullName: 'Ann Smith', email: 'ann@example.com', initials: '' };
+vi.mock('@/hooks/useMyProfile', () => ({
+  useMyProfile: () => ({ data: myProfile }),
+}));
+
 beforeAll(() => {
   // jsdom has no ResizeObserver (ScaledPrintPreview needs one).
   (globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
@@ -51,6 +65,10 @@ beforeAll(() => {
     unobserve() {}
     disconnect() {}
   };
+  // Radix Select needs these DOM APIs jsdom lacks.
+  Element.prototype.scrollIntoView ??= () => {};
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.releasePointerCapture ??= () => {};
 });
 
 const setValue = (label: string, value: string) =>
@@ -119,14 +137,33 @@ describe('Broken Appointments wizard', () => {
     clickContinue();
     fillCalculator({ date: '2026-08-10', time: '09:00' }, { date: '2026-08-09', time: '10:00' });
     clickContinue();
-    // History: flip VIP — the rung engine must land on 5.
+    // History: flip the 0005 toggle — the rung engine must land on 5.
     fireEvent.click(screen.getByRole('switch', { name: /VIP-only scheduling/i }));
     clickContinue();
     expect(screen.getByText(/HARD STOP — front desk does not handle/i)).toBeInTheDocument();
-    expect(screen.getByText(/Pending management decision/i)).toBeInTheDocument();
+    // Rung 5 ruling: no letter ever, and no pending-decision flag — the
+    // screen is OM instructions plus the holding reply only.
+    expect(screen.queryByText(/Pending management decision/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Letter 910/i)).not.toBeInTheDocument();
-    // The holding reply is the only reply offered.
     expect(screen.getByText('Holding reply (the only reply for Rung 5)')).toBeInTheDocument();
+    cleanup();
+  });
+
+  it('mode A no-show at Rung 5 offers the holding reply, never outreach', () => {
+    render(<BrokenAppointments />);
+    fireEvent.click(screen.getByRole('button', { name: /broken appointment/i }));
+    fireEvent.click(screen.getByLabelText(/No-show, or no retrievable record/i));
+    clickContinue();
+    fillCalculator({ date: '2026-08-10', time: '09:00' }, { date: '2026-08-09', time: '10:00' });
+    clickContinue();
+    fireEvent.click(screen.getByRole('switch', { name: /VIP-only scheduling/i }));
+    clickContinue();
+    expect(screen.getByText(/HARD STOP — front desk does not handle/i)).toBeInTheDocument();
+    setValue('Patient first name (for the holding reply)', 'Ann');
+    expect(screen.getByText('Holding reply (the only reply for Rung 5)')).toBeInTheDocument();
+    expect(screen.getByText(/Got your message, Ann/i)).toBeInTheDocument();
+    // The no-show outreach text must not appear at Rung 5.
+    expect(screen.queryByText(/missed you at your appointment/i)).not.toBeInTheDocument();
     cleanup();
   });
 
@@ -160,6 +197,48 @@ describe('Broken Appointments wizard', () => {
     cleanup();
   });
 
+  it('rung 4 provider choice is a dropdown fed by the FOF doctor list', async () => {
+    render(<BrokenAppointments />);
+    fireEvent.click(screen.getByRole('button', { name: /broken appointment/i }));
+    fireEvent.click(screen.getByLabelText(/No-show, or no retrievable record/i));
+    clickContinue();
+    fillCalculator({ date: '2026-08-10', time: '09:00' }, { date: '2026-08-09', time: '10:00' });
+    clickContinue();
+    // Two priors + today = 3 → Rung 4, which asks for the canceled rows.
+    setValue('Prior late cancellations', '2');
+    clickContinue();
+    // The provider cell is a dropdown now, not free text.
+    expect(screen.queryByPlaceholderText('Provider')).not.toBeInTheDocument();
+    const trigger = screen.getByRole('combobox', { name: 'Appointment 1 provider' });
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    const option = await screen.findByRole('option', { name: 'Dr. Scott' });
+    expect(screen.getByRole('option', { name: 'Dr. Taylor' })).toBeInTheDocument();
+    fireEvent.keyDown(option, { key: 'Enter' });
+    expect(trigger.textContent).toContain('Dr. Scott');
+    cleanup();
+  });
+
+  it('rung 4 provider falls back to free text when no FOF doctors are configured', () => {
+    fofDoctorNames = [];
+    try {
+      render(<BrokenAppointments />);
+      fireEvent.click(screen.getByRole('button', { name: /broken appointment/i }));
+      fireEvent.click(screen.getByLabelText(/No-show, or no retrievable record/i));
+      clickContinue();
+      fillCalculator({ date: '2026-08-10', time: '09:00' }, { date: '2026-08-09', time: '10:00' });
+      clickContinue();
+      setValue('Prior late cancellations', '2');
+      clickContinue();
+      expect(screen.getByPlaceholderText('Provider')).toBeInTheDocument();
+      expect(
+        screen.queryByRole('combobox', { name: 'Appointment 1 provider' })
+      ).not.toBeInTheDocument();
+    } finally {
+      fofDoctorNames = ['Dr. Scott', 'Dr. Taylor'];
+      cleanup();
+    }
+  });
+
   it('the copy button writes exactly the rendered text, dateline included', async () => {
     const written: string[] = [];
     Object.defineProperty(navigator, 'clipboard', {
@@ -187,6 +266,75 @@ describe('Broken Appointments wizard', () => {
     expect(written[0]).toBe(rendered);
     expect(written[0]).toContain('Rung 2 / No-show');
     expect(written[0].endsWith('- MV')).toBe(true);
+    cleanup();
+  });
+});
+
+describe('auto-initials', () => {
+  beforeEach(() => {
+    myProfile = { fullName: 'Ann Smith', email: 'ann@example.com', initials: '' };
+  });
+
+  // Mode A no-show with no priors → Rung 2, which renders all three
+  // stamped blocks (note, Pop-Up, ledger checklist).
+  const runToRung2Outputs = () => {
+    fireEvent.click(screen.getByRole('button', { name: /broken appointment/i }));
+    fireEvent.click(screen.getByLabelText(/No-show, or no retrievable record/i));
+    clickContinue();
+    fillCalculator({ date: '2026-08-10', time: '09:00' }, { date: '2026-08-09', time: '10:00' });
+    clickContinue();
+    clickContinue();
+    setValue('First name', 'Ann');
+    fireEvent.click(screen.getByRole('button', { name: /continue to outputs/i }));
+  };
+
+  it('derives the initials from a two-word name', () => {
+    render(<BrokenAppointments />);
+    expect(screen.getByLabelText(/your initials/i)).toHaveValue('AS');
+    cleanup();
+  });
+
+  it('an explicit profile value wins over derivation', () => {
+    myProfile = { ...myProfile, initials: 'ZZ' };
+    render(<BrokenAppointments />);
+    expect(screen.getByLabelText(/your initials/i)).toHaveValue('ZZ');
+    cleanup();
+  });
+
+  it('an inline edit wins over both', () => {
+    myProfile = { ...myProfile, initials: 'ZZ' };
+    render(<BrokenAppointments />);
+    fireEvent.change(screen.getByLabelText(/your initials/i), { target: { value: 'QQ' } });
+    runToRung2Outputs();
+    const note = screen.getByText(/Patient no-showed/i);
+    expect(note.textContent!.endsWith('- QQ')).toBe(true);
+    cleanup();
+  });
+
+  it('every output block in one run carries the same stamped initials', () => {
+    render(<BrokenAppointments />);
+    runToRung2Outputs();
+    const blocks = [...document.querySelectorAll('pre')].map(p => p.textContent!);
+    // Note, Pop-Up, and ledger checklist — stamped identically.
+    expect(blocks).toHaveLength(3);
+    expect(blocks[0].endsWith('- AS')).toBe(true);
+    expect(blocks[1].endsWith('- AS')).toBe(true);
+    expect(blocks[2].endsWith('— AS')).toBe(true);
+    cleanup();
+  });
+
+  it('a missing name prompts for entry rather than stamping blanks', () => {
+    myProfile = { fullName: '', email: 'front@office.example', initials: '' };
+    render(<BrokenAppointments />);
+    runToRung2Outputs();
+    expect(screen.getByText(/Enter your initials to finish/i)).toBeInTheDocument();
+    expect(screen.queryByText('Appointment note (Dentrix)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ledger checklist')).not.toBeInTheDocument();
+    // Typing initials brings the stamped blocks back.
+    fireEvent.change(screen.getByLabelText(/your initials/i), { target: { value: 'mv' } });
+    expect(screen.queryByText(/Enter your initials to finish/i)).not.toBeInTheDocument();
+    const note = screen.getByText(/Patient no-showed/i);
+    expect(note.textContent!.endsWith('- MV')).toBe(true);
     cleanup();
   });
 });

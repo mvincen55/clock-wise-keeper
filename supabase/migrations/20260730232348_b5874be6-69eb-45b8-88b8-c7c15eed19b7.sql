@@ -1,9 +1,20 @@
 -- The office-pulse and accountability jobs previously identified themselves with
 -- the public anon key (or a spoofable "cron" header). Both functions now require
 -- the service-role bearer, so the schedules must present it.
-SELECT cron.unschedule('office-pulse-daily');
-SELECT cron.unschedule('accountability-daily');
-SELECT cron.unschedule('accountability-sweep');
+-- Replay repair: cron.unschedule() raises when the job does not exist, and on
+-- a clean database none of these were ever scheduled (they were created in
+-- production at runtime). Guarded like 20260610183740's sweep job.
+DO $$
+DECLARE
+  v_job text;
+BEGIN
+  FOREACH v_job IN ARRAY ARRAY['office-pulse-daily','accountability-daily','accountability-sweep'] LOOP
+    IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = v_job) THEN
+      PERFORM cron.unschedule(v_job);
+    END IF;
+  END LOOP;
+END;
+$$;
 
 SELECT cron.schedule(
   'office-pulse-daily',

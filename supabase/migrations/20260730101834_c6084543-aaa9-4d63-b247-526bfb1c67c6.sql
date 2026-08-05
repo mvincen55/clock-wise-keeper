@@ -40,6 +40,14 @@ ALTER TABLE public.reminder_hooks ADD CONSTRAINT reminder_hooks_kind_check
   CHECK (kind IN ('goal_task_due','training_due','plan_stall','checklist_gap','sprint_progress','follow_up','sprint_verify'));
 
 -- department of the current user, from employees.team
+--
+-- Replay repair: employees.team was added to production outside the migration
+-- chain (20260731014114 re-adds it with IF NOT EXISTS a day later). Creating
+-- the sql-language function below validates its body, so the column must
+-- exist first for a clean-database replay. Harmless on the live ledger —
+-- this migration never re-runs where it was already applied.
+ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS team text;
+
 CREATE OR REPLACE FUNCTION public.my_department()
 RETURNS text
 LANGUAGE sql

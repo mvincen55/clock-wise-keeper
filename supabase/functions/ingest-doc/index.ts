@@ -1,4 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// ReturnType<typeof createClient> resolves the parameterless overload,
+// whose tables type as never; alias the real call's inferred client type.
+const makeDbClient = (url: string, key: string) => createClient(url, key);
+type DbClient = ReturnType<typeof makeDbClient>;
 import { chunkText, normalizeText } from "../_shared/doc-chunking.ts";
 import { validateStructured, type StructuredChunkRow } from "./structured.ts";
 
@@ -99,7 +104,7 @@ const isUuid = (value: unknown): value is string =>
 
 /** Batched insert; returns the first error encountered (null on success). */
 async function insertChunks(
-  supabase: ReturnType<typeof createClient>,
+  supabase: DbClient,
   rows: Record<string, unknown>[]
 ): Promise<unknown> {
   for (let i = 0; i < rows.length; i += CHUNK_INSERT_BATCH) {

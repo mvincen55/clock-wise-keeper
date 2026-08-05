@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { roleClocksIn } from '@/lib/roles';
+import { DEFAULT_CONFIRMATION_LEAD_DAYS } from '@/components/goals/goal-examples';
 
 export type PracticeSettings = {
   /** Office decides whether employees see the practice-vitals collections bar. */
@@ -10,6 +11,8 @@ export type PracticeSettings = {
   monthly_collections_target_cents: number;
   /** Opt-in: allow the phone-photo fallback for Privacy View Capture. */
   mobile_capture_enabled: boolean;
+  /** How many days ahead the front desk confirms appointments (goal starters use this). */
+  confirmation_lead_days: number;
 };
 
 export type PracticeSettingsPatch = Partial<PracticeSettings>;
@@ -36,7 +39,7 @@ export function usePracticeSettings() {
       const { data } = await supabase
         .from('org_practice_settings')
         .select(
-          'collections_visibility, monthly_collections_target_cents, mobile_capture_enabled'
+          'collections_visibility, monthly_collections_target_cents, mobile_capture_enabled, confirmation_lead_days'
         )
         .eq('org_id', ctx!.org_id)
         .maybeSingle();
@@ -44,6 +47,7 @@ export function usePracticeSettings() {
         collections_visibility: normalizeCollectionsVisibility(data?.collections_visibility),
         monthly_collections_target_cents: data?.monthly_collections_target_cents ?? 0,
         mobile_capture_enabled: data?.mobile_capture_enabled ?? false,
+        confirmation_lead_days: data?.confirmation_lead_days ?? DEFAULT_CONFIRMATION_LEAD_DAYS,
       };
     },
   });

@@ -80,6 +80,8 @@ serve(async (req) => {
         empByName.set(k, list);
       }
     }
+    // TS cannot carry the null-narrowing of `user` into this closure.
+    const importerUserId = user.id;
 
     function resolveEmployee(row: any): { id: string; user_id: string | null } | { ambiguous: true } | null {
       if (row.employee_name) {
@@ -90,7 +92,7 @@ serve(async (req) => {
         return null;
       }
       // Row carries no employee identity (single-employee report): importer's own record.
-      if (importerEmp) return { id: importerEmp.id, user_id: user.id };
+      if (importerEmp) return { id: importerEmp.id, user_id: importerUserId };
       return null;
     }
 
