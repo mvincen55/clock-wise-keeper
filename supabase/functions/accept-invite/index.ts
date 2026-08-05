@@ -240,6 +240,113 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Seed onboarding details captured on the invite (start date, opening PTO
+    // balance, starting weekly schedule). Best-effort only: nothing here may
+    // ever block someone from joining the office.
+    try {
+      if (employeeId) {
+        const startDate: string | null =
+          typeof invite.start_date === "string" && invite.start_date ? invite.start_date : null;
+        const ptoRaw = invite.initial_pto_hours;
+        const initialPtoHours =
+          ptoRaw === null || ptoRaw === undefined || ptoRaw === "" ? null : Number(ptoRaw);
+        const hasPto = initialPtoHours !== null && Number.isFinite(initialPtoHours);
+        const today = new Date().toISOString().slice(0, 10);
+        const effectiveDate = startDate || today;
+
+        if (startDate) {
+          const { error: hireErr } = await supabaseAdmin
+            .from("employees")
+            .update({ hire_date: startDate })
+            .eq("id", employeeId);
+          if (hireErr) console.warn("accept-invite: could not set hire_date", hireErr.message);
+
+          const { error: settingsErr } = await supabaseAdmin
+            .from("pto_settings")
+            .upsert(
+              {
+                user_id: user.id,
+                org_id: invite.org_id,
+                employee_id: employeeId,
+                hire_date: startDate,
+              },
+              { onConflict: "user_id" },
+            );
+          if (settingsErr) console.warn("accept-invite: could not seed pto_settings", settingsErr.message);
+        }
+
+        if (hasPto) {
+          const { error: snapErr } = await supabaseAdmin
+            .from("pto_snapshots")
+            .upsert(
+              {
+                user_id: user.id,
+                org_id: invite.org_id,
+                employee_id: employeeId,
+                snapshot_date: effectiveDate,
+                snapshot_balance_hours: initialPtoHours,
+              },
+              { onConflict: "user_id,snapshot_date" },
+            );
+          if (snapErr) console.warn("accept-invite: could not seed pto_snapshots", snapErr.message);
+        }
+
+        const weekly = Array.isArray(invite.weekly_schedule) ? invite.weekly_schedule : [];
+        const enabledDays = weekly.filter(
+          (d: any) =>
+            d && d.enabled === true &&
+            Number.isInteger(d.weekday) && d.weekday >= 0 && d.weekday <= 6 &&
+            typeof d.start_time === "string" && typeof d.end_time === "string",
+        );
+
+        if (enabledDays.length > 0) {
+          const { data: version, error: versionErr } = await supabaseAdmin
+            .from("schedule_versions")
+            .insert({
+              org_id: invite.org_id,
+              employee_id: employeeId,
+              user_id: user.id,
+              name: "Starting schedule",
+              effective_start_date: effectiveDate,
+              timezone: "America/New_York",
+              week_start_day: 1,
+            })
+            .select("id")
+            .single();
+
+          if (versionErr || !version) {
+            console.warn("accept-invite: could not create schedule version", versionErr?.message);
+          } else {
+            const { error: daysErr } = await supabaseAdmin.from("schedule_weekdays").insert(
+              enabledDays.map((d: any) => ({
+                schedule_version_id: version.id,
+                weekday: d.weekday,
+                enabled: true,
+                start_time: d.start_time,
+                end_time: d.end_time,
+                grace_minutes: 0,
+                threshold_minutes: 1,
+              })),
+            );
+            if (daysErr) console.warn("accept-invite: could not create schedule days", daysErr.message);
+
+            const { error: assignErr } = await supabaseAdmin.from("schedule_assignments").insert({
+              org_id: invite.org_id,
+              employee_id: employeeId,
+              schedule_version_id: version.id,
+              effective_start: effectiveDate,
+            });
+            if (assignErr) console.warn("accept-invite: could not assign schedule", assignErr.message);
+          }
+        }
+      }
+    } catch (seedError) {
+      console.warn(
+        "accept-invite: onboarding seed failed",
+        seedError instanceof Error ? seedError.message : String(seedError),
+      );
+    }
+
     // Mark invite accepted
     await supabaseAdmin
       .from("org_invites")

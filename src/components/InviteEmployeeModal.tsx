@@ -10,7 +10,20 @@ import { useToast } from '@/hooks/use-toast';
 import { Mail, Loader2, Copy, CheckCircle2, AlertTriangle, Check } from 'lucide-react';
 import { OPERATIONAL_ROLES, ROLE_LABELS } from '@/hooks/useOperationalRoles';
 import { MEMBER_ROLE_LABELS } from '@/lib/roles';
+import { Switch } from '@/components/ui/switch';
+import { usePendingInvites } from '@/hooks/usePendingInvites';
 import type { OperationalRole } from '@/lib/schedule-reader/types';
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+type ScheduleDay = { weekday: number; enabled: boolean; start_time: string; end_time: string };
+
+const DEFAULT_SCHEDULE: ScheduleDay[] = DAY_NAMES.map((_, weekday) => ({
+  weekday,
+  enabled: weekday >= 1 && weekday <= 5,
+  start_time: '08:00',
+  end_time: '17:00',
+}));
 
 export default function InviteEmployeeModal() {
   const { data: ctx } = useOrgContext();
@@ -25,6 +38,13 @@ export default function InviteEmployeeModal() {
   const [inviteLink, setInviteLink] = useState('');
   const [emailed, setEmailed] = useState(false);
   const [warning, setWarning] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [ptoHours, setPtoHours] = useState('');
+  const [schedule, setSchedule] = useState<ScheduleDay[]>(DEFAULT_SCHEDULE);
+  const { refetch: refetchInvites } = usePendingInvites();
+
+  const updateDay = (weekday: number, patch: Partial<ScheduleDay>) =>
+    setSchedule(days => days.map(d => (d.weekday === weekday ? { ...d, ...patch } : d)));
 
   const toggleSecondary = (r: OperationalRole) =>
     setSecondaryRoles(list => (list.includes(r) ? list.filter(x => x !== r) : [...list, r]));
@@ -48,6 +68,9 @@ export default function InviteEmployeeModal() {
           name: name.trim(),
           operationalRole,
           secondaryRoles: secondaryRoles.filter(r => r !== operationalRole),
+          startDate: startDate || null,
+          initialPtoHours: ptoHours.trim() === '' ? null : Number(ptoHours),
+          schedule: schedule.filter(d => d.enabled),
           origin: window.location.origin,
         },
       });
@@ -56,6 +79,7 @@ export default function InviteEmployeeModal() {
       if (data?.error) throw new Error(data.error);
 
       setInviteLink(data.link);
+      refetchInvites();
       setEmailed(!!data.emailed);
       setWarning(data.warning || '');
       toast(
@@ -84,6 +108,9 @@ export default function InviteEmployeeModal() {
     setRole('employee');
     setOperationalRole('');
     setSecondaryRoles([]);
+    setStartDate('');
+    setPtoHours('');
+    setSchedule(DEFAULT_SCHEDULE);
     setInviteLink('');
     setEmailed(false);
     setWarning('');
@@ -182,6 +209,61 @@ export default function InviteEmployeeModal() {
                 </div>
               </div>
             )}
+            <div className="space-y-4 rounded-lg border bg-muted/20 p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Onboarding details (optional)
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Start date</Label>
+                  <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Current PTO (hours)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.25"
+                    value={ptoHours}
+                    onChange={e => setPtoHours(e.target.value)}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Weekly schedule</Label>
+                <div className="space-y-1.5">
+                  {schedule.map(day => (
+                    <div key={day.weekday} className="flex items-center gap-2">
+                      <Switch
+                        checked={day.enabled}
+                        onCheckedChange={v => updateDay(day.weekday, { enabled: v })}
+                        aria-label={DAY_NAMES[day.weekday]}
+                      />
+                      <span className="w-16 text-xs text-muted-foreground">{DAY_NAMES[day.weekday].slice(0, 3)}</span>
+                      <Input
+                        type="time"
+                        value={day.start_time}
+                        disabled={!day.enabled}
+                        onChange={e => updateDay(day.weekday, { start_time: e.target.value })}
+                        className="h-8 flex-1 text-xs"
+                      />
+                      <span className="text-xs text-muted-foreground">to</span>
+                      <Input
+                        type="time"
+                        value={day.end_time}
+                        disabled={!day.enabled}
+                        onChange={e => updateDay(day.weekday, { end_time: e.target.value })}
+                        className="h-8 flex-1 text-xs"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Used to set up their starting schedule and PTO balance the moment they join. You can change it later.
+                </p>
+              </div>
+            </div>
             <Button
               onClick={handleInvite}
               disabled={submitting || !email.trim() || !name.trim() || !operationalRole}
