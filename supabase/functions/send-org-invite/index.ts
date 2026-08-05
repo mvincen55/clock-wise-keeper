@@ -135,6 +135,34 @@ Deno.serve(async (req) => {
       (r) => OPERATIONAL_ROLES.includes(r) && r !== operationalRole,
     );
 
+    // Optional onboarding details. All three are optional and sanitized here —
+    // the client never decides what lands in the invite row.
+    const rawStart = typeof body?.startDate === "string" ? body.startDate.trim() : "";
+    const startDate =
+      /^\d{4}-\d{2}-\d{2}$/.test(rawStart) && !Number.isNaN(Date.parse(`${rawStart}T00:00:00Z`))
+        ? rawStart
+        : null;
+
+    const rawPto = body?.initialPtoHours;
+    const ptoNum =
+      typeof rawPto === "number" ? rawPto : typeof rawPto === "string" && rawPto.trim() !== "" ? Number(rawPto) : NaN;
+    const initialPtoHours = Number.isFinite(ptoNum) && ptoNum >= 0 && ptoNum <= 10000 ? ptoNum : null;
+
+    const isHHMM = (v: unknown) => typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
+    const weeklySchedule = (Array.isArray(body?.schedule) ? body.schedule : [])
+      .filter((d: any) =>
+        d && d.enabled === true &&
+        Number.isInteger(d.weekday) && d.weekday >= 0 && d.weekday <= 6 &&
+        isHHMM(d.start_time) && isHHMM(d.end_time) && d.start_time < d.end_time
+      )
+      .map((d: any) => ({
+        weekday: d.weekday,
+        enabled: true,
+        start_time: d.start_time,
+        end_time: d.end_time,
+      }))
+      .filter((d: any, i: number, arr: any[]) => arr.findIndex((x) => x.weekday === d.weekday) === i);
+
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Not authenticated" }), {
@@ -200,6 +228,9 @@ Deno.serve(async (req) => {
       operational_role: operationalRole,
       secondary_roles: cleanSecondary,
       invited_by: user.id,
+      start_date: startDate,
+      initial_pto_hours: initialPtoHours,
+      weekly_schedule: weeklySchedule,
     };
 
     let token: string;
