@@ -8,7 +8,7 @@ import {
   SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import {
-  ArrowLeft, Save, Send, History, Eye, Plus, AlertTriangle, Loader2, Lock,
+  ArrowLeft, Save, Send, History, Eye, Plus, AlertTriangle, Loader2, Lock, Sparkles, ShieldAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -39,7 +39,8 @@ import { useConsentPermissions } from '@/hooks/useConsentSettings';
 import BlockEditor, { CONDITION_SOURCES } from '@/components/consents/BlockEditor';
 import VersionHistoryDialog from '@/components/consents/VersionHistoryDialog';
 import AiAssistPanel from '@/components/consents/AiAssistPanel';
-import { contentToPlainText } from '@/lib/consents/ai';
+import { contentToPlainText, reviewForm, type ReviewItem } from '@/lib/consents/ai';
+import { scanForPatientIdentifiers, PII_KIND_LABELS, type PiiHit } from '@/lib/consents/pii';
 import ConsentPrintSheet from '@/components/consents/ConsentPrintSheet';
 import { ConsentPreviewDialog } from '@/components/consents/ConsentPrinting';
 import { pageFitReport, templateWarnings } from '@/lib/consents/validation';
@@ -94,6 +95,10 @@ export default function ConsentBuilder() {
   const [changeNotes, setChangeNotes] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+
+  // Pre-publish review results — advisory only, never a publish gate.
+  const [prepub, setPrepub] = useState<{ aiItems: ReviewItem[] | null; aiError: string | null; piiHits: PiiHit[] } | null>(null);
+  const [prepubRunning, setPrepubRunning] = useState(false);
 
   // Hydrate from the loaded form exactly once per form id.
   useEffect(() => {
@@ -184,6 +189,60 @@ export default function ConsentBuilder() {
   const addBlock = (type: ConsentBlockType) => {
     setBlocks(prev => [...prev, makeBlock(type, type === 'signature' ? { role: 'patient', required: true } : {})]);
     touch();
+  };
+
+  // Office identity strings the AI panel's identifier scan must not flag.
+  const allowStrings = useMemo(
+    () =>
+      [
+        branding.displayName, branding.legalName, branding.phone,
+        branding.addressLine1, branding.addressLine2, branding.website,
+        branding.emailSenderName,
+      ].filter(Boolean),
+    [branding],
+  );
+
+  /** Accepting a suggestion replaces the first occurrence of the quoted
+   *  passage in whichever block still contains it. */
+  const applySuggestion = (original: string, suggested: string) => {
+    const target = blocks.find(b => b.body?.includes(original));
+    if (!target) {
+      toast({
+        title: 'That passage is no longer in the form',
+        description: 'It may have changed since the suggestion was generated — run the review again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    patchBlock(target.id, { body: (target.body ?? '').replace(original, suggested) });
+    toast({ title: 'Suggestion applied', description: 'Review it, then save or publish when ready.' });
+  };
+
+  const insertDraftedSection = (text: string) => {
+    setBlocks(prev => [...prev, makeBlock('paragraph', { body: text })]);
+    touch();
+  };
+
+  /** Advisory pre-publish sweep: local checks always run; the AI review is
+   *  skipped when the identifier scan hits (template text never leaves with
+   *  patient-shaped content in it). Publishing stays a human decision. */
+  const runPrePublishReview = async () => {
+    setPrepubRunning(true);
+    const text = contentToPlainText(content);
+    const { hits } = scanForPatientIdentifiers(text, allowStrings);
+    let aiItems: ReviewItem[] | null = null;
+    let aiError: string | null = null;
+    if (hits.length > 0) {
+      aiError = 'AI review skipped — remove the possible patient information first.';
+    } else {
+      try {
+        aiItems = await reviewForm('missing_info', 'Entire form', text);
+      } catch (err) {
+        aiError = err instanceof Error ? err.message : 'AI review is unavailable right now.';
+      }
+    }
+    setPrepub({ aiItems, aiError, piiHits: hits });
+    setPrepubRunning(false);
   };
 
   const onDragEnd = (event: DragEndEvent) => {
@@ -467,8 +526,13 @@ export default function ConsentBuilder() {
           {!readOnly && (
             <AiAssistPanel
               content={content}
-              publishedText={existing?.publishedContent ? contentToPlainText(existing.publishedContent) : null}
-              onApplyToBlock={(blockId, text) => patchBlock(blockId, { body: text })}
+              // The builder has no block-selection concept yet, so scope
+              // defaults to the whole form. Wire the real selection here
+              // when BlockEditor grows one.
+              selectedBlockId={null}
+              allowStrings={allowStrings}
+              onApplySuggestion={applySuggestion}
+              onInsertSection={insertDraftedSection}
             />
           )}
           <Card className="card-elevated">
@@ -486,7 +550,7 @@ export default function ConsentBuilder() {
       </div>
 
       {/* Publish dialog */}
-      <Dialog open={publishOpen} onOpenChange={setPublishOpen}>
+      <Dialog open={publishOpen} onOpenChange={o => { setPublishOpen(o); if (!o) setPrepub(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Publish {existing && existing.currentVersion > 0 ? `version ${existing.currentVersion + 1}` : 'version 1'}</DialogTitle>
@@ -512,6 +576,45 @@ export default function ConsentBuilder() {
               placeholder="What changed and why"
               rows={3}
             />
+          </div>
+
+          {/* Advisory pre-publish review — never blocks the Publish button. */}
+          <div className="space-y-2">
+            <Button variant="outline" size="sm" onClick={runPrePublishReview} disabled={prepubRunning}>
+              {prepubRunning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+              Run AI pre-publish review
+            </Button>
+            {prepub && (
+              <div className="max-h-56 space-y-2 overflow-y-auto text-xs">
+                {prepub.piiHits.length > 0 && (
+                  <div className="space-y-1 rounded-lg border border-destructive/50 bg-destructive/5 p-2">
+                    <p className="flex items-center gap-1.5 font-semibold text-destructive">
+                      <ShieldAlert className="h-3.5 w-3.5" />Possible patient information in this template
+                    </p>
+                    {prepub.piiHits.map((h, i) => (
+                      <p key={i} className="text-destructive">{PII_KIND_LABELS[h.kind]}: “{h.excerpt}”</p>
+                    ))}
+                  </div>
+                )}
+                {warnings.map(w => (
+                  <p key={w.code} className="flex items-start gap-1.5 text-muted-foreground">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{w.message}
+                  </p>
+                ))}
+                {prepub.aiError && <p className="text-muted-foreground">{prepub.aiError}</p>}
+                {prepub.aiItems?.length === 0 && (
+                  <p className="text-muted-foreground">AI review found no missing consent information.</p>
+                )}
+                {prepub.aiItems?.map((item, i) => (
+                  <p key={i} className="text-muted-foreground">
+                    • {item.reason || 'Suggested addition'} — near “{item.original.slice(0, 90)}{item.original.length > 90 ? '…' : ''}”
+                  </p>
+                ))}
+                <p className="text-muted-foreground">
+                  Advisory only — publishing is your decision. Apply wording changes from the AI panel in the builder.
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPublishOpen(false)}>Cancel</Button>
