@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
   UNIT_TYPES,
+  QUANTITY_STRATEGY_EXPLANATIONS,
   isUnitType,
   defaultRequirements,
   computeQuantity,
+  validateProcedureMeta,
+  normalizeProcedureCode,
 } from '@/lib/procedures';
 
 describe('unit types', () => {
@@ -47,5 +50,59 @@ describe('computeQuantity', () => {
   it('unit strategies floor at 1 when nothing is entered', () => {
     expect(computeQuantity('per_tooth', {})).toBe(1);
     expect(computeQuantity('per_surface', {})).toBe(1);
+  });
+  it('per_quadrant and per_arch never multiply by raw tooth count', () => {
+    expect(computeQuantity('per_quadrant', { quadrants: 2, teeth: 8 })).toBe(2);
+    expect(computeQuantity('per_arch', { arches: 1, teeth: 14 })).toBe(1);
+  });
+});
+
+describe('validateProcedureMeta (mirrors the DB trigger invariants)', () => {
+  const base = { unitType: 'per_visit', quantityStrategy: 'per_visit', needsTeeth: false, needsSurfaces: false } as const;
+
+  it('accepts a plain per-visit code', () => {
+    expect(validateProcedureMeta({ ...base })).toEqual([]);
+  });
+  it('surfaces without teeth is rejected', () => {
+    expect(validateProcedureMeta({ ...base, needsSurfaces: true })).toContain(
+      'Surface selection requires tooth selection.',
+    );
+  });
+  it('per_surface requires teeth and surfaces', () => {
+    expect(
+      validateProcedureMeta({ ...base, quantityStrategy: 'per_surface', needsTeeth: true, needsSurfaces: false }),
+    ).toContain('A per-surface code must require teeth and surfaces.');
+    expect(
+      validateProcedureMeta({ ...base, quantityStrategy: 'per_surface', needsTeeth: true, needsSurfaces: true }),
+    ).toEqual([]);
+  });
+  it('per_tooth requires teeth', () => {
+    expect(validateProcedureMeta({ ...base, quantityStrategy: 'per_tooth' })).toContain(
+      'A per-tooth code must require teeth.',
+    );
+    expect(
+      validateProcedureMeta({ ...base, quantityStrategy: 'per_tooth', needsTeeth: true }),
+    ).toEqual([]);
+  });
+  it('reports every violated rule at once', () => {
+    const problems = validateProcedureMeta({
+      ...base,
+      quantityStrategy: 'per_surface',
+      needsTeeth: false,
+      needsSurfaces: true,
+    });
+    expect(problems.length).toBeGreaterThanOrEqual(2);
+  });
+  it('every strategy has a plain-language explanation', () => {
+    for (const t of UNIT_TYPES) {
+      expect(QUANTITY_STRATEGY_EXPLANATIONS[t]).toBeTruthy();
+    }
+  });
+});
+
+describe('normalizeProcedureCode', () => {
+  it('trims and uppercases exactly like the database', () => {
+    expect(normalizeProcedureCode('  d2740 ')).toBe('D2740');
+    expect(normalizeProcedureCode('9101a')).toBe('9101A');
   });
 });

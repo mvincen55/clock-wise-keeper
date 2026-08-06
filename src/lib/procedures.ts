@@ -61,6 +61,53 @@ export function defaultRequirements(unitType: UnitType): { needsTeeth: boolean; 
 }
 
 /**
+ * Plain-office-language explanation of what each quantity strategy actually
+ * does to the charge. Shown in the metadata editor so managers configure
+ * behavior, not database enums.
+ */
+export const QUANTITY_STRATEGY_EXPLANATIONS: Record<UnitType, string> = {
+  per_tooth: 'Charge this code once for each selected tooth.',
+  per_surface: 'Charge this code once for each treated surface.',
+  per_quadrant: 'Charge this code once per quadrant — never once per tooth.',
+  per_arch: 'Charge this code once per arch — never once per tooth.',
+  per_visit: 'Charge this code once for the visit, even when multiple teeth are selected.',
+  flat: 'One flat charge, regardless of teeth or surfaces.',
+  manual: 'The team enters the quantity by hand every time this code is used.',
+};
+
+export type ProcedureMetaRules = {
+  unitType: UnitType;
+  quantityStrategy: UnitType;
+  needsTeeth: boolean;
+  needsSurfaces: boolean;
+};
+
+/**
+ * The metadata invariants, shared by the editor UI, packet quantity math, and
+ * tests — and mirrored word-for-word by the database trigger
+ * enforce_procedure_meta_integrity (migration 20260806180000). Returns every
+ * violated rule so an editor can show them all at once.
+ */
+export function validateProcedureMeta(rules: ProcedureMetaRules): string[] {
+  const problems: string[] = [];
+  if (rules.needsSurfaces && !rules.needsTeeth) {
+    problems.push('Surface selection requires tooth selection.');
+  }
+  if (rules.quantityStrategy === 'per_surface' && !(rules.needsTeeth && rules.needsSurfaces)) {
+    problems.push('A per-surface code must require teeth and surfaces.');
+  }
+  if (rules.quantityStrategy === 'per_tooth' && !rules.needsTeeth) {
+    problems.push('A per-tooth code must require teeth.');
+  }
+  return problems;
+}
+
+/** Normalizes a code exactly the way the database does. */
+export function normalizeProcedureCode(code: string): string {
+  return code.trim().toUpperCase();
+}
+
+/**
  * How many billable units a set of teeth/surfaces represents under a strategy.
  * This is the primitive the Forms financial math will use so procedures are not
  * blindly multiplied by the number of teeth.

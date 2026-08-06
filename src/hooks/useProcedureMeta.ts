@@ -60,6 +60,80 @@ export function useProcedureMetaMap(): ReadonlyMap<string, ProcedureMeta> {
   }, [rows]);
 }
 
+function useInvalidateProcedureMeta() {
+  const qc = useQueryClient();
+  return () => {
+    qc.invalidateQueries({ queryKey: ['procedure-meta'] });
+    // fof_code_names is kept in sync by a DB trigger; refresh its readers.
+    qc.invalidateQueries({ queryKey: ['fof-code-names'] });
+  };
+}
+
+export type ProcedureMetaInput = {
+  code: string;
+  patientName: string;
+  internalDescription: string;
+  unitType: UnitType;
+  needsTeeth: boolean;
+  needsSurfaces: boolean;
+  quantityStrategy: UnitType;
+  keywords: string[];
+};
+
+/**
+ * Creates a canonical procedure_meta row. The database normalizes the code
+ * (trim + uppercase), rejects blanks and case-only duplicates, and enforces
+ * the metadata invariants; validateProcedureMeta mirrors those rules so the
+ * editor can explain problems before submitting.
+ */
+export function useCreateProcedureMeta() {
+  const { data: ctx } = useOrgContext();
+  const invalidate = useInvalidateProcedureMeta();
+  return useMutation({
+    mutationFn: async (input: ProcedureMetaInput) => {
+      if (!ctx) throw new Error('Not authenticated');
+      const { error } = await supabase.from('procedure_meta').insert({
+        org_id: ctx.org_id,
+        code: input.code,
+        patient_name: input.patientName,
+        internal_description: input.internalDescription,
+        unit_type: input.unitType,
+        needs_teeth: input.needsTeeth,
+        needs_surfaces: input.needsSurfaces,
+        quantity_strategy: input.quantityStrategy,
+        keywords: input.keywords,
+      });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * Updates a procedure_meta row. Identity (org + code) is immutable at the
+ * database — a wrong code is corrected by deactivating this row and creating
+ * the right one, so the fof_code_names compatibility cache never strands.
+ */
+export function useUpdateProcedureMeta() {
+  const invalidate = useInvalidateProcedureMeta();
+  return useMutation({
+    mutationFn: async (input: Partial<Omit<ProcedureMetaInput, 'code'>> & { id: string; active?: boolean }) => {
+      const patch: Record<string, unknown> = {};
+      if (input.patientName !== undefined) patch.patient_name = input.patientName;
+      if (input.internalDescription !== undefined) patch.internal_description = input.internalDescription;
+      if (input.unitType !== undefined) patch.unit_type = input.unitType;
+      if (input.needsTeeth !== undefined) patch.needs_teeth = input.needsTeeth;
+      if (input.needsSurfaces !== undefined) patch.needs_surfaces = input.needsSurfaces;
+      if (input.quantityStrategy !== undefined) patch.quantity_strategy = input.quantityStrategy;
+      if (input.keywords !== undefined) patch.keywords = input.keywords;
+      if (input.active !== undefined) patch.active = input.active;
+      const { error } = await supabase.from('procedure_meta').update(patch).eq('id', input.id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+}
+
 /**
  * Upserts the patient-friendly name on the canonical procedure_meta row (the
  * single editable source). The DB trigger mirrors it into fof_code_names, so
@@ -68,7 +142,7 @@ export function useProcedureMetaMap(): ReadonlyMap<string, ProcedureMeta> {
  */
 export function useUpsertProcedurePatientName() {
   const { data: ctx } = useOrgContext();
-  const qc = useQueryClient();
+  const invalidate = useInvalidateProcedureMeta();
   return useMutation({
     mutationFn: async ({ code, patientName }: { code: string; patientName: string }) => {
       if (!ctx) throw new Error('Not authenticated');
@@ -82,10 +156,6 @@ export function useUpsertProcedurePatientName() {
         );
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['procedure-meta'] });
-      // fof_code_names is kept in sync by a DB trigger; refresh its readers.
-      qc.invalidateQueries({ queryKey: ['fof-code-names'] });
-    },
+    onSuccess: invalidate,
   });
 }

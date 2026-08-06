@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useBlocker } from 'react-router-dom';
 import {
   Search, Layers, ClipboardList, ArrowLeft, ArrowRight, Printer, Check,
   AlertTriangle, ShieldCheck, ArrowUp, ArrowDown, X, Plus, RotateCcw, Eraser,
@@ -135,6 +135,21 @@ export default function CompleteForms() {
 
   // Cleared on unmount — leaving the workflow never leaves data behind.
   useEffect(() => () => { setFill(emptyPacketFill(todayIso())); }, []);
+
+  // In-app navigation guard: leaving with an unfinished packet erases it, so
+  // the user chooses between staying and discarding — never a silent loss and
+  // never a "save for later" (nothing is ever stored).
+  const blocker = useBlocker(hasPatientInfo);
+
+  // Switching offices mid-packet clears it: a packet belongs to the office
+  // context it was started in.
+  const orgIdRef = useRef(ctx?.org_id);
+  useEffect(() => {
+    if (ctx?.org_id && orgIdRef.current && ctx.org_id !== orgIdRef.current) {
+      clearAll('The office changed, so the packet was erased.');
+    }
+    if (ctx?.org_id) orgIdRef.current = ctx.org_id;
+  }, [ctx?.org_id, clearAll]);
 
   // Browser-level warning before closing/refreshing with unsent info.
   useEffect(() => {
@@ -1126,6 +1141,25 @@ export default function CompleteForms() {
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => clearAll('Cleared at your request.')}>Clear now</AlertDialogCancel>
             <AlertDialogAction onClick={() => setTimeoutWarning(false)}>Keep working</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* In-app navigation guard: stay, or discard the packet and leave. */}
+      <AlertDialog open={blocker.state === 'blocked'} onOpenChange={(open) => { if (!open) blocker.reset?.(); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave and erase this packet?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Patient information typed here is temporary and is never saved. Leaving this page
+              erases everything in the packet — there is no way to come back to it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => blocker.reset?.()}>Stay here</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { clearAll(); blocker.proceed?.(); }}>
+              Discard and leave
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
