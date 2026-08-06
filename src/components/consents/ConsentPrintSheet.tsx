@@ -4,6 +4,8 @@ import { formatCents } from '@/lib/fof/money';
 import { splitIntoPages } from '@/lib/consents/validation';
 import {
   SIGNATURE_ROLE_LABELS,
+  packetLineTotal,
+  packetQuantity,
   packetTotals,
   templateLayout,
   type ConsentBlock,
@@ -62,6 +64,9 @@ function FeeTable({ fill }: { fill: PacketFill }) {
   const totals = packetTotals(fill);
   const hasAdjustments =
     fill.discountCents > 0 || fill.insuranceEstimateCents > 0 || fill.depositCents > 0;
+  // Quantities only appear when a line actually multiplies — a packet of
+  // single-unit procedures prints exactly the classic three-column table.
+  const showQty = fill.procedures.some(p => packetQuantity(p) > 1);
   return (
     <div className="cf-feetable">
       <table>
@@ -69,23 +74,30 @@ function FeeTable({ fill }: { fill: PacketFill }) {
           <tr>
             <th>Code</th>
             <th>Procedure</th>
-            <th className="cf-num">Fee</th>
+            {showQty && <th className="cf-num">Qty</th>}
+            {showQty && <th className="cf-num">Unit Fee</th>}
+            <th className="cf-num">{showQty ? 'Total' : 'Fee'}</th>
           </tr>
         </thead>
         <tbody>
-          {fill.procedures.map((p, i) => (
-            <tr key={`${p.code}-${i}`}>
-              <td>{p.code}</td>
-              <td>
-                {p.description}
-                {p.overridden && <span className="cf-override"> (adjusted from office fee)</span>}
-              </td>
-              <td className="cf-num">{p.feeCents === null ? '—' : formatCents(p.feeCents)}</td>
-            </tr>
-          ))}
+          {fill.procedures.map((p, i) => {
+            const line = packetLineTotal(p);
+            return (
+              <tr key={`${p.code}-${i}`}>
+                <td>{p.code}</td>
+                <td>
+                  {p.description}
+                  {p.overridden && <span className="cf-override"> (adjusted from office fee)</span>}
+                </td>
+                {showQty && <td className="cf-num">{packetQuantity(p)}</td>}
+                {showQty && <td className="cf-num">{p.feeCents === null ? '—' : formatCents(p.feeCents)}</td>}
+                <td className="cf-num">{line === null ? '—' : formatCents(line)}</td>
+              </tr>
+            );
+          })}
           {fill.procedures.length === 0 && (
             <tr>
-              <td colSpan={3} className="cf-feeblank">No procedures listed — complete by hand.</td>
+              <td colSpan={showQty ? 5 : 3} className="cf-feeblank">No procedures listed — complete by hand.</td>
             </tr>
           )}
         </tbody>
@@ -238,24 +250,34 @@ function BlockView({
           <span>{block.label}</span>
         </p>
       );
-    case 'signature':
+    case 'signature': {
+      // An on-screen signature prints as its image sitting on the rule line
+      // with the signed date beside it; unsigned roles keep the blank rule so
+      // signing on paper stays a normal path (and blank copies never change).
+      const role = block.role ?? 'patient';
+      const sigImage = fill?.signatures[role];
+      const signedDate = sigImage && fill?.signedAtIso ? prettyDate(fill.signedAtIso.slice(0, 10)) : undefined;
       return (
         <div className="cf-sig cf-keep">
           <div className="cf-sigline">
             <div className="cf-sigcell">
+              {sigImage && (
+                <img src={sigImage} alt={`${SIGNATURE_ROLE_LABELS[role]} signature`} className="cf-sigimg" />
+              )}
               <div className="cf-sigrule" />
               <div className="cf-sigcaption">
-                {SIGNATURE_ROLE_LABELS[block.role ?? 'patient']} Signature
+                {SIGNATURE_ROLE_LABELS[role]} Signature
                 {block.required === false ? ' (if applicable)' : ''}
               </div>
             </div>
             <div className="cf-sigcell cf-sigdate">
-              <div className="cf-sigrule" />
+              <div className="cf-sigrule">{signedDate ? <span className="cf-sigdateval">{signedDate}</span> : null}</div>
               <div className="cf-sigcaption">Date</div>
             </div>
           </div>
         </div>
       );
+    }
     case 'medications':
       return (
         <div className="cf-keep">

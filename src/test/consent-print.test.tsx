@@ -49,8 +49,8 @@ const filled = (): PacketFill => ({
   toothNumbers: '14, 15',
   providerName: 'Dr. Reference',
   procedures: [
-    { code: 'D7140', description: 'Extraction, erupted tooth', officeFeeCents: 25000, feeCents: 25000, overridden: false },
-    { code: 'D7953', description: 'Bone graft', officeFeeCents: 60000, feeCents: 45000, overridden: true },
+    { code: 'D7140', description: 'Extraction, erupted tooth', officeFeeCents: 25000, feeCents: 25000, overridden: false, quantity: 1 },
+    { code: 'D7953', description: 'Bone graft', officeFeeCents: 60000, feeCents: 45000, overridden: true, quantity: 1 },
   ],
   includeFinancial: true,
   discountCents: 5000,
@@ -140,6 +140,86 @@ describe('financial agreement sheet', () => {
 
   it('stays byte-identical', () => {
     expect(html).toMatchSnapshot();
+  });
+
+  it('single-quantity packets show no Qty column (unchanged classic table)', () => {
+    expect(html).not.toContain('>Qty<');
+    expect(html).not.toContain('Unit Fee');
+  });
+});
+
+describe('fee table quantities', () => {
+  const withQuantities = (): PacketFill => ({
+    ...filled(),
+    procedures: [
+      // Per-tooth extraction on three teeth: unit fee × 3.
+      { code: 'D7140', description: 'Extraction, erupted tooth', officeFeeCents: 25000, feeCents: 25000, overridden: false, quantity: 3, toothNumbers: '3, 14, 19' },
+      // Flat-fee code keeps quantity 1 even with teeth listed.
+      { code: 'D9310', description: 'Consultation', officeFeeCents: 10000, feeCents: 10000, overridden: false, quantity: 1 },
+    ],
+    discountCents: 0,
+    insuranceEstimateCents: 0,
+  });
+
+  const html = render({
+    form: FINANCIAL_FORM,
+    content: { blocks: FINANCIAL_BLOCKS },
+    branding: BRANDING,
+    fill: withQuantities(),
+    versionDate: '2026-07-01',
+  });
+
+  it('shows the Qty column and per-line totals when any line multiplies', () => {
+    expect(html).toContain('>Qty<');
+    expect(html).toContain('Unit Fee');
+    expect(html).toContain('$750.00'); // 3 × $250 line total
+    expect(html).toContain('$850.00'); // packet total: 750 + 100
+  });
+
+  it('a quantity-1 line prints its plain fee as the total', () => {
+    // The consultation row: qty 1, unit $100, total $100.
+    expect(html).toMatch(/D9310[\s\S]*?<td class="cf-num">1<\/td><td class="cf-num">\$100\.00<\/td><td class="cf-num">\$100\.00<\/td>/);
+  });
+});
+
+describe('electronic signatures on the printed sheet', () => {
+  const SIG_URL = 'data:image/png;base64,iVBORw0KGgoTEST';
+  const signedFill = (): PacketFill => ({
+    ...filled(),
+    signatures: { patient: SIG_URL },
+    signedAtIso: '2026-08-03T14:22:00',
+  });
+
+  it('renders the signature image and signed date for a signed role', () => {
+    const html = render({
+      form: FORM, content: { blocks: BLOCKS }, branding: BRANDING,
+      fill: signedFill(), versionDate: '2026-07-01',
+    });
+    expect(html).toContain('cf-sigimg');
+    expect(html).toContain(SIG_URL);
+    expect(html).toContain('Patient Signature');
+    expect(html).toContain('cf-sigdateval');
+    expect(html).toContain('August 3, 2026');
+  });
+
+  it('keeps the blank rule for unsigned roles alongside a signed one', () => {
+    const blocks: ConsentBlock[] = [
+      ...BLOCKS,
+      { id: 'sig2', type: 'signature', role: 'doctor', required: true },
+    ];
+    const html = render({
+      form: FORM, content: { blocks }, branding: BRANDING, fill: signedFill(),
+    });
+    // Doctor stays a plain empty rule — paper signing remains a normal path.
+    expect(html).toMatch(/<div class="cf-sigrule"><\/div><div class="cf-sigcaption">Doctor Signature/);
+    // The single image belongs to the patient role only.
+    expect(html.match(/cf-sigimg/g)?.length).toBe(1);
+  });
+
+  it('blank copies never carry a signature image', () => {
+    const html = render({ form: FORM, content: { blocks: BLOCKS }, branding: BRANDING, fill: null });
+    expect(html).not.toContain('cf-sigimg');
+    expect(html).not.toContain('cf-sigdateval');
   });
 });
 

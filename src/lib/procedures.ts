@@ -108,6 +108,18 @@ export function normalizeProcedureCode(code: string): string {
 }
 
 /**
+ * Counts the entries in a free-typed teeth/surfaces field. Entries are
+ * separated by commas, semicolons, or whitespace — so teeth "3, 14 19" is 3
+ * entries, and surfaces count SELECTIONS, not letters: "MOD" is ONE surface
+ * combination while "MO, DO" is two. This is what keeps a compound surface
+ * code from being silently billed three times.
+ */
+export function countUnitTokens(value: string | null | undefined): number {
+  if (!value) return 0;
+  return value.split(/[\s,;]+/).filter(Boolean).length;
+}
+
+/**
  * How many billable units a set of teeth/surfaces represents under a strategy.
  * This is the primitive the Forms financial math will use so procedures are not
  * blindly multiplied by the number of teeth.
