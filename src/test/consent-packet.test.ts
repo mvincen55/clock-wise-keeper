@@ -86,4 +86,20 @@ describe('privacy boundary — the workflow cannot store what it collects', () =
     expect(source).toContain('beforeunload');
     expect(source).toContain('clearTimeoutMinutes');
   });
+
+  it('blocks in-app navigation with a stay-or-discard choice (never silent loss)', () => {
+    expect(source).toMatch(/useBlocker\(hasPatientInfo\)/);
+    expect(source).toContain('Discard and leave');
+    // Leaving must clear before proceeding, and there is no save-for-later.
+    expect(source).toMatch(/clearAll\(\); blocker\.proceed/);
+    expect(source).not.toMatch(/saveForLater|savePacket|packetDraft/);
+  });
+
+  it('clears the packet when the office context changes', () => {
+    expect(source).toMatch(/ctx\.org_id !== orgIdRef\.current/);
+  });
+
+  it('never routes patient values into URLs or history state', () => {
+    expect(source).not.toMatch(/searchParams|useSearchParams|history\.pushState|location\.hash/i);
+  });
 });
