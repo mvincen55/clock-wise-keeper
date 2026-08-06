@@ -1,8 +1,9 @@
-import type {
-  ConsentBlock,
-  ConsentBundle,
-  ConsentForm,
-  ConsentTemplateContent,
+import {
+  templateLayout,
+  type ConsentBlock,
+  type ConsentBundle,
+  type ConsentForm,
+  type ConsentTemplateContent,
 } from './types';
 
 /**
@@ -186,6 +187,7 @@ export function estimateBlockLines(block: ConsentBlock): number {
     case 'cost':
       return 2;
     case 'long_answer': return 4;
+    case 'notes': return 4;
     case 'initials': return 2;
     case 'signature': return 4;
     case 'logo': return 4;
@@ -219,4 +221,91 @@ export function pagesLikelyToOverflow(blocks: ConsentBlock[]): number[] {
     })
     .filter(p => p.lines > LINES_PER_PAGE)
     .map(p => p.page);
+}
+
+// ---------------------------------------------------------------------------
+// Page-fit reporting for the explicit layout control
+// ---------------------------------------------------------------------------
+
+/** Compact mode buys roughly this much extra content per page (smaller type,
+ *  tighter spacing — still ≥9pt). */
+const COMPACT_CAPACITY = Math.round(LINES_PER_PAGE * 1.2);
+
+export interface PageFitReport {
+  /** Pages the current content is estimated to need in the chosen mode. */
+  estimatedPages: number;
+  /** The layout mode the report was computed for. */
+  pageFit: 'auto' | 'one_page' | 'two_pages';
+  /** Null when the content fits the chosen layout. */
+  problem: string | null;
+  /** Layout switches that would resolve the problem, in suggested order. */
+  suggestions: Array<'two_pages' | 'shorten' | 'auto'>;
+}
+
+/**
+ * An honest, actionable page-fit verdict for the builder — says WHY the form
+ * doesn't fit and what to do, instead of a vague overflow warning.
+ */
+export function pageFitReport(content: ConsentTemplateContent): PageFitReport {
+  const { pageFit } = templateLayout(content);
+  const blocks = content.blocks;
+  const totalLines = blocks
+    .filter(b => b.type !== 'page_break')
+    .reduce((sum, b) => sum + estimateBlockLines(b), 8);
+  const signatureLines = blocks
+    .filter(b => b.type === 'signature' || b.type === 'initials')
+    .reduce((sum, b) => sum + estimateBlockLines(b), 0);
+  // ~5.4 estimated lines per printed inch at the sheet's base type size.
+  const signatureInches = Math.round((signatureLines / 5.4) * 10) / 10;
+
+  if (pageFit === 'one_page') {
+    if (totalLines <= COMPACT_CAPACITY) {
+      return { estimatedPages: 1, pageFit, problem: null, suggestions: [] };
+    }
+    const over = totalLines - COMPACT_CAPACITY;
+    const sigNote = signatureLines > 0
+      ? ` The signature area alone needs about ${signatureInches} in.`
+      : '';
+    return {
+      estimatedPages: Math.ceil(totalLines / COMPACT_CAPACITY),
+      pageFit,
+      problem:
+        `This form is about ${over} lines too long for one page, even with compact spacing.` +
+        sigNote +
+        ' Shorten the wording, remove a section, or switch to two pages.',
+      suggestions: ['shorten', 'two_pages'],
+    };
+  }
+
+  if (pageFit === 'two_pages') {
+    const pages = splitIntoPages(blocks);
+    if (pages.length === 1) {
+      return {
+        estimatedPages: Math.max(1, Math.ceil(totalLines / LINES_PER_PAGE)),
+        pageFit,
+        problem:
+          'Two-page mode works best with an intentional page break. Add a Page Break block where the second page should start.',
+        suggestions: [],
+      };
+    }
+    const overflowing = pagesLikelyToOverflow(blocks);
+    return {
+      estimatedPages: Math.max(pages.length, Math.ceil(totalLines / LINES_PER_PAGE)),
+      pageFit,
+      problem: overflowing.length > 0
+        ? `Page ${overflowing.join(' and ')} holds more than fits on one sheet. Move content past the page break or shorten it.`
+        : null,
+      suggestions: overflowing.length > 0 ? ['shorten'] : [],
+    };
+  }
+
+  const overflowing = pagesLikelyToOverflow(blocks);
+  return {
+    estimatedPages: Math.max(splitIntoPages(blocks).length, Math.ceil(totalLines / LINES_PER_PAGE)),
+    pageFit,
+    problem: overflowing.length > 0
+      ? `Content spills past page ${overflowing[0]} without an intentional break — the printer decides where to cut. Add a Page Break block or switch the layout to two pages.`
+      : null,
+    suggestions: overflowing.length > 0 ? ['two_pages'] : [],
+  };
 }

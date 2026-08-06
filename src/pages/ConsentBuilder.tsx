@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom';
 import {
   DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors,
   type DragEndEvent,
@@ -11,6 +11,10 @@ import {
   ArrowLeft, Save, Send, History, Eye, Plus, AlertTriangle, Loader2, Lock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -38,10 +42,11 @@ import AiAssistPanel from '@/components/consents/AiAssistPanel';
 import { contentToPlainText } from '@/lib/consents/ai';
 import ConsentPrintSheet from '@/components/consents/ConsentPrintSheet';
 import { ConsentPreviewDialog } from '@/components/consents/ConsentPrinting';
-import { templateWarnings } from '@/lib/consents/validation';
+import { pageFitReport, templateWarnings } from '@/lib/consents/validation';
 import {
-  BLOCK_TYPES, FORM_CATEGORIES, FORM_CATEGORY_LABELS, makeBlock, newBlockId, workingContent,
-  type ConsentBlock, type ConsentBlockType, type ConsentForm, type FormCategory,
+  BLOCK_TYPES, FORM_CATEGORIES, FORM_CATEGORY_LABELS, makeBlock, newBlockId,
+  templateLayout, workingContent,
+  type ConsentBlock, type ConsentBlockType, type ConsentForm, type FormCategory, type PageFit,
 } from '@/lib/consents/types';
 
 /**
@@ -81,6 +86,7 @@ export default function ConsentBuilder() {
   const [editableBy, setEditableBy] = useState<'managers' | 'everyone'>('managers');
   const [hygienistMayComplete, setHygienistMayComplete] = useState(false);
   const [blocks, setBlocks] = useState<ConsentBlock[]>(STARTER_BLOCKS);
+  const [pageFit, setPageFit] = useState<PageFit>('auto');
   const [dirty, setDirty] = useState(false);
   const [loadedId, setLoadedId] = useState<string | null>(null);
 
@@ -99,6 +105,7 @@ export default function ConsentBuilder() {
     setHygienistMayComplete(existing.hygienistMayComplete);
     const content = workingContent(existing);
     setBlocks(content?.blocks ?? STARTER_BLOCKS());
+    setPageFit(content ? templateLayout(content).pageFit : 'auto');
     setDirty(false);
     setLoadedId(existing.id);
   }, [existing, loadedId]);
@@ -111,9 +118,15 @@ export default function ConsentBuilder() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
 
+  // In-app navigation with unsaved edits: template drafts are storable (they
+  // are blank configuration, never patient data), so the guard offers to save
+  // the draft on the way out instead of silently dropping the work.
+  const blocker = useBlocker(dirty);
+
   const readOnly = !!existing && !(can('editTemplates') || existing.editableBy === 'everyone');
   const isFinancial = existing?.isFinancial ?? category === 'financial';
-  const content = useMemo(() => ({ blocks }), [blocks]);
+  const content = useMemo(() => ({ blocks, layout: { pageFit } }), [blocks, pageFit]);
+  const fitReport = useMemo(() => pageFitReport(content), [content]);
   const procedureCodes = useMemo(
     () => procedureCodesText.split(/[,\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean),
     [procedureCodesText],
@@ -348,6 +361,40 @@ export default function ConsentBuilder() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label>Page layout</Label>
+                <Select value={pageFit} onValueChange={v => { setPageFit(v as PageFit); touch(); }} disabled={readOnly}>
+                  <SelectTrigger className="sm:w-72"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Automatic</SelectItem>
+                    <SelectItem value="one_page">Fit to one page (compact spacing)</SelectItem>
+                    <SelectItem value="two_pages">Two pages (intentional page break)</SelectItem>
+                  </SelectContent>
+                </Select>
+                {fitReport.problem ? (
+                  <div className="rounded-lg border border-warning/50 bg-warning/5 p-2.5 text-xs text-warning space-y-1.5">
+                    <p>{fitReport.problem}</p>
+                    <div className="flex gap-2">
+                      {fitReport.suggestions.includes('two_pages') && (
+                        <Button size="sm" variant="outline" className="h-6 text-xs" disabled={readOnly}
+                          onClick={() => { setPageFit('two_pages'); touch(); }}>
+                          Switch to two pages
+                        </Button>
+                      )}
+                      {fitReport.pageFit === 'auto' && fitReport.suggestions.includes('two_pages') && (
+                        <Button size="sm" variant="outline" className="h-6 text-xs" disabled={readOnly}
+                          onClick={() => { addBlock('page_break'); }}>
+                          Add a page break
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Prints on about {fitReport.estimatedPages} page{fitReport.estimatedPages === 1 ? '' : 's'}.
+                  </p>
+                )}
+              </div>
               <label className="flex items-center justify-between gap-3 rounded-lg border p-3 sm:col-span-2">
                 <span className="text-sm">
                   <span className="font-medium">Hygienist may complete without a doctor signature</span>
@@ -504,6 +551,38 @@ export default function ConsentBuilder() {
           />
         }
       />
+
+      {/* Unsaved-changes guard: save the draft on the way out, or discard. */}
+      <AlertDialog open={blocker.state === 'blocked'} onOpenChange={(open) => { if (!open) blocker.reset?.(); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved template changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              This form has edits that haven't been saved as a draft yet.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => blocker.reset?.()}>Stay here</AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={() => { blocker.proceed?.(); }}
+            >
+              Discard changes
+            </Button>
+            {!readOnly && (
+              <AlertDialogAction
+                onClick={async () => {
+                  const saved = await saveDraft(true);
+                  if (saved) blocker.proceed?.();
+                  else blocker.reset?.();
+                }}
+              >
+                Save draft and leave
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

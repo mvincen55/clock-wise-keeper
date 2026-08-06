@@ -552,6 +552,69 @@
   text-align: center;
 }
 
+.cf-foot-office {
+  min-width: 0;
+}
+
+/* Standard patient-information row under the page-1 header: name left,
+   date of birth right, sharing one line. */
+.cf-patient-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16pt;
+  margin-bottom: 8pt;
+  padding-bottom: 6pt;
+  border-bottom: 0.75pt solid var(--cf-line);
+}
+
+.cf-patient-row .cf-field {
+  margin: 0;
+}
+
+.cf-patient-row-sm {
+  font-size: 8.5pt;
+  color: var(--cf-muted);
+}
+
+/* One-page mode: tighter spacing within readable minimums (never below
+   9pt body text). The layout compacts; the words stay legible. */
+.cf-sheet.cf-compact {
+  font-size: 9pt;
+  line-height: 1.3;
+}
+
+.cf-sheet.cf-compact .cf-head {
+  padding-bottom: 5pt;
+  margin-bottom: 6pt;
+}
+
+.cf-sheet.cf-compact .cf-logo {
+  height: 0.65in;
+}
+
+.cf-sheet.cf-compact .cf-patient-row {
+  margin-bottom: 5pt;
+  padding-bottom: 4pt;
+}
+
+.cf-sheet.cf-compact .cf-para,
+.cf-sheet.cf-compact .cf-instruction {
+  margin-bottom: 3pt;
+}
+
+.cf-sheet.cf-compact .cf-section {
+  margin-top: 6pt;
+  margin-bottom: 2pt;
+}
+
+.cf-sheet.cf-compact .cf-sig {
+  margin-top: 8pt;
+}
+
+.cf-sheet.cf-compact .cf-foot {
+  margin-top: 6pt;
+}
+
 /* Signature areas, headed sections, and single fields never split across
    a page boundary. */
 .cf-keep,

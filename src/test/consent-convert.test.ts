@@ -5,7 +5,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  guessCategory, guessSectionKind, heuristicConvert, sanitizeBlocks, sanitizeCategory,
+  guessCategory, guessSectionKind, heuristicConvert, inferProcedureCodes,
+  sanitizeBlocks, sanitizeCategory,
 } from '@/lib/consents/convert';
 
 const SCANNED_FORM = `
@@ -122,5 +123,36 @@ describe('classification', () => {
     expect(sanitizeCategory('implant')).toBe('implant');
     expect(sanitizeCategory('made-up')).toBe('other');
     expect(sanitizeCategory(null)).toBe('other');
+  });
+});
+
+describe('inferProcedureCodes', () => {
+  const meta = [
+    { code: 'D7140', patientName: 'Simple extraction', internalDescription: 'Extraction, erupted tooth', keywords: ['extraction', 'pull'] },
+    { code: 'D7953', patientName: 'Bone graft', internalDescription: '', keywords: ['graft', 'socket preservation'] },
+    { code: 'D2740', patientName: 'Porcelain crown', internalDescription: '', keywords: ['crown'] },
+    { code: 'D0140', patientName: 'Exam', internalDescription: '', keywords: ['gum'] }, // short keyword: never matches
+  ];
+
+  it('explicit CDT codes in the document are confident', () => {
+    const r = inferProcedureCodes('Consent', 'This covers D7140 and D7953.', meta);
+    expect(r.confident).toEqual(['D7140', 'D7953']);
+    expect(r.suggested).toEqual([]);
+  });
+
+  it('a title match is confident; a body match is only a suggestion', () => {
+    const r = inferProcedureCodes(
+      'Extraction Consent',
+      'A bone graft may be placed in the socket after removal.',
+      meta,
+    );
+    expect(r.confident).toEqual(['D7140']);
+    expect(r.suggested).toEqual(['D7953']);
+  });
+
+  it('short generic keywords never match, and unrelated codes stay out', () => {
+    const r = inferProcedureCodes('Post-op instructions', 'Care for your gums after treatment.', meta);
+    expect(r.confident).toEqual([]);
+    expect(r.suggested).toEqual([]);
   });
 });

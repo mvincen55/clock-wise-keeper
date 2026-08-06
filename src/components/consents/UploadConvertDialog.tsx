@@ -24,6 +24,8 @@ import ConsentPrintSheet from '@/components/consents/ConsentPrintSheet';
 import NoPhiNote from '@/components/NoPhiNote';
 import { extractFormText, type ExtractedDoc } from '@/lib/consents/extract';
 import { convertUploadedForm, type ConversionResult } from '@/lib/consents/ai';
+import { inferProcedureCodes } from '@/lib/consents/convert';
+import { useProcedureMeta } from '@/hooks/useProcedureMeta';
 import {
   FORM_CATEGORIES, FORM_CATEGORY_LABELS, type FormCategory,
 } from '@/lib/consents/types';
@@ -88,7 +90,10 @@ export default function UploadConvertDialog({
   const [originalPages, setOriginalPages] = useState<string[]>([]);
   const [conversion, setConversion] = useState<ConversionResult | null>(null);
   const [category, setCategory] = useState<FormCategory>('other');
+  const [procedureCodesText, setProcedureCodesText] = useState('');
+  const [suggestedCodes, setSuggestedCodes] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const { data: procedureMeta = [] } = useProcedureMeta();
 
   const reset = () => {
     setStep('pick');
@@ -99,6 +104,8 @@ export default function UploadConvertDialog({
     setExtracted(null);
     setOriginalPages([]);
     setConversion(null);
+    setProcedureCodesText('');
+    setSuggestedCodes([]);
     setSaving(false);
   };
 
@@ -119,8 +126,23 @@ export default function UploadConvertDialog({
     const result = await convertUploadedForm(formName, doc.text);
     setConversion(result);
     setCategory(result.category);
+    // Infer connected procedures from the title/text and the office's own
+    // metadata: strong matches pre-fill (still editable), loose matches wait
+    // for a manager's confirmation.
+    const inferred = inferProcedureCodes(
+      formName,
+      doc.text,
+      procedureMeta.map(m => ({
+        code: m.code,
+        patientName: m.patientName,
+        internalDescription: m.internalDescription,
+        keywords: m.keywords,
+      })),
+    );
+    setProcedureCodesText(inferred.confident.join(', '));
+    setSuggestedCodes(inferred.suggested);
     setStep('review');
-  }, []);
+  }, [procedureMeta]);
 
   const start = async () => {
     if (!file) return;
@@ -170,6 +192,8 @@ export default function UploadConvertDialog({
         name: name.trim() || 'Uploaded form',
         category,
         content: conversion.content,
+        procedureCodes: procedureCodesText
+          .split(/[,\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean),
         source: 'upload',
         // Approve = the manager just reviewed it side by side. Draft keeps
         // the needs-review flag so the library shows it prominently.
@@ -298,6 +322,35 @@ export default function UploadConvertDialog({
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{conversion.notice}
                 </p>
               )}
+              <div className="flex w-full flex-wrap items-center gap-2">
+                <Input
+                  value={procedureCodesText}
+                  onChange={e => setProcedureCodesText(e.target.value)}
+                  className="h-8 w-72"
+                  placeholder="Connected procedures (CDT codes)"
+                  aria-label="Connected procedures"
+                />
+                {suggestedCodes
+                  .filter(c => !procedureCodesText.toUpperCase().includes(c))
+                  .map(code => (
+                    <Button
+                      key={code}
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() =>
+                        setProcedureCodesText(t => (t.trim() ? `${t.trim().replace(/,\s*$/, '')}, ${code}` : code))
+                      }
+                    >
+                      + {code}?
+                    </Button>
+                  ))}
+                {(procedureCodesText || suggestedCodes.length > 0) && (
+                  <p className="w-full text-[11px] text-muted-foreground">
+                    Inferred from the form's title and text — edit freely. Suggestions with a “?” need your confirmation.
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="grid flex-1 min-h-0 gap-4 md:grid-cols-2">

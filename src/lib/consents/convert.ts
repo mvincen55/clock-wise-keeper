@@ -229,7 +229,7 @@ const VALID_TYPES = new Set<ConsentBlockType>([
   'title', 'section', 'instruction', 'paragraph', 'bullets', 'checkbox',
   'yesno', 'short_answer', 'long_answer', 'date', 'tooth_numbers',
   'procedure', 'provider', 'patient_name', 'cost', 'initials', 'signature',
-  'medications', 'logo', 'divider', 'page_break',
+  'medications', 'notes', 'logo', 'divider', 'page_break',
 ]);
 
 const VALID_KINDS = new Set<ConsentSectionKind>([
@@ -296,4 +296,65 @@ export function sanitizeCategory(raw: unknown): FormCategory {
   return typeof raw === 'string' && (FORM_CATEGORIES as readonly string[]).includes(raw)
     ? (raw as FormCategory)
     : 'other';
+}
+
+// ---------------------------------------------------------------------------
+// Connected-procedure inference for imported forms
+// ---------------------------------------------------------------------------
+
+export interface ProcedureInferenceSource {
+  code: string;
+  patientName: string;
+  internalDescription: string;
+  keywords: string[];
+}
+
+export interface InferredProcedures {
+  /** Strong matches, safe to pre-fill (still fully editable). */
+  confident: string[];
+  /** Looser matches, shown as suggestions a manager confirms. */
+  suggested: string[];
+}
+
+const CDT_CODE_RE = /\bD\d{4}\b/g;
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const phraseRe = (phrase: string) => new RegExp(`\\b${escapeRe(phrase)}\\b`, 'i');
+
+/**
+ * Infers which office procedures an imported form is about, from its title,
+ * its text, and the office's own procedure metadata. Conservative on purpose:
+ * an explicit CDT code or a title match is confident; a body-text match is
+ * only ever a suggestion; short/generic keywords never match at all.
+ */
+export function inferProcedureCodes(
+  name: string,
+  text: string,
+  meta: ProcedureInferenceSource[],
+): InferredProcedures {
+  const confident = new Set<string>();
+  const suggested = new Set<string>();
+
+  // Explicit CDT references in the document are the office telling us.
+  for (const match of `${name}\n${text}`.match(CDT_CODE_RE) ?? []) {
+    confident.add(match.toUpperCase());
+  }
+
+  for (const m of meta) {
+    const code = m.code.toUpperCase();
+    if (confident.has(code)) continue;
+    const phrases = [m.patientName, m.internalDescription, ...m.keywords]
+      .map(p => p.trim())
+      // Short fragments ("cap", "gum") match everything; require substance.
+      .filter(p => p.length >= 4);
+    if (phrases.length === 0) continue;
+    if (phrases.some(p => phraseRe(p).test(name))) {
+      confident.add(code);
+    } else if (phrases.some(p => phraseRe(p).test(text))) {
+      suggested.add(code);
+    }
+  }
+
+  for (const code of confident) suggested.delete(code);
+  return { confident: [...confident].sort(), suggested: [...suggested].sort() };
 }

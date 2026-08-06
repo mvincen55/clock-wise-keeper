@@ -5,6 +5,7 @@ import { splitIntoPages } from '@/lib/consents/validation';
 import {
   SIGNATURE_ROLE_LABELS,
   packetTotals,
+  templateLayout,
   type ConsentBlock,
   type ConsentForm,
   type ConsentTemplateContent,
@@ -272,6 +273,24 @@ function BlockView({
           </ul>
         </div>
       );
+    case 'notes': {
+      // Temporary packet notes render here; a blank packet (or blank copy)
+      // prints ruled lines to complete by hand.
+      const notes = fill?.notes?.trim();
+      return (
+        <div className="cf-keep">
+          <p className="cf-field-label">{block.label || 'Notes'}:</p>
+          {notes ? (
+            <div className="cf-longline"><span>{notes}</span></div>
+          ) : (
+            <>
+              <div className="cf-longline" />
+              <div className="cf-longline" />
+            </>
+          )}
+        </div>
+      );
+    }
     case 'logo':
       return null; // the letterhead already carries the logo
     case 'divider':
@@ -301,42 +320,64 @@ export default function ConsentPrintSheet({
   fill = null,
   versionDate = null,
 }: ConsentPrintSheetProps) {
-  const visible = content.blocks.filter(b => blockVisible(b, form.id, fill));
+  const layout = templateLayout(content);
+  const visible = content.blocks.filter(b => {
+    if (!blockVisible(b, form.id, fill)) return false;
+    // The standard patient row owns the name — body copies never print twice.
+    if (layout.patientRow && b.type === 'patient_name') return false;
+    return true;
+  });
   const pages = splitIntoPages(visible);
   const officeName = branding.displayName || branding.legalName || 'Dental Office';
-  const addressBits = [branding.addressLine1, branding.addressLine2].filter(Boolean).join(' · ');
+  // The footer is the one place the office identifies itself, in legal form.
+  const legalName = branding.legalName || branding.displayName || 'Dental Office';
+  const addressBits = [branding.addressLine1, branding.addressLine2].filter(Boolean).join(', ');
   const contactBits = [branding.phone, branding.website].filter(Boolean).join(' · ');
   const versionLabel = form.currentVersion > 0
     ? `v${form.currentVersion}${versionDate ? ` · ${prettyDate(versionDate)}` : ''}`
     : 'Draft';
+  const sheetClass = `cf-sheet${layout.pageFit === 'one_page' ? ' cf-compact' : ''}`;
 
   return (
     <>
       {pages.map((pageBlocks, pageIndex) => (
-        <div className="cf-sheet" key={pageIndex}>
+        <div className={sheetClass} key={pageIndex}>
           {pageIndex === 0 ? (
-            <header className="cf-head">
-              <div className="cf-head-office">
-                {branding.logoUrl ? (
-                  <img src={branding.logoUrl} alt="" className="cf-logo" />
-                ) : (
-                  <div className="cf-logo-mark">{officeName.charAt(0).toUpperCase()}</div>
-                )}
-                <div>
-                  <div className="cf-office-name">{officeName}</div>
-                  {addressBits && <div className="cf-office-line">{addressBits}</div>}
-                  {contactBits && <div className="cf-office-line">{contactBits}</div>}
+            <>
+              <header className="cf-head">
+                <div className="cf-head-office">
+                  {branding.logoUrl ? (
+                    <img src={branding.logoUrl} alt={officeName} className="cf-logo" />
+                  ) : (
+                    <div className="cf-logo-mark">{officeName.charAt(0).toUpperCase()}</div>
+                  )}
                 </div>
-              </div>
-              <div className="cf-head-doc">
-                <div className="cf-doc-name">{form.name}</div>
-                <div className="cf-doc-version">{versionLabel}</div>
-              </div>
-            </header>
+                <div className="cf-head-doc">
+                  <div className="cf-doc-name">{form.name}</div>
+                  <div className="cf-doc-version">{versionLabel}</div>
+                </div>
+              </header>
+              {layout.patientRow && (
+                <div className="cf-patient-row cf-keep">
+                  <p className="cf-field">
+                    <span className="cf-field-label">Patient Name:</span>{' '}
+                    <Fillable value={fill?.patientName} wide />
+                  </p>
+                  <p className="cf-field">
+                    <span className="cf-field-label">Date of Birth:</span>{' '}
+                    <Fillable value={fill?.dateOfBirth} />
+                  </p>
+                </div>
+              )}
+            </>
           ) : (
             <header className="cf-head cf-head-continued">
-              <div className="cf-office-name-sm">{officeName}</div>
               <div className="cf-doc-name-sm">{form.name} — continued</div>
+              {layout.patientRow && (
+                <div className="cf-patient-row-sm">
+                  Patient: <Fillable value={fill?.patientName} />
+                </div>
+              )}
             </header>
           )}
 
@@ -359,9 +400,10 @@ export default function ConsentPrintSheet({
           </main>
 
           <footer className="cf-foot">
-            <span>{officeName}</span>
-            <span className="cf-foot-notice">
-              {fill ? 'Completed with temporary information — not stored by Purple Envelope' : 'Blank copy'}
+            <span className="cf-foot-office">
+              {legalName}
+              {addressBits && ` · ${addressBits}`}
+              {contactBits && ` · ${contactBits}`}
             </span>
             <span>
               {versionLabel} · Page {pageIndex + 1} of {pages.length}

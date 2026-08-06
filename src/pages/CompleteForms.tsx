@@ -28,6 +28,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { GENERIC_BRANDING, useOrgBranding } from '@/hooks/useOrgBranding';
 import { useFeeSchedules, useFeeScheduleItems } from '@/hooks/useFeeSchedules';
+import { useActiveProviders } from '@/hooks/useProviders';
 import { useConsentForms } from '@/hooks/useConsentForms';
 import { useConsentBundles, recordBundleUse } from '@/hooks/useConsentBundles';
 import { useConsentPermissions } from '@/hooks/useConsentSettings';
@@ -81,6 +82,7 @@ export default function CompleteForms() {
   const { data: bundles = [] } = useConsentBundles();
   const { can, settings } = useConsentPermissions();
   const { data: schedules = [] } = useFeeSchedules();
+  const providers = useActiveProviders();
   const officeSchedule = schedules.find(s => s.kind === 'office') ?? null;
   const { data: feeItems = [] } = useFeeScheduleItems(officeSchedule?.id ?? null);
 
@@ -617,6 +619,10 @@ export default function CompleteForms() {
                 <Input id="pf-name" value={fill.patientName} onChange={e => setFill(f => ({ ...f, patientName: e.target.value }))} autoComplete="off" />
               </div>
               <div className="space-y-1.5">
+                <Label htmlFor="pf-dob">Date of birth</Label>
+                <Input id="pf-dob" type="date" value={fill.dateOfBirth} onChange={e => setFill(f => ({ ...f, dateOfBirth: e.target.value }))} autoComplete="off" />
+              </div>
+              <div className="space-y-1.5">
                 <Label htmlFor="pf-date">Date *</Label>
                 <Input id="pf-date" type="date" value={fill.date} onChange={e => setFill(f => ({ ...f, date: e.target.value }))} />
               </div>
@@ -629,11 +635,24 @@ export default function CompleteForms() {
                 <Input id="pf-surface" value={fill.surfaces} onChange={e => setFill(f => ({ ...f, surfaces: e.target.value }))} placeholder="e.g. MOD" autoComplete="off" />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="pf-provider">Treating provider</Label>
-                <Input id="pf-provider" value={fill.providerName} onChange={e => setFill(f => ({ ...f, providerName: e.target.value }))} autoComplete="off" />
+                <Label>Treating provider</Label>
+                <Select
+                  value={fill.providerName || undefined}
+                  onValueChange={v => setFill(f => ({ ...f, providerName: v }))}
+                >
+                  <SelectTrigger><SelectValue placeholder="Choose a provider" /></SelectTrigger>
+                  <SelectContent>
+                    {providers.map(p => (
+                      <SelectItem key={p.id} value={p.displayName}>{p.displayName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  From the office's provider registry (Settings → Treating Providers).
+                </p>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="pf-notes">Additional notes (printed nowhere unless a form has a notes field)</Label>
+                <Label htmlFor="pf-notes">Additional notes (print only where a form has a Notes area)</Label>
                 <Input id="pf-notes" value={fill.notes} onChange={e => setFill(f => ({ ...f, notes: e.target.value }))} autoComplete="off" />
               </div>
               <label className="flex items-center justify-between gap-3 rounded-lg border p-3 sm:col-span-2">
