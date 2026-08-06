@@ -414,9 +414,29 @@ export interface PacketProcedure {
   description: string;
   /** The office's normal fee for the code; null when not on the schedule. */
   officeFeeCents: Cents | null;
-  /** What will print. Starts at officeFeeCents; user may override. */
+  /** UNIT fee that will print. Starts at officeFeeCents; user may override. */
   feeCents: Cents | null;
   overridden: boolean;
+  /**
+   * Billable units from the code's procedure_meta quantity strategy (or a
+   * hand-typed value for `manual` codes). Codes without metadata stay 1 —
+   * per-visit behavior — so listing three teeth never triples a flat fee.
+   */
+  quantity: number;
+  /** Per-line teeth/surfaces. The packet-level fields stay as the default
+   *  for a single-procedure packet; these win when set. */
+  toothNumbers?: string;
+  surfaces?: string;
+}
+
+/** Defensive read of a line's quantity — always a whole number ≥ 1. */
+export function packetQuantity(p: Pick<PacketProcedure, 'quantity'>): number {
+  return Math.max(1, Math.round(p.quantity || 1));
+}
+
+/** What one line prints: overridden-or-office UNIT fee × quantity. */
+export function packetLineTotal(p: PacketProcedure): Cents | null {
+  return p.feeCents === null ? null : p.feeCents * packetQuantity(p);
 }
 
 /** Temporary patient/treatment values — memory only, cleared after print. */
@@ -437,6 +457,14 @@ export interface PacketFill {
   paymentArrangement: string;
   /** Per-block answers keyed by `${formId}:${blockId}` (yes/no, checks, text). */
   answers: Record<string, string>;
+  /**
+   * On-screen signatures keyed by signature role → PNG data URL. Memory-only
+   * like every other fill value: rendered onto the printed sheet and then
+   * cleared with the packet — never uploaded, stored, or logged.
+   */
+  signatures: Record<string, string>;
+  /** Stamped when the first signature lands; printed next to signature images. */
+  signedAtIso?: string;
 }
 
 export function emptyPacketFill(todayIso: string): PacketFill {
@@ -456,6 +484,7 @@ export function emptyPacketFill(todayIso: string): PacketFill {
     depositCents: 0,
     paymentArrangement: '',
     answers: {},
+    signatures: {},
   };
 }
 
@@ -467,17 +496,19 @@ export function fillHasPatientInfo(fill: PacketFill): boolean {
     fill.toothNumbers.trim() ||
     fill.surfaces.trim() ||
     fill.notes.trim() ||
-    Object.values(fill.answers).some(v => v && v.trim())
+    fill.procedures.some(p => p.toothNumbers?.trim() || p.surfaces?.trim()) ||
+    Object.values(fill.answers).some(v => v && v.trim()) ||
+    Object.keys(fill.signatures).length > 0
   );
 }
 
-/** Financial math for the packet: total, minus adjustments. */
+/** Financial math for the packet: unit fee × quantity, minus adjustments. */
 export function packetTotals(fill: PacketFill): {
   subtotalCents: Cents;
   totalCents: Cents;
   estimatedPatientCents: Cents;
 } {
-  const subtotal = fill.procedures.reduce((sum, p) => sum + (p.feeCents ?? 0), 0);
+  const subtotal = fill.procedures.reduce((sum, p) => sum + (packetLineTotal(p) ?? 0), 0);
   const total = Math.max(0, subtotal - fill.discountCents);
   const patient = Math.max(0, total - fill.insuranceEstimateCents - fill.depositCents);
   return { subtotalCents: subtotal, totalCents: total, estimatedPatientCents: patient };

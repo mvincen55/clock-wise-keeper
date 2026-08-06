@@ -7,8 +7,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { computeQuantity, countUnitTokens } from '@/lib/procedures';
 import {
-  emptyPacketFill, fillHasPatientInfo, packetTotals, type PacketFill,
+  emptyPacketFill, fillHasPatientInfo, packetLineTotal, packetTotals,
+  type PacketFill, type PacketProcedure,
 } from '@/lib/consents/types';
 
 const fillWith = (patch: Partial<PacketFill>): PacketFill => ({
@@ -16,12 +18,22 @@ const fillWith = (patch: Partial<PacketFill>): PacketFill => ({
   ...patch,
 });
 
+const proc = (patch: Partial<PacketProcedure>): PacketProcedure => ({
+  code: 'D0000',
+  description: 'Procedure',
+  officeFeeCents: null,
+  feeCents: null,
+  overridden: false,
+  quantity: 1,
+  ...patch,
+});
+
 describe('packetTotals', () => {
   it('sums procedure fees and applies adjustments in order', () => {
     const fill = fillWith({
       procedures: [
-        { code: 'D7140', description: 'Extraction', officeFeeCents: 25000, feeCents: 25000, overridden: false },
-        { code: 'D7953', description: 'Bone graft', officeFeeCents: 60000, feeCents: 50000, overridden: true },
+        proc({ code: 'D7140', description: 'Extraction', officeFeeCents: 25000, feeCents: 25000 }),
+        proc({ code: 'D7953', description: 'Bone graft', officeFeeCents: 60000, feeCents: 50000, overridden: true }),
       ],
       discountCents: 5000,
       insuranceEstimateCents: 30000,
@@ -35,7 +47,7 @@ describe('packetTotals', () => {
 
   it('never goes negative and skips fee-less procedures', () => {
     const fill = fillWith({
-      procedures: [{ code: 'D0140', description: 'Exam', officeFeeCents: null, feeCents: null, overridden: false }],
+      procedures: [proc({ code: 'D0140', description: 'Exam' })],
       discountCents: 1000,
       insuranceEstimateCents: 99999,
     });
@@ -43,6 +55,52 @@ describe('packetTotals', () => {
     expect(totals.subtotalCents).toBe(0);
     expect(totals.totalCents).toBe(0);
     expect(totals.estimatedPatientCents).toBe(0);
+  });
+
+  it('multiplies each line by its quantity (per-tooth code on 3 teeth)', () => {
+    const fill = fillWith({
+      procedures: [
+        proc({ code: 'D7140', feeCents: 25000, quantity: 3, toothNumbers: '3, 14, 19' }),
+        proc({ code: 'D0140', feeCents: 10000 }), // quantity 1 stays a plain fee
+      ],
+    });
+    expect(packetTotals(fill).subtotalCents).toBe(85000);
+  });
+
+  it('multiplies the OVERRIDDEN unit fee by quantity', () => {
+    const fill = fillWith({
+      procedures: [proc({ officeFeeCents: 25000, feeCents: 20000, overridden: true, quantity: 2 })],
+    });
+    expect(packetTotals(fill).subtotalCents).toBe(40000);
+  });
+
+  it('treats a missing/garbage quantity as 1, never 0', () => {
+    expect(packetLineTotal(proc({ feeCents: 5000, quantity: 0 }))).toBe(5000);
+    expect(packetLineTotal(proc({ feeCents: 5000, quantity: Number.NaN }))).toBe(5000);
+    expect(packetLineTotal(proc({ feeCents: null, quantity: 4 }))).toBeNull();
+  });
+});
+
+describe('quantity strategies never blindly multiply by teeth', () => {
+  it('a per-visit or flat code with 3 teeth listed stays quantity 1', () => {
+    const teeth = countUnitTokens('3, 14, 19');
+    expect(teeth).toBe(3);
+    expect(computeQuantity('per_visit', { teeth })).toBe(1);
+    expect(computeQuantity('flat', { teeth })).toBe(1);
+  });
+
+  it('a per-tooth code counts listed teeth; per-surface counts surface selections', () => {
+    expect(computeQuantity('per_tooth', { teeth: countUnitTokens('3, 14, 19') })).toBe(3);
+    // "MOD" is ONE compound surface selection — never 3 units.
+    expect(computeQuantity('per_surface', { surfaces: countUnitTokens('MOD') })).toBe(1);
+    // "MO, DO" is two selections.
+    expect(computeQuantity('per_surface', { surfaces: countUnitTokens('MO, DO') })).toBe(2);
+  });
+
+  it('token counting handles commas, semicolons, and loose spacing', () => {
+    expect(countUnitTokens('3,14 19; 30')).toBe(4);
+    expect(countUnitTokens('  ')).toBe(0);
+    expect(countUnitTokens(undefined)).toBe(0);
   });
 });
 
@@ -56,6 +114,14 @@ describe('fillHasPatientInfo', () => {
     expect(fillHasPatientInfo(fillWith({ toothNumbers: '14' }))).toBe(true);
     expect(fillHasPatientInfo(fillWith({ notes: 'nervous patient' }))).toBe(true);
     expect(fillHasPatientInfo(fillWith({ answers: { 'f:b': 'yes' } }))).toBe(true);
+  });
+
+  it('per-procedure teeth/surfaces and signatures count as patient info', () => {
+    expect(fillHasPatientInfo(fillWith({ procedures: [proc({ toothNumbers: '14' })] }))).toBe(true);
+    expect(fillHasPatientInfo(fillWith({ procedures: [proc({ surfaces: 'MOD' })] }))).toBe(true);
+    expect(fillHasPatientInfo(fillWith({ signatures: { patient: 'data:image/png;base64,AAA' } }))).toBe(true);
+    // A procedure line alone (code + fee, no patient specifics) is not.
+    expect(fillHasPatientInfo(fillWith({ procedures: [proc({ feeCents: 5000 })] }))).toBe(false);
   });
 });
 
@@ -78,7 +144,20 @@ describe('privacy boundary — the workflow cannot store what it collects', () =
     expect(auditCall, 'fee override audit call exists').toBeTruthy();
     const detail = auditCall![1];
     expect(detail).toContain('code');
-    expect(detail).not.toMatch(/patientName|toothNumbers|notes|answers|surfaces/);
+    expect(detail).not.toMatch(/patientName|toothNumbers|notes|answers|surfaces|signatures/);
+  });
+
+  it('signatures never reach an audit detail, a supabase call, or storage', () => {
+    // Every audit detail object in the workflow stays free of signature data.
+    for (const match of source.matchAll(/detail: \{([^}]*)\}/g)) {
+      expect(match[1]).not.toMatch(/signature|signedAt/i);
+    }
+    // The signature pad itself has no network or storage surface at all.
+    const pad = readFileSync(
+      join(process.cwd(), 'src', 'components', 'consents', 'SignatureCapture.tsx'), 'utf8');
+    expect(pad).not.toMatch(/supabase|fetch\(|axios|localStorage|sessionStorage|indexedDB/i);
+    // Its only output is the onChange callback with a data URL.
+    expect(pad).toContain('onChange(canvas.toDataURL');
   });
 
   it('funnels every exit through the clear path', () => {

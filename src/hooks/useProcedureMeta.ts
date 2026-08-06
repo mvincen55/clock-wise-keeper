@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { type ProcedureMeta, type UnitType } from '@/lib/procedures';
+import type { TablesUpdate } from '@/integrations/supabase/types';
 
 function mapRow(r: {
   id: string;
@@ -118,7 +119,7 @@ export function useUpdateProcedureMeta() {
   const invalidate = useInvalidateProcedureMeta();
   return useMutation({
     mutationFn: async (input: Partial<Omit<ProcedureMetaInput, 'code'>> & { id: string; active?: boolean }) => {
-      const patch: Record<string, unknown> = {};
+      const patch: TablesUpdate<'procedure_meta'> = {};
       if (input.patientName !== undefined) patch.patient_name = input.patientName;
       if (input.internalDescription !== undefined) patch.internal_description = input.internalDescription;
       if (input.unitType !== undefined) patch.unit_type = input.unitType;

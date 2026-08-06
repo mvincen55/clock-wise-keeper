@@ -29,6 +29,7 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import { GENERIC_BRANDING, useOrgBranding } from '@/hooks/useOrgBranding';
 import { useFeeSchedules, useFeeScheduleItems } from '@/hooks/useFeeSchedules';
 import { useActiveProviders } from '@/hooks/useProviders';
+import { useProcedureMetaMap } from '@/hooks/useProcedureMeta';
 import { useConsentForms } from '@/hooks/useConsentForms';
 import { useConsentBundles, recordBundleUse } from '@/hooks/useConsentBundles';
 import { useConsentPermissions } from '@/hooks/useConsentSettings';
@@ -36,13 +37,16 @@ import { logConsentAudit } from '@/hooks/useConsentAudit';
 import ScaledPrintPreview from '@/components/ScaledPrintPreview';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
 import ConsentPrintSheet from '@/components/consents/ConsentPrintSheet';
+import SignatureCapture from '@/components/consents/SignatureCapture';
 import { ConsentPrintRoot } from '@/components/consents/ConsentPrinting';
 import { ConsentPrivacyNote } from '@/components/consents/ConsentPrivacyNote';
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
+import { QUANTITY_STRATEGY_EXPLANATIONS, computeQuantity, countUnitTokens } from '@/lib/procedures';
 import {
-  SIGNATURE_ROLE_LABELS, categoryLabel, effectiveContent, emptyPacketFill,
-  fillHasPatientInfo, packetTotals,
+  SIGNATURE_ROLE_LABELS, categoryLabel, deriveSignatureFacts, effectiveContent,
+  emptyPacketFill, fillHasPatientInfo, packetLineTotal, packetQuantity, packetTotals,
   type ConsentBundle, type ConsentForm, type PacketFill, type PacketProcedure,
+  type SignatureRole,
 } from '@/lib/consents/types';
 
 /**
@@ -73,6 +77,14 @@ const todayIso = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 };
 
+/** Local wall-clock timestamp (no zone) so the printed signed date is the
+ *  office's date, never the UTC day. */
+const nowLocalIso = () => {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
+
 export default function CompleteForms() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -85,6 +97,9 @@ export default function CompleteForms() {
   const providers = useActiveProviders();
   const officeSchedule = schedules.find(s => s.kind === 'office') ?? null;
   const { data: feeItems = [] } = useFeeScheduleItems(officeSchedule?.id ?? null);
+  // Canonical per-org procedure behavior: patient-friendly names, teeth/surface
+  // requirements, and the quantity strategy driving the fee math.
+  const metaMap = useProcedureMetaMap();
 
   const [step, setStep] = useState(0);
   const [bundle, setBundle] = useState<ConsentBundle | null>(null);
@@ -239,6 +254,21 @@ export default function CompleteForms() {
     setStep(1);
   };
 
+  /** New line for a code: procedure_meta's patient-friendly name wins the
+   *  description; quantity starts at 1 (per_visit behavior without metadata). */
+  const makeProcedure = useCallback((code: string, fallbackDescription: string, feeCents: number | null): PacketProcedure => {
+    const key = code.toUpperCase();
+    const meta = metaMap.get(key);
+    return {
+      code: key,
+      description: meta?.patientName?.trim() || fallbackDescription || key,
+      officeFeeCents: feeCents,
+      feeCents,
+      overridden: false,
+      quantity: 1,
+    };
+  }, [metaMap]);
+
   const chooseBundle = (b: ConsentBundle) => {
     setBundle(b);
     // Bundle codes seed the procedure list so fees pull automatically.
@@ -246,13 +276,7 @@ export default function CompleteForms() {
       if (f.procedures.length > 0) return f;
       const procedures = b.procedureCodes.map(code => {
         const fee = feeByCode.get(code.toUpperCase());
-        return {
-          code: code.toUpperCase(),
-          description: fee?.description ?? code.toUpperCase(),
-          officeFeeCents: fee?.feeCents ?? null,
-          feeCents: fee?.feeCents ?? null,
-          overridden: false,
-        } satisfies PacketProcedure;
+        return makeProcedure(code, fee?.description ?? code.toUpperCase(), fee?.feeCents ?? null);
       });
       return { ...f, procedures };
     });
@@ -261,13 +285,42 @@ export default function CompleteForms() {
   const addProcedure = (code: string, description: string, feeCents: number | null) => {
     setFill(f => ({
       ...f,
-      procedures: [
-        ...f.procedures,
-        { code: code.toUpperCase(), description, officeFeeCents: feeCents, feeCents, overridden: false },
-      ],
+      procedures: [...f.procedures, makeProcedure(code, description, feeCents)],
     }));
     setProcedureSearch('');
   };
+
+  const setProcedureAt = (index: number, patch: Partial<PacketProcedure>) =>
+    setFill(f => ({
+      ...f,
+      procedures: f.procedures.map((p, j) => (j === index ? { ...p, ...patch } : p)),
+    }));
+
+  // Quantities follow the code's procedure_meta strategy: per-tooth counts
+  // listed teeth, per-surface counts surface SELECTIONS ("MOD" is one,
+  // "MO, DO" is two), per-visit/flat/quadrant/arch NEVER multiply by teeth,
+  // and manual keeps whatever the team typed. The packet-level teeth/surface
+  // fields stay the default for a single-procedure packet.
+  useEffect(() => {
+    setFill(f => {
+      const single = f.procedures.length === 1;
+      let changed = false;
+      const procedures = f.procedures.map(p => {
+        const meta = metaMap.get(p.code.toUpperCase());
+        if (!meta || meta.quantityStrategy === 'manual') return p;
+        const teeth = p.toothNumbers?.trim() ? p.toothNumbers : (single ? f.toothNumbers : '');
+        const surfaces = p.surfaces?.trim() ? p.surfaces : (single ? f.surfaces : '');
+        const quantity = computeQuantity(meta.quantityStrategy, {
+          teeth: countUnitTokens(teeth),
+          surfaces: countUnitTokens(surfaces),
+        });
+        if (quantity === p.quantity) return p;
+        changed = true;
+        return { ...p, quantity };
+      });
+      return changed ? { ...f, procedures } : f;
+    });
+  }, [metaMap, fill.toothNumbers, fill.surfaces, fill.procedures]);
 
   const procedureMatches = useMemo(() => {
     const term = procedureSearch.trim().toLowerCase();
@@ -303,6 +356,55 @@ export default function CompleteForms() {
     if (form.requiresWitnessSignature || settings.requireWitnessDefault) roles.push(SIGNATURE_ROLE_LABELS.witness);
     return roles.length > 0 ? roles.join(' · ') : 'No signatures required';
   };
+
+  // ------------------------------------------------------------------
+  // On-screen signatures (Review step). Roles come from the signature
+  // blocks of the included forms' effective content — those are the lines
+  // the images will actually print on.
+  // ------------------------------------------------------------------
+  const signatureRoles = useMemo(() => {
+    const required = new Set<SignatureRole>();
+    const doctorForms: ConsentForm[] = [];
+    for (const form of packetForms) {
+      const content = effectiveContent(form);
+      if (!content) continue;
+      const facts = deriveSignatureFacts(content);
+      (['patient', 'guardian', 'doctor', 'hygienist', 'assistant', 'witness'] as const).forEach(role => {
+        if (facts[role]) required.add(role);
+      });
+      if (facts.doctor) doctorForms.push(form);
+    }
+    // A second patient-side line (guardian/representative) is offered ONLY
+    // for minors — beyond that, guardian appears just when a template's own
+    // signature blocks require the role (already collected above).
+    if (fill.isMinor) required.add('guardian');
+    // hygienistMayComplete: when the packet's only staff-side requirement is
+    // the doctor line and every form asking for it allows hygienist
+    // completion, the doctor signature is optional per office rule.
+    const doctorOptional =
+      required.has('doctor') &&
+      !required.has('hygienist') &&
+      !required.has('assistant') &&
+      doctorForms.length > 0 &&
+      doctorForms.every(f => f.hygienistMayComplete);
+    const ordered = (['patient', 'guardian', 'doctor', 'hygienist', 'assistant', 'witness'] as const)
+      .filter(role => required.has(role));
+    return { ordered, doctorOptional };
+  }, [packetForms, fill.isMinor]);
+
+  const setSignature = (role: SignatureRole, dataUrl: string | null) =>
+    setFill(f => {
+      const signatures = { ...f.signatures };
+      if (dataUrl) signatures[role] = dataUrl;
+      else delete signatures[role];
+      return {
+        ...f,
+        signatures,
+        // Stamped once, when the first signature lands — the printed packet
+        // shows this date beside every signature image.
+        signedAtIso: f.signedAtIso ?? (dataUrl ? nowLocalIso() : undefined),
+      };
+    });
 
   // ------------------------------------------------------------------
   // Printing
@@ -449,6 +551,7 @@ export default function CompleteForms() {
                   {fill.procedures.map((p, i) => (
                     <Badge key={`${p.code}-${i}`} variant="secondary" className="gap-1 font-normal">
                       {p.code} · {p.description}
+                      {packetQuantity(p) > 1 && <span className="font-medium">×{packetQuantity(p)}</span>}
                       <button
                         onClick={() => setFill(f => ({ ...f, procedures: f.procedures.filter((_, j) => j !== i) }))}
                         aria-label={`Remove ${p.code}`}
@@ -459,6 +562,63 @@ export default function CompleteForms() {
                   ))}
                 </div>
               )}
+              {/* Codes with procedure_meta requirements collect their teeth/
+                  surfaces/quantity here, per line — that is what the quantity
+                  strategy multiplies (never blind tooth counts). */}
+              {fill.procedures.map((p, i) => {
+                const meta = metaMap.get(p.code.toUpperCase());
+                if (!meta || (!meta.needsTeeth && !meta.needsSurfaces && meta.quantityStrategy !== 'manual')) return null;
+                return (
+                  <div key={`detail-${p.code}-${i}`} className="space-y-2 rounded-lg border p-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm"><span className="font-medium">{p.code}</span> — {p.description}</p>
+                      <Badge variant="outline">Qty {packetQuantity(p)}</Badge>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {meta.needsTeeth && (
+                        <div className="space-y-1">
+                          <Label htmlFor={`proc-teeth-${i}`} className="text-xs">Tooth number(s)</Label>
+                          <Input
+                            id={`proc-teeth-${i}`}
+                            value={p.toothNumbers ?? ''}
+                            onChange={e => setProcedureAt(i, { toothNumbers: e.target.value })}
+                            placeholder="e.g. 3, 14, 19"
+                            className="h-8"
+                            autoComplete="off"
+                          />
+                        </div>
+                      )}
+                      {meta.needsSurfaces && (
+                        <div className="space-y-1">
+                          <Label htmlFor={`proc-surfaces-${i}`} className="text-xs">Surface(s)</Label>
+                          <Input
+                            id={`proc-surfaces-${i}`}
+                            value={p.surfaces ?? ''}
+                            onChange={e => setProcedureAt(i, { surfaces: e.target.value })}
+                            placeholder="e.g. MOD — commas separate selections (MO, DO is two)"
+                            className="h-8"
+                            autoComplete="off"
+                          />
+                        </div>
+                      )}
+                      {meta.quantityStrategy === 'manual' && (
+                        <div className="space-y-1">
+                          <Label htmlFor={`proc-qty-${i}`} className="text-xs">Quantity</Label>
+                          <Input
+                            id={`proc-qty-${i}`}
+                            type="number"
+                            min={1}
+                            value={p.quantity}
+                            onChange={e => setProcedureAt(i, { quantity: Math.max(1, Math.round(Number(e.target.value) || 1)) })}
+                            className="h-8 w-24"
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{QUANTITY_STRATEGY_EXPLANATIONS[meta.quantityStrategy]}</p>
+                  </div>
+                );
+              })}
               <p className="text-xs text-muted-foreground">Select as many procedures as the visit needs.</p>
             </CardContent>
           </Card>
@@ -820,8 +980,15 @@ export default function CompleteForms() {
                       disabled={!can('overrideFees') && p.officeFeeCents !== null}
                       className="h-8 w-28 text-right"
                       inputMode="decimal"
-                      aria-label={`Fee for ${p.code}`}
+                      aria-label={`Unit fee for ${p.code}`}
                     />
+                    {/* The input edits the UNIT fee (overridden or not); the
+                        line multiplies by the strategy-computed quantity. */}
+                    {packetQuantity(p) > 1 && (
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        × {packetQuantity(p)} = <strong>{p.feeCents === null ? '—' : formatCents(packetLineTotal(p) ?? 0)}</strong>
+                      </span>
+                    )}
                     {p.overridden && can('overrideFees') && p.officeFeeCents !== null && (
                       <Button
                         variant="ghost"
@@ -1016,6 +1183,43 @@ export default function CompleteForms() {
             </CardContent>
           </Card>
 
+          {/* On-screen signatures — every role stays optional here: printing
+              with blank lines and signing on paper is a normal path. */}
+          {packetForms.length > 0 && signatureRoles.ordered.length > 0 && (
+            <Card className="card-elevated">
+              <CardContent className="space-y-4 p-4">
+                <div>
+                  <p className="text-sm font-semibold">Sign on screen (optional)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Signatures print on each included form's matching signature line. They are
+                    temporary like everything else in this packet — printed, then cleared, never stored.
+                  </p>
+                </div>
+                {signatureRoles.ordered.map(role => (
+                  <SignatureCapture
+                    key={role}
+                    roleLabel={SIGNATURE_ROLE_LABELS[role]}
+                    qualifier={role === 'doctor' && signatureRoles.doctorOptional ? '(optional per office rule)' : undefined}
+                    defaultValue={fill.signatures[role] ?? null}
+                    onChange={dataUrl => setSignature(role, dataUrl)}
+                  />
+                ))}
+                <div className="space-y-0.5 rounded-lg bg-muted/60 p-3 text-xs">
+                  <p>
+                    <strong>Signed on screen:</strong>{' '}
+                    {signatureRoles.ordered.filter(r => fill.signatures[r]).map(r => SIGNATURE_ROLE_LABELS[r]).join(', ') || 'none yet'}
+                  </p>
+                  <p>
+                    <strong>Will be signed on paper:</strong>{' '}
+                    {signatureRoles.ordered.filter(r => !fill.signatures[r])
+                      .map(r => `${SIGNATURE_ROLE_LABELS[r]}${r === 'doctor' && signatureRoles.doctorOptional ? ' (optional per office rule)' : ''}`)
+                      .join(', ') || 'no one — every line is signed'}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Full packet preview */}
           {packetForms.length > 0 && (
             <div className="space-y-2">
@@ -1042,10 +1246,24 @@ export default function CompleteForms() {
             <Card className="card-elevated">
               <CardContent className="space-y-3 p-4">
                 <p className="text-sm font-semibold">Print</p>
+                <p className="text-xs text-muted-foreground">
+                  The preview above shows every page exactly as it will print — review it first, then choose:
+                </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button onClick={() => { setPrintSelection(null); doPrint(); }}>
-                    <Printer className="mr-2 h-4 w-4" />Print entire packet
+                    <Printer className="mr-2 h-4 w-4" />
+                    {fill.includeFinancial && financialForm && packetForms.length > 1
+                      ? 'Print consents + financial agreement'
+                      : 'Print entire packet'}
                   </Button>
+                  {fill.includeFinancial && financialForm && packetForms.length > 1 && (
+                    <Button
+                      variant="outline"
+                      onClick={() => { setPrintSelection(new Set([financialForm.id])); doPrint(); }}
+                    >
+                      <Printer className="mr-2 h-4 w-4" />Print financial agreement only
+                    </Button>
+                  )}
                   <span className="text-xs text-muted-foreground">or select specific forms:</span>
                 </div>
                 <div className="flex flex-wrap gap-2">

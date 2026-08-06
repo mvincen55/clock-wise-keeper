@@ -456,6 +456,26 @@
   margin-top: 2pt;
 }
 
+/* On-screen signature: the captured image sits on the rule line, like ink.
+   The negative margin drops its baseline onto the rule without moving it. */
+.cf-sigimg {
+  display: block;
+  height: 0.5in;
+  max-width: 100%;
+  margin-bottom: -16pt;
+  position: relative;
+  z-index: 1;
+}
+
+/* The signed date prints inside the date rule where a hand-written date
+   would go. */
+.cf-sigdateval {
+  display: inline-block;
+  font-size: 9.5pt;
+  line-height: 18pt;
+  vertical-align: bottom;
+}
+
 .cf-meds {
   margin: 3pt 0 5pt;
   padding-left: 2pt;
