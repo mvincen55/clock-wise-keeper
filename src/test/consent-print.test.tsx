@@ -69,7 +69,23 @@ describe('blank copy', () => {
     expect(html).toContain('v3');
     expect(html).toContain('Page 1 of 2');
     expect(html).toContain('Page 2 of 2');
-    expect(html).toContain('Blank copy');
+  });
+
+  it('footer carries the legal identity once — name, address, contact', () => {
+    // The office identifies itself in the footer, in legal form; the header
+    // carries only the logo and the form title (no repeated names).
+    const footerHits = html.match(/Reference Dental PC/g) ?? [];
+    expect(footerHits.length).toBe(2); // once per page footer, nowhere else
+    expect(html).toContain('12 Main St');
+    expect(html).toContain('(555) 555-0100');
+    expect(html).toContain('referencedental.example');
+    expect(html).not.toContain('not stored by Purple Envelope');
+  });
+
+  it('page 1 carries the standard patient row: name left, DOB right', () => {
+    expect(html).toContain('cf-patient-row');
+    expect(html).toContain('Patient Name:');
+    expect(html).toContain('Date of Birth:');
   });
 
   it('keeps signature areas and headed sections unsplittable', () => {
@@ -94,7 +110,6 @@ describe('completed packet sheet', () => {
     expect(html).toContain('Jordan Reference');
     expect(html).toContain('14, 15');
     expect(html).toContain('August 3, 2026');
-    expect(html).toContain('not stored by Purple Envelope');
   });
 
   it('shows no fee table — this consent has no cost block', () => {

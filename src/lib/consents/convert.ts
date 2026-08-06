@@ -229,7 +229,7 @@ const VALID_TYPES = new Set<ConsentBlockType>([
   'title', 'section', 'instruction', 'paragraph', 'bullets', 'checkbox',
   'yesno', 'short_answer', 'long_answer', 'date', 'tooth_numbers',
   'procedure', 'provider', 'patient_name', 'cost', 'initials', 'signature',
-  'medications', 'logo', 'divider', 'page_break',
+  'medications', 'notes', 'logo', 'divider', 'page_break',
 ]);
 
 const VALID_KINDS = new Set<ConsentSectionKind>([

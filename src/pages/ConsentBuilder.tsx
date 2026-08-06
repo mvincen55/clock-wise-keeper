@@ -38,10 +38,11 @@ import AiAssistPanel from '@/components/consents/AiAssistPanel';
 import { contentToPlainText } from '@/lib/consents/ai';
 import ConsentPrintSheet from '@/components/consents/ConsentPrintSheet';
 import { ConsentPreviewDialog } from '@/components/consents/ConsentPrinting';
-import { templateWarnings } from '@/lib/consents/validation';
+import { pageFitReport, templateWarnings } from '@/lib/consents/validation';
 import {
-  BLOCK_TYPES, FORM_CATEGORIES, FORM_CATEGORY_LABELS, makeBlock, newBlockId, workingContent,
-  type ConsentBlock, type ConsentBlockType, type ConsentForm, type FormCategory,
+  BLOCK_TYPES, FORM_CATEGORIES, FORM_CATEGORY_LABELS, makeBlock, newBlockId,
+  templateLayout, workingContent,
+  type ConsentBlock, type ConsentBlockType, type ConsentForm, type FormCategory, type PageFit,
 } from '@/lib/consents/types';
 
 /**
@@ -81,6 +82,7 @@ export default function ConsentBuilder() {
   const [editableBy, setEditableBy] = useState<'managers' | 'everyone'>('managers');
   const [hygienistMayComplete, setHygienistMayComplete] = useState(false);
   const [blocks, setBlocks] = useState<ConsentBlock[]>(STARTER_BLOCKS);
+  const [pageFit, setPageFit] = useState<PageFit>('auto');
   const [dirty, setDirty] = useState(false);
   const [loadedId, setLoadedId] = useState<string | null>(null);
 
@@ -99,6 +101,7 @@ export default function ConsentBuilder() {
     setHygienistMayComplete(existing.hygienistMayComplete);
     const content = workingContent(existing);
     setBlocks(content?.blocks ?? STARTER_BLOCKS());
+    setPageFit(content ? templateLayout(content).pageFit : 'auto');
     setDirty(false);
     setLoadedId(existing.id);
   }, [existing, loadedId]);
@@ -113,7 +116,8 @@ export default function ConsentBuilder() {
 
   const readOnly = !!existing && !(can('editTemplates') || existing.editableBy === 'everyone');
   const isFinancial = existing?.isFinancial ?? category === 'financial';
-  const content = useMemo(() => ({ blocks }), [blocks]);
+  const content = useMemo(() => ({ blocks, layout: { pageFit } }), [blocks, pageFit]);
+  const fitReport = useMemo(() => pageFitReport(content), [content]);
   const procedureCodes = useMemo(
     () => procedureCodesText.split(/[,\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean),
     [procedureCodesText],
@@ -347,6 +351,40 @@ export default function ConsentBuilder() {
                     <SelectItem value="everyone">Whole team</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label>Page layout</Label>
+                <Select value={pageFit} onValueChange={v => { setPageFit(v as PageFit); touch(); }} disabled={readOnly}>
+                  <SelectTrigger className="sm:w-72"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Automatic</SelectItem>
+                    <SelectItem value="one_page">Fit to one page (compact spacing)</SelectItem>
+                    <SelectItem value="two_pages">Two pages (intentional page break)</SelectItem>
+                  </SelectContent>
+                </Select>
+                {fitReport.problem ? (
+                  <div className="rounded-lg border border-warning/50 bg-warning/5 p-2.5 text-xs text-warning space-y-1.5">
+                    <p>{fitReport.problem}</p>
+                    <div className="flex gap-2">
+                      {fitReport.suggestions.includes('two_pages') && (
+                        <Button size="sm" variant="outline" className="h-6 text-xs" disabled={readOnly}
+                          onClick={() => { setPageFit('two_pages'); touch(); }}>
+                          Switch to two pages
+                        </Button>
+                      )}
+                      {fitReport.pageFit === 'auto' && fitReport.suggestions.includes('two_pages') && (
+                        <Button size="sm" variant="outline" className="h-6 text-xs" disabled={readOnly}
+                          onClick={() => { addBlock('page_break'); }}>
+                          Add a page break
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Prints on about {fitReport.estimatedPages} page{fitReport.estimatedPages === 1 ? '' : 's'}.
+                  </p>
+                )}
               </div>
               <label className="flex items-center justify-between gap-3 rounded-lg border p-3 sm:col-span-2">
                 <span className="text-sm">

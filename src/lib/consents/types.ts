@@ -105,6 +105,7 @@ export type ConsentBlockType =
   | 'initials'
   | 'signature'      // one line per role
   | 'medications'    // checklist of medication options
+  | 'notes'          // printable notes area (temporary packet notes render here)
   | 'logo'
   | 'divider'
   | 'page_break';
@@ -169,8 +170,34 @@ export interface ConsentBlock {
   condition?: BlockCondition | null;
 }
 
+/** Explicit page-layout choice for the printed form. */
+export type PageFit = 'auto' | 'one_page' | 'two_pages';
+
+export interface TemplateLayout {
+  /**
+   * auto      — pages break wherever content and page_break blocks fall.
+   * one_page  — compact spacing (within readable minimums) to fit one sheet.
+   * two_pages — intentional two-page layout honoring page_break markers.
+   */
+  pageFit: PageFit;
+  /**
+   * Standard patient-information row (Patient Name left, Date of Birth right)
+   * under the page-1 header. When on, body patient_name blocks are skipped so
+   * the name never prints twice.
+   */
+  patientRow: boolean;
+}
+
+export const DEFAULT_LAYOUT: TemplateLayout = { pageFit: 'auto', patientRow: true };
+
 export interface ConsentTemplateContent {
   blocks: ConsentBlock[];
+  layout?: Partial<TemplateLayout>;
+}
+
+/** Layout with defaults applied — the only way readers should access it. */
+export function templateLayout(content: ConsentTemplateContent): TemplateLayout {
+  return { ...DEFAULT_LAYOUT, ...(content.layout ?? {}) };
 }
 
 let blockSeq = 0;
@@ -209,6 +236,7 @@ export const BLOCK_TYPES: BlockTypeMeta[] = [
   { type: 'patient_name', label: 'Patient Name', group: 'Fields' },
   { type: 'cost', label: 'Treatment Cost', group: 'Fields' },
   { type: 'medications', label: 'Medication Selection', group: 'Fields' },
+  { type: 'notes', label: 'Notes Area', group: 'Fields' },
   { type: 'initials', label: 'Initial Box', group: 'Signatures' },
   { type: 'signature', label: 'Signature Line', group: 'Signatures' },
   { type: 'logo', label: 'Office Logo', group: 'Layout' },
@@ -394,6 +422,7 @@ export interface PacketProcedure {
 /** Temporary patient/treatment values — memory only, cleared after print. */
 export interface PacketFill {
   patientName: string;
+  dateOfBirth: string;        // YYYY-MM-DD or free entry; memory only like all of it
   date: string;               // YYYY-MM-DD, auto-filled with today
   toothNumbers: string;       // free entry, "3, 14, 19" where applicable
   surfaces: string;
@@ -413,6 +442,7 @@ export interface PacketFill {
 export function emptyPacketFill(todayIso: string): PacketFill {
   return {
     patientName: '',
+    dateOfBirth: '',
     date: todayIso,
     toothNumbers: '',
     surfaces: '',
@@ -433,6 +463,7 @@ export function emptyPacketFill(todayIso: string): PacketFill {
 export function fillHasPatientInfo(fill: PacketFill): boolean {
   return Boolean(
     fill.patientName.trim() ||
+    fill.dateOfBirth.trim() ||
     fill.toothNumbers.trim() ||
     fill.surfaces.trim() ||
     fill.notes.trim() ||
