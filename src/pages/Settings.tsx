@@ -20,6 +20,7 @@ import MessagingSettingsCard from '@/components/settings/MessagingSettingsCard';
 import { PracticeSettingsCard } from '@/components/settings/PracticeSettingsCard';
 import { FofPolicySettingsCard } from '@/components/settings/FofPolicySettingsCard';
 import ProviderRegistryCard from '@/components/settings/ProviderRegistryCard';
+import ProcedureMetaCard from '@/components/settings/ProcedureMetaCard';
 import { BrokenApptSettingsCard } from '@/components/settings/BrokenApptSettingsCard';
 import { StaffInitialsCard } from '@/components/settings/StaffInitialsCard';
 
@@ -98,6 +99,7 @@ export default function Settings() {
 
       {/* Treating provider registry (manager only) — one source for FOF + Forms */}
       {isManager && <ProviderRegistryCard />}
+      {isManager && <ProcedureMetaCard />}
 
       {/* FOF policy wording (manager only) */}
       {isManager && <FofPolicySettingsCard />}
