@@ -67,7 +67,11 @@ export type AssistMode =
   | 'missing_risks'
   | 'unclear'
   | 'suggest_sections'
-  | 'compare';
+  | 'compare'
+  | 'warmer'
+  | 'shorten'
+  | 'grammar'
+  | 'draft_section';
 
 export const ASSIST_MODE_LABELS: Record<AssistMode, string> = {
   rewrite: 'Rewrite for patient understanding',
@@ -77,6 +81,10 @@ export const ASSIST_MODE_LABELS: Record<AssistMode, string> = {
   unclear: 'Identify unclear wording',
   suggest_sections: 'Suggest common sections',
   compare: 'Compare two versions',
+  warmer: 'Make it warmer and easier for patients',
+  shorten: 'Shorten the form',
+  grammar: 'Improve grammar and organization',
+  draft_section: 'Draft a new section',
 };
 
 /**
@@ -100,4 +108,93 @@ export async function consentAssist(
   const result = (data as { result?: string })?.result;
   if (!result) throw new Error('No suggestion came back — try again.');
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Review-based workflow (the builder's "Improve this form with AI" panel)
+// ---------------------------------------------------------------------------
+
+/** What the manager wants help with — step 1 of the panel. */
+export type AssistGoal =
+  | 'simplify'
+  | 'warmer'
+  | 'missing_info'
+  | 'shorten'
+  | 'grammar'
+  | 'draft_section';
+
+export const ASSIST_GOALS: AssistGoal[] = [
+  'simplify', 'warmer', 'missing_info', 'shorten', 'grammar', 'draft_section',
+];
+
+export const ASSIST_GOAL_LABELS: Record<AssistGoal, string> = {
+  simplify: 'Simplify language',
+  warmer: 'Make it warmer and easier for patients',
+  missing_info: 'Check for missing consent information',
+  shorten: 'Shorten the form',
+  grammar: 'Improve grammar and organization',
+  draft_section: 'Draft a new section',
+};
+
+/** What text goes to the AI — step 2 of the panel. */
+export type AssistScope = 'selection' | 'page' | 'form';
+
+export const ASSIST_SCOPE_LABELS: Record<AssistScope, string> = {
+  selection: 'Selected section',
+  page: 'Current page',
+  form: 'Entire form',
+};
+
+/** One structured suggestion: quoted passage, replacement, and why. */
+export interface ReviewItem {
+  original: string;
+  suggested: string;
+  reason: string;
+}
+
+/** Label for the panel's action button, so it says what will happen. */
+export function actionLabelFor(goal: AssistGoal, scope: AssistScope): string {
+  if (goal === 'missing_info') return 'Review form';
+  if (goal === 'draft_section') return 'Draft section';
+  if (scope === 'selection') return 'Rewrite selected section';
+  return 'Generate suggestions';
+}
+
+/**
+ * Structured review of template wording. Returns suggestion items only —
+ * the panel shows original vs suggested and the manager accepts, edits, or
+ * dismisses each one. Nothing is ever applied automatically.
+ */
+export async function reviewForm(
+  goal: AssistGoal,
+  scopeLabel: string,
+  text: string,
+): Promise<ReviewItem[]> {
+  const { data, error } = await supabase.functions.invoke('consent-ai', {
+    body: { action: 'review', goal, scope_label: scopeLabel, text },
+  });
+  if (error) {
+    // Non-2xx responses carry a clear message (e.g. an unreadable AI reply
+    // 502s) — show that instead of a generic "unavailable".
+    let message = 'AI review is unavailable right now. The consent-ai function may not be deployed yet.';
+    const ctx = (error as { context?: unknown }).context;
+    if (ctx instanceof Response) {
+      const body = (await ctx.json().catch(() => null)) as { error?: string } | null;
+      if (body?.error) message = body.error;
+    }
+    throw new Error(message);
+  }
+  const raw = (data as { items?: unknown; error?: string }) ?? {};
+  if (!Array.isArray(raw.items)) {
+    throw new Error(raw.error || 'The review came back unreadable — try again.');
+  }
+  // The function already validates shape; this keeps a misbehaving deploy
+  // from feeding the panel unusable cards.
+  return raw.items.filter(
+    (item): item is ReviewItem =>
+      !!item &&
+      typeof (item as ReviewItem).original === 'string' &&
+      typeof (item as ReviewItem).suggested === 'string' &&
+      typeof (item as ReviewItem).reason === 'string',
+  );
 }
