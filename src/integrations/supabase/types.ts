@@ -4862,50 +4862,6 @@ export type Database = {
           },
         ]
       }
-      org_providers: {
-        Row: {
-          active: boolean
-          created_at: string
-          display_name: string
-          employee_id: string | null
-          id: string
-          org_id: string
-          provider_type: string
-          sort_order: number
-          updated_at: string
-        }
-        Insert: {
-          active?: boolean
-          created_at?: string
-          display_name: string
-          employee_id?: string | null
-          id?: string
-          org_id: string
-          provider_type?: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Update: {
-          active?: boolean
-          created_at?: string
-          display_name?: string
-          employee_id?: string | null
-          id?: string
-          org_id?: string
-          provider_type?: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "org_providers_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "orgs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       org_members: {
         Row: {
           created_at: string
@@ -5042,6 +4998,57 @@ export type Database = {
             foreignKeyName: "org_practice_settings_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_providers: {
+        Row: {
+          active: boolean
+          created_at: string
+          display_name: string
+          employee_id: string | null
+          id: string
+          org_id: string
+          provider_type: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          display_name: string
+          employee_id?: string | null
+          id?: string
+          org_id: string
+          provider_type?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          display_name?: string
+          employee_id?: string | null
+          id?: string
+          org_id?: string
+          provider_type?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_providers_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_providers_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
             referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
@@ -8107,17 +8114,6 @@ export type Database = {
       is_conv_participant: { Args: { _conv: string }; Returns: boolean }
       is_org_admin: { Args: { _org_id: string }; Returns: boolean }
       is_org_member: { Args: { _org_id: string }; Returns: boolean }
-      org_staff_directory: {
-        Args: { p_org_id: string }
-        Returns: {
-          employee_id: string
-          user_id: string
-          display_name: string
-          tag: string
-          employment_status: string
-          membership_status: string
-        }[]
-      }
       is_org_owner: { Args: { _org_id: string }; Returns: boolean }
       knowledge_acknowledgment_user_is_eligible: {
         Args: {
@@ -8262,6 +8258,17 @@ export type Database = {
       }
       my_department: { Args: never; Returns: string }
       my_team: { Args: never; Returns: string }
+      org_staff_directory: {
+        Args: { p_org_id: string }
+        Returns: {
+          display_name: string
+          employee_id: string
+          employment_status: string
+          membership_status: string
+          tag: string
+          user_id: string
+        }[]
+      }
       owns_goal: { Args: { _goal_id: string }; Returns: boolean }
       practice_setup_duplicate_key: {
         Args: { p_title: string }
