@@ -13,6 +13,8 @@ import BrandPrintStyle from '@/components/BrandPrintStyle';
 import ConsentPrintSheet from '@/components/consents/ConsentPrintSheet';
 import { useConsentFormVersions, useCreateConsentForm, useRestoreConsentVersion } from '@/hooks/useConsentForms';
 import { GENERIC_BRANDING, useOrgBranding } from '@/hooks/useOrgBranding';
+import { useStaffCodeMap } from '@/hooks/useStaffCodes';
+import { attributionLabel, resolveStaffCode } from '@/lib/staff-code';
 import type { ConsentForm, ConsentFormVersion } from '@/lib/consents/types';
 
 /**
@@ -32,6 +34,8 @@ export default function VersionHistoryDialog({
 }) {
   const { data: versions = [], isLoading } = useConsentFormVersions(open ? form.id : null);
   const { data: branding = GENERIC_BRANDING } = useOrgBranding();
+  // Attribution shows the canonical staff code (never a name/email fallback).
+  const staffCodes = useStaffCodeMap();
   const restoreVersion = useRestoreConsentVersion();
   const createForm = useCreateConsentForm();
   const { toast } = useToast();
@@ -135,6 +139,8 @@ export default function VersionHistoryDialog({
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {format(new Date(version.publishedAt), 'MMM d, yyyy · h:mm a')}
+                      {' · '}
+                      {attributionLabel('Published', resolveStaffCode(staffCodes, version.publishedBy).code)}
                       {version.changeNotes && <> — {version.changeNotes}</>}
                     </p>
                   </div>
