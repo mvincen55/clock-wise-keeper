@@ -1,10 +1,9 @@
-import { useState } from 'react';
 import { useFofPolicySettings, useUpsertFofPolicySettings } from '@/hooks/useFofPolicySettings';
+import { useDoctorNamesFromRegistry } from '@/hooks/useProviders';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Button } from '@/components/ui/button';
 import { Loader2, Stethoscope } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -16,25 +15,12 @@ export function FofPolicySettingsCard() {
   const { toast } = useToast();
   const { data: settings, isLoading } = useFofPolicySettings();
   const upsert = useUpsertFofPolicySettings();
-  const [doctorInput, setDoctorInput] = useState('');
+  const doctorNames = useDoctorNamesFromRegistry();
 
   const update = (patch: Partial<typeof settings>) => {
     upsert.mutate(patch, {
       onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
     });
-  };
-
-  const addDoctor = () => {
-    const name = doctorInput.trim();
-    if (!name || !settings) return;
-    if (settings.doctor_names.includes(name)) return;
-    update({ doctor_names: [...settings.doctor_names, name] });
-    setDoctorInput('');
-  };
-
-  const removeDoctor = (name: string) => {
-    if (!settings) return;
-    update({ doctor_names: settings.doctor_names.filter((n) => n !== name) });
   };
 
   return (
@@ -69,23 +55,20 @@ export function FofPolicySettingsCard() {
             <div className="space-y-2">
               <Label className="text-xs">Treating Doctors</Label>
               <div className="flex flex-wrap gap-2">
-                {(settings?.doctor_names ?? []).map((name) => (
-                  <span key={name} className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-1 text-xs">
-                    {name}
-                    <button onClick={() => removeDoctor(name)} className="text-muted-foreground hover:text-foreground">×</button>
-                  </span>
-                ))}
+                {doctorNames.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">No active doctors yet.</span>
+                ) : (
+                  doctorNames.map((name) => (
+                    <span key={name} className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-1 text-xs">
+                      {name}
+                    </span>
+                  ))
+                )}
               </div>
-              <div className="flex gap-2 max-w-sm">
-                <Input
-                  value={doctorInput}
-                  onChange={(e) => setDoctorInput(e.target.value)}
-                  placeholder="Dr. Smith"
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addDoctor(); } }}
-                />
-                <Button variant="outline" onClick={addDoctor} disabled={!doctorInput.trim()}>Add</Button>
-              </div>
-              <p className="text-xs text-muted-foreground">Populates the doctor dropdown on the FOF builder.</p>
+              <p className="text-xs text-muted-foreground">
+                Managed in the <strong>Treating Providers</strong> registry above (the single source of
+                truth). This still populates the doctor dropdown on the FOF builder.
+              </p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { PRIVACY_TERMS_DOCUMENT } from '@/lib/privacy-terms';
+import { STAFF_CODE_PATTERN, suggestStaffCode } from '@/lib/staff-code';
 
 // Onboarding: the four things a new member does before the app opens.
 // Managers only ever see whether each step is done — never the answers.
@@ -214,29 +215,23 @@ export function useTagRegistry() {
   });
 }
 
-/** "Jordan Rivera" -> "JR". Falls back to the first letters of one name. */
+/**
+ * Suggests a 3-4 char staff code from a name, e.g. "Megan Vincent" -> "MEG".
+ * Delegates to the shared canonical helper so onboarding and the Team editor
+ * suggest the same shape the database enforces.
+ */
 export function suggestTag(fullName: string): string {
-  const parts = fullName.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '';
-  const letters =
-    parts.length === 1
-      ? parts[0].slice(0, 2)
-      : `${parts[0][0]}${parts[parts.length - 1][0]}`;
-  return letters.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return suggestStaffCode(fullName);
 }
 
-/** First free variant of a suggestion (MV, MV2, MV3…). */
-export function freeTag(base: string, taken: Set<string>): string {
-  const clean = base.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) || 'XX';
-  if (!taken.has(clean)) return clean;
-  for (let i = 2; i < 100; i++) {
-    const candidate = `${clean.slice(0, 4 - String(i).length)}${i}`;
-    if (!taken.has(candidate)) return candidate;
-  }
-  return clean;
+/** First free 3-4 char variant of a suggestion (MEG, MEG2, MEG3…). */
+export function freeTag(base: string, taken: ReadonlySet<string>): string {
+  const seed = base.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return suggestStaffCode(seed || 'XXX', taken);
 }
 
-export const TAG_PATTERN = /^[A-Z0-9]{2,4}$/;
+/** The office staff-code rule: 3-4 uppercase letters/digits (shared source of truth). */
+export const TAG_PATTERN = STAFF_CODE_PATTERN;
 
 /** Preferred name, team, and the report tag. */
 export function useSaveBasics() {

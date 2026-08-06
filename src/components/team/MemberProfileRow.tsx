@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,12 +7,12 @@ import { toast } from 'sonner';
 import {
   freeTag,
   suggestTag,
-  TAG_PATTERN,
   useSaveBasics,
-  useTagRegistry,
   useTeamOnboardingStatus,
 } from '@/hooks/useOnboarding';
+import { useReservedStaffCodes } from '@/hooks/useStaffCodes';
 import OperationalRolesEditor from '@/components/team/OperationalRolesEditor';
+import { validateStaffCodeInput, isLegacyStaffCode, normalizeStaffCode } from '@/lib/staff-code';
 
 type Member = {
   id: string;
@@ -39,42 +39,45 @@ const FAVORITE_LABELS: Record<string, string> = {
  * Progress only — never the answers themselves.
  */
 export default function MemberProfileRow({ employee }: { employee: Member }) {
-  const { data: registry } = useTagRegistry();
   const { data: team } = useTeamOnboardingStatus();
   const save = useSaveBasics();
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(employee.tag ?? '');
 
-  const taken = useMemo(
-    () =>
-      new Set(
-        (registry ?? [])
-          .filter(r => r.employee_id !== employee.id)
-          .map(r => String(r.tag).toUpperCase()),
-      ),
-    [registry, employee.id],
-  );
+  // Shared reserved set: current tags + the permanent registry, excluding this
+  // member's own code so they can keep it.
+  const taken = useReservedStaffCodes(employee.id);
 
   const status = team?.find(t => t.user_id === employee.user_id);
-  const valid = TAG_PATTERN.test(draft) && !taken.has(draft.toUpperCase());
+  const formatCheck = validateStaffCodeInput(draft);
+  const duplicate = taken.has(normalizeStaffCode(draft));
+  const valid = formatCheck.ok && !duplicate;
+  const isLegacy = isLegacyStaffCode(employee.tag);
 
   const startEdit = () => {
-    setDraft(employee.tag ?? freeTag(suggestTag(employee.display_name), taken));
+    // Editing a legacy 2-char code must replace it with a valid 3-4 code, so
+    // seed the draft with a fresh suggestion rather than the legacy value.
+    const seed = employee.tag && !isLegacyStaffCode(employee.tag) ? employee.tag : '';
+    setDraft(seed || freeTag(suggestTag(employee.display_name), taken));
     setEditing(true);
   };
 
   const commit = async () => {
-    if (!valid) {
-      toast.error('Tags are 2–4 letters or numbers, and never reused.');
+    if (duplicate) {
+      toast.error('That staff code is already used in this office — pick another.');
+      return;
+    }
+    if (!formatCheck.ok) {
+      toast.error(formatCheck.reason ?? 'Staff codes are 3–4 uppercase letters or numbers.');
       return;
     }
     try {
       await save.mutateAsync({ employeeId: employee.id, tag: draft });
       setEditing(false);
-      toast.success(`Tag set to ${draft.toUpperCase()}`);
+      toast.success(`Staff code set to ${normalizeStaffCode(draft)}`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not save the tag');
+      toast.error(e instanceof Error ? e.message : 'Could not save the staff code');
     }
   };
 
@@ -104,11 +107,18 @@ export default function MemberProfileRow({ employee }: { employee: Member }) {
         <button
           onClick={startEdit}
           className="flex items-center gap-1 rounded border px-2 py-1 font-mono tracking-widest transition-colors hover:bg-muted"
-          title="Tag shown on reports and print sheets"
+          title="Staff code shown on reports, print sheets, and audit trails"
         >
-          {employee.tag || 'no tag'}
+          {employee.tag || 'no code'}
           <Pencil className="h-3 w-3 opacity-50" />
         </button>
+      )}
+
+      {!editing && isLegacy && (
+        <Badge variant="destructive" className="text-[10px]">Legacy 2-char — update to 3–4</Badge>
+      )}
+      {!editing && !employee.tag && employee.user_id && (
+        <Badge variant="outline" className="border-warning/40 text-warning text-[10px]">Needs a code</Badge>
       )}
 
       {employee.preferred_name && (

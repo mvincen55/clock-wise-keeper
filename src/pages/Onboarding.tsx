@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,16 +22,13 @@ import {
 
 import { currentMonth, useGoalsMonth } from '@/hooks/useGoals';
 import {
-  freeTag,
-  suggestTag,
-  TAG_PATTERN,
   useCompleteStep,
   useOnboardingStatus,
   useSaveBasics,
   useSaveWorkStyle,
   useSignTerms,
-  useTagRegistry,
 } from '@/hooks/useOnboarding';
+import { useMyStaffCode } from '@/hooks/useStaffCodes';
 
 const STEPS = ['Privacy', 'About you', 'Basics', 'First goal'] as const;
 
@@ -233,45 +230,25 @@ function WorkStyleStep({ onDone }: { onDone: () => void }) {
 }
 
 
-function BasicsStep({ onDone }: { onDone: () => void }) {
-  const { data: ctx } = useOrgContext();
-  const { data: registry } = useTagRegistry();
+export function BasicsStep({ onDone }: { onDone: () => void }) {
   const save = useSaveBasics();
+  const { code: staffCode } = useMyStaffCode();
 
   const [preferred, setPreferred] = useState('');
   const [team, setTeam] = useState<string>('clinical');
-  const [tag, setTag] = useState('');
-  const [touchedTag, setTouchedTag] = useState(false);
 
-  const taken = useMemo(
-    () => new Set((registry ?? []).map(r => String(r.tag).toUpperCase())),
-    [registry],
-  );
-
-  // Suggest a tag from their name until they type their own.
-  useEffect(() => {
-    if (touchedTag) return;
-    const base = suggestTag(preferred || ctx?.org_name === undefined ? preferred : preferred);
-    setTag(base ? freeTag(base, taken) : '');
-  }, [preferred, taken, touchedTag, ctx?.org_name]);
-
-  const tagValid = TAG_PATTERN.test(tag);
-  const tagFree = tagValid && !taken.has(tag.toUpperCase());
-
+  // Staff codes are assigned by a manager or owner — never self-set here. This
+  // step captures only the member's own harmless profile basics and never
+  // writes employees.tag.
   const submit = async () => {
     if (!preferred.trim()) {
       toast.error('What should we call you?');
-      return;
-    }
-    if (!tagFree) {
-      toast.error('Pick a free 2–4 character tag.');
       return;
     }
     try {
       await save.mutateAsync({
         preferred_name: preferred,
         team,
-        tag,
         markStep: true,
       });
       onDone();
@@ -296,8 +273,7 @@ function BasicsStep({ onDone }: { onDone: () => void }) {
             maxLength={40}
           />
           <p className="text-xs text-muted-foreground">
-            This is the name used across the app. Add your last name too if you'd like a tag
-            suggested from it.
+            This is the name used across the app.
           </p>
         </div>
 
@@ -316,28 +292,20 @@ function BasicsStep({ onDone }: { onDone: () => void }) {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="tag">Your tag</Label>
-          <Input
-            id="tag"
-            value={tag}
-            onChange={e => {
-              setTouchedTag(true);
-              setTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4));
-            }}
-            placeholder="MV"
-            className="w-24 font-mono tracking-widest"
-          />
+          <Label>Your staff code</Label>
+          {staffCode ? (
+            <p className="inline-block rounded-md border bg-muted px-3 py-1.5 font-mono tracking-widest">
+              {staffCode}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Your office manager still needs to assign your staff code.
+            </p>
+          )}
           <p className="text-xs text-muted-foreground">
-            2–4 characters. Used on reports, print sheets, and exports instead of your full name —
-            everywhere else you're just {preferred || 'you'}. A tag is never reused, so it stays
-            yours.
+            Your staff code is assigned by a manager or owner and appears on official records
+            instead of your name. You don’t set it here.
           </p>
-          {tag && !tagValid && (
-            <p className="text-xs text-destructive">Tags are 2–4 letters or numbers.</p>
-          )}
-          {tagValid && !tagFree && (
-            <p className="text-xs text-destructive">That tag is already taken in this office.</p>
-          )}
         </div>
 
         <Button onClick={submit} disabled={save.isPending || !save.isReady} className="w-full">

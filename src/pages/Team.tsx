@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAddEmployee } from '@/hooks/useEmployees';
 import InviteEmployeeModal from '@/components/InviteEmployeeModal';
+import StaffCodeAttentionCard from '@/components/team/StaffCodeAttentionCard';
 import TeamEmployeeCard from '@/components/TeamEmployeeCard';
 import ArchivedMembersDialog from '@/components/ArchivedMembersDialog';
 import PendingInvitesCard from '@/components/PendingInvitesCard';
@@ -140,6 +141,9 @@ export default function Team() {
           className="w-[10rem] h-8 text-xs"
         />
       </div>
+
+      {/* Staff codes needing assignment */}
+      <StaffCodeAttentionCard />
 
       {/* Search */}
       <div className="flex items-center gap-2">

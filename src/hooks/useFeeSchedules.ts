@@ -363,6 +363,10 @@ export function useCodeNames() {
   });
 }
 
+// Patient-friendly names now live on the canonical procedure_meta row (the
+// single editable source). This writes there; a DB trigger mirrors the name
+// into fof_code_names so all existing readers (FOF + consents) are unchanged.
+// Clearing the field empties the patient name (built-in name is used again).
 export function useUpsertCodeName() {
   const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
@@ -372,25 +376,16 @@ export function useUpsertCodeName() {
       if (!ctx) throw new Error('Not authenticated');
       const key = code.trim().toUpperCase();
       if (!key) throw new Error('Missing code');
-      const name = patientName.trim();
-      // Clearing the field means "go back to the built-in name", not
-      // "print an empty label".
-      if (name === '') {
-        const { error } = await supabase
-          .from('fof_code_names')
-          .delete()
-          .eq('org_id', ctx.org_id)
-          .eq('code', key);
-        if (error) throw error;
-        return;
-      }
-      const { error } = await supabase.from('fof_code_names').upsert(
-        { org_id: ctx.org_id, code: key, patient_name: name },
-        { onConflict: 'org_id,code' }
+      const { error } = await supabase.from('procedure_meta').upsert(
+        { org_id: ctx.org_id, code: key, patient_name: patientName.trim() },
+        { onConflict: 'org_id,code' },
       );
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['fof-code-names'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fof-code-names'] });
+      qc.invalidateQueries({ queryKey: ['procedure-meta'] });
+    },
   });
 }
 

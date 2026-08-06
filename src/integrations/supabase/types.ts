@@ -4862,6 +4862,50 @@ export type Database = {
           },
         ]
       }
+      org_providers: {
+        Row: {
+          active: boolean
+          created_at: string
+          display_name: string
+          employee_id: string | null
+          id: string
+          org_id: string
+          provider_type: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          display_name: string
+          employee_id?: string | null
+          id?: string
+          org_id: string
+          provider_type?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          display_name?: string
+          employee_id?: string | null
+          id?: string
+          org_id?: string
+          provider_type?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_providers_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_members: {
         Row: {
           created_at: string
@@ -5448,6 +5492,62 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "knowledge_versions"
             referencedColumns: ["id", "org_id", "item_id"]
+          },
+        ]
+      }
+      procedure_meta: {
+        Row: {
+          active: boolean
+          code: string
+          created_at: string
+          id: string
+          internal_description: string
+          keywords: string[]
+          needs_surfaces: boolean
+          needs_teeth: boolean
+          org_id: string
+          patient_name: string
+          quantity_strategy: string
+          unit_type: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          code: string
+          created_at?: string
+          id?: string
+          internal_description?: string
+          keywords?: string[]
+          needs_surfaces?: boolean
+          needs_teeth?: boolean
+          org_id: string
+          patient_name?: string
+          quantity_strategy?: string
+          unit_type?: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          code?: string
+          created_at?: string
+          id?: string
+          internal_description?: string
+          keywords?: string[]
+          needs_surfaces?: boolean
+          needs_teeth?: boolean
+          org_id?: string
+          patient_name?: string
+          quantity_strategy?: string
+          unit_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "procedure_meta_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -8007,6 +8107,17 @@ export type Database = {
       is_conv_participant: { Args: { _conv: string }; Returns: boolean }
       is_org_admin: { Args: { _org_id: string }; Returns: boolean }
       is_org_member: { Args: { _org_id: string }; Returns: boolean }
+      org_staff_directory: {
+        Args: { p_org_id: string }
+        Returns: {
+          employee_id: string
+          user_id: string
+          display_name: string
+          tag: string
+          employment_status: string
+          membership_status: string
+        }[]
+      }
       is_org_owner: { Args: { _org_id: string }; Returns: boolean }
       knowledge_acknowledgment_user_is_eligible: {
         Args: {
