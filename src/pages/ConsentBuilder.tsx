@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom';
 import {
   DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors,
   type DragEndEvent,
@@ -11,6 +11,10 @@ import {
   ArrowLeft, Save, Send, History, Eye, Plus, AlertTriangle, Loader2, Lock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -113,6 +117,11 @@ export default function ConsentBuilder() {
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
+
+  // In-app navigation with unsaved edits: template drafts are storable (they
+  // are blank configuration, never patient data), so the guard offers to save
+  // the draft on the way out instead of silently dropping the work.
+  const blocker = useBlocker(dirty);
 
   const readOnly = !!existing && !(can('editTemplates') || existing.editableBy === 'everyone');
   const isFinancial = existing?.isFinancial ?? category === 'financial';
@@ -542,6 +551,38 @@ export default function ConsentBuilder() {
           />
         }
       />
+
+      {/* Unsaved-changes guard: save the draft on the way out, or discard. */}
+      <AlertDialog open={blocker.state === 'blocked'} onOpenChange={(open) => { if (!open) blocker.reset?.(); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved template changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              This form has edits that haven't been saved as a draft yet.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => blocker.reset?.()}>Stay here</AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={() => { blocker.proceed?.(); }}
+            >
+              Discard changes
+            </Button>
+            {!readOnly && (
+              <AlertDialogAction
+                onClick={async () => {
+                  const saved = await saveDraft(true);
+                  if (saved) blocker.proceed?.();
+                  else blocker.reset?.();
+                }}
+              >
+                Save draft and leave
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
