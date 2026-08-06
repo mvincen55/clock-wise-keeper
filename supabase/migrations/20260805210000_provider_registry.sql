@@ -52,6 +52,7 @@ CREATE POLICY "Admins manage providers" ON public.org_providers FOR ALL TO authe
   USING (public.is_org_admin(org_id))
   WITH CHECK (public.is_org_admin(org_id));
 
+DROP TRIGGER IF EXISTS org_providers_updated_at ON public.org_providers;
 CREATE TRIGGER org_providers_updated_at
   BEFORE UPDATE ON public.org_providers
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -100,6 +101,7 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION public.sync_fof_doctor_names() FROM anon, authenticated;
 
+DROP TRIGGER IF EXISTS org_providers_sync_doctor_names ON public.org_providers;
 CREATE TRIGGER org_providers_sync_doctor_names
   AFTER INSERT OR UPDATE OR DELETE ON public.org_providers
   FOR EACH ROW EXECUTE FUNCTION public.sync_fof_doctor_names();

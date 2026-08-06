@@ -49,6 +49,7 @@ CREATE POLICY "Admins manage procedure meta" ON public.procedure_meta FOR ALL TO
   USING (public.is_org_admin(org_id))
   WITH CHECK (public.is_org_admin(org_id));
 
+DROP TRIGGER IF EXISTS procedure_meta_updated_at ON public.procedure_meta;
 CREATE TRIGGER procedure_meta_updated_at
   BEFORE UPDATE ON public.procedure_meta
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -90,6 +91,7 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION public.sync_fof_code_name() FROM anon, authenticated;
 
+DROP TRIGGER IF EXISTS procedure_meta_sync_code_name ON public.procedure_meta;
 CREATE TRIGGER procedure_meta_sync_code_name
   AFTER INSERT OR UPDATE OR DELETE ON public.procedure_meta
   FOR EACH ROW EXECUTE FUNCTION public.sync_fof_code_name();
