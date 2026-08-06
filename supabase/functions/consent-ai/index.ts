@@ -1,11 +1,16 @@
 // consent-ai — template tooling for Forms & Consents.
 //
-// Two jobs, both operating on the office's OWN template wording:
+// Three jobs, all operating on the office's OWN template wording:
 //   convert — turn extracted text of an uploaded blank form into structured
 //             template blocks for the side-by-side review screen.
-//   assist  — drafting help for managers (simplify, rewrite, missing risks,
-//             compare versions). Suggestions only; the client never applies
-//             an AI edit without explicit review and approval.
+//   assist  — free-text drafting help for managers (simplify, rewrite,
+//             missing risks, compare versions, draft a section). Suggestions
+//             only; the client never applies an AI edit without explicit
+//             review and approval.
+//   review  — structured suggestions: each item quotes a short passage
+//             verbatim and proposes a replacement with a reason, so the
+//             client can show original-vs-suggested cards and apply a
+//             single accepted change precisely.
 //
 // PHI boundary: staff are instructed to upload blank master forms, and the
 // client requires that confirmation before calling here. Belt and braces:
@@ -79,7 +84,75 @@ const ASSIST_SYSTEMS: Record<string, string> = {
     "You review the structure of a dental consent form. Suggest sections commonly found in similar consent forms that this one lacks (e.g. alternatives, consequences of declining, questions acknowledgment). Reply as a short bullet list, or 'None noted.'",
   compare:
     "Compare VERSION A and VERSION B of a dental consent form. Summarize what changed: added content, removed content, meaning changes, and tone changes. Flag any removed risk or consent language prominently. Reply as short bullets grouped under 'Added', 'Removed', and 'Changed'.",
+  // Goal modes for the review-based builder panel.
+  warmer:
+    "Rewrite the dental consent text in a warmer, friendlier voice that is easier for patients to read: reassuring, plain words, shorter sentences. Keep every clinical fact, risk, and legal meaning intact. Reply with only the rewritten text.",
+  shorten:
+    "Tighten the dental consent text: remove repetition and filler while keeping every clinical fact, risk, alternative, and consent statement. Do not drop meaning to save words. Reply with only the shortened text.",
+  grammar:
+    "Fix grammar, punctuation, and organization in the dental consent text. Reorder only where it clearly improves flow; never change clinical or legal meaning. Reply with only the corrected text.",
+  draft_section:
+    "Draft one new section for a dental consent form from the manager's short description. Professional, calm, patient-respectful, roughly 8th-grade reading level. Do not invent office-specific policies, fees, or clinical claims beyond the description. Reply with only the drafted section text — no heading markup, no commentary.",
 };
+
+// ---------------------------------------------------------------------------
+// Structured review — original / suggested / reason triples
+// ---------------------------------------------------------------------------
+
+const REVIEW_GOALS: Record<string, string> = {
+  simplify:
+    "Focus on wording a patient could find hard: long sentences, jargon, dense phrasing. Each suggestion simplifies the quoted passage while keeping every clinical fact, risk, and legal meaning.",
+  warmer:
+    "Focus on passages that read cold, clinical, or intimidating. Each suggestion keeps the same meaning in a warmer, patient-respectful voice.",
+  missing_info:
+    "Focus on consent information commonly included in similar dental consent forms that is missing or incomplete here (risks, alternatives, consequences of declining, questions acknowledgment, consent statement). Quote the passage the addition belongs with and propose replacement wording that includes it. Be conservative — do not invent exotic risks.",
+  shorten:
+    "Focus on passages that can be tightened without losing any clinical fact, risk, or consent language. Each suggestion is a shorter rewrite of the quoted passage.",
+  grammar:
+    "Focus on grammar, punctuation, and organization problems. Each suggestion corrects the quoted passage without changing its meaning.",
+};
+
+const reviewSystem = (focus: string): string =>
+  "You review a dental office's consent/instruction form template — the office's own wording, never patient data. " +
+  `${focus} ` +
+  'Reply with ONLY JSON: {"items":[{"original":string,"suggested":string,"reason":string}]}. ' +
+  'Each "original" quotes a short passage (under 300 characters) VERBATIM from the template so it can be located and replaced. ' +
+  '"suggested" is the complete replacement for that passage. "reason" is one short sentence. ' +
+  'At most 8 items, most important first. If nothing needs changing, reply {"items":[]}.';
+
+interface ReviewItem {
+  original: string;
+  suggested: string;
+  reason: string;
+}
+
+/** Null means the model's reply was not usable JSON — the caller 502s. */
+function parseReviewItems(raw: string): ReviewItem[] | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(match[0]);
+  } catch {
+    return null;
+  }
+  const items = (parsed as { items?: unknown })?.items;
+  if (!Array.isArray(items)) return null;
+  const clean: ReviewItem[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const { original, suggested, reason } = item as Record<string, unknown>;
+    // A suggestion without a verbatim quote cannot be applied — drop it.
+    if (typeof original !== "string" || !original.trim()) continue;
+    if (typeof suggested !== "string") continue;
+    clean.push({
+      original: original.slice(0, 2000),
+      suggested: suggested.slice(0, 4000),
+      reason: typeof reason === "string" ? reason.slice(0, 300) : "",
+    });
+  }
+  return clean;
+}
 
 async function callGateway(apiKey: string, system: string, userText: string, maxTokens: number): Promise<string> {
   const response = await fetch(GATEWAY_URL, {
@@ -118,6 +191,8 @@ Deno.serve(async (req) => {
       text?: string;
       mode?: string;
       otherText?: string;
+      goal?: string;
+      scope_label?: string;
     };
 
     if (body.action === "convert") {
@@ -163,6 +238,27 @@ Deno.serve(async (req) => {
       const result = await callGateway(apiKey, system, userText, 4000);
       if (!result.trim()) return json({ error: "No suggestion produced" }, 422);
       return json({ result: result.trim() });
+    }
+
+    if (body.action === "review") {
+      const goal = typeof body.goal === "string" ? body.goal : "";
+      const focus = REVIEW_GOALS[goal];
+      if (!focus) return json({ error: "Unknown review goal" }, 400);
+      const text = typeof body.text === "string" ? body.text.slice(0, 24_000) : "";
+      if (!text.trim()) return json({ error: "Nothing to review" }, 400);
+      const scopeLabel = typeof body.scope_label === "string" ? body.scope_label.slice(0, 60) : "";
+
+      const raw = await callGateway(
+        apiKey,
+        reviewSystem(focus),
+        `Scope: ${scopeLabel || "Entire form"}\n\nTemplate text:\n${text}`,
+        6000,
+      );
+      const items = parseReviewItems(raw);
+      if (items === null) {
+        return json({ error: "The AI review came back in a format the app could not read. Try again." }, 502);
+      }
+      return json({ items });
     }
 
     return json({ error: "Unknown action" }, 400);
