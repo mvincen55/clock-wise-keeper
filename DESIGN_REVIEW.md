@@ -42,8 +42,10 @@ below the hero.
 - `src/pages/DesignReview.tsx` — new, preview-only
 - `src/App.tsx` — `/design-review` route only
 
-No changes to auth logic, allowlist, protected routes, `?next=`, role storage,
-RLS, edge functions, or any product route.
+Existing product plumbing (auth, allowlist, protected routes, `?next=`, role
+storage, RLS, product routes) is preserved. The public inquiry infrastructure
+(`submit-lead` edge function + `marketing_leads` table) was **added** by the
+earlier hardening pass and is retained — see the corrective pass below.
 
 ## Evidence (captured from the running build)
 
