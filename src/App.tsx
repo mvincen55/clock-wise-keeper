@@ -72,6 +72,7 @@ import MarketingStart from "@/pages/marketing/Start";
 // TEMPORARY: preview-only design review index (see src/pages/DesignReview.tsx)
 import DesignReviewDashboard from './pages/DesignReviewDashboard';
 import DesignReview from "@/pages/DesignReview";
+import DesignReviewMoments from './pages/DesignReviewMoments';
 
 const queryClient = new QueryClient();
 
@@ -151,6 +152,8 @@ const router = createBrowserRouter(
             {/* TEMPORARY preview-only review index — remove with DesignReview.tsx */}
             <Route path="/design-review" element={<DesignReview />} />
             <Route path="/design-review/dashboard/:role" element={<DesignReviewDashboard />} />
+            <Route path="/design-review/moments" element={<DesignReviewMoments />} />
+            <Route path="/design-review/moments/:scenario" element={<DesignReviewMoments />} />
             <Route path="/workplace" element={<ProtectedRoute><Workplace /></ProtectedRoute>} />
             <Route path="/playbook" element={<ProtectedRoute><Playbook /></ProtectedRoute>} />
             <Route path="/playbook/procedures" element={<ProtectedRoute><PracticeProcedures /></ProtectedRoute>} />

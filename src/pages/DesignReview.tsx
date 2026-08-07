@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import NotFound from './NotFound';
 import { SCENARIOS } from '@/components/dashboard/scenarios';
+import { MOMENT_SCENARIOS } from './DesignReviewMoments';
 
 /**
  * TEMPORARY — visual review index for the second-pass redesign.
@@ -79,6 +80,30 @@ export default function DesignReview() {
                 <p className="pe-display text-[1.3rem] text-ink">{r.label}</p>
                 <p className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-soft">{r.to}</p>
                 <p className="mt-2 text-[14px] leading-relaxed text-ink-soft">{r.note}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        <h2 className="pe-display mt-16 text-[clamp(1.4rem,4vw,2.2rem)] text-ink">Team moments</h2>
+        <p className="mt-4 max-w-[54ch] text-[15px] leading-relaxed text-ink-soft">
+          The recognition reveal, from static fixtures. Single, combined stack, reduced motion, and the muted
+          preference — desktop and mobile share one anchored surface that never blocks navigation or clocking.
+        </p>
+        <div className="mt-8 border-t-2 border-ink">
+          {MOMENT_SCENARIOS.map((s) => (
+            <Link
+              key={s.slug}
+              to={`/design-review/moments/${s.slug}`}
+              className="pe-focus grid grid-cols-[3rem_1fr] gap-x-5 border-b border-ink/16 py-6 transition-colors hover:bg-ink/[0.04]"
+            >
+              <span className="pe-display text-[1.6rem] leading-none text-plum/40">M</span>
+              <div>
+                <p className="pe-display text-[1.3rem] text-ink">{s.title}</p>
+                <p className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-soft">
+                  /design-review/moments/{s.slug}
+                </p>
+                <p className="mt-2 text-[14px] leading-relaxed text-ink-soft">{s.note}</p>
               </div>
             </Link>
           ))}
