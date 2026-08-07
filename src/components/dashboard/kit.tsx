@@ -33,7 +33,7 @@ export function StatusDot({ tone, className }: { tone: Tone; className?: string 
 
 export function MicroLabel({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <p className={cn('font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground', className)}>
+    <p className={cn('min-w-0 break-words font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground', className)}>
       {children}
     </p>
   );
@@ -55,8 +55,8 @@ export function Band({
 }) {
   return (
     <section className={cn('min-w-0', className)}>
-      <div className="flex items-baseline justify-between gap-4 border-b-2 border-foreground pb-2">
-        <div className="flex items-baseline gap-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b-2 border-foreground pb-2">
+        <div className="flex min-w-0 items-baseline gap-3">
           <MicroLabel className="text-foreground/70">{title}</MicroLabel>
           {count && <span className="font-mono text-[10px] tabular-nums text-muted-foreground">{count}</span>}
         </div>
