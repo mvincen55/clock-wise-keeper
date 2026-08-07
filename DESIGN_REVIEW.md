@@ -241,3 +241,100 @@ Authenticated-only feature. Preview evidence only; **not published to production
 
 ### Deliberately not built
 No leaderboard, score, streak, ranking, or "received fewer" analytics. No manager browse of moment text. No use of moments for corrective feedback, acknowledgments, or accountability escalation.
+
+---
+
+## Pass 5 — corrective pass (correctness + preservation, no redesign)
+
+Base commit corrected: `b0743a7fe9df4c90b2c541bb095f54109e7bceb1`.
+Final commit SHA: the commit created when this turn is saved (latest in project
+history; `git log -1` at HEAD). Visual direction unchanged.
+
+### 1. Restored deleted lead backend source
+
+Recovered byte-for-byte from history (`git show 20134ac:<path>`), not rewritten:
+
+- `supabase/functions/submit-lead/index.ts` — restored
+- `supabase/migrations/20260807174927_7ecd8c33-5513-4b65-a5ce-ba095f988843.sql` — restored
+
+Migration order verified: the file sorts after `20260807120000_letterhead_correspondence.sql`
+and before `20260807193843_*.sql`, which is its original position in the chain.
+`node scripts/verify-migration-files.mjs` → "Migration filename check passed for 153 migration(s)."
+
+Preserved properties (all re-verified against the restored source and the live database):
+
+| Property | Evidence |
+| --- | --- |
+| Service-role-only write path | function reads `SUPABASE_SERVICE_ROLE_KEY`; migration grants only `service_role`; policy `Service role manages marketing leads` is `TO service_role` |
+| No public read | no `anon`/`authenticated` grant exists (`information_schema.role_table_grants` shows none); anon REST read of `marketing_leads` returns no rows |
+| Input validation | name ≥ 2 chars, email regex; live 400 response returned both field errors |
+| Honeypot | `body.company_website` → silent `{"ok":true}`, no row written (verified live, 200) |
+| Per-email rate limit | 3/day — live attempts 1–3 accepted, attempt 4 returned 429 with the polite message (test rows deleted afterwards) |
+| Per-IP rate limit | 5/hour, same code path, indexed by `idx_marketing_leads_ip_recent` |
+| IP hashing | SHA-256 truncated to 32 chars; raw IP never stored |
+| Configured notification destination | `LEAD_NOTIFICATION_EMAIL` secret only; with none set the lead is still stored and nothing is sent to an invented inbox |
+| Safe notification content | all interpolated values pass through `escapeHtml` |
+
+Client/function contract mismatch fixed: `src/pages/marketing/Start.tsx` posted
+the honeypot as `website`; the function reads `company_website`. The client now
+sends `company_website` (the hidden field itself is unchanged, so the honeypot
+is not weakened).
+
+New regression guard: `src/test/marketing-leads-backend.test.ts` (15 assertions)
+fails if the function or migration is deleted again, if a grant to `anon`/
+`authenticated` appears, if validation/honeypot/rate-limit/IP-hashing code is
+removed, or if the client payload drifts from the function contract.
+
+### 2. Security-claim evidence matrix (after correction)
+
+| Public claim (current copy) | Enforcement | Verdict |
+| --- | --- | --- |
+| "Office data is isolated by row-level security … directly through an office column, or relationally through the employee record on some older tables" | `pg_policies` across public tables; legacy indirection also disclosed under LIMITS | Narrowed from "Every operational table is org-scoped" |
+| "Access is invitation-only" | `public.is_allowed_user`, `allowed_users` policy, `src/hooks/useAuth.tsx` denial state | Kept |
+| "Roles are enforced in the database" | security-definer `is_org_owner` / `is_org_admin` / `is_org_member` used inside policies | Kept ("never the control" → "not the control") |
+| "A time correction preserves the original punch" (was: "punches are immutable") | policy `Org admin punches` is `FOR ALL`, so a privileged admin **can** update/delete rows; trigger `trg_audit_punch_change` (UPDATE, DELETE → `log_punch_change()`) records the change | **Corrected** — absolute removed, audited-privileged-change stated |
+| "Published policy versions and acknowledgments are frozen" | `guard_knowledge_history_delete`, `guard_knowledge_version_workflow` | "immutable" → "frozen / guards reject edits" |
+| "A record cannot be signed off by the person it is about" (was: "Nobody can review or approve their own record") | `countersign_accountability_report` and `countersign_incident_report` raise `A record cannot be signed off by the person it is about` | **Narrowed** to what the functions prove |
+| "Private notes and direct messages are scoped to their participants" | `user_notes`: only `Notes are visible only to their author`; `messages`: only `Read messages in your conversations` (no admin read policy) | Kept — verified no owner/admin read hatch |
+| "Integrity monitoring reads system signals, not message content" | `security_events` policies (`Admins read integrity events that are not about them`); no policy or job reads `messages.body` | Kept |
+| "Free text sent to a model is classified and scrubbed first" (was: "Every model call uses the shared scrubber") | `supabase/functions/_shared/ai-allowlist.ts` + `phi-scrub.ts`, enforced by `src/test/phi-gateway-guard.test.ts` and `src/test/ai-gateway-boundary.test.ts` | **Narrowed** — allowlist classification for all callers, scrubbing for free-text surfaces |
+| Home: "Private coaching and training conversations are not browsable by owners or managers" | contradicted by `training_attempts` policy `Org admins read attempt metadata` | **Removed** — Home now states admins can see attempts today and points to the security page |
+| "Office forms are documents, not a patient database" | forms/consents stored as documents; no patient-record modelling or indexing | Kept as a boundary, not a compliance claim |
+| Certifications / audits / BAA | none claimed anywhere | Unchanged |
+
+### 3. Type tuning
+
+Smallest marketing label/running-head sizes raised one step: `10px → 11px`,
+`10.5px → 11.5px` across `src/marketing/*` and `src/pages/marketing/*`.
+Miniature product mockups in `ProductVisuals.tsx` keep their smaller caption
+scale on purpose. No other type, spacing or layout changed.
+
+### 4. Files changed in this pass
+
+- `supabase/functions/submit-lead/index.ts` (restored)
+- `supabase/migrations/20260807174927_7ecd8c33-5513-4b65-a5ce-ba095f988843.sql` (restored)
+- `src/pages/marketing/Start.tsx` — honeypot field name + type sizes
+- `src/pages/marketing/Security.tsx` — claim corrections + type sizes
+- `src/pages/marketing/Home.tsx` — training-privacy copy correction + type sizes
+- `src/marketing/MarketingLayout.tsx`, `src/marketing/primitives.tsx`, `src/marketing/RoleSelector.tsx`, `src/pages/marketing/{About,Features,ForDental,Pricing}.tsx` — type sizes only
+- `src/test/marketing-leads-backend.test.ts` (new)
+- `DESIGN_REVIEW.md`
+
+No authenticated-app plumbing changed in this pass (no edits under
+`src/hooks`, `src/components/dashboard`, `src/pages/Dashboard.tsx`, routing,
+or any other edge function).
+
+### 5. Verification run
+
+| Check | Result |
+| --- | --- |
+| Typecheck (`tsgo -p tsconfig.app.json`) | clean |
+| Production build (`npm run build`) | built in 21.3s, no errors |
+| Full test suite (`vitest run`) | 1070 passed / 1 failed — `goal-events-rls` only, pre-existing: it shells to `psql` under a sandbox role that cannot execute `is_org_member` |
+| Migration order (`scripts/verify-migration-files.mjs`) | passed, 153 migrations |
+| `marketing_leads` grants/RLS | no anon/authenticated grants; service-role-only policy; anon REST read returns nothing |
+| `submit-lead` live behaviour | success 200 + id, validation 400 with field errors, honeypot 200 with no row, rate limit 429 on 4th same-email send |
+| Routes at 1440px and 390px (`/`, `/login`, `/start`, `/security`, `/design-review`) | all render directly, correct H1s, no route-level console errors (only a pre-existing React `forwardRef` dev warning) |
+| `/design-review` | still blocked on production hostnames, still absent from navigation and the footer |
+| Review artifacts | fixtures are obviously fictional; no real employee, patient or office data in screenshots |
+| Production publish | **not** published |
