@@ -40,6 +40,17 @@ export default {
           foreground: "hsl(var(--success-foreground))",
         },
         "clock-bg": "hsl(var(--clock-bg))",
+        paper: "hsl(var(--pe-paper))",
+        "paper-2": "hsl(var(--pe-paper-2))",
+        ink: "hsl(var(--pe-ink))",
+        "ink-soft": "hsl(var(--pe-ink-soft))",
+        plum: {
+          DEFAULT: "hsl(var(--pe-plum))",
+          deep: "hsl(var(--pe-plum-deep))",
+          tint: "hsl(var(--pe-plum-tint))",
+        },
+        line: "hsl(var(--pe-line))",
+        gold: "hsl(var(--pe-gold))",
         "clock-fg": "hsl(var(--clock-fg))",
         muted: {
           DEFAULT: "hsl(var(--muted))",
@@ -68,6 +79,10 @@ export default {
           ring: "hsl(var(--sidebar-ring))",
         },
       },
+      fontFamily: {
+        display: ['Fraunces', 'Georgia', 'serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
@@ -90,10 +105,15 @@ export default {
             height: "0",
           },
         },
+        "pe-fade-up": {
+          from: { opacity: "0", transform: "translateY(10px)" },
+          to: { opacity: "1", transform: "none" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "pe-fade-up": "pe-fade-up 500ms cubic-bezier(0.22,1,0.36,1) both",
       },
     },
   },

@@ -1611,6 +1611,50 @@ export type Database = {
           },
         ]
       }
+      correspondence_settings: {
+        Row: {
+          default_closing: string
+          default_signer_name: string
+          default_signer_title: string
+          org_id: string
+          school_note_wording: string
+          team_can_manage_templates: boolean
+          updated_at: string
+          updated_by: string | null
+          work_note_wording: string
+        }
+        Insert: {
+          default_closing?: string
+          default_signer_name?: string
+          default_signer_title?: string
+          org_id: string
+          school_note_wording?: string
+          team_can_manage_templates?: boolean
+          updated_at?: string
+          updated_by?: string | null
+          work_note_wording?: string
+        }
+        Update: {
+          default_closing?: string
+          default_signer_name?: string
+          default_signer_title?: string
+          org_id?: string
+          school_note_wording?: string
+          team_can_manage_templates?: boolean
+          updated_at?: string
+          updated_by?: string | null
+          work_note_wording?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "correspondence_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       days_off: {
         Row: {
           created_at: string
@@ -3979,6 +4023,62 @@ export type Database = {
           },
           {
             foreignKeyName: "knowledge_versions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      letter_templates: {
+        Row: {
+          body: string
+          category: string
+          closing: string
+          created_at: string
+          created_by: string | null
+          id: string
+          org_id: string
+          status: string
+          subject: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          body: string
+          category?: string
+          closing?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          org_id: string
+          status?: string
+          subject?: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          body?: string
+          category?: string
+          closing?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          org_id?: string
+          status?: string
+          subject?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "letter_templates_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
@@ -6684,6 +6784,44 @@ export type Database = {
           },
         ]
       }
+      staff_signatures: {
+        Row: {
+          allow_office_use: boolean
+          created_at: string
+          id: string
+          org_id: string
+          storage_path: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          allow_office_use?: boolean
+          created_at?: string
+          id?: string
+          org_id: string
+          storage_path: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          allow_office_use?: boolean
+          created_at?: string
+          id?: string
+          org_id?: string
+          storage_path?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_signatures_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_messages: {
         Row: {
           attachment_path: string | null
@@ -7958,6 +8096,7 @@ export type Database = {
         }
         Returns: string
       }
+      correspondence_team_can: { Args: { p_org_id: string }; Returns: boolean }
       countersign_accountability_report: {
         Args: { _note: string; _report_id: string; _typed_name: string }
         Returns: undefined
