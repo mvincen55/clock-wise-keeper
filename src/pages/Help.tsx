@@ -38,7 +38,7 @@ export default function Help() {
       <Card className="card-elevated">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-primary" />Only your business, never your patients
+            <ShieldCheck className="h-4 w-4 text-primary" />Practice guidance, not patient records
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
