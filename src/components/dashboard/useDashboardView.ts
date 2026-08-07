@@ -567,7 +567,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
     };
     return { view: member, isLoading: false };
   }, [
-    ctx, ctxLoading, profile, now, today, snapshot, approvals, vitals, sprints, nudges, bypasses,
+    ctx, ctxLoading, profile, now, today, snapshot, approvals, vitals, sprintData, sprints, nudges, bypasses,
     orgReports, myReports, ackRoster, myAcks, assignments, pto, momentum, todayEntry, missingDays, user,
   ]);
 }
