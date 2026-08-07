@@ -13,6 +13,9 @@ import { useToast } from '@/hooks/use-toast';
 export default function ResetPassword() {
   const [params] = useSearchParams();
   const nextPath = safeInviteNext(params.get('next'));
+  // The same page serves two journeys: finishing an invitation, and an ordinary
+  // "forgot password" reset from the sign-in screen.
+  const isInvite = nextPath.startsWith('/accept-invite');
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const { toast } = useToast();
@@ -49,6 +52,8 @@ export default function ResetPassword() {
     );
   }
 
+  const continueLabel = isInvite ? 'Continue to invitation' : 'Continue to Purple Envelope';
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md card-elevated">
@@ -61,14 +66,16 @@ export default function ResetPassword() {
           <CardTitle>{complete ? 'Password updated' : 'Choose a new password'}</CardTitle>
           <CardDescription>
             {complete
-              ? 'Return to the invitation to finish joining the office.'
-              : 'Use the recovery link from your email, then create a password for this staff account.'}
+              ? isInvite
+                ? 'Return to the invitation to finish joining the office.'
+                : 'Your new password is saved. You can use it the next time you sign in.'
+              : 'Use the recovery link from your email, then create a new password for your account.'}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {complete ? (
             <Button className="w-full" onClick={() => navigate(nextPath, { replace: true })}>
-              Continue to invitation
+              {continueLabel}
             </Button>
           ) : user ? (
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -104,10 +111,12 @@ export default function ResetPassword() {
           ) : (
             <div className="space-y-4 text-center">
               <p className="text-sm text-muted-foreground">
-                This recovery link is missing, expired, or has already been used. Return to the invitation and request another reset email.
+                {isInvite
+                  ? 'This recovery link is missing, expired, or has already been used. Return to the invitation and request another reset email.'
+                  : 'This recovery link is missing, expired, or has already been used. Return to the sign-in page and request a new one.'}
               </p>
               <Button variant="outline" className="w-full" onClick={() => navigate(nextPath, { replace: true })}>
-                Return to invitation
+                {isInvite ? 'Return to invitation' : 'Return to sign in'}
               </Button>
             </div>
           )}
