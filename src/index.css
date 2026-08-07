@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Archivo:wght@400;500;600;700;800;900&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -2820,4 +2820,53 @@
       radial-gradient(hsl(var(--pe-ink) / 0.045) 1px, transparent 1px);
     background-size: 22px 22px;
   }
+
+  /* --- second-pass editorial primitives (sharp, no gradients/blur) --- */
+
+  /* Oversized grotesque display headline */
+  .pe-display {
+    font-family: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    line-height: 0.86;
+    text-transform: uppercase;
+  }
+
+  .pe-display-tight {
+    font-family: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.02;
+  }
+
+  /* Hard hairline construction grid */
+  .pe-blueprint {
+    background-image:
+      linear-gradient(to right, hsl(var(--pe-ink) / 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--pe-ink) / 0.07) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+
+  .pe-blueprint-invert {
+    background-image:
+      linear-gradient(to right, hsl(var(--pe-paper) / 0.09) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--pe-paper) / 0.09) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+
+  /* Editorial index row: label + rule + value */
+  .pe-row {
+    border-top: 1px solid hsl(var(--pe-ink) / 0.16);
+  }
+
+  .pe-row-heavy {
+    border-top: 2px solid hsl(var(--pe-ink));
+  }
+
+  /* Focus ring used across every marketing control */
+  .pe-focus:focus-visible {
+    outline: 2px solid hsl(var(--pe-plum));
+    outline-offset: 2px;
+  }
 }
+
