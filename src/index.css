@@ -137,6 +137,15 @@
   .card-elevated {
     box-shadow: 0 1px 3px hsl(220 25% 10% / 0.06), 0 8px 24px hsl(220 25% 10% / 0.04);
   }
+
+  /* ≥44px touch targets, but only on touch screens — desktop keeps the
+     compact controls. Apply to buttons a finger must hit reliably. */
+  @media (pointer: coarse) {
+    .touch-target {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
 }
 
 /* ---- Financial Options Form (FOF) print sheet ---- */

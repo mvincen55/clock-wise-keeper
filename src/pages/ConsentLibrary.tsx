@@ -170,7 +170,7 @@ export default function ConsentLibrary() {
             <Link to="/consents" className="text-primary underline-offset-2 hover:underline">Forms &amp; Consents home</Link>
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {can('upload') && (
             <Button variant="outline" onClick={() => setUploadOpen(true)}>
               <Upload className="mr-2 h-4 w-4" />Upload &amp; convert

@@ -179,10 +179,10 @@ export default function SignatureCapture({ roleLabel, qualifier, onChange, defau
           {qualifier && <span className="ml-1 text-xs font-normal text-muted-foreground">{qualifier}</span>}
         </p>
         <div className="flex gap-1">
-          <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={clear} disabled={!hasInk}>
+          <Button type="button" variant="ghost" size="sm" className="touch-target h-7 px-2 text-xs" onClick={clear} disabled={!hasInk}>
             <Eraser className="mr-1 h-3 w-3" />Clear
           </Button>
-          <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={redo} disabled={!canRedo}>
+          <Button type="button" variant="ghost" size="sm" className="touch-target h-7 px-2 text-xs" onClick={redo} disabled={!canRedo}>
             <RotateCcw className="mr-1 h-3 w-3" />Redo
           </Button>
         </div>
@@ -191,7 +191,7 @@ export default function SignatureCapture({ roleLabel, qualifier, onChange, defau
         ref={canvasRef}
         role="img"
         aria-label={`${roleLabel} signature pad`}
-        className="h-32 w-full touch-none rounded-lg border bg-white"
+        className="h-32 w-full touch-none rounded-lg border bg-white sm:h-40"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endStroke}

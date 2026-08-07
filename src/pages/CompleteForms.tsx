@@ -507,7 +507,9 @@ export default function CompleteForms() {
               }`}
             >
               {i < step ? <Check className="h-3 w-3" /> : <span>{i + 1}</span>}
-              {label}
+              {/* On phones only the current step keeps its label — the rest
+                  compress to their number so the row fits without wrapping. */}
+              <span className={i === step ? '' : 'hidden sm:inline'}>{label}</span>
             </button>
             {i < STEPS.length - 1 && <span className="h-px w-3 bg-border" />}
           </li>
@@ -549,9 +551,9 @@ export default function CompleteForms() {
               {fill.procedures.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {fill.procedures.map((p, i) => (
-                    <Badge key={`${p.code}-${i}`} variant="secondary" className="gap-1 font-normal">
-                      {p.code} · {p.description}
-                      {packetQuantity(p) > 1 && <span className="font-medium">×{packetQuantity(p)}</span>}
+                    <Badge key={`${p.code}-${i}`} variant="secondary" className="max-w-full gap-1 font-normal">
+                      <span className="truncate">{p.code} · {p.description}</span>
+                      {packetQuantity(p) > 1 && <span className="shrink-0 font-medium">×{packetQuantity(p)}</span>}
                       <button
                         onClick={() => setFill(f => ({ ...f, procedures: f.procedures.filter((_, j) => j !== i) }))}
                         aria-label={`Remove ${p.code}`}
@@ -1329,17 +1331,17 @@ export default function CompleteForms() {
         </Card>
       )}
 
-      {/* Navigation */}
+      {/* Navigation — sticky on phones so Back/Continue never scroll away. */}
       {step < 5 && (
-        <div className="flex items-center justify-between border-t pt-4">
-          <Button variant="outline" onClick={back} disabled={step === 0}>
+        <div className="sticky bottom-0 z-10 -mx-4 flex items-center justify-between gap-3 border-t bg-background px-4 py-3 sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:py-0 sm:pt-4">
+          <Button variant="outline" onClick={back} disabled={step === 0} className="touch-target">
             <ArrowLeft className="mr-2 h-4 w-4" />Back
           </Button>
           <p className="text-xs text-muted-foreground">
             Step {step + 1} of {STEPS.length} — {STEPS[step]}
           </p>
           {step < 4 ? (
-            <Button onClick={next}>
+            <Button onClick={next} className="touch-target">
               Continue<ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           ) : (

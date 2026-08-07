@@ -8,7 +8,7 @@ import {
   SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import {
-  ArrowLeft, Save, Send, History, Eye, Plus, AlertTriangle, Loader2, Lock, Sparkles, ShieldAlert,
+  ArrowLeft, Save, Send, History, Eye, Plus, AlertTriangle, Loader2, Lock, Sparkles, ShieldAlert, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -90,6 +90,10 @@ export default function ConsentBuilder() {
   const [pageFit, setPageFit] = useState<PageFit>('auto');
   const [dirty, setDirty] = useState(false);
   const [loadedId, setLoadedId] = useState<string | null>(null);
+
+  // Small-screen hint only — plain state, no persistence: it simply comes
+  // back next visit, which is fine for a gentle nudge.
+  const [mobileNoteDismissed, setMobileNoteDismissed] = useState(false);
 
   const [publishOpen, setPublishOpen] = useState(false);
   const [changeNotes, setChangeNotes] = useState('');
@@ -380,6 +384,22 @@ export default function ConsentBuilder() {
         </div>
       </div>
 
+      {/* Below md the builder is usable but cramped — say so once, dismissibly. */}
+      {!mobileNoteDismissed && (
+        <div className="flex items-start justify-between gap-2 rounded-lg border bg-muted/50 p-3 text-sm text-muted-foreground md:hidden">
+          <p>The full builder works best on a desktop — basic edits are fine here.</p>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="touch-target h-6 w-6 shrink-0"
+            aria-label="Dismiss"
+            onClick={() => setMobileNoteDismissed(true)}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
         {/* Left: form settings + blocks */}
         <div className="space-y-4 min-w-0">
@@ -433,7 +453,7 @@ export default function ConsentBuilder() {
                 {fitReport.problem ? (
                   <div className="rounded-lg border border-warning/50 bg-warning/5 p-2.5 text-xs text-warning space-y-1.5">
                     <p>{fitReport.problem}</p>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {fitReport.suggestions.includes('two_pages') && (
                         <Button size="sm" variant="outline" className="h-6 text-xs" disabled={readOnly}
                           onClick={() => { setPageFit('two_pages'); touch(); }}>
