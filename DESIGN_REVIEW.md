@@ -196,3 +196,46 @@ permissions, no queries, and the route returns 404 on production hosts.
 
 ### Screenshots
 `design-review/<scenario>-{desktop,tablet,mobile}.png` — 21 captures, seven scenarios × three widths.
+
+---
+
+## Pass 5 — Team Moments (lightweight positive recognition)
+
+Authenticated-only feature. Preview evidence only; **not published to production**.
+
+### What was added
+- `supabase/migrations/*` — `team_moments`, `org_moment_settings`, `moment_prefs` with grants, RLS, and two guard triggers.
+- `src/components/moments/reactions.ts` — closed positive reaction set + pure rules (validation, reveal planning, announcements, replay safety).
+- `src/hooks/useTeamMoments.ts` — pending / history / send / mark-revealed / prefs. Kept separate from `useNotifications`.
+- `src/components/moments/MomentEnvelope.tsx` — the Y-fold envelope opening.
+- `src/components/moments/TeamMomentsReveal.tsx` — anchored reveal surface + live orchestrator.
+- `src/components/moments/SendMomentDialog.tsx` — send / received / preferences.
+- `src/components/AppLayout.tsx` — mounted the entry point (desktop + mobile headers) and the reveal.
+- `src/index.css` — `.pe-moment-flap`, `.pe-moment-rise`, reduced-motion overrides.
+- `src/pages/DesignReviewMoments.tsx` + routes in `src/App.tsx`, linked from `/design-review`.
+- Tests: `src/test/team-moments.test.ts` (17), `src/test/team-moments-rls.test.ts` (12).
+
+### Boundaries enforced in the database, not just the UI
+| Rule | Where |
+| --- | --- |
+| Positive reactions only | CHECK constraint on `reaction` |
+| Sender always named, never yourself | insert policy + two CHECK constraints |
+| Same office only, both sides active | insert policy checks both employee rows against the row's `org_id` |
+| Only recipient and sender can read | select policy — no `is_org_admin` hatch |
+| Wording immutable after sending | `team_moments_guard_update` |
+| Reveal write-once (idempotent across devices) | `team_moments_guard_update` keeps the first timestamp |
+| Anti-spam (per hour, per pair per day) | `team_moments_before_insert` |
+| Office switch, message toggle, expiry, retention | `org_moment_settings` |
+| Personal mute / opt-out | `moment_prefs`, private to each person |
+| No delete path | no delete policy |
+
+### Screenshots (`design-review/`)
+`moments-index-{desktop,mobile}.png`, `moments-single-{desktop,mobile}.png`,
+`moments-multiple-{desktop,mobile}.png`, `moments-reduced-motion-{desktop,mobile}.png`,
+`moments-muted-{desktop,mobile}.png` — desktop 1440×1000, mobile 390×844.
+
+### Review routes
+`/design-review/moments` · `/design-review/moments/single` · `/multiple` · `/reduced-motion` · `/muted`
+
+### Deliberately not built
+No leaderboard, score, streak, ranking, or "received fewer" analytics. No manager browse of moment text. No use of moments for corrective feedback, acknowledgments, or accountability escalation.
