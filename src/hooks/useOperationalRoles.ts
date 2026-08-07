@@ -20,6 +20,9 @@ export type EmployeeOperationalRole = {
   is_primary: boolean;
   confirmed_at: string | null;
   confirmed_by: string | null;
+  /** Optional assignment window — used to tell "covering today" from "can cover". */
+  starts_on: string | null;
+  ends_on: string | null;
 };
 
 export const ROLE_LABELS: Record<OperationalRole, string> = {
@@ -44,7 +47,7 @@ export function useOperationalRoles() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('employee_operational_roles')
-        .select('id, employee_id, operational_role, is_primary, confirmed_at, confirmed_by')
+        .select('id, employee_id, operational_role, is_primary, confirmed_at, confirmed_by, starts_on, ends_on')
         .eq('org_id', ctx!.org_id);
       if (error) throw error;
       const byEmployee = new Map<string, EmployeeOperationalRole[]>();

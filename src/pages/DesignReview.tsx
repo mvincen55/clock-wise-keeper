@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import NotFound from './NotFound';
+import { SCENARIOS } from '@/components/dashboard/scenarios';
 
 /**
  * TEMPORARY — visual review index for the second-pass redesign.
@@ -19,23 +20,13 @@ const ROUTES: { to: string; label: string; note: string }[] = [
   { to: '/security', label: 'Security', note: 'Verified now / explicit boundary / not yet' },
 ];
 
-const DASHBOARDS: { to: string; label: string; note: string }[] = [
-  {
-    to: '/design-review/dashboard/owner',
-    label: 'Owner dashboard',
-    note: 'Practice command center — decisions, staffing, goals, collections pace. No clock controls.',
-  },
-  {
-    to: '/design-review/dashboard/manager',
-    label: 'Manager dashboard',
-    note: 'Live cockpit — who is here, what needs attention, checklist progress, today in order.',
-  },
-  {
-    to: '/design-review/dashboard/team',
-    label: 'Team member dashboard',
-    note: 'Personal launchpad — own status, one next action, my work, my progress.',
-  },
-];
+/** The role-composition matrix, straight from the fixture registry. */
+const DASHBOARDS = SCENARIOS.map((s) => ({
+  to: `/design-review/dashboard/${s.slug}`,
+  label: s.title,
+  note: `Tier: ${s.tier} · Primary: ${s.primary} · Backup: ${s.secondary}`,
+}));
+
 
 export default function DesignReview() {
   const host = typeof window !== 'undefined' ? window.location.hostname : '';
@@ -83,7 +74,7 @@ export default function DesignReview() {
               to={r.to}
               className="pe-focus grid grid-cols-[3rem_1fr] gap-x-5 border-b border-ink/16 py-6 transition-colors hover:bg-ink/[0.04]"
             >
-              <span className="pe-display text-[1.6rem] leading-none text-plum/40">{`0${i + 5}`}</span>
+              <span className="pe-display text-[1.6rem] leading-none text-plum/40">{`0${i + 5}`.slice(-2)}</span>
               <div>
                 <p className="pe-display text-[1.3rem] text-ink">{r.label}</p>
                 <p className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-soft">{r.to}</p>

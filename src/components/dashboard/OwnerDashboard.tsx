@@ -2,9 +2,10 @@ import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
 import type { OwnerView } from './types';
 import {
-  Band, DashboardShell, EmptyLine, FigureStrip, Masthead, MicroLabel, PersonRow,
-  ProgressLine, SignalRow,
+  Band, DashboardShell, EmptyLine, FigureStrip, Lanes, Masthead, MicroLabel, PersonRow,
+  ProgressLine, SignalRow, ViewContext,
 } from './kit';
+import { TrendChart } from './charts';
 
 /**
  * OWNER — practice command center.
@@ -14,7 +15,7 @@ import {
  * personal team-member widgets. Every figure below comes from a real table.
  */
 export default function OwnerDashboard({ view }: { view: OwnerView }) {
-  const { header, figures, decisions, staffing, goals, pulse, health } = view;
+  const { header, figures, decisions, staffing, goals, pulse, health, chart, lanes, roleContext } = view;
   const openDecisions = decisions.filter((d) => d.value !== '0');
 
   return (
@@ -35,6 +36,10 @@ export default function OwnerDashboard({ view }: { view: OwnerView }) {
           </Link>
         }
       />
+
+      <div className="mt-3">
+        <ViewContext context={roleContext} />
+      </div>
 
       {/* Dominant attention region — the four numbers, in the office colour. */}
       <div className="mt-6 bg-primary text-primary-foreground">
@@ -63,6 +68,8 @@ export default function OwnerDashboard({ view }: { view: OwnerView }) {
               goals.map((g) => <ProgressLine key={g.id} row={g} />)
             )}
           </Band>
+
+          {chart && <TrendChart series={chart} />}
 
           {health && (
             <Band title="Collections pace" action={{ label: 'Reports', to: '/reports' }}>
@@ -108,6 +115,10 @@ export default function OwnerDashboard({ view }: { view: OwnerView }) {
           <Band title="Office pulse">
             {pulse.length === 0 ? <EmptyLine>Quiet.</EmptyLine> : pulse.map((s) => <SignalRow key={s.id} signal={s} />)}
           </Band>
+
+          {/* Owners who also work a chair or the desk get a compact lane —
+              it never competes with the decisions above. */}
+          <Lanes lanes={lanes} />
         </div>
       </div>
     </DashboardShell>

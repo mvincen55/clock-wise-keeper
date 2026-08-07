@@ -19,11 +19,16 @@ import { useMomentum } from '@/hooks/useMomentum';
 import { useMissingShifts } from '@/hooks/useMissingShifts';
 import { useTodayEntry } from '@/hooks/useTimeEntries';
 import { useAuth } from '@/hooks/useAuth';
+import { useMyOperationalRoles } from '@/hooks/useMyOperationalRoles';
+import { useAttendanceDayStatus } from '@/hooks/useAttendanceDayStatus';
+import { useTimeEntries } from '@/hooks/useTimeEntries';
+import { shortcutsFor, roleLabel as opRoleLabel, roleMission } from './opRoles';
+import { calculatePunchMinutes } from '@/lib/time-utils';
 import { getClockStatus, getRunningMinutes } from '@/lib/clock-status';
-import { formatDate, formatTime, getToday, minutesToHHMM } from '@/lib/time-utils';
+import { formatDate, formatDateShort, formatTime, getToday, minutesToHHMM, shiftDate } from '@/lib/time-utils';
 import type {
   DashboardHeader, DashboardView, Figure, ManagerView, MemberView, OwnerView,
-  PersonStatus, ProgressRow, Signal, TimelineRow,
+  PermissionTier, PersonStatus, ProgressRow, RoleContext, RoleLane, Series, Signal, TimelineRow,
 } from './types';
 
 /**
@@ -48,6 +53,18 @@ function greeting(hour: number): string {
 
 function money(cents: number): string {
   return `$${Math.round(cents / 100).toLocaleString('en-US')}`;
+}
+
+const TIER_OF: Record<'owner' | 'manager' | 'employee', PermissionTier> = {
+  owner: 'owner',
+  manager: 'manager',
+  employee: 'member',
+};
+
+/** Short weekday label for chart columns. */
+function dayTick(date: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString('en-US', { weekday: 'narrow', timeZone: 'UTC' });
 }
 
 /** One person's live attendance line, in words a human reads at a glance. */
@@ -99,7 +116,12 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
   const { data: momentum } = useMomentum();
   const { data: todayEntry } = useTodayEntry();
 
+  const ops = useMyOperationalRoles();
   const today = getToday();
+  const chartStart = shiftDate(today, -13);
+  const { data: attendanceWindow = [] } = useAttendanceDayStatus(chartStart, today);
+  const weekStart = shiftDate(today, -6);
+  const { data: weekEntries = [] } = useTimeEntries(weekStart, today);
   const fourteenDaysAgo = new Date(new Date(today + 'T12:00:00Z').getTime() - 14 * 86_400_000)
     .toISOString()
     .slice(0, 10);
@@ -115,6 +137,108 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
       personName: firstName ? `${greeting(now.getHours())}, ${firstName}` : greeting(now.getHours()),
       dateLabel: formatDate(today),
       timeLabel: formatTime(now.toISOString()),
+    };
+
+    const tier = TIER_OF[ctx.role];
+    const roleContext: RoleContext = {
+      tier,
+      tierLabel: ROLE_LABEL[ctx.role],
+      primary: ops.primary,
+      primaryLabel: ops.primaryLabel,
+      secondary: ops.secondary,
+      secondaryLabels: ops.secondary.map(opRoleLabel),
+      coveringToday: ops.coveringToday,
+      coveringTodayLabels: ops.coveringToday.map(opRoleLabel),
+    };
+
+    /**
+     * Operational-role lanes. The primary role gets a full lane; backup roles
+     * get a compact "Also covering" strip, and only contribute time-sensitive
+     * items when they are actually covering that function today. A secondary
+     * role never merges a second whole dashboard in, and never widens
+     * permission — `shortcutsFor` filters by tier.
+     */
+    const laneUrgent = (role: typeof ops.primary): Signal[] => {
+      if (!role) return [];
+      const usesChecklists = shortcutsFor(role, tier).some(sc => sc.to === '/checklists');
+      if (!usesChecklists || bypasses.length === 0) return [];
+      return [
+        {
+          id: `bypass-${role}`,
+          label: 'Checklist bypass reasons owed',
+          detail: 'A sentence closes each one. It never blocks your clock-out.',
+          value: String(bypasses.length),
+          href: '/checklists',
+          tone: 'attention',
+        },
+      ];
+    };
+
+    const lanes: RoleLane[] = [];
+    if (ops.primary) {
+      lanes.push({
+        role: ops.primary,
+        label: opRoleLabel(ops.primary),
+        kind: 'primary',
+        mission: roleMission(ops.primary),
+        shortcuts: shortcutsFor(ops.primary, tier),
+        // The primary lane never repeats a line already shown above in the
+        // member's own open-items list — one item, one place.
+        urgent: [],
+      });
+    }
+    for (const role of ops.secondary) {
+      const covering = ops.coveringToday.includes(role);
+      lanes.push({
+        role,
+        label: opRoleLabel(role),
+        kind: 'backup',
+        mission: roleMission(role),
+        shortcuts: shortcutsFor(role, tier).slice(0, 4),
+        urgent: covering ? laneUrgent(role) : [],
+        note: covering ? 'Covering today' : 'Backup — not assigned today',
+      });
+    }
+
+    /**
+     * Charts. Two series, both from records the app already writes:
+     *  - arrivals: `attendance_day_status` rows over the last 14 days,
+     *  - my week: own `time_entries` punches over the last 7 days.
+     * No production, collections, patient or utilisation series exists,
+     * because Purple Envelope does not hold that data.
+     */
+    const dayKeys = Array.from({ length: 14 }, (_, i) => shiftDate(chartStart, i));
+    const arrivalsSeries: Series = {
+      id: 'arrivals',
+      title: 'Arrivals, last 14 days',
+      question: 'Are people getting here on time?',
+      caption: 'On-time arrivals against scheduled people. Pale bar is scheduled, solid bar is on time.',
+      href: '/team',
+      format: 'percent',
+      points: dayKeys.map(d => {
+        const rows = attendanceWindow.filter(r => r.entry_date === d && r.is_scheduled_day && !r.office_closed);
+        return {
+          x: dayTick(d),
+          value: rows.filter(r => r.has_punches && !r.is_late).length,
+          of: rows.length,
+          muted: rows.length === 0,
+        };
+      }),
+      footnote: 'Attendance only. Purple Envelope does not hold production, collections, or schedule-utilisation data.',
+    };
+
+    const mySeries: Series = {
+      id: 'my-week',
+      title: 'My recorded time, last 7 days',
+      question: 'How is my week tracking?',
+      caption: 'Hours from your own punches. Corrections are reflected once approved.',
+      href: '/timesheet',
+      format: 'hours',
+      points: Array.from({ length: 7 }, (_, i) => shiftDate(weekStart, i)).map(d => {
+        const entry = weekEntries.find(e => e.entry_date === d);
+        const mins = entry ? calculatePunchMinutes(entry.punches ?? []) : 0;
+        return { x: dayTick(d), value: Math.round((mins / 60) * 10) / 10, muted: mins === 0 };
+      }),
     };
 
     /* ------------------------------ owner ------------------------------ */
@@ -243,6 +367,9 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
       const owner: OwnerView = {
         kind: 'owner',
         header,
+        roleContext,
+        chart: arrivalsSeries,
+        lanes,
         figures,
         decisions,
         staffing: { present, expected: scheduled.length, rows: scheduled.map(personStatus).slice(0, 10) },
@@ -379,6 +506,9 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
       const manager: ManagerView = {
         kind: 'manager',
         header,
+        roleContext,
+        chart: arrivalsSeries,
+        lanes,
         figures,
         roster: scheduled.map(personStatus),
         attention,
@@ -449,7 +579,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
                 ? {
                     title: 'Explain a missing day',
                     detail: `${missingDays.length} scheduled day${missingDays.length === 1 ? '' : 's'} with no time recorded.`,
-                    href: '/my-time',
+                    href: '/timesheet',
                     cta: 'Review time',
                   }
                 : null;
@@ -484,7 +614,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         label: 'Missing time, last 14 days',
         detail: 'Scheduled days with no punches.',
         value: String(missingDays.length),
-        href: '/my-time',
+        href: '/timesheet',
         tone: missingDays.length > 0 ? 'attention' : 'calm',
       },
       {
@@ -519,7 +649,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         value: minutesToHHMM(runningMinutes),
         label: 'Today',
         detail: 'Recorded time',
-        href: '/my-time',
+        href: '/timesheet',
       },
       {
         id: 'pto',
@@ -558,6 +688,9 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
     const member: MemberView = {
       kind: 'member',
       header,
+      roleContext,
+      chart: mySeries,
+      lanes,
       status,
       next,
       mine,
@@ -569,5 +702,6 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
   }, [
     ctx, ctxLoading, profile, now, today, snapshot, approvals, vitals, sprintData, sprints, nudges, bypasses,
     orgReports, myReports, ackRoster, myAcks, assignments, pto, momentum, todayEntry, missingDays, user,
+    ops, attendanceWindow, weekEntries, chartStart, weekStart,
   ]);
 }

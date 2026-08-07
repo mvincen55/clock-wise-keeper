@@ -134,3 +134,65 @@ Patient counts, scheduling/production/utilization, hygiene reappointment, revenu
 
 ### Screenshots
 `design-review/{owner,manager,team}-{desktop,tablet,mobile}.png`
+
+## Pass 4 — dual-axis personalization (permission tier × operational role)
+
+Home is now composed from two independent dimensions. Permission tier sets the
+dashboard **mission**; operational role(s) set the daily **work**. They are never
+conflated, and a secondary role never widens permission.
+
+### Files added
+- `src/hooks/useMyOperationalRoles.ts` — resolves the signed-in user's primary/secondary operational roles from the existing `employee_operational_roles` table (including the `starts_on`/`ends_on` window, so "covering today" is real)
+- `src/components/dashboard/opRoles.ts` — role module registry: label, mission, and shortcuts, each filtered by `minTier`
+- `src/components/dashboard/charts.tsx` — hand-rolled SVG trend/completion visuals, sharp-cornered, each labelled with the question it answers
+- `src/components/dashboard/scenarios.ts` — the design-review matrix (labels, data sources, omissions)
+
+### Files changed
+- `src/hooks/useOperationalRoles.ts` — added the existing `starts_on` / `ends_on` columns to the type and select
+- `src/components/dashboard/types.ts` — `PermissionTier`, `RoleContext`, `RoleLane`, `Series`, `Shortcut`
+- `src/components/dashboard/useDashboardView.ts` — builds role context, lanes, and the two chart series; fixed member time links to `/timesheet`
+- `src/components/dashboard/kit.tsx` — `ViewContext`, `Lane`, `Lanes`, `ShortcutList`
+- `src/components/dashboard/{Owner,Manager,Member}Dashboard.tsx` — render the chart and lanes
+- `src/components/dashboard/fixtures.ts` — seven review compositions
+- `src/pages/DesignReviewDashboard.tsx` — per-scenario labels, data-source table, omission list
+- `src/pages/DesignReview.tsx` — index driven by the scenario matrix
+
+### Primary + backup behaviour
+- The primary role sets the lane emphasis and appears first, full width.
+- Backup roles render a compact, clearly labelled **Also covering** lane, indented under a rule, with at most four shortcuts.
+- A backup lane elevates time-sensitive items **only** when the assignment window covers today; otherwise it is marked `Backup — not assigned today` and stays quiet.
+- The "My view: … / Also covering: …" line is a label, not a switch. It grants nothing; every shortcut is tier-filtered and every destination is still route- and RLS-guarded.
+- No lane repeats a line already shown in the user's own open-items list.
+
+### Charts (both from records the app already writes)
+| Chart | Question | Source |
+| --- | --- | --- |
+| Arrivals, last 14 days | Are people getting here on time? | `attendance_day_status` via `useOrgAttendanceSnapshot` history |
+| My recorded time, last 7 days | How is my week tracking? | own `time_entries`, self-scoped by RLS |
+
+Every chart links into the workflow that resolves it. No decorative analytics, no
+production/collections/patient/utilisation series — that data does not exist here.
+
+### Review matrix — `/design-review`
+| Scenario | Tier | Primary | Backup |
+| --- | --- | --- | --- |
+| `owner` | Owner | Dentist | — |
+| `manager` | Manager | Office manager | — |
+| `manager-front-desk` | Manager | Front desk | Office manager (covering today) |
+| `front-desk` | Team member | Front desk | — |
+| `hygienist` | Team member | Hygienist | — |
+| `dental-assistant` | Team member | Dental assistant | — |
+| `front-desk-backup-assistant` | Team member | Front desk | Dental assistant (covering today) |
+
+Each preview page prints its own tier/primary/backup labels, the real hook behind
+every widget, and what was deliberately omitted. Fixtures only: no session, no
+permissions, no queries, and the route returns 404 on production hosts.
+
+### Verification
+- Typecheck clean.
+- Tests: 1026/1027 (the single failure is the pre-existing `psql` shell-out test that cannot run in this sandbox).
+- No horizontal overflow at 1440px, 834px, or 390px for all seven compositions.
+- No production publish performed.
+
+### Screenshots
+`design-review/<scenario>-{desktop,tablet,mobile}.png` — 21 captures, seven scenarios × three widths.
