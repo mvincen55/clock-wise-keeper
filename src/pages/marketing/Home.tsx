@@ -221,8 +221,9 @@ export default function MarketingHome() {
                 and does not replace your practice management software.
               </p>
               <p>
-                Private coaching and training conversations are not browsable by owners or managers. Accountability
-                applies to owners and managers too.
+                Personal notes stay with their author, and direct messages stay with their participants — owners
+                included. Training attempts are still visible to administrators in your own office today; we say so on
+                the security page rather than imply otherwise. Accountability applies to owners and managers too.
               </p>
             </div>
             <Link
