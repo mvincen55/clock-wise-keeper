@@ -117,21 +117,24 @@ export function MomentRevealSurface({
 
 /**
  * Live version, mounted once inside the authenticated shell.
- * Marks everything revealed on first paint so it appears exactly once, even
- * across a second tab or a refreshed session.
+ *
+ * It renders ONLY the batch the database handed this device through
+ * `claim_team_moments`, then confirms presentation with `open_team_moments`.
+ * Two devices cannot claim the same moment; if this one closes before
+ * confirming, the two-minute claim lease expires and the moment returns.
  */
 export default function TeamMomentsReveal() {
-  const { data: pending } = usePendingMoments();
+  const { data: claimed } = useClaimedMoments();
   const { data: prefs } = useMomentPrefs();
   const nameOf = useEmployeeNameLookup();
   const reduced = useReducedMotion();
-  const markRevealed = useMarkMomentsRevealed();
+  const openMoments = useOpenMoments();
   const [dismissed, setDismissed] = useState(false);
-  const markedRef = useRef<string | null>(null);
+  const confirmedRef = useRef<string | null>(null);
 
   const moments = useMemo(
-    () => (pending ?? []).map((row) => toPending(row, nameOf(row.sender_employee_id))),
-    [pending, nameOf],
+    () => (claimed ?? []).map((row) => toPending(row, nameOf(row.sender_employee_id))),
+    [claimed, nameOf],
   );
 
   const plan = planReveal(moments, { reducedMotion: reduced, muted: !!prefs?.animations_muted });
@@ -140,9 +143,11 @@ export default function TeamMomentsReveal() {
     if (!plan.show || dismissed) return;
     const ids = plan.order.map((m) => m.id);
     const key = ids.join(',');
-    if (markedRef.current === key) return; // replay guard
-    markedRef.current = key;
-    markRevealed.mutate(ids);
+    if (confirmedRef.current === key) return; // replay guard within this session
+    confirmedRef.current = key;
+    // Confirm only once the surface has actually painted.
+    const raf = requestAnimationFrame(() => openMoments.mutate(ids));
+    return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan.show, plan.order.length, dismissed]);
 
@@ -150,3 +155,4 @@ export default function TeamMomentsReveal() {
 
   return <MomentRevealSurface moments={plan.order} animate={plan.animate} onDismiss={() => setDismissed(true)} />;
 }
+
