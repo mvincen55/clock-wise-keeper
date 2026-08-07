@@ -5,7 +5,7 @@ import { useTick } from '@/hooks/useTick';
 import { useOrgAttendanceSnapshot, type EmployeeSnapshot } from '@/hooks/useOrgAttendanceSnapshot';
 import { useApprovalCounts } from '@/hooks/useApprovalCounts';
 import { usePracticeVitals } from '@/hooks/usePracticeVitals';
-import { useTeamGoals } from '@/hooks/useTeamGoals';
+import { useTeamGoals, type TeamGoal } from '@/hooks/useTeamGoals';
 import { useOfficeNudges } from '@/hooks/useOfficeNudges';
 import { useUnresolvedBypasses } from '@/hooks/useChecklistBypasses';
 import { useOrgAccountabilityReports, useMyAccountabilityReports } from '@/hooks/useAccountability';
@@ -85,7 +85,8 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
   const { data: snapshot = [] } = useOrgAttendanceSnapshot();
   const { data: approvals } = useApprovalCounts();
   const { data: vitals } = usePracticeVitals();
-  const { data: sprints = [] } = useTeamGoals();
+  const { data: sprintData } = useTeamGoals();
+  const sprints: TeamGoal[] = sprintData?.live ?? [];
   const { data: nudges = [] } = useOfficeNudges();
   const { data: bypasses = [] } = useUnresolvedBypasses();
   const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
@@ -453,7 +454,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
                   }
                 : null;
 
-    const mine: Signal[] = [
+    const mineAll: Signal[] = [
       {
         id: 'training',
         label: 'Training assigned to me',
@@ -494,7 +495,8 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         href: '/management',
         tone: openReports.length > 0 ? 'urgent' : 'calm',
       },
-    ].filter(s => s.value !== '0' || s.id === 'training');
+    ];
+    const mine = mineAll.filter(s => s.value !== '0' || s.id === 'training');
 
     const progress: ProgressRow[] = mySprints.slice(0, 3).map(s => ({
       id: s.id,
