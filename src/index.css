@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -2691,5 +2691,56 @@
   /* Decorative texture and breathing layers stay put. */
   .punch-glow {
     box-shadow: none !important;
+  }
+}
+
+/* ==========================================================================
+   Public marketing site (Purple Envelope .com surface)
+   Scoped tokens: warm paper neutrals + the brand plum (#53406e). These are
+   only consumed by src/marketing/* and src/pages/marketing/* — the
+   authenticated app keeps its own palette untouched.
+   ========================================================================== */
+@layer base {
+  :root {
+    --pe-paper: 36 33% 97%;
+    --pe-paper-2: 36 26% 93%;
+    --pe-ink: 264 22% 11%;
+    --pe-ink-soft: 264 8% 38%;
+    --pe-plum: 265 26% 34%;
+    --pe-plum-deep: 265 33% 16%;
+    --pe-plum-tint: 266 38% 94%;
+    --pe-line: 265 15% 87%;
+    --pe-gold: 30 48% 48%;
+  }
+}
+
+@layer utilities {
+  .pe-rule {
+    background-image: linear-gradient(to right, hsl(var(--pe-line)), hsl(var(--pe-line) / 0));
+  }
+
+  .pe-reveal {
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity 700ms cubic-bezier(0.22, 1, 0.36, 1), transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .pe-reveal[data-shown="true"] {
+    opacity: 1;
+    transform: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pe-reveal {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
+  }
+
+  .pe-grain {
+    background-image:
+      radial-gradient(hsl(var(--pe-ink) / 0.045) 1px, transparent 1px);
+    background-size: 22px 22px;
   }
 }
