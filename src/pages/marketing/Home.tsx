@@ -247,7 +247,7 @@ export default function MarketingHome() {
         <Shell className="grid gap-10 py-16 lg:grid-cols-[1.1fr_0.9fr] lg:gap-20 lg:py-24">
           <Reveal>
             <p className="font-mono text-[11.5px] uppercase tracking-[0.22em] text-paper/50">Privacy posture</p>
-            <p className="pe-display mt-6 text-[clamp(2.1rem,6.4vw,4.5rem)] text-paper">
+            <p className="pe-display mt-6 text-[clamp(1.9rem,5vw,3.4rem)] text-paper">
               Only your business,
               <span className="block text-plum-tint">never your patients.</span>
             </p>
@@ -279,7 +279,7 @@ export default function MarketingHome() {
         <Shell className="py-16 lg:py-24">
           <div className="grid gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:gap-20">
             <div>
-              <h2 className="pe-display text-[clamp(2rem,6vw,4rem)] text-ink">
+              <h2 className="pe-display text-[clamp(1.9rem,5vw,3.2rem)] text-ink">
                 Give the office a system, so it stops being a person.
               </h2>
               <div className="mt-9 flex flex-wrap gap-0">
