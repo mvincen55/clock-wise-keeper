@@ -147,6 +147,8 @@ const router = createBrowserRouter(
             <Route path="/pricing" element={<MarketingPricing />} />
             <Route path="/about" element={<MarketingAbout />} />
             <Route path="/start" element={<MarketingStart />} />
+            {/* TEMPORARY preview-only review index — remove with DesignReview.tsx */}
+            <Route path="/design-review" element={<DesignReview />} />
             <Route path="/workplace" element={<ProtectedRoute><Workplace /></ProtectedRoute>} />
             <Route path="/playbook" element={<ProtectedRoute><Playbook /></ProtectedRoute>} />
             <Route path="/playbook/procedures" element={<ProtectedRoute><PracticeProcedures /></ProtectedRoute>} />
