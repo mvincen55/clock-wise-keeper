@@ -43,7 +43,6 @@ export default function Home() {
 
   const role = ctx?.role;
   const isOwner = role === 'owner';
-  const isManager = role === 'manager';
   const isMember = role === 'employee';
 
   return (
