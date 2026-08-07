@@ -26,12 +26,15 @@ export type MomentRow = {
   context_label: string | null;
   created_at: string;
   revealed_at: string | null;
+  claimed_at: string | null;
+  claim_expires_at: string | null;
+  opened_at: string | null;
   dismissed_at: string | null;
   expires_at: string;
 };
 
 const SELECT =
-  'id, org_id, sender_user_id, sender_employee_id, recipient_user_id, recipient_employee_id, reaction, message, context_label, created_at, revealed_at, dismissed_at, expires_at';
+  'id, org_id, sender_user_id, sender_employee_id, recipient_user_id, recipient_employee_id, reaction, message, context_label, created_at, revealed_at, claimed_at, claim_expires_at, opened_at, dismissed_at, expires_at';
 
 /** Office switch + limits. Absent row means the shipped defaults apply. */
 export function useMomentSettings() {
