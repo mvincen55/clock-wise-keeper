@@ -70,6 +70,12 @@ const PATIENT_PHONE = /\bpatient(?:'s)?[^.\n]{0,40}?\(?\d{3}\)?[\s.-]?\d{3}[\s.-
 // (a signature-line label) has no name after it and never matches.
 const HONORIFIC_NAME = /\b(?:Mr|Mrs|Ms)\.\s+[A-Z][a-z]{2,}\b/g;
 
+// A "Patient (name):" label followed by an actual capitalized name. Blank
+// fill-ins ("Patient Name: ____") and placeholders ("Patient:
+// {{patient_name}}") never match — a real name is required. The label is
+// case-tolerant; the name itself must be genuinely capitalized.
+const PATIENT_NAME_LABELED = /\b[Pp]atient(?:'s)?(?:\s+[Nn]ame)?\s*[:—-]\s*[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})?/g;
+
 function collect(
   text: string,
   regex: RegExp,
@@ -110,6 +116,7 @@ export function scanForPatientIdentifiers(
   collect(text, SSN, 'ssn', allow, hits);
   collect(text, PATIENT_PHONE, 'patient_phone', allow, hits);
   collect(text, HONORIFIC_NAME, 'patient_name', allow, hits);
+  collect(text, PATIENT_NAME_LABELED, 'patient_name', allow, hits);
 
   return { hits };
 }

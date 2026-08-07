@@ -29,6 +29,12 @@ import ConsentBuilder from "@/pages/ConsentBuilder";
 import ConsentBundles from "@/pages/ConsentBundles";
 import CompleteForms from "@/pages/CompleteForms";
 import ConsentSettings from "@/pages/ConsentSettings";
+import LettersHub from "@/pages/LettersHub";
+import WriteLetter from "@/pages/WriteLetter";
+import SchoolWorkNote from "@/pages/SchoolWorkNote";
+import SavedLetters from "@/pages/SavedLetters";
+import MySignaturePage from "@/pages/MySignaturePage";
+import CorrespondenceSettingsPage from "@/pages/CorrespondenceSettingsPage";
 import Assistant from "@/pages/Assistant";
 import OfficeHandbook from "@/pages/OfficeHandbook";
 import InsuranceDesk from "@/pages/InsuranceDesk";
@@ -135,6 +141,12 @@ const router = createBrowserRouter(
             <Route path="/consents/bundles" element={<ProtectedRoute><ConsentBundles /></ProtectedRoute>} />
             <Route path="/consents/complete" element={<ProtectedRoute><CompleteForms /></ProtectedRoute>} />
             <Route path="/consents/settings" element={<ProtectedRoute><ConsentSettings /></ProtectedRoute>} />
+            <Route path="/letters" element={<ProtectedRoute><LettersHub /></ProtectedRoute>} />
+            <Route path="/letters/write" element={<ProtectedRoute><WriteLetter /></ProtectedRoute>} />
+            <Route path="/letters/school-work-note" element={<ProtectedRoute><SchoolWorkNote /></ProtectedRoute>} />
+            <Route path="/letters/library" element={<ProtectedRoute><SavedLetters /></ProtectedRoute>} />
+            <Route path="/letters/signature" element={<ProtectedRoute><MySignaturePage /></ProtectedRoute>} />
+            <Route path="/letters/settings" element={<ProtectedRoute><CorrespondenceSettingsPage /></ProtectedRoute>} />
             <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
             <Route path="/handbook" element={<ProtectedRoute><OfficeHandbook /></ProtectedRoute>} />
             <Route path="/insurance-desk" element={<ProtectedRoute><InsuranceDesk /></ProtectedRoute>} />

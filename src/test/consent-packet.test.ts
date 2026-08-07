@@ -152,12 +152,19 @@ describe('privacy boundary — the workflow cannot store what it collects', () =
     for (const match of source.matchAll(/detail: \{([^}]*)\}/g)) {
       expect(match[1]).not.toMatch(/signature|signedAt/i);
     }
-    // The signature pad itself has no network or storage surface at all.
+    // The signature pad itself has no network or storage surface at all —
+    // neither the consent wrapper nor the shared drawing primitive it
+    // delegates to (which staff-profile signatures also use; persistence
+    // decisions live with CALLERS, never inside the pad).
     const pad = readFileSync(
       join(process.cwd(), 'src', 'components', 'consents', 'SignatureCapture.tsx'), 'utf8');
     expect(pad).not.toMatch(/supabase|fetch\(|axios|localStorage|sessionStorage|indexedDB/i);
+    const primitive = readFileSync(
+      join(process.cwd(), 'src', 'components', 'signature', 'SignaturePadCanvas.tsx'), 'utf8');
+    expect(primitive).not.toMatch(/supabase|fetch\(|axios|localStorage|sessionStorage|indexedDB/i);
     // Its only output is the onChange callback with a data URL.
-    expect(pad).toContain('onChange(canvas.toDataURL');
+    expect(primitive).toContain('onChange(canvas.toDataURL');
+    expect(pad).toContain('onChange={onChange}');
   });
 
   it('funnels every exit through the clear path', () => {

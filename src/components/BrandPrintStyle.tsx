@@ -16,6 +16,6 @@ export default function BrandPrintStyle({
 .inc-sheet{--inc-navy:${branding.brandColor};--inc-tint:${branding.brandTint}}
 .goal-sheet{--goal-navy:${branding.brandColor};--goal-tint:${branding.brandTint}}
 .cf-sheet{--cf-navy:${branding.brandColor};--cf-tint:${branding.brandTint}}
-.ba-letter{--ba-navy:${branding.brandColor};--ba-tint:${branding.brandTint}}`;
+.letter-sheet{--letter-navy:${branding.brandColor};--letter-tint:${branding.brandTint}}`;
   return <style>{css}</style>;
 }
