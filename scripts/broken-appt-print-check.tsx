@@ -41,6 +41,7 @@ const BRANDING = {
   addressLine1: '41 Northfield Avenue',
   addressLine2: 'Springvale, MA 02100',
   phone: '(555) 010-0142',
+  website: 'northfielddental.example',
   logoUrl: '',
   brandColor: '#53406e',
   brandTint: '#f3f0f8',
@@ -88,14 +89,14 @@ for (const v of VARIANTS) {
   const markup = renderToStaticMarkup(
     <>
       <BrandPrintStyle branding={BRANDING} />
-      <div className="ba-print-root">
+      <div className="letter-print-root">
         <BaLetterSheet
           branding={BRANDING}
           settings={DEFAULT_BA_SETTINGS}
           body={body(v.code)}
           patient={PATIENT}
           canceledAppts={v.canceledAppts}
-          todayMDY="8/3/2026"
+          todayISO="2026-08-03"
         />
       </div>
     </>
@@ -133,10 +134,10 @@ for (const v of VARIANTS) {
   await page.goto('file://' + path.join(OUT, `${v.name}.html`));
   await page.emulateMedia({ media: 'print' });
   const info = await page.evaluate(() => {
-    const letter = document.querySelector('.ba-letter');
+    const letter = document.querySelector('.letter-sheet');
     return {
       text: letter?.textContent ?? '',
-      hasAttachment: !!document.querySelector('.ba-attach-page'),
+      hasAttachment: !!document.querySelector('.letter-attach-page'),
       hasInlineNote: (letter?.textContent ?? '').includes('A full appointment list is attached'),
     };
   });

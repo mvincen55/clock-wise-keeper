@@ -156,10 +156,11 @@
   display: none;
 }
 
-/* Printable Broken Appointments letter. Hidden on screen; shown only when
-   printing from the Broken Appointments page. Patient values reach it via
-   React props only — never persisted (see src/lib/broken-appts/types.ts). */
-.ba-print-root {
+/* Printable office letterhead (OfficeLetterheadSheet). Hidden on screen;
+   shown only when printing from a correspondence page (Broken Appointment
+   letters, Write on Letterhead, School/Work notes). Patient values reach it
+   via React props only — never persisted (see src/lib/letters/types.ts). */
+.letter-print-root {
   display: none;
 }
 
@@ -2351,27 +2352,35 @@
   text-align: center;
 }
 
-/* ---- Broken Appointments letter (screen preview + print) ----
-   A one-page business letter in the practice's document language.
-   Pure pt/in units so preview and print never diverge. */
-@page baletter {
+/* ---- Office letterhead (screen preview + print) ----
+   THE canonical letter layout for every office correspondence surface:
+   Broken Appointment letters, Write on Letterhead, School/Work notes, and
+   future letters (OfficeLetterheadSheet). A business letter in the
+   practice's document language — logo-only masthead, right-aligned
+   dateline, recipient block, body, closing with optional signature ink,
+   and the practice-identity footer. Pure pt/in units so preview and print
+   never diverge. */
+@page letterdoc {
   size: letter;
   margin: 0.5in;
 }
 
-.ba-letter {
-  --ba-navy: #53406e; /* brand accent default; org_branding overrides */
-  --ba-ink: #2b2733;
-  --ba-muted: #6b6577;
-  --ba-line: #d5cfe0;
-  --ba-tint: #f3f0f8;
-  page: baletter;
+.letter-sheet {
+  --letter-navy: #53406e; /* brand accent default; org_branding overrides */
+  --letter-ink: #2b2733;
+  --letter-muted: #6b6577;
+  --letter-line: #d5cfe0;
+  --letter-tint: #f3f0f8;
+  page: letterdoc;
   width: 7.5in;
-  min-height: 10in;
+  /* A hair under the 10in printable height: fractional layout rounding on
+     an exactly-full sheet can throw the keep-together footer onto a blank
+     second page. The slack is invisible on paper. */
+  min-height: 9.95in;
   display: flex;
   flex-direction: column;
   background: white;
-  color: var(--ba-ink);
+  color: var(--letter-ink);
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 10.5pt;
   line-height: 1.5;
@@ -2380,80 +2389,148 @@
   -webkit-print-color-adjust: exact;
 }
 
-.ba-letterhead {
+/* Masthead: the office's configured logo only — identity text lives in the
+   footer. A logo-less office prints its name in the same slot instead. */
+.letter-masthead {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12pt;
-  border-bottom: 2pt solid var(--ba-navy);
+  border-bottom: 2pt solid var(--letter-navy);
   padding-bottom: 10pt;
 }
 
-.ba-letterhead-name {
-  font-size: 14pt;
-  font-weight: 700;
-  color: var(--ba-navy);
-}
-
-.ba-letterhead-meta {
-  font-size: 9pt;
-  color: var(--ba-muted);
-  text-align: right;
-  line-height: 1.45;
-}
-
-.ba-logo {
-  height: 0.55in;
-  max-width: 2.2in;
+.letter-logo {
+  height: 0.6in;
+  max-width: 2.6in;
   object-fit: contain;
+  object-position: left center;
 }
 
-.ba-dateline {
+.letter-masthead-name {
+  font-size: 15pt;
+  font-weight: 700;
+  color: var(--letter-navy);
+}
+
+.letter-dateline {
+  margin-top: 16pt;
+  text-align: right;
+}
+
+.letter-recipient {
   margin-top: 14pt;
-}
-
-.ba-address-block {
-  margin-top: 10pt;
   line-height: 1.45;
+  /* Long recipient names/addresses wrap instead of widening the page. */
+  overflow-wrap: anywhere;
 }
 
-.ba-salutation {
-  margin-top: 14pt;
+.letter-subject {
+  margin-top: 12pt;
+  font-weight: 700;
 }
 
-.ba-body {
-  margin-top: 9pt;
-  flex: 1;
+.letter-salutation {
+  margin-top: 16pt;
 }
 
-.ba-body p {
+.letter-body {
+  margin-top: 10pt;
+}
+
+.letter-body p {
   margin: 0 0 9pt;
 }
 
-.ba-auto-line {
+.letter-list {
+  margin: 0 0 9pt;
+  padding-left: 22pt;
+}
+
+.letter-list li {
+  margin: 0 0 3pt;
+}
+
+/* Small italic note a feature appends after its body (e.g. the Broken
+   Appointments automatic-letter line). */
+.letter-fineprint {
   font-style: italic;
-  color: var(--ba-muted);
+  color: var(--letter-muted);
   font-size: 9pt;
   margin: 4pt 0 10pt;
 }
 
-.ba-signature-name {
+/* Closing: phrase, optional real-signature ink at a consistent footprint,
+   typed name and title. Never splits across pages. */
+.letter-closing {
+  margin-top: 16pt;
+  margin-bottom: 12pt;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.letter-ink {
+  /* inline-block, NOT block: Chromium's print fragmentation adds a phantom
+     trailing page when a block-level replaced element sits inside this
+     letter (reproduced in scripts/letter-print-check.tsx). The surrounding
+     divs still give the ink its own line. */
+  display: inline-block;
+  vertical-align: top;
+  max-height: 0.55in;
+  max-width: 2.2in;
+  width: auto;
+  object-fit: contain;
+  object-position: left center;
+  margin: 6pt 0 2pt;
+}
+
+.letter-signer-name {
   font-weight: 700;
-  margin-top: 20pt;
 }
 
-.ba-signature-title {
-  color: var(--ba-muted);
+/* No stored ink: leave a hand-signing gap above the typed name. */
+.letter-signer-name--typed {
+  margin-top: 22pt;
 }
 
-.ba-enclosure {
-  margin-top: 12pt;
+.letter-signer-title {
+  color: var(--letter-muted);
+}
+
+.letter-enclosure {
+  margin-top: 0;
+  margin-bottom: 12pt;
   padding-top: 8pt;
-  border-top: 1pt solid var(--ba-line);
+  border-top: 1pt solid var(--letter-line);
   font-size: 9pt;
-  color: var(--ba-muted);
+  color: var(--letter-muted);
 }
 
+/* Practice identity footer — the ONE place the office name/address/phone/
+   website print, fed from org_branding. Pinned to the sheet bottom on a
+   one-page letter (flex margin-top auto); follows the content on the last
+   page of a longer one. The preceding blocks carry explicit bottom margins
+   (flex items never collapse margins), so content can never touch the rule. */
+.letter-foot {
+  margin-top: auto;
+  padding-top: 8pt;
+  border-top: 1.25pt solid var(--letter-navy);
+  text-align: center;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.letter-foot-name {
+  font-size: 9pt;
+  font-weight: 600;
+  color: var(--letter-navy);
+}
+
+.letter-foot-meta {
+  font-size: 8.5pt;
+  color: var(--letter-muted);
+  overflow-wrap: anywhere;
+}
+
+/* Broken Appointments: canceled-appointment table inside the letter body. */
 .ba-appt-table {
   width: 100%;
   border-collapse: collapse;
@@ -2463,35 +2540,35 @@
 
 .ba-appt-table th {
   text-align: left;
-  background: var(--ba-tint);
-  color: var(--ba-navy);
+  background: var(--letter-tint);
+  color: var(--letter-navy);
   padding: 3pt 6pt;
-  border: 0.75pt solid var(--ba-line);
+  border: 0.75pt solid var(--letter-line);
 }
 
 .ba-appt-table td {
   padding: 3pt 6pt;
-  border: 0.75pt solid var(--ba-line);
+  border: 0.75pt solid var(--letter-line);
 }
 
-/* Rung 4 overflow: the full appointment list prints as its own
-   attachment page (same pattern as .fof-office-page). */
-.ba-attach-page {
+/* Attachment pages print after the letter (e.g. Rung 4's full
+   appointment list — same pattern as .fof-office-page). */
+.letter-attach-page {
   page-break-before: always;
   margin-top: 12pt;
-  border-top: 2pt solid var(--ba-line);
+  border-top: 2pt solid var(--letter-line);
   padding-top: 10pt;
 }
 
-.ba-attach-title {
+.letter-attach-title {
   font-weight: 700;
-  color: var(--ba-navy);
+  color: var(--letter-navy);
   font-size: 12pt;
   margin-bottom: 2pt;
 }
 
-.ba-attach-sub {
-  color: var(--ba-muted);
+.letter-attach-sub {
+  color: var(--letter-muted);
   font-size: 9pt;
   margin-bottom: 8pt;
 }
@@ -2514,7 +2591,7 @@
   body:has(.incident-print-root) > *:not(.incident-print-root),
   body:has(.goals-print-root) > *:not(.goals-print-root),
   body:has(.consent-print-root) > *:not(.consent-print-root),
-  body:has(.ba-print-root) > *:not(.ba-print-root) {
+  body:has(.letter-print-root) > *:not(.letter-print-root) {
     display: none !important;
   }
 
@@ -2523,7 +2600,7 @@
   .incident-print-root,
   .goals-print-root,
   .consent-print-root,
-  .ba-print-root {
+  .letter-print-root {
     display: block !important;
   }
 
@@ -2576,21 +2653,21 @@
     padding: 0;
   }
 
-  .ba-print-root .ba-letter {
+  .letter-print-root .letter-sheet {
     width: 100%;
     padding: 0;
   }
 
   /* The letter's appointment table draws its own rules — exempt it from
      the generic print table borders below, then restate its own. */
-  .ba-letter th,
-  .ba-letter td {
+  .letter-sheet th,
+  .letter-sheet td {
     border: none;
   }
 
-  .ba-letter .ba-appt-table th,
-  .ba-letter .ba-appt-table td {
-    border: 0.75pt solid var(--ba-line);
+  .letter-sheet .ba-appt-table th,
+  .letter-sheet .ba-appt-table td {
+    border: 0.75pt solid var(--letter-line);
   }
   
   .no-print {

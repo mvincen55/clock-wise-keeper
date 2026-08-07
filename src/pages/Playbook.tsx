@@ -1,7 +1,8 @@
 import {
   Sunrise, ListChecks, Banknote, ShieldAlert, ReceiptText, FileStack,
   DollarSign, Sparkles, ShieldCheck, Phone, CalendarX, FileSignature,
-  Library, Layers, ClipboardList, BookOpenCheck,
+  Library, Layers, ClipboardList, BookOpenCheck, FileText, GraduationCap,
+  Mail,
 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useBrokenApptSettings } from '@/hooks/useBrokenApptSettings';
@@ -21,6 +22,14 @@ const buildSections = (brokenApptLabel: string): HubSection[] => [
       { to: '/deposit-log', icon: Banknote, label: 'Close the Day', description: 'Deposit log and end-of-day closeout.' },
       { to: '/incident-reports', icon: ShieldAlert, label: 'Incident Reports', description: 'Document and review office incidents.' },
       { to: '/broken-appointments', icon: CalendarX, label: brokenApptLabel, description: 'No-shows and late cancellations: letters, replies, and Dentrix blocks. Nothing patient-specific is stored.' },
+    ],
+  },
+  {
+    title: 'Letters and Notes',
+    links: [
+      { to: '/letters', icon: Mail, label: 'Letters & Notes', description: 'Office correspondence on one canonical letterhead: letters, notes, saved wording, signatures.' },
+      { to: '/letters/write', icon: FileText, label: 'Write on Letterhead', description: 'A one-off office letter — write, preview, print. Nothing patient-specific is stored.' },
+      { to: '/letters/school-work-note', icon: GraduationCap, label: 'School / Work Note', description: 'A fast excuse note for school or work. Temporary details, printed, then cleared.' },
     ],
   },
   {

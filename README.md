@@ -127,6 +127,18 @@ Navigation is a compact destination list; every feature below keeps its own rout
 | `/fof/templates` | FofTemplates | Saved FOF templates |
 | `/fof/fees` | FofFees | Fee schedule management: office + carrier schedules, imports, per-code patient-facing names |
 
+### Letters & Notes (office correspondence)
+| Route | Page | What it does |
+|---|---|---|
+| `/letters` | LettersHub | Office-correspondence hub: write, school/work notes, saved letters, my signature, settings |
+| `/letters/write` | WriteLetter | One-off letter on the canonical letterhead: composer + live preview, print without saving; save WORDING (with `{{placeholders}}`) to the library behind a PII scan + confirmation |
+| `/letters/school-work-note` | SchoolWorkNote | Front-desk excuse note (School/Work). **No save button by design** — temporary values → print → clear |
+| `/letters/library` | SavedLetters | Reusable office letters (use/edit/duplicate/archive); team writes gated by `correspondence_team_can()` RLS |
+| `/letters/signature` | MySignaturePage | Self-service stored signature: draw / upload / **Create one for me** (generated from your own name); `allow_office_use` consent flag |
+| `/letters/settings` | CorrespondenceSettingsPage | Manager settings: default closing, office signer, note wording, team library toggle, letterhead preview |
+
+**One letterhead:** every printed letter (Broken Appointment letters included) renders through `OfficeLetterheadSheet` (`.letter-sheet` CSS, `.letter-print-root` portal). Practice identity comes only from `org_branding`. Print checks: `scripts/letter-print-check.tsx`, `scripts/broken-appt-print-check.tsx`, `scripts/signature-generate-check.mjs`.
+
 ### Forms & Consents (`docs/consent-forms-spec.md`)
 | Route | Page | What it does |
 |---|---|---|
@@ -221,6 +233,7 @@ Migration `20260723200000_checklists.sql`:
 
 - Print from a dialog requires hiding **every `<body>` child except the print root** — Radix portals dialogs as *siblings* of `#root`, so hiding only `#root` prints the dialog. This was the incident-report print bug (`225b37f`); don't regress it.
 - Print-invariant snapshot tests cover FOF, Deposit Log, Incident Report — printed output must not drift.
+- **Letters are one component.** Anything that prints as an office letter goes through `OfficeLetterheadSheet` + the `.letter-print-root` portal — never a per-feature letterhead. Signature images inside the letter must stay `display: inline-block` (a block-level replaced element makes Chromium's print fragmentation emit a phantom trailing page — see `scripts/letter-print-check.tsx`).
 
 ## Database conventions
 
