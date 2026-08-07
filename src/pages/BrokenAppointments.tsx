@@ -321,7 +321,7 @@ export default function BrokenAppointments() {
         body={letterTemplate.body}
         patient={patient}
         canceledAppts={rung === 4 ? canceledAppts.filter(r => r.date || r.provider || r.visitType) : []}
-        todayMDY={todayMDY}
+        todayISO={isoDateOf(now)}
       />
     ) : null;
 
@@ -1109,7 +1109,7 @@ export default function BrokenAppointments() {
 
       {/* Hidden print copy, portaled outside #root so print CSS can show
           only the letter (FOF pattern). */}
-      {letterSheet && createPortal(<div className="ba-print-root">{letterSheet}</div>, document.body)}
+      {letterSheet && createPortal(<div className="letter-print-root">{letterSheet}</div>, document.body)}
     </div>
   );
 }

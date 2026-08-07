@@ -8,7 +8,9 @@ import type { BaCanceledAppt, BaPatientFields } from '@/lib/broken-appts/types';
 // gates: merge fields resolve, the automatic-letter italic line and the
 // enclosure footer appear on every letter, bold markers become <strong>,
 // and a 12-row Rung 4 produces the attachment page instead of the inline
-// table.
+// table. Since the letterhead migration, every letter must also render on
+// the ONE shared OfficeLetterheadSheet (.letter-sheet) — logo-only
+// masthead, long-form dateline, practice identity in the footer.
 
 const BRANDING = {
   displayName: 'Northfield Dental',
@@ -16,6 +18,7 @@ const BRANDING = {
   addressLine1: '41 Northfield Avenue',
   addressLine2: 'Springvale, MA 02100',
   phone: '(555) 010-0142',
+  website: 'northfielddental.example',
   logoUrl: '',
 };
 
@@ -41,7 +44,7 @@ const render = (code: string, canceledAppts: BaCanceledAppt[] = []) =>
       body={LETTERS.find(l => l.code === code)!.body}
       patient={PATIENT}
       canceledAppts={canceledAppts}
-      todayMDY="8/3/2026"
+      todayISO="2026-08-03"
     />
   );
 
@@ -58,10 +61,25 @@ describe('BaLetterSheet — the five shipped letters', () => {
     const html = render(code, code === '9107' ? APPT_ROWS(3) : []);
     expect(html).not.toContain('{{');
     expect(html).toContain('Dear Ann,');
-    expect(html).toContain('8/10/2026'); // appt_date
+    expect(html).toContain('8/10/2026'); // appt_date (body wording unchanged)
     expect(html).toContain('$75'); // fee_amount
     expect(html).toContain('(555) 010-0142'); // office_phone fallback from branding
   });
+
+  it.each(['9101A', '0002', '9100A', '9106', '9107'])(
+    '%s renders on the shared office letterhead',
+    code => {
+      const html = render(code, code === '9107' ? APPT_ROWS(3) : []);
+      // The one canonical letter component, not a BA-specific layout.
+      expect(html).toContain('class="letter-sheet"');
+      // Long-form dateline owned by the letterhead.
+      expect(html).toContain('August 3, 2026');
+      // Practice identity lives in the shared footer, fed from branding.
+      expect(html).toContain('letter-foot');
+      expect(html).toContain('Northfield Dental Group, LLC');
+      expect(html).toContain('41 Northfield Avenue');
+    }
+  );
 
   it.each(['9101A', '0002', '9100A', '9106', '9107'])(
     '%s carries the automatic-letter line and the enclosure footer',
@@ -86,7 +104,7 @@ describe('BaLetterSheet — the five shipped letters', () => {
     const html = render('9107', APPT_ROWS(3));
     expect(html).toContain('ba-appt-table');
     expect(html).not.toContain('A full appointment list is attached');
-    expect(html).not.toContain('ba-attach-page');
+    expect(html).not.toContain('letter-attach-page');
   });
 
   it('9107 with 12 rows moves the table to the attachment page', () => {
@@ -94,7 +112,7 @@ describe('BaLetterSheet — the five shipped letters', () => {
     expect(rows.length).toBeGreaterThan(INLINE_APPT_ROWS_MAX);
     const html = render('9107', rows);
     expect(html).toContain('A full appointment list is attached');
-    expect(html).toContain('ba-attach-page');
+    expect(html).toContain('letter-attach-page');
     expect(html).toContain('Attached Appointment List');
     // Every canceled appointment is listed on the attachment.
     for (let i = 1; i <= 12; i++) expect(html).toContain(`9/${i}/2026`);
@@ -112,7 +130,7 @@ describe('BaLetterSheet — the five shipped letters', () => {
         settings={{ ...SETTINGS, signatureName: '' }}
         body={LETTERS[0].body}
         patient={PATIENT}
-        todayMDY="8/3/2026"
+        todayISO="2026-08-03"
       />
     );
     expect(html).toContain('Warm regards,');

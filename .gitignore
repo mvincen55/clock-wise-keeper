@@ -27,3 +27,5 @@ package-lock.json
 *.sw?
 .repro/
 .repro-ba/
+.repro-letter/
+.repro-signatures/

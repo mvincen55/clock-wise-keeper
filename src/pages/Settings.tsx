@@ -23,6 +23,7 @@ import ProviderRegistryCard from '@/components/settings/ProviderRegistryCard';
 import ProcedureMetaCard from '@/components/settings/ProcedureMetaCard';
 import { BrokenApptSettingsCard } from '@/components/settings/BrokenApptSettingsCard';
 import { StaffInitialsCard } from '@/components/settings/StaffInitialsCard';
+import MySignatureCard from '@/components/letterhead/MySignatureCard';
 
 const WEEKDAY_OPTIONS = [
   { value: '0', label: 'Sunday' },
@@ -91,6 +92,9 @@ export default function Settings() {
 
       {/* Personal: initials stamped into Broken Appointments outputs */}
       <StaffInitialsCard />
+
+      {/* Personal: my stored signature for office letters (self-service) */}
+      <MySignatureCard />
 
       {isManager && <EscalationPoliciesCard />}
 
