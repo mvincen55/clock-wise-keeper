@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createBrowserRouter, createRoutesFromElements, RouterProvider, Route, Navigate } from "react-router-dom";
+import { createBrowserRouter, createRoutesFromElements, RouterProvider, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import AppLayout from "@/components/AppLayout";
 import Auth from "@/pages/Auth";
@@ -62,8 +62,25 @@ import Onboarding from "@/pages/Onboarding";
 import OAuthConsent from "@/pages/OAuthConsent";
 import { Loader2 } from "lucide-react";
 import { useOnboardingStatus } from "@/hooks/useOnboarding";
+import MarketingHome from "@/pages/marketing/Home";
+import MarketingFeatures from "@/pages/marketing/Features";
+import MarketingForDental from "@/pages/marketing/ForDental";
+import MarketingSecurity from "@/pages/marketing/Security";
+import MarketingPricing from "@/pages/marketing/Pricing";
+import MarketingAbout from "@/pages/marketing/About";
+import MarketingStart from "@/pages/marketing/Start";
+// TEMPORARY: preview-only design review index (see src/pages/DesignReview.tsx)
+import DesignReviewDashboard from './pages/DesignReviewDashboard';
+import DesignReview from "@/pages/DesignReview";
+import DesignReviewMoments from './pages/DesignReviewMoments';
 
 const queryClient = new QueryClient();
+
+function LoginRedirect() {
+  const location = useLocation();
+  const next = `${location.pathname}${location.search}`;
+  return <Navigate to={`/login?next=${encodeURIComponent(next)}`} replace />;
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading, isAllowed } = useAuth();
@@ -72,8 +89,24 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       <Loader2 className="h-8 w-8 animate-spin text-primary" />
     </div>
   );
-  if (!user || !isAllowed) return <Navigate to="/auth" replace />;
+  if (!user || !isAllowed) return <LoginRedirect />;
   return <OnboardingGate>{children}</OnboardingGate>;
+}
+
+/**
+ * `/` is the public Purple Envelope website when signed out, and the existing
+ * office dashboard when signed in. Nothing about the authenticated experience
+ * changes — this is only the logged-out/public split.
+ */
+function RootRoute() {
+  const { user, loading, isAllowed } = useAuth();
+  if (loading) return (
+    <div className="flex min-h-screen items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
+  if (!user || !isAllowed) return <MarketingHome />;
+  return <OnboardingGate><Dashboard /></OnboardingGate>;
 }
 
 /**
@@ -96,7 +129,7 @@ function OnboardingRoute() {
       <Loader2 className="h-8 w-8 animate-spin text-primary" />
     </div>
   );
-  if (!user || !isAllowed) return <Navigate to="/auth" replace />;
+  if (!user || !isAllowed) return <LoginRedirect />;
   return <Onboarding />;
 }
 
@@ -107,7 +140,20 @@ const router = createBrowserRouter(
   createRoutesFromElements(
     <>
       <Route path="/auth" element={<Auth />} />
-            <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/login" element={<Auth />} />
+            {/* Public marketing site — visible only when signed out at "/". */}
+            <Route path="/" element={<RootRoute />} />
+            <Route path="/features" element={<MarketingFeatures />} />
+            <Route path="/for-dental" element={<MarketingForDental />} />
+            <Route path="/security" element={<MarketingSecurity />} />
+            <Route path="/pricing" element={<MarketingPricing />} />
+            <Route path="/about" element={<MarketingAbout />} />
+            <Route path="/start" element={<MarketingStart />} />
+            {/* TEMPORARY preview-only review index — remove with DesignReview.tsx */}
+            <Route path="/design-review" element={<DesignReview />} />
+            <Route path="/design-review/dashboard/:role" element={<DesignReviewDashboard />} />
+            <Route path="/design-review/moments" element={<DesignReviewMoments />} />
+            <Route path="/design-review/moments/:scenario" element={<DesignReviewMoments />} />
             <Route path="/workplace" element={<ProtectedRoute><Workplace /></ProtectedRoute>} />
             <Route path="/playbook" element={<ProtectedRoute><Playbook /></ProtectedRoute>} />
             <Route path="/playbook/procedures" element={<ProtectedRoute><PracticeProcedures /></ProtectedRoute>} />
@@ -168,7 +214,7 @@ const router = createBrowserRouter(
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
-            <Route path="*" element={<Navigate to="/auth" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
     </>
   )
 );

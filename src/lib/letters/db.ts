@@ -65,7 +65,14 @@ type LetterDatabase = {
       staff_signatures: TableShape<StaffSignatureRow>;
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    // A concrete entry (not Record<string, never>): under the lockfile's
+    // supabase-js the empty-record form degrades maybeSingle() rows to {}.
+    Functions: {
+      correspondence_team_can: {
+        Args: { p_org_id: string };
+        Returns: boolean;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

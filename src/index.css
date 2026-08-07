@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Archivo:wght@400;500;600;700;800;900&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -2869,5 +2869,139 @@
   /* Decorative texture and breathing layers stay put. */
   .punch-glow {
     box-shadow: none !important;
+  }
+}
+
+/* ==========================================================================
+   Public marketing site (Purple Envelope .com surface)
+   Scoped tokens: warm paper neutrals + the brand plum (#53406e). These are
+   only consumed by src/marketing/* and src/pages/marketing/* — the
+   authenticated app keeps its own palette untouched.
+   ========================================================================== */
+@layer base {
+  :root {
+    --pe-paper: 36 33% 97%;
+    --pe-paper-2: 36 26% 93%;
+    --pe-ink: 264 22% 11%;
+    --pe-ink-soft: 264 8% 38%;
+    --pe-plum: 265 26% 34%;
+    --pe-plum-deep: 265 33% 16%;
+    --pe-plum-tint: 266 38% 94%;
+    --pe-line: 265 15% 87%;
+    --pe-gold: 30 48% 48%;
+  }
+}
+
+@layer utilities {
+  .pe-rule {
+    background-image: linear-gradient(to right, hsl(var(--pe-line)), hsl(var(--pe-line) / 0));
+  }
+
+  .pe-reveal {
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity 700ms cubic-bezier(0.22, 1, 0.36, 1), transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .pe-reveal[data-shown="true"] {
+    opacity: 1;
+    transform: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pe-reveal {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
+  }
+
+  .pe-grain {
+    background-image:
+      radial-gradient(hsl(var(--pe-ink) / 0.045) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+
+  /* --- second-pass editorial primitives (sharp, no gradients/blur) --- */
+
+  /* Oversized grotesque display headline */
+  .pe-display {
+    font-family: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    line-height: 0.86;
+    text-transform: uppercase;
+  }
+
+  .pe-display-tight {
+    font-family: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.02;
+  }
+
+  /* Hard hairline construction grid */
+  .pe-blueprint {
+    background-image:
+      linear-gradient(to right, hsl(var(--pe-ink) / 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--pe-ink) / 0.07) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+
+  .pe-blueprint-invert {
+    background-image:
+      linear-gradient(to right, hsl(var(--pe-paper) / 0.09) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--pe-paper) / 0.09) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+
+  /* Editorial index row: label + rule + value */
+  .pe-row {
+    border-top: 1px solid hsl(var(--pe-ink) / 0.16);
+  }
+
+  .pe-row-heavy {
+    border-top: 2px solid hsl(var(--pe-ink));
+  }
+
+  /* Focus ring used across every marketing control */
+  .pe-focus:focus-visible {
+    outline: 2px solid hsl(var(--pe-plum));
+    outline-offset: 2px;
+  }
+}
+
+
+@layer components {
+  /* --- Team Moments: subtle envelope reveal (no confetti, no takeover) --- */
+
+  /* The Y-fold tips open, then settles. */
+  .pe-moment-flap {
+    transform-origin: 50% 15%;
+    transform: rotateX(-38deg) translateY(-2px);
+    transition: transform 460ms cubic-bezier(0.22, 0.9, 0.28, 1);
+  }
+  .pe-moment-flap.is-open {
+    transform: rotateX(0deg) translateY(0);
+  }
+
+  /* The reaction lifts briefly, then settles into place. */
+  .pe-moment-rise {
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 380ms ease-out 140ms, transform 460ms cubic-bezier(0.22, 0.9, 0.28, 1) 140ms;
+  }
+  .pe-moment-rise.is-open {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pe-moment-flap,
+    .pe-moment-rise {
+      transform: none;
+      opacity: 1;
+      transition: none;
+    }
   }
 }

@@ -1611,6 +1611,50 @@ export type Database = {
           },
         ]
       }
+      correspondence_settings: {
+        Row: {
+          default_closing: string
+          default_signer_name: string
+          default_signer_title: string
+          org_id: string
+          school_note_wording: string
+          team_can_manage_templates: boolean
+          updated_at: string
+          updated_by: string | null
+          work_note_wording: string
+        }
+        Insert: {
+          default_closing?: string
+          default_signer_name?: string
+          default_signer_title?: string
+          org_id: string
+          school_note_wording?: string
+          team_can_manage_templates?: boolean
+          updated_at?: string
+          updated_by?: string | null
+          work_note_wording?: string
+        }
+        Update: {
+          default_closing?: string
+          default_signer_name?: string
+          default_signer_title?: string
+          org_id?: string
+          school_note_wording?: string
+          team_can_manage_templates?: boolean
+          updated_at?: string
+          updated_by?: string | null
+          work_note_wording?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "correspondence_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       days_off: {
         Row: {
           created_at: string
@@ -3986,6 +4030,62 @@ export type Database = {
           },
         ]
       }
+      letter_templates: {
+        Row: {
+          body: string
+          category: string
+          closing: string
+          created_at: string
+          created_by: string | null
+          id: string
+          org_id: string
+          status: string
+          subject: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          body: string
+          category?: string
+          closing?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          org_id: string
+          status?: string
+          subject?: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          body?: string
+          category?: string
+          closing?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          org_id?: string
+          status?: string
+          subject?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "letter_templates_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       location_events: {
         Row: {
           accuracy: number | null
@@ -4062,6 +4162,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      marketing_leads: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          ip_hash: string | null
+          name: string
+          note: string | null
+          office_size: string | null
+          practice_name: string | null
+          role: string | null
+          source: string
+          status: string
+          updated_at: string
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          ip_hash?: string | null
+          name: string
+          note?: string | null
+          office_size?: string | null
+          practice_name?: string | null
+          role?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          ip_hash?: string | null
+          name?: string
+          note?: string | null
+          office_size?: string | null
+          practice_name?: string | null
+          role?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Relationships: []
       }
       member_onboarding: {
         Row: {
@@ -4211,6 +4359,38 @@ export type Database = {
           },
           {
             foreignKeyName: "messages_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      moment_prefs: {
+        Row: {
+          animations_muted: boolean
+          org_id: string
+          receive_enabled: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          animations_muted?: boolean
+          org_id: string
+          receive_enabled?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          animations_muted?: boolean
+          org_id?: string
+          receive_enabled?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moment_prefs_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
@@ -4943,6 +5123,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "org_messaging_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_moment_settings: {
+        Row: {
+          allow_message: boolean
+          enabled: boolean
+          history_retention_days: number
+          max_per_pair_per_day: number
+          max_per_sender_per_hour: number
+          org_id: string
+          unseen_expiry_days: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          allow_message?: boolean
+          enabled?: boolean
+          history_retention_days?: number
+          max_per_pair_per_day?: number
+          max_per_sender_per_hour?: number
+          org_id: string
+          unseen_expiry_days?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          allow_message?: boolean
+          enabled?: boolean
+          history_retention_days?: number
+          max_per_pair_per_day?: number
+          max_per_sender_per_hour?: number
+          org_id?: string
+          unseen_expiry_days?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_moment_settings_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: true
             referencedRelation: "orgs"
@@ -6687,6 +6911,44 @@ export type Database = {
           },
         ]
       }
+      staff_signatures: {
+        Row: {
+          allow_office_use: boolean
+          created_at: string
+          id: string
+          org_id: string
+          storage_path: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          allow_office_use?: boolean
+          created_at?: string
+          id?: string
+          org_id: string
+          storage_path: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          allow_office_use?: boolean
+          created_at?: string
+          id?: string
+          org_id?: string
+          storage_path?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_signatures_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_messages: {
         Row: {
           attachment_path: string | null
@@ -6988,6 +7250,76 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_moments: {
+        Row: {
+          context_label: string | null
+          created_at: string
+          dismissed_at: string | null
+          expires_at: string
+          id: string
+          message: string | null
+          org_id: string
+          reaction: string
+          recipient_employee_id: string
+          recipient_user_id: string
+          revealed_at: string | null
+          sender_employee_id: string
+          sender_user_id: string
+        }
+        Insert: {
+          context_label?: string | null
+          created_at?: string
+          dismissed_at?: string | null
+          expires_at: string
+          id?: string
+          message?: string | null
+          org_id: string
+          reaction: string
+          recipient_employee_id: string
+          recipient_user_id: string
+          revealed_at?: string | null
+          sender_employee_id: string
+          sender_user_id: string
+        }
+        Update: {
+          context_label?: string | null
+          created_at?: string
+          dismissed_at?: string | null
+          expires_at?: string
+          id?: string
+          message?: string | null
+          org_id?: string
+          reaction?: string
+          recipient_employee_id?: string
+          recipient_user_id?: string
+          revealed_at?: string | null
+          sender_employee_id?: string
+          sender_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_moments_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_moments_recipient_employee_id_fkey"
+            columns: ["recipient_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_moments_sender_employee_id_fkey"
+            columns: ["sender_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]
@@ -7961,6 +8293,7 @@ export type Database = {
         }
         Returns: string
       }
+      correspondence_team_can: { Args: { p_org_id: string }; Returns: boolean }
       countersign_accountability_report: {
         Args: { _note: string; _report_id: string; _typed_name: string }
         Returns: undefined
