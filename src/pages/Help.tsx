@@ -43,9 +43,11 @@ export default function Help() {
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>
-            Purple Envelope manages how your office runs — time, policies, training, forms, and
-            communication. It is not a patient-record system and never stores completed patient
-            forms, patient-entered values, or patient-specific financial information.
+            Purple Envelope carries the doctor’s standards, preferences and approved language into
+            every patient conversation — time, policies, training, forms and communication all live
+            here. It is built for practice operations and team guidance, not for storing patient
+            charts, clinical records or patient-identifying information: it does not keep completed
+            patient forms, patient-entered values, or patient-specific financial information.
           </p>
           <p className="flex items-center gap-1.5">
             <FileText className="h-3.5 w-3.5" />
