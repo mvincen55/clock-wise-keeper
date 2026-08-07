@@ -69,6 +69,8 @@ import MarketingSecurity from "@/pages/marketing/Security";
 import MarketingPricing from "@/pages/marketing/Pricing";
 import MarketingAbout from "@/pages/marketing/About";
 import MarketingStart from "@/pages/marketing/Start";
+// TEMPORARY: preview-only design review index (see src/pages/DesignReview.tsx)
+import DesignReview from "@/pages/DesignReview";
 
 const queryClient = new QueryClient();
 
