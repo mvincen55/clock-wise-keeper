@@ -4,12 +4,13 @@ import { cn } from '@/lib/utils';
 import { MomentEnvelope } from '@/components/moments/MomentEnvelope';
 import { announce, planReveal, type PendingMoment } from '@/components/moments/reactions';
 import {
+  useClaimedMoments,
   useEmployeeNameLookup,
-  useMarkMomentsRevealed,
   useMomentPrefs,
-  usePendingMoments,
+  useOpenMoments,
   toPending,
 } from '@/hooks/useTeamMoments';
+
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 /**
