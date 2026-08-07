@@ -61,7 +61,7 @@ export default function MarketingAbout() {
               ],
               [
                 'The patient boundary is a feature.',
-                'Staying out of patient records keeps the product focused and keeps the risk profile honest. Only your business, never your patients.',
+                'Purple Envelope keeps the doctor’s standards, preferences and approved language so the team says the same thing to every patient. Charts, clinical records and patient-identifying information stay in your practice management software — practice guidance, not patient records.',
               ],
               [
                 'Nothing gets marketed before it exists.',
