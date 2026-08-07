@@ -159,7 +159,8 @@ describe('one shared letterhead across the product', () => {
         body={letter.body}
         patient={{
           firstName: 'Ann', lastName: 'Example', addressLine1: '12 Test Lane',
-          city: 'Springvale', state: 'MA', zip: '02100', apptDateISO: '2026-08-10',
+          addressLine2: '', city: 'Springvale', state: 'MA', zip: '02100',
+          apptDateISO: '2026-08-10',
         }}
         todayISO="2026-08-07"
       />

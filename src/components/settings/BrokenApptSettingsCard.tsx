@@ -150,21 +150,14 @@ export function BrokenApptSettingsCard() {
                   placeholder="Blank = practice phone from branding"
                 />
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Letter Signature Name</Label>
-                <Input
-                  value={settings?.signatureName ?? ''}
-                  onChange={e => update({ signatureName: e.target.value })}
-                  placeholder="Blank = practice name"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Letter Signature Title</Label>
-                <Input
-                  value={settings?.signatureTitle ?? ''}
-                  onChange={e => update({ signatureTitle: e.target.value })}
-                  placeholder="Office Manager"
-                />
+              <div className="space-y-2 sm:col-span-2">
+                <p className="text-xs text-muted-foreground">
+                  Letters are signed through the shared Letterhead &amp;
+                  Correspondence system — pick the authorized signer while
+                  printing, and manage signers and signatures under Letters →
+                  Settings. There is no Broken Appointments–specific signature
+                  setup anymore.
+                </p>
               </div>
             </div>
 

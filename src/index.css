@@ -2573,6 +2573,96 @@
   margin-bottom: 8pt;
 }
 
+/* Broken Appointments OFFICE COPY — the office-only documentation page
+   printed last in the package (never given to the patient). Follows the
+   attach-page pattern; the banner and tables use the letter palette. */
+.ba-office-sheet {
+  margin-top: 12pt;
+}
+
+.ba-office-sheet--break {
+  page-break-before: always;
+  border-top: 2pt solid var(--letter-line);
+  padding-top: 10pt;
+}
+
+.ba-office-heading {
+  font-size: 16pt;
+  font-weight: 700;
+  color: var(--letter-navy);
+  letter-spacing: 0.04em;
+}
+
+.ba-office-subheading {
+  font-size: 12pt;
+  font-weight: 600;
+  margin-top: 2pt;
+}
+
+.ba-office-banner {
+  display: inline-block;
+  margin: 8pt 0 10pt;
+  padding: 3pt 10pt;
+  border: 1.5pt solid #a3242e;
+  color: #a3242e;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-size: 10pt;
+}
+
+.ba-office-context {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9.5pt;
+  margin-bottom: 10pt;
+}
+
+.ba-office-context th {
+  text-align: left;
+  color: var(--letter-muted);
+  font-weight: 600;
+  padding: 2.5pt 8pt 2.5pt 0;
+  width: 1.35in;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.ba-office-context td {
+  padding: 2.5pt 12pt 2.5pt 0;
+  overflow-wrap: anywhere;
+}
+
+.ba-office-actions {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9.5pt;
+}
+
+.ba-office-actions th {
+  text-align: left;
+  background: var(--letter-tint);
+  color: var(--letter-navy);
+  padding: 3pt 6pt;
+  border: 0.75pt solid var(--letter-line);
+}
+
+.ba-office-actions td {
+  padding: 3pt 6pt;
+  border: 0.75pt solid var(--letter-line);
+}
+
+.ba-office-incomplete {
+  color: #a3242e;
+  font-weight: 600;
+}
+
+.ba-office-fineprint {
+  margin-top: 10pt;
+  font-style: italic;
+  color: var(--letter-muted);
+  font-size: 8.5pt;
+}
+
 @media print {
   body {
     background: white !important;
@@ -2668,6 +2758,17 @@
   .letter-sheet .ba-appt-table th,
   .letter-sheet .ba-appt-table td {
     border: 0.75pt solid var(--letter-line);
+  }
+
+  /* The OFFICE COPY page's tables draw their own rules too. */
+  .ba-office-actions th,
+  .ba-office-actions td {
+    border: 0.75pt solid var(--letter-line) !important;
+  }
+
+  .ba-office-context th,
+  .ba-office-context td {
+    border: none !important;
   }
   
   .no-print {

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { roleClocksIn } from '@/lib/roles';
+import { normalizePmsSystem, type PmsSystem } from '@/lib/pms';
 import { DEFAULT_CONFIRMATION_LEAD_DAYS } from '@/components/goals/goal-examples';
 
 export type PracticeSettings = {
@@ -13,6 +14,8 @@ export type PracticeSettings = {
   mobile_capture_enabled: boolean;
   /** How many days ahead the front desk confirms appointments (goal starters use this). */
   confirmation_lead_days: number;
+  /** The office's practice management system (canonical list in src/lib/pms.ts). */
+  pms_system: PmsSystem;
 };
 
 export type PracticeSettingsPatch = Partial<PracticeSettings>;
@@ -39,7 +42,7 @@ export function usePracticeSettings() {
       const { data } = await supabase
         .from('org_practice_settings')
         .select(
-          'collections_visibility, monthly_collections_target_cents, mobile_capture_enabled, confirmation_lead_days'
+          'collections_visibility, monthly_collections_target_cents, mobile_capture_enabled, confirmation_lead_days, pms_system'
         )
         .eq('org_id', ctx!.org_id)
         .maybeSingle();
@@ -48,6 +51,7 @@ export function usePracticeSettings() {
         monthly_collections_target_cents: data?.monthly_collections_target_cents ?? 0,
         mobile_capture_enabled: data?.mobile_capture_enabled ?? false,
         confirmation_lead_days: data?.confirmation_lead_days ?? DEFAULT_CONFIRMATION_LEAD_DAYS,
+        pms_system: normalizePmsSystem(data?.pms_system),
       };
     },
   });

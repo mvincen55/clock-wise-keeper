@@ -4,6 +4,7 @@ import OfficeLetterheadSheet, {
 } from '@/components/letterhead/OfficeLetterheadSheet';
 import { formatDateMDY, formatMoney, mergeFields } from '@/lib/broken-appts/outputs';
 import { formatLetterDate } from '@/lib/letters/letter-body';
+import type { LetterSigner } from '@/lib/letters/types';
 import type { BaCanceledAppt, BaPatientFields, BaSettings } from '@/lib/broken-appts/types';
 
 /**
@@ -33,6 +34,13 @@ interface BaLetterSheetProps {
   canceledAppts?: BaCanceledAppt[];
   /** Letter date (ISO YYYY-MM-DD) — computed once by the page. */
   todayISO: string;
+  /**
+   * The shared-correspondence signer (SignerSelect + authorized ink).
+   * Omitted = legacy fallback to the module's signature_name settings row.
+   */
+  signer?: LetterSigner;
+  /** Extra pages appended after the letter/attachment (e.g. OFFICE COPY). */
+  extraPages?: React.ReactNode;
 }
 
 /** **bold** runs → <strong>; everything else passes through verbatim. */
@@ -73,6 +81,8 @@ export default function BaLetterSheet({
   patient,
   canceledAppts = [],
   todayISO,
+  signer,
+  extraPages,
 }: BaLetterSheetProps) {
   const practiceName = branding.legalName.trim() || branding.displayName.trim();
   const phone = settings.officePhone.trim() || branding.phone.trim();
@@ -94,11 +104,13 @@ export default function BaLetterSheet({
     .join(' ');
 
   // Broken-appointment letters are always mailed: blank address lines print
-  // as a written-in dash rather than collapsing.
+  // as a written-in dash rather than collapsing. Address Line 2 is the one
+  // exception — it exists only when the patient's address has one, so a
+  // blank vanishes from the block (shared letterhead behavior).
   const recipient = {
     name: patientFullName || '—',
     addressLine1: patient.addressLine1.trim() || '—',
-    addressLine2: '',
+    addressLine2: patient.addressLine2.trim(),
     city: patient.city.trim() || '—',
     state: patient.state.trim(),
     zip: patient.zip.trim(),
@@ -135,22 +147,29 @@ export default function BaLetterSheet({
       recipient={recipient}
       salutation={`Dear ${patient.firstName.trim() || 'patient'},`}
       body={letterBody}
-      signer={{
-        closing: 'Warm regards,',
-        name: settings.signatureName.trim() || practiceName,
-        title: settings.signatureName.trim() !== '' ? settings.signatureTitle : '',
-      }}
+      signer={
+        signer ?? {
+          closing: 'Warm regards,',
+          name: settings.signatureName.trim() || practiceName,
+          title: settings.signatureName.trim() !== '' ? settings.signatureTitle : '',
+        }
+      }
       enclosure="Enclosure: Account Statement"
       attachment={
-        tableAttached ? (
-          <div className="letter-attach-page">
-            <div className="letter-attach-title">Attached Appointment List</div>
-            <div className="letter-attach-sub">
-              {patientFullName || '—'} · Prepared {todayText} · {canceledAppts.length} canceled
-              appointments
-            </div>
-            <ApptTable rows={canceledAppts} />
-          </div>
+        tableAttached || extraPages ? (
+          <>
+            {tableAttached && (
+              <div className="letter-attach-page">
+                <div className="letter-attach-title">Attached Appointment List</div>
+                <div className="letter-attach-sub">
+                  {patientFullName || '—'} · Prepared {todayText} · {canceledAppts.length} canceled
+                  appointments
+                </div>
+                <ApptTable rows={canceledAppts} />
+              </div>
+            )}
+            {extraPages}
+          </>
         ) : undefined
       }
     />

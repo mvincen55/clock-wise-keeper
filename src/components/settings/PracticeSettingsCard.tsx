@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Building2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { PMS_LABELS, PMS_SYSTEMS, normalizePmsSystem } from '@/lib/pms';
 
 export function PracticeSettingsCard() {
   const { toast } = useToast();
@@ -19,13 +20,19 @@ export function PracticeSettingsCard() {
     const dollars = parseFloat(value);
     const cents = Number.isFinite(dollars) ? Math.round(dollars * 100) : 0;
     upsert.mutate({ monthly_collections_target_cents: cents }, {
-      onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
+      onError: (err: Error) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
     });
   };
 
   const handleVisibilityChange = (value: string) => {
     upsert.mutate({ collections_visibility: value }, {
-      onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
+      onError: (err: Error) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
+    });
+  };
+
+  const handlePmsChange = (value: string) => {
+    upsert.mutate({ pms_system: normalizePmsSystem(value) }, {
+      onError: (err: Error) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
     });
   };
 
@@ -89,6 +96,27 @@ export function PracticeSettingsCard() {
               </Select>
               <p className="text-xs text-muted-foreground">
                 Employees won't see collections figures when set to admins only.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs">Practice Management System</Label>
+              <Select
+                value={settings?.pms_system ?? 'not_configured'}
+                onValueChange={handlePmsChange}
+              >
+                <SelectTrigger className="w-48" aria-label="Practice Management System">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PMS_SYSTEMS.map(pms => (
+                    <SelectItem key={pms} value={pms}>{PMS_LABELS[pms]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Lets features tailor their help to your PMS — for example, Broken
+                Appointments can show where to find a patient's address in Dentrix.
               </p>
             </div>
 

@@ -48,6 +48,8 @@ export interface BaPatientFields {
   firstName: string;
   lastName: string;
   addressLine1: string;
+  /** Apt/Unit/Suite line; blank disappears from the printed block entirely. */
+  addressLine2: string;
   city: string;
   state: string;
   zip: string;

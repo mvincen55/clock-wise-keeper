@@ -5183,6 +5183,7 @@ export type Database = {
           mobile_capture_enabled: boolean
           monthly_collections_target_cents: number | null
           org_id: string
+          pms_system: string
           roleplay_notes: string | null
           roleplay_persona_style: string
           roleplay_policy_tone: string
@@ -5197,6 +5198,7 @@ export type Database = {
           mobile_capture_enabled?: boolean
           monthly_collections_target_cents?: number | null
           org_id: string
+          pms_system?: string
           roleplay_notes?: string | null
           roleplay_persona_style?: string
           roleplay_policy_tone?: string
@@ -5211,6 +5213,7 @@ export type Database = {
           mobile_capture_enabled?: boolean
           monthly_collections_target_cents?: number | null
           org_id?: string
+          pms_system?: string
           roleplay_notes?: string | null
           roleplay_persona_style?: string
           roleplay_policy_tone?: string
