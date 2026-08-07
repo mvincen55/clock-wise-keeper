@@ -33,17 +33,18 @@ export function useConsumedSearchParam(key: string): string | null {
 }
 
 /**
- * Ref that scrolls its element into view (and briefly holds a highlight)
- * once, when `active` is true and the element mounts. Attach it to the row
- * or card the deep link points at.
+ * Ref that scrolls its element into view when `active` becomes truthy.
+ * Attach it to the row or card the deep link points at. Pass the record id
+ * (rather than a boolean) when the same mounted component can be pointed at
+ * different records over time — each new id scrolls again.
  */
-export function useScrollIntoView<T extends HTMLElement = HTMLDivElement>(active: boolean) {
+export function useScrollIntoView<T extends HTMLElement = HTMLDivElement>(
+  active: boolean | string | null | undefined
+) {
   const ref = useRef<T | null>(null);
-  const done = useRef(false);
 
   useEffect(() => {
-    if (!active || done.current || !ref.current) return;
-    done.current = true;
+    if (!active || !ref.current) return;
     // Wait a frame so layout (tab switches, list renders) settles first.
     const id = requestAnimationFrame(() => {
       ref.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });

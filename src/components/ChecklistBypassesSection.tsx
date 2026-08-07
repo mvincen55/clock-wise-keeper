@@ -9,7 +9,7 @@ export default function ChecklistBypassesSection({ orgId, highlightId }: { orgId
   const { data: rows, isLoading } = useOrgBypasses(orgId);
   // A bypass notification scrolls to and marks the exact row it names.
   const highlightRef = useScrollIntoView<HTMLTableRowElement>(
-    !!highlightId && !!rows?.some(r => r.id === highlightId)
+    rows?.some(r => r.id === highlightId) ? highlightId : false
   );
 
   return (

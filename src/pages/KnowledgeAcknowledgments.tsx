@@ -96,25 +96,26 @@ export default function KnowledgeAcknowledgments() {
 
   // A notification names the exact assignment: the assignee lands with it
   // selected for reading and signing; a manager lands on the roster entry.
+  // Re-applies when a different acknowledgment is clicked from this page.
   const linkedAssignmentId = useConsumedSearchParam('assignment');
-  const [linkApplied, setLinkApplied] = useState(false);
+  const [appliedLink, setAppliedLink] = useState<string | null>(null);
   const linkedRosterRef = useScrollIntoView<HTMLDivElement>(
-    !!linkedAssignmentId && expandedRosterId === linkedAssignmentId
+    expandedRosterId === linkedAssignmentId ? linkedAssignmentId : false
   );
 
   useEffect(() => {
-    if (!linkedAssignmentId || linkApplied || myLoading) return;
+    if (!linkedAssignmentId || linkedAssignmentId === appliedLink || myLoading) return;
     if (activeAssignments.some(assignment => assignment.id === linkedAssignmentId)) {
       setSelectedId(linkedAssignmentId);
-      setLinkApplied(true);
+      setAppliedLink(linkedAssignmentId);
       return;
     }
     if (isAdmin && rosterLoading) return;
     if (isAdmin && roster.some(assignment => assignment.id === linkedAssignmentId)) {
       setExpandedRosterId(linkedAssignmentId);
     }
-    setLinkApplied(true);
-  }, [linkedAssignmentId, linkApplied, myLoading, rosterLoading, isAdmin, activeAssignments, roster]);
+    setAppliedLink(linkedAssignmentId);
+  }, [linkedAssignmentId, appliedLink, myLoading, rosterLoading, isAdmin, activeAssignments, roster]);
 
   useEffect(() => {
     if (activeAssignments.length === 0) {

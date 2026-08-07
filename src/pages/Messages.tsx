@@ -108,9 +108,13 @@ export default function Messages() {
   const { data: employees } = useOrgEmployees();
   const { data: conversations = [], isLoading } = useConversations();
 
-  // A message notification opens the exact conversation it came from.
+  // A message notification opens the exact conversation it came from —
+  // including when the person is already sitting in the inbox.
   const linkedConversationId = useConsumedSearchParam('conversation');
   const [activeId, setActiveId] = useState<string | null>(linkedConversationId);
+  useEffect(() => {
+    if (linkedConversationId) setActiveId(linkedConversationId);
+  }, [linkedConversationId]);
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<ConversationType | 'all'>('all');
   const [senderFilter, setSenderFilter] = useState<string>('all');

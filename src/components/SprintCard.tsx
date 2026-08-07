@@ -242,7 +242,7 @@ export default function SprintCard({ highlightId }: { highlightId?: string | nul
   const sprint = data?.active ?? null;
   // A sprint notification scrolls to the card; the ring appears when the
   // running sprint is the one the notification was about.
-  const highlightRef = useScrollIntoView<HTMLDivElement>(!!highlightId && !!sprint);
+  const highlightRef = useScrollIntoView<HTMLDivElement>(sprint ? highlightId : false);
   const highlighted = !!sprint && !!highlightId && sprint.id === highlightId;
 
   // Nothing running and nothing to suggest: stay quiet for the team.

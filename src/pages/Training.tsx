@@ -57,7 +57,8 @@ export default function Training() {
   const { data: drafts = [] } = useDraftModules();
 
   // A notification names the exact module (?module=) or the person's own
-  // assignment (?assignment=) — either way that training opens directly.
+  // assignment (?assignment=) — either way that training opens directly,
+  // including when the person is already on this page.
   const linkedModuleId = useConsumedSearchParam('module');
   const linkedAssignmentId = useConsumedSearchParam('assignment');
   const [openModuleId, setOpenModuleId] = useState<string | null>(linkedModuleId);
@@ -66,15 +67,23 @@ export default function Training() {
   const [tagFilter, setTagFilter] = useState<string>('all');
   const [previewModule, setPreviewModule] = useState<TrainingModule | null>(null);
 
-  const [assignmentLinkApplied, setAssignmentLinkApplied] = useState(false);
+  const [appliedModuleLink, setAppliedModuleLink] = useState(linkedModuleId);
   useEffect(() => {
-    if (!linkedAssignmentId || assignmentLinkApplied) return;
+    if (linkedModuleId && linkedModuleId !== appliedModuleLink) {
+      setAppliedModuleLink(linkedModuleId);
+      setOpenModuleId(linkedModuleId);
+    }
+  }, [linkedModuleId, appliedModuleLink]);
+
+  const [appliedAssignmentLink, setAppliedAssignmentLink] = useState<string | null>(null);
+  useEffect(() => {
+    if (!linkedAssignmentId || linkedAssignmentId === appliedAssignmentLink) return;
     const assignment = assignments.find(a => a.id === linkedAssignmentId);
     if (assignment) {
-      setAssignmentLinkApplied(true);
+      setAppliedAssignmentLink(linkedAssignmentId);
       setOpenModuleId(assignment.module_id);
     }
-  }, [linkedAssignmentId, assignmentLinkApplied, assignments]);
+  }, [linkedAssignmentId, appliedAssignmentLink, assignments]);
 
   const nameFor = useMemo(() => {
     const map = new Map(roster.map(m => [m.user_id, m.display_name]));

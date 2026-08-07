@@ -165,7 +165,7 @@ export default function Checklists() {
   // A goal-step reminder names one item; open its list with the row in view.
   const linkedItemId = useConsumedSearchParam('item');
   const linkedItem = linkedItemId ? (data?.items ?? []).find(i => i.id === linkedItemId) : undefined;
-  const linkedRef = useScrollIntoView<HTMLDivElement>(!!linkedItem);
+  const linkedRef = useScrollIntoView<HTMLDivElement>(linkedItem ? linkedItem.id : false);
 
   const completionsByItem = useMemo(() => {
     const map = new Map<string, ChecklistCompletion[]>();
