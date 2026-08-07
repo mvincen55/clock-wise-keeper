@@ -45,9 +45,13 @@ export default function PTO() {
   const { data: myPtoRequests } = useMyPtoRequests();
   const cancelRequest = useCancelPtoRequest();
   const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
-  // A decision notification opens the requests tab with that request in view.
+  // A decision notification opens the requests tab with that request in view —
+  // including when the person is already somewhere on this page.
   const linkedRequestId = useConsumedSearchParam('request');
   const [tab, setTab] = useState(linkedRequestId ? 'requests' : 'overview');
+  useEffect(() => {
+    if (linkedRequestId) setTab('requests');
+  }, [linkedRequestId]);
 
   const { data: settings, isLoading: settingsLoading } = usePtoSettings();
   const { data: snapshots } = usePtoSnapshots();

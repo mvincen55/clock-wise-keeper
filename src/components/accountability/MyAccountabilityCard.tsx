@@ -65,7 +65,7 @@ export default function MyAccountabilityCard({ highlightId }: { highlightId?: st
   const { data: reports = [], isLoading } = useMyAccountabilityReports();
   // A "record needs your note" notification lands on the exact record.
   const highlightRef = useScrollIntoView<HTMLDivElement>(
-    !!highlightId && reports.some(r => r.id === highlightId)
+    reports.some(r => r.id === highlightId) ? highlightId : false
   );
 
   if (isLoading || reports.length === 0) return null;

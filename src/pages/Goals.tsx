@@ -89,7 +89,7 @@ export default function Goals() {
     return null;
   }, [linkedGoalId, linkedTaskId, tasks]);
   const highlightRef = useScrollIntoView<HTMLDivElement>(
-    !!highlightGoalId && myGoals.some(g => g.id === highlightGoalId)
+    myGoals.some(g => g.id === highlightGoalId) ? highlightGoalId : false
   );
 
   const nameOf = (userId: string) =>

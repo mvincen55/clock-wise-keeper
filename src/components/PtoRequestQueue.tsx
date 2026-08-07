@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useOrgPtoRequests, useReviewPtoRequest, PtoRequest } from '@/hooks/usePtoRequests';
 import { useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
 import { Card, CardContent } from '@/components/ui/card';
@@ -44,6 +44,9 @@ function HighlightablePtoCard({
 export function PtoRequestQueue({ highlightId }: { highlightId?: string | null }) {
   // Deep links start on "all" so the request is findable whatever its status.
   const [filter, setFilter] = useState(highlightId ? 'all' : 'pending');
+  useEffect(() => {
+    if (highlightId) setFilter('all');
+  }, [highlightId]);
   const { data: requests, isLoading } = useOrgPtoRequests(filter);
   const reviewMutation = useReviewPtoRequest();
 

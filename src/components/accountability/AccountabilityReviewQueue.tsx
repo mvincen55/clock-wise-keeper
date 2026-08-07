@@ -70,7 +70,7 @@ export default function AccountabilityReviewQueue({ highlightId }: { highlightId
   const { data: employees } = useOrgEmployees();
   // A sign-off notification lands on the exact record awaiting review.
   const highlightRef = useScrollIntoView<HTMLDivElement>(
-    !!highlightId && reports.some(r => r.id === highlightId)
+    reports.some(r => r.id === highlightId) ? highlightId : false
   );
 
   const nameByUser = useMemo(() => {

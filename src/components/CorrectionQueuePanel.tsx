@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useOrgCorrectionRequests, useReviewCorrectionRequest, CorrectionRequestRow } from '@/hooks/useCorrectionRequests';
 import { useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -64,6 +64,9 @@ function CorrectionCard({ request, onReview, highlighted }: { request: Correctio
 export function CorrectionQueuePanel({ highlightId }: { highlightId?: string | null }) {
   // Deep links start on "all" so the request is findable whatever its status.
   const [tab, setTab] = useState(highlightId ? 'all' : 'pending');
+  useEffect(() => {
+    if (highlightId) setTab('all');
+  }, [highlightId]);
   const { data: requests, isLoading } = useOrgCorrectionRequests(tab);
   const reviewMutation = useReviewCorrectionRequest();
   const { toast } = useToast();

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useOrgChangeRequests, useReviewChangeRequest, ChangeRequestRow } from '@/hooks/useChangeRequests';
 import { useOrgContext } from '@/hooks/useOrgContext';
@@ -95,6 +95,15 @@ export default function ApprovalQueue() {
     TAB_VALUES.includes(linkedTab as (typeof TAB_VALUES)[number]) ? (linkedTab as string) : 'change-requests'
   );
   const { data: counts } = useApprovalCounts();
+
+  // Clicking a notification while already on this page still switches tabs
+  // and widens the filter so the linked request is findable.
+  useEffect(() => {
+    if (linkedTab && TAB_VALUES.includes(linkedTab as (typeof TAB_VALUES)[number])) {
+      setActiveTab(linkedTab);
+    }
+    if (linkedId) setFilter('all');
+  }, [linkedTab, linkedId]);
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
