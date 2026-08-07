@@ -91,7 +91,7 @@ function emailHtml(heading: string, line: string): string {
         <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#4a4458;">${escapeHtml(line)}</p>
         <a href="${APP_URL}" style="display:inline-block;background:#53406e;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 20px;border-radius:8px;">Open my training</a>
       </div>
-      <p style="margin:20px 0 0;font-size:12px;color:#9a94a8;text-align:center;">Only your business, never your patients.</p>
+      <p style="margin:20px 0 0;font-size:12px;color:#9a94a8;text-align:center;">Practice guidance, not patient records.</p>
     </div>
   </body>
 </html>`;

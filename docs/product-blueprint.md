@@ -8,7 +8,7 @@ It helps the office manage employees, policies, time, communication, training, p
 
 The governing product boundary is:
 
-> Only your business, never your patients.
+> Your practice playbook—not a patient chart.
 
 Purple Envelope may store blank form templates, office branding, approved wording, field definitions, packet structures, permissions, and de-identified configuration. It must not store completed patient forms, patient-entered values, signatures, treatment details, or patient-specific financial information.
 

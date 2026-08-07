@@ -110,6 +110,11 @@ export default function MarketingStart() {
               You can’t create an office here with a credit card yet. Purple Envelope is opening to a small number of
               independent practices, and each one is set up with us directly.
             </p>
+            <p className="mt-5 max-w-[46ch] text-[14.5px] leading-relaxed text-ink-soft">
+              Purple Envelope helps your team carry the doctor’s standards, preferences and approved language into
+              every patient conversation. It is designed for practice operations and team guidance — not for storing
+              patient charts or patient-identifying clinical information.
+            </p>
             <ol className="mt-12">
               {STEPS.map(([t, b], i) => (
                 <li key={t} className="pe-row grid grid-cols-[3rem_1fr] gap-x-5 py-5 last:border-b last:border-ink/16">

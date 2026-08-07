@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Popover,
   PopoverContent,
@@ -13,47 +12,33 @@ import {
   OPERATIONAL_ROLES,
   ROLE_LABELS,
   useOperationalRoles,
-  useSetCoverageWindow,
   useSetEmployeeRoles,
 } from '@/hooks/useOperationalRoles';
-import { isCoveringOn } from '@/hooks/useMyOperationalRoles';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import { getToday } from '@/lib/time-utils';
 import type { OperationalRole } from '@/lib/schedule-reader/types';
 
 /**
  * Operational roles on the Team page: what a person actually DOES, separate
  * from their permission role. The inviting owner/manager sets them on the
  * invite; this editor is where owners/managers adjust them afterward.
- *
- * Two distinct ideas, kept visibly apart:
- *  - a BACKUP role is permanent capability ("can cover"), never dated;
- *  - COVERING TODAY is an explicit dated assignment a manager creates on
- *    purpose. Editing the role set never creates or destroys one by accident.
  */
 export default function OperationalRolesEditor({ employeeId }: { employeeId: string }) {
   const { data: ctx } = useOrgContext();
   const { data: rolesByEmployee } = useOperationalRoles();
   const setRoles = useSetEmployeeRoles();
-  const setCoverage = useSetCoverageWindow();
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
-  const today = getToday();
 
   const roles = rolesByEmployee?.get(employeeId) ?? [];
   const primary = roles.find(r => r.is_primary);
-  const secondaries = roles.filter(r => !r.is_primary);
 
   const [open, setOpen] = useState(false);
   const [draftPrimary, setDraftPrimary] = useState<OperationalRole | null>(null);
   const [draftSecondary, setDraftSecondary] = useState<OperationalRole[]>([]);
-  const [coverRole, setCoverRole] = useState<OperationalRole | null>(null);
-  const [coverStart, setCoverStart] = useState('');
-  const [coverEnd, setCoverEnd] = useState('');
 
   const startEdit = () => {
     setDraftPrimary((primary?.operational_role as OperationalRole) ?? null);
     setDraftSecondary(
-      secondaries.map(r => r.operational_role as OperationalRole)
+      roles.filter(r => !r.is_primary).map(r => r.operational_role as OperationalRole)
     );
     setOpen(true);
   };
@@ -72,24 +57,6 @@ export default function OperationalRolesEditor({ employeeId }: { employeeId: str
     }
   };
 
-  const saveCoverage = async (clear = false) => {
-    if (!coverRole) return;
-    try {
-      await setCoverage.mutateAsync({
-        employeeId,
-        role: coverRole,
-        startsOn: clear ? null : coverStart || null,
-        endsOn: clear ? null : coverEnd || null,
-      });
-      setCoverRole(null);
-      setCoverStart('');
-      setCoverEnd('');
-      toast.success(clear ? 'Back to backup only' : 'Coverage window saved');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not save coverage');
-    }
-  };
-
   if (!isManager && roles.length === 0) return null;
 
   return (
@@ -98,22 +65,15 @@ export default function OperationalRolesEditor({ employeeId }: { employeeId: str
       {roles.length === 0 ? (
         <span className="text-muted-foreground">No operational role yet</span>
       ) : (
-        <>
-          {primary && (
-            <Badge variant="secondary" className="text-[10px]">
-              {ROLE_LABELS[primary.operational_role as OperationalRole] ?? primary.operational_role}
-            </Badge>
-          )}
-          {secondaries.map(r => {
-            const covering = isCoveringOn(r, today);
-            return (
-              <Badge key={r.id} variant="outline" className="text-[10px]">
-                {covering ? 'Also covering today: ' : 'Backup: '}
-                {ROLE_LABELS[r.operational_role as OperationalRole] ?? r.operational_role}
-              </Badge>
-            );
-          })}
-        </>
+        roles.map(r => (
+          <Badge
+            key={r.id}
+            variant={r.is_primary ? 'secondary' : 'outline'}
+            className="text-[10px]"
+          >
+            {ROLE_LABELS[r.operational_role as OperationalRole] ?? r.operational_role}
+          </Badge>
+        ))
       )}
 
       {isManager && (
@@ -123,7 +83,7 @@ export default function OperationalRolesEditor({ employeeId }: { employeeId: str
               Edit
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-80 space-y-3" align="start">
+          <PopoverContent className="w-72 space-y-3" align="start">
             <div className="space-y-1.5">
               <p className="text-xs font-medium">Primary role</p>
               <div className="grid grid-cols-2 gap-1.5">
@@ -145,10 +105,7 @@ export default function OperationalRolesEditor({ employeeId }: { employeeId: str
               </div>
             </div>
             <div className="space-y-1.5">
-              <p className="text-xs font-medium">Can cover (backup)</p>
-              <p className="text-[10.5px] text-muted-foreground">
-                Backup means qualified to help. It does not schedule anyone.
-              </p>
+              <p className="text-xs font-medium">Also covers</p>
               <div className="grid grid-cols-2 gap-1.5">
                 {OPERATIONAL_ROLES.filter(r => r !== draftPrimary).map(role => (
                   <Button
@@ -180,75 +137,6 @@ export default function OperationalRolesEditor({ employeeId }: { employeeId: str
               {setRoles.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
               Save roles
             </Button>
-
-            {secondaries.length > 0 && (
-              <div className="space-y-1.5 border-t pt-3">
-                <p className="text-xs font-medium">Temporary coverage</p>
-                <p className="text-[10.5px] text-muted-foreground">
-                  Only a dated assignment shows as covering today.
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {secondaries.map(r => {
-                    const role = r.operational_role as OperationalRole;
-                    return (
-                      <Button
-                        key={r.id}
-                        type="button"
-                        size="sm"
-                        variant={coverRole === role ? 'default' : 'outline'}
-                        className="h-7 text-[11px]"
-                        onClick={() => {
-                          setCoverRole(role);
-                          setCoverStart(r.starts_on ?? '');
-                          setCoverEnd(r.ends_on ?? '');
-                        }}
-                      >
-                        {ROLE_LABELS[role]}
-                      </Button>
-                    );
-                  })}
-                </div>
-                {coverRole && (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <Input
-                        type="date"
-                        aria-label="Coverage starts on"
-                        value={coverStart}
-                        onChange={e => setCoverStart(e.target.value)}
-                        className="h-7 text-[11px]"
-                      />
-                      <Input
-                        type="date"
-                        aria-label="Coverage ends on"
-                        value={coverEnd}
-                        onChange={e => setCoverEnd(e.target.value)}
-                        className="h-7 text-[11px]"
-                      />
-                    </div>
-                    <div className="flex gap-1.5">
-                      <Button
-                        size="sm"
-                        className="flex-1 text-[11px]"
-                        disabled={setCoverage.isPending || !coverStart}
-                        onClick={() => saveCoverage(false)}
-                      >
-                        Save coverage
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-[11px]"
-                        disabled={setCoverage.isPending}
-                        onClick={() => saveCoverage(true)}
-                      >
-                        Backup only
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </PopoverContent>
         </Popover>
       )}

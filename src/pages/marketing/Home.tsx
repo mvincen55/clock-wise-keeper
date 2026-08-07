@@ -208,17 +208,19 @@ export default function MarketingHome() {
       <section className="border-b-2 border-ink bg-ink text-paper">
         <Shell className="grid gap-10 py-16 lg:grid-cols-[1.1fr_0.9fr] lg:gap-20 lg:py-24">
           <Reveal>
-            <p className="font-mono text-[11.5px] uppercase tracking-[0.22em] text-paper/50">Privacy posture</p>
-            <p className="pe-display mt-6 text-[clamp(2.1rem,6.4vw,4.5rem)] text-paper">
-              Only your business,
-              <span className="block text-plum-tint">never your patients.</span>
+            <p className="font-mono text-[11.5px] uppercase tracking-[0.22em] text-paper/50">Scope &amp; privacy</p>
+            <p className="pe-display mt-6 text-[clamp(1.9rem,5vw,3.4rem)] text-paper">
+              Your practice playbook—
+              <span className="block text-plum-tint">not a patient chart.</span>
             </p>
           </Reveal>
           <Reveal delay={60} className="self-end">
             <div className="space-y-4 text-[15px] leading-relaxed text-paper/70">
               <p>
-                Purple Envelope is deliberately the business side of the practice. It is not a patient-record system
-                and does not replace your practice management software.
+                Purple Envelope helps your team carry the doctor’s standards, preferences and approved language into
+                every patient conversation. It is designed for practice operations and team guidance — not for storing
+                patient charts or patient-identifying clinical information, and it does not replace your practice
+                management software.
               </p>
               <p>
                 Personal notes stay with their author, and direct messages stay with their participants — owners

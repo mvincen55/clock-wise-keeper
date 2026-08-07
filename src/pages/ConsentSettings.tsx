@@ -196,7 +196,7 @@ export default function ConsentSettings() {
               </p>
             ))}
             <p className="pt-1 text-[11px] text-muted-foreground">
-              Purple Envelope stores your business, never your patients. This application is not
+              Purple Envelope holds your practice guidance, not patient records. This application is not
               HIPAA-compliant storage, so completed patient forms are printed and cleared — never saved.
             </p>
           </div>

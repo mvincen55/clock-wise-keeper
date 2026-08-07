@@ -4,13 +4,12 @@ import { cn } from '@/lib/utils';
 import { MomentEnvelope } from '@/components/moments/MomentEnvelope';
 import { announce, planReveal, type PendingMoment } from '@/components/moments/reactions';
 import {
-  useClaimedMoments,
   useEmployeeNameLookup,
+  useMarkMomentsRevealed,
   useMomentPrefs,
-  useOpenMoments,
+  usePendingMoments,
   toPending,
 } from '@/hooks/useTeamMoments';
-
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 /**
@@ -118,24 +117,21 @@ export function MomentRevealSurface({
 
 /**
  * Live version, mounted once inside the authenticated shell.
- *
- * It renders ONLY the batch the database handed this device through
- * `claim_team_moments`, then confirms presentation with `open_team_moments`.
- * Two devices cannot claim the same moment; if this one closes before
- * confirming, the two-minute claim lease expires and the moment returns.
+ * Marks everything revealed on first paint so it appears exactly once, even
+ * across a second tab or a refreshed session.
  */
 export default function TeamMomentsReveal() {
-  const { data: claimed } = useClaimedMoments();
+  const { data: pending } = usePendingMoments();
   const { data: prefs } = useMomentPrefs();
   const nameOf = useEmployeeNameLookup();
   const reduced = useReducedMotion();
-  const openMoments = useOpenMoments();
+  const markRevealed = useMarkMomentsRevealed();
   const [dismissed, setDismissed] = useState(false);
-  const confirmedRef = useRef<string | null>(null);
+  const markedRef = useRef<string | null>(null);
 
   const moments = useMemo(
-    () => (claimed ?? []).map((row) => toPending(row, nameOf(row.sender_employee_id))),
-    [claimed, nameOf],
+    () => (pending ?? []).map((row) => toPending(row, nameOf(row.sender_employee_id))),
+    [pending, nameOf],
   );
 
   const plan = planReveal(moments, { reducedMotion: reduced, muted: !!prefs?.animations_muted });
@@ -144,11 +140,9 @@ export default function TeamMomentsReveal() {
     if (!plan.show || dismissed) return;
     const ids = plan.order.map((m) => m.id);
     const key = ids.join(',');
-    if (confirmedRef.current === key) return; // replay guard within this session
-    confirmedRef.current = key;
-    // Confirm only once the surface has actually painted.
-    const raf = requestAnimationFrame(() => openMoments.mutate(ids));
-    return () => cancelAnimationFrame(raf);
+    if (markedRef.current === key) return; // replay guard
+    markedRef.current = key;
+    markRevealed.mutate(ids);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan.show, plan.order.length, dismissed]);
 
@@ -156,4 +150,3 @@ export default function TeamMomentsReveal() {
 
   return <MomentRevealSurface moments={plan.order} animate={plan.animate} onDismiss={() => setDismissed(true)} />;
 }
-

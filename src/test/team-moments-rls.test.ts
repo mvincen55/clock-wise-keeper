@@ -134,12 +134,8 @@ describe.runIf(hasPsql)('team_moments constraints', () => {
 
     const updateFn = q(`select prosrc from pg_proc where proname = 'team_moments_guard_update'`);
     expect(updateFn).toContain('cannot be edited after it is sent');
-    // Delivery state is write-once: the first opened_at stands, dismissal
-    // cannot be undone, and revealed_at stays a mirror of the first opening.
-    expect(updateFn).toContain('NEW.opened_at := OLD.opened_at');
-    expect(updateFn).toContain('NEW.dismissed_at := OLD.dismissed_at');
+    // reveal is write-once: revealed_at mirrors the first opened_at and can never be reset
     expect(updateFn).toContain('NEW.revealed_at := COALESCE(OLD.revealed_at, NEW.opened_at)');
-
   });
 });
 

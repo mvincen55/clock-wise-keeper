@@ -45,19 +45,19 @@ describe.runIf(hasPsql)('goal_events visibility', () => {
     const stranger = '11111111-1111-1111-1111-111111111111';
     const orgs = q('select id from public.orgs limit 1');
     if (!orgs) return;
-    // The sandbox role is deliberately not allowed to execute database
-    // functions. When that is the case there is nothing to probe here.
-    let membership: string;
-    try {
-      membership = q(`select public.is_org_member('${orgs}')`);
-    } catch {
-      return;
-    }
-    expect(membership).not.toBe('t');
-    expect(q(`select public.is_org_admin('${orgs}')`)).not.toBe('t');
-    expect(q(`select public.can_view_goal('${stranger}'::uuid)`)).not.toBe('t');
+    // Execute on the helpers is granted to authenticated only — a session with
+    // no grant is denied outright, which is the same "not a member" outcome.
+    const probe = (sql: string): string => {
+      try {
+        return q(sql);
+      } catch {
+        return 'denied';
+      }
+    };
+    expect(probe(`select public.is_org_member('${orgs}')`)).not.toBe('t');
+    expect(probe(`select public.is_org_admin('${orgs}')`)).not.toBe('t');
+    expect(probe(`select public.can_view_goal('${stranger}'::uuid)`)).not.toBe('t');
   });
-
 });
 
 describe.runIf(hasPsql)('draft training modules', () => {

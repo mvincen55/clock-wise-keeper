@@ -338,29 +338,3 @@ or any other edge function).
 | `/design-review` | still blocked on production hostnames, still absent from navigation and the footer |
 | Review artifacts | fixtures are obviously fictional; no real employee, patient or office data in screenshots |
 | Production publish | **not** published |
-
-## Final corrective pass — delivery, retention, dashboard editing
-
-- Atomic delivery: `TeamMomentsReveal` now renders only the batch returned by
-  `claim_team_moments` (SECURITY DEFINER, `FOR UPDATE SKIP LOCKED`, 2-minute
-  claim lease, office-membership checked) and confirms presentation with
-  `open_team_moments` after paint.
-  Guarantee, stated exactly: at most one device shows a moment at a time; if a
-  device disappears before confirming, the lease expires and the moment
-  returns. Not "exactly once" — never silently lost.
-- Preferences are per office: `moment_prefs` PRIMARY KEY (org_id, user_id);
-  every query key, read and upsert conflict target includes the active office.
-- Retention: `cleanup_team_moments` (service_role only, nightly cron
-  `team-moments-retention` at 03:20) deletes moments past the office's
-  `history_retention_days`, default 180, floor 30. Message text is never read.
-- Function execute grants tightened: claim/open = authenticated + service_role;
-  cleanup = service_role only.
-- Backup vs covering: `isCoveringOn` requires an explicit `starts_on`; undated
-  secondary roles read as "Backup" only.
-- Dashboard below the fold recomposed by tier (Owner: records & decisions;
-  Manager: floor detail + own work; Team member: my work). No generic "Detail"
-  band, no duplicated status rows. `?record` and `?sprint` deep links force
-  their card in and scroll to it.
-- Verification: typecheck clean, production build clean, 1097/1097 tests pass
-  (86 files) including new `operational-coverage` and `team-moments-delivery`
-  database suites. Production was NOT published.

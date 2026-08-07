@@ -25,7 +25,7 @@ export default function Privacy() {
         </Card>
         <p className="flex items-center justify-center gap-1.5 pb-4 text-xs text-muted-foreground">
           <Mail className="h-3 w-3 text-primary" />
-          Purple Envelope — only your business, never your patients.
+          Purple Envelope — practice guidance, not patient records.
         </p>
       </div>
     </div>

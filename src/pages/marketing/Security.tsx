@@ -59,12 +59,12 @@ const VERIFIED: { claim: string; how: string }[] = [
 
 const BOUNDARIES: { claim: string; how: string }[] = [
   {
-    claim: 'This is not a patient-record system',
-    how: 'Purple Envelope is the business side of the practice. It does not replace your practice management software and is not designed to hold a patient chart.',
+    claim: 'Practice guidance, not patient records',
+    how: 'Purple Envelope holds the doctor’s standards, preferences and approved language so the team can carry them into every patient conversation. It is designed for practice operations and team guidance — not for storing patient charts or patient-identifying clinical information — and it does not replace your practice management software.',
   },
   {
     claim: 'Office forms are documents, not a patient database',
-    how: 'Forms and consents are produced and printed as office documents. They are not modelled, indexed or reported on as clinical records.',
+    how: 'Forms and consents are produced and printed as office documents. They are not modelled, indexed or reported on as clinical records, and completed patient copies are not stored.',
   },
   {
     claim: 'Accountability applies upward too',
@@ -174,7 +174,7 @@ export default function MarketingSecurity() {
                 kicker="Explicit boundary"
                 tone="paper"
                 title="Things we chose not to build."
-                lede="These are product decisions, not gaps. They are the reason the sentence “only your business, never your patients” is safe to print."
+                lede="These are product decisions, not gaps. They are why we can say plainly that Purple Envelope carries the doctor’s standards and approved language into patient conversations, while patient charts and patient-identifying clinical records stay in your practice management software."
               />
               <Rows rows={BOUNDARIES} tone="paper" />
             </Reveal>

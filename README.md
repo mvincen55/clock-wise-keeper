@@ -1,7 +1,7 @@
 # Purple Envelope
 
 Practice-operations software for small independent dental offices.
-**"Only your business, never your patients."**
+**"Your practice playbook—not a patient chart."**
 
 - **Live site:** https://purpleenvelope.app (legacy: https://timekeepers.me — still allowed for invite links)
 - **Brand color:** `#53406e`
@@ -21,7 +21,7 @@ Read in this order before changing anything:
 
 Golden rules that must survive every change:
 
-- **No patient data. Ever.** Not in tables, not in checklist titles, not in AI prompts. See the HIPAA boundary section.
+- **No patient charts or patient-identifying clinical data.** Not in tables, not in checklist titles, not in AI prompts. Practice-level guidance and approved patient-facing language are in scope; patient records are not. See the HIPAA boundary section.
 - **`org_id` on every table, RLS on every table.** RLS is the *sole* security perimeter — the bundled anon key is public by design.
 - **Org identity comes from `org_members` server-side, never from client input.**
 - **Recipient emails are PII** — use the existing `maskEmail()` pattern in edge function logs.
@@ -31,7 +31,7 @@ Golden rules that must survive every change:
 
 ## Product rules (non-negotiable)
 
-1. **No patient data, ever.** Storing PHI would trigger HIPAA BAA obligations with every vendor in the pipeline. This is the product's founding constraint, not a preference.
+1. **Practice guidance, not patient records.** The product preserves the doctor's standards, preferences and approved language for patient conversations, but stores no patient charts or patient-identifying clinical information. Storing PHI would trigger HIPAA BAA obligations with every vendor in the pipeline. This is the product's founding constraint, not a preference.
 2. **Everything is a setting.** Offices differ; behavior that could vary by office should be configurable rather than hard-coded.
 3. **Defaults are the product.** A new office should get a sensible, working configuration out of the box.
 4. **Invite-only access.** No public sign-up into an org. Access is gated by an allowlist (see Access model).

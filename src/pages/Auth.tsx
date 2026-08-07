@@ -98,7 +98,7 @@ export default function Auth() {
         </div>
 
         <p className="relative font-mono text-[10.5px] uppercase tracking-[0.2em] text-paper/55">
-          Only your business, never your patients
+          Practice guidance, not patient records
         </p>
       </div>
 

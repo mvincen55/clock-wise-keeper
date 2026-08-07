@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react';
 import { getToday } from '@/lib/time-utils';
 import { useMissingShifts } from '@/hooks/useMissingShifts';
 import { MissingShiftBanner } from '@/components/MissingShiftBanner';
@@ -21,52 +20,18 @@ import { MicroLabel } from '@/components/dashboard/kit';
 /**
  * Home — three role experiences, one product family.
  *
- * The top composition is the role command center (a view into existing hooks).
- * Below it sits deliberately EDITED working detail: each tier gets only the
- * interactive surfaces that tier actually works, under a named section — never
- * a generic "Detail" dump of every card, and never a second copy of something
- * the command center already answered.
- *
- * Deep links (`?record=`, `?sprint=`) still land on their card: if a tier does
- * not normally show that card, the link forces it in and scrolls to it.
+ * Owner reads decisions and exceptions, manager reads the live floor, team
+ * member reads their own next action. The top composition is a view into
+ * existing hooks (`useDashboardView`); the working surfaces below are the
+ * unchanged interactive cards, including the deep-link targets notifications
+ * point at. No clock card anywhere — clocking stays in GlobalTimeControl.
  */
-
-/** A named band of working surfaces. Reads as a section, not a card grid. */
-function Section({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t-2 border-foreground pt-4">
-        <MicroLabel>{label}</MicroLabel>
-        {hint && <p className="text-[12.5px] text-muted-foreground">{hint}</p>}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-/** Scrolls a deep-linked card into view once, without changing its behaviour. */
-function DeepLinked({ active, children }: { active: boolean; children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!active) return;
-    const t = setTimeout(() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
-    return () => clearTimeout(t);
-  }, [active]);
-  return <div ref={ref}>{children}</div>;
-}
-
 export default function Home() {
   const { data: ctx } = useOrgContext();
   const { view } = useDashboardView();
 
+  // Notifications about sprints and accountability records still land on the
+  // exact card the notification described.
   const linkedRecordId = useConsumedSearchParam('record');
   const linkedSprintId = useConsumedSearchParam('sprint');
 
@@ -78,7 +43,6 @@ export default function Home() {
 
   const role = ctx?.role;
   const isOwner = role === 'owner';
-  const isManager = role === 'manager';
   const isMember = role === 'employee';
 
   return (
@@ -87,74 +51,28 @@ export default function Home() {
       {view?.kind === 'manager' && <ManagerDashboard view={view} />}
       {view?.kind === 'member' && <MemberDashboard view={view} />}
 
-      <div className="mx-auto mt-8 w-full max-w-[1400px] space-y-8 px-4 sm:px-6 md:px-8">
+      {/* Working surfaces: unchanged interactive cards and deep-link targets. */}
+      <div className="mx-auto w-full max-w-[1400px] space-y-4 px-4 sm:px-6 md:px-8">
         {!isOwner && missingDays.length > 0 && <MissingShiftBanner missingDays={missingDays} />}
 
-        {/* OWNER — decisions and records only. No clock, no momentum, no
-            manager task queue: those belong to the people doing the work. */}
-        {isOwner && (
-          <Section label="Records & decisions" hint="Sign-offs and sprints that need an owner.">
-            <div className="grid gap-4 lg:grid-cols-2">
-              <DeepLinked active={!!linkedRecordId}>
-                <MyAccountabilityCard highlightId={linkedRecordId} />
-              </DeepLinked>
-              <DeepLinked active={!!linkedSprintId}>
-                <SprintCard highlightId={linkedSprintId} />
-              </DeepLinked>
-            </div>
-          </Section>
-        )}
+        <div className="border-t-2 border-foreground pt-4">
+          <MicroLabel>Detail</MicroLabel>
+        </div>
 
-        {/* MANAGER — the floor in detail, then their own assigned work. */}
-        {isManager && (
-          <>
-            <Section label="The floor in detail" hint="Closeout, the doctor board, and today's scope.">
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="space-y-4">
-                  <MessagesCloseoutCard />
-                  <DoctorBoardCard />
-                </div>
-                <div className="space-y-4">
-                  <TodayFocusCard />
-                  <RescopeCard />
-                </div>
-              </div>
-            </Section>
-            <Section label="My own work" hint="What is assigned to you, not to the office.">
-              <div className="grid gap-4 lg:grid-cols-2">
-                <DeepLinked active={!!linkedSprintId}>
-                  <SprintCard highlightId={linkedSprintId} />
-                </DeepLinked>
-                <DeepLinked active={!!linkedRecordId}>
-                  <MyAccountabilityCard highlightId={linkedRecordId} />
-                </DeepLinked>
-                <UserNotesBoard />
-              </div>
-            </Section>
-          </>
-        )}
-
-        {/* TEAM MEMBER — own work only. No management surfaces. */}
-        {isMember && (
-          <Section label="My work" hint="Your focus, your records, your notes.">
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="space-y-4">
-                <TodayFocusCard />
-                <MessagesCloseoutCard />
-                <MyMomentumCard />
-              </div>
-              <div className="space-y-4">
-                <DeepLinked active={!!linkedSprintId}>
-                  <SprintCard highlightId={linkedSprintId} />
-                </DeepLinked>
-                <DeepLinked active={!!linkedRecordId}>
-                  <MyAccountabilityCard highlightId={linkedRecordId} />
-                </DeepLinked>
-                <UserNotesBoard />
-              </div>
-            </div>
-          </Section>
-        )}
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-4">
+            <MessagesCloseoutCard />
+            {!isOwner && <TodayFocusCard />}
+            {!isMember && <DoctorBoardCard />}
+            {!isOwner && <RescopeCard />}
+          </div>
+          <div className="space-y-4">
+            <SprintCard highlightId={linkedSprintId} />
+            {isMember && <MyMomentumCard />}
+            <MyAccountabilityCard highlightId={linkedRecordId} />
+            <UserNotesBoard />
+          </div>
+        </div>
       </div>
     </div>
   );

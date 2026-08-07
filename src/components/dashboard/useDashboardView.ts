@@ -196,8 +196,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         mission: roleMission(role),
         shortcuts: shortcutsFor(role, tier).slice(0, 4),
         urgent: covering ? laneUrgent(role) : [],
-        covering,
-        note: covering ? 'Also covering today' : 'Backup — can cover, not assigned',
+        note: covering ? 'Covering today' : 'Backup — not assigned today',
       });
     }
 
