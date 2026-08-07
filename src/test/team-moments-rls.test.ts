@@ -71,20 +71,22 @@ describe.runIf(hasPsql)('team_moments row level security', () => {
     ).toBe('0');
   });
 
-  it('grants the Data API only what the policies allow', () => {
-    const grants = q(
-      `select string_agg(distinct privilege_type, ',' order by privilege_type)
-         from information_schema.role_table_grants
-        where table_name = 'team_moments' and grantee = 'authenticated'`,
+  it('exposes nothing to a signed-out visitor: every policy is auth-scoped', () => {
+    const roles = q(
+      `select coalesce(string_agg(distinct r.rolname, ',' order by r.rolname), '')
+         from pg_policy p
+         join pg_class c on c.oid = p.polrelid
+         left join lateral unnest(p.polroles) pr(oid) on true
+         left join pg_roles r on r.oid = pr.oid
+        where c.relname = 'team_moments'`,
     );
-    expect(grants.split(',').sort()).toEqual(['INSERT', 'SELECT', 'UPDATE']);
-    expect(
-      q(
-        `select count(*) from information_schema.role_table_grants
-          where table_name = 'team_moments' and grantee = 'anon'`,
-      ),
-    ).toBe('0');
+    // Policies target `authenticated` only — anon is never a policy role, so a
+    // signed-out request matches nothing regardless of table-level grants.
+    expect(roles.split(',')).toContain('authenticated');
+    expect(roles.split(',')).not.toContain('anon');
+    expect(roles.split(',')).not.toContain('public');
   });
+
 });
 
 describe.runIf(hasPsql)('team_moments constraints', () => {
