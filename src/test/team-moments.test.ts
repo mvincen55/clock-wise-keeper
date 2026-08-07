@@ -4,7 +4,7 @@ import {
   REACTIONS,
   announce,
   describe as describeMoment,
-  idsToMarkRevealed,
+  idsToConfirmOpened,
   isApprovedReaction,
   normalizeText,
   planReveal,
@@ -124,23 +124,23 @@ describe('screen reader announcement', () => {
   });
 });
 
-describe('reveal is write-once (duplicate / replay safety)', () => {
+describe('presentation confirmation is write-once (duplicate / replay safety)', () => {
   it('only marks the ones not already revealed', () => {
     expect(
-      idsToMarkRevealed([
-        { id: 'a', revealed_at: null },
-        { id: 'b', revealed_at: '2026-08-01T10:00:00Z' },
+      idsToConfirmOpened([
+        { id: 'a', opened_at: null },
+        { id: 'b', opened_at: '2026-08-01T10:00:00Z' },
       ]),
     ).toEqual(['a']);
   });
 
   it('is a no-op on replay from a second device or refreshed session', () => {
-    const rows = [{ id: 'a', revealed_at: null }];
-    const first = idsToMarkRevealed(rows);
+    const rows = [{ id: 'a', opened_at: null }];
+    const first = idsToConfirmOpened(rows);
     expect(first).toEqual(['a']);
     // Second pass, same session state already marked locally.
-    expect(idsToMarkRevealed(rows, first)).toEqual([]);
+    expect(idsToConfirmOpened(rows, first)).toEqual([]);
     // And once the server confirms, nothing is left to mark.
-    expect(idsToMarkRevealed([{ id: 'a', revealed_at: '2026-08-01T10:01:00Z' }])).toEqual([]);
+    expect(idsToConfirmOpened([{ id: 'a', opened_at: '2026-08-01T10:01:00Z' }])).toEqual([]);
   });
 });

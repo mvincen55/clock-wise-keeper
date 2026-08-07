@@ -156,13 +156,14 @@ export function describe(m: PendingMoment): string {
 }
 
 /**
- * Reveal is marked once. Replays (a second tab, a refreshed session, a retried
- * request) must resolve to nothing rather than re-opening the envelope.
+ * Presentation is confirmed once. The database hands this device a claimed
+ * batch; this decides which of those still need an `opened_at` confirmation.
+ * Replays (a re-render, a retried request) resolve to nothing.
  */
-export function idsToMarkRevealed(
-  moments: { id: string; revealed_at: string | null }[],
-  alreadyMarked: Iterable<string> = [],
+export function idsToConfirmOpened(
+  moments: { id: string; opened_at: string | null }[],
+  alreadyConfirmed: Iterable<string> = [],
 ): string[] {
-  const seen = new Set(alreadyMarked);
-  return moments.filter((m) => m.revealed_at === null && !seen.has(m.id)).map((m) => m.id);
+  const seen = new Set(alreadyConfirmed);
+  return moments.filter((m) => m.opened_at === null && !seen.has(m.id)).map((m) => m.id);
 }
