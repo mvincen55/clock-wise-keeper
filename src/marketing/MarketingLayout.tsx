@@ -39,7 +39,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
       key={to + label}
       to={to}
       className={cn(
-        'pe-focus font-mono text-[10.5px] uppercase tracking-[0.18em] transition-colors',
+        'pe-focus font-mono text-[11.5px] uppercase tracking-[0.18em] transition-colors',
         location.pathname === to ? 'text-plum' : 'text-ink-soft hover:text-ink',
       )}
     >
@@ -71,7 +71,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
             {user && isAllowed ? (
               <Link
                 to="/"
-                className="pe-focus bg-plum px-5 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-plum-deep"
+                className="pe-focus bg-plum px-5 py-2.5 font-mono text-[11.5px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-plum-deep"
               >
                 Open your office
               </Link>
@@ -79,13 +79,13 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
               <>
                 <Link
                   to="/login"
-                  className="pe-focus border-y border-l border-ink px-4 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink transition-colors hover:bg-ink hover:text-paper"
+                  className="pe-focus border-y border-l border-ink px-4 py-2.5 font-mono text-[11.5px] uppercase tracking-[0.18em] text-ink transition-colors hover:bg-ink hover:text-paper"
                 >
                   Log in
                 </Link>
                 <Link
                   to="/start"
-                  className="pe-focus bg-plum px-4 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-plum-deep"
+                  className="pe-focus bg-plum px-4 py-2.5 font-mono text-[11.5px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-plum-deep"
                 >
                   Request access
                 </Link>
@@ -115,7 +115,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
                 style={{ animationDelay: `${i * 30}ms` }}
                 className="animate-pe-fade-up pe-row flex items-baseline gap-4 py-4"
               >
-                <span className="font-mono text-[10px] text-plum">{String(i + 1).padStart(2, '0')}</span>
+                <span className="font-mono text-[11px] text-plum">{String(i + 1).padStart(2, '0')}</span>
                 <span className="pe-display text-[1.6rem] text-ink">{n.label}</span>
               </Link>
             ))}
@@ -163,7 +163,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
             </p>
           </div>
           <nav aria-label="Product" className="text-[13.5px]">
-            <p className="pe-row-heavy pt-3 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-soft">Product</p>
+            <p className="pe-row-heavy pt-3 font-mono text-[11px] uppercase tracking-[0.2em] text-ink-soft">Product</p>
             <ul className="mt-3 space-y-2.5">
               {NAV.map((n) => (
                 <li key={n.to}>
@@ -175,7 +175,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
             </ul>
           </nav>
           <nav aria-label="Access" className="text-[13.5px]">
-            <p className="pe-row-heavy pt-3 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-soft">Access</p>
+            <p className="pe-row-heavy pt-3 font-mono text-[11px] uppercase tracking-[0.2em] text-ink-soft">Access</p>
             <ul className="mt-3 space-y-2.5">
               <li>
                 <Link to="/login" className="pe-focus text-ink-soft transition-colors hover:text-plum">
@@ -201,7 +201,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
           </nav>
         </Shell>
         <div className="border-t border-ink/15">
-          <Shell className="flex flex-col gap-2 py-5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-soft sm:flex-row sm:items-center sm:justify-between">
+          <Shell className="flex flex-col gap-2 py-5 font-mono text-[11.5px] uppercase tracking-[0.14em] text-ink-soft sm:flex-row sm:items-center sm:justify-between">
             <span>© {new Date().getFullYear()} Purple Envelope</span>
             <span className="normal-case tracking-normal">
               Not a patient-record system. Not a replacement for your practice management software.

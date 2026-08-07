@@ -18,7 +18,7 @@ const ROLES = ['Owner / dentist', 'Office manager', 'Team member', 'Something el
 const FN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/submit-lead`;
 const ANON = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
 
-const LABEL = 'font-mono text-[10px] uppercase tracking-[0.2em] text-ink-soft';
+const LABEL = 'font-mono text-[11px] uppercase tracking-[0.2em] text-ink-soft';
 const FIELD =
   'pe-focus w-full rounded-none border-0 border-b border-ink/25 bg-transparent px-0 py-2.5 text-[15px] text-ink outline-none transition-colors focus:border-plum';
 
@@ -59,7 +59,8 @@ export default function MarketingStart() {
           role,
           office_size: size,
           note,
-          website,
+          // Honeypot field name must match the edge function exactly.
+          company_website: website,
           source: 'start',
         }),
       });
@@ -88,7 +89,7 @@ export default function MarketingStart() {
         <div className="pe-blueprint-invert relative">
           <Shell className="relative grid gap-8 py-14 lg:grid-cols-[1.2fr_0.8fr] lg:items-end lg:gap-16 lg:py-20">
             <div>
-              <p className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-paper/55">
+              <p className="font-mono text-[11.5px] uppercase tracking-[0.22em] text-paper/55">
                 Form 01 · Early access intake
               </p>
               <h1 className="pe-display mt-5 text-[clamp(2.4rem,8.5vw,6rem)] text-paper">
@@ -133,7 +134,7 @@ export default function MarketingStart() {
           <div className="py-12 lg:py-16 lg:pl-14">
             {done ? (
               <div role="status" aria-live="polite" className="border-2 border-ink p-8">
-                <p className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-plum">Received</p>
+                <p className="font-mono text-[11.5px] uppercase tracking-[0.22em] text-plum">Received</p>
                 <h2 className="pe-display mt-4 text-[1.9rem] text-ink">Thank you — it’s in.</h2>
                 <p className="mt-4 max-w-[44ch] text-[14.5px] leading-relaxed text-ink-soft">
                   We read every one of these ourselves. If Purple Envelope isn’t a fit for your office yet, we’ll tell
@@ -148,7 +149,7 @@ export default function MarketingStart() {
               </div>
             ) : (
               <form onSubmit={submit} noValidate className="border-t-2 border-ink">
-                <p className="py-3 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-soft">
+                <p className="py-3 font-mono text-[11px] uppercase tracking-[0.2em] text-ink-soft">
                   Complete all required lines
                 </p>
 
@@ -249,7 +250,7 @@ export default function MarketingStart() {
                   Send request
                 </button>
 
-                <p className="mt-5 max-w-[52ch] font-mono text-[10px] uppercase leading-relaxed tracking-[0.14em] text-ink-soft">
+                <p className="mt-5 max-w-[52ch] font-mono text-[11px] uppercase leading-relaxed tracking-[0.14em] text-ink-soft">
                   Stored only for this conversation. No newsletter, no resale, no patient information.
                 </p>
               </form>

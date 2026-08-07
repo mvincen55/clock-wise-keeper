@@ -17,7 +17,7 @@ export default function RoleSelector({
   return (
     <div>
       {!compact && (
-        <p className="mb-4 font-mono text-[10.5px] uppercase tracking-[0.22em] text-ink-soft">
+        <p className="mb-4 font-mono text-[11.5px] uppercase tracking-[0.22em] text-ink-soft">
           Read this page as
         </p>
       )}
@@ -58,7 +58,7 @@ export default function RoleSelector({
               {!compact && (
                 <span
                   className={cn(
-                    'mt-1 block font-mono text-[10px] uppercase tracking-[0.16em]',
+                    'mt-1 block font-mono text-[11px] uppercase tracking-[0.16em]',
                     active ? 'text-white/70' : 'text-ink-soft',
                   )}
                 >

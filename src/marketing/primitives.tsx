@@ -62,7 +62,7 @@ export function Eyebrow({
   return (
     <p
       className={cn(
-        'font-mono text-[10.5px] uppercase tracking-[0.22em]',
+        'font-mono text-[11.5px] uppercase tracking-[0.22em]',
         tone === 'plum' && 'text-plum',
         tone === 'ink' && 'text-ink-soft',
         tone === 'paper' && 'text-paper/55',
@@ -110,7 +110,7 @@ export function BandHead({
         {kicker && (
           <span
             className={cn(
-              'font-mono text-[10.5px] uppercase tracking-[0.22em]',
+              'font-mono text-[11.5px] uppercase tracking-[0.22em]',
               paper ? 'text-paper/50' : 'text-ink-soft',
             )}
           >
@@ -170,7 +170,7 @@ export function Shell({ children, className }: { children: ReactNode; className?
 /** A small honest label used anywhere something is not shipped yet. */
 export function StatusTag({ children }: { children: ReactNode }) {
   return (
-    <span className="ml-2 inline-flex items-center border border-current/30 px-2 py-0.5 align-middle font-mono text-[10px] uppercase tracking-[0.16em] opacity-70">
+    <span className="ml-2 inline-flex items-center border border-current/30 px-2 py-0.5 align-middle font-mono text-[11px] uppercase tracking-[0.16em] opacity-70">
       {children}
     </span>
   );
