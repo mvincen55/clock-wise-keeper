@@ -2,7 +2,9 @@ import { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Figure, PersonStatus, ProgressRow, Signal, TimelineRow, Tone } from './types';
+import type {
+  Figure, PersonStatus, ProgressRow, RoleContext, RoleLane, Shortcut, Signal, TimelineRow, Tone,
+} from './types';
 
 /**
  * The authenticated dashboard kit.
@@ -295,4 +297,100 @@ export function Masthead({
 /** Page frame: wide, gutter-consistent, and never centred in a narrow column. */
 export function DashboardShell({ children }: { children: ReactNode }) {
   return <div className="mx-auto w-full max-w-[1400px] px-4 py-5 sm:px-6 md:px-8 md:py-8">{children}</div>;
+}
+
+/**
+ * "My view" context line: permission tier, primary operational role, and any
+ * backup roles. It is a LABEL, not a switch — it never changes permission, and
+ * the underlying links are already filtered to what the tier can open.
+ */
+export function ViewContext({ context }: { context: RoleContext }) {
+  const { tierLabel, primaryLabel, secondaryLabels, coveringTodayLabels } = context;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+      <span className="text-foreground/70">{tierLabel}</span>
+      {primaryLabel && (
+        <>
+          <span aria-hidden>/</span>
+          <span>My view: {primaryLabel}</span>
+        </>
+      )}
+      {secondaryLabels.length > 0 && (
+        <>
+          <span aria-hidden>/</span>
+          <span>
+            Also covering: {secondaryLabels.join(', ')}
+            {coveringTodayLabels.length > 0 ? ' · today' : ''}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Shortcut list for an operational-role lane. Reads as an index, not buttons. */
+export function ShortcutList({ shortcuts }: { shortcuts: Shortcut[] }) {
+  if (shortcuts.length === 0) return null;
+  return (
+    <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-3">
+      {shortcuts.map((s) => (
+        <Link
+          key={s.id}
+          to={s.to}
+          className="group flex min-w-0 items-center justify-between gap-2 bg-background px-3 py-3 transition-colors hover:bg-muted/70"
+        >
+          <span className="truncate text-[13px] font-medium">{s.label}</span>
+          <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-hover:-translate-y-0.5" />
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * One operational-role lane. Primary reads full; a backup lane stays compact
+ * and clearly labelled so two roles never compete for the same attention.
+ */
+export function Lane({ lane }: { lane: RoleLane }) {
+  const compact = lane.kind === 'backup';
+  return (
+    <section className={cn('min-w-0', compact && 'border-l-2 border-border pl-4')}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-foreground pb-2">
+        <MicroLabel className="text-foreground/70">
+          {compact ? 'Also covering' : 'My work'} · {lane.label}
+        </MicroLabel>
+        {lane.note && (
+          <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{lane.note}</span>
+        )}
+      </div>
+      {!compact && <p className="mt-2 max-w-[52ch] text-[13px] leading-snug text-muted-foreground">{lane.mission}</p>}
+      {lane.urgent.length > 0 && (
+        <div className="mt-2">
+          {lane.urgent.map((s) => (
+            <SignalRow key={s.id} signal={s} />
+          ))}
+        </div>
+      )}
+      <div className="mt-3">
+        <ShortcutList shortcuts={lane.shortcuts} />
+      </div>
+    </section>
+  );
+}
+
+/** Primary lane first, then backup lanes, compact. */
+export function Lanes({ lanes, className }: { lanes: RoleLane[]; className?: string }) {
+  if (lanes.length === 0) return null;
+  const primary = lanes.filter((l) => l.kind === 'primary');
+  const backup = lanes.filter((l) => l.kind === 'backup');
+  return (
+    <div className={cn('space-y-6', className)}>
+      {primary.map((l) => (
+        <Lane key={l.role} lane={l} />
+      ))}
+      {backup.map((l) => (
+        <Lane key={l.role} lane={l} />
+      ))}
+    </div>
+  );
 }
