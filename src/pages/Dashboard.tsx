@@ -1,16 +1,7 @@
-import { Link } from 'react-router-dom';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import {
-  Briefcase, BookOpen, Inbox, Gauge, CalendarDays, ChevronRight,
-} from 'lucide-react';
-import { formatDate, getToday } from '@/lib/time-utils';
-import { useTick } from '@/hooks/useTick';
+import { getToday } from '@/lib/time-utils';
 import { useMissingShifts } from '@/hooks/useMissingShifts';
 import { MissingShiftBanner } from '@/components/MissingShiftBanner';
-import { useCurrentPtoBalance } from '@/hooks/usePtoEngine';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import { useApprovalCounts } from '@/hooks/useApprovalCounts';
 import { useConsumedSearchParam } from '@/hooks/useDeepLink';
 import TodayFocusCard from '@/components/copilot/TodayFocusCard';
 import MessagesCloseoutCard from '@/components/MessagesCloseoutCard';
@@ -20,117 +11,70 @@ import SprintCard from '@/components/SprintCard';
 import MyMomentumCard from '@/components/MyMomentumCard';
 import MyAccountabilityCard from '@/components/accountability/MyAccountabilityCard';
 import UserNotesBoard from '@/components/UserNotesBoard';
-
-function greeting(hour: number): string {
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
-}
-
-const SHORTCUTS = [
-  { to: '/workplace', icon: Briefcase, label: 'Workplace' },
-  { to: '/playbook', icon: BookOpen, label: 'Playbook' },
-  { to: '/inbox', icon: Inbox, label: 'Inbox' },
-];
+import OwnerDashboard from '@/components/dashboard/OwnerDashboard';
+import ManagerDashboard from '@/components/dashboard/ManagerDashboard';
+import MemberDashboard from '@/components/dashboard/MemberDashboard';
+import { useDashboardView } from '@/components/dashboard/useDashboardView';
+import { MicroLabel } from '@/components/dashboard/kit';
 
 /**
- * Home: a role-personalized launchpad (blueprint §5). It answers "what
- * deserves my attention?" — the clock lives in the global time control,
- * and management concerns live in Management.
+ * Home — three role experiences, one product family.
+ *
+ * Owner reads decisions and exceptions, manager reads the live floor, team
+ * member reads their own next action. The top composition is a view into
+ * existing hooks (`useDashboardView`); the working surfaces below are the
+ * unchanged interactive cards, including the deep-link targets notifications
+ * point at. No clock card anywhere — clocking stays in GlobalTimeControl.
  */
 export default function Home() {
-  const now = useTick(60_000);
   const { data: ctx } = useOrgContext();
-  const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
-  const { data: approvalCounts } = useApprovalCounts();
-  // Notifications about sprints and accountability records land here, on
-  // the exact card the notification described.
+  const { view } = useDashboardView();
+
+  // Notifications about sprints and accountability records still land on the
+  // exact card the notification described.
   const linkedRecordId = useConsumedSearchParam('record');
   const linkedSprintId = useConsumedSearchParam('sprint');
 
   const todayKey = getToday();
-  const fourteenDaysAgo = new Date(new Date(todayKey + 'T12:00:00Z').getTime() - 14 * 24 * 3600 * 1000)
+  const fourteenDaysAgo = new Date(new Date(todayKey + 'T12:00:00Z').getTime() - 14 * 86_400_000)
     .toISOString()
     .slice(0, 10);
   const missingDays = useMissingShifts(fourteenDaysAgo);
-  const ptoState = useCurrentPtoBalance();
+
+  const role = ctx?.role;
+  const isOwner = role === 'owner';
+  const isManager = role === 'manager';
+  const isMember = role === 'employee';
 
   return (
-    <div className="p-4 md:p-8 max-w-3xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold">{greeting(now.getHours())}</h1>
-        <p className="text-muted-foreground">{formatDate(now)}</p>
-      </div>
+    <div className="pb-10">
+      {view?.kind === 'owner' && <OwnerDashboard view={view} />}
+      {view?.kind === 'manager' && <ManagerDashboard view={view} />}
+      {view?.kind === 'member' && <MemberDashboard view={view} />}
 
-      {/* Where to next — the destinations, one tap away. */}
-      <div className="flex flex-wrap gap-2">
-        {SHORTCUTS.map(s => (
-          <Button key={s.to} asChild variant="outline" size="sm">
-            <Link to={s.to}><s.icon className="mr-2 h-4 w-4" />{s.label}</Link>
-          </Button>
-        ))}
-        {isManager && (
-          <Button asChild variant="outline" size="sm">
-            <Link to="/management">
-              <Gauge className="mr-2 h-4 w-4" />
-              Management
-              {(approvalCounts?.total ?? 0) > 0 && (
-                <span className="ml-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
-                  {approvalCounts!.total}
-                </span>
-              )}
-            </Link>
-          </Button>
-        )}
-      </div>
+      {/* Working surfaces: unchanged interactive cards and deep-link targets. */}
+      <div className="mx-auto w-full max-w-[1400px] space-y-4 px-4 sm:px-6 md:px-8">
+        {!isOwner && missingDays.length > 0 && <MissingShiftBanner missingDays={missingDays} />}
 
-      {/* Needs attention first. */}
-      {missingDays.length > 0 && <MissingShiftBanner missingDays={missingDays} />}
-      <MessagesCloseoutCard />
+        <div className="border-t-2 border-foreground pt-4">
+          <MicroLabel>Detail</MicroLabel>
+        </div>
 
-      {/* One spotlight: your next thing. */}
-      <TodayFocusCard />
-      <DoctorBoardCard />
-      <RescopeCard />
-
-      {/* Restrained progress summary. */}
-      <SprintCard highlightId={linkedSprintId} />
-      <MyMomentumCard />
-      <MyAccountabilityCard highlightId={linkedRecordId} />
-
-      <Card className="card-elevated">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <CalendarDays className="h-5 w-5 text-primary" />
-              <div>
-                <p className="text-sm font-medium">PTO Balance</p>
-                <p className="text-xs text-muted-foreground">
-                  {ptoState.tier.label} — {(ptoState.tier.rate * 100).toFixed(2)}%
-                </p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className={`text-xl font-bold time-display ${ptoState.balance < 0 ? 'text-destructive' : 'text-success'}`}>
-                {ptoState.balance.toFixed(2)}h
-              </p>
-              <Link to="/pto" className="inline-flex items-center text-xs text-primary hover:underline">
-                View Details <ChevronRight className="h-3 w-3" />
-              </Link>
-            </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-4">
+            <MessagesCloseoutCard />
+            {!isOwner && <TodayFocusCard />}
+            {!isMember && <DoctorBoardCard />}
+            {!isOwner && <RescopeCard />}
           </div>
-          {ptoState.currentWeek && (
-            <div className="flex gap-4 mt-2 pt-2 border-t text-xs text-muted-foreground">
-              <span>This week accrual: <span className="font-semibold text-success">+{ptoState.currentWeek.accrual_credited.toFixed(2)}h</span></span>
-              {ptoState.currentWeek.pto_taken_hours > 0 && (
-                <span>PTO used: <span className="font-semibold text-destructive">-{ptoState.currentWeek.pto_taken_hours.toFixed(2)}h</span></span>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <UserNotesBoard />
+          <div className="space-y-4">
+            <SprintCard highlightId={linkedSprintId} />
+            {isMember && <MyMomentumCard />}
+            <MyAccountabilityCard highlightId={linkedRecordId} />
+            <UserNotesBoard />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
