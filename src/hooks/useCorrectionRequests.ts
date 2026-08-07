@@ -89,15 +89,19 @@ export function useSubmitCorrectionRequest() {
         .maybeSingle();
       if (existing) throw new Error('You already have a pending request for this item');
       
-      const { error } = await supabase.from('correction_requests').insert({
-        org_id: ctx.org_id,
-        employee_id: ctx.employee_id,
-        created_by: user.id,
-        target_table: params.target_table,
-        target_id: params.target_id,
-        proposed_change: params.proposed_change as any,
-        reason: params.reason.trim(),
-      });
+      const { data: created, error } = await supabase
+        .from('correction_requests')
+        .insert({
+          org_id: ctx.org_id,
+          employee_id: ctx.employee_id,
+          created_by: user.id,
+          target_table: params.target_table,
+          target_id: params.target_id,
+          proposed_change: params.proposed_change as any,
+          reason: params.reason.trim(),
+        })
+        .select('id')
+        .single();
       if (error) throw error;
 
       // Notify managers about the new correction request
@@ -125,6 +129,7 @@ export function useSubmitCorrectionRequest() {
             title: 'New Correction Request',
             message: `${emp?.display_name || 'An employee'} submitted a correction request: ${params.reason.trim()}`,
             related_table: 'correction_requests',
+            related_id: created.id,
           });
         }
       }

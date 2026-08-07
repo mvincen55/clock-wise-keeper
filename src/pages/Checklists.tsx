@@ -5,6 +5,7 @@
  * periods (history is kept, like the filed sheets).
  */
 import { useMemo, useState } from 'react';
+import { useConsumedSearchParam, useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -161,6 +162,11 @@ export default function Checklists() {
   const [editingItem, setEditingItem] = useState<typeof EMPTY_ITEM & { id?: string }>(EMPTY_ITEM);
   const [dialogChecklistId, setDialogChecklistId] = useState<string | null>(null);
 
+  // A goal-step reminder names one item; open its list with the row in view.
+  const linkedItemId = useConsumedSearchParam('item');
+  const linkedItem = linkedItemId ? (data?.items ?? []).find(i => i.id === linkedItemId) : undefined;
+  const linkedRef = useScrollIntoView<HTMLDivElement>(!!linkedItem);
+
   const completionsByItem = useMemo(() => {
     const map = new Map<string, ChecklistCompletion[]>();
     for (const c of completions ?? []) {
@@ -230,7 +236,7 @@ export default function Checklists() {
           </CardContent>
         </Card>
       ) : (
-        <Tabs defaultValue={checklists[0].id}>
+        <Tabs key={linkedItem?.checklist_id ?? 'default'} defaultValue={linkedItem?.checklist_id ?? checklists[0].id}>
           <TabsList className="flex-wrap h-auto">
             {checklists.map(list => (
               <TabsTrigger key={list.id} value={list.id}>{list.name}</TabsTrigger>
@@ -295,7 +301,10 @@ export default function Checklists() {
                           return (
                             <div
                               key={item.id}
-                              className="flex items-start gap-3 py-2 border-b last:border-0"
+                              ref={item.id === linkedItemId ? linkedRef : undefined}
+                              className={`flex items-start gap-3 py-2 border-b last:border-0 ${
+                                item.id === linkedItemId ? `rounded-md px-2 ${DEEP_LINK_HIGHLIGHT}` : ''
+                              }`}
                             >
                               <Checkbox
                                 id={`ck-${item.id}-${periodKey}`}

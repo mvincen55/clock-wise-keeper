@@ -1,17 +1,139 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, CheckCheck } from 'lucide-react';
+import { Bell, CheckCheck, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useNotifications, useUnreadCount, useMarkNotificationRead, useMarkAllRead } from '@/hooks/useNotifications';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { useNotifications, useUnreadCount, useMarkNotificationRead, useMarkAllRead, type Notification } from '@/hooks/useNotifications';
+import { resolveNotificationDestination, type OrgRole } from '@/lib/notification-routing';
 import { formatDistanceToNow } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrgContext } from '@/hooks/useOrgContext';
 import { slaFor } from '@/lib/support-sla';
 import { useTick } from '@/hooks/useTick';
 import TicketTimeline, { stageFromTicket } from '@/components/support/TicketTimeline';
+
+const typeIcon: Record<string, string> = {
+  pto_request_new: '📋',
+  pto_request_approved: '✅',
+  pto_request_denied: '❌',
+  correction_request_new: '📝',
+  correction_approved: '✅',
+  correction_denied: '❌',
+  change_request_new: '📋',
+  change_request_approved: '✅',
+  change_request_denied: '❌',
+  incident_report_new: '⚠️',
+  incident_report_signature_needed: '✍️',
+  incident_report_signed: '✅',
+  incident_report_closed: '✅',
+  training_assigned: '🎓',
+  training_due: '🎓',
+  ai_training_due: '🎓',
+  goal_step_due: '🎯',
+  ai_goal_task_due: '🎯',
+  ai_plan_stall: '🎯',
+  knowledge_acknowledgment_required: '📖',
+  knowledge_acknowledgment_due: '📖',
+  knowledge_acknowledgment_blocked: '📖',
+  knowledge_acknowledgment_unblocked: '📖',
+  knowledge_acknowledgment_question: '❓',
+  knowledge_acknowledgment_question_answered: '💬',
+  knowledge_acknowledgment_manager_escalation: '📖',
+  knowledge_acknowledgment_owner_escalation: '📖',
+  accountability_record: '🖊️',
+  accountability_review_due: '🖊️',
+  accountability_escalation: '🖊️',
+  checklist_bypass: '📋',
+  ai_sprint_verify: '🏁',
+  ai_sprint_announced: '🏁',
+  ai_sprint_won: '🎉',
+  ai_sprint_missed: '🏁',
+  ai_sprint_pending_verification: '🏁',
+  ai_sprint_progress: '🏁',
+  message: '💬',
+  integrity_elevated: '🛡️',
+  integrity_digest: '🛡️',
+};
+
+function iconFor(type: string): string {
+  return typeIcon[type] || (type.startsWith('ai_') ? '✨' : '🔔');
+}
+
+/**
+ * One notification row. The row itself stays readable on any device; on
+ * desktop, hovering reveals the full detail without marking anything read.
+ */
+function NotificationRow({
+  notification: n,
+  role,
+  onOpen,
+}: {
+  notification: Notification;
+  role: OrgRole | undefined;
+  onOpen: (n: Notification) => void;
+}) {
+  const destination = resolveNotificationDestination(n, { role });
+  const created = new Date(n.created_at);
+
+  const row = (
+    <button
+      className={`w-full text-left px-4 py-3 border-b border-border last:border-0 hover:bg-muted/50 transition-colors ${
+        !n.is_read ? 'bg-primary/5' : ''
+      }`}
+      onClick={() => onOpen(n)}
+    >
+      <div className="flex items-start gap-2">
+        <span className="text-base mt-0.5">{iconFor(n.notification_type)}</span>
+        <div className="flex-1 min-w-0">
+          <p className={`text-sm ${!n.is_read ? 'font-semibold text-foreground' : 'text-foreground'}`}>
+            {n.title}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {formatDistanceToNow(created, { addSuffix: true })}
+          </p>
+        </div>
+        {!n.is_read && (
+          <div className="h-2 w-2 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+        )}
+      </div>
+    </button>
+  );
+
+  // Hover is desktop-only by nature (the hover card never opens from touch),
+  // so phones simply tap through to the destination.
+  return (
+    <HoverCard openDelay={350} closeDelay={100}>
+      <HoverCardTrigger asChild>{row}</HoverCardTrigger>
+      <HoverCardContent side="left" align="start" className="w-80 p-3 space-y-2">
+        <div className="flex items-start gap-2">
+          <span className="text-base">{iconFor(n.notification_type)}</span>
+          <p className="text-sm font-semibold leading-snug">{n.title}</p>
+        </div>
+        <p className="text-sm text-foreground/90 whitespace-pre-wrap break-words">{n.message}</p>
+        <p className="text-xs text-muted-foreground">
+          {formatDistanceToNow(created, { addSuffix: true })} · {created.toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+          })}
+        </p>
+        <div className="flex items-center gap-1.5 border-t pt-2 text-xs text-muted-foreground">
+          <ArrowRight className="h-3 w-3 text-primary" />
+          <span>
+            Opens: <span className="font-medium text-foreground">{destination.label}</span>
+          </span>
+          <span className="ml-auto text-[11px] italic">Click to open</span>
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
@@ -23,6 +145,7 @@ export default function NotificationBell() {
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllRead();
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
 
   // The problem reports this person filed, so they can see where each one stands
   // without having to reopen the widget and ask.
@@ -49,40 +172,21 @@ export default function NotificationBell() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const typeIcon: Record<string, string> = {
-    pto_request_new: '📋',
-    pto_request_approved: '✅',
-    pto_request_denied: '❌',
-    correction_request_new: '📝',
-    correction_approved: '✅',
-    correction_denied: '❌',
-    change_request_new: '📋',
-    change_request_approved: '✅',
-    change_request_denied: '❌',
-    incident_report_new: '⚠️',
-    incident_report_signature_needed: '✍️',
-    incident_report_signed: '✅',
-    incident_report_closed: '✅',
-    training_due: '🎓',
-    goal_step_due: '🎯',
-    knowledge_acknowledgment_required: '📖',
+  /**
+   * Click → destination opens → notification becomes read. The mark-read is
+   * optimistic and never gates the navigation; if it fails, the person still
+   * lands where the notification points.
+   */
+  const openNotification = (n: Notification) => {
+    const destination = resolveNotificationDestination(n, { role: ctx?.role });
+    setOpen(false);
+    navigate(destination.to);
+    if (!n.is_read) markRead.mutate(n.id);
   };
-
-  /** Notifications that point at a row or workspace the recipient can open. */
-  const linkFor = (n: { related_table: string | null; related_id: string | null }) =>
-    n.related_table === 'incident_reports' && n.related_id
-      ? `/incident-reports?report=${n.related_id}`
-      : n.related_table === 'training_assignments'
-        ? '/training?tab=mine'
-        : n.related_table === 'checklist_items'
-          ? '/goals'
-          : n.related_table === 'knowledge_acknowledgments'
-            ? '/acknowledgments'
-            : null;
 
   return (
     <div className="relative" ref={ref}>
-      <Button variant="ghost" size="icon" className="relative" onClick={() => setOpen(!open)}>
+      <Button variant="ghost" size="icon" className="relative" aria-label="Notifications" onClick={() => setOpen(!open)}>
         <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
           <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs bg-destructive text-destructive-foreground">
@@ -143,36 +247,12 @@ export default function NotificationBell() {
               <p className="text-sm text-muted-foreground text-center py-8">No notifications</p>
             ) : (
               notifications.map(n => (
-                <button
+                <NotificationRow
                   key={n.id}
-                  className={`w-full text-left px-4 py-3 border-b border-border last:border-0 hover:bg-muted/50 transition-colors ${
-                    !n.is_read ? 'bg-primary/5' : ''
-                  }`}
-                  onClick={() => {
-                    if (!n.is_read) markRead.mutate(n.id);
-                    const to = linkFor(n);
-                    if (to) {
-                      setOpen(false);
-                      navigate(to);
-                    }
-                  }}
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="text-base mt-0.5">{typeIcon[n.notification_type] || '🔔'}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm ${!n.is_read ? 'font-semibold text-foreground' : 'text-foreground'}`}>
-                        {n.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
-                      </p>
-                    </div>
-                    {!n.is_read && (
-                      <div className="h-2 w-2 rounded-full bg-primary mt-1.5 flex-shrink-0" />
-                    )}
-                  </div>
-                </button>
+                  notification={n}
+                  role={ctx?.role}
+                  onOpen={openNotification}
+                />
               ))
             )}
           </ScrollArea>

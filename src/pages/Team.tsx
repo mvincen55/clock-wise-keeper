@@ -12,6 +12,7 @@ import TeamEmployeeCard from '@/components/TeamEmployeeCard';
 import ArchivedMembersDialog from '@/components/ArchivedMembersDialog';
 import PendingInvitesCard from '@/components/PendingInvitesCard';
 import ChecklistBypassesSection from '@/components/ChecklistBypassesSection';
+import { useConsumedSearchParam } from '@/hooks/useDeepLink';
 import { Users, Plus, Loader2, CalendarDays } from 'lucide-react';
 
 function getDefaultRange() {
@@ -33,6 +34,8 @@ export default function Team() {
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({ name: '', email: '' });
   const [search, setSearch] = useState('');
+  // A bypass notification lands on the exact bypass row below the roster.
+  const linkedBypassId = useConsumedSearchParam('bypass');
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
@@ -175,7 +178,7 @@ export default function Team() {
       )}
 
       {(ctx?.role === 'owner' || ctx?.role === 'manager') && (
-        <ChecklistBypassesSection orgId={ctx.org_id} />
+        <ChecklistBypassesSection orgId={ctx.org_id} highlightId={linkedBypassId} />
       )}
     </div>
   );

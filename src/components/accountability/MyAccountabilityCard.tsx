@@ -13,6 +13,7 @@ import {
   POLICY_LABELS,
   type AccountabilityReport,
 } from '@/hooks/useAccountability';
+import { useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
 
 function SignForm({ report }: { report: AccountabilityReport }) {
   const sign = useSignAccountabilityReport();
@@ -60,8 +61,12 @@ function SignForm({ report }: { report: AccountabilityReport }) {
 }
 
 /** The member's own records: sign the open one, read the closed ones. */
-export default function MyAccountabilityCard() {
+export default function MyAccountabilityCard({ highlightId }: { highlightId?: string | null }) {
   const { data: reports = [], isLoading } = useMyAccountabilityReports();
+  // A "record needs your note" notification lands on the exact record.
+  const highlightRef = useScrollIntoView<HTMLDivElement>(
+    !!highlightId && reports.some(r => r.id === highlightId)
+  );
 
   if (isLoading || reports.length === 0) return null;
 
@@ -78,7 +83,11 @@ export default function MyAccountabilityCard() {
       </CardHeader>
       <CardContent className="space-y-4 p-4">
         {reports.map(r => (
-          <div key={r.id} className="space-y-3 rounded-md border p-3">
+          <div
+            key={r.id}
+            ref={r.id === highlightId ? highlightRef : undefined}
+            className={`space-y-3 rounded-md border p-3 ${r.id === highlightId ? DEEP_LINK_HIGHLIGHT : ''}`}
+          >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-medium">{POLICY_LABELS[r.kind] ?? r.kind}</span>
               <Badge variant={r.status === 'closed' ? 'secondary' : 'default'}>

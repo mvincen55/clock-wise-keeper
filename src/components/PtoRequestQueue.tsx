@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useOrgPtoRequests, useReviewPtoRequest, PtoRequest } from '@/hooks/usePtoRequests';
+import { useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,8 +25,25 @@ const typeLabels: Record<string, string> = {
   other: 'Other',
 };
 
-export function PtoRequestQueue() {
-  const [filter, setFilter] = useState('pending');
+/** When a notification names one request, land with it in view. */
+function HighlightablePtoCard({
+  highlighted,
+  children,
+}: {
+  highlighted: boolean;
+  children: ReactNode;
+}) {
+  const ref = useScrollIntoView<HTMLDivElement>(highlighted);
+  return (
+    <Card ref={ref} className={`card-elevated ${highlighted ? DEEP_LINK_HIGHLIGHT : ''}`}>
+      {children}
+    </Card>
+  );
+}
+
+export function PtoRequestQueue({ highlightId }: { highlightId?: string | null }) {
+  // Deep links start on "all" so the request is findable whatever its status.
+  const [filter, setFilter] = useState(highlightId ? 'all' : 'pending');
   const { data: requests, isLoading } = useOrgPtoRequests(filter);
   const reviewMutation = useReviewPtoRequest();
 
@@ -78,7 +96,7 @@ export function PtoRequestQueue() {
           {requests.map(r => {
             const badge = statusBadge[r.status] || statusBadge.pending;
             return (
-              <Card key={r.id} className="card-elevated">
+              <HighlightablePtoCard key={r.id} highlighted={r.id === highlightId}>
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -115,7 +133,7 @@ export function PtoRequestQueue() {
                     </div>
                   )}
                 </CardContent>
-              </Card>
+              </HighlightablePtoCard>
             );
           })}
         </div>

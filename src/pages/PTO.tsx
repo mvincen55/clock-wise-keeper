@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import {
   usePtoSettings, useUpsertPtoSettings,
   usePtoSnapshots, useUpsertPtoSnapshot,
@@ -23,6 +23,17 @@ import { Badge } from '@/components/ui/badge';
 import { CalendarDays, TrendingUp, Clock, Settings as SettingsIcon, Printer, RefreshCw, AlertTriangle, Loader2, Plus, XCircle, Pencil, Check, X } from 'lucide-react';
 import { formatDate } from '@/lib/time-utils';
 import { useToast } from '@/hooks/use-toast';
+import { useConsumedSearchParam, useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
+
+/** A request row a notification can land on, highlighted and scrolled into view. */
+function PtoRequestRow({ highlighted, children }: { highlighted: boolean; children: ReactNode }) {
+  const ref = useScrollIntoView<HTMLDivElement>(highlighted);
+  return (
+    <div ref={ref} className={`px-4 py-3 space-y-1 ${highlighted ? `rounded-md ${DEEP_LINK_HIGHLIGHT}` : ''}`}>
+      {children}
+    </div>
+  );
+}
 
 export default function PTO() {
   const { user } = useAuth();
@@ -34,7 +45,9 @@ export default function PTO() {
   const { data: myPtoRequests } = useMyPtoRequests();
   const cancelRequest = useCancelPtoRequest();
   const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
-  const [tab, setTab] = useState('overview');
+  // A decision notification opens the requests tab with that request in view.
+  const linkedRequestId = useConsumedSearchParam('request');
+  const [tab, setTab] = useState(linkedRequestId ? 'requests' : 'overview');
 
   const { data: settings, isLoading: settingsLoading } = usePtoSettings();
   const { data: snapshots } = usePtoSnapshots();
@@ -269,7 +282,7 @@ export default function PTO() {
                       cancelled: 'bg-muted text-muted-foreground',
                     };
                     return (
-                      <div key={r.id} className="px-4 py-3 space-y-1">
+                      <PtoRequestRow key={r.id} highlighted={r.id === linkedRequestId}>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <Badge variant="outline" className="text-xs capitalize">{r.pto_type}</Badge>
@@ -323,7 +336,7 @@ export default function PTO() {
                             <span className="font-medium">Manager:</span> {r.manager_note}
                           </p>
                         )}
-                      </div>
+                      </PtoRequestRow>
                     );
                   })}
                 </div>

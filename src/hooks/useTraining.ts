@@ -260,11 +260,15 @@ export function useAssignModule() {
         due_date: input.dueDate,
       }));
       // Re-assigning someone who already has it just refreshes the due date.
-      const { error } = await supabase
+      const { data: saved, error } = await supabase
         .from('training_assignments')
-        .upsert(rows, { onConflict: 'module_id,assigned_to' });
+        .upsert(rows, { onConflict: 'module_id,assigned_to' })
+        .select('id, assigned_to');
       if (error) throw error;
 
+      // Each notification points at that person's own assignment row, the
+      // same shape the due-date reminders use.
+      const assignmentByUser = new Map((saved ?? []).map(a => [a.assigned_to, a.id]));
       await Promise.all(
         input.userIds.map(uid =>
           createNotification({
@@ -276,8 +280,9 @@ export function useAssignModule() {
             message: input.dueDate
               ? `"${input.module.title}" — due ${input.dueDate}`
               : `"${input.module.title}" is ready for you`,
-            related_table: 'training_modules',
-            related_id: input.module.id,
+            ...(assignmentByUser.get(uid)
+              ? { related_table: 'training_assignments', related_id: assignmentByUser.get(uid)! }
+              : { related_table: 'training_modules', related_id: input.module.id }),
           })
         )
       );
