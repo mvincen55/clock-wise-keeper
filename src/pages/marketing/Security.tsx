@@ -174,7 +174,7 @@ export default function MarketingSecurity() {
                 kicker="Explicit boundary"
                 tone="paper"
                 title="Things we chose not to build."
-                lede="These are product decisions, not gaps. They are the reason the sentence “only your business, never your patients” is safe to print."
+                lede="These are product decisions, not gaps. They are why we can say plainly that Purple Envelope carries the doctor’s standards and approved language into patient conversations, while patient charts and patient-identifying clinical records stay in your practice management software."
               />
               <Rows rows={BOUNDARIES} tone="paper" />
             </Reveal>
