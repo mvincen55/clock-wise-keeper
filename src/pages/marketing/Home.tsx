@@ -75,7 +75,7 @@ export default function MarketingHome() {
       {/* ---------------- HERO ---------------- */}
       <section className="relative overflow-hidden border-b border-line">
         <div className="pe-grain pointer-events-none absolute inset-0 opacity-60" aria-hidden />
-        <Shell className="relative grid gap-14 pb-16 pt-14 md:pt-20 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-16 lg:pb-24">
+        <Shell className="relative grid gap-14 pb-16 pt-14 [&>*]:min-w-0 md:pt-20 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-16 lg:pb-24">
           <div>
             <Eyebrow>Practice operations · independent dental</Eyebrow>
             <h1 className="mt-5 font-display text-[clamp(2.5rem,6.2vw,4.25rem)] font-medium leading-[0.98] tracking-[-0.025em] text-ink">
