@@ -49,7 +49,7 @@ function lanesFor(ctx: RoleContext, urgent: Signal[] = []): RoleLane[] {
       kind: 'primary',
       mission: roleMission(ctx.primary),
       shortcuts: shortcutsFor(ctx.primary, ctx.tier),
-      urgent,
+      urgent: [],
     });
   }
   for (const role of ctx.secondary) {

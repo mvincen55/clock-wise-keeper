@@ -182,7 +182,9 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         kind: 'primary',
         mission: roleMission(ops.primary),
         shortcuts: shortcutsFor(ops.primary, tier),
-        urgent: laneUrgent(ops.primary),
+        // The primary lane never repeats a line already shown above in the
+        // member's own open-items list — one item, one place.
+        urgent: [],
       });
     }
     for (const role of ops.secondary) {
