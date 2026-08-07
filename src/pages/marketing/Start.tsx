@@ -59,7 +59,7 @@ export default function MarketingStart() {
                 ['We set the office up with you', 'Roles, schedules, policies and the first assignments.'],
               ].map(([t, b], i) => (
                 <li key={t} className="relative">
-                  <span className="absolute -left-[31px] grid h-5 w-5 place-items-center rounded-full border border-line bg-paper font-mono text-[10px] text-plum">
+                  <span className="absolute -left-[31px] grid h-5 w-5 place-items-center rounded-none border border-line bg-paper font-mono text-[10px] text-plum">
                     {i + 1}
                   </span>
                   <p className="text-[14.5px] font-medium text-ink">{t}</p>
@@ -67,7 +67,7 @@ export default function MarketingStart() {
                 </li>
               ))}
             </ol>
-            <p className="mt-9 rounded-xl border border-line bg-paper-2/70 p-5 text-[13.5px] leading-relaxed text-ink-soft">
+            <p className="mt-9 rounded-none border border-line bg-paper-2/70 p-5 text-[13.5px] leading-relaxed text-ink-soft">
               Already part of an office that uses Purple Envelope? You don’t need this page —{' '}
               <Link to="/login" className="text-plum underline underline-offset-4">
                 log in
@@ -78,7 +78,7 @@ export default function MarketingStart() {
 
           <Reveal delay={70}>
             <form
-              className="rounded-2xl border border-line bg-white p-7 md:p-8"
+              className="rounded-none border border-line bg-white p-7 md:p-8"
               onSubmit={(e) => {
                 e.preventDefault();
                 window.location.href = mailto;
@@ -95,7 +95,7 @@ export default function MarketingStart() {
                   <input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full rounded-lg border border-line bg-paper px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors focus:border-plum"
+                    className="w-full rounded-[2px] border border-line bg-paper px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors focus:border-plum"
                     placeholder="First and last"
                   />
                 </label>
@@ -104,7 +104,7 @@ export default function MarketingStart() {
                   <input
                     value={practice}
                     onChange={(e) => setPractice(e.target.value)}
-                    className="w-full rounded-lg border border-line bg-paper px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors focus:border-plum"
+                    className="w-full rounded-[2px] border border-line bg-paper px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors focus:border-plum"
                     placeholder="Your office"
                   />
                 </label>
@@ -114,7 +114,7 @@ export default function MarketingStart() {
                     <select
                       value={role}
                       onChange={(e) => setRole(e.target.value)}
-                      className="w-full rounded-lg border border-line bg-paper px-3.5 py-2.5 text-[14px] text-ink outline-none focus:border-plum"
+                      className="w-full rounded-[2px] border border-line bg-paper px-3.5 py-2.5 text-[14px] text-ink outline-none focus:border-plum"
                     >
                       {ROLES.map((r) => (
                         <option key={r}>{r}</option>
@@ -126,7 +126,7 @@ export default function MarketingStart() {
                     <select
                       value={size}
                       onChange={(e) => setSize(e.target.value)}
-                      className="w-full rounded-lg border border-line bg-paper px-3.5 py-2.5 text-[14px] text-ink outline-none focus:border-plum"
+                      className="w-full rounded-[2px] border border-line bg-paper px-3.5 py-2.5 text-[14px] text-ink outline-none focus:border-plum"
                     >
                       {SIZES.map((s) => (
                         <option key={s}>{s}</option>
@@ -142,7 +142,7 @@ export default function MarketingStart() {
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                     rows={4}
-                    className="w-full resize-y rounded-lg border border-line bg-paper px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors focus:border-plum"
+                    className="w-full resize-y rounded-[2px] border border-line bg-paper px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors focus:border-plum"
                     placeholder="Training, PTO, closing routine, insurance notes…"
                   />
                 </label>
@@ -150,7 +150,7 @@ export default function MarketingStart() {
 
               <button
                 type="submit"
-                className="group mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-plum px-6 py-3.5 text-[14.5px] font-medium text-white transition-colors hover:bg-plum-deep"
+                className="group mt-6 inline-flex w-full items-center justify-center gap-2 rounded-none bg-plum px-6 py-3.5 text-[14.5px] font-medium text-white transition-colors hover:bg-plum-deep"
               >
                 Compose the message
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />

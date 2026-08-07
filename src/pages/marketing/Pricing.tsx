@@ -48,7 +48,7 @@ export default function MarketingPricing() {
           <Reveal>
             <SectionTitle eyebrow="Pricing philosophy" title="Four commitments we’re willing to put in writing." />
           </Reveal>
-          <div className="mt-10 grid gap-px overflow-hidden rounded-2xl border border-line bg-line md:grid-cols-2">
+          <div className="mt-10 grid gap-px overflow-hidden rounded-none border border-line bg-line md:grid-cols-2">
             {PRINCIPLES.map((p, i) => (
               <Reveal key={p.title} delay={i * 50} className="bg-paper">
                 <div className="h-full p-7">
@@ -65,10 +65,10 @@ export default function MarketingPricing() {
         <Shell className="py-16">
           <div className="grid gap-10 lg:grid-cols-[1fr_0.85fr] lg:gap-16">
             <Reveal>
-              <div className="rounded-2xl border border-plum/25 bg-white p-8 md:p-10">
+              <div className="rounded-none border border-plum/25 bg-white p-8 md:p-10">
                 <div className="flex items-baseline justify-between gap-4">
                   <h2 className="font-display text-[1.6rem] font-medium text-ink">Early access</h2>
-                  <span className="rounded-full border border-line bg-paper-2 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-soft">
+                  <span className="rounded-none border border-line bg-paper-2 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-soft">
                     Open now
                   </span>
                 </div>
@@ -91,7 +91,7 @@ export default function MarketingPricing() {
                 </ul>
                 <Link
                   to="/start"
-                  className="mt-8 inline-block rounded-full bg-plum px-6 py-3.5 text-[14.5px] font-medium text-white transition-colors hover:bg-plum-deep"
+                  className="mt-8 inline-block rounded-none bg-plum px-6 py-3.5 text-[14.5px] font-medium text-white transition-colors hover:bg-plum-deep"
                 >
                   Join early access
                 </Link>
@@ -99,9 +99,9 @@ export default function MarketingPricing() {
             </Reveal>
 
             <Reveal delay={70}>
-              <div className="rounded-2xl border border-line bg-paper-2/60 p-8">
+              <div className="rounded-none border border-line bg-paper-2/60 p-8">
                 <h2 className="font-display text-[1.35rem] font-medium text-ink">General availability</h2>
-                <span className="mt-3 inline-block rounded-full border border-line bg-white px-3 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-soft">
+                <span className="mt-3 inline-block rounded-none border border-line bg-white px-3 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-soft">
                   Pricing to be published
                 </span>
                 <p className="mt-4 text-[14.5px] leading-relaxed text-ink-soft">
@@ -128,7 +128,7 @@ export default function MarketingPricing() {
           </p>
           <Link
             to="/start"
-            className="mt-8 inline-block rounded-full bg-paper px-7 py-3.5 text-[14.5px] font-medium text-plum-deep transition-transform hover:-translate-y-0.5"
+            className="mt-8 inline-block rounded-none bg-paper px-7 py-3.5 text-[14.5px] font-medium text-plum-deep transition-transform hover:-translate-y-0.5"
           >
             Talk to us
           </Link>

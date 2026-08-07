@@ -46,7 +46,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen overflow-x-hidden bg-paper font-sans text-ink">
       <a
         href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-plum focus:px-4 focus:py-2 focus:text-white"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-[2px] focus:bg-plum focus:px-4 focus:py-2 focus:text-white"
       >
         Skip to content
       </a>
@@ -87,7 +87,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
             {user && isAllowed ? (
               <Link
                 to="/"
-                className="rounded-full bg-plum px-4 py-2 text-[13.5px] font-medium text-white transition-colors hover:bg-plum-deep"
+                className="rounded-none bg-plum px-4 py-2 text-[13.5px] font-medium text-white transition-colors hover:bg-plum-deep"
               >
                 Open your office
               </Link>
@@ -95,13 +95,13 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
               <>
                 <Link
                   to="/login"
-                  className="rounded-full border border-line px-4 py-2 text-[13.5px] text-ink transition-colors hover:border-plum/40 hover:text-plum"
+                  className="rounded-none border border-line px-4 py-2 text-[13.5px] text-ink transition-colors hover:border-plum/40 hover:text-plum"
                 >
                   Log in
                 </Link>
                 <Link
                   to="/start"
-                  className="group inline-flex items-center gap-1.5 rounded-full bg-plum px-4 py-2 text-[13.5px] font-medium text-white transition-colors hover:bg-plum-deep"
+                  className="group inline-flex items-center gap-1.5 rounded-none bg-plum px-4 py-2 text-[13.5px] font-medium text-white transition-colors hover:bg-plum-deep"
                 >
                   Start Purple Envelope
                   <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
@@ -115,7 +115,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-label={open ? 'Close menu' : 'Open menu'}
-            className="grid h-10 w-10 place-items-center rounded-lg border border-line text-ink lg:hidden"
+            className="grid h-10 w-10 place-items-center rounded-[2px] border border-line text-ink lg:hidden"
           >
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -137,15 +137,15 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
             ))}
             <div className="mt-6 flex flex-col gap-3">
               {user && isAllowed ? (
-                <Link to="/" className="rounded-full bg-plum px-5 py-3.5 text-center font-medium text-white">
+                <Link to="/" className="rounded-none bg-plum px-5 py-3.5 text-center font-medium text-white">
                   Open your office
                 </Link>
               ) : (
                 <>
-                  <Link to="/start" className="rounded-full bg-plum px-5 py-3.5 text-center font-medium text-white">
+                  <Link to="/start" className="rounded-none bg-plum px-5 py-3.5 text-center font-medium text-white">
                     Start Purple Envelope
                   </Link>
-                  <Link to="/login" className="rounded-full border border-line px-5 py-3.5 text-center text-ink">
+                  <Link to="/login" className="rounded-none border border-line px-5 py-3.5 text-center text-ink">
                     Log in
                   </Link>
                 </>

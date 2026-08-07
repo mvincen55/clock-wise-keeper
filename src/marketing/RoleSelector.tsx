@@ -38,7 +38,7 @@ export default function RoleSelector({
                 onChange?.(r.id);
               }}
               className={cn(
-                'group rounded-full border px-4 text-left transition-all duration-200',
+                'group rounded-none border px-4 text-left transition-all duration-200',
                 compact ? 'py-1.5' : 'py-2.5',
                 active
                   ? 'border-plum bg-plum text-white shadow-[0_10px_24px_-14px_rgba(83,64,110,0.9)]'
@@ -67,7 +67,7 @@ export function RoleStoryBlock() {
         {story.headline}
       </h2>
       <p className="mt-4 max-w-2xl text-[1.0625rem] leading-relaxed text-ink-soft">{story.lede}</p>
-      <ol className="mt-10 grid gap-px overflow-hidden rounded-xl border border-line bg-line md:grid-cols-3">
+      <ol className="mt-10 grid gap-px overflow-hidden rounded-none border border-line bg-line md:grid-cols-3">
         {story.points.map((p, i) => (
           <li key={p.title} className="bg-paper p-6">
             <span className="font-mono text-[11px] text-plum/60">0{i + 1}</span>

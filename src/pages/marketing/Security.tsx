@@ -92,7 +92,7 @@ export default function MarketingSecurity() {
           </Reveal>
           <div className="mt-10 grid gap-6 lg:grid-cols-2">
             <Reveal>
-              <div className="h-full rounded-2xl border border-plum/25 bg-white p-7">
+              <div className="h-full rounded-none border border-plum/25 bg-white p-7">
                 <h3 className="font-display text-[1.3rem] font-medium text-ink">Designed to hold</h3>
                 <ul className="mt-5 space-y-3">
                   {DESIGNED_TO_HOLD.map((i) => (
@@ -105,7 +105,7 @@ export default function MarketingSecurity() {
               </div>
             </Reveal>
             <Reveal delay={70}>
-              <div className="h-full rounded-2xl border border-line bg-paper p-7">
+              <div className="h-full rounded-none border border-line bg-paper p-7">
                 <h3 className="font-display text-[1.3rem] font-medium text-ink">Not designed to hold</h3>
                 <ul className="mt-5 space-y-3">
                   {NOT_DESIGNED_TO_HOLD.map((i) => (
@@ -129,7 +129,7 @@ export default function MarketingSecurity() {
           <Reveal>
             <SectionTitle eyebrow="How access works" title="The controls that are actually in place." />
           </Reveal>
-          <dl className="mt-10 grid gap-px overflow-hidden rounded-2xl border border-line bg-line md:grid-cols-2">
+          <dl className="mt-10 grid gap-px overflow-hidden rounded-none border border-line bg-line md:grid-cols-2">
             {CONTROLS.map((c, i) => (
               <Reveal key={c.title} delay={i * 40} className="bg-paper">
                 <div className="h-full p-7">
@@ -157,7 +157,7 @@ export default function MarketingSecurity() {
                 'We are not offering a BAA at this time.',
                 'No software is unhackable, and we won’t pretend otherwise.',
               ].map((i) => (
-                <li key={i} className="flex gap-3 rounded-lg bg-paper/8 p-4 text-[14px] leading-relaxed text-paper/85">
+                <li key={i} className="flex gap-3 rounded-[2px] bg-paper/8 p-4 text-[14px] leading-relaxed text-paper/85">
                   <X className="mt-0.5 h-4 w-4 shrink-0 text-paper/50" />
                   {i}
                 </li>
@@ -173,7 +173,7 @@ export default function MarketingSecurity() {
 
       <section>
         <Shell className="py-16">
-          <Reveal className="flex flex-col items-start justify-between gap-6 rounded-2xl border border-line bg-paper-2/60 p-8 md:flex-row md:items-center">
+          <Reveal className="flex flex-col items-start justify-between gap-6 rounded-none border border-line bg-paper-2/60 p-8 md:flex-row md:items-center">
             <div>
               <h2 className="font-display text-[1.4rem] font-medium text-ink">Have a specific security question?</h2>
               <p className="mt-2 max-w-xl text-[14.5px] leading-relaxed text-ink-soft">
@@ -182,12 +182,12 @@ export default function MarketingSecurity() {
               </p>
             </div>
             <div className="flex shrink-0 gap-3">
-              <Link to="/start" className="rounded-full bg-plum px-6 py-3.5 text-[14.5px] font-medium text-white">
+              <Link to="/start" className="rounded-none bg-plum px-6 py-3.5 text-[14.5px] font-medium text-white">
                 Ask us
               </Link>
               <Link
                 to="/privacy"
-                className="rounded-full border border-line bg-white px-6 py-3.5 text-[14.5px] font-medium text-ink"
+                className="rounded-none border border-line bg-white px-6 py-3.5 text-[14.5px] font-medium text-ink"
               >
                 Privacy &amp; Terms
               </Link>

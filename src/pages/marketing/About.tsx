@@ -49,7 +49,7 @@ export default function MarketingAbout() {
           <Reveal>
             <SectionTitle eyebrow="What we believe" title="Four positions that shape the product." />
           </Reveal>
-          <div className="mt-10 grid gap-px overflow-hidden rounded-2xl border border-line bg-line md:grid-cols-2">
+          <div className="mt-10 grid gap-px overflow-hidden rounded-none border border-line bg-line md:grid-cols-2">
             {[
               [
                 'Independent practices deserve real operational software.',
@@ -100,7 +100,7 @@ export default function MarketingAbout() {
           </h2>
           <Link
             to="/start"
-            className="mt-8 inline-block rounded-full bg-paper px-7 py-3.5 text-[14.5px] font-medium text-plum-deep transition-transform hover:-translate-y-0.5"
+            className="mt-8 inline-block rounded-none bg-paper px-7 py-3.5 text-[14.5px] font-medium text-plum-deep transition-transform hover:-translate-y-0.5"
           >
             Talk to us
           </Link>

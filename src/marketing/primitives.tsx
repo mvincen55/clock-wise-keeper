@@ -98,7 +98,7 @@ export function Shell({ children, className }: { children: ReactNode; className?
 /** A small honest label used anywhere something is not shipped yet. */
 export function StatusTag({ children }: { children: ReactNode }) {
   return (
-    <span className="ml-2 inline-flex items-center rounded-full border border-line bg-paper-2 px-2 py-0.5 align-middle font-mono text-[10px] uppercase tracking-[0.12em] text-ink-soft">
+    <span className="ml-2 inline-flex items-center rounded-none border border-line bg-paper-2 px-2 py-0.5 align-middle font-mono text-[10px] uppercase tracking-[0.12em] text-ink-soft">
       {children}
     </span>
   );
@@ -110,7 +110,7 @@ export function Wordmark({ className, tone = 'ink' }: { className?: string; tone
       <span
         aria-hidden
         className={cn(
-          'grid h-7 w-9 place-items-center rounded-[5px] border',
+          'grid h-7 w-9 place-items-center rounded-[2px] border',
           tone === 'ink'
             ? 'border-plum/25 bg-plum text-paper'
             : 'border-paper/30 bg-paper/10 text-paper',

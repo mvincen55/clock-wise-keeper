@@ -97,7 +97,7 @@ export default function MarketingForDental() {
                 <div className="flex items-center gap-3">
                   <Eyebrow>{s.eyebrow}</Eyebrow>
                   {highlighted && (
-                    <span className="rounded-full bg-plum px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-white">
+                    <span className="rounded-none bg-plum px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-white">
                       Your view
                     </span>
                   )}
@@ -107,12 +107,12 @@ export default function MarketingForDental() {
                 </h2>
                 <p className="mt-5 max-w-xl text-[15.5px] leading-relaxed text-ink-soft">{s.body}</p>
 
-                <div className="mt-8 rounded-xl border border-line bg-white/70 p-6">
+                <div className="mt-8 rounded-none border border-line bg-white/70 p-6">
                   <p className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-plum/70">{s.scenario.title}</p>
                   <ol className="mt-4 space-y-3">
                     {s.scenario.steps.map((step, n) => (
                       <li key={step} className="flex gap-3 text-[14px] leading-relaxed text-ink">
-                        <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-plum/10 font-mono text-[10px] text-plum">
+                        <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-none bg-plum/10 font-mono text-[10px] text-plum">
                           {n + 1}
                         </span>
                         {step}
@@ -151,7 +151,7 @@ export default function MarketingForDental() {
           </h2>
           <Link
             to="/start"
-            className="mt-8 inline-block rounded-full bg-paper px-7 py-3.5 text-[14.5px] font-medium text-plum-deep transition-transform hover:-translate-y-0.5"
+            className="mt-8 inline-block rounded-none bg-paper px-7 py-3.5 text-[14.5px] font-medium text-plum-deep transition-transform hover:-translate-y-0.5"
           >
             Talk to us
           </Link>

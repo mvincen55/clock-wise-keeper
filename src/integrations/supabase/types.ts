@@ -4163,6 +4163,54 @@ export type Database = {
           },
         ]
       }
+      marketing_leads: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          ip_hash: string | null
+          name: string
+          note: string | null
+          office_size: string | null
+          practice_name: string | null
+          role: string | null
+          source: string
+          status: string
+          updated_at: string
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          ip_hash?: string | null
+          name: string
+          note?: string | null
+          office_size?: string | null
+          practice_name?: string | null
+          role?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          ip_hash?: string | null
+          name?: string
+          note?: string | null
+          office_size?: string | null
+          practice_name?: string | null
+          role?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       member_onboarding: {
         Row: {
           basics_done_at: string | null

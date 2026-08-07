@@ -135,7 +135,7 @@ export default function MarketingFeatures() {
               <a
                 key={a.id}
                 href={`#${a.id}`}
-                className="rounded-full border border-line bg-white/70 px-3.5 py-1.5 text-[12.5px] text-ink-soft transition-colors hover:border-plum/40 hover:text-plum"
+                className="rounded-none border border-line bg-white/70 px-3.5 py-1.5 text-[12.5px] text-ink-soft transition-colors hover:border-plum/40 hover:text-plum"
               >
                 {a.eyebrow}
               </a>
@@ -186,7 +186,7 @@ export default function MarketingFeatures() {
           </div>
           <Link
             to="/start"
-            className="group inline-flex shrink-0 items-center gap-2 rounded-full bg-paper px-6 py-3.5 text-[14.5px] font-medium text-plum-deep"
+            className="group inline-flex shrink-0 items-center gap-2 rounded-none bg-paper px-6 py-3.5 text-[14.5px] font-medium text-plum-deep"
           >
             Talk to us
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />

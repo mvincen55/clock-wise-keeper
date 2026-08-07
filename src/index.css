@@ -2820,4 +2820,40 @@
       radial-gradient(hsl(var(--pe-ink) / 0.045) 1px, transparent 1px);
     background-size: 22px 22px;
   }
+
+  /* Ledger ruling: the faint horizontal lines of an office form. */
+  .pe-ruled {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      hsl(var(--pe-line) / 0.75) 0px,
+      hsl(var(--pe-line) / 0.75) 1px,
+      transparent 1px,
+      transparent 34px
+    );
+  }
+
+  /* Architectural grid used behind editorial sections. */
+  .pe-grid {
+    background-image:
+      linear-gradient(to right, hsl(var(--pe-line) / 0.7) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--pe-line) / 0.7) 1px, transparent 1px);
+    background-size: 72px 72px;
+  }
+
+  .pe-grid-dark {
+    background-image:
+      linear-gradient(to right, hsl(0 0% 100% / 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(0 0% 100% / 0.07) 1px, transparent 1px);
+    background-size: 72px 72px;
+  }
+
+  /* Hard offset shadow — a stacked sheet of paper, not a soft SaaS glow. */
+  .pe-offset {
+    box-shadow: 10px 10px 0 0 hsl(var(--pe-plum) / 0.1);
+  }
+
+  .pe-offset-deep {
+    box-shadow: 12px 12px 0 0 hsl(var(--pe-plum) / 0.16);
+  }
 }
+
