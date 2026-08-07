@@ -120,7 +120,7 @@ export function BandHead({
       </div>
       <h2
         className={cn(
-          'pe-display mt-4 max-w-[18ch] text-[clamp(2rem,5.6vw,4rem)]',
+          'pe-display pe-display-cap mt-4 max-w-[22ch]',
           paper ? 'text-paper' : 'text-ink',
         )}
       >
