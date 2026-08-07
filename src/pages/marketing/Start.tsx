@@ -87,16 +87,14 @@ export default function MarketingStart() {
       {/* ── Masthead ─────────────────────────────────────────── */}
       <section className="border-b-2 border-ink bg-plum text-paper">
         <div className="pe-blueprint-invert relative">
-          <Shell className="relative grid gap-8 py-14 lg:grid-cols-[1.2fr_0.8fr] lg:items-end lg:gap-16 lg:py-20">
+          <Shell className="relative grid gap-6 py-10 lg:grid-cols-[1.2fr_0.8fr] lg:items-center lg:gap-16 lg:py-12">
             <div>
               <p className="font-mono text-[11.5px] uppercase tracking-[0.22em] text-paper/55">
                 Form 01 · Early access intake
               </p>
-              <h1 className="pe-display mt-5 text-[clamp(2.4rem,8.5vw,6rem)] text-paper">
-                Start Purple Envelope.
-              </h1>
+              <h1 className="pe-display pe-display-cap mt-4 text-paper">Start Purple Envelope.</h1>
             </div>
-            <EnvelopeMark stroke={2} className="hidden h-auto w-full max-w-[15rem] text-paper/80 lg:block" />
+            <EnvelopeMark stroke={2} className="ml-auto hidden h-auto w-full max-w-[9rem] text-paper/80 lg:block" />
           </Shell>
         </div>
       </section>
