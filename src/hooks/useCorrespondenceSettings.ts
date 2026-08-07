@@ -35,11 +35,13 @@ export function useCorrespondenceSettings() {
     enabled: !!user && !!ctx,
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<CorrespondenceSettings> => {
+      // Explicit row generic: '*' inference degrades to {} for this table
+      // under the narrow letterDb cast (tsc 5.8 + postgrest-js 2.96).
       const { data, error } = await letterDb
         .from('correspondence_settings')
         .select('*')
         .eq('org_id', ctx!.org_id)
-        .maybeSingle();
+        .maybeSingle<CorrespondenceSettingsRow>();
       if (error) throw error;
       return data ? mapRow(data) : DEFAULT_CORRESPONDENCE_SETTINGS;
     },

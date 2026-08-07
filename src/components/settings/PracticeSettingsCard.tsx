@@ -20,13 +20,13 @@ export function PracticeSettingsCard() {
     const dollars = parseFloat(value);
     const cents = Number.isFinite(dollars) ? Math.round(dollars * 100) : 0;
     upsert.mutate({ monthly_collections_target_cents: cents }, {
-      onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
+      onError: (err: Error) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
     });
   };
 
   const handleVisibilityChange = (value: string) => {
     upsert.mutate({ collections_visibility: value }, {
-      onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
+      onError: (err: Error) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
     });
   };
 

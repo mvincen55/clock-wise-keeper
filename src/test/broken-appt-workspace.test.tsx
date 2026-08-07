@@ -141,7 +141,7 @@ describe('decision-first workspace', () => {
     pickNoShow();
     answerNotice('No');
     // No priors → first NS → Rung 2, shown immediately.
-    expect(screen.getByText('Rung 2')).toBeInTheDocument();
+    expect(screen.getByText('Rung 2', { selector: 'span' })).toBeInTheDocument();
     expect(screen.getByText(/Today's code: 9100/i)).toBeInTheDocument();
     // Operational guidance is already on screen — before any mailing info.
     expect(screen.getByText('Appointment note (Dentrix)')).toBeInTheDocument();
@@ -155,7 +155,7 @@ describe('decision-first workspace', () => {
     render(<BrokenAppointments />);
     pickNoShow();
     answerNotice('No');
-    expect(screen.getByText('Rung 2')).toBeInTheDocument();
+    expect(screen.getByText('Rung 2', { selector: 'span' })).toBeInTheDocument();
     // The calculator dialog never opened.
     expect(screen.queryByText(/Business-hour notice calculator/i)).not.toBeInTheDocument();
     cleanup();
@@ -166,7 +166,7 @@ describe('decision-first workspace', () => {
     pickNoShow();
     answerNotice('No');
     setValue('Prior late cancellations', '1');
-    expect(screen.getByText('Rung 3')).toBeInTheDocument();
+    expect(screen.getByText('Rung 3', { selector: 'span' })).toBeInTheDocument();
     expect(screen.getByText(/Letter 9106/i)).toBeInTheDocument();
     cleanup();
   });
@@ -193,7 +193,7 @@ describe('decision-first workspace', () => {
     expect(screen.getByText(/inside the window/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Apply Result/i }));
     // Applied "no" → the rung shows.
-    expect(screen.getByText('Rung 2')).toBeInTheDocument();
+    expect(screen.getByText('Rung 2', { selector: 'span' })).toBeInTheDocument();
     cleanup();
   });
 
@@ -221,7 +221,7 @@ describe('decision-first workspace', () => {
       target: { value: 'Running behind, cancel me please' },
     });
     answerNotice('No');
-    expect(screen.getByText('Rung 1')).toBeInTheDocument();
+    expect(screen.getByText('Rung 1', { selector: 'span' })).toBeInTheDocument();
     expect(screen.getByText(/No Pop-Up required/i)).toBeInTheDocument();
     expect(screen.getByText(/Reply to copy-paste/i)).toBeInTheDocument();
     const note = screen.getByText(/Patient texted to cancel/i);
@@ -252,8 +252,9 @@ describe('conditional Future Appointments (engine-driven)', () => {
     pickNoShow();
     answerNotice('No');
     setValue('Prior late cancellations', '2'); // → Rung 4
-    expect(screen.getByText('Rung 4')).toBeInTheDocument();
-    expect(screen.getByText(/Future appointments/i)).toBeInTheDocument();
+    expect(screen.getByText('Rung 4', { selector: 'span' })).toBeInTheDocument();
+    // The section card (not the letter wording, which also mentions them).
+    expect(screen.getByText(/Future appointments \(canceled/i)).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /Capture from Dentrix/i })).toHaveLength(2);
     cleanup();
   });
