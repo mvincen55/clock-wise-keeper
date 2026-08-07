@@ -158,8 +158,8 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
               Practice operations for independent dental offices. Built inside a working private practice. Not for
               DSOs.
             </p>
-            <p className="pe-display mt-6 max-w-[14ch] text-[1.5rem] text-plum">
-              Only your business, never your patients.
+            <p className="pe-display mt-6 max-w-[16ch] text-[1.5rem] text-plum">
+              Practice guidance, not patient records.
             </p>
           </div>
           <nav aria-label="Product" className="text-[13.5px]">
