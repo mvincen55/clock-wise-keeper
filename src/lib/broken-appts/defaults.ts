@@ -38,6 +38,13 @@ export interface RungBehavior {
   /** Reply template code offered in text mode. */
   replyCode: string | null;
   popUp: 'none' | 'standard' | 'vip' | 'update';
+  /**
+   * True when this rung's outcome ACTS on the patient's future appointments
+   * (Rung 4 cancels them all and lists them in the 9107 letter). The UI
+   * shows a Future Appointments section — and its capture shortcut — only
+   * when this is set; the policy engine, not the screen, decides.
+   */
+  futureAppts: boolean;
 }
 
 /**
@@ -52,6 +59,7 @@ export const RUNG_BEHAVIOR: Record<Rung, RungBehavior> = {
     schedulingStatus: 'May schedule normally.',
     replyCode: 'rung1',
     popUp: 'none',
+    futureAppts: false,
   },
   2: {
     transactionLine: '{{fee}} auto-posted as outstanding balance',
@@ -59,6 +67,7 @@ export const RUNG_BEHAVIOR: Record<Rung, RungBehavior> = {
     schedulingStatus: 'BLOCKED until balance paid + card on file.',
     replyCode: null,
     popUp: 'standard',
+    futureAppts: false,
   },
   3: {
     transactionLine: '{{fee}} posted as outstanding balance',
@@ -70,6 +79,7 @@ export const RUNG_BEHAVIOR: Record<Rung, RungBehavior> = {
       'BLOCKED until balance paid + card on file (collect card now if missing).',
     replyCode: 'rung3',
     popUp: 'standard',
+    futureAppts: false,
   },
   4: {
     transactionLine: '{{fee}} charged to card on file; if no card, post as outstanding + flag OM',
@@ -78,6 +88,7 @@ export const RUNG_BEHAVIOR: Record<Rung, RungBehavior> = {
       'VIP only: cancel ALL future appts; hygiene = VIP text list; doctor = prepay greater of {{prepay_floor}} or est. patient portion, forfeited if broken.',
     replyCode: 'rung4',
     popUp: 'vip',
+    futureAppts: true,
   },
   5: {
     transactionLine: 'Handled under Office Manager process',
@@ -85,6 +96,7 @@ export const RUNG_BEHAVIOR: Record<Rung, RungBehavior> = {
     schedulingStatus: 'HARD STOP — front desk does not handle.',
     replyCode: 'rung5',
     popUp: 'update',
+    futureAppts: false,
   },
 };
 

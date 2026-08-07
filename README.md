@@ -139,6 +139,9 @@ Navigation is a compact destination list; every feature below keeps its own rout
 
 **One letterhead:** every printed letter (Broken Appointment letters included) renders through `OfficeLetterheadSheet` (`.letter-sheet` CSS, `.letter-print-root` portal). Practice identity comes only from `org_branding`. Print checks: `scripts/letter-print-check.tsx`, `scripts/broken-appt-print-check.tsx`, `scripts/signature-generate-check.mjs`.
 
+### Broken Appointments (`/broken-appointments`)
+Decision-first front-desk workspace (no wizard): what happened + was there enough notice (+ history) → the rung, code, and instructions appear immediately; mailing info, Dentrix copy blocks, an interactive ledger checklist (stamped `CODE • MM/DD/YYYY • h:mm AM`, canonical staff codes from `employees.tag`), and the shared-letterhead letter preview all live on one continuous page. The business-hours calculator is optional. Printing appends an **OFFICE COPY — Broken Appointment Documentation** page (never for the patient) recording completed/incomplete actions. The PMS-aware capture assistant (`PmsCaptureDialog`, first profile: Dentrix via `src/lib/pms.ts`) reads the Address panel / Appointments table from a screen share or pasted screenshot with the local tesseract OCR stack — frames, crops, and OCR text live in memory only and are wiped on every exit path (`broken-appt-capture-privacy.test.ts`). The office's PMS is the canonical `org_practice_settings.pms_system` setting.
+
 ### Forms & Consents (`docs/consent-forms-spec.md`)
 | Route | Page | What it does |
 |---|---|---|

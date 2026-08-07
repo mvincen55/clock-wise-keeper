@@ -28,6 +28,7 @@ const PATIENT: BaPatientFields = {
   firstName: 'Ann',
   lastName: 'Example',
   addressLine1: '12 Test Lane',
+  addressLine2: '',
   city: 'Springvale',
   state: 'MA',
   zip: '02100',
@@ -135,5 +136,65 @@ describe('BaLetterSheet — the five shipped letters', () => {
     );
     expect(html).toContain('Warm regards,');
     expect(html).toContain('Northfield Dental Group, LLC');
+  });
+
+  it('Address Line 2 prints when present (Apt/Unit/Suite)', () => {
+    const html = renderToStaticMarkup(
+      <BaLetterSheet
+        branding={BRANDING}
+        settings={SETTINGS}
+        body={LETTERS[0].body}
+        patient={{ ...PATIENT, addressLine2: 'Apt 3B' }}
+        todayISO="2026-08-03"
+      />
+    );
+    expect(html).toContain('Apt 3B');
+  });
+
+  it('a blank Address Line 2 vanishes — no empty line in the block', () => {
+    const html = render('9101A');
+    expect(html).not.toContain('Apt 3B');
+    // The recipient block holds exactly name, street, city line.
+    const block = html.match(/letter-recipient"><div>(.*?)<\/div><\/div>/);
+    expect(block).toBeTruthy();
+  });
+
+  it('the shared-correspondence signer overrides the module settings row', () => {
+    const html = renderToStaticMarkup(
+      <BaLetterSheet
+        branding={BRANDING}
+        settings={SETTINGS}
+        body={LETTERS[0].body}
+        patient={PATIENT}
+        todayISO="2026-08-03"
+        signer={{
+          closing: 'Kind regards,',
+          name: 'Dr. Alice Signer',
+          title: 'DMD',
+          signatureDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        }}
+      />
+    );
+    expect(html).toContain('Kind regards,');
+    expect(html).toContain('Dr. Alice Signer');
+    expect(html).toContain('DMD');
+    expect(html).toContain('letter-ink');
+    expect(html).not.toContain('Megan Vincent');
+  });
+
+  it('extraPages render after the letter (OFFICE COPY print order)', () => {
+    const html = renderToStaticMarkup(
+      <BaLetterSheet
+        branding={BRANDING}
+        settings={SETTINGS}
+        body={LETTERS[0].body}
+        patient={PATIENT}
+        todayISO="2026-08-03"
+        extraPages={<div className="ba-office-sheet ba-office-sheet--break">OFFICE COPY</div>}
+      />
+    );
+    const letterAt = html.indexOf('letter-closing');
+    const officeAt = html.indexOf('OFFICE COPY');
+    expect(officeAt).toBeGreaterThan(letterAt);
   });
 });

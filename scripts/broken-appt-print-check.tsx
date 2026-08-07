@@ -7,6 +7,12 @@
  *   - 9107 with 12 canceled appointments is exactly TWO pages (letter +
  *     "Attached Appointment List" page) with the inline table replaced by
  *     the attachment note,
+ *   - the OFFICE COPY documentation page prints LAST on its own page
+ *     (letter + office copy = 2 pages; 9107-12-rows + office copy = 3),
+ *     carries DO NOT GIVE TO PATIENT, and keeps incomplete actions visible,
+ *   - Address Line 2 prints when present and leaves no gap when absent,
+ *   - long names/addresses and a long checklist still fit their pages,
+ *   - the shared-signature ink variant prints without a phantom page,
  *   - no letter carries an unresolved {{merge_field}}.
  *
  * Run:  npx vite-node scripts/broken-appt-print-check.tsx
@@ -17,9 +23,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import BaLetterSheet from '@/components/broken-appts/BaLetterSheet';
+import BaOfficeCopySheet, {
+  type OfficeCopyChecklistRow,
+} from '@/components/broken-appts/BaOfficeCopySheet';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
 import { DEFAULT_BA_SETTINGS, DEFAULT_BA_TEMPLATES } from '@/lib/broken-appts/defaults';
-import type { BaCanceledAppt, BaPatientFields } from '@/lib/broken-appts/types';
+import { completionStamp } from '@/lib/broken-appts/checklist';
+import type { LetterSigner } from '@/lib/letters/types';
+import type { BaCanceledAppt, BaPatientFields, Rung } from '@/lib/broken-appts/types';
 
 const OUT = path.resolve(__dirname, '../.repro-ba');
 fs.rmSync(OUT, { recursive: true, force: true });
@@ -51,11 +62,36 @@ const PATIENT: BaPatientFields = {
   firstName: 'Ann',
   lastName: 'Example',
   addressLine1: '12 Test Lane',
+  addressLine2: '',
   city: 'Springvale',
   state: 'MA',
   zip: '02100',
   apptDateISO: '2026-08-10',
 };
+
+const LONG_PATIENT: BaPatientFields = {
+  firstName: 'Alexandriana-Katherine',
+  lastName: 'Vandermeer-Worthington y Fuentes de la Cruz III',
+  addressLine1: '14789 Old Commonwealth Turnpike Extension, Northwest Corner',
+  addressLine2: 'Building C, Suite 2200, Attention Residential Manager',
+  city: 'South Attleborough-Seekonk Crossing',
+  state: 'MA',
+  zip: '02703-4471',
+  apptDateISO: '2026-08-10',
+};
+
+// A 1×1 transparent PNG — enough for Chromium to lay the ink out for real.
+const INK =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+const SIGNER_INK: LetterSigner = {
+  closing: 'Warm regards,',
+  name: 'Megan Vincent',
+  title: 'Office Manager',
+  signatureDataUrl: INK,
+};
+
+const AT = new Date(2026, 7, 7, 10, 47);
 
 const rows = (n: number): BaCanceledAppt[] =>
   Array.from({ length: n }, (_, i) => ({
@@ -65,46 +101,196 @@ const rows = (n: number): BaCanceledAppt[] =>
     visitType: i % 2 ? 'Crown prep and delivery' : 'Prophy + exam',
   }));
 
+const checklistRows = (labels: string[], completed: number): OfficeCopyChecklistRow[] =>
+  labels.map((label, i) => ({
+    label,
+    completion: i < completed ? completionStamp('MEG', AT) : null,
+  }));
+
+const RUNG3_CHECKLIST = ['Post 9101 + $75 fee', 'Post 0002 (letter sent)'];
+const LONG_CHECKLIST = [
+  'Post 9104b (late arrival)',
+  'Post 9100 (auto-fee)',
+  'Post 9107 (letter sent)',
+  'Create unscheduled hygiene appointment',
+  'Cancel remaining hygiene appointments',
+  'Cancel remaining doctor appointments',
+  'Add patient to the VIP text list',
+  'Collect prepayment before doctor visits',
+  'Verify card on file is current',
+  'Update Pop-Up',
+  'Call patient to explain the change',
+  'Notify Office Manager',
+];
+
 const letters = DEFAULT_BA_TEMPLATES.filter(t => t.kind === 'letter');
 const body = (code: string) => letters.find(l => l.code === code)!.body;
 
+const officeCopy = (
+  checklist: OfficeCopyChecklistRow[],
+  opts: { rung?: Rung; patient?: BaPatientFields; startOnNewPage?: boolean } = {}
+) => (
+  <BaOfficeCopySheet
+    patientName={`${(opts.patient ?? PATIENT).firstName} ${(opts.patient ?? PATIENT).lastName}`}
+    apptDateMDY="8/10/2026"
+    eventLabel="Late cancellation"
+    rung={opts.rung ?? 3}
+    eventCode="9101"
+    workflowDateMDY="8/7/2026"
+    staffCode="MEG"
+    checklist={checklist}
+    startOnNewPage={opts.startOnNewPage ?? true}
+  />
+);
+
 interface Variant {
   name: string;
-  code: string;
-  canceledAppts: BaCanceledAppt[];
+  element: React.ReactElement;
   expectedPages: number;
   expectAttachment: boolean;
+  /** Substrings that must appear in the rendered document. */
+  expectTexts?: string[];
+  /** Substrings that must NOT appear. */
+  rejectTexts?: string[];
 }
 
+const letterVariant = (
+  name: string,
+  code: string,
+  opts: {
+    canceledAppts?: BaCanceledAppt[];
+    patient?: BaPatientFields;
+    signer?: LetterSigner;
+    officeCopyRows?: OfficeCopyChecklistRow[];
+  } = {}
+) => ({
+  name,
+  code,
+  element: (
+    <BaLetterSheet
+      branding={BRANDING}
+      settings={DEFAULT_BA_SETTINGS}
+      body={body(code)}
+      patient={opts.patient ?? PATIENT}
+      canceledAppts={opts.canceledAppts ?? []}
+      todayISO="2026-08-03"
+      signer={opts.signer}
+      extraPages={
+        opts.officeCopyRows ? officeCopy(opts.officeCopyRows, { patient: opts.patient }) : undefined
+      }
+    />
+  ),
+});
+
 const VARIANTS: Variant[] = [
-  { name: '9101a', code: '9101A', canceledAppts: [], expectedPages: 1, expectAttachment: false },
-  { name: '0002', code: '0002', canceledAppts: [], expectedPages: 1, expectAttachment: false },
-  { name: '9100a', code: '9100A', canceledAppts: [], expectedPages: 1, expectAttachment: false },
-  { name: '9106', code: '9106', canceledAppts: [], expectedPages: 1, expectAttachment: false },
-  { name: '9107-3rows', code: '9107', canceledAppts: rows(3), expectedPages: 1, expectAttachment: false },
-  { name: '9107-12rows', code: '9107', canceledAppts: rows(12), expectedPages: 2, expectAttachment: true },
+  // The five shipped letters, letter-only — the original single-page gates.
+  { ...letterVariant('9101a', '9101A'), expectedPages: 1, expectAttachment: false },
+  { ...letterVariant('0002', '0002'), expectedPages: 1, expectAttachment: false },
+  { ...letterVariant('9100a', '9100A'), expectedPages: 1, expectAttachment: false },
+  { ...letterVariant('9106', '9106'), expectedPages: 1, expectAttachment: false },
+  {
+    ...letterVariant('9107-3rows', '9107', { canceledAppts: rows(3) }),
+    expectedPages: 1,
+    expectAttachment: false,
+  },
+  {
+    ...letterVariant('9107-12rows', '9107', { canceledAppts: rows(12) }),
+    expectedPages: 2,
+    expectAttachment: true,
+  },
+
+  // The full front-desk package: letter + OFFICE COPY page, printed last.
+  {
+    ...letterVariant('package-office-copy', '0002', {
+      officeCopyRows: checklistRows(RUNG3_CHECKLIST, 1),
+    }),
+    expectedPages: 2,
+    expectAttachment: false,
+    expectTexts: [
+      'OFFICE COPY',
+      'DO NOT GIVE TO PATIENT',
+      'Not completed at time of print',
+      '08/07/2026',
+      '10:47 AM',
+      'MEG',
+    ],
+  },
+  {
+    ...letterVariant('package-9107-office-copy', '9107', {
+      canceledAppts: rows(12),
+      officeCopyRows: checklistRows(RUNG3_CHECKLIST, 2),
+    }),
+    expectedPages: 3,
+    expectAttachment: true,
+    expectTexts: ['OFFICE COPY', 'Attached Appointment List'],
+    rejectTexts: ['Not completed at time of print'],
+  },
+
+  // Address Line 2 prints; long values wrap instead of overflowing.
+  {
+    ...letterVariant('addr-line2', '9100A', {
+      patient: { ...PATIENT, addressLine2: 'Apt 3B' },
+    }),
+    expectedPages: 1,
+    expectAttachment: false,
+    expectTexts: ['Apt 3B'],
+  },
+  {
+    ...letterVariant('long-everything', '9106', {
+      patient: LONG_PATIENT,
+      officeCopyRows: checklistRows(RUNG3_CHECKLIST, 0),
+    }),
+    expectedPages: 2,
+    expectAttachment: false,
+    expectTexts: ['Building C, Suite 2200'],
+  },
+
+  // Shared-signature ink must not add a phantom page (letter-ink rule).
+  {
+    ...letterVariant('signer-ink', '9101A', { signer: SIGNER_INK }),
+    expectedPages: 1,
+    expectAttachment: false,
+  },
+
+  // Office copy standalone (Rung 5 / reply-only): one page, office-only.
+  {
+    name: 'office-copy-alone',
+    element: (
+      <div className="letter-sheet">
+        {officeCopy(checklistRows(['Update Pop-Up', 'Notify Office Manager'], 1), {
+          rung: 5,
+          startOnNewPage: false,
+        })}
+      </div>
+    ),
+    expectedPages: 1,
+    expectAttachment: false,
+    expectTexts: ['OFFICE COPY', 'DO NOT GIVE TO PATIENT', 'Not completed at time of print'],
+  },
+
+  // A long checklist keeps the office page intact (may spill to a 2nd
+  // documentation page, never onto the letter).
+  {
+    ...letterVariant('long-checklist', '9107', {
+      canceledAppts: rows(3),
+      officeCopyRows: checklistRows(LONG_CHECKLIST, 5),
+    }),
+    expectedPages: 2,
+    expectAttachment: false,
+    expectTexts: ['Notify Office Manager', 'Not completed at time of print'],
+  },
 ];
 
 for (const v of VARIANTS) {
   const markup = renderToStaticMarkup(
     <>
       <BrandPrintStyle branding={BRANDING} />
-      <div className="letter-print-root">
-        <BaLetterSheet
-          branding={BRANDING}
-          settings={DEFAULT_BA_SETTINGS}
-          body={body(v.code)}
-          patient={PATIENT}
-          canceledAppts={v.canceledAppts}
-          todayISO="2026-08-03"
-        />
-      </div>
+      <div className="letter-print-root">{v.element}</div>
     </>
   );
   const html = `<!doctype html><html><head><meta charset="utf-8"><style>${preflight}</style><style>${css}</style></head><body>${markup}</body></html>`;
   fs.writeFileSync(path.join(OUT, `${v.name}.html`), html);
 }
-fs.writeFileSync(path.join(OUT, 'variants.json'), JSON.stringify(VARIANTS, null, 2));
 
 async function loadChromium() {
   for (const spec of ['playwright', 'playwright-core', '/opt/node22/lib/node_modules/playwright/index.mjs']) {
@@ -154,6 +340,12 @@ for (const v of VARIANTS) {
   if (v.expectAttachment && !info.hasInlineNote)
     problems.push('letter body missing the "full appointment list is attached" note');
   if (info.text.includes('{{')) problems.push('unresolved merge field in rendered letter');
+  for (const t of v.expectTexts ?? []) {
+    if (!info.text.includes(t)) problems.push(`missing expected text: ${t}`);
+  }
+  for (const t of v.rejectTexts ?? []) {
+    if (info.text.includes(t)) problems.push(`unexpected text present: ${t}`);
+  }
 
   if (problems.length) {
     failures++;
