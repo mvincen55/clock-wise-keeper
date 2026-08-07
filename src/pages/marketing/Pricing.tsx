@@ -68,7 +68,7 @@ export default function MarketingPricing() {
               <div className="rounded-2xl border border-plum/25 bg-white p-8 md:p-10">
                 <div className="flex items-baseline justify-between gap-4">
                   <h2 className="font-display text-[1.6rem] font-medium text-ink">Early access</h2>
-                  <span className="rounded-full border border-line bg-paper-2 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-soft">
+                  <span className="rounded-full border border-line bg-paper-2 px-3 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-soft">
                     Open now
                   </span>
                 </div>
@@ -101,7 +101,7 @@ export default function MarketingPricing() {
             <Reveal delay={70}>
               <div className="rounded-2xl border border-line bg-paper-2/60 p-8">
                 <h2 className="font-display text-[1.35rem] font-medium text-ink">General availability</h2>
-                <span className="mt-3 inline-block rounded-full border border-line bg-white px-3 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-soft">
+                <span className="mt-3 inline-block rounded-full border border-line bg-white px-3 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-soft">
                   Pricing to be published
                 </span>
                 <p className="mt-4 text-[14.5px] leading-relaxed text-ink-soft">

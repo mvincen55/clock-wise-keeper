@@ -129,7 +129,7 @@ export default function MarketingSecurity() {
       {/* masthead */}
       <section className="border-b-2 border-ink">
         <Shell>
-          <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-1 border-b border-ink/15 py-3 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-soft">
+          <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-1 border-b border-ink/15 py-3 font-mono text-[11px] uppercase tracking-[0.2em] text-ink-soft">
             <span>Security &amp; privacy</span>
             <span className="text-plum">Claims constrained to what the code enforces</span>
           </div>

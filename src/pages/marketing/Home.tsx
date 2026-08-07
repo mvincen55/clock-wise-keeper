@@ -64,7 +64,7 @@ export default function MarketingHome() {
       <section className="relative border-b-2 border-ink">
         <Shell>
           {/* running head */}
-          <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-1 border-b border-ink/15 py-3 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-soft">
+          <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-1 border-b border-ink/15 py-3 font-mono text-[11px] uppercase tracking-[0.2em] text-ink-soft">
             <span>Independent dental offices</span>
             <span className="text-plum">No DSOs</span>
             <span className="hidden sm:inline">Built inside a working private practice</span>
@@ -105,7 +105,7 @@ export default function MarketingHome() {
               className="h-auto w-full max-w-[26rem] text-paper/85 lg:max-w-none"
             />
             <div>
-              <p className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-paper/55">The whole idea</p>
+              <p className="font-mono text-[11.5px] uppercase tracking-[0.22em] text-paper/55">The whole idea</p>
               <p className="pe-display mt-5 text-[clamp(1.8rem,4.8vw,3.6rem)] text-paper">
                 You shouldn’t need thirty locations to run a tight ship.
               </p>
@@ -173,7 +173,7 @@ export default function MarketingHome() {
                   <h3 className="pe-display text-[1.35rem] text-ink">{m.title}</h3>
                   <div className="max-w-[58ch]">
                     <p className="text-[14.5px] leading-relaxed text-ink">{m.body}</p>
-                    <p className="mt-3 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-soft">{m.meta}</p>
+                    <p className="mt-3 font-mono text-[11.5px] uppercase tracking-[0.14em] text-ink-soft">{m.meta}</p>
                   </div>
                 </div>
               </Reveal>
@@ -198,7 +198,7 @@ export default function MarketingHome() {
           <Reveal className="mt-14" delay={60}>
             <RoleStoryBlock />
           </Reveal>
-          <p className="mt-12 border-t border-ink/15 pt-4 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-soft">
+          <p className="mt-12 border-t border-ink/15 pt-4 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft">
             This only changes what you read here. Real permissions come from your Purple Envelope account.
           </p>
         </Shell>
@@ -208,7 +208,7 @@ export default function MarketingHome() {
       <section className="border-b-2 border-ink bg-ink text-paper">
         <Shell className="grid gap-10 py-16 lg:grid-cols-[1.1fr_0.9fr] lg:gap-20 lg:py-24">
           <Reveal>
-            <p className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-paper/50">Privacy posture</p>
+            <p className="font-mono text-[11.5px] uppercase tracking-[0.22em] text-paper/50">Privacy posture</p>
             <p className="pe-display mt-6 text-[clamp(2.1rem,6.4vw,4.5rem)] text-paper">
               Only your business,
               <span className="block text-plum-tint">never your patients.</span>
@@ -258,7 +258,7 @@ export default function MarketingHome() {
             </div>
 
             <div className="self-end border-t-2 border-ink pt-6">
-              <p className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-ink-soft">
+              <p className="font-mono text-[11.5px] uppercase tracking-[0.22em] text-ink-soft">
                 Already using Purple Envelope?
               </p>
               <p className="pe-display-tight mt-4 text-[1.2rem] text-ink">
