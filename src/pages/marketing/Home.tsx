@@ -71,45 +71,82 @@ export default function MarketingHome() {
           </div>
         </Shell>
 
-        <Shell className="relative pb-0 pt-10 sm:pt-14">
-          <h1 className="pe-display text-[clamp(2.9rem,12.4vw,9.5rem)] text-ink">
-            <span className="block">Run the</span>
-            <span className="block">office.</span>
-            <span className="mt-2 block text-plum">Without living</span>
-            <span className="block text-plum">at the office.</span>
-          </h1>
+        {/* Two balanced columns at laptop widths: the argument on the left,
+            one restrained piece of product proof on the right. Everything a
+            first-time reader needs sits inside the first viewport at 1280+. */}
+        <Shell className="relative pb-10 pt-8 sm:pt-10 lg:pb-12 lg:pt-12">
+          <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-14">
+            {/* LEFT — headline, plain-language explanation, action. */}
+            <div>
+              <h1 className="pe-display pe-hero-h1 max-w-[15ch] text-ink">
+                <span className="block">Run the office.</span>
+                <span className="block text-plum">Without living</span>
+                <span className="block text-plum">at the office.</span>
+              </h1>
 
-          <div className="mt-10 grid gap-8 border-t-2 border-ink pt-7 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16">
-            <p className="max-w-[46ch] text-[1.0625rem] leading-relaxed text-ink sm:text-[1.15rem]">
-              Purple Envelope is practice-operations software for independent dental offices. Daily workflows,
-              training, office knowledge, forms, requests and accountability live in one place instead of in one
-              person’s memory.
-            </p>
-            <div className="flex flex-wrap items-start gap-0 self-start">
-              <Btn to="/start" tone="plum">
-                Request access
-              </Btn>
-              <Btn href="#what-it-does" tone="ghost" className="border-l-0">
-                What it does
-              </Btn>
+              <p className="mt-7 max-w-[52ch] border-t-2 border-ink pt-6 text-[1.0625rem] leading-relaxed text-ink sm:text-[1.125rem]">
+                Purple Envelope is practice-operations software for independent dental offices. Daily workflows,
+                training, office knowledge, forms, requests and accountability live in one place instead of in one
+                person’s memory.
+              </p>
+
+              <div className="mt-7 flex flex-wrap items-start gap-0">
+                <Btn to="/start" tone="plum">
+                  Request access
+                </Btn>
+                <Btn href="#what-it-does" tone="ghost" className="border-l-0">
+                  What it does
+                </Btn>
+              </div>
+            </div>
+
+            {/* RIGHT — product proof. One panel, real surfaces, no card soup. */}
+            <div className="border-2 border-ink bg-paper-2">
+              <div className="flex items-baseline justify-between border-b-2 border-ink px-5 py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-soft">
+                <span>Manager view · Wednesday</span>
+                <span className="text-plum">4 open</span>
+              </div>
+              <ul>
+                {[
+                  ['Missing punch', 'Tue · needs a reason before payroll'],
+                  ['Closing checklist', 'Bypassed once — follow-up unresolved'],
+                  ['Handbook v4', '3 people have not read the published version'],
+                  ['Time-off request', 'Waiting on you since Monday'],
+                ].map(([label, detail]) => (
+                  <li
+                    key={label}
+                    className="grid grid-cols-[0.6rem_1fr] items-start gap-x-3 border-b border-ink/15 px-5 py-3.5"
+                  >
+                    <span className="mt-[0.45rem] h-1.5 w-1.5 bg-plum" aria-hidden />
+                    <span>
+                      <span className="block text-[14.5px] font-semibold leading-tight text-ink">{label}</span>
+                      <span className="mt-0.5 block text-[13px] leading-snug text-ink-soft">{detail}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="px-5 py-3 font-mono text-[10.5px] uppercase leading-relaxed tracking-[0.14em] text-ink-soft">
+                Illustration of the manager view. Sample office — not real records.
+              </p>
             </div>
           </div>
         </Shell>
 
-        {/* the decisive purple field */}
-        <div className="relative mt-12 bg-plum text-paper">
+        {/* the decisive purple field — begins inside the first viewport so the
+            page reads as continuing, not as a cropped poster */}
+        <div className="relative bg-plum text-paper">
           <div className="pe-blueprint-invert pointer-events-none absolute inset-0 opacity-70" aria-hidden />
-          <Shell className="relative grid items-center gap-10 py-14 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20 lg:py-20">
+          <Shell className="relative grid items-center gap-8 py-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16 lg:py-14">
             <EnvelopeMark
               stroke={2}
-              className="h-auto w-full max-w-[26rem] text-paper/85 lg:max-w-none"
+              className="h-auto w-full max-w-[18rem] text-paper/85 lg:max-w-[22rem]"
             />
             <div>
               <p className="font-mono text-[11.5px] uppercase tracking-[0.22em] text-paper/55">The whole idea</p>
-              <p className="pe-display mt-5 text-[clamp(1.8rem,4.8vw,3.6rem)] text-paper">
+              <p className="pe-display pe-display-cap mt-4 text-paper">
                 You shouldn’t need thirty locations to run a tight ship.
               </p>
-              <p className="mt-6 max-w-[48ch] text-[15px] leading-relaxed text-paper/75">
+              <p className="mt-5 max-w-[52ch] text-[15px] leading-relaxed text-paper/75">
                 Groups buy operational discipline as software. Independent offices get a binder and a good manager.
                 Purple Envelope is for the independents — one office today, with room in the design for a small
                 owner-led group later.
@@ -117,6 +154,7 @@ export default function MarketingHome() {
             </div>
           </Shell>
         </div>
+
       </section>
 
       {/* ═══════════ 02 · THE PROBLEM ═══════════ */}
