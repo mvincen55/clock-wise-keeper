@@ -104,10 +104,10 @@ function BundleRow({
                     <Badge
                       key={item.id}
                       variant={item.requirement === 'required' ? 'default' : 'secondary'}
-                      className="font-normal"
+                      className="max-w-full font-normal"
                     >
-                      {form?.name ?? 'Missing form'}
-                      <span className="ml-1 opacity-70">
+                      <span className="truncate">{form?.name ?? 'Missing form'}</span>
+                      <span className="ml-1 shrink-0 opacity-70">
                         · {item.requirement === 'conditional' && item.conditionLabel
                           ? `if: ${item.conditionLabel}`
                           : REQUIREMENT_LABELS[item.requirement].toLowerCase()}
