@@ -15,8 +15,8 @@ import { EnvelopeMark } from '@/marketing/EnvelopeMark';
 
 const VERIFIED: { claim: string; how: string }[] = [
   {
-    claim: 'One office cannot see another office’s data',
-    how: 'Every operational table is org-scoped and protected by row-level security in the database, so the rule holds no matter which screen or API call is used.',
+    claim: 'Office data is isolated by row-level security',
+    how: 'Core records are scoped to one office by row-level security policies in the database — directly through an office column, or relationally through the employee record on some older tables. The rule is applied by the database, not by the screen.',
   },
   {
     claim: 'Access is invitation-only',
@@ -24,37 +24,38 @@ const VERIFIED: { claim: string; how: string }[] = [
   },
   {
     claim: 'Roles are enforced in the database, not the interface',
-    how: 'Owner, manager and member permissions are evaluated by security-definer role functions inside the database policies. Hiding a button is never the control.',
+    how: 'Owner, manager and member permissions are evaluated by security-definer role functions inside the database policies. Hiding a button is not the control.',
   },
   {
-    claim: 'Time punches are immutable',
-    how: 'Punches are never updated in place. A correction supersedes the original and inserts a new row, so the original fact survives.',
+    claim: 'A time correction preserves the original punch',
+    how: 'The correction workflow does not overwrite a punch. The original is superseded and a new row is added. Where a privileged administrator changes a punch row directly, a database trigger records the change with before and after values.',
   },
   {
     claim: 'Sensitive changes keep who, when, before, after and why',
     how: 'Manual edits to time, deposits, checklists and configuration require a comment and write an audit event with the before/after values.',
   },
   {
-    claim: 'Published policy versions and acknowledgments are immutable',
-    how: 'Publication creates a frozen version. An acknowledgment records the exact version read, and neither can be edited afterwards.',
+    claim: 'Published policy versions and acknowledgments are frozen',
+    how: 'Publication creates a fixed version. An acknowledgment records the exact version read, and database guards reject edits to published history.',
   },
   {
-    claim: 'Nobody can review or approve their own record',
-    how: 'Author and reviewer separation is enforced at the data layer, not left to policy or good manners.',
+    claim: 'A record cannot be signed off by the person it is about',
+    how: 'Accountability and incident countersignatures are rejected by the database function itself when the signer is the subject of the record.',
   },
   {
     claim: 'Private notes and direct messages are scoped to their participants',
-    how: 'Personal notes are author-only. Direct messages and group threads are readable only by participants — including by owners.',
+    how: 'Personal notes are readable only by their author. Direct messages and group threads are readable only by participants — owners included, with no administrative read policy.',
   },
   {
     claim: 'Integrity monitoring reads system signals, not message content',
-    how: 'The integrity layer looks at events such as failed authorisation and tampering signals. It does not scan conversation text.',
+    how: 'The integrity layer records events such as failed authorisation and tampering signals. Conversation text is not one of its inputs.',
   },
   {
-    claim: 'Text sent to AI is scrubbed for identifiers first',
-    how: 'A shared scrubbing layer runs before any model call, and the assistant has no ability to roam the codebase or the raw database.',
+    claim: 'Free text sent to a model is classified and scrubbed first',
+    how: 'Every function that calls a model is listed in a checked allowlist, and the ones carrying staff free text run it through a shared identifier scrubber. A test suite fails if a new AI caller skips either step.',
   },
 ];
+
 
 const BOUNDARIES: { claim: string; how: string }[] = [
   {
