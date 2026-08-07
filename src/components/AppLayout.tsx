@@ -12,6 +12,8 @@ import { useOrgBranding } from '@/hooks/useOrgBranding';
 import NotificationBell from '@/components/NotificationBell';
 import BypassReasonBanner from '@/components/BypassReasonBanner';
 import SupportWidget from '@/components/SupportWidget';
+import SendMomentDialog from '@/components/moments/SendMomentDialog';
+import TeamMomentsReveal from '@/components/moments/TeamMomentsReveal';
 import AppFooter from '@/components/AppFooter';
 import OfficeBrandStyle from '@/components/OfficeBrandStyle';
 import GlobalTimeControl, { ClockProvider } from '@/components/GlobalTimeControl';
@@ -240,6 +242,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 <span className="truncate font-semibold">{officeName}</span>
               </Link>
               <div className="flex items-center gap-1 shrink-0">
+                <SendMomentDialog />
                 <NotificationBell />
                 <Button variant="ghost" size="icon" onClick={privacyLock} className="text-destructive" aria-label="Privacy lock">
                   <ShieldCheck className="h-5 w-5" />
@@ -336,6 +339,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </SheetContent>
             </Sheet>
           </nav>
+
+          {/* Team Moments: anchored, never blocking navigation or clocking. */}
+          <TeamMomentsReveal />
 
           <SupportWidget />
         </div>
