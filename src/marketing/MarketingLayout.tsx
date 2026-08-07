@@ -204,7 +204,8 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
           <Shell className="flex flex-col gap-2 py-5 font-mono text-[11.5px] uppercase tracking-[0.14em] text-ink-soft sm:flex-row sm:items-center sm:justify-between">
             <span>© {new Date().getFullYear()} Purple Envelope</span>
             <span className="normal-case tracking-normal">
-              Not a patient-record system. Not a replacement for your practice management software.
+              Built for practice operations and team guidance. Not a patient chart, and not a replacement for your
+              practice management software.
             </span>
           </Shell>
         </div>
