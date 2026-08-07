@@ -2964,8 +2964,35 @@
     border-top: 2px solid hsl(var(--pe-ink));
   }
 
+  /**
+   * Hero headline scale — deliberately CAPPED.
+   *
+   * Regression guard: a single extreme viewport unit (the old 12.4vw) rendered
+   * a ~172px headline at 1385px, pushed the explanation, the buttons and the
+   * product proof below the fold, and left the right half of the hero empty.
+   * The scale is therefore fluid but bounded, and the desktop step is tuned to
+   * the hero's LEFT COLUMN width, not the full viewport, so the headline
+   * resolves in three intentional lines at laptop widths.
+   */
+  .pe-hero-h1 {
+    font-size: clamp(2.5rem, 8.6vw, 3.6rem);
+  }
+
+  @media (min-width: 1024px) {
+    .pe-hero-h1 {
+      /* 1024 -> ~45px · 1366 -> ~60px · 1440 -> ~63px · capped at 4.5rem */
+      font-size: clamp(2.75rem, 4.4vw, 4.5rem);
+    }
+  }
+
+  /* Secondary display headings follow the same capped discipline. */
+  .pe-display-cap {
+    font-size: clamp(1.7rem, 3.6vw, 2.9rem);
+  }
+
   /* Focus ring used across every marketing control */
   .pe-focus:focus-visible {
+
     outline: 2px solid hsl(var(--pe-plum));
     outline-offset: 2px;
   }
