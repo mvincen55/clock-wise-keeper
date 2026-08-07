@@ -23,13 +23,13 @@ function Frame({
   return (
     <figure
       className={cn(
-        'overflow-hidden rounded-none border border-line bg-white shadow-[0_1px_2px_rgba(30,20,45,0.05),0_24px_50px_-28px_rgba(40,25,70,0.35)]',
+        'overflow-hidden rounded-xl border border-line bg-white shadow-[0_1px_2px_rgba(30,20,45,0.05),0_24px_50px_-28px_rgba(40,25,70,0.35)]',
         className,
       )}
     >
       <div className="flex items-center justify-between gap-3 border-b border-line bg-paper-2/70 px-4 py-2.5">
         <div className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-none bg-plum/25" />
+          <span className="h-2 w-2 rounded-full bg-plum/25" />
           <span className="text-[12px] font-medium text-ink">{title}</span>
         </div>
         {meta && <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-soft">{meta}</span>}
@@ -42,7 +42,7 @@ function Frame({
   );
 }
 
-const dot = 'inline-block h-1.5 w-1.5 rounded-none';
+const dot = 'inline-block h-1.5 w-1.5 rounded-full';
 
 export function AttentionQueueVisual({ className }: { className?: string }) {
   const rows = [
@@ -62,7 +62,7 @@ export function AttentionQueueVisual({ className }: { className?: string }) {
             </div>
             <span
               className={cn(
-                'flex shrink-0 items-center gap-1.5 rounded-none border px-2.5 py-1 text-[11px]',
+                'flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px]',
                 r.tone === 'plum' && 'border-plum/25 bg-plum-tint text-plum',
                 r.tone === 'amber' && 'border-gold/30 bg-gold/10 text-gold',
                 r.tone === 'muted' && 'border-line bg-paper-2 text-ink-soft',
@@ -89,8 +89,8 @@ export function AcknowledgmentVisual({ className }: { className?: string }) {
     <Frame title="Late cancellation policy · v3" meta="Acknowledgments" className={className}>
       <ul className="space-y-2">
         {people.map((p) => (
-          <li key={p.tag} className="flex items-center gap-3 rounded-[2px] border border-line/80 px-3 py-2">
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[2px] bg-plum/10 font-mono text-[11px] font-semibold text-plum">
+          <li key={p.tag} className="flex items-center gap-3 rounded-lg border border-line/80 px-3 py-2">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-plum/10 font-mono text-[11px] font-semibold text-plum">
               {p.tag}
             </span>
             <div className="min-w-0 flex-1">
@@ -99,7 +99,7 @@ export function AcknowledgmentVisual({ className }: { className?: string }) {
             </div>
             <span
               className={cn(
-                'shrink-0 rounded-none px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em]',
+                'shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em]',
                 p.read ? 'bg-plum-tint text-plum' : 'bg-paper-2 text-ink-soft',
               )}
             >
@@ -130,8 +130,8 @@ export function CloseTheDayVisual({ className }: { className?: string }) {
         <span className="font-display text-2xl text-ink">3 of 5</span>
         <span className="font-mono text-[11px] text-ink-soft">4:52 PM ET</span>
       </div>
-      <div className="mb-4 h-1.5 w-full overflow-hidden rounded-none bg-paper-2">
-        <div className="h-full w-3/5 rounded-none bg-plum" />
+      <div className="mb-4 h-1.5 w-full overflow-hidden rounded-full bg-paper-2">
+        <div className="h-full w-3/5 rounded-full bg-plum" />
       </div>
       <ul className="space-y-2">
         {items.map((i) => (
@@ -152,7 +152,7 @@ export function CloseTheDayVisual({ className }: { className?: string }) {
           </li>
         ))}
       </ul>
-      <p className="mt-3 rounded-[2px] border border-gold/25 bg-gold/8 px-3 py-2 text-[11px] leading-relaxed text-ink-soft">
+      <p className="mt-3 rounded-md border border-gold/25 bg-gold/8 px-3 py-2 text-[11px] leading-relaxed text-ink-soft">
         A checklist can gate clock-out, but it never traps anyone at work. A bypass takes a short reason and creates
         follow-up.
       </p>
@@ -169,7 +169,7 @@ export function KnowledgeVisual({ className }: { className?: string }) {
   ];
   return (
     <Frame title="Office knowledge" meta="Handbook & procedures" className={className}>
-      <div className="mb-3 flex items-center gap-2 rounded-[2px] border border-line bg-paper px-3 py-2">
+      <div className="mb-3 flex items-center gap-2 rounded-lg border border-line bg-paper px-3 py-2">
         <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 text-ink-soft" fill="none" stroke="currentColor" strokeWidth="1.6">
           <circle cx="7" cy="7" r="4.5" />
           <path d="M10.5 10.5 14 14" />
@@ -184,7 +184,7 @@ export function KnowledgeVisual({ className }: { className?: string }) {
               <span className="font-mono text-[10px] text-ink-soft">{d.v}</span>
               <span
                 className={cn(
-                  'rounded-none px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em]',
+                  'rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em]',
                   d.state === 'Published' ? 'bg-plum-tint text-plum' : 'bg-paper-2 text-ink-soft',
                 )}
               >
@@ -207,13 +207,13 @@ export function TrainingVisual({ className }: { className?: string }) {
           { name: 'Presenting a treatment estimate', pct: 60 },
           { name: 'Sterilization: instrument cycle', pct: 0 },
         ].map((m) => (
-          <li key={m.name} className="rounded-[2px] border border-line/80 px-3 py-2.5">
+          <li key={m.name} className="rounded-lg border border-line/80 px-3 py-2.5">
             <div className="flex items-center justify-between gap-3">
               <span className="truncate text-[13px] text-ink">{m.name}</span>
               <span className="font-mono text-[11px] text-ink-soft">{m.pct}%</span>
             </div>
-            <div className="mt-2 h-1 w-full overflow-hidden rounded-none bg-paper-2">
-              <div className="h-full rounded-none bg-plum" style={{ width: `${Math.max(m.pct, 2)}%` }} />
+            <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-paper-2">
+              <div className="h-full rounded-full bg-plum" style={{ width: `${Math.max(m.pct, 2)}%` }} />
             </div>
           </li>
         ))}
@@ -236,7 +236,7 @@ export function RequestStatusVisual({ className }: { className?: string }) {
           <li key={s.label} className="relative">
             <span
               className={cn(
-                'absolute -left-5 top-1 h-3 w-3 rounded-none border-2 bg-white',
+                'absolute -left-5 top-1 h-3 w-3 rounded-full border-2 bg-white',
                 s.done ? 'border-plum' : 'border-line',
               )}
             />

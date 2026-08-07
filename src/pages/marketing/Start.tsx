@@ -1,24 +1,34 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import MarketingLayout from '@/marketing/MarketingLayout';
-import { Reveal, Shell, Eyebrow } from '@/marketing/primitives';
-import { supabase } from '@/integrations/supabase/client';
-import { ArrowRight, Check, Loader2 } from 'lucide-react';
+import { Shell } from '@/marketing/primitives';
+import { EnvelopeMark } from '@/marketing/EnvelopeMark';
+import { Loader2 } from 'lucide-react';
 
 /**
- * Early-access inquiry.
+ * Early-access intake.
  *
- * Self-service office creation is not open, so this does not pretend to create
- * an account. The form posts to the `submit-lead` edge function, which stores
- * the inquiry in the isolated `marketing_leads` table (service-role only, never
- * readable by the site) and notifies the team. No third-party CRM or tracker.
+ * Backed by the `submit-lead` edge function (service-role writes into the
+ * isolated `marketing_leads` table; honeypot + per-IP/per-email rate limits
+ * live server-side). The browser can never read the table back.
  */
-const CONTACT_EMAIL = 'hello@purpleenvelope.app';
-
 const SIZES = ['1 doctor', '2 doctors', '3+ doctors'];
 const ROLES = ['Owner / dentist', 'Office manager', 'Team member', 'Something else'];
 
-type FieldErrors = Partial<Record<'name' | 'email', string>>;
+const FN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/submit-lead`;
+const ANON = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+
+const LABEL = 'font-mono text-[10px] uppercase tracking-[0.2em] text-ink-soft';
+const FIELD =
+  'pe-focus w-full rounded-none border-0 border-b border-ink/25 bg-transparent px-0 py-2.5 text-[15px] text-ink outline-none transition-colors focus:border-plum';
+
+type FieldErrors = Partial<Record<'name' | 'email' | 'note' | 'practice_name', string>>;
+
+const STEPS: [string, string][] = [
+  ['You tell us how the office runs today', 'Size, roles, what’s currently held together manually.'],
+  ['We tell you honestly whether it fits', 'Including if it doesn’t, or if it’s too early for you.'],
+  ['We set the office up with you', 'Roles, schedules, policies and the first assignments.'],
+];
 
 export default function MarketingStart() {
   const [name, setName] = useState('');
@@ -29,48 +39,43 @@ export default function MarketingStart() {
   const [note, setNote] = useState('');
   const [website, setWebsite] = useState(''); // honeypot
   const [submitting, setSubmitting] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [formError, setFormError] = useState('');
+  const [done, setDone] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
-  const field =
-    'w-full border border-line bg-paper px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors focus:border-plum';
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    setFormError('');
+    setFormError(null);
     setFieldErrors({});
-
     try {
-      const { data, error } = await supabase.functions.invoke('submit-lead', {
-        body: {
+      const res = await fetch(FN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${ANON}` },
+        body: JSON.stringify({
           name,
           email,
           practice_name: practice,
           role,
           office_size: size,
           note,
-          company_website: website,
-        },
+          website,
+          source: 'start',
+        }),
       });
-
-      const payload = (data ?? {}) as { ok?: boolean; error?: string; fieldErrors?: FieldErrors };
-
-      if (payload.ok) {
-        setSent(true);
-        return;
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        fieldErrors?: FieldErrors;
+      };
+      if (!res.ok || !data.ok) {
+        setFieldErrors(data.fieldErrors ?? {});
+        setFormError(data.error ?? 'Something went wrong. Please try again in a moment.');
+      } else {
+        setDone(true);
       }
-
-      if (payload.fieldErrors) setFieldErrors(payload.fieldErrors);
-      setFormError(
-        payload.error ??
-          (error
-            ? 'Something went wrong sending that. Please try again, or email us directly.'
-            : 'Something went wrong. Please try again.'),
-      );
     } catch {
-      setFormError('Something went wrong sending that. Please try again, or email us directly.');
+      setFormError('We couldn’t reach the server. Please check your connection and try again.');
     } finally {
       setSubmitting(false);
     }
@@ -78,175 +83,178 @@ export default function MarketingStart() {
 
   return (
     <MarketingLayout>
-      <section className="border-b border-line">
-        <Shell className="grid gap-14 py-16 lg:grid-cols-[0.95fr_1.05fr] lg:gap-20 lg:py-20">
-          <Reveal>
-            <span className="h-px w-10 bg-plum" aria-hidden />
-            <Eyebrow className="mt-5">Early access</Eyebrow>
-            <h1 className="mt-4 font-display text-[clamp(2.1rem,5vw,3.4rem)] font-medium leading-[1.03] tracking-[-0.025em] text-ink">
-              Start Purple Envelope.
-            </h1>
-            <p className="mt-6 max-w-lg text-[1.0625rem] leading-relaxed text-ink-soft">
+      {/* ── Masthead ─────────────────────────────────────────── */}
+      <section className="border-b-2 border-ink bg-plum text-paper">
+        <div className="pe-blueprint-invert relative">
+          <Shell className="relative grid gap-8 py-14 lg:grid-cols-[1.2fr_0.8fr] lg:items-end lg:gap-16 lg:py-20">
+            <div>
+              <p className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-paper/55">
+                Form 01 · Early access intake
+              </p>
+              <h1 className="pe-display mt-5 text-[clamp(2.4rem,8.5vw,6rem)] text-paper">
+                Start Purple Envelope.
+              </h1>
+            </div>
+            <EnvelopeMark stroke={2} className="hidden h-auto w-full max-w-[15rem] text-paper/80 lg:block" />
+          </Shell>
+        </div>
+      </section>
+
+      {/* ── Intake sheet ─────────────────────────────────────── */}
+      <section className="border-b-2 border-ink">
+        <Shell className="grid gap-0 lg:grid-cols-[0.85fr_1.15fr]">
+          {/* left column — the honest framing */}
+          <div className="border-ink/15 py-12 lg:border-r lg:py-16 lg:pr-14">
+            <p className="max-w-[44ch] text-[1.0625rem] leading-relaxed text-ink">
               You can’t create an office here with a credit card yet. Purple Envelope is opening to a small number of
-              independent practices, and each one is set up with us directly so policies, schedules and configuration
-              land correctly on day one.
+              independent practices, and each one is set up with us directly.
             </p>
-            <ol className="mt-9 space-y-5 border-l border-line pl-6">
-              {[
-                ['You tell us how the office runs today', 'Size, roles, what’s currently held together manually.'],
-                ['We tell you honestly whether it fits', 'Including if it doesn’t, or if it’s too early for you.'],
-                ['We set the office up with you', 'Roles, schedules, policies and the first assignments.'],
-              ].map(([t, b], i) => (
-                <li key={t} className="relative">
-                  <span className="absolute -left-[31px] grid h-5 w-5 place-items-center border border-line bg-paper font-mono text-[10px] text-plum">
-                    {i + 1}
-                  </span>
-                  <p className="text-[14.5px] font-medium text-ink">{t}</p>
-                  <p className="mt-1 text-[13.5px] leading-relaxed text-ink-soft">{b}</p>
+            <ol className="mt-12">
+              {STEPS.map(([t, b], i) => (
+                <li key={t} className="pe-row grid grid-cols-[3rem_1fr] gap-x-5 py-5 last:border-b last:border-ink/16">
+                  <span className="pe-display text-[1.75rem] leading-none text-plum/35">{`0${i + 1}`}</span>
+                  <div>
+                    <p className="pe-display-tight text-[1.05rem] text-ink">{t}</p>
+                    <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-soft">{b}</p>
+                  </div>
                 </li>
               ))}
             </ol>
-            <p className="mt-9 border-l-2 border-plum bg-paper-2/70 p-5 text-[13.5px] leading-relaxed text-ink-soft">
+            <p className="mt-10 border-l-2 border-plum pl-5 text-[13.5px] leading-relaxed text-ink-soft">
               Already part of an office that uses Purple Envelope? You don’t need this page —{' '}
-              <Link to="/login" className="text-plum underline underline-offset-4">
+              <Link to="/login" className="pe-focus text-plum underline underline-offset-4">
                 log in
-              </Link>{' '}
-              with the account you already use at work. Joining an office is by invitation from your owner or manager.
+              </Link>
+              .
             </p>
-          </Reveal>
+          </div>
 
-          <Reveal delay={70}>
-            {sent ? (
-              <div className="border border-ink/80 bg-white p-8 pe-offset">
-                <div className="grid h-10 w-10 place-items-center border border-plum bg-plum text-white">
-                  <Check className="h-5 w-5" />
-                </div>
-                <h2 className="mt-5 font-display text-[1.5rem] font-medium text-ink">Message received.</h2>
-                <p className="mt-3 text-[14.5px] leading-relaxed text-ink-soft">
-                  Thanks — we have your note and we’ll reply to <span className="text-ink">{email}</span> personally.
-                  We’re a small team inside a working practice, so it may not be instant, but it will be a real answer
-                  from a real person.
+          {/* right column — the sheet */}
+          <div className="py-12 lg:py-16 lg:pl-14">
+            {done ? (
+              <div role="status" aria-live="polite" className="border-2 border-ink p-8">
+                <p className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-plum">Received</p>
+                <h2 className="pe-display mt-4 text-[1.9rem] text-ink">Thank you — it’s in.</h2>
+                <p className="mt-4 max-w-[44ch] text-[14.5px] leading-relaxed text-ink-soft">
+                  We read every one of these ourselves. If Purple Envelope isn’t a fit for your office yet, we’ll tell
+                  you that plainly rather than leaving you waiting.
                 </p>
-                <p className="mt-4 text-[13px] text-ink-soft">
-                  Need to add something? Email{' '}
-                  <a href={`mailto:${CONTACT_EMAIL}`} className="text-plum underline underline-offset-4">
-                    {CONTACT_EMAIL}
-                  </a>
-                  .
-                </p>
+                <Link
+                  to="/features"
+                  className="pe-focus mt-7 inline-block border-b-2 border-plum pb-1 font-mono text-[11px] uppercase tracking-[0.18em] text-plum"
+                >
+                  Keep reading the product tour →
+                </Link>
               </div>
             ) : (
-              <form className="border border-ink/80 bg-white p-7 pe-offset md:p-8" onSubmit={handleSubmit}>
-                <h2 className="font-display text-[1.35rem] font-medium text-ink">Tell us about your office</h2>
-                <p className="mt-1.5 text-[13px] leading-relaxed text-ink-soft">
-                  This goes straight to us. We store your note so we can reply — nothing else, and no third-party
-                  marketing tools.
+              <form onSubmit={submit} noValidate className="border-t-2 border-ink">
+                <p className="py-3 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-soft">
+                  Complete all required lines
                 </p>
 
-                <div className="mt-6 space-y-4">
-                  <label className="block">
-                    <span className="mb-1.5 block text-[12.5px] font-medium text-ink">Your name</span>
-                    <input
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className={field}
-                      placeholder="First and last"
-                      required
-                    />
-                    {fieldErrors.name && <span className="mt-1 block text-[12px] text-destructive">{fieldErrors.name}</span>}
-                  </label>
-                  <label className="block">
-                    <span className="mb-1.5 block text-[12.5px] font-medium text-ink">Email</span>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className={field}
-                      placeholder="you@yourpractice.com"
-                      required
-                    />
-                    {fieldErrors.email && (
-                      <span className="mt-1 block text-[12px] text-destructive">{fieldErrors.email}</span>
-                    )}
-                  </label>
-                  <label className="block">
-                    <span className="mb-1.5 block text-[12.5px] font-medium text-ink">Practice name</span>
-                    <input
-                      value={practice}
-                      onChange={(e) => setPractice(e.target.value)}
-                      className={field}
-                      placeholder="Your office"
-                    />
-                  </label>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="block">
-                      <span className="mb-1.5 block text-[12.5px] font-medium text-ink">Your role</span>
-                      <select value={role} onChange={(e) => setRole(e.target.value)} className={field}>
-                        {ROLES.map((r) => (
-                          <option key={r}>{r}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="block">
-                      <span className="mb-1.5 block text-[12.5px] font-medium text-ink">Office size</span>
-                      <select value={size} onChange={(e) => setSize(e.target.value)} className={field}>
-                        {SIZES.map((s) => (
-                          <option key={s}>{s}</option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                  <label className="block">
-                    <span className="mb-1.5 block text-[12.5px] font-medium text-ink">
-                      What’s currently held together manually?
-                    </span>
-                    <textarea
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      rows={4}
-                      className={`${field} resize-y`}
-                      placeholder="Training, PTO, closing routine, insurance notes…"
-                    />
-                  </label>
-                </div>
-
-                {/* Honeypot — hidden from people, tempting to bots. */}
-                <div aria-hidden className="hidden">
-                  <label>
-                    Company website
-                    <input
-                      tabIndex={-1}
-                      autoComplete="off"
-                      value={website}
-                      onChange={(e) => setWebsite(e.target.value)}
-                    />
-                  </label>
-                </div>
-
                 {formError && (
-                  <p className="mt-5 border-l-2 border-destructive bg-destructive/10 p-3 text-[13px] text-destructive">
+                  <p
+                    role="alert"
+                    className="mb-5 border-l-2 border-destructive bg-destructive/10 p-3 text-[13.5px] text-destructive"
+                  >
                     {formError}
                   </p>
                 )}
 
+                <div className="grid gap-7 sm:grid-cols-2">
+                  <label className="block">
+                    <span className={LABEL}>Your name *</span>
+                    <input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                      autoComplete="name"
+                      aria-invalid={!!fieldErrors.name}
+                      className={FIELD}
+                    />
+                    {fieldErrors.name && <span className="mt-1.5 block text-[12.5px] text-destructive">{fieldErrors.name}</span>}
+                  </label>
+
+                  <label className="block">
+                    <span className={LABEL}>Email *</span>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      autoComplete="email"
+                      aria-invalid={!!fieldErrors.email}
+                      className={FIELD}
+                    />
+                    {fieldErrors.email && (
+                      <span className="mt-1.5 block text-[12.5px] text-destructive">{fieldErrors.email}</span>
+                    )}
+                  </label>
+
+                  <label className="block sm:col-span-2">
+                    <span className={LABEL}>Practice name</span>
+                    <input
+                      value={practice}
+                      onChange={(e) => setPractice(e.target.value)}
+                      autoComplete="organization"
+                      className={FIELD}
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className={LABEL}>Your role</span>
+                    <select value={role} onChange={(e) => setRole(e.target.value)} className={FIELD}>
+                      {ROLES.map((r) => (
+                        <option key={r}>{r}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className={LABEL}>Office size</span>
+                    <select value={size} onChange={(e) => setSize(e.target.value)} className={FIELD}>
+                      {SIZES.map((s) => (
+                        <option key={s}>{s}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block sm:col-span-2">
+                    <span className={LABEL}>How the office runs today</span>
+                    <textarea
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      rows={5}
+                      placeholder="What’s currently held together by one person, a binder, or a group text?"
+                      className={`${FIELD} resize-y border border-ink/25 px-3.5 py-3`}
+                    />
+                    {fieldErrors.note && <span className="mt-1.5 block text-[12.5px] text-destructive">{fieldErrors.note}</span>}
+                  </label>
+                </div>
+
+                {/* honeypot — visually hidden, never focusable */}
+                <div aria-hidden className="absolute left-[-9999px] h-0 w-0 overflow-hidden">
+                  <label>
+                    Website
+                    <input value={website} onChange={(e) => setWebsite(e.target.value)} tabIndex={-1} autoComplete="off" />
+                  </label>
+                </div>
+
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="group mt-6 inline-flex min-h-[50px] w-full items-center justify-center gap-2 border border-plum bg-plum px-6 py-3.5 text-[14.5px] font-medium text-white transition-colors hover:bg-plum-deep disabled:opacity-60"
+                  className="pe-focus mt-10 inline-flex w-full items-center justify-center gap-2 rounded-none bg-plum px-6 py-4 font-mono text-[11px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-plum-deep disabled:opacity-60 sm:w-auto sm:px-12"
                 >
-                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Send it to us
-                  {!submitting && <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />}
+                  {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Send request
                 </button>
-                <p className="mt-3 text-center text-[12px] text-ink-soft">
-                  Or email us directly at{' '}
-                  <a href={`mailto:${CONTACT_EMAIL}`} className="text-plum underline underline-offset-4">
-                    {CONTACT_EMAIL}
-                  </a>
+
+                <p className="mt-5 max-w-[52ch] font-mono text-[10px] uppercase leading-relaxed tracking-[0.14em] text-ink-soft">
+                  Stored only for this conversation. No newsletter, no resale, no patient information.
                 </p>
               </form>
             )}
-          </Reveal>
+          </div>
         </Shell>
       </section>
     </MarketingLayout>

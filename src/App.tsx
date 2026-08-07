@@ -69,6 +69,8 @@ import MarketingSecurity from "@/pages/marketing/Security";
 import MarketingPricing from "@/pages/marketing/Pricing";
 import MarketingAbout from "@/pages/marketing/About";
 import MarketingStart from "@/pages/marketing/Start";
+// TEMPORARY: preview-only design review index (see src/pages/DesignReview.tsx)
+import DesignReview from "@/pages/DesignReview";
 
 const queryClient = new QueryClient();
 
@@ -145,6 +147,8 @@ const router = createBrowserRouter(
             <Route path="/pricing" element={<MarketingPricing />} />
             <Route path="/about" element={<MarketingAbout />} />
             <Route path="/start" element={<MarketingStart />} />
+            {/* TEMPORARY preview-only review index — remove with DesignReview.tsx */}
+            <Route path="/design-review" element={<DesignReview />} />
             <Route path="/workplace" element={<ProtectedRoute><Workplace /></ProtectedRoute>} />
             <Route path="/playbook" element={<ProtectedRoute><Playbook /></ProtectedRoute>} />
             <Route path="/playbook/procedures" element={<ProtectedRoute><PracticeProcedures /></ProtectedRoute>} />

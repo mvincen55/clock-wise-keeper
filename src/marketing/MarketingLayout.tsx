@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { Wordmark, Shell } from './primitives';
-import { Menu, X, ArrowRight } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 
 const NAV = [
   { to: '/features', label: 'Features' },
@@ -21,19 +21,11 @@ export function useTrainingHref(): string {
 
 export default function MarketingLayout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
   const trainingHref = useTrainingHref();
   const { user, isAllowed } = useAuth();
 
   useEffect(() => setOpen(false), [location.pathname]);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
 
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : '';
@@ -42,52 +34,44 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
     };
   }, [open]);
 
+  const navLink = (to: string, label: string) => (
+    <Link
+      key={to + label}
+      to={to}
+      className={cn(
+        'pe-focus font-mono text-[10.5px] uppercase tracking-[0.18em] transition-colors',
+        location.pathname === to ? 'text-plum' : 'text-ink-soft hover:text-ink',
+      )}
+    >
+      {label}
+    </Link>
+  );
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-paper font-sans text-ink">
       <a
         href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-[2px] focus:bg-plum focus:px-4 focus:py-2 focus:text-white"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:bg-plum focus:px-4 focus:py-2 focus:text-white"
       >
         Skip to content
       </a>
 
-      <header
-        className={cn(
-          'sticky top-0 z-40 border-b transition-colors duration-300',
-          scrolled ? 'border-line bg-paper/90 backdrop-blur-md' : 'border-transparent bg-paper',
-        )}
-      >
-        <Shell className="flex h-[68px] items-center justify-between gap-6">
-          <Link to="/" aria-label="Purple Envelope home" className="shrink-0">
+      <header className="sticky top-0 z-40 border-b-2 border-ink bg-paper">
+        <Shell className="flex h-16 items-center justify-between gap-6">
+          <Link to="/" aria-label="Purple Envelope home" className="pe-focus shrink-0">
             <Wordmark />
           </Link>
 
           <nav className="hidden items-center gap-7 lg:flex" aria-label="Primary">
-            {NAV.map((n) => (
-              <Link
-                key={n.to}
-                to={n.to}
-                className={cn(
-                  'relative text-[13.5px] text-ink-soft transition-colors hover:text-ink',
-                  location.pathname === n.to && 'text-ink',
-                )}
-              >
-                {n.label}
-                {location.pathname === n.to && (
-                  <span className="absolute -bottom-1.5 left-0 h-px w-full bg-plum" />
-                )}
-              </Link>
-            ))}
-            <Link to={trainingHref} className="text-[13.5px] text-ink-soft transition-colors hover:text-ink">
-              Training
-            </Link>
+            {NAV.map((n) => navLink(n.to, n.label))}
+            {navLink(trainingHref, 'Training')}
           </nav>
 
-          <div className="hidden items-center gap-3 lg:flex">
+          <div className="hidden items-center gap-0 lg:flex">
             {user && isAllowed ? (
               <Link
                 to="/"
-                className="rounded-none bg-plum px-4 py-2 text-[13.5px] font-medium text-white transition-colors hover:bg-plum-deep"
+                className="pe-focus bg-plum px-5 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-plum-deep"
               >
                 Open your office
               </Link>
@@ -95,16 +79,15 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
               <>
                 <Link
                   to="/login"
-                  className="rounded-none border border-line px-4 py-2 text-[13.5px] text-ink transition-colors hover:border-plum/40 hover:text-plum"
+                  className="pe-focus border-y border-l border-ink px-4 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink transition-colors hover:bg-ink hover:text-paper"
                 >
                   Log in
                 </Link>
                 <Link
                   to="/start"
-                  className="group inline-flex items-center gap-1.5 rounded-none bg-plum px-4 py-2 text-[13.5px] font-medium text-white transition-colors hover:bg-plum-deep"
+                  className="pe-focus bg-plum px-4 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-plum-deep"
                 >
-                  Start Purple Envelope
-                  <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                  Request access
                 </Link>
               </>
             )}
@@ -115,7 +98,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-label={open ? 'Close menu' : 'Open menu'}
-            className="grid h-10 w-10 place-items-center rounded-[2px] border border-line text-ink lg:hidden"
+            className="pe-focus grid h-10 w-10 place-items-center border border-ink text-ink lg:hidden"
           >
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -123,29 +106,39 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
       </header>
 
       {open && (
-        <div className="fixed inset-0 top-[68px] z-40 overflow-y-auto bg-paper lg:hidden">
-          <Shell className="flex flex-col py-6">
+        <div className="fixed inset-0 top-16 z-40 overflow-y-auto bg-paper lg:hidden">
+          <Shell className="flex flex-col py-4">
             {[...NAV, { to: trainingHref, label: 'Training' }].map((n, i) => (
               <Link
                 key={n.label}
                 to={n.to}
-                style={{ animationDelay: `${i * 35}ms` }}
-                className="animate-pe-fade-up border-b border-line py-4 font-display text-xl text-ink"
+                style={{ animationDelay: `${i * 30}ms` }}
+                className="animate-pe-fade-up pe-row flex items-baseline gap-4 py-4"
               >
-                {n.label}
+                <span className="font-mono text-[10px] text-plum">{String(i + 1).padStart(2, '0')}</span>
+                <span className="pe-display text-[1.6rem] text-ink">{n.label}</span>
               </Link>
             ))}
-            <div className="mt-6 flex flex-col gap-3">
+            <div className="mt-6 flex flex-col">
               {user && isAllowed ? (
-                <Link to="/" className="rounded-none bg-plum px-5 py-3.5 text-center font-medium text-white">
+                <Link
+                  to="/"
+                  className="bg-plum px-5 py-4 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-white"
+                >
                   Open your office
                 </Link>
               ) : (
                 <>
-                  <Link to="/start" className="rounded-none bg-plum px-5 py-3.5 text-center font-medium text-white">
-                    Start Purple Envelope
+                  <Link
+                    to="/start"
+                    className="bg-plum px-5 py-4 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-white"
+                  >
+                    Request access
                   </Link>
-                  <Link to="/login" className="rounded-none border border-line px-5 py-3.5 text-center text-ink">
+                  <Link
+                    to="/login"
+                    className="border-x border-b border-ink px-5 py-4 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-ink"
+                  >
                     Log in
                   </Link>
                 </>
@@ -157,21 +150,24 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
 
       <main id="main">{children}</main>
 
-      <footer className="border-t border-line bg-paper-2/60">
-        <Shell className="grid gap-10 py-14 md:grid-cols-[1.4fr_1fr_1fr]">
+      <footer className="border-t-2 border-ink bg-paper">
+        <Shell className="grid gap-10 py-14 md:grid-cols-[1.6fr_1fr_1fr]">
           <div>
             <Wordmark />
-            <p className="mt-4 max-w-xs text-[13.5px] leading-relaxed text-ink-soft">
-              Practice operations software for independent dental offices. Built inside a working private practice.
+            <p className="mt-5 max-w-xs text-[13.5px] leading-relaxed text-ink-soft">
+              Practice operations for independent dental offices. Built inside a working private practice. Not for
+              DSOs.
             </p>
-            <p className="mt-4 font-display text-[15px] text-plum">Only your business, never your patients.</p>
+            <p className="pe-display mt-6 max-w-[14ch] text-[1.5rem] text-plum">
+              Only your business, never your patients.
+            </p>
           </div>
           <nav aria-label="Product" className="text-[13.5px]">
-            <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-soft">Product</p>
-            <ul className="space-y-2.5">
+            <p className="pe-row-heavy pt-3 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-soft">Product</p>
+            <ul className="mt-3 space-y-2.5">
               {NAV.map((n) => (
                 <li key={n.to}>
-                  <Link to={n.to} className="text-ink-soft transition-colors hover:text-plum">
+                  <Link to={n.to} className="pe-focus text-ink-soft transition-colors hover:text-plum">
                     {n.label}
                   </Link>
                 </li>
@@ -179,35 +175,37 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
             </ul>
           </nav>
           <nav aria-label="Access" className="text-[13.5px]">
-            <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-soft">Access</p>
-            <ul className="space-y-2.5">
+            <p className="pe-row-heavy pt-3 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-soft">Access</p>
+            <ul className="mt-3 space-y-2.5">
               <li>
-                <Link to="/login" className="text-ink-soft transition-colors hover:text-plum">
+                <Link to="/login" className="pe-focus text-ink-soft transition-colors hover:text-plum">
                   Log in
                 </Link>
               </li>
               <li>
-                <Link to={trainingHref} className="text-ink-soft transition-colors hover:text-plum">
+                <Link to={trainingHref} className="pe-focus text-ink-soft transition-colors hover:text-plum">
                   Training
                 </Link>
               </li>
               <li>
-                <Link to="/start" className="text-ink-soft transition-colors hover:text-plum">
-                  Early access
+                <Link to="/start" className="pe-focus text-ink-soft transition-colors hover:text-plum">
+                  Request access
                 </Link>
               </li>
               <li>
-                <Link to="/privacy" className="text-ink-soft transition-colors hover:text-plum">
+                <Link to="/privacy" className="pe-focus text-ink-soft transition-colors hover:text-plum">
                   Privacy &amp; Terms
                 </Link>
               </li>
             </ul>
           </nav>
         </Shell>
-        <div className="border-t border-line/70">
-          <Shell className="flex flex-col gap-2 py-5 text-[12px] text-ink-soft sm:flex-row sm:items-center sm:justify-between">
+        <div className="border-t border-ink/15">
+          <Shell className="flex flex-col gap-2 py-5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-soft sm:flex-row sm:items-center sm:justify-between">
             <span>© {new Date().getFullYear()} Purple Envelope</span>
-            <span>Purple Envelope is not a patient-record system and is not a substitute for your practice management software.</span>
+            <span className="normal-case tracking-normal">
+              Not a patient-record system. Not a replacement for your practice management software.
+            </span>
           </Shell>
         </div>
       </footer>

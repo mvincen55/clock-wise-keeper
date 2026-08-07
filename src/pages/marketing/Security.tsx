@@ -1,188 +1,217 @@
 import { Link } from 'react-router-dom';
 import MarketingLayout from '@/marketing/MarketingLayout';
-import { Reveal, SectionTitle, Shell, Eyebrow, StatusTag } from '@/marketing/primitives';
-import { ArrowRight, Lock, ShieldCheck, EyeOff, FileClock, Bot, Users } from 'lucide-react';
+import { Shell, Reveal, BandHead } from '@/marketing/primitives';
+import { EnvelopeMark } from '@/marketing/EnvelopeMark';
 
 /**
- * Security page.
+ * Evidence-led trust page.
  *
- * Every statement here was checked against the actual implementation. Where the
- * product does not yet do something, it says so plainly rather than implying it.
- * If the code changes, this page has to change with it.
+ * Every VERIFIED row below corresponds to something enforced in the database
+ * (RLS policy, constraint, security-definer function) or covered by a test in
+ * src/test. Anything that is only partly true lives under LIMITS. No
+ * certifications, audit badges, compliance absolutes or BAA claims appear
+ * anywhere on this page — none of those exist yet.
  */
 
-const PILLARS = [
+const VERIFIED: { claim: string; how: string }[] = [
   {
-    icon: Users,
-    title: 'One office cannot see another',
-    body:
-      'Every operational record carries the office it belongs to, and the database — not the browser — decides what you are allowed to read or write. Row-level security is enabled across the application tables, and requests are evaluated against your signed-in identity on the server.',
+    claim: 'One office cannot see another office’s data',
+    how: 'Every operational table is org-scoped and protected by row-level security in the database, so the rule holds no matter which screen or API call is used.',
   },
   {
-    icon: Lock,
-    title: 'Invitation only',
-    body:
-      'There is no public sign-up. An account can only reach an office after an owner or manager invites that email address; anything else is refused at sign-in and by the database itself.',
+    claim: 'Access is invitation-only',
+    how: 'Sign-in is gated by a server-side allowlist check. An authenticated account that has not been invited into an office is denied at the boundary, not hidden in the UI.',
   },
   {
-    icon: ShieldCheck,
-    title: 'Roles are enforced on the server',
-    body:
-      'Owner, manager and team member are database-level facts. Hiding a button in the interface is not our access control — the same rules are applied again in the database on every read and write.',
+    claim: 'Roles are enforced in the database, not the interface',
+    how: 'Owner, manager and member permissions are evaluated by security-definer role functions inside the database policies. Hiding a button is never the control.',
   },
   {
-    icon: FileClock,
-    title: 'The record keeps its history',
-    body:
-      'Time punches are never edited in place; corrections supersede the original and both remain. Sensitive changes record who, when, before, after and why. Published policy versions and the acknowledgments against them cannot be quietly rewritten.',
+    claim: 'Time punches are immutable',
+    how: 'Punches are never updated in place. A correction supersedes the original and inserts a new row, so the original fact survives.',
   },
   {
-    icon: EyeOff,
-    title: 'Not everything is management-visible',
-    body:
-      'Private notes are readable only by their author. Direct messages are scoped to their participants. Our monitoring for tampering and abuse looks at system-level signals, not at the contents of your conversations.',
+    claim: 'Sensitive changes keep who, when, before, after and why',
+    how: 'Manual edits to time, deposits, checklists and configuration require a comment and write an audit event with the before/after values.',
   },
   {
-    icon: Bot,
-    title: 'AI features are fenced',
-    body:
-      'Text is scrubbed for identifiers before it is sent to a model, and AI features are wired to a fixed set of office capabilities. AI does not roam the codebase and does not read private message threads.',
+    claim: 'Published policy versions and acknowledgments are immutable',
+    how: 'Publication creates a frozen version. An acknowledgment records the exact version read, and neither can be edited afterwards.',
+  },
+  {
+    claim: 'Nobody can review or approve their own record',
+    how: 'Author and reviewer separation is enforced at the data layer, not left to policy or good manners.',
+  },
+  {
+    claim: 'Private notes and direct messages are scoped to their participants',
+    how: 'Personal notes are author-only. Direct messages and group threads are readable only by participants — including by owners.',
+  },
+  {
+    claim: 'Integrity monitoring reads system signals, not message content',
+    how: 'The integrity layer looks at events such as failed authorisation and tampering signals. It does not scan conversation text.',
+  },
+  {
+    claim: 'Text sent to AI is scrubbed for identifiers first',
+    how: 'A shared scrubbing layer runs before any model call, and the assistant has no ability to roam the codebase or the raw database.',
   },
 ];
 
-const BOUNDARY = [
-  ['What Purple Envelope is for', 'Running the business side of the practice: schedules, time, training, policies, requests, checklists, deposits, office documents.'],
-  ['What it is not', 'A patient record system, a clinical chart, or a replacement for your practice management software.'],
-  ['Patient-facing forms', 'Forms and consents are completed in the browser and handed off — the completed form is not kept as a patient database inside Purple Envelope.'],
-  ['Your responsibility', 'Because staff can type anything into a free-text box, keep patient identifiers out of Purple Envelope unless your office has agreed a compliant workflow with us in writing.'],
+const BOUNDARIES: { claim: string; how: string }[] = [
+  {
+    claim: 'This is not a patient-record system',
+    how: 'Purple Envelope is the business side of the practice. It does not replace your practice management software and is not designed to hold a patient chart.',
+  },
+  {
+    claim: 'Office forms are documents, not a patient database',
+    how: 'Forms and consents are produced and printed as office documents. They are not modelled, indexed or reported on as clinical records.',
+  },
+  {
+    claim: 'Accountability applies upward too',
+    how: 'Owner and manager delays, blocks and unresolved decisions are recorded the same way anyone else’s are. There is no downward-only surveillance mode.',
+  },
+  {
+    claim: 'Delay is not automatically misconduct',
+    how: 'Blocked, snoozed with a reason, awaiting an answer and not-scheduled are distinct states. The system does not collapse them into “late”.',
+  },
 ];
 
-const HONEST = [
-  [
-    'We do not claim a HIPAA certification',
-    'No such certification exists. What we can describe is the boundary above and how access is enforced — and we would rather do that than post a badge.',
-  ],
-  [
-    'Training practice conversations are not fully private yet',
-    'Roleplay attempts are currently visible to office administrators. We are narrowing that so practice dialogue stays with the learner. Until it ships, we will not claim otherwise.',
-  ],
-  [
-    'Some older schedule tables are scoped indirectly',
-    'A few legacy tables inherit their office through the employee record rather than carrying it directly. Access is still enforced; we are migrating them to direct scoping.',
-  ],
-  [
-    'Serious-risk exceptions are disclosed, not hidden',
-    'If a narrow safety or integrity trigger ever surfaces something from private content, it is defined in advance, visible in settings, limited to a structured alert, and access-audited. No transcript dumps.',
-  ],
+const LIMITS: { claim: string; how: string }[] = [
+  {
+    claim: 'Training roleplay attempts are visible to administrators today',
+    how: 'The intent is that practice conversations stay private to the learner. Right now an administrator in your own office can see attempts. We are narrowing this, and we would rather say so than imply otherwise.',
+  },
+  {
+    claim: 'Some legacy scheduling tables are scoped indirectly',
+    how: 'A few older tables inherit their office scope through the employee record rather than carrying an office column of their own. They are still protected, but the scoping is one hop away and is being migrated.',
+  },
+  {
+    claim: 'No certification, audit report or BAA is claimed',
+    how: 'We hold no third-party security certification, have published no external audit, and do not offer a business-associate agreement. When any of that changes, it will be stated here with the date.',
+  },
 ];
+
+function Rows({
+  rows,
+  tone = 'ink',
+}: {
+  rows: { claim: string; how: string }[];
+  tone?: 'ink' | 'paper';
+}) {
+  const paper = tone === 'paper';
+  return (
+    <div className="mt-10">
+      {rows.map((r, i) => (
+        <div
+          key={r.claim}
+          className={`grid gap-x-10 gap-y-2 border-t py-6 last:border-b lg:grid-cols-[4rem_1fr_1.25fr] ${
+            paper ? 'border-paper/25' : 'border-ink/16'
+          }`}
+        >
+          <span
+            className={`font-mono text-[11px] tabular-nums tracking-[0.2em] ${paper ? 'text-paper/45' : 'text-plum'}`}
+          >
+            {String(i + 1).padStart(2, '0')}
+          </span>
+          <h3 className={`pe-display-tight text-[1.1rem] ${paper ? 'text-paper' : 'text-ink'}`}>{r.claim}</h3>
+          <p className={`max-w-[62ch] text-[14.5px] leading-relaxed ${paper ? 'text-paper/70' : 'text-ink-soft'}`}>
+            {r.how}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function MarketingSecurity() {
   return (
     <MarketingLayout>
-      <section className="border-b-2 border-ink/85">
-        <Shell className="py-16 md:py-20">
-          <Reveal className="max-w-3xl">
-            <span className="h-px w-10 bg-plum" aria-hidden />
-            <Eyebrow className="mt-5">Security &amp; privacy</Eyebrow>
-            <h1 className="mt-4 font-display text-[clamp(2.1rem,5vw,3.4rem)] font-medium leading-[1.03] tracking-[-0.025em] text-ink">
-              Only your business,
-              <span className="block text-plum">never your patients.</span>
+      {/* masthead */}
+      <section className="border-b-2 border-ink">
+        <Shell>
+          <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-1 border-b border-ink/15 py-3 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-soft">
+            <span>Security &amp; privacy</span>
+            <span className="text-plum">Claims constrained to what the code enforces</span>
+          </div>
+        </Shell>
+        <Shell className="grid gap-10 py-14 lg:grid-cols-[1.25fr_0.75fr] lg:items-end lg:gap-16 lg:py-20">
+          <div>
+            <h1 className="pe-display text-[clamp(2.4rem,8vw,5.5rem)] text-ink">
+              What we can
+              <span className="block text-plum">actually prove.</span>
             </h1>
-            <p className="mt-6 text-[1.0625rem] leading-relaxed text-ink-soft">
-              This page describes how Purple Envelope actually behaves — what is enforced, what is visible to whom, and
-              what is still being tightened. We would rather be specific and unflattering than vague and reassuring.
+            <p className="mt-8 max-w-[52ch] text-[1.0625rem] leading-relaxed text-ink">
+              No compliance logos, no certification badges, no “bank-grade” adjectives. Below are three lists: what is
+              enforced in the database today, where we deliberately drew a line, and what is not true yet.
             </p>
-          </Reveal>
-        </Shell>
-      </section>
-
-      <section className="border-b border-line bg-paper-2/60">
-        <Shell className="py-18 md:py-20">
-          <Reveal>
-            <SectionTitle eyebrow="How access works" title="Six things that are true of every office." />
-          </Reveal>
-          <div className="mt-12 grid gap-px border border-ink/80 bg-line md:grid-cols-2">
-            {PILLARS.map((p, i) => (
-              <Reveal key={p.title} delay={i * 50} className="bg-paper">
-                <div className="flex h-full gap-5 p-7">
-                  <p.icon className="mt-0.5 h-5 w-5 shrink-0 text-plum" aria-hidden />
-                  <div>
-                    <h3 className="font-display text-[1.2rem] font-medium leading-snug text-ink">{p.title}</h3>
-                    <p className="mt-2.5 text-[13.5px] leading-relaxed text-ink-soft">{p.body}</p>
-                  </div>
-                </div>
-              </Reveal>
-            ))}
           </div>
+          <EnvelopeMark stroke={2} className="hidden h-auto w-full max-w-[14rem] text-plum lg:block" />
         </Shell>
       </section>
 
-      <section className="border-b border-line">
-        <Shell className="grid gap-12 py-20 lg:grid-cols-[0.85fr_1.15fr] lg:gap-20">
+      {/* verified */}
+      <section className="border-b-2 border-ink">
+        <Shell className="py-16 lg:py-24">
           <Reveal>
-            <SectionTitle
-              eyebrow="The patient boundary"
-              title="The line we drew on purpose."
-              lede="Most of the risk in dental software comes from mixing clinical data into everything else. Purple Envelope stays on the operations side of that line."
+            <BandHead
+              index="01"
+              kicker="Verified now"
+              title="Enforced in the database, not in the interface."
+              lede="Each of these is a rule the server applies. Turning off a screen, calling the API directly or changing the client does not get around them."
             />
-          </Reveal>
-          <Reveal delay={70}>
-            <dl className="border-t border-ink/80">
-              {BOUNDARY.map(([term, def]) => (
-                <div key={term} className="grid gap-2 border-b border-line py-5 sm:grid-cols-[0.6fr_1fr] sm:gap-8">
-                  <dt className="font-mono text-[11px] uppercase tracking-[0.12em] text-plum/80">{term}</dt>
-                  <dd className="text-[14px] leading-relaxed text-ink-soft">{def}</dd>
-                </div>
-              ))}
-            </dl>
+            <Rows rows={VERIFIED} />
           </Reveal>
         </Shell>
       </section>
 
-      <section className="border-b border-line bg-paper-2/60">
-        <Shell className="py-20">
+      {/* boundaries */}
+      <section className="border-b-2 border-ink bg-plum text-paper">
+        <div className="pe-blueprint-invert">
+          <Shell className="py-16 lg:py-24">
+            <Reveal>
+              <BandHead
+                index="02"
+                kicker="Explicit boundary"
+                tone="paper"
+                title="Things we chose not to build."
+                lede="These are product decisions, not gaps. They are the reason the sentence “only your business, never your patients” is safe to print."
+              />
+              <Rows rows={BOUNDARIES} tone="paper" />
+            </Reveal>
+          </Shell>
+        </div>
+      </section>
+
+      {/* not yet */}
+      <section className="border-b-2 border-ink bg-paper-2">
+        <Shell className="py-16 lg:py-24">
           <Reveal>
-            <SectionTitle
-              eyebrow="What we will not overstate"
-              title="The honest limits."
-              lede="Anything on this list is either a deliberate boundary or work in progress. It stays here until it is genuinely finished."
+            <BandHead
+              index="03"
+              kicker="Not yet"
+              title="The honest list."
+              lede="A security page that only contains good news is not a security page. These are open, dated by the version of the product you are looking at, and will change here when they change in the code."
             />
+            <Rows rows={LIMITS} />
           </Reveal>
-          <div className="mt-12 grid gap-px border border-ink/80 bg-line md:grid-cols-2">
-            {HONEST.map(([title, body], i) => (
-              <Reveal key={title} delay={i * 50} className="bg-paper">
-                <div className="h-full p-7">
-                  <p className="font-display text-[1.1rem] font-medium leading-snug text-ink">
-                    {title}
-                    {i === 1 && <StatusTag>In progress</StatusTag>}
-                  </p>
-                  <p className="mt-2.5 text-[13.5px] leading-relaxed text-ink-soft">{body}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
         </Shell>
       </section>
 
-      <section className="relative overflow-hidden bg-plum-deep text-paper">
-        <div className="pe-grid-dark pointer-events-none absolute inset-0" aria-hidden />
-        <Shell className="relative py-18 md:py-20">
-          <Reveal className="max-w-2xl">
-            <h2 className="font-display text-[clamp(1.8rem,4vw,2.7rem)] font-medium leading-[1.05] tracking-[-0.02em]">
-              Have a question this page didn’t answer?
-            </h2>
-            <p className="mt-5 text-[15px] leading-relaxed text-paper/70">
-              Ask it before you commit an office to anything. We will answer specifically, including when the answer is
-              “not yet”.
-            </p>
-            <Link
-              to="/start"
-              className="group mt-8 inline-flex min-h-[48px] items-center gap-2 bg-paper px-7 py-3.5 text-[14.5px] font-medium text-plum-deep transition-colors hover:bg-white"
-            >
-              Ask us directly
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </Link>
-          </Reveal>
+      {/* close */}
+      <section>
+        <Shell className="py-16 lg:py-20">
+          <p className="pe-display max-w-[20ch] text-[clamp(1.8rem,5vw,3.4rem)] text-ink">
+            Ask us anything on this page.
+          </p>
+          <p className="mt-6 max-w-[52ch] text-[15px] leading-relaxed text-ink-soft">
+            If a claim here matters to your decision, ask and we will show you the specific rule or test behind it. If
+            we cannot, we will remove the claim.
+          </p>
+          <Link
+            to="/start"
+            className="pe-focus mt-8 inline-block bg-plum px-8 py-4 font-mono text-[11px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-plum-deep"
+          >
+            Request access
+          </Link>
         </Shell>
       </section>
     </MarketingLayout>

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Archivo:wght@400;500;600;700;800;900&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -2821,39 +2821,52 @@
     background-size: 22px 22px;
   }
 
-  /* Ledger ruling: the faint horizontal lines of an office form. */
-  .pe-ruled {
-    background-image: repeating-linear-gradient(
-      to bottom,
-      hsl(var(--pe-line) / 0.75) 0px,
-      hsl(var(--pe-line) / 0.75) 1px,
-      transparent 1px,
-      transparent 34px
-    );
+  /* --- second-pass editorial primitives (sharp, no gradients/blur) --- */
+
+  /* Oversized grotesque display headline */
+  .pe-display {
+    font-family: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    line-height: 0.86;
+    text-transform: uppercase;
   }
 
-  /* Architectural grid used behind editorial sections. */
-  .pe-grid {
+  .pe-display-tight {
+    font-family: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.02;
+  }
+
+  /* Hard hairline construction grid */
+  .pe-blueprint {
     background-image:
-      linear-gradient(to right, hsl(var(--pe-line) / 0.7) 1px, transparent 1px),
-      linear-gradient(to bottom, hsl(var(--pe-line) / 0.7) 1px, transparent 1px);
-    background-size: 72px 72px;
+      linear-gradient(to right, hsl(var(--pe-ink) / 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--pe-ink) / 0.07) 1px, transparent 1px);
+    background-size: 64px 64px;
   }
 
-  .pe-grid-dark {
+  .pe-blueprint-invert {
     background-image:
-      linear-gradient(to right, hsl(0 0% 100% / 0.07) 1px, transparent 1px),
-      linear-gradient(to bottom, hsl(0 0% 100% / 0.07) 1px, transparent 1px);
-    background-size: 72px 72px;
+      linear-gradient(to right, hsl(var(--pe-paper) / 0.09) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--pe-paper) / 0.09) 1px, transparent 1px);
+    background-size: 64px 64px;
   }
 
-  /* Hard offset shadow — a stacked sheet of paper, not a soft SaaS glow. */
-  .pe-offset {
-    box-shadow: 10px 10px 0 0 hsl(var(--pe-plum) / 0.1);
+  /* Editorial index row: label + rule + value */
+  .pe-row {
+    border-top: 1px solid hsl(var(--pe-ink) / 0.16);
   }
 
-  .pe-offset-deep {
-    box-shadow: 12px 12px 0 0 hsl(var(--pe-plum) / 0.16);
+  .pe-row-heavy {
+    border-top: 2px solid hsl(var(--pe-ink));
+  }
+
+  /* Focus ring used across every marketing control */
+  .pe-focus:focus-visible {
+    outline: 2px solid hsl(var(--pe-plum));
+    outline-offset: 2px;
   }
 }
 

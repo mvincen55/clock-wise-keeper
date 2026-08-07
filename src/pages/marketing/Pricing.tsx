@@ -1,122 +1,58 @@
 import { Link } from 'react-router-dom';
 import MarketingLayout from '@/marketing/MarketingLayout';
-import { Reveal, SectionTitle, Shell, Eyebrow, StatusTag } from '@/marketing/primitives';
-import { ArrowRight } from 'lucide-react';
-
-/**
- * Pricing page.
- *
- * Purple Envelope has no published price list yet and no approved commercial
- * commitments. This page states the principles we are designing pricing around
- * and nothing that would bind the business — no per-person figures, no
- * feature-paywall promises, no "locked in forever" language.
- */
+import { Reveal, Shell, Eyebrow, SectionTitle } from '@/marketing/primitives';
+import { Check } from 'lucide-react';
 
 const PRINCIPLES = [
   {
-    n: '01',
-    title: 'Priced for an independent office',
+    title: 'One price for the office',
     body:
-      'The comparison isn’t enterprise software. It’s the hours a manager currently spends chasing follow-up, and the cost of the thing that got missed.',
+      'Not a per-feature maze. An independent practice shouldn’t need a procurement process to figure out what it owes.',
   },
   {
-    n: '02',
-    title: 'Readable, not a matrix',
+    title: 'Priced for one office, built to grow slightly',
     body:
-      'You should be able to explain what you’re paying for in one sentence, without a spreadsheet or a call with a sales engineer.',
+      'A single location is the normal case. A small owner-led group with two or three locations is a shape we’ve kept room for in the design, not a different product tier we’ll upsell you into.',
   },
   {
-    n: '03',
-    title: 'No surprise invoices',
+    title: 'No paywalling the parts that make it work',
     body:
-      'Whatever the final structure is, changes will be told to you plainly and in advance. We are not building a product that quietly grows its own bill.',
+      'Accountability, knowledge and training only work if the whole team is in the system. Charging per person for the people who most need access defeats the point.',
   },
   {
-    n: '04',
-    title: 'The team is not an upsell',
+    title: 'You can leave with your data',
     body:
-      'Accountability only works if everyone in the office is actually in the system. Pricing has to reflect that, not punish it.',
+      'Timesheets, goals and operational reports export. Your office’s records are your office’s records.',
   },
 ];
 
 export default function MarketingPricing() {
   return (
     <MarketingLayout>
-      <section className="border-b-2 border-ink/85">
-        <Shell className="grid gap-12 py-16 md:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:gap-20">
-          <Reveal>
-            <span className="h-px w-10 bg-plum" aria-hidden />
-            <Eyebrow className="mt-5">Pricing</Eyebrow>
-            <h1 className="mt-4 font-display text-[clamp(2.1rem,5vw,3.4rem)] font-medium leading-[1.03] tracking-[-0.025em] text-ink">
-              We haven’t set the price yet.
-              <span className="mt-2 block text-plum">So we’re not going to invent one.</span>
-            </h1>
-            <p className="mt-6 max-w-lg text-[1.0625rem] leading-relaxed text-ink-soft">
-              Purple Envelope is in early access with a small number of independent practices. Standard pricing is
-              still being worked out, and posting a number we might change would be the first dishonest thing on this
-              site.
-              <StatusTag>Early access</StatusTag>
-            </p>
-            <p className="mt-5 max-w-lg text-[14.5px] leading-relaxed text-ink-soft">
-              If you talk to us about early access, you’ll get the actual terms for your office in writing before
-              anything starts. No obligation, and no commitment on this page pretending to be one.
-            </p>
-            <div className="mt-9 flex flex-wrap gap-3">
-              <Link
-                to="/start"
-                className="group inline-flex min-h-[48px] items-center gap-2 border border-plum bg-plum px-6 py-3.5 text-[14.5px] font-medium text-white transition-colors hover:bg-plum-deep"
-              >
-                Ask about early access
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-              <Link
-                to="/features"
-                className="inline-flex min-h-[48px] items-center border border-ink/25 px-6 py-3.5 text-[14.5px] font-medium text-ink transition-colors hover:border-plum hover:text-plum"
-              >
-                See what you’d be paying for
-              </Link>
-            </div>
-          </Reveal>
-
-          <Reveal delay={70}>
-            <div className="border border-ink/80 bg-white p-8 pe-offset">
-              <Eyebrow>What early access means today</Eyebrow>
-              <ul className="mt-6 border-t border-line">
-                {[
-                  ['Set up with us', 'We configure the office with you rather than handing you an empty account.'],
-                  ['Direct line', 'You talk to the people building it, and what you report changes the product.'],
-                  ['Terms in writing', 'Whatever is agreed for your office is written down before you start.'],
-                  ['You can leave', 'Your office data is yours; we are not building a hostage situation.'],
-                ].map(([t, b]) => (
-                  <li key={t} className="border-b border-line py-4">
-                    <p className="text-[14px] font-medium text-ink">{t}</p>
-                    <p className="mt-1 text-[13px] leading-relaxed text-ink-soft">{b}</p>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-6 font-mono text-[10.5px] uppercase leading-relaxed tracking-[0.12em] text-ink-soft">
-                Nothing on this page is a price quote or a contract.
-              </p>
-            </div>
-          </Reveal>
+      <section className="border-b border-line">
+        <Shell className="py-16 md:py-20">
+          <Eyebrow>Pricing</Eyebrow>
+          <h1 className="mt-5 max-w-3xl font-display text-[clamp(2.25rem,5.4vw,3.6rem)] font-medium leading-[1.02] tracking-[-0.025em] text-ink">
+            Launch pricing is being finalized.
+          </h1>
+          <p className="mt-6 max-w-2xl text-[1.0625rem] leading-relaxed text-ink-soft">
+            We’d rather publish nothing than publish a number we’ll change in a month. Purple Envelope is in active
+            development inside a working practice and is opening to a small group of early offices. What we can tell
+            you now is how we intend to price it.
+          </p>
         </Shell>
       </section>
 
-      <section className="border-b border-line bg-paper-2/60">
-        <Shell className="py-20">
+      <section className="border-b border-line bg-paper-2/50">
+        <Shell className="py-16">
           <Reveal>
-            <SectionTitle
-              eyebrow="How we’re thinking about it"
-              title="The principles the price has to satisfy."
-              lede="These are commitments about how we’ll behave, not numbers we can’t honour yet."
-            />
+            <SectionTitle eyebrow="Pricing philosophy" title="Four commitments we’re willing to put in writing." />
           </Reveal>
-          <div className="mt-12 grid gap-px border border-ink/80 bg-line sm:grid-cols-2">
+          <div className="mt-10 grid gap-px overflow-hidden rounded-2xl border border-line bg-line md:grid-cols-2">
             {PRINCIPLES.map((p, i) => (
-              <Reveal key={p.n} delay={i * 50} className="bg-paper">
+              <Reveal key={p.title} delay={i * 50} className="bg-paper">
                 <div className="h-full p-7">
-                  <span className="font-mono text-[11px] tracking-[0.14em] text-plum/70">{p.n}</span>
-                  <h3 className="mt-3 font-display text-[1.25rem] font-medium leading-snug text-ink">{p.title}</h3>
+                  <h3 className="font-display text-[1.2rem] font-medium text-ink">{p.title}</h3>
                   <p className="mt-2.5 text-[13.5px] leading-relaxed text-ink-soft">{p.body}</p>
                 </div>
               </Reveal>
@@ -125,24 +61,77 @@ export default function MarketingPricing() {
         </Shell>
       </section>
 
-      <section className="relative overflow-hidden bg-plum-deep text-paper">
-        <div className="pe-grid-dark pointer-events-none absolute inset-0" aria-hidden />
-        <Shell className="relative py-18 md:py-20">
-          <Reveal className="max-w-2xl">
-            <h2 className="font-display text-[clamp(1.8rem,4vw,2.7rem)] font-medium leading-[1.05] tracking-[-0.02em]">
-              Tell us about the office and we’ll tell you where it stands.
-            </h2>
-            <p className="mt-5 text-[15px] leading-relaxed text-paper/70">
-              Including whether it’s too early for you. That answer is free and we give it often.
-            </p>
-            <Link
-              to="/start"
-              className="group mt-8 inline-flex min-h-[48px] items-center gap-2 bg-paper px-7 py-3.5 text-[14.5px] font-medium text-plum-deep transition-colors hover:bg-white"
-            >
-              Start the conversation
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </Link>
-          </Reveal>
+      <section className="border-b border-line">
+        <Shell className="py-16">
+          <div className="grid gap-10 lg:grid-cols-[1fr_0.85fr] lg:gap-16">
+            <Reveal>
+              <div className="rounded-2xl border border-plum/25 bg-white p-8 md:p-10">
+                <div className="flex items-baseline justify-between gap-4">
+                  <h2 className="font-display text-[1.6rem] font-medium text-ink">Early access</h2>
+                  <span className="rounded-full border border-line bg-paper-2 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-soft">
+                    Open now
+                  </span>
+                </div>
+                <p className="mt-4 text-[15px] leading-relaxed text-ink-soft">
+                  For independent offices willing to use software that is still being built, and to tell us when it’s
+                  wrong. Pricing for early offices is agreed directly and in writing before anything starts.
+                </p>
+                <ul className="mt-7 space-y-3">
+                  {[
+                    'Full access to the shipped product, not a limited demo',
+                    'Direct line to the people building it',
+                    'Your operational reality shapes what gets built next',
+                    'Clear, written terms before you commit to anything',
+                  ].map((i) => (
+                    <li key={i} className="flex gap-3 text-[14px] leading-relaxed text-ink">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-plum" />
+                      {i}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  to="/start"
+                  className="mt-8 inline-block rounded-full bg-plum px-6 py-3.5 text-[14.5px] font-medium text-white transition-colors hover:bg-plum-deep"
+                >
+                  Join early access
+                </Link>
+              </div>
+            </Reveal>
+
+            <Reveal delay={70}>
+              <div className="rounded-2xl border border-line bg-paper-2/60 p-8">
+                <h2 className="font-display text-[1.35rem] font-medium text-ink">General availability</h2>
+                <span className="mt-3 inline-block rounded-full border border-line bg-white px-3 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-soft">
+                  Pricing to be published
+                </span>
+                <p className="mt-4 text-[14.5px] leading-relaxed text-ink-soft">
+                  When standard pricing is set, it will be published on this page in full — the number, what’s
+                  included, and what isn’t.
+                </p>
+                <p className="mt-4 text-[14.5px] leading-relaxed text-ink-soft">
+                  No “contact sales for a quote” theater, no hidden enterprise tier, and no crossed-out prices that
+                  were never real.
+                </p>
+              </div>
+            </Reveal>
+          </div>
+        </Shell>
+      </section>
+
+      <section className="bg-plum-deep text-paper">
+        <Shell className="py-16 text-center">
+          <h2 className="mx-auto max-w-2xl font-display text-[clamp(1.7rem,3.8vw,2.6rem)] font-medium leading-[1.07]">
+            Ask us what it would cost for your office.
+          </h2>
+          <p className="mx-auto mt-4 max-w-xl text-[15px] text-paper/70">
+            We’ll give you a straight answer, including if it isn’t the right time for you yet.
+          </p>
+          <Link
+            to="/start"
+            className="mt-8 inline-block rounded-full bg-paper px-7 py-3.5 text-[14.5px] font-medium text-plum-deep transition-transform hover:-translate-y-0.5"
+          >
+            Talk to us
+          </Link>
         </Shell>
       </section>
     </MarketingLayout>
