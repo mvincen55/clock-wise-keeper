@@ -68,7 +68,8 @@ describe('marketing_leads migration source is present at HEAD', () => {
   });
 
   it('grants nothing to anon or authenticated', () => {
-    const grants = sql.match(/GRANT[^;]+;/gi) ?? [];
+    const withoutComments = sql.replace(/--[^\n]*/g, '');
+    const grants = withoutComments.match(/GRANT[^;]+;/gi) ?? [];
     expect(grants.length).toBeGreaterThan(0);
     for (const g of grants) {
       expect(g).not.toMatch(/\banon\b/i);
