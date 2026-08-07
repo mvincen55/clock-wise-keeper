@@ -59,7 +59,8 @@ export default function MarketingStart() {
           role,
           office_size: size,
           note,
-          website,
+          // Honeypot field name must match the edge function exactly.
+          company_website: website,
           source: 'start',
         }),
       });
