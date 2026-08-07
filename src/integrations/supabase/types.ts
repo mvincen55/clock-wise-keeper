@@ -7256,12 +7256,15 @@ export type Database = {
       }
       team_moments: {
         Row: {
+          claim_expires_at: string | null
+          claimed_at: string | null
           context_label: string | null
           created_at: string
           dismissed_at: string | null
           expires_at: string
           id: string
           message: string | null
+          opened_at: string | null
           org_id: string
           reaction: string
           recipient_employee_id: string
@@ -7271,12 +7274,15 @@ export type Database = {
           sender_user_id: string
         }
         Insert: {
+          claim_expires_at?: string | null
+          claimed_at?: string | null
           context_label?: string | null
           created_at?: string
           dismissed_at?: string | null
           expires_at: string
           id?: string
           message?: string | null
+          opened_at?: string | null
           org_id: string
           reaction: string
           recipient_employee_id: string
@@ -7286,12 +7292,15 @@ export type Database = {
           sender_user_id: string
         }
         Update: {
+          claim_expires_at?: string | null
+          claimed_at?: string | null
           context_label?: string | null
           created_at?: string
           dismissed_at?: string | null
           expires_at?: string
           id?: string
           message?: string | null
+          opened_at?: string | null
           org_id?: string
           reaction?: string
           recipient_employee_id?: string
@@ -8207,6 +8216,34 @@ export type Database = {
       can_read_conv: { Args: { _conv: string }; Returns: boolean }
       can_view_goal: { Args: { _goal_id: string }; Returns: boolean }
       can_view_team_goal: { Args: { _goal_id: string }; Returns: boolean }
+      claim_team_moments: {
+        Args: { p_limit?: number; p_org_id: string }
+        Returns: {
+          claim_expires_at: string | null
+          claimed_at: string | null
+          context_label: string | null
+          created_at: string
+          dismissed_at: string | null
+          expires_at: string
+          id: string
+          message: string | null
+          opened_at: string | null
+          org_id: string
+          reaction: string
+          recipient_employee_id: string
+          recipient_user_id: string
+          revealed_at: string | null
+          sender_employee_id: string
+          sender_user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "team_moments"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      cleanup_team_moments: { Args: never; Returns: number }
       configure_knowledge_acknowledgment: {
         Args: {
           p_due_days?: number
@@ -8594,6 +8631,7 @@ export type Database = {
       }
       my_department: { Args: never; Returns: string }
       my_team: { Args: never; Returns: string }
+      open_team_moments: { Args: { p_ids: string[] }; Returns: number }
       org_staff_directory: {
         Args: { p_org_id: string }
         Returns: {

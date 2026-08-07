@@ -61,7 +61,8 @@ function lanesFor(ctx: RoleContext, urgent: Signal[] = []): RoleLane[] {
       mission: roleMission(role),
       shortcuts: shortcutsFor(role, ctx.tier).slice(0, 4),
       urgent: covering ? urgent : [],
-      note: covering ? 'Covering today' : 'Backup — not assigned today',
+      covering,
+        note: covering ? 'Also covering today' : 'Backup — can cover, not assigned',
     });
   }
   return lanes;

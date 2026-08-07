@@ -318,12 +318,16 @@ export function ViewContext({ context }: { context: RoleContext }) {
       {secondaryLabels.length > 0 && (
         <>
           <span aria-hidden>/</span>
-          <span>
-            Also covering: {secondaryLabels.join(', ')}
-            {coveringTodayLabels.length > 0 ? ' · today' : ''}
-          </span>
+          <span>Backup: {secondaryLabels.join(', ')}</span>
         </>
       )}
+      {coveringTodayLabels.length > 0 && (
+        <>
+          <span aria-hidden>/</span>
+          <span className="text-foreground/70">Also covering today: {coveringTodayLabels.join(', ')}</span>
+        </>
+      )}
+
     </div>
   );
 }
@@ -357,7 +361,7 @@ export function Lane({ lane }: { lane: RoleLane }) {
     <section className={cn('min-w-0', compact && 'border-l-2 border-border pl-4')}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-foreground pb-2">
         <MicroLabel className="text-foreground/70">
-          {compact ? 'Also covering' : 'My work'} · {lane.label}
+          {compact ? (lane.covering ? 'Also covering today' : 'Backup') : 'My work'} · {lane.label}
         </MicroLabel>
         {lane.note && (
           <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{lane.note}</span>

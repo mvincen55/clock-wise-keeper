@@ -61,7 +61,14 @@ export function useOperationalRoles() {
   });
 }
 
-/** Owner/manager: set (replace) an employee's roles and confirm them. */
+/**
+ * Owner/manager: set (replace) an employee's roles and confirm them.
+ *
+ * Editing the ROLE SET never silently changes a coverage window: any dates
+ * already recorded for a role that survives the edit are carried over. A
+ * temporary coverage assignment is created deliberately through
+ * `useSetCoverageWindow`.
+ */
 export function useSetEmployeeRoles() {
   const { user } = useAuth();
   const { data: ctx } = useOrgContext();
@@ -75,6 +82,17 @@ export function useSetEmployeeRoles() {
     }) => {
       if (!user || !ctx) throw new Error('Not authenticated');
       const now = new Date().toISOString();
+
+      const { data: existing } = await supabase
+        .from('employee_operational_roles')
+        .select('operational_role, starts_on, ends_on')
+        .eq('org_id', ctx.org_id)
+        .eq('employee_id', input.employeeId);
+
+      const windows = new Map<string, { starts_on: string | null; ends_on: string | null }>();
+      for (const row of (existing ?? []) as any[]) {
+        windows.set(row.operational_role, { starts_on: row.starts_on, ends_on: row.ends_on });
+      }
 
       await supabase
         .from('employee_operational_roles')
@@ -96,6 +114,9 @@ export function useSetEmployeeRoles() {
           employee_id: input.employeeId,
           operational_role: r.role,
           is_primary: r.is_primary,
+          // A primary role is the standing job, never a dated coverage stint.
+          starts_on: r.is_primary ? null : windows.get(r.role)?.starts_on ?? null,
+          ends_on: r.is_primary ? null : windows.get(r.role)?.ends_on ?? null,
           created_by: user.id,
           confirmed_by: user.id,
           confirmed_at: now,
@@ -106,4 +127,38 @@ export function useSetEmployeeRoles() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['operational-roles'] }),
   });
 }
+
+/**
+ * Owner/manager: give a backup role an explicit coverage window, or clear it
+ * back to permanent-backup capability. This is the ONLY way a role becomes
+ * "covering today" — the dashboard never infers coverage from an undated row.
+ */
+export function useSetCoverageWindow() {
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: {
+      employeeId: string;
+      role: OperationalRole;
+      startsOn: string | null;
+      endsOn: string | null;
+    }) => {
+      if (!ctx) throw new Error('Not authenticated');
+      if (input.startsOn && input.endsOn && input.endsOn < input.startsOn) {
+        throw new Error('Coverage cannot end before it starts');
+      }
+      const { error } = await supabase
+        .from('employee_operational_roles')
+        .update({ starts_on: input.startsOn, ends_on: input.endsOn })
+        .eq('org_id', ctx.org_id)
+        .eq('employee_id', input.employeeId)
+        .eq('operational_role', input.role)
+        .eq('is_primary', false);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['operational-roles'] }),
+  });
+}
+
 

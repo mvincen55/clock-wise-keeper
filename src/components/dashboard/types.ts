@@ -52,7 +52,9 @@ export type RoleLane = {
   shortcuts: Shortcut[];
   /** Time-sensitive items from this role — only elevated when covering today. */
   urgent: Signal[];
-  /** Set when the lane is compact because the person is not covering it today. */
+  /** True only for an explicit, dated coverage assignment that includes today. */
+  covering?: boolean;
+  /** Short state line: "Also covering today" vs "Backup — can cover". */
   note?: string;
 };
 

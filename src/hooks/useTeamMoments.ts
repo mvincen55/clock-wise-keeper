@@ -62,17 +62,22 @@ export function useMomentSettings() {
   });
 }
 
-/** Personal mute / opt-out. */
+/**
+ * Personal mute / opt-out — PER OFFICE. One login can belong to more than one
+ * office, and a preference set in one office must never speak for another, so
+ * every read and write carries both the active org and the user.
+ */
 export function useMomentPrefs() {
   const { data: ctx } = useOrgContext();
   return useQuery({
-    queryKey: ['moment-prefs', ctx?.user_id],
-    enabled: !!ctx?.user_id,
+    queryKey: ['moment-prefs', ctx?.org_id, ctx?.user_id],
+    enabled: !!ctx?.user_id && !!ctx?.org_id,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('moment_prefs')
         .select('*')
+        .eq('org_id', ctx!.org_id)
         .eq('user_id', ctx!.user_id)
         .maybeSingle();
       if (error) throw error;
@@ -92,55 +97,89 @@ export function useUpdateMomentPrefs() {
         .from('moment_prefs')
         .upsert(
           { user_id: ctx.user_id, org_id: ctx.org_id, updated_at: new Date().toISOString(), ...patch },
-          { onConflict: 'user_id' },
+          { onConflict: 'org_id,user_id' },
         );
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['moment-prefs'] }),
     onError: (e: any) => toast({ title: 'Could not save that', description: e.message, variant: 'destructive' }),
+
   });
 }
 
-/** Unrevealed, unexpired moments for the signed-in person. */
-export function usePendingMoments() {
+/**
+ * ATOMIC CLAIM.
+ *
+ * The client no longer reads pending rows and then marks them itself. It asks
+ * the database to hand it a batch: `claim_team_moments` locks the rows with
+ * SKIP LOCKED, stamps a two-minute claim lease, and returns exactly what this
+ * device may show. A second tab or phone opening at the same instant gets a
+ * different (usually empty) batch.
+ *
+ * Guarantee, stated honestly: at most one device shows a given moment at a
+ * time. If this device disappears before confirming, the lease expires and the
+ * moment comes back — so a moment can, in that narrow window, be shown twice.
+ * It is never silently lost.
+ */
+export function useClaimedMoments() {
   const { data: ctx } = useOrgContext();
   return useQuery({
-    queryKey: ['team-moments', 'pending', ctx?.user_id],
-    enabled: !!ctx?.user_id,
-    staleTime: 30 * 1000,
+    queryKey: ['team-moments', 'claimed', ctx?.org_id, ctx?.user_id],
+    enabled: !!ctx?.user_id && !!ctx?.org_id,
+    // A claim is a write: never refetch it in the background or on focus.
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+    retry: false,
     queryFn: async (): Promise<MomentRow[]> => {
-      const { data, error } = await supabase
-        .from('team_moments')
-        .select(SELECT)
-        .eq('recipient_user_id', ctx!.user_id)
-        .is('revealed_at', null)
-        .gt('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: true })
-        .limit(12);
+      const { data, error } = await supabase.rpc('claim_team_moments', {
+        p_org_id: ctx!.org_id,
+        p_limit: 5,
+      });
       if (error) throw error;
-      return (data ?? []) as MomentRow[];
+      return ((data ?? []) as MomentRow[]).sort((a, b) => a.created_at.localeCompare(b.created_at));
     },
   });
 }
 
-/** Everything already seen, plus what this person has sent. */
+/** Confirms the claimed batch was actually presented. Write-once server side. */
+export function useOpenMoments() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (ids.length === 0) return 0;
+      const { data, error } = await supabase.rpc('open_team_moments', { p_ids: ids });
+      if (error) throw error;
+      return (data as number) ?? 0;
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['team-moments', 'history'] });
+    },
+  });
+}
+
+/** Everything already opened, plus what this person has sent — this office. */
 export function useMomentHistory() {
   const { data: ctx } = useOrgContext();
   return useQuery({
-    queryKey: ['team-moments', 'history', ctx?.user_id],
-    enabled: !!ctx?.user_id,
+    queryKey: ['team-moments', 'history', ctx?.org_id, ctx?.user_id],
+    enabled: !!ctx?.user_id && !!ctx?.org_id,
     queryFn: async (): Promise<{ received: MomentRow[]; sent: MomentRow[] }> => {
       const [received, sent] = await Promise.all([
         supabase
           .from('team_moments')
           .select(SELECT)
+          .eq('org_id', ctx!.org_id)
           .eq('recipient_user_id', ctx!.user_id)
-          .not('revealed_at', 'is', null)
+          .not('opened_at', 'is', null)
           .order('created_at', { ascending: false })
           .limit(30),
         supabase
           .from('team_moments')
           .select(SELECT)
+          .eq('org_id', ctx!.org_id)
           .eq('sender_user_id', ctx!.user_id)
           .order('created_at', { ascending: false })
           .limit(30),
@@ -152,26 +191,6 @@ export function useMomentHistory() {
   });
 }
 
-/**
- * Write-once reveal. Safe to call repeatedly and from more than one device: the
- * filter skips rows already marked and the database keeps the first timestamp.
- */
-export function useMarkMomentsRevealed() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (ids: string[]) => {
-      if (ids.length === 0) return;
-      const { error } = await supabase
-        .from('team_moments')
-        .update({ revealed_at: new Date().toISOString() })
-        .in('id', ids)
-        .is('revealed_at', null);
-      if (error) throw error;
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ['team-moments'] });
-    },
-  });
 }
 
 export function useSendMoment() {
