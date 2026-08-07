@@ -134,18 +134,18 @@ export default function MarketingSecurity() {
             <span className="text-plum">Claims constrained to what the code enforces</span>
           </div>
         </Shell>
-        <Shell className="grid gap-10 py-14 lg:grid-cols-[1.25fr_0.75fr] lg:items-end lg:gap-16 lg:py-20">
+        <Shell className="grid gap-8 py-10 lg:grid-cols-[1.25fr_0.75fr] lg:items-center lg:gap-16 lg:py-14">
           <div>
-            <h1 className="pe-display text-[clamp(2.4rem,8vw,5.5rem)] text-ink">
+            <h1 className="pe-display pe-hero-h1 text-ink">
               What we can
               <span className="block text-plum">actually prove.</span>
             </h1>
-            <p className="mt-8 max-w-[52ch] text-[1.0625rem] leading-relaxed text-ink">
+            <p className="mt-6 max-w-[52ch] text-[1.0625rem] leading-relaxed text-ink">
               No compliance logos, no certification badges, no “bank-grade” adjectives. Below are three lists: what is
               enforced in the database today, where we deliberately drew a line, and what is not true yet.
             </p>
           </div>
-          <EnvelopeMark stroke={2} className="hidden h-auto w-full max-w-[14rem] text-plum lg:block" />
+          <EnvelopeMark stroke={2} className="ml-auto hidden h-auto w-full max-w-[10rem] text-plum lg:block" />
         </Shell>
       </section>
 
