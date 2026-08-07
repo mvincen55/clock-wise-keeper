@@ -4366,6 +4366,38 @@ export type Database = {
           },
         ]
       }
+      moment_prefs: {
+        Row: {
+          animations_muted: boolean
+          org_id: string
+          receive_enabled: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          animations_muted?: boolean
+          org_id: string
+          receive_enabled?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          animations_muted?: boolean
+          org_id?: string
+          receive_enabled?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moment_prefs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           actor_user_id: string | null
@@ -5091,6 +5123,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "org_messaging_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_moment_settings: {
+        Row: {
+          allow_message: boolean
+          enabled: boolean
+          history_retention_days: number
+          max_per_pair_per_day: number
+          max_per_sender_per_hour: number
+          org_id: string
+          unseen_expiry_days: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          allow_message?: boolean
+          enabled?: boolean
+          history_retention_days?: number
+          max_per_pair_per_day?: number
+          max_per_sender_per_hour?: number
+          org_id: string
+          unseen_expiry_days?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          allow_message?: boolean
+          enabled?: boolean
+          history_retention_days?: number
+          max_per_pair_per_day?: number
+          max_per_sender_per_hour?: number
+          org_id?: string
+          unseen_expiry_days?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_moment_settings_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: true
             referencedRelation: "orgs"
@@ -7171,6 +7247,76 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_moments: {
+        Row: {
+          context_label: string | null
+          created_at: string
+          dismissed_at: string | null
+          expires_at: string
+          id: string
+          message: string | null
+          org_id: string
+          reaction: string
+          recipient_employee_id: string
+          recipient_user_id: string
+          revealed_at: string | null
+          sender_employee_id: string
+          sender_user_id: string
+        }
+        Insert: {
+          context_label?: string | null
+          created_at?: string
+          dismissed_at?: string | null
+          expires_at: string
+          id?: string
+          message?: string | null
+          org_id: string
+          reaction: string
+          recipient_employee_id: string
+          recipient_user_id: string
+          revealed_at?: string | null
+          sender_employee_id: string
+          sender_user_id: string
+        }
+        Update: {
+          context_label?: string | null
+          created_at?: string
+          dismissed_at?: string | null
+          expires_at?: string
+          id?: string
+          message?: string | null
+          org_id?: string
+          reaction?: string
+          recipient_employee_id?: string
+          recipient_user_id?: string
+          revealed_at?: string | null
+          sender_employee_id?: string
+          sender_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_moments_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_moments_recipient_employee_id_fkey"
+            columns: ["recipient_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_moments_sender_employee_id_fkey"
+            columns: ["sender_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]
