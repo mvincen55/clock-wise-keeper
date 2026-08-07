@@ -7,7 +7,71 @@
  * Nothing here fetches, mutates, or re-implements product logic.
  */
 
+import type { OperationalRole } from '@/lib/schedule-reader/types';
+
 export type Tone = 'urgent' | 'attention' | 'steady' | 'calm';
+
+/** Permission/authority tier — what you are allowed to see and do. */
+export type PermissionTier = 'owner' | 'manager' | 'member';
+
+/** A link into an existing surface. `minTier` hides links the tier cannot open. */
+export type Shortcut = {
+  id: string;
+  label: string;
+  to: string;
+  detail?: string;
+  minTier?: PermissionTier;
+};
+
+/**
+ * The two personalization dimensions, resolved.
+ * Permission tier decides the dashboard MISSION; operational roles decide the
+ * daily WORK surfaced inside it. They are never conflated.
+ */
+export type RoleContext = {
+  tier: PermissionTier;
+  tierLabel: string;
+  primary: OperationalRole | null;
+  primaryLabel: string | null;
+  secondary: OperationalRole[];
+  secondaryLabels: string[];
+  /** Secondary roles whose assignment window covers today. */
+  coveringToday: OperationalRole[];
+  coveringTodayLabels: string[];
+};
+
+/**
+ * One operational-role lane. The primary lane sets emphasis; backup lanes are
+ * compact and sit lower unless the person is covering that role today.
+ */
+export type RoleLane = {
+  role: OperationalRole;
+  label: string;
+  kind: 'primary' | 'backup';
+  mission: string;
+  shortcuts: Shortcut[];
+  /** Time-sensitive items from this role — only elevated when covering today. */
+  urgent: Signal[];
+  /** Set when the lane is compact because the person is not covering it today. */
+  note?: string;
+};
+
+/**
+ * A chart series. Every chart must answer `question` and link into the
+ * workflow that fixes it — no decorative analytics.
+ */
+export type Series = {
+  id: string;
+  title: string;
+  question: string;
+  caption: string;
+  href?: string;
+  /** Optional context line rendered under the chart. */
+  footnote?: string;
+  points: { x: string; value: number; of?: number; muted?: boolean }[];
+  /** Formats the big readout. */
+  format?: 'count' | 'percent' | 'hours';
+};
 
 /** A single actionable line: what it is, how many, where to go. */
 export type Signal = {
@@ -66,6 +130,9 @@ export type DashboardHeader = {
 export type OwnerView = {
   kind: 'owner';
   header: DashboardHeader;
+  roleContext: RoleContext;
+  /** The one chart an owner reads: verified operational trend. */
+  chart: Series | null;
   /** Command strip: the four numbers an owner reads first. */
   figures: Figure[];
   /** Decisions and exceptions that are the owner's to resolve. */
@@ -89,6 +156,10 @@ export type OwnerView = {
 export type ManagerView = {
   kind: 'manager';
   header: DashboardHeader;
+  roleContext: RoleContext;
+  chart: Series | null;
+  /** Compact personal-work lane — never displaces the cockpit. */
+  lanes: RoleLane[];
   figures: Figure[];
   /** Who is here right now. */
   roster: PersonStatus[];
@@ -103,6 +174,10 @@ export type ManagerView = {
 export type MemberView = {
   kind: 'member';
   header: DashboardHeader;
+  roleContext: RoleContext;
+  chart: Series | null;
+  /** Primary role lane first, backup lanes compact underneath. */
+  lanes: RoleLane[];
   /** Today's own status line. */
   status: { label: string; detail: string; tone: Tone };
   /** The single next action. */
