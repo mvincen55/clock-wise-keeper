@@ -134,7 +134,8 @@ describe.runIf(hasPsql)('team_moments constraints', () => {
 
     const updateFn = q(`select prosrc from pg_proc where proname = 'team_moments_guard_update'`);
     expect(updateFn).toContain('cannot be edited after it is sent');
-    expect(updateFn).toContain('NEW.revealed_at := OLD.revealed_at');
+    // reveal is write-once: revealed_at mirrors the first opened_at and can never be reset
+    expect(updateFn).toContain('NEW.revealed_at := COALESCE(OLD.revealed_at, NEW.opened_at)');
   });
 });
 
