@@ -133,6 +133,8 @@ export type OwnerView = {
   roleContext: RoleContext;
   /** The one chart an owner reads: verified operational trend. */
   chart: Series | null;
+  /** Compact lane when the owner also works a chair or the desk. */
+  lanes: RoleLane[];
   /** Command strip: the four numbers an owner reads first. */
   figures: Figure[];
   /** Decisions and exceptions that are the owner's to resolve. */
