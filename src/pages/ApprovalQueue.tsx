@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useOrgChangeRequests, useReviewChangeRequest, ChangeRequestRow } from '@/hooks/useChangeRequests';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import { useConsumedSearchParam, useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -29,12 +31,13 @@ const typeLabels: Record<string, string> = {
   other: 'Other',
 };
 
-function RequestCard({ request, onReview }: { request: ChangeRequestRow; onReview: (r: ChangeRequestRow) => void }) {
+function RequestCard({ request, onReview, highlighted }: { request: ChangeRequestRow; onReview: (r: ChangeRequestRow) => void; highlighted?: boolean }) {
   const badge = statusBadge[request.status] || statusBadge.pending;
   const payload = request.payload || {};
+  const ref = useScrollIntoView<HTMLDivElement>(!!highlighted);
 
   return (
-    <Card className="card-elevated">
+    <Card ref={ref} className={`card-elevated ${highlighted ? DEEP_LINK_HIGHLIGHT : ''}`}>
       <CardContent className="p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -72,9 +75,15 @@ function RequestCard({ request, onReview }: { request: ChangeRequestRow; onRevie
   );
 }
 
+const TAB_VALUES = ['change-requests', 'pto-requests', 'corrections'] as const;
+
 export default function ApprovalQueue() {
   const { data: ctx } = useOrgContext();
-  const [filter, setFilter] = useState('pending');
+  // A notification lands on the right tab with the right card in view.
+  const [searchParams] = useSearchParams();
+  const linkedTab = searchParams.get('tab');
+  const linkedId = useConsumedSearchParam('request');
+  const [filter, setFilter] = useState(linkedId ? 'all' : 'pending');
   const { data: requests, isLoading } = useOrgChangeRequests(filter);
   const reviewMutation = useReviewChangeRequest();
   const { toast } = useToast();
@@ -82,7 +91,9 @@ export default function ApprovalQueue() {
   const [reviewTarget, setReviewTarget] = useState<ChangeRequestRow | null>(null);
   const [reviewDecision, setReviewDecision] = useState<'approved' | 'denied'>('approved');
   const [reviewReason, setReviewReason] = useState('');
-  const [activeTab, setActiveTab] = useState('change-requests');
+  const [activeTab, setActiveTab] = useState(
+    TAB_VALUES.includes(linkedTab as (typeof TAB_VALUES)[number]) ? (linkedTab as string) : 'change-requests'
+  );
   const { data: counts } = useApprovalCounts();
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
@@ -176,18 +187,23 @@ export default function ApprovalQueue() {
           ) : (
             <div className="space-y-3">
               {requests.map(r => (
-                <RequestCard key={r.id} request={r} onReview={setReviewTarget} />
+                <RequestCard
+                  key={r.id}
+                  request={r}
+                  onReview={setReviewTarget}
+                  highlighted={activeTab === 'change-requests' && r.id === linkedId}
+                />
               ))}
             </div>
           )}
         </TabsContent>
 
         <TabsContent value="pto-requests" className="mt-4">
-          <PtoRequestQueue />
+          <PtoRequestQueue highlightId={activeTab === 'pto-requests' ? linkedId : null} />
         </TabsContent>
 
         <TabsContent value="corrections" className="mt-4">
-          <CorrectionQueuePanel />
+          <CorrectionQueuePanel highlightId={activeTab === 'corrections' ? linkedId : null} />
         </TabsContent>
       </Tabs>
 

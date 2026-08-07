@@ -17,6 +17,7 @@ import {
   type AccountabilityReport,
 } from '@/hooks/useAccountability';
 import AccountabilityAuditTimeline from './AccountabilityAuditTimeline';
+import { useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
 
 function ReviewForm({ report }: { report: AccountabilityReport }) {
   const sign = useCountersignAccountabilityReport();
@@ -61,12 +62,16 @@ function ReviewForm({ report }: { report: AccountabilityReport }) {
 }
 
 /** Owner/manager review queue. Only rendered for admins. */
-export default function AccountabilityReviewQueue() {
+export default function AccountabilityReviewQueue({ highlightId }: { highlightId?: string | null }) {
   const { user } = useAuth();
   const { data: ctx } = useOrgContext();
   const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
   const { data: reports = [] } = useOrgAccountabilityReports(isAdmin);
   const { data: employees } = useOrgEmployees();
+  // A sign-off notification lands on the exact record awaiting review.
+  const highlightRef = useScrollIntoView<HTMLDivElement>(
+    !!highlightId && reports.some(r => r.id === highlightId)
+  );
 
   const nameByUser = useMemo(() => {
     const m = new Map<string, string>();
@@ -94,7 +99,11 @@ export default function AccountabilityReviewQueue() {
       </CardHeader>
       <CardContent className="space-y-4 p-4">
         {open.map(r => (
-          <div key={r.id} className="space-y-3 rounded-md border p-3">
+          <div
+            key={r.id}
+            ref={r.id === highlightId ? highlightRef : undefined}
+            className={`space-y-3 rounded-md border p-3 ${r.id === highlightId ? DEEP_LINK_HIGHLIGHT : ''}`}
+          >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-medium">
                 {nameByUser.get(r.subject_user_id ?? '') ?? 'Team member'} ·{' '}

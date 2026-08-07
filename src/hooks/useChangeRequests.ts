@@ -73,14 +73,47 @@ export function useSubmitChangeRequest() {
       payload: Record<string, any>;
     }) => {
       if (!user || !ctx) throw new Error('Not authenticated');
-      const { error } = await supabase.from('change_requests').insert({
-        org_id: ctx.org_id,
-        employee_id: ctx.employee_id,
-        requested_by: user.id,
-        request_type: params.request_type,
-        payload: params.payload as any,
-      });
+      const { data: created, error } = await supabase
+        .from('change_requests')
+        .insert({
+          org_id: ctx.org_id,
+          employee_id: ctx.employee_id,
+          requested_by: user.id,
+          request_type: params.request_type,
+          payload: params.payload as any,
+        })
+        .select('id')
+        .single();
       if (error) throw error;
+
+      // Notify managers about the new request, pointing at the exact row.
+      const { data: managers } = await supabase
+        .from('org_members')
+        .select('user_id')
+        .eq('org_id', ctx.org_id)
+        .in('role', ['owner', 'manager'])
+        .eq('status', 'active');
+
+      const { data: emp } = await supabase
+        .from('employees')
+        .select('display_name')
+        .eq('id', ctx.employee_id)
+        .single();
+
+      const typeLabel = params.request_type.replace(/_/g, ' ');
+      for (const m of managers ?? []) {
+        if (m.user_id === user.id) continue;
+        await createNotification({
+          org_id: ctx.org_id,
+          recipient_user_id: m.user_id,
+          actor_user_id: user.id,
+          notification_type: 'change_request_new',
+          title: 'New Change Request',
+          message: `${emp?.display_name || 'An employee'} submitted a ${typeLabel} request`,
+          related_table: 'change_requests',
+          related_id: created.id,
+        });
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['change-requests'] });

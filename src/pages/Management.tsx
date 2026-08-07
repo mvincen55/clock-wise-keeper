@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useApprovalCounts } from '@/hooks/useApprovalCounts';
+import { useConsumedSearchParam } from '@/hooks/useDeepLink';
 import { OrgSnapshotPanel } from '@/components/OrgSnapshotPanel';
 import PracticeVitalsCard from '@/components/PracticeVitalsCard';
 import AccountabilityReviewQueue from '@/components/accountability/AccountabilityReviewQueue';
@@ -31,6 +32,8 @@ const ADMIN_LINKS = [
 export default function Management() {
   const { data: ctx, isLoading } = useOrgContext();
   const { data: counts } = useApprovalCounts();
+  // An accountability notification lands on the exact record in the queue.
+  const linkedRecordId = useConsumedSearchParam('record');
 
   if (isLoading) {
     return (
@@ -80,7 +83,7 @@ export default function Management() {
         </CardContent>
       </Card>
 
-      <AccountabilityReviewQueue />
+      <AccountabilityReviewQueue highlightId={linkedRecordId} />
 
       <AcknowledgmentEscalationSettingsCard />
 

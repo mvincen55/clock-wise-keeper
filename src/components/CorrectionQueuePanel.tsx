@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useOrgCorrectionRequests, useReviewCorrectionRequest, CorrectionRequestRow } from '@/hooks/useCorrectionRequests';
+import { useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,12 +19,13 @@ const statusBadge: Record<string, { label: string; className: string }> = {
   applied: { label: 'Applied', className: 'bg-primary/20 text-primary' },
 };
 
-function CorrectionCard({ request, onReview }: { request: CorrectionRequestRow; onReview: (r: CorrectionRequestRow) => void }) {
+function CorrectionCard({ request, onReview, highlighted }: { request: CorrectionRequestRow; onReview: (r: CorrectionRequestRow) => void; highlighted?: boolean }) {
   const badge = statusBadge[request.status] || statusBadge.pending;
   const change = request.proposed_change || {};
+  const ref = useScrollIntoView<HTMLDivElement>(!!highlighted);
 
   return (
-    <Card className="card-elevated">
+    <Card ref={ref} className={`card-elevated ${highlighted ? DEEP_LINK_HIGHLIGHT : ''}`}>
       <CardContent className="p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -59,8 +61,9 @@ function CorrectionCard({ request, onReview }: { request: CorrectionRequestRow; 
   );
 }
 
-export function CorrectionQueuePanel() {
-  const [tab, setTab] = useState('pending');
+export function CorrectionQueuePanel({ highlightId }: { highlightId?: string | null }) {
+  // Deep links start on "all" so the request is findable whatever its status.
+  const [tab, setTab] = useState(highlightId ? 'all' : 'pending');
   const { data: requests, isLoading } = useOrgCorrectionRequests(tab);
   const reviewMutation = useReviewCorrectionRequest();
   const { toast } = useToast();
@@ -128,7 +131,7 @@ export function CorrectionQueuePanel() {
           ) : (
             <div className="space-y-3">
               {requests.map(r => (
-                <CorrectionCard key={r.id} request={r} onReview={setReviewTarget} />
+                <CorrectionCard key={r.id} request={r} onReview={setReviewTarget} highlighted={r.id === highlightId} />
               ))}
             </div>
           )}

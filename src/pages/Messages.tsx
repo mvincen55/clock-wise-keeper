@@ -29,6 +29,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useOrgEmployees } from '@/hooks/useEmployees';
+import { useConsumedSearchParam } from '@/hooks/useDeepLink';
 import MessageAttachments from '@/components/MessageAttachments';
 import {
   useConversationAttachments,
@@ -107,7 +108,9 @@ export default function Messages() {
   const { data: employees } = useOrgEmployees();
   const { data: conversations = [], isLoading } = useConversations();
 
-  const [activeId, setActiveId] = useState<string | null>(null);
+  // A message notification opens the exact conversation it came from.
+  const linkedConversationId = useConsumedSearchParam('conversation');
+  const [activeId, setActiveId] = useState<string | null>(linkedConversationId);
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<ConversationType | 'all'>('all');
   const [senderFilter, setSenderFilter] = useState<string>('all');

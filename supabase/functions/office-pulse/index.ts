@@ -320,12 +320,21 @@ async function fireHooks(db: Client, apiKey: string | undefined, orgId: string, 
       }
 
       const message = await say(apiKey, brief, fallback);
+      // Name the table ref_id points into, so the notification can link
+      // straight to the record it is about.
+      const refTable: Record<string, string> = {
+        goal_task_due: "goal_tasks",
+        training_due: "training_assignments",
+        plan_stall: "goals",
+        sprint_verify: "team_goals",
+      };
       await deliver(db, {
         org_id: orgId,
         user_id: hook.user_id,
         kind: hook.kind,
         title,
         message,
+        related_table: refTable[hook.kind] ?? null,
         related_id: hook.ref_id,
         data_refs: payload,
       });

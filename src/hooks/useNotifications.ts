@@ -68,6 +68,7 @@ export function useUnreadCount() {
 }
 
 export function useMarkNotificationRead() {
+  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
@@ -77,7 +78,20 @@ export function useMarkNotificationRead() {
         .eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+    // Optimistic: the unread dot clears the moment the person clicks, and
+    // navigation never waits on the database write.
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ['notifications', user?.id] });
+      const previous = qc.getQueryData<Notification[]>(['notifications', user?.id]);
+      qc.setQueryData<Notification[]>(['notifications', user?.id], old =>
+        old ? old.map(n => (n.id === id ? { ...n, is_read: true } : n)) : old
+      );
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) qc.setQueryData(['notifications', user?.id], context.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 }
 
@@ -94,7 +108,18 @@ export function useMarkAllRead() {
         .eq('is_read', false);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: ['notifications', user?.id] });
+      const previous = qc.getQueryData<Notification[]>(['notifications', user?.id]);
+      qc.setQueryData<Notification[]>(['notifications', user?.id], old =>
+        old ? old.map(n => (n.is_read ? n : { ...n, is_read: true })) : old
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(['notifications', user?.id], context.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 }
 

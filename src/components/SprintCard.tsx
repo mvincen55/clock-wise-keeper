@@ -35,6 +35,7 @@ import {
 } from '@/hooks/useTeamGoals';
 
 import { daysBetween, getToday, shiftDate } from '@/lib/time-utils';
+import { useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
 
 /** Days from today until an Eastern "YYYY-MM-DD" date. */
 function daysLeft(endsOn: string): number {
@@ -227,7 +228,7 @@ function scopeLabel(sprint: TeamGoal) {
 }
 
 /** The sprint card — everyone in scope sees it, and the AI runs it end to end. */
-export default function SprintCard() {
+export default function SprintCard({ highlightId }: { highlightId?: string | null }) {
   const { data: ctx } = useOrgContext();
   const { data } = useTeamGoals();
   const { data: suggestion } = useSprintSuggestion();
@@ -239,6 +240,10 @@ export default function SprintCard() {
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
   const sprint = data?.active ?? null;
+  // A sprint notification scrolls to the card; the ring appears when the
+  // running sprint is the one the notification was about.
+  const highlightRef = useScrollIntoView<HTMLDivElement>(!!highlightId && !!sprint);
+  const highlighted = !!sprint && !!highlightId && sprint.id === highlightId;
 
   // Nothing running and nothing to suggest: stay quiet for the team.
   if (!sprint && !suggestion && !isManager) return null;
@@ -291,7 +296,7 @@ export default function SprintCard() {
 
   return (
     <>
-      <Card className="card-elevated overflow-hidden">
+      <Card ref={highlightRef} className={`card-elevated overflow-hidden ${highlighted ? DEEP_LINK_HIGHLIGHT : ''}`}>
         <CardContent className="p-4">
           <div className="flex items-start gap-4">
             <ProgressRing

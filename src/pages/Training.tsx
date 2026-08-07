@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useConsumedSearchParam } from '@/hooks/useDeepLink';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
@@ -55,11 +56,25 @@ export default function Training() {
   const { data: roster = [] } = useTeamRoster();
   const { data: drafts = [] } = useDraftModules();
 
-  const [openModuleId, setOpenModuleId] = useState<string | null>(null);
+  // A notification names the exact module (?module=) or the person's own
+  // assignment (?assignment=) — either way that training opens directly.
+  const linkedModuleId = useConsumedSearchParam('module');
+  const linkedAssignmentId = useConsumedSearchParam('assignment');
+  const [openModuleId, setOpenModuleId] = useState<string | null>(linkedModuleId);
   const [assignTarget, setAssignTarget] = useState<TrainingModule | null>(null);
   const [buildOpen, setBuildOpen] = useState(false);
   const [tagFilter, setTagFilter] = useState<string>('all');
   const [previewModule, setPreviewModule] = useState<TrainingModule | null>(null);
+
+  const [assignmentLinkApplied, setAssignmentLinkApplied] = useState(false);
+  useEffect(() => {
+    if (!linkedAssignmentId || assignmentLinkApplied) return;
+    const assignment = assignments.find(a => a.id === linkedAssignmentId);
+    if (assignment) {
+      setAssignmentLinkApplied(true);
+      setOpenModuleId(assignment.module_id);
+    }
+  }, [linkedAssignmentId, assignmentLinkApplied, assignments]);
 
   const nameFor = useMemo(() => {
     const map = new Map(roster.map(m => [m.user_id, m.display_name]));

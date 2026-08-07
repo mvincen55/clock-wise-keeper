@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useConsumedSearchParam, useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
 import {
   CheckCircle2,
   CircleHelp,
@@ -92,6 +93,28 @@ export default function KnowledgeAcknowledgments() {
   const [expandedRosterId, setExpandedRosterId] = useState('');
   const [answerAssignment, setAnswerAssignment] = useState<KnowledgeAcknowledgmentRow | null>(null);
   const [answer, setAnswer] = useState('');
+
+  // A notification names the exact assignment: the assignee lands with it
+  // selected for reading and signing; a manager lands on the roster entry.
+  const linkedAssignmentId = useConsumedSearchParam('assignment');
+  const [linkApplied, setLinkApplied] = useState(false);
+  const linkedRosterRef = useScrollIntoView<HTMLDivElement>(
+    !!linkedAssignmentId && expandedRosterId === linkedAssignmentId
+  );
+
+  useEffect(() => {
+    if (!linkedAssignmentId || linkApplied || myLoading) return;
+    if (activeAssignments.some(assignment => assignment.id === linkedAssignmentId)) {
+      setSelectedId(linkedAssignmentId);
+      setLinkApplied(true);
+      return;
+    }
+    if (isAdmin && rosterLoading) return;
+    if (isAdmin && roster.some(assignment => assignment.id === linkedAssignmentId)) {
+      setExpandedRosterId(linkedAssignmentId);
+    }
+    setLinkApplied(true);
+  }, [linkedAssignmentId, linkApplied, myLoading, rosterLoading, isAdmin, activeAssignments, roster]);
 
   useEffect(() => {
     if (activeAssignments.length === 0) {
@@ -316,8 +339,13 @@ export default function KnowledgeAcknowledgments() {
               ) : (
                 roster.map(assignment => {
                   const openQuestion = !!assignment.question_asked_at && !assignment.question_resolved_at;
+                  const linked = assignment.id === linkedAssignmentId;
                   return (
-                    <div key={assignment.id} className="rounded-lg border px-3 py-3 text-sm">
+                    <div
+                      key={assignment.id}
+                      ref={linked ? linkedRosterRef : undefined}
+                      className={`rounded-lg border px-3 py-3 text-sm ${linked ? DEEP_LINK_HIGHLIGHT : ''}`}
+                    >
                       <div className="grid gap-3 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.35fr)_auto] sm:items-center">
                         <div>
                           <p className="font-medium">{assignment.displayName}</p>

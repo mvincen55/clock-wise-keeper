@@ -11,6 +11,7 @@ import { MissingShiftBanner } from '@/components/MissingShiftBanner';
 import { useCurrentPtoBalance } from '@/hooks/usePtoEngine';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useApprovalCounts } from '@/hooks/useApprovalCounts';
+import { useConsumedSearchParam } from '@/hooks/useDeepLink';
 import TodayFocusCard from '@/components/copilot/TodayFocusCard';
 import MessagesCloseoutCard from '@/components/MessagesCloseoutCard';
 import DoctorBoardCard from '@/components/board/DoctorBoardCard';
@@ -42,6 +43,10 @@ export default function Home() {
   const { data: ctx } = useOrgContext();
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
   const { data: approvalCounts } = useApprovalCounts();
+  // Notifications about sprints and accountability records land here, on
+  // the exact card the notification described.
+  const linkedRecordId = useConsumedSearchParam('record');
+  const linkedSprintId = useConsumedSearchParam('sprint');
 
   const todayKey = getToday();
   const fourteenDaysAgo = new Date(new Date(todayKey + 'T12:00:00Z').getTime() - 14 * 24 * 3600 * 1000)
@@ -89,9 +94,9 @@ export default function Home() {
       <RescopeCard />
 
       {/* Restrained progress summary. */}
-      <SprintCard />
+      <SprintCard highlightId={linkedSprintId} />
       <MyMomentumCard />
-      <MyAccountabilityCard />
+      <MyAccountabilityCard highlightId={linkedRecordId} />
 
       <Card className="card-elevated">
         <CardContent className="p-4">

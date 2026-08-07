@@ -2,10 +2,15 @@ import { ClipboardX } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useOrgBypasses } from '@/hooks/useChecklistBypasses';
+import { useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
 
 /** Read-only manager view of checklist bypasses. Informative, never shaming. */
-export default function ChecklistBypassesSection({ orgId }: { orgId?: string }) {
+export default function ChecklistBypassesSection({ orgId, highlightId }: { orgId?: string; highlightId?: string | null }) {
   const { data: rows, isLoading } = useOrgBypasses(orgId);
+  // A bypass notification scrolls to and marks the exact row it names.
+  const highlightRef = useScrollIntoView<HTMLTableRowElement>(
+    !!highlightId && !!rows?.some(r => r.id === highlightId)
+  );
 
   return (
     <Card>
@@ -34,7 +39,11 @@ export default function ChecklistBypassesSection({ orgId }: { orgId?: string }) 
               </thead>
               <tbody>
                 {rows.map(r => (
-                  <tr key={r.id} className="border-b last:border-0 align-top">
+                  <tr
+                    key={r.id}
+                    ref={r.id === highlightId ? highlightRef : undefined}
+                    className={`border-b last:border-0 align-top ${r.id === highlightId ? 'bg-primary/10' : ''}`}
+                  >
                     <td className="py-2 pr-3 font-medium">{r.display_name}</td>
                     <td className="py-2 pr-3 whitespace-nowrap text-muted-foreground">{r.checklist_date}</td>
                     <td className="py-2 pr-3">{r.incomplete_count}</td>

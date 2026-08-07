@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useConsumedSearchParam, useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -77,6 +78,19 @@ export default function Goals() {
 
   const myGoals = useMemo(() => goals.filter(g => g.user_id === user?.id), [goals, user?.id]);
   const myTeamGoal = myGoals.find(g => g.visibility === 'team' && g.status === 'active');
+
+  // A reminder about a goal (?goal=) or one of its steps (?task=) lands with
+  // that goal card highlighted rather than leaving the reader to hunt.
+  const linkedGoalId = useConsumedSearchParam('goal');
+  const linkedTaskId = useConsumedSearchParam('task');
+  const highlightGoalId = useMemo(() => {
+    if (linkedGoalId) return linkedGoalId;
+    if (linkedTaskId) return tasks.find(t => t.id === linkedTaskId)?.goal_id ?? null;
+    return null;
+  }, [linkedGoalId, linkedTaskId, tasks]);
+  const highlightRef = useScrollIntoView<HTMLDivElement>(
+    !!highlightGoalId && myGoals.some(g => g.id === highlightGoalId)
+  );
 
   const nameOf = (userId: string) =>
     team?.find(t => t.user_id === userId)?.display_name ?? 'Team member';
@@ -280,15 +294,20 @@ export default function Goals() {
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">My goals</h2>
           {myGoals.map(goal => (
-            <MyGoalCard
+            <div
               key={goal.id}
-              goal={goal}
-              tasks={tasksFor(goal.id)}
-              latestUpdate={latestUpdate(goal.id)}
-              onShareUpdate={() => setUpdateGoal(goal)}
-              events={(goalEvents ?? []).filter(ev => ev.goal_id === goal.id)}
-              onArchived={setPendingReplacement}
-            />
+              ref={goal.id === highlightGoalId ? highlightRef : undefined}
+              className={goal.id === highlightGoalId ? `rounded-xl ${DEEP_LINK_HIGHLIGHT}` : undefined}
+            >
+              <MyGoalCard
+                goal={goal}
+                tasks={tasksFor(goal.id)}
+                latestUpdate={latestUpdate(goal.id)}
+                onShareUpdate={() => setUpdateGoal(goal)}
+                events={(goalEvents ?? []).filter(ev => ev.goal_id === goal.id)}
+                onArchived={setPendingReplacement}
+              />
+            </div>
           ))}
         </section>
       )}
