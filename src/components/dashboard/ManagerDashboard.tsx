@@ -2,9 +2,10 @@ import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
 import type { ManagerView } from './types';
 import {
-  Band, DashboardShell, EmptyLine, FigureStrip, Masthead, PersonRow, ProgressLine,
-  SignalRow, TimelineLine,
+  Band, DashboardShell, EmptyLine, FigureStrip, Lanes, Masthead, PersonRow, ProgressLine,
+  SignalRow, TimelineLine, ViewContext,
 } from './kit';
+import { TrendChart } from './charts';
 
 /**
  * MANAGER — live operational cockpit.
@@ -14,7 +15,7 @@ import {
  * deliberately no time-clock card here.
  */
 export default function ManagerDashboard({ view }: { view: ManagerView }) {
-  const { header, figures, roster, attention, progress, timeline } = view;
+  const { header, figures, roster, attention, progress, timeline, chart, lanes, roleContext } = view;
   const open = attention.filter((a) => a.value !== '0');
 
   return (
@@ -35,6 +36,10 @@ export default function ManagerDashboard({ view }: { view: ManagerView }) {
           </Link>
         }
       />
+
+      <div className="mt-3">
+        <ViewContext context={roleContext} />
+      </div>
 
       <div className="mt-6 border-y-2 border-foreground">
         <FigureStrip figures={figures} />
@@ -60,6 +65,8 @@ export default function ManagerDashboard({ view }: { view: ManagerView }) {
             )}
           </Band>
 
+          {chart && <TrendChart series={chart} />}
+
           <Band title="On track?" action={{ label: 'Checklists', to: '/checklists' }}>
             {progress.length === 0 ? (
               <EmptyLine>No checklists are set up for today.</EmptyLine>
@@ -69,14 +76,20 @@ export default function ManagerDashboard({ view }: { view: ManagerView }) {
           </Band>
         </div>
 
-        {/* Today, in order. */}
-        <Band title="Today" action={{ label: 'Huddle', to: '/morning-huddle' }}>
-          {timeline.length === 0 ? (
-            <EmptyLine>Nothing logged yet today.</EmptyLine>
-          ) : (
-            timeline.map((t) => <TimelineLine key={t.id} row={t} />)
-          )}
-        </Band>
+        {/* Today, in order — plus the manager's own work, compact. */}
+        <div className="space-y-8">
+          <Band title="Today" action={{ label: 'Huddle', to: '/morning-huddle' }}>
+            {timeline.length === 0 ? (
+              <EmptyLine>Nothing logged yet today.</EmptyLine>
+            ) : (
+              timeline.map((t) => <TimelineLine key={t.id} row={t} />)
+            )}
+          </Band>
+
+          {/* A manager who also works the floor keeps a personal lane here —
+              it never displaces the cockpit above. */}
+          <Lanes lanes={lanes} />
+        </div>
       </div>
     </DashboardShell>
   );

@@ -3,9 +3,10 @@ import { ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MemberView } from './types';
 import {
-  Band, DashboardShell, EmptyLine, FigureStrip, Masthead, MicroLabel, ProgressLine,
-  SignalRow, StatusDot, toneText,
+  Band, DashboardShell, EmptyLine, FigureStrip, Lanes, Masthead, MicroLabel, ProgressLine,
+  SignalRow, StatusDot, ViewContext, toneText,
 } from './kit';
+import { TrendChart } from './charts';
 
 /**
  * TEAM MEMBER — personal launchpad.
@@ -15,7 +16,7 @@ import {
  * clock. Nothing management-only is rendered here.
  */
 export default function MemberDashboard({ view }: { view: MemberView }) {
-  const { header, status, next, mine, progress, figures, office } = view;
+  const { header, status, next, mine, progress, figures, office, chart, lanes, roleContext } = view;
 
   return (
     <DashboardShell>
@@ -26,6 +27,10 @@ export default function MemberDashboard({ view }: { view: MemberView }) {
         dateLabel={header.dateLabel}
         timeLabel={header.timeLabel}
       />
+
+      <div className="mt-3">
+        <ViewContext context={roleContext} />
+      </div>
 
       {/* First viewport: status + the single next action. */}
       <div className="mt-6 grid gap-px bg-border md:grid-cols-[1fr_1.15fr]">
@@ -76,13 +81,19 @@ export default function MemberDashboard({ view }: { view: MemberView }) {
       </div>
 
       <div className="mt-8 grid gap-8 [&>*]:min-w-0 lg:grid-cols-[1.3fr_1fr] lg:gap-10">
-        <Band title="My work" count={`${mine.length}`} action={{ label: 'Workplace', to: '/workplace' }}>
-          {mine.length === 0 ? (
-            <EmptyLine>Nothing open. Anything new will land here and in your inbox.</EmptyLine>
-          ) : (
-            mine.map((s) => <SignalRow key={s.id} signal={s} />)
-          )}
-        </Band>
+        <div className="space-y-8">
+          <Band title="Open for me" count={`${mine.length}`} action={{ label: 'Workplace', to: '/workplace' }}>
+            {mine.length === 0 ? (
+              <EmptyLine>Nothing open. Anything new will land here and in your inbox.</EmptyLine>
+            ) : (
+              mine.map((s) => <SignalRow key={s.id} signal={s} />)
+            )}
+          </Band>
+
+          {/* Primary operational role sets the emphasis; backup roles stay
+              compact underneath unless they are being covered today. */}
+          <Lanes lanes={lanes} />
+        </div>
 
         <div className="space-y-8">
           <Band title="My progress" action={{ label: 'Goals', to: '/goals' }}>
@@ -92,6 +103,8 @@ export default function MemberDashboard({ view }: { view: MemberView }) {
               progress.map((p) => <ProgressLine key={p.id} row={p} />)
             )}
           </Band>
+
+          {chart && <TrendChart series={chart} />}
 
           <Band title="Around the office">
             {office.length === 0 ? (
