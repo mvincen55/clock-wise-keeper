@@ -1,10 +1,8 @@
 /**
- * "Create one for me" render check — bundles the signature generator,
- * runs it in real Chromium against the vendored fonts, and FAILS unless:
+ * "Create one for me" render check — bundles the stroke-based signature
+ * generator, runs it in real Chromium, and FAILS unless:
  *
- *   - every bundled signature font loads,
- *   - every generated option renders with real ink (not blank, not a
- *     fallback-font sliver),
+ *   - every generated option renders with real ink (not blank),
  *   - options within a set differ from each other pixel-wise,
  *   - regenerating with a new seed changes the set.
  *
@@ -54,10 +52,7 @@ await page.goto('file://' + path.join(OUT, 'blank.html'));
 await page.addScriptTag({ path: bundle });
 
 const result = await page.evaluate(
-  async ({ name, fontsBase }) => {
-    // Point the font manifest at the vendored files on disk.
-    for (const f of SigGen.SIGNATURE_FONTS) f.url = fontsBase + f.url;
-
+  async ({ name }) => {
     const inkPixels = canvas => {
       const ctx = canvas.getContext('2d');
       const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
@@ -71,7 +66,6 @@ const result = await page.evaluate(
       for (const option of SigGen.generateSignatureOptions(name, seed, 6)) {
         const canvas = await SigGen.renderSignatureOption(option);
         set.push({
-          fontKey: option.fontKey,
           text: option.text,
           ink: canvas ? inkPixels(canvas) : 0,
           dataUrl: canvas ? canvas.toDataURL('image/png') : null,
@@ -109,7 +103,7 @@ const result = await page.evaluate(
       montage: montage.toDataURL('image/png'),
     };
   },
-  { name: NAME, fontsBase: 'file://' + path.join(root, 'public') },
+  { name: NAME },
 );
 
 fs.writeFileSync(
@@ -123,9 +117,9 @@ for (const opt of result.setA) {
   // lays down thousands of ink pixels.
   if (opt.ink < 2000) {
     failures++;
-    console.error(`FAIL ${opt.fontKey}: only ${opt.ink} ink pixels for "${opt.text}"`);
+    console.error(`FAIL option: only ${opt.ink} ink pixels for "${opt.text}"`);
   } else {
-    console.log(`ok   ${opt.fontKey} — "${opt.text}" (${opt.ink} ink px)`);
+    console.log(`ok   "${opt.text}" (${opt.ink} ink px)`);
   }
 }
 if (result.distinctA !== result.setA.length) {

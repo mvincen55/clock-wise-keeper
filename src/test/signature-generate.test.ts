@@ -1,19 +1,20 @@
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
   generateSignatureOptions,
   seededRandom,
   signatureForms,
-  SIGNATURE_FONTS,
 } from '@/lib/letters/signature-generate';
 
 /**
- * "Create one for me" — generated staff signatures. The generator is pure
- * and seeded, so the option math is fully testable; canvas rendering is
- * exercised by the Chromium check (scripts/signature-generate-check.mjs).
- * Security posture: generation only ever consumes the signed-in employee's
- * OWN display name and saves through the same self-bound pipeline.
+ * "Create one for me" — generated staff signatures, drawn as pen strokes
+ * (no fonts, deliberately: a name set in a script font does not read as a
+ * signature). The generator is pure and seeded, so the option math is
+ * fully testable; stroke rendering is exercised by the Chromium check
+ * (scripts/signature-generate-check.mjs). Security posture: generation
+ * only ever consumes the signed-in employee's OWN display name and saves
+ * through the same self-bound pipeline.
  */
 
 describe('signature name forms', () => {
@@ -49,21 +50,24 @@ describe('generated option sets', () => {
     }
   });
 
-  it('one set spans distinct typefaces — never five copies of one script', () => {
+  it('one set cycles through the distinct signature shapes of the name', () => {
     const options = generateSignatureOptions('Megan Vincent', 11, 5);
-    const fonts = new Set(options.map(o => o.fontKey));
-    expect(fonts.size).toBe(5);
+    expect(new Set(options.map(o => o.text)).size).toBe(3);
   });
 
-  it('options vary beyond the font: slant, size, wobble, ink', () => {
+  it('every option is a different hand: size, lean, compression, pressure', () => {
     const options = generateSignatureOptions('Megan Vincent', 3, 6);
     expect(new Set(options.map(o => o.size)).size).toBeGreaterThan(1);
     expect(new Set(options.map(o => o.slant)).size).toBeGreaterThan(1);
-    // Per-character faces get handwriting wobble; connected scripts don't.
+    expect(new Set(options.map(o => o.jitterSeed)).size).toBe(6);
     for (const option of options) {
-      const font = SIGNATURE_FONTS.find(f => f.key === option.fontKey)!;
-      if (font.perChar) expect(option.wobble).toBeGreaterThan(0);
-      else expect(option.wobble).toBe(0);
+      // A signature scrawl, not typesetting: enlarged capitals, real
+      // compression, a leaning baseline, and visible pen character.
+      expect(option.capScale).toBeGreaterThan(1.3);
+      expect(option.compression).toBeGreaterThan(0);
+      expect(option.slant).toBeGreaterThan(0);
+      expect(option.wobble).toBeGreaterThan(0);
+      expect(option.pen).toBeGreaterThan(1);
     }
   });
 
@@ -79,21 +83,7 @@ describe('generated option sets', () => {
   });
 });
 
-describe('bundled fonts', () => {
-  it('every declared signature font is vendored with its license', () => {
-    for (const font of SIGNATURE_FONTS) {
-      const file = join(process.cwd(), 'public', font.url);
-      expect(existsSync(file), font.url).toBe(true);
-    }
-    const license = readFileSync(
-      join(process.cwd(), 'public', 'fonts', 'signatures', 'LICENSE.md'),
-      'utf8',
-    );
-    expect(license).toContain('SIL Open Font License');
-  });
-});
-
-describe('generation stays self-service (static)', () => {
+describe('generation stays self-service and local (static)', () => {
   it('the card builds options from the signed-in profile only and saves through the self-bound pipeline', () => {
     const card = readFileSync(
       join(process.cwd(), 'src', 'components', 'letterhead', 'MySignatureCard.tsx'),
@@ -106,11 +96,12 @@ describe('generation stays self-service (static)', () => {
     expect(card).toContain('useSaveMySignature');
   });
 
-  it('the generator itself is local: no AI calls, no network requests', () => {
+  it('the generator draws strokes — no fonts, no AI calls, no network', () => {
     const gen = readFileSync(
       join(process.cwd(), 'src', 'lib', 'letters', 'signature-generate.ts'),
       'utf8',
     );
     expect(gen).not.toMatch(/supabase|functions\.invoke|fetch\(|XMLHttpRequest/);
+    expect(gen).not.toMatch(/FontFace|@font-face|fillText|\.woff/i);
   });
 });
