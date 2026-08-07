@@ -59,7 +59,7 @@ function inviteEmailHtml(orgName: string, role: string, link: string): string {
         </p>
       </div>
       <p style="margin:20px 0 0;font-size:12px;color:#9a94a8;text-align:center;">
-        Only your business, never your patients.
+        Practice guidance, not patient records.
       </p>
     </div>
   </body>
@@ -74,7 +74,7 @@ ${orgName} has invited you to join their team on Purple Envelope as a ${role}.
 Open this link to create your account and get started (expires in 7 days):
 ${link}
 
-— Purple Envelope · Only your business, never your patients.`;
+— Purple Envelope · Practice guidance, not patient records.`;
 }
 
 Deno.serve(async (req) => {

@@ -1,7 +1,7 @@
 # Purple Envelope
 
 Practice-operations software for small independent dental offices.
-**"Only your business, never your patients."**
+**"Your practice playbook—not a patient chart."**
 
 - **Live site:** https://purpleenvelope.app (legacy: https://timekeepers.me — still allowed for invite links)
 - **Brand color:** `#53406e`

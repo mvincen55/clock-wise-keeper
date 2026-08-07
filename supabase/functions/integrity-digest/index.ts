@@ -77,7 +77,7 @@ function emailHtml(lines: Line[], openTotal: number): string {
         <table style="width:100%;border-collapse:collapse;border-top:1px solid #eeebf2;">${rows}</table>
         <a href="${APP_URL}" style="display:inline-block;margin-top:24px;background:#53406e;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 20px;border-radius:8px;">Review in Integrity &amp; Safety</a>
       </div>
-      <p style="margin:20px 0 0;font-size:12px;color:#9a94a8;text-align:center;">Only your business, never your patients.</p>
+      <p style="margin:20px 0 0;font-size:12px;color:#9a94a8;text-align:center;">Practice guidance, not patient records.</p>
     </div>
   </body>
 </html>`;

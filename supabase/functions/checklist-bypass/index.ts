@@ -65,7 +65,7 @@ function emailHtml(first: string, escalation: string | null): string {
         <p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#4a4458;">${escapeHtml(first)}</p>
         ${escalation ? `<p style="margin:0;font-size:15px;line-height:1.6;color:#6b3a2a;"><strong>${escapeHtml(escalation)}</strong></p>` : ""}
       </div>
-      <p style="margin:20px 0 0;font-size:12px;color:#9a94a8;text-align:center;">Only your business, never your patients.</p>
+      <p style="margin:20px 0 0;font-size:12px;color:#9a94a8;text-align:center;">Practice guidance, not patient records.</p>
     </div>
   </body>
 </html>`;
