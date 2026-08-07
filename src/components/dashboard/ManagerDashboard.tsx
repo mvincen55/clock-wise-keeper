@@ -40,7 +40,7 @@ export default function ManagerDashboard({ view }: { view: ManagerView }) {
         <FigureStrip figures={figures} />
       </div>
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_1.3fr_1fr] lg:gap-8">
+      <div className="mt-8 grid gap-8 [&>*]:min-w-0 lg:grid-cols-[1fr_1.3fr_1fr] lg:gap-8">
         {/* Who is here — first thing a manager looks for. */}
         <Band title="On the floor" count={`${roster.length}`} action={{ label: 'Team', to: '/team' }}>
           {roster.length === 0 ? (

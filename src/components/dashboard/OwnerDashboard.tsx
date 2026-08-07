@@ -41,7 +41,7 @@ export default function OwnerDashboard({ view }: { view: OwnerView }) {
         <FigureStrip figures={figures} invert />
       </div>
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1.35fr_1fr] lg:gap-10">
+      <div className="mt-8 grid gap-8 [&>*]:min-w-0 lg:grid-cols-[1.35fr_1fr] lg:gap-10">
         {/* Left: what the owner must decide. */}
         <div className="space-y-8">
           <Band

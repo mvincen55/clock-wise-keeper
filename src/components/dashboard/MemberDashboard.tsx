@@ -75,7 +75,7 @@ export default function MemberDashboard({ view }: { view: MemberView }) {
         <FigureStrip figures={figures} />
       </div>
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1.3fr_1fr] lg:gap-10">
+      <div className="mt-8 grid gap-8 [&>*]:min-w-0 lg:grid-cols-[1.3fr_1fr] lg:gap-10">
         <Band title="My work" count={`${mine.length}`} action={{ label: 'Workplace', to: '/workplace' }}>
           {mine.length === 0 ? (
             <EmptyLine>Nothing open. Anything new will land here and in your inbox.</EmptyLine>
