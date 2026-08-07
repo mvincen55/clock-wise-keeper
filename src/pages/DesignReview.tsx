@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import NotFound from './NotFound';
+import { SCENARIOS } from '@/components/dashboard/scenarios';
 
 /**
  * TEMPORARY — visual review index for the second-pass redesign.
@@ -73,7 +74,7 @@ export default function DesignReview() {
               to={r.to}
               className="pe-focus grid grid-cols-[3rem_1fr] gap-x-5 border-b border-ink/16 py-6 transition-colors hover:bg-ink/[0.04]"
             >
-              <span className="pe-display text-[1.6rem] leading-none text-plum/40">{`0${i + 5}`}</span>
+              <span className="pe-display text-[1.6rem] leading-none text-plum/40">{`0${i + 5}`.slice(-2)}</span>
               <div>
                 <p className="pe-display text-[1.3rem] text-ink">{r.label}</p>
                 <p className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-soft">{r.to}</p>
