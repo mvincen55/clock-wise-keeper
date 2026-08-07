@@ -10,13 +10,31 @@ import NotFound from './NotFound';
  */
 export const REDESIGN_VERSION = 'v2 — editorial second pass';
 
-const PRODUCTION_HOSTS = ['purpleenvelope.app', 'www.purpleenvelope.app', 'purpleenvelope.lovable.app', 'timekeepers.me'];
+export const PRODUCTION_HOSTS = ['purpleenvelope.app', 'www.purpleenvelope.app', 'purpleenvelope.lovable.app', 'timekeepers.me'];
 
 const ROUTES: { to: string; label: string; note: string }[] = [
   { to: '/', label: 'Home', note: 'Oversized grotesque hero, envelope field, ruled index bands' },
   { to: '/login', label: 'Login', note: 'Purple/paper split, envelope mark, real forgot-password flow' },
   { to: '/start', label: 'Start', note: 'Editorial intake sheet on the live submit-lead backend' },
   { to: '/security', label: 'Security', note: 'Verified now / explicit boundary / not yet' },
+];
+
+const DASHBOARDS: { to: string; label: string; note: string }[] = [
+  {
+    to: '/design-review/dashboard/owner',
+    label: 'Owner dashboard',
+    note: 'Practice command center — decisions, staffing, goals, collections pace. No clock controls.',
+  },
+  {
+    to: '/design-review/dashboard/manager',
+    label: 'Manager dashboard',
+    note: 'Live cockpit — who is here, what needs attention, checklist progress, today in order.',
+  },
+  {
+    to: '/design-review/dashboard/team',
+    label: 'Team member dashboard',
+    note: 'Personal launchpad — own status, one next action, my work, my progress.',
+  },
 ];
 
 export default function DesignReview() {
@@ -44,6 +62,28 @@ export default function DesignReview() {
               className="pe-focus grid grid-cols-[3rem_1fr] gap-x-5 border-b border-ink/16 py-6 transition-colors hover:bg-ink/[0.04]"
             >
               <span className="pe-display text-[1.6rem] leading-none text-plum/40">{`0${i + 1}`}</span>
+              <div>
+                <p className="pe-display text-[1.3rem] text-ink">{r.label}</p>
+                <p className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-soft">{r.to}</p>
+                <p className="mt-2 text-[14px] leading-relaxed text-ink-soft">{r.note}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        <h2 className="pe-display mt-16 text-[clamp(1.4rem,4vw,2.2rem)] text-ink">Role dashboards</h2>
+        <p className="mt-4 max-w-[54ch] text-[15px] leading-relaxed text-ink-soft">
+          Rendered from static fixtures — no session, no permissions, no queries. Every widget maps to a hook the app
+          already ships; anything Purple Envelope cannot verify from real records is deliberately absent.
+        </p>
+        <div className="mt-8 border-t-2 border-ink">
+          {DASHBOARDS.map((r, i) => (
+            <Link
+              key={r.to}
+              to={r.to}
+              className="pe-focus grid grid-cols-[3rem_1fr] gap-x-5 border-b border-ink/16 py-6 transition-colors hover:bg-ink/[0.04]"
+            >
+              <span className="pe-display text-[1.6rem] leading-none text-plum/40">{`0${i + 5}`}</span>
               <div>
                 <p className="pe-display text-[1.3rem] text-ink">{r.label}</p>
                 <p className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-soft">{r.to}</p>
