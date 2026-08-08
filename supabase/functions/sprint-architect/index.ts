@@ -88,6 +88,9 @@ const CATEGORIES = new Set([
 
 type ChatMessage = { role: "system" | "user"; content: string };
 
+/** Thrown when the gateway refuses in a way the manager should hear about. */
+class GatewayError extends Error {}
+
 async function callModel(
   apiKey: string,
   messages: ChatMessage[],
@@ -96,10 +99,19 @@ async function callModel(
   const res = await fetch(GATEWAY_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, messages }),
+    // reasoning_effort "none": without it the model spends the token budget
+    // thinking and can return empty or truncated JSON.
+    body: JSON.stringify({ model: MODEL, reasoning_effort: "none", max_tokens: maxTokens, messages }),
   });
   if (!res.ok) {
-    console.error("sprint-architect: gateway answered", res.status);
+    const detail = await res.text().catch(() => "");
+    console.error("sprint-architect: gateway answered", res.status, detail.slice(0, 300));
+    if (res.status === 429) {
+      throw new GatewayError("The AI is rate limited right now — try again in a minute.");
+    }
+    if (res.status === 402) {
+      throw new GatewayError("AI credits are exhausted. Add credits to keep sprint ideas running.");
+    }
     return null;
   }
   const data = await res.json();
@@ -424,12 +436,15 @@ Deno.serve(async (req) => {
         },
         { role: "user", content: facts },
       ],
-      1600,
+      2000,
     );
     if (raw === null) return json({ error: "The AI could not run right now — try again in a minute." }, 502);
 
     const parsed = parseJsonBlock<{ suggestions?: unknown; concern?: unknown }>(raw);
-    if (!parsed) return json({ error: "The AI returned nothing usable — try again." }, 502);
+    if (!parsed) {
+      console.error("sprint-architect: unusable model output, length", raw.length, raw.slice(0, 200));
+      return json({ error: "The AI returned nothing usable — try again." }, 502);
+    }
 
     const suggestions = (Array.isArray(parsed.suggestions) ? parsed.suggestions : [])
       .map((s: Record<string, unknown>) => ({
@@ -465,6 +480,7 @@ Deno.serve(async (req) => {
     return json({ suggestions, concern, audience: { label: audienceLabel, size: audienceSize } });
   } catch (e) {
     console.error("sprint-architect failed:", (e as Error).message);
+    if (e instanceof GatewayError) return json({ error: e.message }, 503);
     return json({ error: "Sprint ideas could not be generated." }, 500);
   }
 });

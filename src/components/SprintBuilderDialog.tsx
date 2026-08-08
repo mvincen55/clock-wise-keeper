@@ -97,9 +97,10 @@ export default function SprintBuilderDialog({
 
   const audience = parseAudience(audienceValue);
 
-  // Positions come from the office's actual configuration — a role appears
-  // only when someone in this office actually holds it.
-  const configuredRoles = useMemo(() => {
+  // Positions: the core dental-office roles are always offered, and any role
+  // someone in this office actually holds joins them with a head count. An
+  // office that hasn't configured roles yet still gets the standard choices.
+  const positionOptions = useMemo(() => {
     const counts = new Map<OperationalRole, number>();
     for (const roles of rolesByEmployee?.values() ?? []) {
       const seen = new Set<OperationalRole>();
@@ -110,7 +111,9 @@ export default function SprintBuilderDialog({
         }
       }
     }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    const core: OperationalRole[] = ['front_desk', 'hygienist', 'dental_assistant', 'dentist', 'office_manager'];
+    const extras = [...counts.keys()].filter(r => !core.includes(r));
+    return [...core, ...extras].map(role => ({ role, count: counts.get(role) ?? 0 }));
   }, [rolesByEmployee]);
 
   const audienceApi: SprintAudience = {
@@ -229,9 +232,9 @@ export default function SprintBuilderDialog({
         <SelectTrigger><SelectValue /></SelectTrigger>
         <SelectContent>
           <SelectItem value="team">Whole team</SelectItem>
-          {configuredRoles.map(([role, count]) => (
+          {positionOptions.map(({ role, count }) => (
             <SelectItem key={role} value={`role:${role}`}>
-              {SPRINT_ROLE_LABELS[role] ?? role} ({count})
+              {SPRINT_ROLE_LABELS[role] ?? role}{count > 0 ? ` (${count})` : ''}
             </SelectItem>
           ))}
           <SelectItem value="department:clinical">Clinical team</SelectItem>

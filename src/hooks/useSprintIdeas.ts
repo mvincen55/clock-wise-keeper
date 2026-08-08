@@ -50,6 +50,31 @@ export type SprintIdeasResult = {
   audience: { label: string; size: number };
 };
 
+/**
+ * Invoke the architect and surface ITS error message. On a non-2xx response
+ * supabase-js hands back a generic FunctionsHttpError with the real JSON body
+ * hidden on `context` — without this unwrap every failure reads as
+ * "Edge Function returned a non-2xx status code".
+ */
+async function invokeArchitect(body: Record<string, unknown>) {
+  const { data, error } = await supabase.functions.invoke('sprint-architect', { body });
+  if (error) {
+    let message = error.message;
+    const ctx = (error as { context?: Response }).context;
+    if (ctx && typeof ctx.json === 'function') {
+      try {
+        const parsed = await ctx.json();
+        if (parsed?.error) message = parsed.error;
+      } catch {
+        // keep the generic message
+      }
+    }
+    throw new Error(message);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
 export function useSprintIdeas() {
   const { data: ctx } = useOrgContext();
 
@@ -59,18 +84,14 @@ export function useSprintIdeas() {
       direction?: string;
       exclude?: string[];
     }): Promise<SprintIdeasResult> => {
-      const { data, error } = await supabase.functions.invoke('sprint-architect', {
-        body: {
-          action: 'ideas',
-          scope: input.audience.scope,
-          scope_role: input.audience.scope_role ?? undefined,
-          scope_department: input.audience.scope_department ?? undefined,
-          direction: input.direction?.trim() || undefined,
-          exclude: input.exclude ?? [],
-        },
+      const data = await invokeArchitect({
+        action: 'ideas',
+        scope: input.audience.scope,
+        scope_role: input.audience.scope_role ?? undefined,
+        scope_department: input.audience.scope_department ?? undefined,
+        direction: input.direction?.trim() || undefined,
+        exclude: input.exclude ?? [],
       });
-      if (error) throw new Error(data?.error ?? error.message);
-      if (data?.error) throw new Error(data.error);
       return {
         suggestions: Array.isArray(data?.suggestions) ? data.suggestions : [],
         concern: data?.concern ?? null,
@@ -88,17 +109,13 @@ export function useRewardIdeas() {
       audience: SprintAudience;
       sprintTitle?: string;
     }): Promise<string[]> => {
-      const { data, error } = await supabase.functions.invoke('sprint-architect', {
-        body: {
-          action: 'rewards',
-          scope: input.audience.scope,
-          scope_role: input.audience.scope_role ?? undefined,
-          scope_department: input.audience.scope_department ?? undefined,
-          sprint_title: input.sprintTitle,
-        },
+      const data = await invokeArchitect({
+        action: 'rewards',
+        scope: input.audience.scope,
+        scope_role: input.audience.scope_role ?? undefined,
+        scope_department: input.audience.scope_department ?? undefined,
+        sprint_title: input.sprintTitle,
       });
-      if (error) throw new Error(data?.error ?? error.message);
-      if (data?.error) throw new Error(data.error);
       return Array.isArray(data?.rewards) ? data.rewards : [];
     },
   });
