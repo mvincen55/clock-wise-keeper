@@ -2,7 +2,7 @@ import {
   Sunrise, ListChecks, Banknote, ShieldAlert, ReceiptText, FileStack,
   DollarSign, Sparkles, ShieldCheck, Phone, CalendarX, FileSignature,
   Library, Layers, ClipboardList, BookOpenCheck, FileText, GraduationCap,
-  Mail,
+  Mail, Wallet,
 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useBrokenApptSettings } from '@/hooks/useBrokenApptSettings';
@@ -45,6 +45,7 @@ const buildSections = (brokenApptLabel: string): HubSection[] => [
     title: 'Patient Forms',
     links: [
       { to: '/fof', icon: ReceiptText, label: 'Financial Options Form', description: 'Prepare treatment financial options. Nothing patient-specific is stored.' },
+      { to: '/account-balance', icon: Wallet, label: 'Account Balance Explainer', description: 'Turn a Dentrix ledger into a clear explanation of what the patient owes. Patient information stays on this device and is cleared after use.' },
       { to: '/fof/templates', icon: FileStack, label: 'Form Templates', description: 'Blank templates and office document styling.', managerOnly: true },
       { to: '/fof/fees', icon: DollarSign, label: 'Fee Schedule', description: 'Office fees, plans, and bundles.', managerOnly: true },
     ],

@@ -193,6 +193,14 @@
   display: none;
 }
 
+/* Printable ACCOUNT BALANCE EXPLANATION (Account Balance Explainer).
+   Hidden on screen; shown only when printing from /account-balance.
+   Patient values reach it via React props only — never persisted (see
+   src/lib/account-balance/types.ts). */
+.abx-print-root {
+  display: none;
+}
+
 @page consent {
   size: letter;
   margin: 0.5in;
@@ -2091,6 +2099,271 @@
 }
 
 
+/* ---- Account Balance Explanation print sheet ---- */
+/* A polished patient-facing financial explanation: brand accent on white,
+   grayscale-safe, US Letter with 0.5in margins. Cards never split across
+   pages; more than one page is allowed when the account needs it. */
+@page abx {
+  size: letter;
+  margin: 0.5in;
+}
+
+.abx-sheet {
+  --abx-navy: #53406e; /* brand accent default; org_branding overrides */
+  --abx-ink: #2b2733;
+  --abx-muted: #6b6577;
+  --abx-line: #d5cfe0;
+  --abx-tint: #f3f0f8;
+  page: abx;
+  width: 7.5in;
+  margin: 0 auto;
+  background: white;
+  color: var(--abx-ink);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 10pt;
+  line-height: 1.45;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.abx-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.4in;
+  padding-bottom: 8pt;
+  border-bottom: 1.5pt solid var(--abx-navy);
+  margin-bottom: 12pt;
+}
+
+.abx-head-identity {
+  display: flex;
+  align-items: center;
+  gap: 8pt;
+}
+
+.abx-logo {
+  height: 0.55in;
+  width: auto;
+}
+
+.abx-practice-name {
+  font-size: 12pt;
+  font-weight: 700;
+  color: var(--abx-navy);
+}
+
+.abx-head-meta {
+  text-align: right;
+}
+
+.abx-doc-title {
+  font-size: 15pt;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--abx-navy);
+  line-height: 1.15;
+}
+
+.abx-meta-line {
+  font-size: 9pt;
+  margin-top: 2pt;
+}
+
+.abx-meta-key {
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--abx-muted);
+  margin-right: 3pt;
+}
+
+.abx-hero {
+  background: var(--abx-tint);
+  border: 1pt solid var(--abx-navy);
+  border-radius: 6pt;
+  padding: 12pt 14pt;
+  text-align: center;
+  margin-bottom: 14pt;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.abx-hero-kicker {
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--abx-navy);
+}
+
+.abx-hero-amount {
+  font-size: 26pt;
+  font-weight: 700;
+  color: var(--abx-navy);
+  line-height: 1.15;
+}
+
+.abx-hero-sub {
+  font-size: 8.5pt;
+  color: var(--abx-muted);
+}
+
+.abx-section-head {
+  font-size: 9pt;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--abx-navy);
+  border-bottom: 0.75pt solid var(--abx-line);
+  padding-bottom: 3pt;
+  margin: 12pt 0 8pt;
+  /* A heading never strands at a page bottom away from its first card. */
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+.abx-card {
+  border: 0.75pt solid var(--abx-line);
+  border-radius: 5pt;
+  padding: 8pt 12pt;
+  margin-bottom: 8pt;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.abx-card-muted {
+  background: #faf9fc;
+}
+
+.abx-card-date {
+  font-size: 7.5pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--abx-muted);
+}
+
+.abx-card-title {
+  font-size: 11pt;
+  font-weight: 700;
+  color: var(--abx-navy);
+  margin-bottom: 4pt;
+}
+
+.abx-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12pt;
+  padding: 1.5pt 0;
+  font-size: 9.5pt;
+}
+
+.abx-row > span:last-child {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.abx-row-subtotal {
+  border-top: 0.5pt solid var(--abx-line);
+  margin-top: 2pt;
+  padding-top: 3pt;
+  font-weight: 600;
+}
+
+.abx-row-total {
+  border-top: 1pt solid var(--abx-navy);
+  margin-top: 3pt;
+  padding-top: 3.5pt;
+  font-weight: 700;
+  color: var(--abx-navy);
+}
+
+.abx-card-note {
+  margin-top: 5pt;
+  padding-top: 4pt;
+  border-top: 0.5pt dashed var(--abx-line);
+  font-size: 8.5pt;
+  color: var(--abx-muted);
+}
+
+.abx-calc {
+  background: var(--abx-tint);
+  border: 0.75pt solid var(--abx-navy);
+  border-radius: 5pt;
+  padding: 8pt 12pt;
+  margin: 10pt 0 8pt;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.abx-calc-title {
+  font-size: 9pt;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--abx-navy);
+  margin-bottom: 3pt;
+}
+
+.abx-calc-total {
+  border-top: 1.25pt solid var(--abx-navy);
+  font-size: 11.5pt;
+}
+
+.abx-insurance {
+  display: flex;
+  gap: 8pt;
+  border: 0.75pt solid var(--abx-line);
+  border-radius: 5pt;
+  padding: 8pt 12pt;
+  margin-bottom: 8pt;
+  font-size: 9pt;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.abx-insurance-icon {
+  color: var(--abx-navy);
+  flex-shrink: 0;
+}
+
+.abx-icon {
+  width: 11pt;
+  height: 11pt;
+}
+
+.abx-closing {
+  font-size: 9pt;
+  color: var(--abx-muted);
+  margin: 10pt 0 0;
+}
+
+.abx-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6pt 16pt;
+  border-top: 1pt solid var(--abx-navy);
+  margin-top: 10pt;
+  padding-top: 6pt;
+  font-size: 8pt;
+  color: var(--abx-muted);
+}
+
+.abx-footer-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3pt;
+}
+
+.abx-footer-item .abx-icon {
+  width: 8.5pt;
+  height: 8.5pt;
+  color: var(--abx-navy);
+}
+
 @page goalsheet {
   size: letter;
   margin: 0.5in;
@@ -2681,7 +2954,8 @@
   body:has(.incident-print-root) > *:not(.incident-print-root),
   body:has(.goals-print-root) > *:not(.goals-print-root),
   body:has(.consent-print-root) > *:not(.consent-print-root),
-  body:has(.letter-print-root) > *:not(.letter-print-root) {
+  body:has(.letter-print-root) > *:not(.letter-print-root),
+  body:has(.abx-print-root) > *:not(.abx-print-root) {
     display: none !important;
   }
 
@@ -2690,7 +2964,8 @@
   .incident-print-root,
   .goals-print-root,
   .consent-print-root,
-  .letter-print-root {
+  .letter-print-root,
+  .abx-print-root {
     display: block !important;
   }
 
@@ -2740,6 +3015,11 @@
   .fof-sheet th,
   .fof-sheet td {
     border: none;
+    padding: 0;
+  }
+
+  .abx-print-root .abx-sheet {
+    width: 100%;
     padding: 0;
   }
 
