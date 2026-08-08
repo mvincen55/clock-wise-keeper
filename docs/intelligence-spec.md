@@ -86,6 +86,49 @@ Prompt 19 v2 supersedes v1 (sprint goals gained scoping + verification tiers).
 > - THE AI RUNS IT END TO END: announces the sprint when created (the manager never says a word out loud), mid-period progress nudges with real numbers, the verification push at the end ("upload the recall report to verify"), and the final declaration.
 > - AI SUGGESTS SPRINTS: weekly, one dismissible suggestion to each manager based on office data ("the recall list is long — might not be a bad idea to run a calls sprint verified against the outside report"), marked ai_suggested when accepted.
 
+## Sprint Builder v3 — the Intelligent Sprint Builder (shipped 2026-08-08)
+
+Upgrades "Start a sprint" from a blank form into an AI-assisted builder. The
+manual path is untouched — AI is assistance, not a requirement.
+
+- **Position-first flow.** The dialog opens on "Who do you want to challenge?"
+  — Whole team, each operational role actually configured in the office
+  (from `employee_operational_roles`, with head counts), the two departments,
+  or one person. Sprints gained a fourth scope: `role` + `scope_role`
+  (migration `20260808120000`), with RLS via `my_operational_roles()` and
+  audience fan-out in office-pulse honouring coverage windows.
+- **`sprint-architect` edge function** (verify_jwt, owner/manager only,
+  allowlisted `scrub`). Action `ideas` returns 3-5 suggestion cards
+  (title, goal, what-counts, target, period, verification, reward, one-line
+  "why", category) grounded in: computed office signals, weekly closeout
+  rollups, schedule utilization, sprint history (with outcomes), and the
+  office's recorded rules (practice settings, broken-appt policy, assistant
+  memories, published knowledge). Action `rewards` returns small practical
+  reward ideas sized to the group.
+- **Signals are code, not vibes.** `_shared/sprint-signals.ts` (unit-tested)
+  rolls `deposit_logs` into weeks and detects: disruptions rising across
+  consecutive weeks, improvement that slipped back, sustained staffing
+  strain, and sustained open schedule time from `provider_day_metrics`.
+  Thin data yields silence; one bad week is never a pattern.
+- **Sprint vs. intervention.** Signals carry a `watch`/`concern` level. A
+  `concern` renders as a separate ⚠️ "noticed something" banner (review /
+  build a sprint around it / not now) — serious problems are surfaced to the
+  manager, not gamified by default. Structurally enforced: the model cannot
+  return a concern unless the deterministic layer found one.
+- **Office rules are hard boundaries.** The prompt's charter: recorded
+  policies outrank any metric; no treatment pressure, no out-of-role work,
+  no schedule manipulation, no skipped documentation; attribution care (a
+  metric in a role's column ≠ that role caused it); only the three real
+  verification methods may be suggested; every "why" must trace to a
+  provided fact. Manager direction ("Anything you want to work on?") is
+  honoured but never overrides the charter, and passes the jailbreak guard.
+- **Learning from outcomes.** `team_goals.category` records what an
+  AI-built sprint was about; history (target vs. progress vs. status, with
+  categories and scopes) feeds every future generation so goals aren't
+  repeated blindly — revisits must explain themselves ("improved in May,
+  slipping again"). Shuffle ("Show me different ideas") excludes titles
+  already shown this session.
+
 ## Known build risks
 
 - **Nagware drift.** If the dismissal loop isn't real (kinds never go quiet), the

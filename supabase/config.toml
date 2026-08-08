@@ -57,6 +57,8 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = true
   [functions.sprint-verify]
     verify_jwt = true
+  [functions.sprint-architect]
+    verify_jwt = true
   [functions.support-agent]
     verify_jwt = true
   [functions.training-reminders]

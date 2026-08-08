@@ -357,7 +357,7 @@ async function orgMembers(db: Client, orgId: string) {
   return data ?? [];
 }
 
-/** Who hears about this sprint: the whole office, one department, or one person. */
+/** Who hears about this sprint: the office, a position, a department, or one person. */
 async function sprintAudience(
   db: Client,
   orgId: string,
@@ -385,8 +385,37 @@ async function sprintAudience(
       .map(e => String(e.user_id));
     return [...new Set([...inDept, ...admins])];
   }
+  if (sprint.scope === "role") {
+    // Everyone currently holding the operational role, coverage windows honoured.
+    const today = easternToday();
+    const { data: holders } = await db
+      .from("employee_operational_roles")
+      .select("operational_role, starts_on, ends_on, employees!inner(user_id)")
+      .eq("org_id", orgId)
+      .eq("operational_role", String(sprint.scope_role ?? ""));
+    const inRole = (holders ?? [])
+      .filter(r =>
+        (!r.starts_on || String(r.starts_on) <= today) &&
+        (!r.ends_on || String(r.ends_on) >= today)
+      )
+      .map(r => String((r.employees as unknown as { user_id: string | null })?.user_id ?? ""))
+      .filter(uid => uid !== "" && uid !== "null");
+    return [...new Set([...inRole, ...admins])];
+  }
   return all;
 }
+
+/** How a role-scoped sprint's audience reads in an announcement. */
+const ROLE_TEAM_LABELS: Record<string, string> = {
+  dentist: "the doctors",
+  hygienist: "the hygienists",
+  dental_assistant: "the dental assistants",
+  front_desk: "the front desk team",
+  office_manager: "the managers",
+  sterilization: "the sterilization team",
+  floater: "the floaters",
+  other: "one position's team",
+};
 
 /** The verifier is the manager; if the office has no manager, the owner. */
 async function sprintVerifier(db: Client, orgId: string): Promise<string | null> {
@@ -415,6 +444,8 @@ async function runSprints(db: Client, apiKey: string | undefined, orgId: string,
     const verification = String(s.verification ?? "honor");
     const scopeLabel = s.scope === "department"
       ? `the ${s.scope_department} team`
+      : s.scope === "role"
+      ? ROLE_TEAM_LABELS[String(s.scope_role ?? "")] ?? "one position's team"
       : s.scope === "individual"
       ? "one team member"
       : "the whole office";

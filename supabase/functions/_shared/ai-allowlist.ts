@@ -39,6 +39,11 @@ export const AI_GATEWAY_ALLOWLIST: Record<string, GatewayEntry> = {
     handler: "scrub",
     reason: "Reads a staff-uploaded verification artifact, then deletes it.",
   },
+  "sprint-architect": {
+    handler: "scrub",
+    reason:
+      "Builds sprint suggestions from manager direction, sprint history, and office rules — all staff-authored free text.",
+  },
   "commitment-listen": {
     handler: "scrub",
     reason: "Listens to meeting/update text authored by staff.",
