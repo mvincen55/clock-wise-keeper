@@ -8,7 +8,7 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 
 export type SprintPeriod = 'week' | 'month';
 export type SprintStatus = 'active' | 'pending_verification' | 'won' | 'missed' | 'cancelled';
-export type SprintScope = 'team' | 'department' | 'individual';
+export type SprintScope = 'team' | 'department' | 'individual' | 'role';
 export type SprintDepartment = 'clinical' | 'clerical';
 export type SprintVerification = 'honor' | 'manager_approval' | 'document';
 
@@ -34,6 +34,8 @@ export type TeamGoal = {
   scope: SprintScope;
   scope_department: SprintDepartment | null;
   scope_user_id: string | null;
+  scope_role: string | null;
+  category: string | null;
   verification: SprintVerification;
   verified_by: string | null;
   verified_at: string | null;
@@ -113,6 +115,8 @@ export function useCreateSprint() {
       scope: SprintScope;
       scope_department?: SprintDepartment | null;
       scope_user_id?: string | null;
+      scope_role?: string | null;
+      category?: string | null;
       verification: SprintVerification;
       ai_suggested?: boolean;
     }) => {
@@ -124,6 +128,8 @@ export function useCreateSprint() {
           ...input,
           scope_department: input.scope === 'department' ? input.scope_department ?? null : null,
           scope_user_id: input.scope === 'individual' ? input.scope_user_id ?? null : null,
+          scope_role: input.scope === 'role' ? input.scope_role ?? null : null,
+          category: input.category ?? null,
           org_id: ctx.org_id,
           created_by: user.id,
         })
