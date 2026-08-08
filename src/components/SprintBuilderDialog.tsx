@@ -124,17 +124,25 @@ export default function SprintBuilderDialog({
 
   const generate = async (opts?: { direction?: string; shuffle?: boolean }) => {
     try {
+      const alreadyShown = opts?.shuffle ? shownTitles : [];
       const res = await ideasApi.mutateAsync({
         audience: audienceApi,
         direction: opts?.direction ?? direction,
-        exclude: opts?.shuffle ? shownTitles : [],
+        exclude: alreadyShown,
       });
-      setResult(res);
-      if (!opts?.shuffle) setShownTitles([]);
-      setShownTitles(prev => [...new Set([...(opts?.shuffle ? prev : []), ...res.suggestions.map(s => s.title)])]);
+      // The server already drops echoes of shown titles; this is the belt to
+      // its braces so a shuffle never silently re-displays the same cards.
+      const seen = new Set(alreadyShown.map(t => t.toLowerCase()));
+      const fresh = res.suggestions.filter(s => !seen.has(s.title.toLowerCase()));
+      if (opts?.shuffle && fresh.length === 0) {
+        toast.info('No different angles this time — try adding a direction above, or shuffle again.');
+        return; // keep the cards already on screen
+      }
+      setResult({ ...res, suggestions: fresh });
+      setShownTitles([...new Set([...alreadyShown, ...fresh.map(s => s.title)])]);
       setConcernDismissed(false);
       setConcernOpen(false);
-      if (res.suggestions.length === 0) {
+      if (fresh.length === 0) {
         toast.info('Nothing worth suggesting right now — the office data may be thin. You can still create your own.');
       }
     } catch (e) {

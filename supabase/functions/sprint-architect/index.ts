@@ -258,10 +258,14 @@ Deno.serve(async (req) => {
     ) {
       return json({ error: JAILBREAK_REFUSAL }, 400);
     }
-    const exclude = (Array.isArray(body.exclude) ? body.exclude : [])
-      .map((t: unknown) => safe(t, 80))
+    // Titles already shown this session: the raw values drive dedup, and a
+    // scrubbed copy goes into the prompt (client-supplied text never reaches
+    // the gateway unscrubbed).
+    const excludeRaw = (Array.isArray(body.exclude) ? body.exclude : [])
+      .map((t: unknown) => bounded(t, 80))
       .filter((t) => t !== "")
       .slice(0, 20);
+    const excludePrompt = excludeRaw.map((t) => safe(t, 80)).filter((t) => t !== "");
 
     const today = easternToday();
     const [sprintsRes, depositsRes, metricsRes, practiceRes, baRes, memoriesRes, itemsRes] =
@@ -390,14 +394,12 @@ Deno.serve(async (req) => {
       `ACTIVE SPRINTS: ${liveSprints.map(sprintLine).join("; ") || "none"}`,
       `PAST SPRINTS (newest first): ${pastSprints.map(sprintLine).join("; ") || "none yet"}`,
       `OFFICE RULES ON FILE:\n${rulesLines.length > 0 ? rulesLines.map((l) => `- ${l}`).join("\n") : "- none recorded"}`,
-      exclude.length > 0
-        ? `ALREADY SHOWN THIS SESSION (offer different angles, not rewordings): ${exclude.join("; ")}`
+      excludePrompt.length > 0
+        ? `ALREADY SHOWN THIS SESSION (offer different angles, not rewordings): ${excludePrompt.join("; ")}`
         : "",
     ].filter(Boolean).join("\n\n");
 
-    const raw = await callModel(
-      apiKey,
-      [
+    const architectMessages: ChatMessage[] = [
         {
           role: "system",
           content:
@@ -435,30 +437,44 @@ Deno.serve(async (req) => {
             `what the pattern is, why it may need review before (or instead of) a sprint. Never accuse anyone.`,
         },
         { role: "user", content: facts },
-      ],
-      2000,
-    );
-    if (raw === null) return json({ error: "The AI could not run right now — try again in a minute." }, 502);
+      ];
 
-    const parsed = parseJsonBlock<{ suggestions?: unknown; concern?: unknown }>(raw);
-    if (!parsed) {
+    // The model occasionally returns unusable output; one quiet retry beats
+    // making the manager tap the button again.
+    let raw = await callModel(apiKey, architectMessages, 2000);
+    let parsed = raw === null
+      ? null
+      : parseJsonBlock<{ suggestions?: unknown; concern?: unknown }>(raw);
+    if (raw !== null && !parsed) {
       console.error("sprint-architect: unusable model output, length", raw.length, raw.slice(0, 200));
-      return json({ error: "The AI returned nothing usable — try again." }, 502);
+      raw = await callModel(apiKey, architectMessages, 2000);
+      parsed = raw === null
+        ? null
+        : parseJsonBlock<{ suggestions?: unknown; concern?: unknown }>(raw);
     }
+    if (raw === null) return json({ error: "The AI could not run right now — try again in a minute." }, 502);
+    if (!parsed) return json({ error: "The AI returned nothing usable — try again." }, 502);
 
+    // Model output is generated from inputs that were already scrubbed, so it
+    // is bounded but NOT re-scrubbed — the scrubber's full-name heuristic
+    // mangles Title-Case sprint names ("Two-Day Confirmations").
+    const seenTitles = new Set(excludeRaw.map((t) => t.toLowerCase()));
     const suggestions = (Array.isArray(parsed.suggestions) ? parsed.suggestions : [])
       .map((s: Record<string, unknown>) => ({
-        title: safe(s?.title, 80),
-        goal: safe(s?.goal, 220),
-        metric: safe(s?.metric, 160),
+        title: bounded(s?.title, 80),
+        goal: bounded(s?.goal, 220),
+        metric: bounded(s?.metric, 160),
         target: Math.max(1, Math.min(10_000, Math.round(Number(s?.target)) || 0)),
         period: PERIODS.has(String(s?.period)) ? String(s?.period) : "month",
         verification: VERIFICATIONS.has(String(s?.verification)) ? String(s?.verification) : "honor",
-        reward: safe(s?.reward, 80),
-        why: safe(s?.why, 180),
+        reward: bounded(s?.reward, 80),
+        why: bounded(s?.why, 180),
         category: CATEGORIES.has(String(s?.category)) ? String(s?.category) : "other",
       }))
       .filter((s) => s.title && s.metric && s.target >= 1)
+      // A shuffle must actually shuffle: anything echoing an already-shown
+      // title is dropped here, not left for the client to re-display.
+      .filter((s) => !seenTitles.has(s.title.toLowerCase()))
       .slice(0, 5);
 
     // The concern gate is structural: no deterministic [concern] signal, no
@@ -466,8 +482,8 @@ Deno.serve(async (req) => {
     let concern: { headline: string; detail: string; receipts: string[] } | null = null;
     if (hasRealConcern && parsed.concern && typeof parsed.concern === "object") {
       const c = parsed.concern as Record<string, unknown>;
-      const headline = safe(c.headline, 120);
-      const detail = safe(c.detail, 400);
+      const headline = bounded(c.headline, 120);
+      const detail = bounded(c.detail, 400);
       if (headline) {
         concern = {
           headline,
