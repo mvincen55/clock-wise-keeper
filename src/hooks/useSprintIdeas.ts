@@ -8,6 +8,18 @@ import type { SprintDepartment, SprintPeriod, SprintScope, SprintVerification } 
 // this hook just carries the audience, the manager's optional direction, and
 // the shuffle-exclusion list across the wire.
 
+/** How a sprint audience reads on cards and badges — plural, team-flavoured. */
+export const SPRINT_ROLE_LABELS: Record<string, string> = {
+  dentist: 'Doctors',
+  hygienist: 'Hygienists',
+  dental_assistant: 'Dental assistants',
+  front_desk: 'Front desk',
+  office_manager: 'Managers',
+  sterilization: 'Sterilization',
+  floater: 'Floaters',
+  other: 'Other roles',
+};
+
 export type SprintIdea = {
   title: string;
   goal: string;

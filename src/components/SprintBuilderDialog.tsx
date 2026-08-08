@@ -24,6 +24,7 @@ import {
   type SprintVerification,
 } from '@/hooks/useTeamGoals';
 import {
+  SPRINT_ROLE_LABELS,
   useRewardIdeas,
   useSprintIdeas,
   type SprintAudience,
@@ -37,18 +38,6 @@ import type { OperationalRole } from '@/lib/schedule-reader/types';
 // The Intelligent Sprint Builder. Position first, then either the architect's
 // grounded suggestions or the manual form the office already knows. The AI
 // suggests and explains; the manager edits everything and decides.
-
-/** How a sprint audience reads on cards and badges — plural, team-flavoured. */
-export const SPRINT_ROLE_LABELS: Record<string, string> = {
-  dentist: 'Doctors',
-  hygienist: 'Hygienists',
-  dental_assistant: 'Dental assistants',
-  front_desk: 'Front desk',
-  office_manager: 'Managers',
-  sterilization: 'Sterilization',
-  floater: 'Floaters',
-  other: 'Other roles',
-};
 
 type AudienceValue =
   | 'team'

@@ -23,12 +23,17 @@ const CRON_ONLY = [
   { name: 'accountability-engine', body: { action: 'sweep' } },
 ];
 
-/** Endpoints that require a signed-in user (most also require a role). */
-const USER_ONLY = [
+/**
+ * Endpoints that require a signed-in user (most also require a role).
+ * `notDeployedOk` marks a function merged ahead of its first deploy: a 404
+ * NOT_FOUND is unreachable-by-definition and acceptable until it ships, at
+ * which point the strict 401/403 bar applies. Remove the flag after deploy.
+ */
+const USER_ONLY: Array<{ name: string; body: unknown; notDeployedOk?: boolean }> = [
   { name: 'commitment-listen', body: { message: 'probe' } },
   { name: 'parse-treatment', body: { image: 'data:image/png;base64,AAAA' } },
   { name: 'sprint-verify', body: { goal_id: '00000000-0000-0000-0000-000000000000' } },
-  { name: 'sprint-architect', body: { action: 'ideas', scope: 'team' } },
+  { name: 'sprint-architect', body: { action: 'ideas', scope: 'team' }, notDeployedOk: true },
   { name: 'goal-assistant', body: { mode: 'chat', messages: [] } },
   { name: 'reports-analyst', body: { action: 'analyze' } },
   { name: 'training-builder', body: { topic: 'probe' } },
@@ -77,11 +82,12 @@ describe.skipIf(!LIVE)('unauthorized callers are refused', () => {
     );
   }
 
-  for (const { name, body } of USER_ONLY) {
+  for (const { name, body, notDeployedOk } of USER_ONLY) {
     it(
       `${name} refuses a caller with no user session`,
       async () => {
         const { status, text } = await probe(name, body);
+        if (notDeployedOk && status === 404 && /NOT_FOUND/i.test(text)) return;
         expect(
           [401, 403],
           `${name} answered ${status}: ${text.slice(0, 200)}`,

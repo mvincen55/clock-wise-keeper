@@ -8,7 +8,8 @@ import { Gift, Plus, ShieldCheck, Sparkles, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import SprintVerifyDialog from '@/components/SprintVerifyDialog';
-import SprintBuilderDialog, { SPRINT_ROLE_LABELS } from '@/components/SprintBuilderDialog';
+import SprintBuilderDialog from '@/components/SprintBuilderDialog';
+import { SPRINT_ROLE_LABELS } from '@/hooks/useSprintIdeas';
 import {
   useBumpSprint,
   useCancelSprint,
