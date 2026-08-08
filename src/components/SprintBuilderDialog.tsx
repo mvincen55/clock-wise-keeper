@@ -222,7 +222,7 @@ export default function SprintBuilderDialog({
         verification,
         ai_suggested: fromIdea || !!seed,
       });
-      toast.success('Sprint started — the office AI will announce it.');
+      toast.success('Sprint started — the team will see the announcement.');
       onOpenChange(false);
       resetAll();
     } catch (e) {
@@ -277,7 +277,7 @@ export default function SprintBuilderDialog({
             <DialogHeader>
               <DialogTitle>Start a sprint</DialogTitle>
               <DialogDescription>
-                One number, one reward. Pick who it's for and the office AI will suggest sprints
+                One number, one reward. Pick who it's for and Purple Envelope will suggest sprints
                 grounded in what's actually happening here.
               </DialogDescription>
             </DialogHeader>
@@ -316,7 +316,7 @@ export default function SprintBuilderDialog({
                 <div className="rounded-md border border-warning/40 bg-warning/10 p-3 space-y-2">
                   <p className="text-sm font-medium flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 shrink-0 text-warning mt-0.5" />
-                    <span>The office AI noticed something</span>
+                    <span>Purple Envelope noticed something</span>
                   </p>
                   <p className="text-sm text-muted-foreground">{concern.headline}</p>
                   {concernOpen && (

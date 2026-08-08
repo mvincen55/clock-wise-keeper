@@ -208,6 +208,14 @@ export default function SupportWidget() {
     if (open) setTimeout(() => textRef.current?.focus(), 60);
   }, [open]);
 
+  // On mobile the floating launcher is hidden (it would sit on top of the
+  // bottom navigation), so More → "Report a Problem" opens the panel instead.
+  useEffect(() => {
+    const openFromNav = () => setOpen(true);
+    window.addEventListener('pe:open-support', openFromNav);
+    return () => window.removeEventListener('pe:open-support', openFromNav);
+  }, []);
+
   // Prefill from wherever they are: the page decides the category, and any date
   // range already on screen (?from=&to=) carries over so nobody retypes it.
   useEffect(() => {
@@ -811,7 +819,7 @@ export default function SupportWidget() {
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Report a problem"
-          className="fixed bottom-4 right-4 z-50 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-lg transition-all hover:w-auto hover:gap-2 hover:px-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group"
+          className="fixed bottom-4 right-4 z-50 hidden h-11 w-11 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-lg transition-all hover:w-auto hover:gap-2 hover:px-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group md:flex"
         >
           <LifeBuoy className="h-5 w-5 shrink-0" />
           <span className="hidden whitespace-nowrap text-sm group-hover:inline">
@@ -822,7 +830,7 @@ export default function SupportWidget() {
 
       {open && (
         <div
-          className="fixed bottom-4 right-4 z-50 flex max-h-[70vh] w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border bg-card shadow-2xl"
+          className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)] right-4 z-50 flex max-h-[70vh] w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border bg-card shadow-2xl md:bottom-4"
           onDragEnter={onDragEnter}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}

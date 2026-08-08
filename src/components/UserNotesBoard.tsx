@@ -80,7 +80,7 @@ function SortableNote({
           <button
             type="button"
             onClick={onCycleColor}
-            aria-label="Change note colour"
+            aria-label="Change note color"
             className="h-4 w-4 rounded-full border border-foreground/20 bg-background/60"
           />
           <Button

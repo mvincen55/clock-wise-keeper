@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useMyProfile } from '@/hooks/useMyProfile';
 import { useTick } from '@/hooks/useTick';
-import { useOrgAttendanceSnapshot, type EmployeeSnapshot } from '@/hooks/useOrgAttendanceSnapshot';
+import { useOrgAttendanceSnapshot } from '@/hooks/useOrgAttendanceSnapshot';
 import { useApprovalCounts } from '@/hooks/useApprovalCounts';
 import { usePracticeVitals } from '@/hooks/usePracticeVitals';
 import { useTeamGoals, type TeamGoal } from '@/hooks/useTeamGoals';
@@ -20,15 +20,15 @@ import { useMissingShifts } from '@/hooks/useMissingShifts';
 import { useTodayEntry } from '@/hooks/useTimeEntries';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyOperationalRoles } from '@/hooks/useMyOperationalRoles';
-import { useAttendanceDayStatus } from '@/hooks/useAttendanceDayStatus';
 import { useTimeEntries } from '@/hooks/useTimeEntries';
 import { shortcutsFor, roleLabel as opRoleLabel, roleMission } from './opRoles';
 import { calculatePunchMinutes } from '@/lib/time-utils';
 import { getClockStatus, getRunningMinutes } from '@/lib/clock-status';
-import { formatDate, formatDateShort, formatTime, getToday, minutesToHHMM, shiftDate } from '@/lib/time-utils';
+import { formatDate, formatTime, getToday, minutesToHHMM, shiftDate } from '@/lib/time-utils';
+import { staffingSummary } from './staffing';
 import type {
   DashboardHeader, DashboardView, Figure, ManagerView, MemberView, OwnerView,
-  PermissionTier, PersonStatus, ProgressRow, RoleContext, RoleLane, Series, Signal, TimelineRow,
+  PermissionTier, ProgressRow, RoleContext, RoleLane, Series, Signal,
 } from './types';
 
 /**
@@ -37,6 +37,10 @@ import type {
  * This file adds no queries, no tables, and no business rules — every number
  * below already powers another surface in the app. Anything Purple Envelope
  * cannot verify from real records is simply not rendered.
+ *
+ * Time semantics live in `staffing.ts`: "scheduled sometime today" is never
+ * presented as "expected to be working right now", and a closed office never
+ * produces staffing exceptions.
  */
 
 const ROLE_LABEL = {
@@ -67,31 +71,6 @@ function dayTick(date: string): string {
   return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString('en-US', { weekday: 'narrow', timeZone: 'UTC' });
 }
 
-/** One person's live attendance line, in words a human reads at a glance. */
-function personStatus(s: EmployeeSnapshot): PersonStatus {
-  if (s.office_closed) return { id: s.employee_id, name: s.display_name, status: 'Office closed', tone: 'calm' };
-  if (s.has_day_off) return { id: s.employee_id, name: s.display_name, status: 'Approved off', tone: 'calm' };
-  if (s.is_absent) return { id: s.employee_id, name: s.display_name, status: 'Out', tone: 'urgent' };
-  if (s.is_incomplete) return { id: s.employee_id, name: s.display_name, status: 'No clock-out', tone: 'attention' };
-  if (s.is_late)
-    return {
-      id: s.employee_id,
-      name: s.display_name,
-      status: `Late ${s.minutes_late}m`,
-      tone: 'attention',
-    };
-  if (s.has_punches)
-    return {
-      id: s.employee_id,
-      name: s.display_name,
-      status: s.is_remote ? 'In — remote' : 'In',
-      tone: 'steady',
-    };
-  if (!s.is_scheduled_day)
-    return { id: s.employee_id, name: s.display_name, status: 'Not scheduled', tone: 'calm' };
-  return { id: s.employee_id, name: s.display_name, status: 'No punch yet', tone: 'attention' };
-}
-
 export function useDashboardView(): { view: DashboardView | null; isLoading: boolean } {
   const now = useTick(60_000);
   const { user } = useAuth();
@@ -118,8 +97,6 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
 
   const ops = useMyOperationalRoles();
   const today = getToday();
-  const chartStart = shiftDate(today, -13);
-  const { data: attendanceWindow = [] } = useAttendanceDayStatus(chartStart, today);
   const weekStart = shiftDate(today, -6);
   const { data: weekEntries = [] } = useTimeEntries(weekStart, today);
   const fourteenDaysAgo = new Date(new Date(today + 'T12:00:00Z').getTime() - 14 * 86_400_000)
@@ -202,32 +179,10 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
     }
 
     /**
-     * Charts. Two series, both from records the app already writes:
-     *  - arrivals: `attendance_day_status` rows over the last 14 days,
-     *  - my week: own `time_entries` punches over the last 7 days.
-     * No production, collections, patient or utilisation series exists,
-     * because Purple Envelope does not hold that data.
+     * The member's personal chart, from their own `time_entries` punches.
+     * The office arrivals trend intentionally does NOT live on Home — it is an
+     * attendance surface an admin opens on purpose, from Team.
      */
-    const dayKeys = Array.from({ length: 14 }, (_, i) => shiftDate(chartStart, i));
-    const arrivalsSeries: Series = {
-      id: 'arrivals',
-      title: 'Arrivals, last 14 days',
-      question: 'Are people getting here on time?',
-      caption: 'On-time arrivals against scheduled people. Pale bar is scheduled, solid bar is on time.',
-      href: '/team',
-      format: 'percent',
-      points: dayKeys.map(d => {
-        const rows = attendanceWindow.filter(r => r.entry_date === d && r.is_scheduled_day && !r.office_closed);
-        return {
-          x: dayTick(d),
-          value: rows.filter(r => r.has_punches && !r.is_late).length,
-          of: rows.length,
-          muted: rows.length === 0,
-        };
-      }),
-      footnote: 'Attendance only. Purple Envelope does not hold production, collections, or schedule-utilisation data.',
-    };
-
     const mySeries: Series = {
       id: 'my-week',
       title: 'My recorded time, last 7 days',
@@ -244,13 +199,14 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
 
     /* ------------------------------ owner ------------------------------ */
     if (ctx.role === 'owner') {
-      const scheduled = snapshot.filter(s => s.is_scheduled_day && !s.office_closed && !s.has_day_off);
-      const present = scheduled.filter(s => s.has_punches).length;
-      const risks = scheduled.filter(s => s.is_absent || s.is_late || (!s.has_punches && s.is_scheduled_day)).length;
+      // Owners are already excluded from `snapshot` at the hook boundary —
+      // an owner without punches can never appear absent or out.
+      const staffing = staffingSummary(snapshot, now);
       const ownerReviews = orgReports.filter(r => r.status === 'awaiting_owner');
       const overdueAcks = ackRoster.filter(a => !a.acknowledged_at && a.overdue_at);
       const openSprints = sprints.filter(s => s.status === 'active' || s.status === 'pending_verification');
       const verifySprints = sprints.filter(s => s.status === 'pending_verification');
+      const openRecords = orgReports.filter(r => r.status !== 'closed').length;
       const decisionCount =
         (approvals?.total ?? 0) + ownerReviews.length + overdueAcks.length + verifySprints.length;
 
@@ -289,33 +245,48 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         },
       ];
 
-      const figures: Figure[] = [
-        {
-          id: 'decisions',
-          value: String(decisionCount),
-          label: 'Waiting on you',
-          detail: decisionCount === 0 ? 'Clear' : 'Approvals, reviews, signatures',
-          href: '/approvals',
-        },
-        {
-          id: 'staffing',
-          value: `${present}/${scheduled.length}`,
-          label: 'On the floor',
-          detail: risks === 0 ? 'No staffing exceptions' : `${risks} exception${risks === 1 ? '' : 's'}`,
-          href: '/team',
-        },
+      // At-a-glance strip: STATUS only. Detail and actions live in the bands
+      // below, so a number never repeats with the same meaning twice. The
+      // staffing tile exists only while staffing is a live question — when
+      // the office is closed, the Office Status card already says so once.
+      const staffingFigures: Figure[] =
+        staffing.office.phase === 'open'
+          ? [
+              {
+                id: 'staffing',
+                value: `${staffing.presentNow ?? 0}/${staffing.expectedNow ?? 0}`,
+                label: 'In right now',
+                detail: (staffing.missingNow ?? 0) > 0 ? `${staffing.missingNow} not in yet` : 'As expected',
+                tone: (staffing.missingNow ?? 0) > 0 ? 'attention' : 'steady',
+                href: '/team',
+              },
+            ]
+          : staffing.office.phase === 'unknown_hours'
+            ? [
+                {
+                  id: 'staffing',
+                  value: String(staffing.scheduledToday),
+                  label: 'Scheduled today',
+                  detail: 'Shift times not set',
+                  href: '/team',
+                },
+              ]
+            : [];
+
+      const glance: Figure[] = [
+        ...staffingFigures,
         {
           id: 'goals',
-          value: String(openSprints.length),
+          value: openSprints.length > 0 ? String(openSprints.length) : '—',
           label: 'Goals in flight',
-          detail: openSprints.length === 0 ? 'None set' : 'Office sprints running',
+          detail: openSprints.length > 0 ? 'Office sprints running' : 'None running yet',
           href: '/goals',
         },
         {
-          id: 'exceptions',
-          value: String(orgReports.filter(r => r.status !== 'closed').length),
+          id: 'records',
+          value: openRecords > 0 ? String(openRecords) : '0',
           label: 'Open records',
-          detail: 'Unresolved accountability chain',
+          detail: openRecords > 0 ? 'Accountability in progress' : 'All resolved',
           href: '/management',
         },
       ];
@@ -346,34 +317,40 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
             }
           : null;
 
-      const pulse: Signal[] = [
-        {
+      // Office pulse: only real, unresolved signals. A zero here is silence,
+      // not a row — the band renders a calm "all quiet" state instead.
+      const pulse: Signal[] = [];
+      if (nudges.length > 0) {
+        pulse.push({
           id: 'nudges',
-          label: 'Open office notes',
-          detail: 'Quiet notes the office AI has left, still unresolved.',
+          label: 'Unresolved office notes',
+          detail: 'Notes Purple Envelope flagged, still open.',
           value: String(nudges.length),
           href: '/inbox',
-          tone: nudges.length > 0 ? 'attention' : 'calm',
-        },
-        {
-          id: 'missing',
-          label: 'Missing punches, last 14 days',
-          detail: 'Scheduled days with no time recorded.',
-          value: String(snapshot.filter(s => s.is_incomplete).length),
+          tone: 'attention',
+        });
+      }
+      if (staffing.reviewCount > 0) {
+        pulse.push({
+          id: 'attendance-review',
+          label: `${staffing.reviewCount} attendance item${staffing.reviewCount === 1 ? '' : 's'} need review`,
+          detail: staffing.reviewDetail,
+          value: String(staffing.reviewCount),
           href: '/team',
-          tone: snapshot.some(s => s.is_incomplete) ? 'attention' : 'calm',
-        },
-      ];
+          tone: 'attention',
+        });
+      }
 
       const owner: OwnerView = {
         kind: 'owner',
         header,
         roleContext,
-        chart: arrivalsSeries,
         lanes,
-        figures,
+        office: staffing.office,
+        decisionCount,
         decisions,
-        staffing: { present, expected: scheduled.length, rows: scheduled.map(personStatus).slice(0, 10) },
+        glance,
+        staffing,
         goals,
         pulse,
         health,
@@ -383,58 +360,109 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
 
     /* ----------------------------- manager ----------------------------- */
     if (ctx.role === 'manager') {
-      const scheduled = snapshot.filter(s => s.is_scheduled_day && !s.office_closed);
-      const present = scheduled.filter(s => s.has_punches).length;
-      const late = scheduled.filter(s => s.is_late).length;
-      const out = scheduled.filter(s => s.is_absent).length;
-      const incomplete = snapshot.filter(s => s.is_incomplete).length;
+      const staffing = staffingSummary(snapshot, now);
       const trainingDue = assignments.filter(a => a.status !== 'completed').length;
       const openAcks = ackRoster.filter(a => !a.acknowledged_at).length;
       const managerReviews = orgReports.filter(r => r.status === 'awaiting_manager');
 
-      const figures: Figure[] = [
-        {
-          id: 'here',
-          value: `${present}/${scheduled.length}`,
-          label: 'Here now',
-          detail: late > 0 ? `${late} late` : 'No late arrivals',
-          tone: late > 0 ? 'attention' : 'steady',
-          href: '/team',
-        },
-        {
-          id: 'out',
-          value: String(out),
-          label: 'Out today',
-          detail: 'Coverage gaps',
-          tone: out > 0 ? 'attention' : 'calm',
-          href: '/team',
-        },
-        {
-          id: 'approvals',
-          value: String(approvals?.total ?? 0),
-          label: 'Approvals',
-          detail: 'PTO, corrections, changes',
-          tone: (approvals?.total ?? 0) > 0 ? 'attention' : 'calm',
-          href: '/approvals',
-        },
-        {
-          id: 'punches',
-          value: String(incomplete),
-          label: 'Missing clock-outs',
-          detail: 'Days that need fixing',
-          tone: incomplete > 0 ? 'urgent' : 'calm',
-          href: '/team',
-        },
-      ];
+      const approvalsFigure: Figure = {
+        id: 'approvals',
+        value: String(approvals?.total ?? 0),
+        label: 'Approvals',
+        detail: (approvals?.total ?? 0) > 0 ? 'PTO, corrections, changes' : 'Queue is clear',
+        tone: (approvals?.total ?? 0) > 0 ? 'attention' : 'calm',
+        href: '/approvals',
+      };
+      const reviewFigure: Figure = {
+        id: 'attendance-review',
+        value: String(staffing.reviewCount),
+        label: 'Attendance to review',
+        detail: staffing.reviewCount > 0 ? staffing.reviewDetail : 'Nothing needs review',
+        tone: staffing.reviewCount > 0 ? 'attention' : 'calm',
+        href: '/team',
+      };
 
-      const attention: Signal[] = [
+      // The figure strip answers the question that matches the time of day:
+      // live staffing while the office works, a day summary when it does not.
+      const figures: Figure[] =
+        staffing.office.phase === 'open'
+          ? [
+              {
+                id: 'here',
+                value: `${staffing.presentNow ?? 0}/${staffing.expectedNow ?? 0}`,
+                label: 'In right now',
+                detail: 'Against who is expected at this hour',
+                tone: 'steady',
+                href: '/team',
+              },
+              {
+                id: 'not-in',
+                value: String(staffing.missingNow ?? 0),
+                label: 'Not in yet',
+                detail: (staffing.missingNow ?? 0) > 0 ? 'Expected now, no punch' : 'Everyone expected is in',
+                tone: (staffing.missingNow ?? 0) > 0 ? 'attention' : 'calm',
+                href: '/team',
+              },
+              approvalsFigure,
+              reviewFigure,
+            ]
+          : staffing.office.phase === 'before_open'
+            ? [
+                { id: 'office', value: '—', label: 'Office', detail: staffing.office.detail, tone: 'calm', href: '/team' },
+                {
+                  id: 'scheduled',
+                  value: String(staffing.scheduledToday),
+                  label: 'Scheduled today',
+                  detail: 'Shifts on the calendar',
+                  tone: 'calm',
+                  href: '/team',
+                },
+                approvalsFigure,
+                reviewFigure,
+              ]
+            : staffing.office.phase === 'unknown_hours'
+              ? [
+                  {
+                    id: 'scheduled',
+                    value: String(staffing.scheduledToday),
+                    label: 'Scheduled today',
+                    detail: 'Shift times not set',
+                    tone: 'calm',
+                    href: '/team',
+                  },
+                  {
+                    id: 'punched',
+                    value: String(snapshot.filter(s => s.has_punches).length),
+                    label: 'Punched in today',
+                    detail: 'Recorded time today',
+                    tone: 'calm',
+                    href: '/team',
+                  },
+                  approvalsFigure,
+                  reviewFigure,
+                ]
+              : [
+                  { id: 'office', value: 'Closed', label: 'Office', detail: staffing.office.detail, tone: 'calm' },
+                  {
+                    id: 'worked',
+                    value: String(snapshot.filter(s => s.has_punches).length),
+                    label: 'Worked today',
+                    detail: staffing.scheduledToday > 0 ? `${staffing.scheduledToday} scheduled` : 'No shifts today',
+                    tone: 'calm',
+                    href: '/team',
+                  },
+                  approvalsFigure,
+                  reviewFigure,
+                ];
+
+      const attentionAll: Signal[] = [
         {
           id: 'pto',
           label: 'PTO requests pending',
           detail: 'Approve or decline before the schedule locks.',
           value: String(approvals?.ptoRequests ?? 0),
           href: '/approvals',
-          tone: (approvals?.ptoRequests ?? 0) > 0 ? 'attention' : 'calm',
+          tone: 'attention',
         },
         {
           id: 'corrections',
@@ -442,7 +470,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
           detail: 'Each one keeps the original punch on record.',
           value: String(approvals?.corrections ?? 0),
           href: '/approvals',
-          tone: (approvals?.corrections ?? 0) > 0 ? 'attention' : 'calm',
+          tone: 'attention',
         },
         {
           id: 'reviews',
@@ -450,7 +478,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
           detail: 'Accountability chain — you cannot review your own.',
           value: String(managerReviews.length),
           href: '/management',
-          tone: managerReviews.length > 0 ? 'urgent' : 'calm',
+          tone: 'urgent',
         },
         {
           id: 'acks',
@@ -458,7 +486,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
           detail: 'Exact published versions still unsigned.',
           value: String(openAcks),
           href: '/playbook',
-          tone: openAcks > 0 ? 'attention' : 'calm',
+          tone: 'attention',
         },
         {
           id: 'training',
@@ -466,17 +494,18 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
           detail: 'Assigned modules not yet completed.',
           value: String(trainingDue),
           href: '/training',
-          tone: trainingDue > 0 ? 'attention' : 'calm',
+          tone: 'attention',
         },
         {
           id: 'nudges',
           label: 'Unresolved office notes',
-          detail: 'Nudges nobody has acted on or dismissed.',
+          detail: 'Notes Purple Envelope flagged, still open.',
           value: String(nudges.length),
           href: '/inbox',
-          tone: nudges.length > 0 ? 'attention' : 'calm',
+          tone: 'attention',
         },
       ];
+      const attention = attentionAll.filter(s => s.value !== '0');
 
       const progress: ProgressRow[] = sprints
         .filter(s => s.status === 'active')
@@ -490,31 +519,16 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
           href: '/goals',
         }));
 
-      const timeline: TimelineRow[] = scheduled
-        .filter(s => s.has_punches || s.is_late || s.is_absent)
-        .slice(0, 12)
-        .map(s => {
-          const p = personStatus(s);
-          return {
-            id: s.employee_id,
-            time: s.is_late ? `+${s.minutes_late}m` : s.has_punches ? 'In' : '—',
-            label: s.display_name,
-            detail: p.status,
-            tone: p.tone,
-          };
-        });
-
       const manager: ManagerView = {
         kind: 'manager',
         header,
         roleContext,
-        chart: arrivalsSeries,
         lanes,
+        office: staffing.office,
         figures,
-        roster: scheduled.map(personStatus),
+        staffing,
         attention,
         progress,
-        timeline,
       };
       return { view: manager, isLoading: false };
     }
@@ -592,7 +606,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         detail: 'Modules not yet completed.',
         value: String(openTraining.length),
         href: '/training',
-        tone: openTraining.length > 0 ? 'attention' : 'calm',
+        tone: 'attention',
       },
       {
         id: 'acks',
@@ -600,7 +614,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         detail: 'Signing means you read that exact version.',
         value: String(openAcks.length),
         href: '/playbook',
-        tone: openAcks.length > 0 ? 'attention' : 'calm',
+        tone: 'attention',
       },
       {
         id: 'bypasses',
@@ -608,7 +622,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         detail: 'Never blocks you — just needs a sentence.',
         value: String(bypasses.length),
         href: '/checklists',
-        tone: bypasses.length > 0 ? 'attention' : 'calm',
+        tone: 'attention',
       },
       {
         id: 'missing',
@@ -616,7 +630,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         detail: 'Scheduled days with no punches.',
         value: String(missingDays.length),
         href: '/timesheet',
-        tone: missingDays.length > 0 ? 'attention' : 'calm',
+        tone: 'attention',
       },
       {
         id: 'records',
@@ -624,10 +638,12 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         detail: 'You always get to add your side.',
         value: String(openReports.length),
         href: '/management',
-        tone: openReports.length > 0 ? 'urgent' : 'calm',
+        tone: 'urgent',
       },
     ];
-    const mine = mineAll.filter(s => s.value !== '0' || s.id === 'training');
+    // A zero is not an open item. The empty state says "you're clear" once,
+    // instead of five rows of zeros saying it five times.
+    const mine = mineAll.filter(s => s.value !== '0');
 
     const progress: ProgressRow[] = mySprints.slice(0, 3).map(s => ({
       id: s.id,
@@ -667,24 +683,27 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
       },
     ];
 
-    const office: Signal[] = [
-      {
+    const office: Signal[] = [];
+    if (mySprints.length > 0) {
+      office.push({
         id: 'sprints',
         label: 'Office sprints running',
         detail: 'Shared goals you can contribute to.',
         value: String(mySprints.length),
         href: '/goals',
         tone: 'calm',
-      },
-      {
+      });
+    }
+    if (nudges.length > 0) {
+      office.push({
         id: 'nudges',
         label: 'Notes for you',
         detail: 'Quiet suggestions, always yours to dismiss.',
         value: String(nudges.length),
         href: '/inbox',
-        tone: nudges.length > 0 ? 'attention' : 'calm',
-      },
-    ];
+        tone: 'attention',
+      });
+    }
 
     const member: MemberView = {
       kind: 'member',
@@ -703,6 +722,6 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
   }, [
     ctx, ctxLoading, profile, now, today, snapshot, approvals, vitals, sprintData, sprints, nudges, bypasses,
     orgReports, myReports, ackRoster, myAcks, assignments, pto, momentum, todayEntry, missingDays, user,
-    ops, attendanceWindow, weekEntries, chartStart, weekStart,
+    ops, weekEntries, weekStart,
   ]);
 }

@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useAddEmployee } from '@/hooks/useEmployees';
 import InviteEmployeeModal from '@/components/InviteEmployeeModal';
 import StaffCodeAttentionCard from '@/components/team/StaffCodeAttentionCard';
+import AttendanceTrendCard from '@/components/team/AttendanceTrendCard';
 import TeamEmployeeCard from '@/components/TeamEmployeeCard';
 import ArchivedMembersDialog from '@/components/ArchivedMembersDialog';
 import PendingInvitesCard from '@/components/PendingInvitesCard';
@@ -144,6 +145,9 @@ export default function Team() {
           className="w-[10rem] h-8 text-xs"
         />
       </div>
+
+      {/* Attendance trend — inspected here on purpose, not on Home. */}
+      <AttendanceTrendCard />
 
       {/* Staff codes needing assignment */}
       <StaffCodeAttentionCard />

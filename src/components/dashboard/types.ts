@@ -8,6 +8,9 @@
  */
 
 import type { OperationalRole } from '@/lib/schedule-reader/types';
+import type { OfficeStatus, StaffingSummary } from './staffing';
+
+export type { OfficeStatus, StaffingSummary };
 
 export type Tone = 'urgent' | 'attention' | 'steady' | 'calm';
 
@@ -133,19 +136,21 @@ export type OwnerView = {
   kind: 'owner';
   header: DashboardHeader;
   roleContext: RoleContext;
-  /** The one chart an owner reads: verified operational trend. */
-  chart: Series | null;
   /** Compact lane when the owner also works a chair or the desk. */
   lanes: RoleLane[];
-  /** Command strip: the four numbers an owner reads first. */
-  figures: Figure[];
-  /** Decisions and exceptions that are the owner's to resolve. */
+  /** Current office state — open, closed, nobody scheduled. */
+  office: OfficeStatus;
+  /** Everything waiting on owner authority, resolved to one number. */
+  decisionCount: number;
+  /** The decision lines behind that number (component renders open ones). */
   decisions: Signal[];
-  /** Staffing risk, today. */
-  staffing: { present: number; expected: number; rows: PersonStatus[] };
+  /** Compact at-a-glance strip. Status only — detail lives in the bands. */
+  glance: Figure[];
+  /** Phase-aware staffing. Attendance surfaces here ONLY as a real exception. */
+  staffing: StaffingSummary;
   /** Operational goals in flight. */
   goals: ProgressRow[];
-  /** Verified office pulse lines. */
+  /** Verified office pulse lines — only real, unresolved signals. */
   pulse: Signal[];
   /** Collections pace — only when the office records deposits and it is visible. */
   health: {
@@ -161,18 +166,17 @@ export type ManagerView = {
   kind: 'manager';
   header: DashboardHeader;
   roleContext: RoleContext;
-  chart: Series | null;
   /** Compact personal-work lane — never displaces the cockpit. */
   lanes: RoleLane[];
+  /** Current office state — drives which figures make sense. */
+  office: OfficeStatus;
   figures: Figure[];
-  /** Who is here right now. */
-  roster: PersonStatus[];
+  /** Phase-aware staffing: live roster while open, day summary after. */
+  staffing: StaffingSummary;
   /** What needs the manager's hands. */
   attention: Signal[];
   /** Checklist / Close the Day progress. */
   progress: ProgressRow[];
-  /** Today, in order. */
-  timeline: TimelineRow[];
 };
 
 export type MemberView = {

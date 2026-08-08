@@ -14,7 +14,7 @@ import { MicroLabel } from './kit';
  *    inventing a shape.
  */
 
-function readout(series: Series): string {
+export function readout(series: Series): string {
   const pts = series.points;
   if (pts.length === 0) return '—';
   const last = pts[pts.length - 1];
@@ -45,7 +45,7 @@ export function TrendChart({ series, className }: { series: Series; className?: 
 
   return (
     <section className={cn('min-w-0', className)}>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b-2 border-foreground pb-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border pb-2">
         <MicroLabel className="text-foreground/70">{series.title}</MicroLabel>
         {series.href && (
           <Link
@@ -73,7 +73,7 @@ export function TrendChart({ series, className }: { series: Series; className?: 
       {hasData ? (
         <>
           <div
-            className="mt-5 flex h-24 items-end gap-[3px] border-b border-foreground sm:h-28"
+            className="mt-5 flex h-24 items-end gap-[3px] border-b border-border sm:h-28"
             role="img"
             aria-label={`${series.title}. ${series.caption}`}
           >
@@ -170,7 +170,7 @@ export function CompletionRing({
   );
 }
 
-/** Coverage composition — one hard bar, labelled, never a pie. */
+/** Coverage composition — one hard bar, labeled, never a pie. */
 export function StackedBar({
   segments,
   caption,

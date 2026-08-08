@@ -1,16 +1,19 @@
 import type { ManagerView, MemberView, OwnerView } from './types';
 import {
   assistantFixture, frontDeskBackupAssistFixture, frontDeskFixture, hygienistFixture,
-  managerFixture, managerFrontDeskFixture, ownerFixture,
+  managerFixture, managerFrontDeskFixture, managerNewFixture, memberNewFixture,
+  ownerClosedFixture, ownerFixture, ownerNewFixture,
 } from './fixtures';
 
 /**
  * DESIGN-REVIEW MATRIX (temporary).
  *
- * One entry per composition the owner asked to review. Each carries the labels
- * the review needs: permission tier, primary operational role, backup roles,
- * the real hook behind every widget, and what was deliberately left out because
- * Purple Envelope does not hold trustworthy data for it.
+ * One entry per composition the owner asked to review — including the states
+ * that matter most in production: closed office, brand-new office, and
+ * brand-new employee. Each carries the labels the review needs: permission
+ * tier, primary operational role, backup roles, the real hook behind every
+ * widget, and what was deliberately left out because Purple Envelope does not
+ * hold trustworthy data for it.
  */
 
 export type Scenario = {
@@ -28,7 +31,7 @@ export type Scenario = {
 const NO_CLINICAL = [
   'Production, collections, revenue, and payroll — not stored by Purple Envelope.',
   'Patient names, appointments, balances, and treatment detail — outside the non-HIPAA boundary.',
-  'Schedule utilisation and practice-health scores — would require PMS data the app does not read.',
+  'Schedule utilization and practice-health scores — would require PMS data the app does not read.',
 ];
 
 const MEMBER_SOURCES: [string, string][] = [
@@ -42,9 +45,9 @@ const MEMBER_SOURCES: [string, string][] = [
 ];
 
 const ADMIN_SOURCES: [string, string][] = [
-  ['Roster / here now', 'useOrgAttendanceSnapshot'],
+  ['Office status + staffing', 'useOrgAttendanceSnapshot + staffing.ts (owners excluded; phase-aware)'],
   ['Approvals', 'useApprovalCounts'],
-  ['Arrivals chart', 'attendance_day_status, last 14 days'],
+  ['Attendance to review', 'staffing.ts attendanceReview — only facts already true'],
   ['Checklist progress', 'useChecklists'],
   ['Acknowledgments', 'useKnowledgeAcknowledgments'],
   ['Training', 'useTrainingAssignments'],
@@ -54,7 +57,7 @@ const ADMIN_SOURCES: [string, string][] = [
 export const SCENARIOS: Scenario[] = [
   {
     slug: 'owner',
-    title: 'Owner — practice command centre',
+    title: 'Owner — open office with activity',
     tier: 'Owner',
     primary: 'Dentist',
     secondary: 'None',
@@ -67,12 +70,48 @@ export const SCENARIOS: Scenario[] = [
     omitted: NO_CLINICAL,
   },
   {
+    slug: 'owner-closed',
+    title: 'Owner — office closed for the day (10:32 PM)',
+    tier: 'Owner',
+    primary: 'Dentist',
+    secondary: 'None',
+    view: ownerClosedFixture,
+    sources: ADMIN_SOURCES,
+    omitted: [
+      ...NO_CLINICAL,
+      'Live staffing — the workday is over, so no "on the floor" claim is made and no exceptions are invented.',
+    ],
+  },
+  {
+    slug: 'owner-new',
+    title: 'Owner — brand-new office',
+    tier: 'Owner',
+    primary: 'Dentist',
+    secondary: 'None',
+    view: ownerNewFixture,
+    sources: ADMIN_SOURCES,
+    omitted: [
+      ...NO_CLINICAL,
+      'Attendance trend — no history exists, so it renders on Team as "not enough history yet", never as 0%.',
+    ],
+  },
+  {
     slug: 'manager',
     title: 'Manager — operational cockpit',
     tier: 'Manager',
     primary: 'Office manager',
     secondary: 'None',
     view: managerFixture,
+    sources: ADMIN_SOURCES,
+    omitted: NO_CLINICAL,
+  },
+  {
+    slug: 'manager-new',
+    title: 'Manager — brand-new office',
+    tier: 'Manager',
+    primary: 'Office manager',
+    secondary: 'None',
+    view: managerNewFixture,
     sources: ADMIN_SOURCES,
     omitted: NO_CLINICAL,
   },
@@ -108,6 +147,16 @@ export const SCENARIOS: Scenario[] = [
     view: hygienistFixture,
     sources: MEMBER_SOURCES,
     omitted: [...NO_CLINICAL, 'Per-provider clinical output — no such data exists in the app.'],
+  },
+  {
+    slug: 'member-new',
+    title: 'Team member — brand-new employee',
+    tier: 'Team member',
+    primary: 'Hygienist',
+    secondary: 'None',
+    view: memberNewFixture,
+    sources: MEMBER_SOURCES,
+    omitted: [...NO_CLINICAL, 'Streak, hours, and open items are real zeros — a new account genuinely starts at zero.'],
   },
   {
     slug: 'dental-assistant',

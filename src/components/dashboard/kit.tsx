@@ -9,9 +9,10 @@ import type {
 /**
  * The authenticated dashboard kit.
  *
- * Same family as the public surfaces — hard rules, mono micro-labels, heavy
- * display numerals, no rounded card soup — but rendered in the OFFICE's
- * semantic tokens so the office identity stays primary.
+ * Same family as the public surfaces — ruled sections, mono micro-labels,
+ * heavy display numerals — but warmed up for a working dental office: soft
+ * rules instead of hard black bars, rounded surfaces, and the office's purple
+ * as an accent rather than a command-console skin. Distinctive, not severe.
  */
 
 export const toneText: Record<Tone, string> = {
@@ -28,14 +29,14 @@ export const toneDot: Record<Tone, string> = {
   calm: 'bg-muted-foreground/40',
 };
 
-/** Status is never colour alone — every dot carries its own text label. */
+/** Status is never color alone — every dot carries its own text label. */
 export function StatusDot({ tone, className }: { tone: Tone; className?: string }) {
   return <span aria-hidden className={cn('inline-block h-2 w-2 shrink-0', toneDot[tone], className)} />;
 }
 
 export function MicroLabel({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <p className={cn('min-w-0 break-words font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground', className)}>
+    <p className={cn('min-w-0 break-words font-mono text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground', className)}>
       {children}
     </p>
   );
@@ -57,7 +58,7 @@ export function Band({
 }) {
   return (
     <section className={cn('min-w-0', className)}>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b-2 border-foreground pb-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border pb-2">
         <div className="flex min-w-0 items-baseline gap-3">
           <MicroLabel className="text-foreground/70">{title}</MicroLabel>
           {count && <span className="font-mono text-[10px] tabular-nums text-muted-foreground">{count}</span>}
@@ -133,6 +134,55 @@ export function EmptyLine({ children }: { children: ReactNode }) {
 }
 
 /**
+ * A designed empty state. Empty is a real production experience, not an edge
+ * case, and each one declares what its emptiness MEANS:
+ *  - `good`    — genuinely clear; celebrate, no action needed.
+ *  - `neutral` — nothing yet (e.g. not enough history); no action needed.
+ *  - `setup`   — incomplete setup; offers the one action that changes it.
+ */
+export function EmptyState({
+  tone = 'neutral',
+  title,
+  detail,
+  action,
+}: {
+  tone?: 'good' | 'neutral' | 'setup';
+  title: string;
+  detail?: string;
+  action?: { label: string; to: string };
+}) {
+  return (
+    <div
+      className={cn(
+        'rounded-xl border px-4 py-5 my-3',
+        tone === 'good' && 'border-success/25 bg-success/[0.06]',
+        tone === 'neutral' && 'border-border bg-muted/40',
+        tone === 'setup' && 'border-primary/25 bg-primary/[0.05]',
+      )}
+    >
+      <p
+        className={cn(
+          'text-[14.5px] font-semibold leading-snug',
+          tone === 'good' ? 'text-success' : tone === 'setup' ? 'text-primary' : 'text-foreground',
+        )}
+      >
+        {title}
+      </p>
+      {detail && <p className="mt-1 text-[13px] leading-snug text-muted-foreground">{detail}</p>}
+      {action && (
+        <Link
+          to={action.to}
+          className="group mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
+        >
+          {action.label}
+          <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:-translate-y-0.5" />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+/**
  * The command strip: the numbers that answer "how are we doing" before any
  * reading happens. Dominant on desktop, a two-up block on mobile.
  */
@@ -140,7 +190,8 @@ export function FigureStrip({ figures, invert }: { figures: Figure[]; invert?: b
   return (
     <div
       className={cn(
-        'grid grid-cols-2 sm:grid-cols-4',
+        'grid grid-cols-2',
+        figures.length >= 4 ? 'sm:grid-cols-4' : figures.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2',
         invert ? 'divide-primary-foreground/20' : 'divide-border',
         'divide-x divide-y sm:divide-y-0',
       )}
@@ -275,7 +326,7 @@ export function Masthead({
   right?: ReactNode;
 }) {
   return (
-    <div className="border-b-2 border-foreground pb-4">
+    <div className="border-b border-border pb-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <MicroLabel>
           {officeName} · {roleLabel}
@@ -285,7 +336,7 @@ export function Masthead({
         </MicroLabel>
       </div>
       <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-        <h1 className="font-display text-[clamp(1.75rem,5.5vw,3.1rem)] font-extrabold uppercase leading-[0.88] tracking-[-0.035em]">
+        <h1 className="font-display text-[clamp(1.6rem,5vw,2.6rem)] font-extrabold leading-[0.95] tracking-[-0.03em]">
           {title}
         </h1>
         {right}
@@ -294,7 +345,7 @@ export function Masthead({
   );
 }
 
-/** Page frame: wide, gutter-consistent, and never centred in a narrow column. */
+/** Page frame: wide, gutter-consistent, and never centered in a narrow column. */
 export function DashboardShell({ children }: { children: ReactNode }) {
   return <div className="mx-auto w-full max-w-[1400px] px-4 py-5 sm:px-6 md:px-8 md:py-8">{children}</div>;
 }
@@ -353,13 +404,13 @@ export function ShortcutList({ shortcuts }: { shortcuts: Shortcut[] }) {
 
 /**
  * One operational-role lane. Primary reads full; a backup lane stays compact
- * and clearly labelled so two roles never compete for the same attention.
+ * and clearly labeled so two roles never compete for the same attention.
  */
 export function Lane({ lane }: { lane: RoleLane }) {
   const compact = lane.kind === 'backup';
   return (
     <section className={cn('min-w-0', compact && 'border-l-2 border-border pl-4')}>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-foreground pb-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border pb-2">
         <MicroLabel className="text-foreground/70">
           {compact ? (lane.covering ? 'Also covering today' : 'Backup') : 'My work'} · {lane.label}
         </MicroLabel>

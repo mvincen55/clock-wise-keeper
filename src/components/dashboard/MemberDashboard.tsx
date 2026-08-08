@@ -3,7 +3,7 @@ import { ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MemberView } from './types';
 import {
-  Band, DashboardShell, EmptyLine, FigureStrip, Lanes, Masthead, MicroLabel, ProgressLine,
+  Band, DashboardShell, EmptyState, FigureStrip, Lanes, Masthead, MicroLabel, ProgressLine,
   SignalRow, StatusDot, ViewContext, toneText,
 } from './kit';
 import { TrendChart } from './charts';
@@ -33,14 +33,14 @@ export default function MemberDashboard({ view }: { view: MemberView }) {
       </div>
 
       {/* First viewport: status + the single next action. */}
-      <div className="mt-6 grid gap-px bg-border md:grid-cols-[1fr_1.15fr]">
+      <div className="mt-6 grid gap-px overflow-hidden rounded-2xl border border-border bg-border md:grid-cols-[1fr_1.15fr]">
         <div className="bg-background px-5 py-6 sm:px-6">
           <MicroLabel>Today</MicroLabel>
           <div className="mt-3 flex items-center gap-2.5">
             <StatusDot tone={status.tone} className="h-2.5 w-2.5" />
             <p
               className={cn(
-                'font-display text-[clamp(1.5rem,4.5vw,2.25rem)] font-extrabold uppercase leading-[0.9] tracking-[-0.03em]',
+                'font-display text-[clamp(1.5rem,4.5vw,2.25rem)] font-extrabold leading-[0.9] tracking-[-0.03em]',
                 toneText[status.tone],
               )}
             >
@@ -54,7 +54,7 @@ export default function MemberDashboard({ view }: { view: MemberView }) {
           <MicroLabel className="text-primary-foreground/70">Next</MicroLabel>
           {next ? (
             <>
-              <p className="mt-3 font-display text-[clamp(1.35rem,3.6vw,1.9rem)] font-extrabold uppercase leading-[0.95] tracking-[-0.025em]">
+              <p className="mt-3 font-display text-[clamp(1.35rem,3.6vw,1.9rem)] font-extrabold leading-[0.95] tracking-[-0.025em]">
                 {next.title}
               </p>
               <p className="mt-2 max-w-[42ch] text-[13.5px] leading-snug text-primary-foreground/75">
@@ -62,7 +62,7 @@ export default function MemberDashboard({ view }: { view: MemberView }) {
               </p>
               <Link
                 to={next.href}
-                className="group mt-5 inline-flex items-center gap-2 border-2 border-primary-foreground px-4 py-2 font-mono text-[11px] uppercase tracking-[0.14em] transition-colors hover:bg-primary-foreground hover:text-primary"
+                className="group mt-5 inline-flex items-center gap-2 rounded-full border border-primary-foreground/70 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.12em] transition-colors hover:bg-primary-foreground hover:text-primary"
               >
                 {next.cta}
                 <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
@@ -76,7 +76,7 @@ export default function MemberDashboard({ view }: { view: MemberView }) {
         </div>
       </div>
 
-      <div className="mt-8 border-y-2 border-foreground">
+      <div className="mt-8 overflow-hidden rounded-2xl border border-border bg-card">
         <FigureStrip figures={figures} />
       </div>
 
@@ -84,7 +84,11 @@ export default function MemberDashboard({ view }: { view: MemberView }) {
         <div className="space-y-8">
           <Band title="Open for me" count={`${mine.length}`} action={{ label: 'Workplace', to: '/workplace' }}>
             {mine.length === 0 ? (
-              <EmptyLine>Nothing open. Anything new will land here and in your inbox.</EmptyLine>
+              <EmptyState
+                tone="good"
+                title="You're clear."
+                detail="Nothing is assigned to you. Anything new will land here and in your inbox."
+              />
             ) : (
               mine.map((s) => <SignalRow key={s.id} signal={s} />)
             )}
@@ -98,7 +102,12 @@ export default function MemberDashboard({ view }: { view: MemberView }) {
         <div className="space-y-8">
           <Band title="My progress" action={{ label: 'Goals', to: '/goals' }}>
             {progress.length === 0 ? (
-              <EmptyLine>No goals set for this month.</EmptyLine>
+              <EmptyState
+                tone="setup"
+                title="No goal is set for this month."
+                detail="Set the next result you want to be working toward."
+                action={{ label: 'Create a goal', to: '/goals' }}
+              />
             ) : (
               progress.map((p) => <ProgressLine key={p.id} row={p} />)
             )}
@@ -108,7 +117,7 @@ export default function MemberDashboard({ view }: { view: MemberView }) {
 
           <Band title="Around the office">
             {office.length === 0 ? (
-              <EmptyLine>No announcements.</EmptyLine>
+              <EmptyState tone="neutral" title="All quiet." detail="Office sprints and notes for you will appear here." />
             ) : (
               office.map((s) => <SignalRow key={s.id} signal={s} />)
             )}

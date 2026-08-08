@@ -2,6 +2,7 @@ import type { OperationalRole } from '@/lib/schedule-reader/types';
 import { shortcutsFor, roleLabel, roleMission } from './opRoles';
 import type {
   ManagerView, MemberView, OwnerView, PermissionTier, RoleContext, RoleLane, Series, Signal,
+  StaffingSummary,
 } from './types';
 
 /**
@@ -13,12 +14,12 @@ import type {
  * obviously fictional so a fixture can never be mistaken for office data.
  */
 
-const header = (roleLabel: string, personName: string) => ({
+const header = (roleLabel: string, personName: string, timeLabel = '9:42 AM') => ({
   officeName: 'Sample Family Dental',
   roleLabel,
   personName,
   dateLabel: 'Tue, Mar 3, 2026',
-  timeLabel: '9:42 AM',
+  timeLabel,
 });
 
 function context(
@@ -62,30 +63,13 @@ function lanesFor(ctx: RoleContext, urgent: Signal[] = []): RoleLane[] {
       shortcuts: shortcutsFor(role, ctx.tier).slice(0, 4),
       urgent: covering ? urgent : [],
       covering,
-        note: covering ? 'Also covering today' : 'Backup — can cover, not assigned',
+      note: covering ? 'Also covering today' : 'Backup — can cover, not assigned',
     });
   }
   return lanes;
 }
 
-const D = ['M', 'T', 'W', 'T', 'F', 'S', 'S', 'M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
-/** Arrivals series — shaped exactly like the live `attendance_day_status` read. */
-const arrivals: Series = {
-  id: 'arrivals',
-  title: 'Arrivals, last 14 days',
-  question: 'Are people getting here on time?',
-  caption: 'On-time arrivals against scheduled people. Pale bar is scheduled, solid bar is on time.',
-  href: '/team',
-  format: 'percent',
-  points: [7, 8, 6, 8, 7, 0, 0, 8, 7, 8, 6, 8, 0, 6].map((v, i) => ({
-    x: D[i],
-    value: v,
-    of: [8, 8, 8, 8, 8, 0, 0, 8, 8, 8, 8, 8, 0, 8][i],
-    muted: v === 0,
-  })),
-  footnote: 'Attendance only. Purple Envelope does not hold production, collections, or schedule-utilisation data.',
-};
+const D = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 /** My-week series — shaped exactly like the live `time_entries` read. */
 const myWeek: Series = {
@@ -96,6 +80,12 @@ const myWeek: Series = {
   href: '/timesheet',
   format: 'hours',
   points: [7.8, 8.1, 0, 7.4, 8.2, 0, 2.2].map((v, i) => ({ x: D[i], value: v, muted: v === 0 })),
+};
+
+/** Empty week — a brand-new employee with no punches yet. */
+const myWeekEmpty: Series = {
+  ...myWeek,
+  points: D.map(x => ({ x, value: 0, muted: true })),
 };
 
 const bypassUrgent: Signal[] = [
@@ -109,46 +99,88 @@ const bypassUrgent: Signal[] = [
   },
 ];
 
+/* ----------------------------- staffing ------------------------------- */
+
+const staffingOpen: StaffingSummary = {
+  office: { phase: 'open', headline: 'Open', detail: 'Workday runs until 5:00 PM.' },
+  expectedNow: 8,
+  presentNow: 6,
+  missingNow: 1,
+  scheduledToday: 8,
+  rows: [
+    { id: '1', name: 'Dana R.', status: 'In', tone: 'steady' },
+    { id: '2', name: 'Marcus T.', status: 'In · late 12m', tone: 'attention' },
+    { id: '3', name: 'Priya S.', status: 'In', tone: 'steady' },
+    { id: '4', name: 'Jo B.', status: 'Approved off', tone: 'calm' },
+    { id: '5', name: 'Ken W.', status: 'Not in yet', tone: 'attention' },
+    { id: '6', name: 'Alice N.', status: 'In — remote', tone: 'steady' },
+    { id: '7', name: 'Sam K.', status: 'Starts 1:00 PM', tone: 'calm' },
+    { id: '8', name: 'Rita M.', status: 'Clocked out', tone: 'calm' },
+  ],
+  reviewCount: 1,
+  reviewDetail: '1 unreviewed late arrival',
+};
+
+const staffingClosed: StaffingSummary = {
+  office: {
+    phase: 'after_close',
+    headline: 'Closed for the day',
+    detail: "Today's workday ended at 5:00 PM.",
+  },
+  expectedNow: null,
+  presentNow: null,
+  missingNow: null,
+  scheduledToday: 2,
+  rows: [],
+  reviewCount: 0,
+  reviewDetail: '',
+};
+
+const staffingNewOffice: StaffingSummary = {
+  office: {
+    phase: 'no_schedule',
+    headline: 'No one scheduled today',
+    detail: 'No shifts are on the schedule for today.',
+  },
+  expectedNow: null,
+  presentNow: null,
+  missingNow: null,
+  scheduledToday: 0,
+  rows: [],
+  reviewCount: 0,
+  reviewDetail: '',
+};
+
 /* ------------------------------- owner -------------------------------- */
 
 const ownerContext = context('owner', 'Owner', 'dentist');
 
+/** Established office, mid-morning, with real activity. */
 export const ownerFixture: OwnerView = {
   kind: 'owner',
-  header: header('Owner', 'Command'),
+  header: header('Owner', 'Good morning, Megan'),
   roleContext: ownerContext,
-  chart: arrivals,
   lanes: lanesFor(ownerContext),
-  figures: [
-    { id: 'a', value: '7', label: 'Waiting on you', detail: 'Approvals, reviews, signatures', href: '/approvals' },
-    { id: 'b', value: '6/8', label: 'On the floor', detail: '2 exceptions', href: '/team' },
-    { id: 'c', value: '3', label: 'Goals in flight', detail: 'Office sprints running', href: '/goals' },
-    { id: 'd', value: '2', label: 'Open records', detail: 'Unresolved accountability chain', href: '/management' },
-  ],
+  office: staffingOpen.office,
+  decisionCount: 7,
   decisions: [
     { id: '1', label: 'Approvals pending', detail: '2 PTO · 1 correction · 1 change', value: '4', href: '/approvals', tone: 'attention' },
     { id: '2', label: 'Accountability records at owner review', detail: 'Nobody reviews their own record — these have reached you.', value: '2', href: '/management', tone: 'urgent' },
     { id: '3', label: 'Policy acknowledgments overdue', detail: 'Published versions still unsigned past their due date.', value: '1', href: '/playbook', tone: 'attention' },
   ],
-  staffing: {
-    present: 6,
-    expected: 8,
-    rows: [
-      { id: '1', name: 'Dana R.', status: 'In', tone: 'steady' },
-      { id: '2', name: 'Marcus T.', status: 'Late 12m', tone: 'attention' },
-      { id: '3', name: 'Priya S.', status: 'In', tone: 'steady' },
-      { id: '4', name: 'Jo B.', status: 'Approved off', tone: 'calm' },
-      { id: '5', name: 'Ken W.', status: 'No punch yet', tone: 'attention' },
-      { id: '6', name: 'Alice N.', status: 'In — remote', tone: 'steady' },
-    ],
-  },
+  glance: [
+    { id: 'staffing', value: '6/8', label: 'In right now', detail: '1 not in yet', tone: 'attention', href: '/team' },
+    { id: 'goals', value: '2', label: 'Goals in flight', detail: 'Office sprints running', href: '/goals' },
+    { id: 'records', value: '2', label: 'Open records', detail: 'Accountability in progress', href: '/management' },
+  ],
+  staffing: staffingOpen,
   goals: [
     { id: 'g1', label: 'Same-day treatment acceptance', done: 12, total: 20, detail: 'accepted plans · ends Mar 31, 2026', href: '/goals' },
     { id: 'g2', label: 'Morning huddle on time', done: 9, total: 10, detail: 'huddles · ends Mar 7, 2026', href: '/goals' },
   ],
   pulse: [
-    { id: 'p1', label: 'Open office notes', detail: 'Quiet notes the office AI has left, still unresolved.', value: '3', href: '/inbox', tone: 'attention' },
-    { id: 'p2', label: 'Missing punches, last 14 days', detail: 'Scheduled days with no time recorded.', value: '1', href: '/team', tone: 'attention' },
+    { id: 'p1', label: 'Unresolved office notes', detail: 'Notes Purple Envelope flagged, still open.', value: '3', href: '/inbox', tone: 'attention' },
+    { id: 'p2', label: '1 attendance item needs review', detail: '1 unreviewed late arrival', value: '1', href: '/team', tone: 'attention' },
   ],
   health: {
     collectedLabel: '$142,300',
@@ -159,31 +191,57 @@ export const ownerFixture: OwnerView = {
   },
 };
 
+/** The same office at 10:32 PM — closed, clear, calm. Never "0/2 on the floor". */
+export const ownerClosedFixture: OwnerView = {
+  ...ownerFixture,
+  header: header('Owner', 'Good evening, Megan', '10:32 PM'),
+  office: staffingClosed.office,
+  decisionCount: 0,
+  decisions: [],
+  glance: [
+    { id: 'goals', value: '2', label: 'Goals in flight', detail: 'Office sprints running', href: '/goals' },
+    { id: 'records', value: '0', label: 'Open records', detail: 'All resolved', href: '/management' },
+  ],
+  staffing: staffingClosed,
+  pulse: [],
+  health: null,
+};
+
+/** A brand-new office: setup guidance, not a wall of zeros. */
+export const ownerNewFixture: OwnerView = {
+  kind: 'owner',
+  header: header('Owner', 'Good morning, Megan'),
+  roleContext: ownerContext,
+  lanes: lanesFor(ownerContext),
+  office: staffingNewOffice.office,
+  decisionCount: 0,
+  decisions: [],
+  glance: [
+    { id: 'goals', value: '—', label: 'Goals in flight', detail: 'None running yet', href: '/goals' },
+    { id: 'records', value: '0', label: 'Open records', detail: 'All resolved', href: '/management' },
+  ],
+  staffing: staffingNewOffice,
+  goals: [],
+  pulse: [],
+  health: null,
+};
+
 /* ------------------------------ manager ------------------------------- */
 
 function makeManager(ctx: RoleContext, urgent: Signal[] = []): ManagerView {
   return {
     kind: 'manager',
-    header: header('Practice manager', 'The floor'),
+    header: header('Practice manager', 'Good morning, Sofia'),
     roleContext: ctx,
-    chart: arrivals,
     lanes: lanesFor(ctx, urgent),
+    office: staffingOpen.office,
     figures: [
-      { id: 'a', value: '6/8', label: 'Here now', detail: '1 late', tone: 'attention', href: '/team' },
-      { id: 'b', value: '1', label: 'Out today', detail: 'Coverage gaps', tone: 'attention', href: '/team' },
-      { id: 'c', value: '4', label: 'Approvals', detail: 'PTO, corrections, changes', tone: 'attention', href: '/approvals' },
-      { id: 'd', value: '2', label: 'Missing clock-outs', detail: 'Days that need fixing', tone: 'urgent', href: '/team' },
+      { id: 'here', value: '6/8', label: 'In right now', detail: 'Against who is expected at this hour', tone: 'steady', href: '/team' },
+      { id: 'not-in', value: '1', label: 'Not in yet', detail: 'Expected now, no punch', tone: 'attention', href: '/team' },
+      { id: 'approvals', value: '4', label: 'Approvals', detail: 'PTO, corrections, changes', tone: 'attention', href: '/approvals' },
+      { id: 'review', value: '1', label: 'Attendance to review', detail: '1 unreviewed late arrival', tone: 'attention', href: '/team' },
     ],
-    roster: [
-      { id: '1', name: 'Dana R.', status: 'In', tone: 'steady' },
-      { id: '2', name: 'Marcus T.', status: 'Late 12m', tone: 'attention' },
-      { id: '3', name: 'Priya S.', status: 'In', tone: 'steady' },
-      { id: '4', name: 'Jo B.', status: 'Approved off', tone: 'calm' },
-      { id: '5', name: 'Ken W.', status: 'No punch yet', tone: 'attention' },
-      { id: '6', name: 'Alice N.', status: 'In — remote', tone: 'steady' },
-      { id: '7', name: 'Sam K.', status: 'No clock-out', tone: 'attention' },
-      { id: '8', name: 'Rita M.', status: 'Out', tone: 'urgent' },
-    ],
+    staffing: staffingOpen,
     attention: [
       { id: '1', label: 'PTO requests pending', detail: 'Approve or decline before the schedule locks.', value: '2', href: '/approvals', tone: 'attention' },
       { id: '2', label: 'Time corrections pending', detail: 'Each one keeps the original punch on record.', value: '1', href: '/approvals', tone: 'attention' },
@@ -196,13 +254,6 @@ function makeManager(ctx: RoleContext, urgent: Signal[] = []): ManagerView {
       { id: 'p2', label: 'Sterilization log', done: 4, total: 4, detail: 'daily checklist', href: '/checklists' },
       { id: 'p3', label: 'Morning huddle on time', done: 9, total: 10, detail: 'huddles · ends Mar 7, 2026', href: '/goals' },
     ],
-    timeline: [
-      { id: '1', time: 'In', label: 'Dana R.', detail: 'In', tone: 'steady' },
-      { id: '2', time: '+12m', label: 'Marcus T.', detail: 'Late 12m', tone: 'attention' },
-      { id: '3', time: 'In', label: 'Priya S.', detail: 'In', tone: 'steady' },
-      { id: '4', time: '—', label: 'Rita M.', detail: 'Out', tone: 'urgent' },
-      { id: '5', time: 'In', label: 'Alice N.', detail: 'In — remote', tone: 'steady' },
-    ],
   };
 }
 
@@ -210,6 +261,21 @@ export const managerFixture = makeManager(context('manager', 'Practice manager',
 export const managerFrontDeskFixture = makeManager(
   context('manager', 'Practice manager', 'front_desk', ['office_manager'], ['office_manager']),
 );
+
+/** A new office from the manager's chair: clear queues, setup prompts. */
+export const managerNewFixture: ManagerView = {
+  ...makeManager(context('manager', 'Practice manager', 'office_manager')),
+  office: staffingNewOffice.office,
+  figures: [
+    { id: 'office', value: 'Closed', label: 'Office', detail: 'No shifts are on the schedule for today.', tone: 'calm' },
+    { id: 'worked', value: '0', label: 'Worked today', detail: 'No shifts today', tone: 'calm', href: '/team' },
+    { id: 'approvals', value: '0', label: 'Approvals', detail: 'Queue is clear', tone: 'calm', href: '/approvals' },
+    { id: 'review', value: '0', label: 'Attendance to review', detail: 'Nothing needs review', tone: 'calm', href: '/team' },
+  ],
+  staffing: staffingNewOffice,
+  attention: [],
+  progress: [],
+};
 
 /* ------------------------------- member ------------------------------- */
 
@@ -284,3 +350,23 @@ export const frontDeskBackupAssistFixture = makeMember(
   'Dana',
   context('member', 'Team member', 'front_desk', ['dental_assistant'], ['dental_assistant']),
 );
+
+/** A brand-new team member: invited, no punches, nothing assigned yet. */
+export const memberNewFixture = makeMember('Priya', context('member', 'Team member', 'hygienist'), {
+  chart: myWeekEmpty,
+  status: {
+    label: 'Not clocked in',
+    detail: 'Your punches appear here as soon as you clock in.',
+    tone: 'calm',
+  },
+  next: null,
+  mine: [],
+  progress: [],
+  figures: [
+    { id: 'a', value: '0', label: 'Day streak', detail: 'Verified records only' },
+    { id: 'b', value: '0:00', label: 'Today', detail: 'Recorded time', href: '/timesheet' },
+    { id: 'c', value: '0h', label: 'PTO balance', detail: 'Accrues as you work', href: '/pto' },
+    { id: 'd', value: '0', label: 'Open items', detail: 'Assigned to you' },
+  ],
+  office: [],
+});

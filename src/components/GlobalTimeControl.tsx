@@ -270,7 +270,7 @@ export default function GlobalTimeControl({ variant }: { variant: 'header' | 'ba
   }
 
   return (
-    <div className="fixed inset-x-0 bottom-16 z-40 border-t bg-card/95 backdrop-blur px-4 py-2 md:hidden">
+    <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 border-t bg-card/95 backdrop-blur px-4 py-2 md:hidden">
       <div className="flex items-center justify-between gap-3">
         <Popover>
           <PopoverTrigger asChild>

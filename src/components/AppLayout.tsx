@@ -252,7 +252,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
             <BypassReasonBanner />
 
-            <main className="flex-1 overflow-auto pb-36 md:pb-0">
+            <main className="flex-1 overflow-auto pb-[calc(9rem+env(safe-area-inset-bottom))] md:pb-0">
               {children}
             </main>
 
@@ -262,8 +262,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           {/* Mobile sticky clock bar (above the bottom navigation). */}
           <GlobalTimeControl variant="bar" />
 
-          {/* Mobile five-item bottom navigation. */}
-          <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 flex h-16 items-stretch border-t bg-card">
+          {/* Mobile five-item bottom navigation. Safe-area padding keeps the
+              row clear of home indicators; nothing may float over it. */}
+          <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 flex min-h-16 items-stretch border-t bg-card pb-[env(safe-area-inset-bottom)]">
             {destinations
               .filter(d => !d.managerOnly)
               .map(dest => {
@@ -316,6 +317,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   <Link to="/help" onClick={() => setMoreOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted">
                     <LifeBuoy className="h-4 w-4" />Help &amp; Support
                   </Link>
+                  <button
+                    onClick={() => {
+                      setMoreOpen(false);
+                      window.dispatchEvent(new CustomEvent('pe:open-support'));
+                    }}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted"
+                  >
+                    <LifeBuoy className="h-4 w-4" />Report a Problem
+                  </button>
                   <button
                     onClick={() => { setMoreOpen(false); privacyLock(); }}
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/10"
