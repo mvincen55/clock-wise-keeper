@@ -7166,7 +7166,6 @@ export type Database = {
         Row: {
           ai_suggested: boolean
           ai_verdict: Json | null
-          category: string | null
           created_at: string
           created_by: string
           ends_on: string
@@ -7179,7 +7178,6 @@ export type Database = {
           reward: string
           scope: string
           scope_department: string | null
-          scope_role: string | null
           scope_user_id: string | null
           starts_on: string
           status: string
@@ -7195,7 +7193,6 @@ export type Database = {
         Insert: {
           ai_suggested?: boolean
           ai_verdict?: Json | null
-          category?: string | null
           created_at?: string
           created_by: string
           ends_on: string
@@ -7208,7 +7205,6 @@ export type Database = {
           reward: string
           scope?: string
           scope_department?: string | null
-          scope_role?: string | null
           scope_user_id?: string | null
           starts_on: string
           status?: string
@@ -7224,7 +7220,6 @@ export type Database = {
         Update: {
           ai_suggested?: boolean
           ai_verdict?: Json | null
-          category?: string | null
           created_at?: string
           created_by?: string
           ends_on?: string
@@ -7237,7 +7232,6 @@ export type Database = {
           reward?: string
           scope?: string
           scope_department?: string | null
-          scope_role?: string | null
           scope_user_id?: string | null
           starts_on?: string
           status?: string
