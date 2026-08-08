@@ -36,6 +36,13 @@ const COPIES = [
   ['node_modules/tesseract.js-core/tesseract-core-lstm.wasm', 'tesseract-core-lstm.wasm'],
   ['node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm.js', 'tesseract-core-simd-lstm.wasm.js'],
   ['node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm', 'tesseract-core-simd-lstm.wasm'],
+  // tesseract.js v7 prefers the relaxed-SIMD build on current Chromium;
+  // without these the worker's importScripts fails and OCR reports
+  // OCR_ASSETS_MISSING on exactly the newest browsers.
+  ['node_modules/tesseract.js-core/tesseract-core-relaxedsimd.wasm.js', 'tesseract-core-relaxedsimd.wasm.js'],
+  ['node_modules/tesseract.js-core/tesseract-core-relaxedsimd.wasm', 'tesseract-core-relaxedsimd.wasm'],
+  ['node_modules/tesseract.js-core/tesseract-core-relaxedsimd-lstm.wasm.js', 'tesseract-core-relaxedsimd-lstm.wasm.js'],
+  ['node_modules/tesseract.js-core/tesseract-core-relaxedsimd-lstm.wasm', 'tesseract-core-relaxedsimd-lstm.wasm'],
 ];
 
 const TRAINEDDATA_URL =

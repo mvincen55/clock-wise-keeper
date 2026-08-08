@@ -20,6 +20,7 @@ import Team from "@/pages/Team";
 import EmployeeDetail from "@/pages/EmployeeDetail";
 import OrgSetup from "@/pages/OrgSetup";
 import FofBuilder from "@/pages/FofBuilder";
+import AccountBalanceExplainer from "@/pages/AccountBalanceExplainer";
 import BrokenAppointments from "@/pages/BrokenAppointments";
 import FofTemplates from "@/pages/FofTemplates";
 import FofFees from "@/pages/FofFees";
@@ -178,6 +179,7 @@ const router = createBrowserRouter(
             <Route path="/org-setup" element={<ProtectedRoute><OrgSetup /></ProtectedRoute>} />
             <Route path="/broken-appointments" element={<ProtectedRoute><BrokenAppointments /></ProtectedRoute>} />
             <Route path="/fof" element={<ProtectedRoute><FofBuilder /></ProtectedRoute>} />
+            <Route path="/account-balance" element={<ProtectedRoute><AccountBalanceExplainer /></ProtectedRoute>} />
             <Route path="/fof/templates" element={<ProtectedRoute><FofTemplates /></ProtectedRoute>} />
             <Route path="/fof/fees" element={<ProtectedRoute><FofFees /></ProtectedRoute>} />
             <Route path="/consents" element={<ProtectedRoute><ConsentsHub /></ProtectedRoute>} />
