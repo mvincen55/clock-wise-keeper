@@ -11,11 +11,14 @@ export default function PracticeVitalsCard() {
   const { data, isLoading } = usePracticeVitals();
   if (isLoading || !data) return null;
 
-  const { thisMonth, months, monthElapsed, targetCents, pacedTargetCents, visible } = data;
+  const { thisMonth, months, prevMonth, monthElapsed, targetCents, pacedTargetCents, visible } = data;
 
+  // Collections are paced against the org-configured collections goal. There is
+  // no production target in Purple Envelope — production is never compared to
+  // the collections goal.
   const delta =
-    targetCents > 0
-      ? Math.round(((thisMonth.productionCents - pacedTargetCents) / pacedTargetCents) * 100)
+    targetCents > 0 && pacedTargetCents > 0 && visible
+      ? Math.round(((thisMonth.collectedCents - pacedTargetCents) / pacedTargetCents) * 100)
       : null;
   const ahead = (delta ?? 0) >= 0;
 
@@ -32,11 +35,11 @@ export default function PracticeVitalsCard() {
   const trendMax = Math.max(...trendMonths.map(m => m.productionCents), 1);
   const disruptMax = Math.max(...trendMonths.map(m => m.disruptions), 1);
 
-  const prevMonth = months.length > 1 ? months[months.length - 2] : null;
-
+  // The orb's pace is prior-month production × month elapsed — exactly what
+  // its receipts declare. It is never the collections goal in disguise.
   const pulseInput = {
     productionCents: thisMonth.productionCents,
-    pacedTargetCents: pacedTargetCents,
+    pacedTargetCents: prevMonth ? Math.round(prevMonth.productionCents * monthElapsed) : 0,
     disruptions: thisMonth.disruptions,
     disruptionBaseline: prevMonth ? prevMonth.disruptions * monthElapsed : 0,
     month: new Date().toISOString().slice(0, 7),
@@ -93,7 +96,7 @@ export default function PracticeVitalsCard() {
               )}
             >
               {ahead ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
-              Production tracking {Math.abs(delta)}% {ahead ? 'ahead of' : 'behind'} target
+              Collections tracking {Math.abs(delta)}% {ahead ? 'ahead of' : 'behind'} the monthly goal pace
             </p>
           )}
         </div>

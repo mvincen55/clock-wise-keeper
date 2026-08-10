@@ -29,7 +29,7 @@ export type Scenario = {
 };
 
 const NO_CLINICAL = [
-  'Production, collections, revenue, and payroll — not stored by Purple Envelope.',
+  'Per-patient revenue and payroll — only office-day aggregates from the deposit log exist.',
   'Patient names, appointments, balances, and treatment detail — outside the non-HIPAA boundary.',
   'Schedule utilization and practice-health scores — would require PMS data the app does not read.',
 ];
@@ -64,7 +64,8 @@ export const SCENARIOS: Scenario[] = [
     view: ownerFixture,
     sources: [
       ...ADMIN_SOURCES,
-      ['Practice vitals', 'usePracticeVitals (deposit_logs — only when the office records deposits)'],
+      ['Daily pulse + summary sentence', 'usePracticeVitals (deposit_logs) → owner-pulse.ts, deterministic'],
+      ["What I'd look at", 'owner-pulse.ts ownerRecommendation — fixed-priority signals with receipts'],
       ['Records at owner review', 'useAccountabilityReports'],
     ],
     omitted: NO_CLINICAL,

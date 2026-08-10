@@ -9,8 +9,12 @@
 
 import type { OperationalRole } from '@/lib/schedule-reader/types';
 import type { OfficeStatus, StaffingSummary } from './staffing';
+import type {
+  DailyBrief, GoalBrief, MissedMonth, MonthDetail, OwnerRecommendation, PulseFact,
+} from '@/lib/owner-pulse';
 
 export type { OfficeStatus, StaffingSummary };
+export type { DailyBrief, GoalBrief, MissedMonth, MonthDetail, OwnerRecommendation, PulseFact };
 
 export type Tone = 'urgent' | 'attention' | 'steady' | 'calm';
 
@@ -140,26 +144,29 @@ export type OwnerView = {
   lanes: RoleLane[];
   /** Current office state — open, closed, nobody scheduled. */
   office: OfficeStatus;
+  /**
+   * The 20-second briefing sentence, deterministically built from recorded
+   * facts. Null while vitals are still loading — never a fabricated line.
+   */
+  summary: string | null;
+  /** TODAY block of the pulse: honest day scope, facts, and time semantics. */
+  brief: DailyBrief | null;
+  /** The month collections-vs-goal fact — its one home is the pulse hero. */
+  monthFact: PulseFact | null;
+  /** One grounded recommendation with receipts, or null while loading. */
+  lookAt: OwnerRecommendation | null;
   /** Everything waiting on owner authority, resolved to one number. */
   decisionCount: number;
   /** The decision lines behind that number (component renders open ones). */
   decisions: Signal[];
-  /** Compact at-a-glance strip. Status only — detail lives in the bands. */
-  glance: Figure[];
+  /** The office goal the hero shows; moreCount collapses the rest. */
+  goal: GoalBrief | null;
+  /** Month in progress — production MTD, missed MTD, compact trend. */
+  month: MonthDetail | null;
   /** Phase-aware staffing. Attendance surfaces here ONLY as a real exception. */
   staffing: StaffingSummary;
-  /** Operational goals in flight. */
-  goals: ProgressRow[];
-  /** Verified office pulse lines — only real, unresolved signals. */
-  pulse: Signal[];
-  /** Collections pace — only when the office records deposits and it is visible. */
-  health: {
-    collectedLabel: string;
-    paceLabel: string;
-    pacePct: number;
-    disruptions: number;
-    days: number;
-  } | null;
+  /** Real, unresolved operational exceptions (notes, attendance review). */
+  exceptions: Signal[];
 };
 
 export type ManagerView = {

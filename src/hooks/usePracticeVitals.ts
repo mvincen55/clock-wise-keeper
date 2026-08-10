@@ -139,10 +139,18 @@ export function usePracticeVitals() {
       const thisMonth = summarize(thisMonthDays);
       const pacedTarget = targetCents > 0 ? Math.round(targetCents * (dayOfMonth / daysInMonth)) : 0;
 
+      // The TRUE previous calendar month — not merely the second-to-last month
+      // with data, which could be months ago in a patchy log.
+      const prevMonthKey = monthStart(today, -1).slice(0, 7);
+      const prevMonth = months.find(m => m.month === prevMonthKey) ?? null;
+
       return {
         today: all.find(d => d.date === today) ?? null,
+        /** Most recent closed-out day on record (may be today), or null. */
+        latest: all.length > 0 ? all[all.length - 1] : null,
         thisMonth,
         months,
+        prevMonth,
         thisMonthDays,
         monthElapsed: dayOfMonth / daysInMonth,
         targetCents,

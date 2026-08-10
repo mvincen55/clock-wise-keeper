@@ -26,6 +26,10 @@ import { calculatePunchMinutes } from '@/lib/time-utils';
 import { getClockStatus, getRunningMinutes } from '@/lib/clock-status';
 import { formatDate, formatTime, getToday, minutesToHHMM, shiftDate } from '@/lib/time-utils';
 import { staffingSummary } from './staffing';
+import {
+  buildDailyBrief, buildGoalBrief, buildMonthDetail, dailySummary, monthCollectionsFact,
+  ownerRecommendation, type OwnerPulseInput,
+} from '@/lib/owner-pulse';
 import type {
   DashboardHeader, DashboardView, Figure, ManagerView, MemberView, OwnerView,
   PermissionTier, ProgressRow, RoleContext, RoleLane, Series, Signal,
@@ -53,10 +57,6 @@ function greeting(hour: number): string {
   if (hour < 12) return 'Good morning';
   if (hour < 17) return 'Good afternoon';
   return 'Good evening';
-}
-
-function money(cents: number): string {
-  return `$${Math.round(cents / 100).toLocaleString('en-US')}`;
 }
 
 const TIER_OF: Record<'owner' | 'manager' | 'employee', PermissionTier> = {
@@ -204,9 +204,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
       const staffing = staffingSummary(snapshot, now);
       const ownerReviews = orgReports.filter(r => r.status === 'awaiting_owner');
       const overdueAcks = ackRoster.filter(a => !a.acknowledged_at && a.overdue_at);
-      const openSprints = sprints.filter(s => s.status === 'active' || s.status === 'pending_verification');
       const verifySprints = sprints.filter(s => s.status === 'pending_verification');
-      const openRecords = orgReports.filter(r => r.status !== 'closed').length;
       const decisionCount =
         (approvals?.total ?? 0) + ownerReviews.length + overdueAcks.length + verifySprints.length;
 
@@ -245,83 +243,40 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         },
       ];
 
-      // At-a-glance strip: STATUS only. Detail and actions live in the bands
-      // below, so a number never repeats with the same meaning twice. The
-      // staffing tile exists only while staffing is a live question — when
-      // the office is closed, the Office Status card already says so once.
-      const staffingFigures: Figure[] =
-        staffing.office.phase === 'open'
-          ? [
-              {
-                id: 'staffing',
-                value: `${staffing.presentNow ?? 0}/${staffing.expectedNow ?? 0}`,
-                label: 'In right now',
-                detail: (staffing.missingNow ?? 0) > 0 ? `${staffing.missingNow} not in yet` : 'As expected',
-                tone: (staffing.missingNow ?? 0) > 0 ? 'attention' : 'steady',
-                href: '/team',
-              },
-            ]
-          : staffing.office.phase === 'unknown_hours'
-            ? [
-                {
-                  id: 'staffing',
-                  value: String(staffing.scheduledToday),
-                  label: 'Scheduled today',
-                  detail: 'Shift times not set',
-                  href: '/team',
-                },
-              ]
-            : [];
+      // The daily pulse is a pure function of recorded vitals. While the
+      // query is in flight everything stays null — the hero renders a quiet
+      // loading line instead of fabricated zeros.
+      let summary: string | null = null;
+      let brief: OwnerView['brief'] = null;
+      let monthFact: OwnerView['monthFact'] = null;
+      let lookAt: OwnerView['lookAt'] = null;
+      let month: OwnerView['month'] = null;
+      if (vitals) {
+        const pulseInput: OwnerPulseInput = {
+          today,
+          todayVitals: vitals.today,
+          latest: vitals.latest,
+          thisMonth: vitals.thisMonth,
+          prevMonth: vitals.prevMonth,
+          monthElapsed: vitals.monthElapsed,
+          targetCents: vitals.targetCents,
+          pacedTargetCents: vitals.pacedTargetCents,
+          officePhase: staffing.office.phase,
+        };
+        brief = buildDailyBrief(pulseInput);
+        monthFact = monthCollectionsFact(pulseInput);
+        lookAt = ownerRecommendation(pulseInput, sprints);
+        summary = dailySummary(pulseInput, brief, decisionCount);
+        month = buildMonthDetail(pulseInput, vitals.months);
+      }
 
-      const glance: Figure[] = [
-        ...staffingFigures,
-        {
-          id: 'goals',
-          value: openSprints.length > 0 ? String(openSprints.length) : '—',
-          label: 'Goals in flight',
-          detail: openSprints.length > 0 ? 'Office sprints running' : 'None running yet',
-          href: '/goals',
-        },
-        {
-          id: 'records',
-          value: openRecords > 0 ? String(openRecords) : '0',
-          label: 'Open records',
-          detail: openRecords > 0 ? 'Accountability in progress' : 'All resolved',
-          href: '/management',
-        },
-      ];
+      const goal = buildGoalBrief(sprints, today);
 
-      const goals: ProgressRow[] = openSprints.slice(0, 4).map(s => ({
-        id: s.id,
-        label: s.title,
-        done: Math.min(s.progress, s.target_count),
-        total: s.target_count,
-        detail: `${s.metric} · ends ${formatDate(s.ends_on)}${s.status === 'pending_verification' ? ' · awaiting verification' : ''}`,
-        href: '/goals',
-      }));
-
-      const health =
-        vitals && vitals.visible && vitals.targetCents > 0 && vitals.thisMonthDays.length > 0
-          ? {
-              collectedLabel: money(vitals.thisMonth.collectedCents),
-              paceLabel:
-                vitals.thisMonth.collectedCents >= vitals.pacedTargetCents
-                  ? `Ahead of a ${money(vitals.pacedTargetCents)} pace`
-                  : `Behind a ${money(vitals.pacedTargetCents)} pace`,
-              pacePct:
-                vitals.targetCents > 0
-                  ? (vitals.thisMonth.collectedCents / vitals.targetCents) * 100
-                  : 0,
-              disruptions: vitals.thisMonth.disruptions,
-              days: vitals.thisMonthDays.length,
-            }
-          : null;
-
-      // Office pulse: only real, unresolved signals. A zero here is silence,
-      // not a row — the band renders a calm "all quiet" state instead.
-      const pulse: Signal[] = [];
+      // Operational exceptions: only real, unresolved signals. A zero here is
+      // silence, not a row — normal staffing mostly disappears.
+      const exceptions: Signal[] = [];
       if (nudges.length > 0) {
-        pulse.push({
+        exceptions.push({
           id: 'nudges',
           label: 'Unresolved office notes',
           detail: 'Notes Purple Envelope flagged, still open.',
@@ -331,7 +286,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         });
       }
       if (staffing.reviewCount > 0) {
-        pulse.push({
+        exceptions.push({
           id: 'attendance-review',
           label: `${staffing.reviewCount} attendance item${staffing.reviewCount === 1 ? '' : 's'} need review`,
           detail: staffing.reviewDetail,
@@ -347,13 +302,16 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         roleContext,
         lanes,
         office: staffing.office,
+        summary,
+        brief,
+        monthFact,
+        lookAt,
         decisionCount,
         decisions,
-        glance,
+        goal,
+        month,
         staffing,
-        goals,
-        pulse,
-        health,
+        exceptions,
       };
       return { view: owner, isLoading: false };
     }

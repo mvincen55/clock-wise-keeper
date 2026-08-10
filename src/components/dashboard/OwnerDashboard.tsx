@@ -1,26 +1,38 @@
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, CheckCircle2 } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { OwnerView } from './types';
+import { missedBreakdown } from '@/lib/owner-pulse';
+import type { OwnerView, PulseFact } from './types';
 import {
-  Band, DashboardShell, EmptyState, FigureStrip, Lanes, Masthead, MicroLabel, PersonRow,
-  ProgressLine, SignalRow, ViewContext,
+  Band, DashboardShell, EmptyState, Lanes, Masthead, MicroLabel, PersonRow, SignalRow,
+  StatusDot, ViewContext,
 } from './kit';
 
 /**
- * OWNER — "is the office okay, and does anything need me?"
+ * OWNER — "how did my office do, and does anything need me?"
  *
- * Order of importance: office status, then decisions waiting on owner
- * authority, then goals and pulse. Attendance appears ONLY as a real
- * exception ("N attendance items need review") — the arrivals trend lives on
- * Team, where an owner inspects it on purpose. A clear state is celebrated,
- * never rendered as a wall of zeros.
+ * The hero is the day's pulse read straight off the deposit log, opened by a
+ * deterministic one-sentence briefing. Decisions that need owner authority
+ * stay prominent but no longer DEFINE the page — zero approvals never claims
+ * the office had a good day. Every number keeps exactly one home:
+ *
+ *   today's production/collected/missed + month collections pace → hero
+ *   the single recommendation                                    → What I'd look at
+ *   approvals/reviews/acks/verifications                         → Owner attention
+ *   the primary sprint                                           → Office goal
+ *   month-to-date production, missed trend, 6-month history      → Month in progress
+ *   live roster and real exceptions                              → Staffing
+ *
+ * Missing data is narrated ("closeout isn't in yet"), never rendered as $0.
  */
 export default function OwnerDashboard({ view }: { view: OwnerView }) {
-  const { header, office, decisionCount, decisions, glance, staffing, goals, pulse, health, lanes, roleContext } = view;
+  const {
+    header, office, summary, brief, monthFact, lookAt, decisionCount, decisions, goal, month,
+    staffing, exceptions, lanes, roleContext,
+  } = view;
   const openDecisions = decisions.filter((d) => d.value !== '0');
-  const clear = decisionCount === 0;
   const liveRoster = staffing.rows.length > 0;
+  const factTiles: PulseFact[] = [...(brief?.facts ?? []), ...(monthFact ? [monthFact] : [])];
 
   return (
     <DashboardShell>
@@ -41,147 +53,318 @@ export default function OwnerDashboard({ view }: { view: OwnerView }) {
         }
       />
 
-      <div className="mt-3">
+      {/* Quiet office context: state line + role lane label. Never a hero. */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+          <StatusDot tone={office.phase === 'open' ? 'steady' : 'calm'} />
+          {office.headline}
+        </span>
         <ViewContext context={roleContext} />
       </div>
 
-      {/* Primary command area: office state + does anything need me? */}
-      <div className="mt-6 grid gap-3 lg:grid-cols-[1.6fr_1fr]">
-        <div
-          className={cn(
-            'rounded-2xl border px-6 py-7',
-            clear ? 'border-success/25 bg-success/[0.05]' : 'border-primary/25 bg-primary/[0.05]',
-          )}
-        >
-          <MicroLabel className={clear ? 'text-success' : 'text-primary'}>Owner status</MicroLabel>
-          {clear ? (
-            <>
-              <div className="mt-3 flex items-center gap-3">
-                <CheckCircle2 className="h-7 w-7 shrink-0 text-success" aria-hidden />
-                <p className="font-display text-[clamp(1.7rem,4.5vw,2.5rem)] font-extrabold leading-[0.95] tracking-[-0.03em] text-foreground">
-                  You&rsquo;re clear.
-                </p>
-              </div>
-              <p className="mt-2 text-[14px] leading-snug text-muted-foreground">
-                Nothing needs an owner decision right now.
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="mt-3 font-display text-[clamp(1.7rem,4.5vw,2.5rem)] font-extrabold leading-[0.95] tracking-[-0.03em] text-foreground">
-                {decisionCount} need{decisionCount === 1 ? 's' : ''} you
-              </p>
-              <p className="mt-2 text-[14px] leading-snug text-muted-foreground">
-                Approvals, reviews, and sign-offs only an owner can move.
-              </p>
-              <Link
-                to="/approvals"
-                className="group mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
-              >
-                Review them
-                <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:-translate-y-0.5" />
-              </Link>
-            </>
-          )}
+      {/* B — TODAY'S OFFICE PULSE. The hero: briefing sentence + the facts. */}
+      <section className="mt-6 rounded-2xl border border-border bg-card px-5 py-6 sm:px-7">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <MicroLabel className="text-primary">Today&rsquo;s office pulse</MicroLabel>
+          {brief && brief.scope !== 'none' && <MicroLabel>{brief.dayLabel}</MicroLabel>}
         </div>
 
-        <div className="rounded-2xl border border-border bg-card px-6 py-7">
-          <MicroLabel>Office status</MicroLabel>
-          <p className="mt-3 font-display text-[clamp(1.3rem,3vw,1.7rem)] font-extrabold leading-[0.95] tracking-[-0.02em]">
-            {office.headline}
+        {summary ? (
+          <p className="mt-3 max-w-[64ch] font-display text-[clamp(1.25rem,3.2vw,1.85rem)] font-bold leading-snug tracking-[-0.02em]">
+            {summary}
           </p>
-          <p className="mt-2 text-[13px] leading-snug text-muted-foreground">{office.detail}</p>
-        </div>
-      </div>
+        ) : (
+          <p className="mt-3 text-[14px] text-muted-foreground">Reading the day&rsquo;s numbers…</p>
+        )}
+        {brief?.note && <p className="mt-2 text-[13px] text-muted-foreground">{brief.note}</p>}
 
-      {/* Compact at-a-glance strip — status, not a second copy of the bands. */}
-      <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-card [&_.font-display]:text-[clamp(1.3rem,3vw,1.7rem)]">
-        <FigureStrip figures={glance} />
-      </div>
+        {brief && brief.scope === 'none' ? (
+          <EmptyState
+            tone="setup"
+            title="No days have been closed out yet."
+            detail="The pulse reads production, collections, and missed appointments straight off the deposit log."
+            action={{ label: 'Open the deposit log', to: '/deposit-log' }}
+          />
+        ) : (
+          factTiles.length > 0 && (
+            <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border lg:grid-cols-4">
+              {factTiles.map((f) => {
+                const body = (
+                  <>
+                    <MicroLabel>{f.label}</MicroLabel>
+                    <p
+                      className={cn(
+                        'mt-2 font-display text-[clamp(1.45rem,3.5vw,2.15rem)] font-extrabold leading-[0.9] tabular-nums tracking-[-0.03em]',
+                        f.tone === 'attention' && 'text-warning',
+                        f.tone === 'urgent' && 'text-destructive',
+                      )}
+                    >
+                      {f.value}
+                    </p>
+                    {f.detail && (
+                      <p className="mt-1.5 text-[11.5px] leading-tight text-muted-foreground">{f.detail}</p>
+                    )}
+                  </>
+                );
+                return f.href ? (
+                  <Link key={f.id} to={f.href} className="block bg-card px-4 py-4 transition-colors hover:bg-muted/50">
+                    {body}
+                  </Link>
+                ) : (
+                  <div key={f.id} className="bg-card px-4 py-4">
+                    {body}
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+      </section>
+
+      {/* C — WHAT I'D LOOK AT. One grounded suggestion, receipts on tap. */}
+      {lookAt && (
+        <section className="mt-3 rounded-2xl border border-primary/25 bg-primary/[0.04] px-5 py-5 sm:px-7">
+          <MicroLabel className="text-primary">What I&rsquo;d look at</MicroLabel>
+          <p className="mt-2 max-w-[72ch] text-[14.5px] leading-relaxed">{lookAt.text}</p>
+          {lookAt.action && (
+            <Link
+              to={lookAt.action.to}
+              className="group mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              {lookAt.action.label}
+              <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:-translate-y-0.5" />
+            </Link>
+          )}
+          {lookAt.receipts.length > 0 && (
+            <details className="mt-3">
+              <summary className="cursor-pointer list-none font-mono text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+                Why? — the recorded facts behind this
+              </summary>
+              <dl className="mt-3 space-y-2.5 border-t border-border pt-3">
+                {lookAt.receipts.map((r) => (
+                  <div key={r.label}>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="text-[12px] text-muted-foreground">{r.label}</dt>
+                      <dd className="text-[12px] font-medium tabular-nums">{r.value}</dd>
+                    </div>
+                    <p className="text-[11px] leading-snug text-muted-foreground/80">{r.source}</p>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          )}
+        </section>
+      )}
 
       <div className="mt-8 grid gap-8 [&>*]:min-w-0 lg:grid-cols-[1.35fr_1fr] lg:gap-10">
-        {/* Left: what the owner must decide, and what the office is chasing. */}
+        {/* Left: decisions, the goal, and the month's detail. */}
         <div className="space-y-8">
-          {openDecisions.length > 0 && (
-            <Band
-              title="Waiting on you"
-              count={`${openDecisions.length} open`}
-              action={{ label: 'Approvals', to: '/approvals' }}
-            >
-              {openDecisions.map((d) => (
-                <SignalRow key={d.id} signal={d} />
-              ))}
-            </Band>
-          )}
-
-          <Band title="Office goals" count={goals.length > 0 ? `${goals.length} in flight` : undefined} action={{ label: 'Goals', to: '/goals' }}>
-            {goals.length === 0 ? (
+          {/* D — OWNER ATTENTION. Prominent when real, one calm line when clear. */}
+          <Band
+            title="Owner attention"
+            count={openDecisions.length > 0 ? `${decisionCount} waiting` : undefined}
+            action={{ label: 'Approvals', to: '/approvals' }}
+          >
+            {openDecisions.length === 0 ? (
               <EmptyState
-                tone="setup"
-                title="No office goal is active."
-                detail="Pick one shared number the office can rally around."
-                action={{ label: 'Start a sprint', to: '/goals' }}
+                tone="good"
+                title="No owner decisions are waiting."
+                detail="Approvals, reviews, and sign-offs are clear."
               />
             ) : (
-              goals.map((g) => <ProgressLine key={g.id} row={g} />)
+              openDecisions.map((d) => <SignalRow key={d.id} signal={d} />)
             )}
           </Band>
 
-          {health && (
-            <Band title="Collections pace" action={{ label: 'Reports', to: '/reports' }}>
+          {/* E — OFFICE GOAL. One primary sprint; the rest collapse to a count. */}
+          <Band title="Office goal" action={{ label: 'Goals', to: '/goals' }}>
+            {goal ? (
               <div className="border-b border-border py-4">
-                <div className="flex flex-wrap items-end justify-between gap-4">
-                  <div>
-                    <p className="font-display text-[clamp(1.8rem,4vw,2.6rem)] font-extrabold leading-none tabular-nums tracking-[-0.03em]">
-                      {health.collectedLabel}
-                    </p>
-                    <MicroLabel className="mt-2">Collected this month · {health.days} days logged</MicroLabel>
-                  </div>
-                  <p className="text-[13px] text-muted-foreground">{health.paceLabel}</p>
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <p className="text-[15px] font-semibold leading-snug">{goal.title}</p>
+                  <span
+                    className={cn(
+                      'font-mono text-[10px] uppercase tracking-[0.12em]',
+                      goal.state === 'on_track' && 'text-success',
+                      goal.state === 'needs_push' && 'text-warning',
+                      goal.state === 'awaiting_verification' && 'text-primary',
+                    )}
+                  >
+                    {goal.stateLabel}
+                  </span>
                 </div>
-                <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-muted">
+                <p className="mt-3 font-display text-[2rem] font-extrabold leading-none tabular-nums tracking-[-0.02em]">
+                  {goal.done}
+                  <span className="text-[1.25rem] text-muted-foreground"> / {goal.total}</span>
+                </p>
+                <div className="mt-3 h-1.5 w-full bg-muted">
                   <div
-                    className="h-full rounded-full bg-primary transition-[width] duration-700"
-                    style={{ width: `${Math.min(100, Math.max(0, health.pacePct))}%` }}
+                    className={cn(
+                      'h-full transition-[width] duration-700',
+                      goal.done >= goal.total ? 'bg-success' : 'bg-primary',
+                    )}
+                    style={{ width: `${Math.min(100, goal.total > 0 ? (goal.done / goal.total) * 100 : 0)}%` }}
                   />
                 </div>
                 <p className="mt-2 text-[12.5px] text-muted-foreground">
-                  {health.disruptions} cancellation{health.disruptions === 1 ? '' : 's'} or no-show
-                  {health.disruptions === 1 ? '' : 's'} recorded this month.
+                  {goal.remaining} remaining · ends {goal.endsLabel}
+                  {goal.daysLeft > 0 ? ` (${goal.daysLeft} day${goal.daysLeft === 1 ? '' : 's'} left)` : ' (today)'}
+                  {' · '}
+                  {goal.stateDetail}
                 </p>
+                {goal.moreCount > 0 && (
+                  <Link
+                    to="/goals"
+                    className="group mt-2 inline-flex items-center gap-1 font-mono text-[10.5px] uppercase tracking-[0.12em] text-primary hover:underline"
+                  >
+                    {goal.moreCount} more active
+                    <ArrowUpRight className="h-3 w-3 transition-transform group-hover:-translate-y-0.5" />
+                  </Link>
+                )}
               </div>
-            </Band>
-          )}
-        </div>
-
-        {/* Right: standing context, compact. */}
-        <div className="space-y-8">
-          <Band
-            title="Staffing today"
-            count={liveRoster ? `${staffing.rows.length}` : undefined}
-            action={{ label: 'Team', to: '/team' }}
-          >
-            {liveRoster ? (
-              staffing.rows.map((p) => <PersonRow key={p.id} person={p} />)
             ) : (
               <EmptyState
-                tone="neutral"
-                title={office.headline}
-                detail={`${office.detail} No live staffing status is needed.`}
+                tone="setup"
+                title="No office goal is running."
+                detail="Pick one shared number the office can rally around — the Sprint Builder can scope it."
+                action={{ label: 'Choose a goal', to: '/goals' }}
               />
             )}
           </Band>
 
-          <Band title="Office pulse">
-            {pulse.length === 0 ? (
-              <EmptyState tone="good" title="All quiet." detail="No unresolved notes or exceptions right now." />
+          {/* F — MONTH IN PROGRESS. Production MTD, missed MTD, recorded history. */}
+          <Band
+            title="Month in progress"
+            count={month ? `${month.daysLogged} day${month.daysLogged === 1 ? '' : 's'} logged` : undefined}
+            action={{ label: 'Reports', to: '/reports' }}
+          >
+            {month ? (
+              <>
+                <div className="border-b border-border py-4">
+                  <MicroLabel>Production month to date</MicroLabel>
+                  <p className="mt-2 font-display text-[clamp(1.6rem,3.5vw,2.2rem)] font-extrabold leading-none tabular-nums tracking-[-0.03em]">
+                    {month.productionLabel}
+                  </p>
+                  <p className="mt-1.5 text-[12px] text-muted-foreground">
+                    {month.productionCompare ??
+                      'Recorded from closeouts. No production goal is configured — this is the factual total.'}
+                  </p>
+                </div>
+                <div className="border-b border-border py-4">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <MicroLabel>Missed appointments this month</MicroLabel>
+                    <span
+                      className={cn(
+                        'font-display text-[1.35rem] font-bold leading-none tabular-nums',
+                        month.missed.trend === 'above_pace' ? 'text-warning' : 'text-foreground',
+                      )}
+                    >
+                      {month.missed.total}
+                    </span>
+                  </div>
+                  {month.missed.total > 0 && (
+                    <p className="mt-1.5 text-[12px] text-muted-foreground">
+                      {missedBreakdown(month.missed)}
+                    </p>
+                  )}
+                  {month.missed.trendLabel ? (
+                    <p
+                      className={cn(
+                        'mt-1 text-[12px]',
+                        month.missed.trend === 'above_pace' ? 'text-warning' : 'text-muted-foreground',
+                      )}
+                    >
+                      {month.missed.trendLabel}
+                    </p>
+                  ) : (
+                    month.missed.total === 0 && (
+                      <p className="mt-1 text-[12px] text-muted-foreground">None recorded this month.</p>
+                    )
+                  )}
+                </div>
+                {month.trend.length > 1 && (
+                  <div className="grid gap-x-6 gap-y-4 border-b border-border py-4 sm:grid-cols-2">
+                    {(
+                      [
+                        {
+                          key: 'production',
+                          title: 'Production by month',
+                          question: 'Is production holding?',
+                          pick: (m: (typeof month.trend)[number]) => m.productionCents,
+                          fmt: (v: number) => `$${Math.round(v / 100).toLocaleString('en-US')}`,
+                          tone: 'bg-primary',
+                        },
+                        {
+                          key: 'missed',
+                          title: 'Missed appointments by month',
+                          question: 'Getting better or worse?',
+                          pick: (m: (typeof month.trend)[number]) => m.disruptions,
+                          fmt: (v: number) => String(v),
+                          tone: 'bg-warning/80',
+                        },
+                      ] as const
+                    ).map((chart) => {
+                      const max = Math.max(1, ...month.trend.map(chart.pick));
+                      return (
+                        <div key={chart.key} className="min-w-0">
+                          <div className="flex items-baseline justify-between gap-3">
+                            <p className="text-[11.5px] text-muted-foreground">{chart.title}</p>
+                            <p className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground">
+                              {chart.question}
+                            </p>
+                          </div>
+                          <div className="mt-2 flex h-14 items-end gap-1.5">
+                            {month.trend.map((m) => (
+                              <div key={m.month} className="flex-1" title={`${m.month}: ${chart.fmt(chart.pick(m))}`}>
+                                <div
+                                  className={cn('w-full', chart.tone)}
+                                  style={{ height: `${Math.max((chart.pick(m) / max) * 56, 2)}px` }}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-1 flex justify-between font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground">
+                            <span>{month.trend[0].month.slice(5)}</span>
+                            <span>{month.trend[month.trend.length - 1].month.slice(5)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <p className="py-2.5 text-[11px] text-muted-foreground">
+                  From the deposit log · figures update when a day is closed out.
+                </p>
+              </>
+            ) : brief ? (
+              <EmptyState
+                tone="neutral"
+                title="No closeouts this month yet."
+                detail="Month figures appear as days are closed out in the deposit log."
+              />
             ) : (
-              pulse.map((s) => <SignalRow key={s.id} signal={s} />)
+              <p className="border-b border-border py-4 text-[13px] text-muted-foreground">Loading…</p>
             )}
           </Band>
+        </div>
+
+        {/* Right: staffing only when it is a live question or a real exception. */}
+        <div className="space-y-8">
+          {(liveRoster || exceptions.length > 0) && (
+            <Band
+              title="Staffing today"
+              count={liveRoster ? `${staffing.rows.length}` : undefined}
+              action={{ label: 'Team', to: '/team' }}
+            >
+              {exceptions.map((s) => (
+                <SignalRow key={s.id} signal={s} />
+              ))}
+              {liveRoster && staffing.rows.map((p) => <PersonRow key={p.id} person={p} />)}
+            </Band>
+          )}
 
           {/* Owners who also work a chair or the desk get a compact lane —
-              it never competes with the decisions above. */}
+              it never competes with the pulse above. */}
           <Lanes lanes={lanes} />
         </div>
       </div>
