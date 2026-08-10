@@ -30,6 +30,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return stored ? parseInt(stored, 10) : DEFAULT_TIMEOUT_MINUTES;
   });
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Id of the user who last passed the allowlist check. Lets evaluate() tell a
+  // token refresh / tab-refocus re-auth of the vetted user apart from a real
+  // sign-in, without reading state from a stale closure.
+  const allowedUserIdRef = useRef<string | null>(null);
 
   // Access is decided server-side: the allowed_users table (maintained by
   // the invite flow) via the SECURITY DEFINER is_allowed_user(), the same
@@ -54,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOutClean = useCallback(async () => {
     clearInactivityTimer();
+    allowedUserIdRef.current = null;
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
@@ -89,12 +94,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let evaluationVersion = 0;
 
     const evaluate = (nextSession: Session | null) => {
+      const nextUser = nextSession?.user ?? null;
+
+      // Tab refocus / token refresh for the already-vetted user: refresh the
+      // session silently. Flipping loading here would unmount the page and
+      // wipe unpersisted patient info; the allowlist stays enforced by RLS.
+      if (nextUser && allowedUserIdRef.current === nextUser.id) {
+        setSession(nextSession);
+        setUser(nextUser);
+        return;
+      }
+
       const version = ++evaluationVersion;
       setSession(nextSession);
-      const nextUser = nextSession?.user ?? null;
       setUser(nextUser);
 
       if (!nextUser) {
+        allowedUserIdRef.current = null;
         setIsAllowed(false);
         setLoading(false);
         return;
@@ -109,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const allowed = await checkAllowed(nextUser);
         if (cancelled || version !== evaluationVersion) return;
 
+        allowedUserIdRef.current = allowed ? nextUser.id : null;
         setIsAllowed(allowed);
         if (!allowed) {
           // Keep a not-yet-allowlisted session only on the narrow public routes
