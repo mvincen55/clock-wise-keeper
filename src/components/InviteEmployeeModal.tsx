@@ -25,22 +25,64 @@ const DEFAULT_SCHEDULE: ScheduleDay[] = DAY_NAMES.map((_, weekday) => ({
   end_time: '17:00',
 }));
 
-export default function InviteEmployeeModal() {
+type InviteInitial = {
+  email: string;
+  role: 'employee' | 'manager';
+  invited_name: string | null;
+  operational_role: string | null;
+  secondary_roles: string[];
+  start_date: string | null;
+  initial_pto_hours: number | null;
+  weekly_schedule: ScheduleDay[];
+};
+
+/**
+ * Invite a team member — or, given `initial` (an open invite), update its
+ * details and resend the email. send-org-invite reuses the same invite row
+ * and token for an un-accepted email, so "update & resend" is one call.
+ */
+export default function InviteEmployeeModal({
+  initial,
+  open: controlledOpen,
+  onOpenChange,
+}: {
+  initial?: InviteInitial;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+} = {}) {
   const { data: ctx } = useOrgContext();
   const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'employee' | 'manager'>('employee');
-  const [operationalRole, setOperationalRole] = useState<OperationalRole | ''>('');
-  const [secondaryRoles, setSecondaryRoles] = useState<OperationalRole[]>([]);
+  const updateMode = !!initial;
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = onOpenChange ?? setUncontrolledOpen;
+  const seedSchedule = (): ScheduleDay[] => {
+    if (!initial?.weekly_schedule?.length) return DEFAULT_SCHEDULE;
+    return DAY_NAMES.map((_, weekday) => {
+      const saved = initial.weekly_schedule.find(d => d.weekday === weekday);
+      return saved ?? { weekday, enabled: false, start_time: '08:00', end_time: '17:00' };
+    });
+  };
+  const [name, setName] = useState(initial?.invited_name ?? '');
+  const [email, setEmail] = useState(initial?.email ?? '');
+  const [role, setRole] = useState<'employee' | 'manager'>(initial?.role ?? 'employee');
+  const [operationalRole, setOperationalRole] = useState<OperationalRole | ''>(
+    (initial?.operational_role as OperationalRole | null) ?? ''
+  );
+  const [secondaryRoles, setSecondaryRoles] = useState<OperationalRole[]>(
+    (initial?.secondary_roles as OperationalRole[] | undefined) ?? []
+  );
   const [submitting, setSubmitting] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
   const [emailed, setEmailed] = useState(false);
   const [warning, setWarning] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [ptoHours, setPtoHours] = useState('');
-  const [schedule, setSchedule] = useState<ScheduleDay[]>(DEFAULT_SCHEDULE);
+  const [startDate, setStartDate] = useState(initial?.start_date ?? '');
+  const [ptoHours, setPtoHours] = useState(
+    initial?.initial_pto_hours === null || initial?.initial_pto_hours === undefined
+      ? ''
+      : String(initial.initial_pto_hours)
+  );
+  const [schedule, setSchedule] = useState<ScheduleDay[]>(seedSchedule);
   const { refetch: refetchInvites } = usePendingInvites();
 
   const updateDay = (weekday: number, patch: Partial<ScheduleDay>) =>
@@ -84,8 +126,15 @@ export default function InviteEmployeeModal() {
       setWarning(data.warning || '');
       toast(
         data.emailed
-          ? { title: 'Invite sent', description: `An invite email is on its way to ${email.toLowerCase().trim()}.` }
-          : { title: 'Invite created', description: data.warning || 'Share the link manually.', variant: 'destructive' }
+          ? {
+              title: updateMode ? 'Invite updated & resent' : 'Invite sent',
+              description: `An invite email is on its way to ${email.toLowerCase().trim()}.`,
+            }
+          : {
+              title: updateMode ? 'Invite updated' : 'Invite created',
+              description: data.warning || 'Share the link manually.',
+              variant: 'destructive',
+            }
       );
     } catch (e) {
       toast({
@@ -117,12 +166,16 @@ export default function InviteEmployeeModal() {
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
-      <DialogTrigger asChild>
-        <Button variant="outline"><Mail className="mr-2 h-4 w-4" />Invite</Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v && !updateMode) reset(); }}>
+      {!updateMode && (
+        <DialogTrigger asChild>
+          <Button variant="outline"><Mail className="mr-2 h-4 w-4" />Invite</Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Invite Team Member</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{updateMode ? 'Update invite & resend' : 'Invite Team Member'}</DialogTitle>
+        </DialogHeader>
 
         {inviteLink ? (
           <div className="space-y-4">
@@ -145,7 +198,13 @@ export default function InviteEmployeeModal() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">The invite expires in 7 days.</p>
-            <Button variant="outline" onClick={reset} className="w-full">Invite Another</Button>
+            {updateMode ? (
+              <Button variant="outline" onClick={() => { setInviteLink(''); setOpen(false); }} className="w-full">
+                Done
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={reset} className="w-full">Invite Another</Button>
+            )}
           </div>
         ) : (
           <div className="space-y-4">
@@ -155,8 +214,19 @@ export default function InviteEmployeeModal() {
             </div>
             <div className="space-y-2">
               <Label>Email address (their username) *</Label>
-              <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@company.com" />
-              <p className="text-xs text-muted-foreground">They'll sign in with this address.</p>
+              <Input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="jane@company.com"
+                readOnly={updateMode}
+                className={updateMode ? 'bg-muted' : undefined}
+              />
+              <p className="text-xs text-muted-foreground">
+                {updateMode
+                  ? 'The invite stays tied to this address. For a different email, revoke this invite and send a new one.'
+                  : "They'll sign in with this address."}
+              </p>
             </div>
             <div className="space-y-2">
               <Label>Permissions</Label>
@@ -270,7 +340,7 @@ export default function InviteEmployeeModal() {
               className="w-full"
             >
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Send Invite Email
+              {updateMode ? 'Update & Resend Email' : 'Send Invite Email'}
             </Button>
           </div>
         )}

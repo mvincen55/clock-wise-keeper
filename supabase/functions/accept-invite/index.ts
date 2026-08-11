@@ -192,9 +192,16 @@ Deno.serve(async (req) => {
     let employeeId: string | null = null;
     if (empRecord) {
       employeeId = empRecord.id;
+      // Accepting an invite means joining the team: a pre-existing loginless
+      // record (e.g. archived or roster-imported) must come back active, or
+      // the person accepts successfully yet never appears on the Team page.
       await supabaseAdmin
         .from("employees")
-        .update({ user_id: user.id, ...(invitedName ? { display_name: invitedName } : {}) })
+        .update({
+          user_id: user.id,
+          employment_status: "active",
+          ...(invitedName ? { display_name: invitedName } : {}),
+        })
         .eq("id", empRecord.id);
     } else {
       // Create a new employee record, named by the inviter.
