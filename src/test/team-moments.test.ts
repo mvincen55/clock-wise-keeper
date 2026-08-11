@@ -4,11 +4,14 @@ import {
   REACTIONS,
   announce,
   describe as describeMoment,
+  groupRecipients,
   idsToConfirmOpened,
   isApprovedReaction,
   normalizeText,
   planReveal,
+  roleLabel,
   validateDraft,
+  type MomentRecipient,
   type PendingMoment,
 } from '@/components/moments/reactions';
 
@@ -142,5 +145,42 @@ describe('presentation confirmation is write-once (duplicate / replay safety)', 
     expect(idsToConfirmOpened(rows, first)).toEqual([]);
     // And once the server confirms, nothing is left to mark.
     expect(idsToConfirmOpened([{ id: 'a', opened_at: '2026-08-01T10:01:00Z' }])).toEqual([]);
+  });
+});
+
+describe('recipient grouping (recognition flows up as well as sideways)', () => {
+  const r = (over: Partial<MomentRecipient>): MomentRecipient => ({
+    id: 'e1',
+    userId: 'u1',
+    name: 'Alex',
+    role: 'employee',
+    ...over,
+  });
+
+  it('splits teammates from managers and owners, each sorted by name', () => {
+    const { teammates, leaders } = groupRecipients([
+      r({ id: 'e1', name: 'Priya' }),
+      r({ id: 'e2', name: 'Alex' }),
+      r({ id: 'e3', name: 'Dr. Harelick', role: 'owner' }),
+      r({ id: 'e4', name: 'Dana', role: 'manager' }),
+    ]);
+    expect(teammates.map((x) => x.name)).toEqual(['Alex', 'Priya']);
+    expect(leaders.map((x) => x.name)).toEqual(['Dana', 'Dr. Harelick']);
+  });
+
+  it('never drops anyone: every recipient lands in exactly one group', () => {
+    const all = [
+      r({ id: 'e1' }),
+      r({ id: 'e2', role: 'manager' }),
+      r({ id: 'e3', role: 'owner' }),
+    ];
+    const { teammates, leaders } = groupRecipients(all);
+    expect(teammates.length + leaders.length).toBe(all.length);
+  });
+
+  it('labels roles in plain words', () => {
+    expect(roleLabel('owner')).toBe('Owner');
+    expect(roleLabel('manager')).toBe('Manager');
+    expect(roleLabel('employee')).toBe('Teammate');
   });
 });

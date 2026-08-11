@@ -51,7 +51,10 @@ export function MomentRevealSurface({
         {announce(moments)}
       </p>
 
-      <div className="border-2 border-ink bg-paper shadow-none" aria-label="Team moment">
+      <div
+        className={cn('border-2 border-ink bg-paper shadow-none', animate && 'pe-moment-pop')}
+        aria-label="Team moment"
+      >
         <div className="relative">
           <button
             type="button"
