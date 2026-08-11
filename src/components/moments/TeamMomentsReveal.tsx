@@ -6,6 +6,7 @@ import { MomentEnvelope } from '@/components/moments/MomentEnvelope';
 import { announce, planReveal, type PendingMoment } from '@/components/moments/reactions';
 import {
   useClaimedMoments,
+  useDismissMoments,
   useEmployeeNameLookup,
   useMomentPrefs,
   useOpenMoments,
@@ -137,6 +138,7 @@ export default function TeamMomentsReveal() {
   const nameOf = useEmployeeNameLookup();
   const reduced = useReducedMotion();
   const openMoments = useOpenMoments();
+  const dismissMoments = useDismissMoments();
   const [dismissed, setDismissed] = useState(false);
   const confirmedRef = useRef<string | null>(null);
 
@@ -161,6 +163,18 @@ export default function TeamMomentsReveal() {
 
   if (!plan.show || dismissed) return null;
 
-  return <MomentRevealSurface moments={plan.order} animate={plan.animate} onDismiss={() => setDismissed(true)} />;
+  return (
+    <MomentRevealSurface
+      moments={plan.order}
+      animate={plan.animate}
+      onDismiss={() => {
+        // Exit is final everywhere: hide now, and stamp dismissed_at so no
+        // page, tab, or device shows this batch again. It stays saved on the
+        // employee's record — the Received history keeps every opened moment.
+        setDismissed(true);
+        dismissMoments.mutate(plan.order.map((m) => m.id));
+      }}
+    />
+  );
 }
 

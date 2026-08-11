@@ -15,14 +15,18 @@ import { getReaction, type PendingMoment } from '@/components/moments/reactions'
 
 /** Hard-cornered confetti sparks: direction, spin, and delay per piece. */
 const SPARKS: { dx: string; dy: string; rot: string; delay: string; size: number; gold: boolean }[] = [
-  { dx: '-30px', dy: '-26px', rot: '-50deg', delay: '40ms', size: 6, gold: true },
-  { dx: '2px', dy: '-34px', rot: '30deg', delay: '0ms', size: 5, gold: false },
-  { dx: '30px', dy: '-24px', rot: '60deg', delay: '70ms', size: 7, gold: true },
-  { dx: '-38px', dy: '-4px', rot: '-25deg', delay: '110ms', size: 5, gold: false },
-  { dx: '40px', dy: '-2px', rot: '45deg', delay: '90ms', size: 6, gold: false },
-  { dx: '-24px', dy: '18px', rot: '-70deg', delay: '140ms', size: 5, gold: true },
-  { dx: '18px', dy: '22px', rot: '35deg', delay: '120ms', size: 6, gold: false },
-  { dx: '36px', dy: '14px', rot: '80deg', delay: '170ms', size: 5, gold: true },
+  { dx: '-48px', dy: '-42px', rot: '-70deg', delay: '40ms', size: 8, gold: true },
+  { dx: '2px', dy: '-56px', rot: '40deg', delay: '0ms', size: 7, gold: false },
+  { dx: '48px', dy: '-40px', rot: '80deg', delay: '60ms', size: 9, gold: true },
+  { dx: '-22px', dy: '-52px', rot: '-35deg', delay: '90ms', size: 6, gold: false },
+  { dx: '26px', dy: '-50px', rot: '55deg', delay: '30ms', size: 7, gold: true },
+  { dx: '-58px', dy: '-8px', rot: '-30deg', delay: '110ms', size: 7, gold: false },
+  { dx: '60px', dy: '-4px', rot: '60deg', delay: '80ms', size: 8, gold: false },
+  { dx: '-38px', dy: '26px', rot: '-90deg', delay: '140ms', size: 6, gold: true },
+  { dx: '28px', dy: '32px', rot: '45deg', delay: '120ms', size: 7, gold: false },
+  { dx: '54px', dy: '20px', rot: '100deg', delay: '160ms', size: 6, gold: true },
+  { dx: '-52px', dy: '-26px', rot: '-55deg', delay: '180ms', size: 6, gold: false },
+  { dx: '44px', dy: '-24px', rot: '70deg', delay: '200ms', size: 6, gold: true },
 ];
 
 export function MomentEnvelope({
@@ -58,6 +62,9 @@ export function MomentEnvelope({
             </div>
             {animate && (
               <span aria-hidden className={cn('pe-moment-burst', open && 'is-open')}>
+                {/* Shockwave: two expanding hard-cornered rings, paper then gold. */}
+                <span className="pe-moment-boom border-paper" />
+                <span className="pe-moment-boom pe-moment-boom-late border-gold" />
                 {SPARKS.map((s, i) => (
                   <span
                     key={i}
