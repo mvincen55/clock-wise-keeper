@@ -28,7 +28,7 @@ export interface OwnerBoardPrefs {
 export const DEFAULT_MESSAGING_SETTINGS: MessagingSettings = {
   enabled: true,
   messages_label: 'Messages',
-  requests_label: 'Doctor Requests',
+  requests_label: 'Requests',
   doctor_recipient_label: 'the doctor',
   categories: [
     'Treatment question',
@@ -60,8 +60,9 @@ export const MESSAGING_SETTING_LABELS = {
     onboarding: 'What does your office call passing notes to each other?',
   },
   requests_label: {
-    label: 'What we call notes sent to the doctor',
-    onboarding: 'What does your office call something you need the doctor to look at?',
+    label: 'What we call requests in the Inbox',
+    onboarding:
+      'What does your office call something you need a teammate or the doctor to look at?',
   },
   doctor_recipient_label: {
     label: 'What we call the doctor in clock-out messages',

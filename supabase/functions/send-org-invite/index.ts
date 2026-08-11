@@ -210,15 +210,16 @@ Deno.serve(async (req) => {
     const orgId = membership.org_id;
     const orgName = (membership as any).orgs?.name || "Your office";
 
-    // Reuse a live pending invite for the same org+email instead of stacking
-    // duplicates — refreshed with the latest name/roles the inviter entered.
+    // Reuse any un-accepted invite for the same org+email instead of stacking
+    // duplicates — including an EXPIRED one, so "resend" revives it rather
+    // than forking a second row. Fields are refreshed with whatever the
+    // inviter entered, and the expiry restarts at a full 7 days.
     const { data: existing } = await supabaseAdmin
       .from("org_invites")
       .select("id, token")
       .eq("org_id", orgId)
       .eq("email", rawEmail)
       .is("accepted_at", null)
-      .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -231,6 +232,8 @@ Deno.serve(async (req) => {
       start_date: startDate,
       initial_pto_hours: initialPtoHours,
       weekly_schedule: weeklySchedule,
+      // Every (re)send restarts the 7-day clock the email promises.
+      expires_at: new Date(Date.now() + 7 * 86_400_000).toISOString(),
     };
 
     let token: string;

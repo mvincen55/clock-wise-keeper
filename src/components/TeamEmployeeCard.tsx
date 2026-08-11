@@ -21,6 +21,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/time-utils';
 import { ChevronDown, ChevronUp, Clock, Calendar, AlertTriangle, CalendarOff, Loader2, Pencil, Plus, Trash2, Archive } from 'lucide-react';
+import { useTeamOnboardingStatus } from '@/hooks/useOnboarding';
+import { employeeTeamStatus } from '@/lib/team-status';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Link } from 'react-router-dom';
 
@@ -71,6 +73,22 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
   const { toast } = useToast();
   const canArchive = orgCtx?.role === 'owner' || orgCtx?.role === 'manager';
 
+  // Join-pipeline status (React Query dedupes the org-wide fetch per card).
+  const { data: onboardingTeam } = useTeamOnboardingStatus();
+  const onboardingRow = employee.user_id
+    ? onboardingTeam?.find(t => t.user_id === employee.user_id)
+    : undefined;
+  const teamStatus = employeeTeamStatus({
+    hasLogin: !!employee.user_id,
+    onboarding: onboardingRow
+      ? {
+          complete: onboardingRow.complete,
+          stepsDone: Object.values(onboardingRow.steps).filter(Boolean).length,
+          stepsTotal: 4,
+        }
+      : null,
+  });
+
   const handleArchive = async () => {
     setArchiving(true);
     const { error } = await supabase
@@ -103,6 +121,21 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
               {employee.tag && (
                 <span className="ml-2 font-mono text-[10px] tracking-widest text-muted-foreground">{employee.tag}</span>
               )}
+              {/* Join-pipeline status, visible without expanding the card:
+                  Active / Pending Onboarding / Pending (no login yet). */}
+              <Badge
+                variant="outline"
+                title={teamStatus.detail}
+                className={`ml-2 text-[10px] ${
+                  teamStatus.tone === 'success'
+                    ? 'border-success/30 text-success'
+                    : teamStatus.tone === 'warning'
+                      ? 'border-warning/40 text-warning'
+                      : 'text-muted-foreground'
+                }`}
+              >
+                {teamStatus.label}
+              </Badge>
             </p>
             <p className="text-xs text-muted-foreground">{employee.email || 'No email'}</p>
           </div>

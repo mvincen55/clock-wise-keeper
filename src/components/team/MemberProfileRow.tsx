@@ -125,12 +125,19 @@ export default function MemberProfileRow({ employee }: { employee: Member }) {
         <span className="text-muted-foreground">goes by {employee.preferred_name}</span>
       )}
 
-      {status ? (
+      {/* One join-pipeline vocabulary everywhere: Active / Pending Onboarding
+          / Pending (no login). A loginless roster record is "Pending", never
+          mislabeled as un-started onboarding. */}
+      {!employee.user_id ? (
+        <Badge variant="outline" className="text-muted-foreground" title="Login not created yet">
+          Pending
+        </Badge>
+      ) : status ? (
         status.complete ? (
-          <Badge variant="outline" className="border-success/30 text-success">Onboarded</Badge>
+          <Badge variant="outline" className="border-success/30 text-success">Active</Badge>
         ) : (
           <Badge variant="outline" className="border-warning/30 text-warning">
-            Onboarding{' '}
+            Pending Onboarding{' '}
             {['terms', 'work_style', 'basics', 'goal'].filter(
               k => status.steps[k as keyof typeof status.steps],
             ).length}
@@ -138,7 +145,9 @@ export default function MemberProfileRow({ employee }: { employee: Member }) {
           </Badge>
         )
       ) : (
-        <Badge variant="outline" className="text-muted-foreground">Not started</Badge>
+        <Badge variant="outline" className="border-warning/30 text-warning" title="Login created — onboarding not started">
+          Pending Onboarding
+        </Badge>
       )}
       </div>
 

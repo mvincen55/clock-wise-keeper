@@ -5,6 +5,18 @@ Status (2026-07-30): Prompts 17 + 18 pending. Pairs with `docs/intelligence-spec
 the AI conversation instead of only cards. Takes "announcements system" OFF the
 deferred list.
 
+Update (2026-08-11): the AI channel's minimal reply path now exists — the
+`office-ai-chat` edge function answers the member's latest message with office
+memories as grounding and writes the reply as sender_kind 'pathfinder' (service
+role; member RLS still only writes 'member'). The Messages page and the new
+chat surfaces invoke it after each send in an 'ai' conversation. Also shipped:
+realtime corner popups for incoming messages (in-app toast + desktop
+notification when the tab is hidden, driven by the notify_new_message
+notification rows), and a Google Chat-style dock (`ChatDock`) pinned to the
+bottom of every desktop page. The Inbox's requests tab now uses the office's
+configured `requests_label` (default renamed 'Doctor Requests' → 'Requests' —
+requests can go to any teammate, not only the doctor).
+
 ## Product decisions (the "why")
 
 1. **One messaging system, three kinds of conversations.** Member DMs/groups,
