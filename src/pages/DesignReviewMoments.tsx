@@ -21,6 +21,17 @@ const SINGLE: PendingMoment[] = [
   },
 ];
 
+const HEARTS: PendingMoment[] = [
+  {
+    id: 'm4',
+    reaction: 'thank_you',
+    message: 'Thank you for covering!',
+    context_label: null,
+    created_at: '2026-08-06T15:20:00Z',
+    sender_name: 'A teammate',
+  },
+];
+
 const MANY: PendingMoment[] = [
   ...SINGLE,
   {
@@ -48,8 +59,9 @@ export const MOMENT_SCENARIOS: {
   moments: PendingMoment[];
   animate: boolean;
 }[] = [
-  { slug: 'single', title: 'One moment', note: 'Default reveal: card pops in, envelope opens, sparks fly, reaction rises, settles.', moments: SINGLE, animate: true },
-  { slug: 'multiple', title: 'Several waiting', note: 'One combined opening, then a compact stack — never several blocking animations.', moments: MANY, animate: true },
+  { slug: 'single', title: 'One moment', note: 'Default reveal: card pops in, envelope opens, confetti bursts to match the reaction, settles.', moments: SINGLE, animate: true },
+  { slug: 'thank-you', title: 'Thank-you hearts', note: 'Each reaction throws its own confetti — thank-you floats purple hearts.', moments: HEARTS, animate: true },
+  { slug: 'multiple', title: 'Several waiting', note: 'One combined opening, then a compact stack — confetti re-bursts per moment as you page.', moments: MANY, animate: true },
   { slug: 'reduced-motion', title: 'Reduced motion', note: 'OS prefers-reduced-motion: renders the settled state immediately.', moments: SINGLE, animate: false },
   { slug: 'muted', title: 'Muted preference', note: 'Person muted the animation: still delivered, already opened.', moments: MANY, animate: false },
 ];

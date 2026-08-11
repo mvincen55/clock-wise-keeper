@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { MomentConfetti } from '@/components/moments/MomentConfetti';
 import { MomentEnvelope } from '@/components/moments/MomentEnvelope';
 import { announce, planReveal, type PendingMoment } from '@/components/moments/reactions';
 import {
@@ -42,7 +43,7 @@ export function MomentRevealSurface({
   return (
     <div
       className={cn(
-        'z-40 w-full max-w-sm',
+        'relative z-40 w-full max-w-sm',
         !embedded && 'fixed bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] right-4 left-4 sm:left-auto sm:bottom-6 sm:right-6',
       )}
     >
@@ -50,6 +51,9 @@ export function MomentRevealSurface({
       <p className="sr-only" role="status" aria-live="polite">
         {announce(moments)}
       </p>
+
+      {/* Confetti themed to the reaction that was sent; re-bursts per moment. */}
+      {animate && <MomentConfetti reaction={current.reaction} burstKey={current.id} />}
 
       <div
         className={cn('border-2 border-ink bg-paper shadow-none', animate && 'pe-moment-pop')}
