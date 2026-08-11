@@ -277,7 +277,7 @@ export function useSendMessage() {
       for (const file of files) {
         // Path is always <org_id>/<conversation_id>/<file> — storage RLS
         // reads the conversation id out of the path and allows participants only.
-        const safe = file.name.replace(/[^\w.\-]+/g, '_').slice(-80);
+        const safe = file.name.replace(/[^\w.-]+/g, '_').slice(-80);
         const path = `${ctx.org_id}/${conversationId}/${crypto.randomUUID()}-${safe}`;
         const up = await supabase.storage
           .from('message-attachments')
