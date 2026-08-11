@@ -1,4 +1,9 @@
 import type { OperationalRole } from '@/lib/schedule-reader/types';
+import type { DayVitals, VitalsSummary } from '@/hooks/usePracticeVitals';
+import {
+  buildDailyBrief, buildGoalBrief, buildMonthDetail, dailySummary, monthCollectionsFact,
+  ownerRecommendation, type GoalLike, type OwnerPulseInput,
+} from '@/lib/owner-pulse';
 import { shortcutsFor, roleLabel, roleMission } from './opRoles';
 import type {
   ManagerView, MemberView, OwnerView, PermissionTier, RoleContext, RoleLane, Series, Signal,
@@ -155,6 +160,80 @@ const staffingNewOffice: StaffingSummary = {
 
 const ownerContext = context('owner', 'Owner', 'dentist');
 
+/**
+ * Owner pulse fixtures run through the REAL derivation layer (owner-pulse.ts)
+ * so the design-review surface can never drift from production logic. Only the
+ * raw recorded inputs are invented — every label, pace verdict, recommendation,
+ * and summary sentence below is computed, not typed.
+ */
+const fxDay = (date: string, over: Partial<DayVitals> = {}): DayVitals => ({
+  date,
+  productionCents: 742_000,
+  collectedCents: 615_000,
+  hygieneCancellations: 2,
+  hygieneNoShows: 0,
+  doctorCancellations: 0,
+  doctorNoShows: 1,
+  ...over,
+});
+
+const fxSummary = (over: Partial<VitalsSummary> = {}): VitalsSummary => ({
+  productionCents: 1_390_000,
+  collectedCents: 900_000,
+  hygieneCancellations: 3,
+  hygieneNoShows: 0,
+  doctorCancellations: 0,
+  doctorNoShows: 1,
+  disruptions: 4,
+  days: 2,
+  ...over,
+});
+
+const fxGoals: GoalLike[] = [
+  {
+    id: 'g1', title: 'Same-day treatment acceptance', metric: 'accepted plans',
+    progress: 12, target_count: 20, starts_on: '2026-03-01', ends_on: '2026-03-31', status: 'active',
+  },
+  {
+    id: 'g2', title: 'Morning huddle on time', metric: 'huddles',
+    progress: 9, target_count: 10, starts_on: '2026-02-24', ends_on: '2026-03-07', status: 'active',
+  },
+];
+
+const fxMonths = [
+  { month: '2025-10', productionCents: 12_100_000, disruptions: 24 },
+  { month: '2025-11', productionCents: 11_400_000, disruptions: 19 },
+  { month: '2025-12', productionCents: 9_800_000, disruptions: 28 },
+  { month: '2026-01', productionCents: 13_200_000, disruptions: 22 },
+  { month: '2026-02', productionCents: 14_800_000, disruptions: 21 },
+  { month: '2026-03', productionCents: 1_390_000, disruptions: 4 },
+];
+
+/** Mid-morning, Tue Mar 3: yesterday closed out, today's closeout still ahead. */
+const openPulseInput: OwnerPulseInput = {
+  today: '2026-03-03',
+  todayVitals: null,
+  latest: fxDay('2026-03-02'),
+  thisMonth: fxSummary(),
+  prevMonth: {
+    month: '2026-02',
+    productionCents: 14_800_000,
+    collectedCents: 14_100_000,
+    hygieneCancellations: 12,
+    hygieneNoShows: 4,
+    doctorCancellations: 3,
+    doctorNoShows: 2,
+    disruptions: 21,
+    days: 19,
+  },
+  monthElapsed: 3 / 31,
+  targetCents: 15_000_000,
+  pacedTargetCents: Math.round(15_000_000 * (3 / 31)),
+  officePhase: 'open',
+};
+
+const openBrief = buildDailyBrief(openPulseInput);
+
 /** Established office, mid-morning, with real activity. */
 export const ownerFixture: OwnerView = {
   kind: 'owner',
@@ -162,68 +241,95 @@ export const ownerFixture: OwnerView = {
   roleContext: ownerContext,
   lanes: lanesFor(ownerContext),
   office: staffingOpen.office,
+  summary: dailySummary(openPulseInput, openBrief, 7),
+  brief: openBrief,
+  monthFact: monthCollectionsFact(openPulseInput),
+  lookAt: ownerRecommendation(openPulseInput, fxGoals),
   decisionCount: 7,
   decisions: [
     { id: '1', label: 'Approvals pending', detail: '2 PTO · 1 correction · 1 change', value: '4', href: '/approvals', tone: 'attention' },
     { id: '2', label: 'Accountability records at owner review', detail: 'Nobody reviews their own record — these have reached you.', value: '2', href: '/management', tone: 'urgent' },
     { id: '3', label: 'Policy acknowledgments overdue', detail: 'Published versions still unsigned past their due date.', value: '1', href: '/playbook', tone: 'attention' },
   ],
-  glance: [
-    { id: 'staffing', value: '6/8', label: 'In right now', detail: '1 not in yet', tone: 'attention', href: '/team' },
-    { id: 'goals', value: '2', label: 'Goals in flight', detail: 'Office sprints running', href: '/goals' },
-    { id: 'records', value: '2', label: 'Open records', detail: 'Accountability in progress', href: '/management' },
-  ],
+  goal: buildGoalBrief(fxGoals, '2026-03-03'),
+  month: buildMonthDetail(openPulseInput, fxMonths),
   staffing: staffingOpen,
-  goals: [
-    { id: 'g1', label: 'Same-day treatment acceptance', done: 12, total: 20, detail: 'accepted plans · ends Mar 31, 2026', href: '/goals' },
-    { id: 'g2', label: 'Morning huddle on time', done: 9, total: 10, detail: 'huddles · ends Mar 7, 2026', href: '/goals' },
-  ],
-  pulse: [
+  exceptions: [
     { id: 'p1', label: 'Unresolved office notes', detail: 'Notes Purple Envelope flagged, still open.', value: '3', href: '/inbox', tone: 'attention' },
     { id: 'p2', label: '1 attendance item needs review', detail: '1 unreviewed late arrival', value: '1', href: '/team', tone: 'attention' },
   ],
-  health: {
-    collectedLabel: '$142,300',
-    paceLabel: 'Behind a $150,000 pace',
-    pacePct: 47,
-    disruptions: 4,
-    days: 12,
-  },
 };
 
-/** The same office at 10:32 PM — closed, clear, calm. Never "0/2 on the floor". */
+/** The same office at 10:32 PM — today closed out clean, decisions clear. */
+const closedPulseInput: OwnerPulseInput = {
+  ...openPulseInput,
+  todayVitals: fxDay('2026-03-03', {
+    productionCents: 815_000,
+    collectedCents: 790_000,
+    hygieneCancellations: 0,
+    doctorNoShows: 0,
+  }),
+  latest: fxDay('2026-03-03', {
+    productionCents: 815_000,
+    collectedCents: 790_000,
+    hygieneCancellations: 0,
+    doctorNoShows: 0,
+  }),
+  thisMonth: fxSummary({ productionCents: 2_205_000, collectedCents: 1_690_000, days: 3 }),
+  officePhase: 'after_close',
+};
+
+const closedBrief = buildDailyBrief(closedPulseInput);
+
 export const ownerClosedFixture: OwnerView = {
   ...ownerFixture,
   header: header('Owner', 'Good evening, Megan', '10:32 PM'),
   office: staffingClosed.office,
+  summary: dailySummary(closedPulseInput, closedBrief, 0),
+  brief: closedBrief,
+  monthFact: monthCollectionsFact(closedPulseInput),
+  lookAt: ownerRecommendation(closedPulseInput, fxGoals),
   decisionCount: 0,
   decisions: [],
-  glance: [
-    { id: 'goals', value: '2', label: 'Goals in flight', detail: 'Office sprints running', href: '/goals' },
-    { id: 'records', value: '0', label: 'Open records', detail: 'All resolved', href: '/management' },
-  ],
+  month: buildMonthDetail(closedPulseInput, fxMonths),
   staffing: staffingClosed,
-  pulse: [],
-  health: null,
+  exceptions: [],
 };
 
 /** A brand-new office: setup guidance, not a wall of zeros. */
+const newPulseInput: OwnerPulseInput = {
+  today: '2026-03-03',
+  todayVitals: null,
+  latest: null,
+  thisMonth: fxSummary({
+    productionCents: 0, collectedCents: 0, hygieneCancellations: 0, hygieneNoShows: 0,
+    doctorCancellations: 0, doctorNoShows: 0, disruptions: 0, days: 0,
+  }),
+  prevMonth: null,
+  monthElapsed: 3 / 31,
+  targetCents: 0,
+  pacedTargetCents: 0,
+  officePhase: 'no_schedule',
+};
+
+const newBrief = buildDailyBrief(newPulseInput);
+
 export const ownerNewFixture: OwnerView = {
   kind: 'owner',
   header: header('Owner', 'Good morning, Megan'),
   roleContext: ownerContext,
   lanes: lanesFor(ownerContext),
   office: staffingNewOffice.office,
+  summary: dailySummary(newPulseInput, newBrief, 0),
+  brief: newBrief,
+  monthFact: monthCollectionsFact(newPulseInput),
+  lookAt: ownerRecommendation(newPulseInput, []),
   decisionCount: 0,
   decisions: [],
-  glance: [
-    { id: 'goals', value: '—', label: 'Goals in flight', detail: 'None running yet', href: '/goals' },
-    { id: 'records', value: '0', label: 'Open records', detail: 'All resolved', href: '/management' },
-  ],
+  goal: null,
+  month: buildMonthDetail(newPulseInput, []),
   staffing: staffingNewOffice,
-  goals: [],
-  pulse: [],
-  health: null,
+  exceptions: [],
 };
 
 /* ------------------------------ manager ------------------------------- */

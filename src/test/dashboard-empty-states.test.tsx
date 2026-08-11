@@ -24,10 +24,11 @@ import {
 const renderView = (ui: React.ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>);
 
 describe('owner — clear and closed states', () => {
-  it('celebrates the clear state instead of rendering a broken zero', () => {
+  it('a clear decision queue is one calm line, never the definition of the day', () => {
     renderView(<OwnerDashboard view={ownerClosedFixture} />);
-    expect(screen.getByText(/You’re clear\./)).toBeInTheDocument();
-    expect(screen.getByText(/Nothing needs an owner decision right now\./)).toBeInTheDocument();
+    expect(screen.getByText(/No owner decisions are waiting\./)).toBeInTheDocument();
+    // The old approvals-only hero is gone: zero approvals is not "all clear".
+    expect(screen.queryByText(/You’re clear\./)).not.toBeInTheDocument();
   });
 
   it('a closed office shows office status, not live floor counts or exceptions', () => {
@@ -37,6 +38,8 @@ describe('owner — clear and closed states', () => {
     // No counted exceptions ("2 exceptions") may be invented off-hours.
     expect(screen.queryByText(/\d+\s+exceptions?/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/\b0\/2\b/)).not.toBeInTheDocument();
+    // Normal staffing disappears entirely when the day is over.
+    expect(screen.queryByText(/Staffing today/i)).not.toBeInTheDocument();
   });
 
   it('owner home never headlines the attendance question or trend', () => {
@@ -51,8 +54,8 @@ describe('owner — clear and closed states', () => {
 
   it('a brand-new office offers sprint setup instead of a wall of zeros', () => {
     renderView(<OwnerDashboard view={ownerNewFixture} />);
-    expect(screen.getByText(/No office goal is active\./)).toBeInTheDocument();
-    const cta = screen.getByRole('link', { name: /Start a sprint/ });
+    expect(screen.getByText(/No office goal is running\./)).toBeInTheDocument();
+    const cta = screen.getByRole('link', { name: /Choose a goal/ });
     expect(cta).toHaveAttribute('href', '/goals');
   });
 });
