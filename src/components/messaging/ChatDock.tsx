@@ -89,6 +89,9 @@ function DockThread({
 
   const submit = () => {
     if (!draft.trim()) return;
+    // A send is a solid user gesture — the safest moment to ask the browser
+    // for desktop-notification permission.
+    requestDesktopNotificationPermission();
     const conversationId = conversation.id;
     const isAi = conversation.type === 'ai';
     send.mutate(
