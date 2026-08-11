@@ -155,6 +155,30 @@ export function useClaimedMoments() {
   });
 }
 
+/**
+ * Durable exit. Stamps dismissed_at (write-once, server clock) so the reveal
+ * is gone from every screen the instant the person closes it — it can never
+ * come back on another page, tab, or device. The moment itself is not lost:
+ * it stays on the employee's record, in the Received history, which reads
+ * opened moments regardless of dismissal.
+ */
+export function useDismissMoments() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (ids.length === 0) return;
+      const { error } = await supabase
+        .from('team_moments')
+        .update({ dismissed_at: new Date().toISOString() })
+        .in('id', ids);
+      if (error) throw error;
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['team-moments', 'history'] });
+    },
+  });
+}
+
 /** Confirms the claimed batch was actually presented. Write-once server side. */
 export function useOpenMoments() {
   const qc = useQueryClient();
@@ -233,7 +257,8 @@ export function useSendMoment() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['team-moments'] });
-      toast({ title: 'Moment sent', description: 'It opens the next time they sign in.' });
+      // Quick confirmation only — it dismisses itself after a couple seconds.
+      toast({ title: 'Moment sent', description: 'It opens the next time they sign in.', duration: 2500 });
     },
     onError: (e: any) =>
       toast({ title: 'Could not send that', description: humanizeSendError(e?.message), variant: 'destructive' }),

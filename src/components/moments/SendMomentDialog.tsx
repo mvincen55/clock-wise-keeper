@@ -74,7 +74,9 @@ export default function SendMomentDialog() {
           ))}
         </div>
 
-        {tab === 'send' && <SendForm allowMessage={settings?.allow_message !== false} onSent={() => setTab('history')} />}
+        {/* Sending closes the dialog — the brief "Moment sent" toast is the
+            confirmation, so there is nothing left to do in here. */}
+        {tab === 'send' && <SendForm allowMessage={settings?.allow_message !== false} onSent={() => setOpen(false)} />}
         {tab === 'history' && <HistoryList />}
         {tab === 'settings' && <PrefsPanel />}
       </DialogContent>

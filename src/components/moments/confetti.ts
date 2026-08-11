@@ -15,8 +15,9 @@ import type { ReactionKey } from '@/components/moments/reactions';
  *
  * Everything here is pure and deterministic: the layout is seeded by the
  * reaction key, so the same reaction always celebrates the same way and tests
- * can pin the behaviour down. Kept modest on purpose — a short, hard-cornered
- * flurry beside the card, never a full-screen shower.
+ * can pin the behaviour down. It's a real boom — a big, hard-cornered volley
+ * that spills wide of the card — but it's over in about two seconds and never
+ * becomes a full-screen shower.
  */
 
 export type ConfettiMotion = 'toss' | 'float' | 'rise' | 'twinkle';
@@ -47,10 +48,10 @@ export type ConfettiPlan = {
 };
 
 /** Bounds tests hold us to: enough to feel fun, never enough to feel loud. */
-export const CONFETTI_MIN_PIECES = 8;
-export const CONFETTI_MAX_PIECES = 28;
+export const CONFETTI_MIN_PIECES = 12;
+export const CONFETTI_MAX_PIECES = 48;
 export const CONFETTI_MIN_SIZE = 3;
-export const CONFETTI_MAX_SIZE = 10;
+export const CONFETTI_MAX_SIZE = 13;
 
 type Theme = {
   key: ReactionKey;
@@ -60,6 +61,8 @@ type Theme = {
   count: number;
   /** 'spread' launches across the card; 'sides' from the two edges inward. */
   origin: 'spread' | 'sides';
+  /** Max horizontal drift for 'spread' pieces — how wide the boom feels. */
+  driftPx: number;
   durationMs: readonly [number, number];
   maxDelayMs: number;
 };
@@ -70,28 +73,31 @@ const THEMES: Record<ReactionKey, Theme> = {
     motion: 'toss',
     shape: 'rect',
     tones: ['plum', 'gold', 'plum-tint'],
-    count: 16,
+    count: 28,
     origin: 'spread',
-    durationMs: [850, 1150],
-    maxDelayMs: 180,
+    driftPx: 100,
+    durationMs: [900, 1250],
+    maxDelayMs: 200,
   },
   celebrate: {
     key: 'celebrate',
     motion: 'toss',
     shape: 'rect',
     tones: ['plum', 'plum-deep', 'plum-tint', 'gold'],
-    count: 26,
+    count: 44,
     origin: 'spread',
-    durationMs: [1050, 1500],
-    maxDelayMs: 280,
+    driftPx: 120,
+    durationMs: [1100, 1650],
+    maxDelayMs: 340,
   },
   thank_you: {
     key: 'thank_you',
     motion: 'float',
     shape: 'heart',
     tones: ['plum', 'plum-deep', 'plum-tint'],
-    count: 12,
+    count: 18,
     origin: 'spread',
+    driftPx: 48,
     durationMs: [1450, 2000],
     maxDelayMs: 380,
   },
@@ -100,18 +106,20 @@ const THEMES: Record<ReactionKey, Theme> = {
     motion: 'rise',
     shape: 'ember',
     tones: ['gold', 'plum-deep', 'plum'],
-    count: 16,
+    count: 26,
     origin: 'spread',
-    durationMs: [650, 950],
-    maxDelayMs: 240,
+    driftPx: 36,
+    durationMs: [700, 1050],
+    maxDelayMs: 260,
   },
   great_save: {
     key: 'great_save',
     motion: 'twinkle',
     shape: 'star',
     tones: ['gold', 'plum-tint', 'plum'],
-    count: 12,
+    count: 18,
     origin: 'spread',
+    driftPx: 60,
     durationMs: [1300, 1850],
     maxDelayMs: 320,
   },
@@ -120,10 +128,11 @@ const THEMES: Record<ReactionKey, Theme> = {
     motion: 'toss',
     shape: 'rect',
     tones: ['plum', 'plum-deep', 'plum-tint', 'gold'],
-    count: 24,
+    count: 40,
     origin: 'sides',
-    durationMs: [1000, 1450],
-    maxDelayMs: 260,
+    driftPx: 130,
+    durationMs: [1050, 1550],
+    maxDelayMs: 300,
   },
 };
 
@@ -155,7 +164,7 @@ export function confettiPlan(reaction: string): ConfettiPlan {
   const rnd = mulberry32(seedFrom(theme.key));
 
   const pieces: ConfettiPiece[] = Array.from({ length: theme.count }, (_, i) => {
-    const size = Math.round(between(rnd, 5, 9));
+    const size = Math.round(between(rnd, 6, 12));
     const tone = theme.tones[i % theme.tones.length];
 
     let xPct: number;
@@ -163,11 +172,12 @@ export function confettiPlan(reaction: string): ConfettiPlan {
     if (theme.origin === 'sides') {
       // Thrown in from the left and right edges, drifting toward the middle.
       const fromLeft = i % 2 === 0;
-      xPct = fromLeft ? between(rnd, 2, 20) : between(rnd, 80, 98);
-      dxPx = (fromLeft ? 1 : -1) * between(rnd, 24, 80);
+      xPct = fromLeft ? between(rnd, 0, 20) : between(rnd, 80, 100);
+      dxPx = (fromLeft ? 1 : -1) * between(rnd, 40, theme.driftPx);
     } else {
-      xPct = between(rnd, 4, 96);
-      dxPx = between(rnd, -60, 60);
+      // Spill a little past both edges so the boom feels wider than the card.
+      xPct = between(rnd, -4, 104);
+      dxPx = between(rnd, -theme.driftPx, theme.driftPx);
     }
 
     let midYPx: number;
@@ -175,24 +185,24 @@ export function confettiPlan(reaction: string): ConfettiPlan {
     let rotDeg: number;
     switch (theme.motion) {
       case 'toss':
-        midYPx = -between(rnd, 55, 130);
-        endYPx = between(rnd, 55, 130);
-        rotDeg = (rnd() < 0.5 ? -1 : 1) * between(rnd, 140, 520);
+        midYPx = -between(rnd, 90, 220);
+        endYPx = between(rnd, 70, 190);
+        rotDeg = (rnd() < 0.5 ? -1 : 1) * between(rnd, 180, 720);
         break;
       case 'float':
-        midYPx = -between(rnd, 30, 60);
-        endYPx = -between(rnd, 65, 115);
-        rotDeg = between(rnd, -22, 22);
+        midYPx = -between(rnd, 45, 85);
+        endYPx = -between(rnd, 95, 170);
+        rotDeg = between(rnd, -26, 26);
         break;
       case 'rise':
-        midYPx = -between(rnd, 45, 85);
-        endYPx = -between(rnd, 85, 150);
+        midYPx = -between(rnd, 70, 130);
+        endYPx = -between(rnd, 130, 230);
         rotDeg = between(rnd, -30, 30);
         break;
       case 'twinkle':
-        midYPx = between(rnd, 18, 40);
-        endYPx = between(rnd, 45, 95);
-        rotDeg = (rnd() < 0.5 ? -1 : 1) * between(rnd, 60, 200);
+        midYPx = between(rnd, 24, 55);
+        endYPx = between(rnd, 65, 140);
+        rotDeg = (rnd() < 0.5 ? -1 : 1) * between(rnd, 90, 260);
         break;
     }
 

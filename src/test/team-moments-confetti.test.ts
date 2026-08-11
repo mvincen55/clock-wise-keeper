@@ -81,8 +81,9 @@ describe('confetti stays clean and professional', () => {
         expect(p.widthPx).toBeLessThanOrEqual(CONFETTI_MAX_SIZE);
         expect(p.heightPx).toBeGreaterThanOrEqual(CONFETTI_MIN_SIZE);
         expect(p.heightPx).toBeLessThanOrEqual(CONFETTI_MAX_SIZE * 2);
-        expect(p.xPct).toBeGreaterThanOrEqual(0);
-        expect(p.xPct).toBeLessThanOrEqual(100);
+        // The boom may spill slightly past the card's edges, never further.
+        expect(p.xPct).toBeGreaterThanOrEqual(-5);
+        expect(p.xPct).toBeLessThanOrEqual(105);
       }
     }
   });
