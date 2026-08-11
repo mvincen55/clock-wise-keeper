@@ -80,7 +80,6 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
   const today = getToday();
   const { data: todayLog } = useDepositLog(today);
   const { data: sprintData } = useTeamGoals();
-  const sprints: TeamGoal[] = sprintData?.live ?? [];
   const { data: nudges = [] } = useOfficeNudges();
   const { data: bypasses = [] } = useUnresolvedBypasses();
   const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
@@ -100,6 +99,8 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
 
   return useMemo(() => {
     if (!ctx) return { view: null, isLoading: ctxLoading };
+
+    const sprints: TeamGoal[] = sprintData?.live ?? [];
 
     const firstName = (profile?.fullName || '').trim().split(' ')[0];
     const header: DashboardHeader = {
@@ -524,7 +525,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
     };
     return { view: member, isLoading: false };
   }, [
-    ctx, ctxLoading, profile, now, today, snapshot, approvals, vitals, todayLog, sprintData, sprints,
+    ctx, ctxLoading, profile, now, today, snapshot, approvals, vitals, todayLog, sprintData,
     nudges, bypasses, orgReports, myReports, ackRoster, myAcks, assignments, pto, todayEntry,
     missingDays, user, ops,
   ]);

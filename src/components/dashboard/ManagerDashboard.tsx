@@ -298,7 +298,7 @@ export default function ManagerDashboard({ view }: { view: ManagerView }) {
               <SignalRow
                 signal={{
                   id: 'attendance-review',
-                  label: `${staffing.reviewCount} attendance item${staffing.reviewCount === 1 ? '' : 's'} need review`,
+                  label: `${staffing.reviewCount} attendance item${staffing.reviewCount === 1 ? ' needs' : 's need'} review`,
                   detail: staffing.reviewDetail,
                   value: String(staffing.reviewCount),
                   href: '/team',

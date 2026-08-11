@@ -411,7 +411,7 @@ export function monthPaceLines(input: OwnerPulseInput): MonthPaceLine[] {
     id: 'new_patients',
     label: 'New patients seen month to date',
     value: seenRecorded ? String(thisMonth.newPatientsSeen) : '—',
-    detail: npDetailParts.join(' '),
+    detail: npDetailParts.join(' · '),
     tone: seen?.status === 'behind' ? 'attention' : seen ? 'steady' : 'calm',
     href: '/deposit-log',
     pace: seen,
