@@ -37,6 +37,42 @@ export interface MessageRow {
 
 const sel = (s: string): string => s;
 
+const TYPE_FALLBACK_TITLE: Record<string, string> = {
+  dm: 'Direct message',
+  group: 'Group',
+  announcement: 'Announcement',
+  ai: 'Office AI',
+};
+
+/** One name for a conversation, shared by the Messages page and the chat dock. */
+export function conversationTitle(
+  c: ConversationSummary,
+  currentUserId: string | null | undefined,
+  nameByUserId: Map<string, string>,
+): string {
+  if (c.type === 'ai') return 'Office AI';
+  if (c.title) return c.title;
+  if (c.type === 'dm') {
+    const other = c.participantUserIds.find(id => id !== currentUserId);
+    return (other && nameByUserId.get(other)) || 'Direct message';
+  }
+  return TYPE_FALLBACK_TITLE[c.type] ?? 'Conversation';
+}
+
+/**
+ * Who a message is from, as shown in a thread. The schema spells the AI
+ * 'pathfinder'; 'ai' is accepted too in case of legacy rows.
+ */
+export function senderLabel(
+  senderKind: string,
+  senderId: string | null,
+  nameByUserId: Map<string, string>,
+): string {
+  if (senderKind === 'pathfinder' || senderKind === 'ai') return 'Office AI';
+  if (senderKind === 'system') return 'System';
+  return nameByUserId.get(senderId ?? '') ?? 'Teammate';
+}
+
 /**
  * All conversations the signed-in user can read, with last message + unread
  * counts. RLS scopes this to conversations they participate in — there is no
@@ -270,6 +306,33 @@ export function useSendMessage() {
       qc.invalidateQueries({ queryKey: ['conversations'] });
     },
     onError: (e: Error) => toast({ title: 'Message not sent', description: e.message, variant: 'destructive' }),
+  });
+}
+
+/**
+ * Ask Office AI to answer the latest member message in an AI conversation.
+ * Fire this after useSendMessage succeeds; while it is pending the thread
+ * shows a typing indicator. The reply row is inserted server-side, so
+ * success is just a refetch away.
+ */
+export function useOfficeAiReply() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      const { data, error } = await supabase.functions.invoke('office-ai-chat', {
+        body: { conversation_id: conversationId },
+      });
+      if (error) throw new Error('Office AI could not reply right now — try again.');
+      if (data?.error) throw new Error(data.error as string);
+      return conversationId;
+    },
+    onError: (e: Error) =>
+      toast({ title: 'Office AI', description: e.message, variant: 'destructive' }),
+    onSettled: (_d, _e, conversationId) => {
+      qc.invalidateQueries({ queryKey: ['messages', conversationId] });
+      qc.invalidateQueries({ queryKey: ['conversations'] });
+    },
   });
 }
 

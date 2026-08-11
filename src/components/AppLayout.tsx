@@ -12,6 +12,8 @@ import { useOrgBranding } from '@/hooks/useOrgBranding';
 import NotificationBell from '@/components/NotificationBell';
 import BypassReasonBanner from '@/components/BypassReasonBanner';
 import SupportWidget from '@/components/SupportWidget';
+import ChatDock from '@/components/messaging/ChatDock';
+import MessagePopups from '@/components/messaging/MessagePopups';
 import SendMomentDialog from '@/components/moments/SendMomentDialog';
 import TeamMomentsReveal from '@/components/moments/TeamMomentsReveal';
 import AppFooter from '@/components/AppFooter';
@@ -354,6 +356,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <TeamMomentsReveal />
 
           <SupportWidget />
+
+          {/* Google Chat-style dock (desktop) + corner popups for new messages. */}
+          <ChatDock />
+          <MessagePopups />
         </div>
       </ClockProvider>
     </TooltipProvider>

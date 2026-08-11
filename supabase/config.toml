@@ -65,3 +65,5 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = false
   [functions.training-roleplay]
     verify_jwt = true
+  [functions.office-ai-chat]
+    verify_jwt = true

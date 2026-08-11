@@ -51,7 +51,7 @@ export default function MessagingSettingsCard() {
             <Input
               defaultValue={settings.requests_label}
               onBlur={e =>
-                save.mutate({ requests_label: e.target.value.trim() || 'Doctor Requests' })
+                save.mutate({ requests_label: e.target.value.trim() || 'Requests' })
               }
               className="h-9"
             />

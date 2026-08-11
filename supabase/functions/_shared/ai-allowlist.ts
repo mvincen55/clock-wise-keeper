@@ -80,6 +80,10 @@ export const AI_GATEWAY_ALLOWLIST: Record<string, GatewayEntry> = {
     handler: "scrub",
     reason: "Drafts neutral records from staff-authored event context.",
   },
+  "office-ai-chat": {
+    handler: "scrub",
+    reason: "The Office AI conversation in Messages carries staff free text.",
+  },
   "consent-ai": {
     handler: "scrub",
     reason:

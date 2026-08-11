@@ -59,7 +59,10 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
     };
 
     return (
-      <div className="space-y-1">
+      // w-full matters: as a flex item (e.g. a chat composer row) this
+      // wrapper must claim the remaining width or the textarea collapses
+      // to its intrinsic size.
+      <div className="w-full space-y-1">
         <textarea
           className={cn(
             "flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
