@@ -8,6 +8,8 @@ import { formatCents } from '@/lib/money';
 import { getToday, shiftDate } from '@/lib/time-utils';
 import { useSealDay, type DepositLog } from '@/hooks/useDepositLog';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import { useMyPermissionGrants } from '@/hooks/useEmployeePermissions';
+import { hasGrant } from '@/lib/permissions';
 import { useCreateSprint } from '@/hooks/useTeamGoals';
 import { goalProgress } from '@/lib/schedule-reader/metrics-referee';
 import type { Tables } from '@/integrations/supabase/types';
@@ -54,6 +56,10 @@ export default function SealDayCard({ log, date, collectionsCents, staffing, met
   const seal = useSealDay();
   const createSprint = useCreateSprint();
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
+  // A granted employee may also unseal/edit past days (RLS enforces; the
+  // late-edit audit trigger records either way).
+  const grants = useMyPermissionGrants();
+  const canEditHistory = isManager || hasGrant(grants, 'edit_closeout_history');
 
   const summary = useMemo(() => {
     const total = (field: (m: Tables<'provider_day_metrics'>) => number) =>
@@ -229,7 +235,7 @@ export default function SealDayCard({ log, date, collectionsCents, staffing, met
               <Lock className="h-4 w-4 text-success" />
               Day sealed{log?.sealed_at ? ` · ${new Date(log.sealed_at).toLocaleTimeString()}` : ''}
             </p>
-            {(date >= getToday() || isManager) && (
+            {(date >= getToday() || canEditHistory) && (
               <Button
                 size="sm"
                 variant="ghost"

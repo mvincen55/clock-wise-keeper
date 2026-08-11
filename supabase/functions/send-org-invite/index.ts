@@ -103,8 +103,8 @@ Deno.serve(async (req) => {
       : [];
 
     const OPERATIONAL_ROLES = [
-      "dentist", "hygienist", "dental_assistant", "front_desk",
-      "office_manager", "sterilization", "floater", "other",
+      "dentist", "hygienist", "dental_assistant", "front_desk", "treatment_coordinator",
+      "office_manager", "assistant_office_manager", "sterilization", "floater", "other",
     ];
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {

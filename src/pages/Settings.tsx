@@ -10,6 +10,7 @@ import PrivacyTermsCard from '@/components/onboarding/PrivacyTermsCard';
 import OrgBrandingCard from '@/components/OrgBrandingCard';
 import EscalationPoliciesCard from '@/components/accountability/EscalationPoliciesCard';
 import AcknowledgmentEscalationSettingsCard from '@/components/knowledge/AcknowledgmentEscalationSettingsCard';
+import EmployeePermissionsCard from '@/components/settings/EmployeePermissionsCard';
 import MessagingSettingsCard from '@/components/settings/MessagingSettingsCard';
 import { PracticeSettingsCard } from '@/components/settings/PracticeSettingsCard';
 import { FofPolicySettingsCard } from '@/components/settings/FofPolicySettingsCard';
@@ -134,6 +135,8 @@ export default function Settings() {
         {/* ------------------------------ people ------------------------------ */}
         {isManager && (
           <TabsContent value="people" className="mt-4 space-y-6">
+            {/* Per-employee capability grants; the owner decides who edits them. */}
+            <EmployeePermissionsCard />
             {/* Accountability record chains (who reviews whom). */}
             <EscalationPoliciesCard />
             {/* Acknowledgment chasing: quiet hours, ladder, snoozes — moved

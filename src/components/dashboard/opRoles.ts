@@ -35,7 +35,7 @@ export const ROLE_MODULES: Record<OperationalRole, RoleModule> = {
       { id: 'consents', label: 'Forms & consents', to: '/consents' },
       { id: 'letters', label: 'Letters', to: '/letters' },
       { id: 'numbers', label: 'Important numbers', to: '/important-numbers' },
-      { id: 'deposit', label: 'Deposit log', to: '/deposit-log', minTier: 'manager' },
+      { id: 'deposit', label: 'Deposit log', to: '/deposit-log', minTier: 'manager', permission: 'edit_closeout_history' },
     ],
   },
   hygienist: {
@@ -70,6 +70,18 @@ export const ROLE_MODULES: Record<OperationalRole, RoleModule> = {
       { id: 'letters', label: 'Letters', to: '/letters' },
     ],
   },
+  treatment_coordinator: {
+    label: ROLE_LABELS.treatment_coordinator,
+    mission: 'Treatment acceptance: financial options, consents, and follow-through.',
+    shortcuts: [
+      { id: 'fof', label: 'Financial options', to: '/fof' },
+      { id: 'consents', label: 'Forms & consents', to: '/consents' },
+      { id: 'insurance', label: 'Insurance desk', to: '/insurance-desk' },
+      { id: 'broken', label: 'Broken appointments', to: '/broken-appointments' },
+      { id: 'letters', label: 'Letters', to: '/letters' },
+      { id: 'training', label: 'Training', to: '/training' },
+    ],
+  },
   office_manager: {
     label: ROLE_LABELS.office_manager,
     mission: 'Running the floor: approvals, people, and follow-through.',
@@ -77,7 +89,22 @@ export const ROLE_MODULES: Record<OperationalRole, RoleModule> = {
       { id: 'approvals', label: 'Approvals', to: '/approvals', minTier: 'manager' },
       { id: 'team', label: 'Team', to: '/team', minTier: 'manager' },
       { id: 'checklists', label: 'Checklists', to: '/checklists' },
-      { id: 'reports', label: 'Reports', to: '/reports', minTier: 'manager' },
+      { id: 'reports', label: 'Reports', to: '/reports', minTier: 'manager', permission: 'view_reports' },
+    ],
+  },
+  assistant_office_manager: {
+    label: ROLE_LABELS.assistant_office_manager,
+    mission: 'Backing up the front office: checklists, coverage, and follow-through.',
+    // minTier hides the admin surfaces from members holding this role — an
+    // operational role never widens a permission tier.
+    shortcuts: [
+      { id: 'checklists', label: 'Checklists', to: '/checklists' },
+      { id: 'numbers', label: 'Important numbers', to: '/important-numbers' },
+      { id: 'playbook', label: 'Playbook', to: '/playbook' },
+      { id: 'training', label: 'Training', to: '/training' },
+      { id: 'reports', label: 'Reports', to: '/reports', minTier: 'manager', permission: 'view_reports' },
+      { id: 'approvals', label: 'Approvals', to: '/approvals', minTier: 'manager' },
+      { id: 'team', label: 'Team', to: '/team', minTier: 'manager' },
     ],
   },
   sterilization: {
@@ -111,12 +138,21 @@ export const ROLE_MODULES: Record<OperationalRole, RoleModule> = {
 };
 
 /**
- * Shortcuts for a role, filtered to what this permission tier can open.
- * A secondary role never widens permission — it only reorders presentation.
+ * Shortcuts for a role, filtered to what this person can open: their
+ * permission tier, or a per-employee grant that unlocks a tier-gated link
+ * (the same grant RLS enforces server-side). A secondary role never widens
+ * permission — it only reorders presentation.
  */
-export function shortcutsFor(role: OperationalRole, tier: PermissionTier): Shortcut[] {
+export function shortcutsFor(
+  role: OperationalRole,
+  tier: PermissionTier,
+  grants: ReadonlySet<string> = new Set(),
+): Shortcut[] {
   return ROLE_MODULES[role].shortcuts.filter(
-    s => !s.minTier || TIER_RANK[tier] >= TIER_RANK[s.minTier],
+    s =>
+      !s.minTier ||
+      TIER_RANK[tier] >= TIER_RANK[s.minTier] ||
+      (s.permission !== undefined && grants.has(s.permission)),
   );
 }
 
