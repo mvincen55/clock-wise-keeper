@@ -280,6 +280,9 @@ export default function Messages() {
 
   const submit = () => {
     if (!activeId || (!draft.trim() && pending.length === 0)) return;
+    // A send is a solid user gesture — the moment browsers are happiest
+    // showing the desktop-notification permission prompt.
+    requestDesktopNotificationPermission();
     const conversationId = activeId;
     const isAi = active?.type === 'ai';
     send.mutate(
