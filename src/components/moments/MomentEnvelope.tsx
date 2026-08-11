@@ -5,11 +5,26 @@ import { getReaction, type PendingMoment } from '@/components/moments/reactions'
 
 /**
  * The reveal itself: a hard-cornered purple envelope whose Y-fold flap tips
- * open, the reaction lifts, then everything settles into a plain card.
+ * open, a brief burst of sparks flies from it, the reaction lifts, then
+ * everything settles into a plain card.
  *
- * No confetti, no full-screen takeover. When motion is off (OS preference or
- * the person's own mute) it renders the settled state immediately.
+ * The celebration stays inside the card — no full-screen takeover. When motion
+ * is off (OS preference or the person's own mute) it renders the settled state
+ * immediately and skips the sparks.
  */
+
+/** Hard-cornered confetti sparks: direction, spin, and delay per piece. */
+const SPARKS: { dx: string; dy: string; rot: string; delay: string; size: number; gold: boolean }[] = [
+  { dx: '-30px', dy: '-26px', rot: '-50deg', delay: '40ms', size: 6, gold: true },
+  { dx: '2px', dy: '-34px', rot: '30deg', delay: '0ms', size: 5, gold: false },
+  { dx: '30px', dy: '-24px', rot: '60deg', delay: '70ms', size: 7, gold: true },
+  { dx: '-38px', dy: '-4px', rot: '-25deg', delay: '110ms', size: 5, gold: false },
+  { dx: '40px', dy: '-2px', rot: '45deg', delay: '90ms', size: 6, gold: false },
+  { dx: '-24px', dy: '18px', rot: '-70deg', delay: '140ms', size: 5, gold: true },
+  { dx: '18px', dy: '22px', rot: '35deg', delay: '120ms', size: 6, gold: false },
+  { dx: '36px', dy: '14px', rot: '80deg', delay: '170ms', size: 5, gold: true },
+];
+
 export function MomentEnvelope({
   moment,
   animate,
@@ -37,8 +52,30 @@ export function MomentEnvelope({
       {/* Envelope field */}
       <div className="relative overflow-hidden bg-plum px-5 pb-5 pt-6 text-paper" style={{ ['--pe-knockout' as any]: '#F7F5F1' }}>
         <div className="flex items-start gap-4">
-          <div className={cn('relative shrink-0', animate && 'pe-moment-flap', open && 'is-open')}>
-            <EnvelopeMark className="h-10 w-14 text-paper" stroke={4} />
+          <div className="relative shrink-0">
+            <div className={cn(animate && 'pe-moment-flap', open && 'is-open')}>
+              <EnvelopeMark className="h-10 w-14 text-paper" stroke={4} />
+            </div>
+            {animate && (
+              <span aria-hidden className={cn('pe-moment-burst', open && 'is-open')}>
+                {SPARKS.map((s, i) => (
+                  <span
+                    key={i}
+                    className={cn('pe-moment-spark', s.gold ? 'bg-gold' : 'bg-paper')}
+                    style={
+                      {
+                        width: s.size,
+                        height: s.size,
+                        '--spark-dx': s.dx,
+                        '--spark-dy': s.dy,
+                        '--spark-rot': s.rot,
+                        '--spark-delay': s.delay,
+                      } as React.CSSProperties
+                    }
+                  />
+                ))}
+              </span>
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-paper/70">Team moment</p>

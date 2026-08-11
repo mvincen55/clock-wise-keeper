@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Mail } from 'lucide-react';
+import { PartyPopper } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,6 +11,8 @@ import {
   MESSAGE_MAX,
   REACTIONS,
   getReaction,
+  groupRecipients,
+  roleLabel,
   validateDraft,
   type ReactionKey,
 } from '@/components/moments/reactions';
@@ -45,8 +47,10 @@ export default function SendMomentDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
+        {/* A party popper, not the envelope: the entry point reads as a
+            celebration before the dialog even opens. */}
         <Button variant="ghost" size="icon" aria-label="Team moments">
-          <Mail className="h-5 w-5" />
+          <PartyPopper className="h-5 w-5" />
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
@@ -81,6 +85,7 @@ export default function SendMomentDialog() {
 function SendForm({ allowMessage, onSent }: { allowMessage: boolean; onSent: () => void }) {
   const { data: ctx } = useOrgContext();
   const recipients = useMomentRecipients();
+  const grouped = useMemo(() => groupRecipients(recipients), [recipients]);
   const send = useSendMoment();
   const [recipientId, setRecipientId] = useState('');
   const [reaction, setReaction] = useState<ReactionKey | null>(null);
@@ -132,12 +137,25 @@ function SendForm({ allowMessage, onSent }: { allowMessage: boolean; onSent: () 
           onChange={(e) => setRecipientId(e.target.value)}
           className="h-10 w-full border border-input bg-background px-3 text-sm"
         >
-          <option value="">Choose a teammate…</option>
-          {recipients.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
+          <option value="">Choose a teammate, manager, or owner…</option>
+          {grouped.teammates.length > 0 && (
+            <optgroup label="Teammates">
+              {grouped.teammates.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {grouped.leaders.length > 0 && (
+            <optgroup label="Managers & owners">
+              {grouped.leaders.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name} — {roleLabel(r.role)}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
         {touched && problemFor('recipient') && <p className="text-xs text-destructive">{problemFor('recipient')}</p>}
       </div>

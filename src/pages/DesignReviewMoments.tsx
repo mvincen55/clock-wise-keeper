@@ -48,7 +48,7 @@ export const MOMENT_SCENARIOS: {
   moments: PendingMoment[];
   animate: boolean;
 }[] = [
-  { slug: 'single', title: 'One moment', note: 'Default reveal: envelope opens, reaction rises, settles.', moments: SINGLE, animate: true },
+  { slug: 'single', title: 'One moment', note: 'Default reveal: card pops in, envelope opens, sparks fly, reaction rises, settles.', moments: SINGLE, animate: true },
   { slug: 'multiple', title: 'Several waiting', note: 'One combined opening, then a compact stack — never several blocking animations.', moments: MANY, animate: true },
   { slug: 'reduced-motion', title: 'Reduced motion', note: 'OS prefers-reduced-motion: renders the settled state immediately.', moments: SINGLE, animate: false },
   { slug: 'muted', title: 'Muted preference', note: 'Person muted the animation: still delivered, already opened.', moments: MANY, animate: false },
