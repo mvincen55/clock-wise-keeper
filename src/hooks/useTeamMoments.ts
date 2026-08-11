@@ -4,7 +4,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useOrgEmployees } from '@/hooks/useEmployees';
 import { useToast } from '@/hooks/use-toast';
-import { CONTEXT_MAX, MESSAGE_MAX, normalizeText, type PendingMoment, type ReactionKey } from '@/components/moments/reactions';
+import {
+  CONTEXT_MAX,
+  MESSAGE_MAX,
+  normalizeText,
+  type MomentRecipient,
+  type PendingMoment,
+  type ReactionKey,
+  type RecipientRole,
+} from '@/components/moments/reactions';
 
 /**
  * TEAM MOMENTS data layer.
@@ -242,16 +250,49 @@ export function humanizeSendError(message?: string): string {
   return m || 'Something went wrong.';
 }
 
-/** Employees who may receive a moment: active, same office, not yourself. */
-export function useMomentRecipients() {
+/** Role of every active member, so the picker can label managers and owners. */
+function useOrgMemberRoles() {
+  const { data: ctx } = useOrgContext();
+  return useQuery({
+    queryKey: ['org-member-roles', ctx?.org_id],
+    enabled: !!ctx?.org_id,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<Record<string, RecipientRole>> => {
+      const { data, error } = await supabase
+        .from('org_members')
+        .select('user_id, role')
+        .eq('org_id', ctx!.org_id)
+        .eq('status', 'active');
+      if (error) throw error;
+      const roles: Record<string, RecipientRole> = {};
+      for (const m of data ?? []) {
+        if (m.user_id) roles[m.user_id as string] = m.role as RecipientRole;
+      }
+      return roles;
+    },
+  });
+}
+
+/**
+ * Everyone who may receive a moment: active, same office, not yourself.
+ * Managers and owners are included — recognition flows up as well as sideways —
+ * and carry their role so the picker can group them.
+ */
+export function useMomentRecipients(): MomentRecipient[] {
   const { data: ctx } = useOrgContext();
   const { data: employees } = useOrgEmployees();
+  const { data: roles } = useOrgMemberRoles();
   return useMemo(
     () =>
       (employees ?? [])
         .filter((e: any) => e.id !== ctx?.employee_id && !!e.user_id)
-        .map((e: any) => ({ id: e.id as string, userId: e.user_id as string, name: (e.display_name as string) || 'Teammate' })),
-    [employees, ctx?.employee_id],
+        .map((e: any) => ({
+          id: e.id as string,
+          userId: e.user_id as string,
+          name: (e.display_name as string) || 'Teammate',
+          role: roles?.[e.user_id as string] ?? 'employee',
+        })),
+    [employees, ctx?.employee_id, roles],
   );
 }
 

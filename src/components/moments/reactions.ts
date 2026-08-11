@@ -103,6 +103,39 @@ export function normalizeText(value: string | null | undefined, max: number): st
 }
 
 // ---------------------------------------------------------------------------
+// Recipients
+// ---------------------------------------------------------------------------
+
+export type RecipientRole = 'owner' | 'manager' | 'employee';
+
+export type MomentRecipient = {
+  id: string;
+  userId: string;
+  name: string;
+  role: RecipientRole;
+};
+
+/**
+ * Anyone active in the office can receive a moment — teammates, managers, and
+ * owners alike. The picker splits them into two labelled groups so it is
+ * obvious recognition flows in every direction, not just sideways.
+ */
+export function groupRecipients(recipients: MomentRecipient[]): {
+  teammates: MomentRecipient[];
+  leaders: MomentRecipient[];
+} {
+  const byName = (a: MomentRecipient, b: MomentRecipient) => a.name.localeCompare(b.name);
+  return {
+    teammates: recipients.filter((r) => r.role === 'employee').sort(byName),
+    leaders: recipients.filter((r) => r.role === 'owner' || r.role === 'manager').sort(byName),
+  };
+}
+
+export function roleLabel(role: RecipientRole): string {
+  return role === 'owner' ? 'Owner' : role === 'manager' ? 'Manager' : 'Teammate';
+}
+
+// ---------------------------------------------------------------------------
 // Reveal sequencing
 // ---------------------------------------------------------------------------
 
