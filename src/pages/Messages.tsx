@@ -45,9 +45,17 @@ import {
   useConversationReceipts,
   useEnsureDm,
   useEnsureAiConversation,
+  useOfficeAiReply,
+  conversationTitle,
+  senderLabel,
   type ConversationSummary,
   type ConversationType,
 } from '@/hooks/useMessaging';
+import {
+  markConversationOpen,
+  markConversationClosed,
+  requestDesktopNotificationPermission,
+} from '@/lib/active-conversation';
 
 
 const TYPE_LABEL: Record<string, string> = {
@@ -128,6 +136,7 @@ export default function Messages() {
 
   const { toast } = useToast();
   const send = useSendMessage();
+  const aiReply = useOfficeAiReply();
   const markRead = useMarkConversationRead();
   const ensureDm = useEnsureDm();
   const ensureAi = useEnsureAiConversation();
@@ -146,15 +155,8 @@ export default function Messages() {
     return m;
   }, [employees]);
 
-  const convTitle = (c: ConversationSummary): string => {
-    if (c.type === 'ai') return 'Office AI';
-    if (c.title) return c.title;
-    if (c.type === 'dm') {
-      const other = c.participantUserIds.find(id => id !== user?.id);
-      return other ? nameByUserId.get(other) ?? 'Direct message' : 'Direct message';
-    }
-    return TYPE_LABEL[c.type] ?? 'Conversation';
-  };
+  const convTitle = (c: ConversationSummary): string =>
+    conversationTitle(c, user?.id, nameByUserId);
 
   const searching = query.trim().length >= 2;
   const { data: hits = [], isFetching: searchFetching } = useMessageSearch(
@@ -214,7 +216,17 @@ export default function Messages() {
   const bottomRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' });
-  }, [messages.length, activeId]);
+  }, [messages.length, activeId, aiReply.isPending]);
+
+  // The corner popups skip conversations that are already on screen here.
+  useEffect(() => {
+    if (!activeId) return;
+    markConversationOpen(activeId);
+    return () => markConversationClosed(activeId);
+  }, [activeId]);
+  useEffect(() => {
+    requestDesktopNotificationPermission();
+  }, []);
 
   // Keep last_read_at advancing while the thread is open so unread counts stay
   // accurate and other people's receipts reflect reality.
@@ -268,13 +280,18 @@ export default function Messages() {
 
   const submit = () => {
     if (!activeId || (!draft.trim() && pending.length === 0)) return;
+    const conversationId = activeId;
+    const isAi = active?.type === 'ai';
     send.mutate(
-      { conversationId: activeId, content: draft, files: pending },
+      { conversationId, content: draft, files: pending },
       {
         onSuccess: () => {
           setDraft('');
           setPending([]);
           if (fileRef.current) fileRef.current.value = '';
+          // The AI channel answers itself: hand the thread to Office AI and
+          // let the typing indicator hold the floor until the reply lands.
+          if (isAi) aiReply.mutate(conversationId);
         },
       },
     );
@@ -482,9 +499,7 @@ export default function Messages() {
                             {TYPE_LABEL[h.conversation?.type ?? ''] ?? 'Conversation'}
                           </Badge>
                           <span className="font-medium text-foreground">
-                            {h.sender_kind === 'ai'
-                              ? 'Office AI'
-                              : nameByUserId.get(h.sender_id ?? '') ?? 'Teammate'}
+                            {senderLabel(h.sender_kind, h.sender_id, nameByUserId)}
                           </span>
                           <span>{timeLabel(h.created_at)}</span>
                         </div>
@@ -520,9 +535,7 @@ export default function Messages() {
                           >
                             {!mine && (
                               <p className="mb-0.5 text-[11px] font-medium opacity-70">
-                                {m.sender_kind === 'ai'
-                                  ? 'Office AI'
-                                  : nameByUserId.get(m.sender_id ?? '') ?? 'Teammate'}
+                                {senderLabel(m.sender_kind, m.sender_id, nameByUserId)}
                               </p>
                             )}
                             {m.content && <p className="whitespace-pre-wrap">{m.content}</p>}
@@ -543,6 +556,15 @@ export default function Messages() {
                         </div>
                       );
                     })}
+                    {active.type === 'ai' && aiReply.isPending && (
+                      <div className="flex justify-start">
+                        <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+                          <Sparkles className="h-3.5 w-3.5" />
+                          Office AI is typing
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        </div>
+                      </div>
+                    )}
                     <div ref={bottomRef} />
                   </div>
                 </ScrollArea>
@@ -592,6 +614,7 @@ export default function Messages() {
                       }}
                       placeholder="Write a message…"
                       className="min-h-[44px] resize-none"
+                      hideDateline
                     />
                     <Button
                       onClick={submit}
