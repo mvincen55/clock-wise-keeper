@@ -8310,6 +8310,7 @@ export type Database = {
       can_access_employee: { Args: { _employee_id: string }; Returns: boolean }
       can_access_request: { Args: { _request_id: string }; Returns: boolean }
       can_manage_goal: { Args: { _goal_id: string }; Returns: boolean }
+      can_manage_permissions: { Args: { _org_id: string }; Returns: boolean }
       can_read_conv: { Args: { _conv: string }; Returns: boolean }
       can_view_goal: { Args: { _goal_id: string }; Returns: boolean }
       can_view_team_goal: { Args: { _goal_id: string }; Returns: boolean }
@@ -8575,6 +8576,10 @@ export type Database = {
         }[]
       }
       get_user_timezone: { Args: { p_user_id: string }; Returns: string }
+      has_permission: {
+        Args: { _org_id: string; _perm: string }
+        Returns: boolean
+      }
       incident_countersign_role: {
         Args: { _employee_id: string }
         Returns: string
