@@ -1,45 +1,46 @@
-# Recommendation: an optional monthly production target (not implemented)
+# Monthly production target — implemented
 
-Status: **proposal only** — documented before any schema change, per the Owner
-Home redesign brief. Nothing in the app references this today.
+Status: **implemented** (originally documented here as a proposal before any
+schema change, per the Owner Home redesign brief).
 
-## Context
+## What shipped
 
-The redesigned Owner Home shows production factually:
+`org_practice_settings.monthly_production_target_cents` (nullable bigint,
+added by `supabase/migrations/20260811120000_office_performance_pulse.sql`)
+alongside two siblings that keep the three office metrics strictly parallel
+and strictly separate:
 
-- today's production from the day's `deposit_logs` row;
-- month-to-date production summed from this month's rows;
-- an optional comparison against the previous month's recorded pace
-  ("Last month had reached about $X by this point"), shown only when the prior
-  month has at least 5 closed-out days.
+- `monthly_production_target_cents` + `production_visibility`
+- `monthly_collections_target_cents` + `collections_visibility` (pre-existing)
+- `monthly_new_patients_seen_target_count` + `new_patients_visibility`
 
-There is deliberately **no** production goal on the surface. The org setting
-`org_practice_settings.monthly_collections_target_cents` is a collections goal,
-and a production target must never be derived from it — collections lag
-production by insurance timing, so the two numbers answer different questions.
+All three targets are optional. Null/0 keeps the original behavior: factual
+totals, no pace verdict, never a fake percentage. When a target is set,
+`usePracticeVitals` exposes it and the shared pace layer
+(`src/lib/metric-pace.ts`, consumed by `owner-pulse.ts`, `manager-pulse.ts`,
+and `member-pulse.ts`) renders ahead / on pace / behind with the same ±2%
+on-pace band collections always used — one formula for every dashboard.
 
-## The proposal
+## Invariants preserved from the original recommendation
 
-If owners want production paced the way collections already are, add one
-nullable column:
+- The production target is an org-configured setting — never hard-coded and
+  **never derived from the collections goal**. Collections lag production by
+  insurance timing; the two numbers answer different questions and each paces
+  only against its own goal. The pairing is structural in
+  `productionPace()` / `collectionsPace()`.
+- Each metric's visibility is its own setting; `admin_only` hides a metric
+  from regular members' Home (owners and managers always see all three).
+  These are dashboard-display controls, not secrecy claims.
+- The prior-month comparison ("Last month had reached about $X by this
+  point") survives as a comparison when no production goal is set — it is
+  never relabeled as a target.
 
-```
-org_practice_settings.monthly_production_target_cents  bigint  null
-```
+## New-patient metrics that shipped with it
 
-- Null (default) keeps today's behavior: factual production, no pace verdict.
-- When set, `usePracticeVitals` can expose a paced production target exactly the
-  way it paces collections, and `owner-pulse.ts` can render
-  "ahead / on pace / behind" for production with the same ±2% on-pace band.
-- Configured in Practice Settings next to the collections goal, subject to the
-  same `collections_visibility` gating.
-
-## Why not now
-
-- No office has asked for it; the recorded prior-month comparison already
-  answers "is production holding?" without inventing a number.
-- Every added target increases scoreboard pressure on a surface that is meant
-  to read like a briefing, not a quota board.
-
-If this ships later, it must arrive as an org-configured setting — never a
-hard-coded office value and never a derivation from the collections goal.
+Close the Day records two separate aggregate counts on `deposit_logs`
+(`new_patients_scheduled_count`, `new_patients_seen_count`), both nullable so
+old records stay "not recorded". Only patients **seen** (completed first
+visits) advance the new-patient goal; scheduled patients are a pipeline
+indicator. The weekly pace shown in settings and dashboards is the calendar
+approximation `monthly target ÷ (days in month ÷ 7)`, labeled as such —
+Purple Envelope does not claim to know future working days.

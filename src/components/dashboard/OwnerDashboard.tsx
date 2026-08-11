@@ -16,23 +16,23 @@ import {
  * stay prominent but no longer DEFINE the page — zero approvals never claims
  * the office had a good day. Every number keeps exactly one home:
  *
- *   today's production/collected/missed + month collections pace → hero
+ *   today's production/collected/new patients/missed             → hero
  *   the single recommendation                                    → What I'd look at
  *   approvals/reviews/acks/verifications                         → Owner attention
  *   the primary sprint                                           → Office goal
- *   month-to-date production, missed trend, 6-month history      → Month in progress
+ *   MTD production/collections/new-patient pace, missed, history → Month in progress
  *   live roster and real exceptions                              → Staffing
  *
  * Missing data is narrated ("closeout isn't in yet"), never rendered as $0.
  */
 export default function OwnerDashboard({ view }: { view: OwnerView }) {
   const {
-    header, office, summary, brief, monthFact, lookAt, decisionCount, decisions, goal, month,
+    header, office, summary, brief, lookAt, decisionCount, decisions, goal, month,
     staffing, exceptions, lanes, roleContext,
   } = view;
   const openDecisions = decisions.filter((d) => d.value !== '0');
   const liveRoster = staffing.rows.length > 0;
-  const factTiles: PulseFact[] = [...(brief?.facts ?? []), ...(monthFact ? [monthFact] : [])];
+  const factTiles: PulseFact[] = brief?.facts ?? [];
 
   return (
     <DashboardShell>
@@ -87,7 +87,7 @@ export default function OwnerDashboard({ view }: { view: OwnerView }) {
           />
         ) : (
           factTiles.length > 0 && (
-            <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border lg:grid-cols-4">
+            <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3 lg:grid-cols-5">
               {factTiles.map((f) => {
                 const body = (
                   <>
@@ -240,16 +240,27 @@ export default function OwnerDashboard({ view }: { view: OwnerView }) {
           >
             {month ? (
               <>
-                <div className="border-b border-border py-4">
-                  <MicroLabel>Production month to date</MicroLabel>
-                  <p className="mt-2 font-display text-[clamp(1.6rem,3.5vw,2.2rem)] font-extrabold leading-none tabular-nums tracking-[-0.03em]">
-                    {month.productionLabel}
-                  </p>
-                  <p className="mt-1.5 text-[12px] text-muted-foreground">
-                    {month.productionCompare ??
-                      'Recorded from closeouts. No production goal is configured — this is the factual total.'}
-                  </p>
-                </div>
+                {/* The month scoreboard: each metric against ONLY its own
+                    optional goal. Pace verdicts appear only when the math
+                    supports one; a missing goal reads as a factual total. */}
+                {month.paceLines.map((line) => (
+                  <Link
+                    key={line.id}
+                    to={line.href ?? '/reports'}
+                    className="block border-b border-border py-4 transition-opacity hover:opacity-75"
+                  >
+                    <MicroLabel>{line.label}</MicroLabel>
+                    <p
+                      className={cn(
+                        'mt-2 font-display text-[clamp(1.6rem,3.5vw,2.2rem)] font-extrabold leading-none tabular-nums tracking-[-0.03em]',
+                        line.tone === 'attention' && 'text-warning',
+                      )}
+                    >
+                      {line.value}
+                    </p>
+                    <p className="mt-1.5 text-[12px] text-muted-foreground">{line.detail}</p>
+                  </Link>
+                ))}
                 <div className="border-b border-border py-4">
                   <div className="flex items-baseline justify-between gap-3">
                     <MicroLabel>Missed appointments this month</MicroLabel>

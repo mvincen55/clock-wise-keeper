@@ -10,11 +10,16 @@
 import type { OperationalRole } from '@/lib/schedule-reader/types';
 import type { OfficeStatus, StaffingSummary } from './staffing';
 import type {
-  DailyBrief, GoalBrief, MissedMonth, MonthDetail, OwnerRecommendation, PulseFact,
+  DailyBrief, GoalBrief, MissedMonth, MonthDetail, MonthPaceLine, OwnerRecommendation, PulseFact,
 } from '@/lib/owner-pulse';
+import type { ActionItem, CloseDayStatus, ManagerIntervention } from '@/lib/manager-pulse';
+import type { RolePulseItem } from '@/lib/member-pulse';
 
 export type { OfficeStatus, StaffingSummary };
-export type { DailyBrief, GoalBrief, MissedMonth, MonthDetail, OwnerRecommendation, PulseFact };
+export type {
+  DailyBrief, GoalBrief, MissedMonth, MonthDetail, MonthPaceLine, OwnerRecommendation, PulseFact,
+};
+export type { ActionItem, CloseDayStatus, ManagerIntervention, RolePulseItem };
 
 export type Tone = 'urgent' | 'attention' | 'steady' | 'calm';
 
@@ -151,8 +156,6 @@ export type OwnerView = {
   summary: string | null;
   /** TODAY block of the pulse: honest day scope, facts, and time semantics. */
   brief: DailyBrief | null;
-  /** The month collections-vs-goal fact — its one home is the pulse hero. */
-  monthFact: PulseFact | null;
   /** One grounded recommendation with receipts, or null while loading. */
   lookAt: OwnerRecommendation | null;
   /** Everything waiting on owner authority, resolved to one number. */
@@ -161,7 +164,10 @@ export type OwnerView = {
   decisions: Signal[];
   /** The office goal the hero shows; moreCount collapses the rest. */
   goal: GoalBrief | null;
-  /** Month in progress — production MTD, missed MTD, compact trend. */
+  /**
+   * Month in progress — the three pace lines (production, collections, new
+   * patients seen), missed MTD, compact trend. The month numbers' one home.
+   */
   month: MonthDetail | null;
   /** Phase-aware staffing. Attendance surfaces here ONLY as a real exception. */
   staffing: StaffingSummary;
@@ -173,37 +179,57 @@ export type ManagerView = {
   kind: 'manager';
   header: DashboardHeader;
   roleContext: RoleContext;
-  /** Compact personal-work lane — never displaces the cockpit. */
+  /** H — compact personal-work lane; never displaces the cockpit. */
   lanes: RoleLane[];
-  /** Current office state — drives which figures make sense. */
+  /** A — current office state, kept calm and compact. */
   office: OfficeStatus;
-  figures: Figure[];
-  /** Phase-aware staffing: live roster while open, day summary after. */
+  /**
+   * B — Manager Pulse: deterministic briefing sentence + the day's facts,
+   * built by the same canonical layer Owner Home reads. Null while loading.
+   */
+  summary: string | null;
+  brief: DailyBrief | null;
+  /** C — the three performance cards. Null while vitals load. */
+  performance: MonthPaceLine[] | null;
+  /** The new-patient card's pipeline row: scheduled this week. */
+  pipeline: { scheduledThisWeek: number; recordedDays: number } | null;
+  /** D — the single recommended intervention, with receipts. */
+  next: ManagerIntervention | null;
+  /** D — the rest of the queue, ordered by operational consequence. */
+  queue: ActionItem[];
+  /** E — where today's Close the Day record stands. */
+  closeDay: CloseDayStatus | null;
+  /** F — phase-aware staffing: live roster while open, calm summary after. */
   staffing: StaffingSummary;
-  /** What needs the manager's hands. */
-  attention: Signal[];
-  /** Checklist / Close the Day progress. */
-  progress: ProgressRow[];
+  /** G — the primary office sprint; moreCount collapses the rest. */
+  goal: GoalBrief | null;
 };
 
 export type MemberView = {
   kind: 'member';
   header: DashboardHeader;
   roleContext: RoleContext;
-  chart: Series | null;
-  /** Primary role lane first, backup lanes compact underneath. */
+  /** C — primary role lane first, backup lanes compact underneath. */
   lanes: RoleLane[];
-  /** Today's own status line. */
-  status: { label: string; detail: string; tone: Tone };
-  /** The single next action. */
+  /** A — the single next action ("My Next Move"). */
   next: { title: string; detail: string; href: string; cta: string } | null;
-  /** My open work, compact. */
+  /**
+   * B — Our Office Pulse: the same canonical month lines the owner reads,
+   * filtered by each metric's own visibility setting. A hidden metric is
+   * omitted entirely — no locked teaser.
+   */
+  officePulse: MonthPaceLine[];
+  /** Honest time-semantics line for the pulse (e.g. updates after closeout). */
+  officePulseNote: string | null;
+  /** C — office facts relevant to this member's operational role. */
+  rolePulse: RolePulseItem[];
+  /** D — my open work, compact. */
   mine: Signal[];
-  /** My progress. */
-  progress: ProgressRow[];
-  figures: Figure[];
-  /** Office context a member is permitted to see. */
-  office: Signal[];
+  /** E — the shared office goal (never personal blame for office results). */
+  goal: GoalBrief | null;
+  /** F — personal utilities: today's recorded time, PTO, timesheet links. */
+  status: { label: string; detail: string; tone: Tone };
+  utilities: Figure[];
 };
 
 export type DashboardView = OwnerView | ManagerView | MemberView;

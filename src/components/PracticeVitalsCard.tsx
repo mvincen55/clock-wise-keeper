@@ -11,11 +11,14 @@ export default function PracticeVitalsCard() {
   const { data, isLoading } = usePracticeVitals();
   if (isLoading || !data) return null;
 
-  const { thisMonth, months, prevMonth, monthElapsed, targetCents, pacedTargetCents, visible } = data;
+  const { thisMonth, months, prevMonth, monthElapsed, targets, pacedTargets, visibility } = data;
+  const targetCents = targets.collectionsCents;
+  const pacedTargetCents = pacedTargets.collectionsCents;
+  const visible = visibility.collections;
 
-  // Collections are paced against the org-configured collections goal. There is
-  // no production target in Purple Envelope — production is never compared to
-  // the collections goal.
+  // Collections are paced against the org-configured collections goal, and
+  // ONLY that goal — production has its own optional target and is never
+  // compared to the collections goal.
   const delta =
     targetCents > 0 && pacedTargetCents > 0 && visible
       ? Math.round(((thisMonth.collectedCents - pacedTargetCents) / pacedTargetCents) * 100)

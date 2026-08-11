@@ -1743,6 +1743,8 @@ export type Database = {
           illumitrac_cents: number
           ins_cc_cents: number
           needs_manager_review: boolean
+          new_patients_scheduled_count: number | null
+          new_patients_seen_count: number | null
           notes: string
           org_id: string
           outside_financing_cents: number
@@ -1774,6 +1776,8 @@ export type Database = {
           illumitrac_cents?: number
           ins_cc_cents?: number
           needs_manager_review?: boolean
+          new_patients_scheduled_count?: number | null
+          new_patients_seen_count?: number | null
           notes?: string
           org_id: string
           outside_financing_cents?: number
@@ -1805,6 +1809,8 @@ export type Database = {
           illumitrac_cents?: number
           ins_cc_cents?: number
           needs_manager_review?: boolean
+          new_patients_scheduled_count?: number | null
+          new_patients_seen_count?: number | null
           notes?: string
           org_id?: string
           outside_financing_cents?: number
@@ -5182,8 +5188,12 @@ export type Database = {
           id: string
           mobile_capture_enabled: boolean
           monthly_collections_target_cents: number | null
+          monthly_new_patients_seen_target_count: number | null
+          monthly_production_target_cents: number | null
+          new_patients_visibility: string
           org_id: string
           pms_system: string
+          production_visibility: string
           roleplay_notes: string | null
           roleplay_persona_style: string
           roleplay_policy_tone: string
@@ -5197,8 +5207,12 @@ export type Database = {
           id?: string
           mobile_capture_enabled?: boolean
           monthly_collections_target_cents?: number | null
+          monthly_new_patients_seen_target_count?: number | null
+          monthly_production_target_cents?: number | null
+          new_patients_visibility?: string
           org_id: string
           pms_system?: string
+          production_visibility?: string
           roleplay_notes?: string | null
           roleplay_persona_style?: string
           roleplay_policy_tone?: string
@@ -5212,8 +5226,12 @@ export type Database = {
           id?: string
           mobile_capture_enabled?: boolean
           monthly_collections_target_cents?: number | null
+          monthly_new_patients_seen_target_count?: number | null
+          monthly_production_target_cents?: number | null
+          new_patients_visibility?: string
           org_id?: string
           pms_system?: string
+          production_visibility?: string
           roleplay_notes?: string | null
           roleplay_persona_style?: string
           roleplay_policy_tone?: string

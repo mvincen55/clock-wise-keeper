@@ -1,4 +1,6 @@
-// Owner daily pulse — the deterministic layer behind Owner Home.
+// Office daily pulse — the canonical deterministic layer behind ALL role
+// dashboards (Owner, Manager, and the member-facing office pulse both build
+// on the functions here; see manager-pulse.ts and member-pulse.ts).
 //
 // Everything here is a pure function of recorded office data: deposit_logs
 // rollups (via usePracticeVitals), team_goals rows, and the office phase from
@@ -7,10 +9,14 @@
 // a receipt so the UI can show exactly why a sentence was said.
 //
 // Missing data is never rendered as zero: a day with no deposit-log row has no
-// production fact at all, and the pulse says the closeout is not in yet.
+// production fact at all, and the pulse says the closeout is not in yet. The
+// three metrics never share targets — production paces only against the
+// production goal, collections against the collections goal, and new patients
+// SEEN (never scheduled) against the new-patient goal.
 
-import type { DayVitals, VitalsSummary } from '@/hooks/usePracticeVitals';
+import type { DayVitals, VitalsSummary, VitalsTargets } from '@/hooks/usePracticeVitals';
 import type { OfficePhase } from '@/components/dashboard/staffing';
+import { metricPace, type MetricPace } from '@/lib/metric-pace';
 import { daysBetween, formatDate } from '@/lib/time-utils';
 
 /* ------------------------------- inputs -------------------------------- */
@@ -40,10 +46,14 @@ export type OwnerPulseInput = {
   prevMonth: (VitalsSummary & { month: string }) | null;
   /** Fraction of this month elapsed, 0–1. */
   monthElapsed: number;
-  /** Org-configured monthly collections goal in cents; 0 = not configured. */
-  targetCents: number;
-  /** targetCents × monthElapsed — what "on pace" collections look like now. */
-  pacedTargetCents: number;
+  /** The three org-configured monthly targets; 0 = not configured. */
+  targets: VitalsTargets;
+  /** Approximate patients/week to stay on the seen goal, or null (no goal). */
+  weeklyNewPatientPace: number | null;
+  /** New patients scheduled Mon–today: the pipeline indicator. */
+  scheduledThisWeek: number;
+  /** Days this week that actually recorded the scheduled count. */
+  scheduledThisWeekRecordedDays: number;
   /** Office phase right now, from staffing.ts. */
   officePhase: OfficePhase;
 };
@@ -75,15 +85,21 @@ export type DailyBrief = {
   facts: PulseFact[];
 };
 
-export type CollectionsPace = {
-  collectedCents: number;
-  targetCents: number;
-  pacedTargetCents: number;
-  /** collected − paced target; positive = ahead. */
-  diffCents: number;
-  /** Percent of the FULL monthly goal collected so far. */
-  pctOfTarget: number;
-  status: 'ahead' | 'on_pace' | 'behind';
+/**
+ * One month-to-date metric line for the scoreboard sections: the actual, the
+ * pace verdict when a goal supports one, and an honest detail line otherwise.
+ */
+export type MonthPaceLine = {
+  id: 'production' | 'collections' | 'new_patients';
+  label: string;
+  /** MTD actual, formatted — or an em dash when nothing is recorded. */
+  value: string;
+  /** Pace/goal receipt, prior-month comparison, or the no-goal statement. */
+  detail: string;
+  tone: PulseTone;
+  href?: string;
+  /** The math behind the verdict; null when no verdict is supportable. */
+  pace: MetricPace | null;
 };
 
 export type MissedMonth = {
@@ -129,6 +145,7 @@ export type OwnerRecommendation = {
     | 'disruptions_elevated'
     | 'collections_posting'
     | 'collections_behind'
+    | 'production_behind'
     | 'goal_rescope'
     | 'all_clear';
   text: string;
@@ -180,13 +197,13 @@ export function missedBreakdown(d: {
   return parts.join(' · ');
 }
 
-function missedCount(d: DayVitals): number {
+export function missedCount(d: DayVitals): number {
   return d.hygieneCancellations + d.hygieneNoShows + d.doctorCancellations + d.doctorNoShows;
 }
 
 /* ----------------------------- daily brief ----------------------------- */
 
-/** Facts for one closed-out day. Production may be unrecorded on a real row. */
+/** Facts for one closed-out day. Unrecorded values read as dashes, never 0. */
 function dayFacts(day: DayVitals): PulseFact[] {
   const missed = missedCount(day);
   return [
@@ -203,6 +220,28 @@ function dayFacts(day: DayVitals): PulseFact[] {
       label: 'Collected',
       value: money(day.collectedCents),
       tone: 'steady',
+      href: '/deposit-log',
+    },
+    {
+      id: 'np-seen',
+      label: 'New patients seen',
+      value: day.newPatientsSeen !== null ? String(day.newPatientsSeen) : '—',
+      detail:
+        day.newPatientsSeen !== null
+          ? 'Completed first visits'
+          : 'Not recorded in this closeout',
+      tone: 'steady',
+      href: '/deposit-log',
+    },
+    {
+      id: 'np-scheduled',
+      label: 'New patients scheduled',
+      value: day.newPatientsScheduled !== null ? String(day.newPatientsScheduled) : '—',
+      detail:
+        day.newPatientsScheduled !== null
+          ? 'Pipeline — not goal progress'
+          : 'Not recorded in this closeout',
+      tone: 'calm',
       href: '/deposit-log',
     },
     {
@@ -259,60 +298,126 @@ export function buildDailyBrief(input: OwnerPulseInput): DailyBrief {
   };
 }
 
-/* --------------------------- collections pace -------------------------- */
+/* ----------------------------- metric paces ----------------------------- */
+//
+// Each metric paces ONLY against its own target — the wrappers below make the
+// pairing structural, so a caller cannot cross-wire production with the
+// collections goal. All three share metricPace() from metric-pace.ts: one
+// formula, one on-pace band, three metrics.
 
-/** Within ±2% of the full monthly goal counts as "on pace". */
-const ON_PACE_BAND = 0.02;
-
-/**
- * Month collections vs the org-configured goal, paced by month elapsed.
- * Null when no goal is configured or nothing is logged this month — a fake
- * "0% of goal" is worse than saying nothing.
- */
-export function collectionsPace(input: OwnerPulseInput): CollectionsPace | null {
-  const { thisMonth, targetCents, pacedTargetCents } = input;
-  if (targetCents <= 0 || thisMonth.days === 0) return null;
-  const diff = thisMonth.collectedCents - pacedTargetCents;
-  const status: CollectionsPace['status'] =
-    Math.abs(diff) <= targetCents * ON_PACE_BAND ? 'on_pace' : diff > 0 ? 'ahead' : 'behind';
-  return {
-    collectedCents: thisMonth.collectedCents,
-    targetCents,
-    pacedTargetCents,
-    diffCents: diff,
-    pctOfTarget: thisMonth.collectedCents / targetCents,
-    status,
-  };
+/** Month collections vs the collections goal. Null = no goal or no data. */
+export function collectionsPace(input: OwnerPulseInput): MetricPace | null {
+  return metricPace({
+    actual: input.thisMonth.collectedCents,
+    target: input.targets.collectionsCents,
+    monthElapsed: input.monthElapsed,
+    recordedDays: input.thisMonth.days,
+  });
 }
 
-/** The hero's one month-level fact. Honest when the goal is not configured. */
-export function monthCollectionsFact(input: OwnerPulseInput): PulseFact | null {
-  const pace = collectionsPace(input);
-  if (pace) {
-    const paceLabel =
-      pace.status === 'on_pace'
-        ? 'on pace'
-        : `${money(pace.diffCents)} ${pace.status === 'ahead' ? 'ahead of' : 'behind'} pace`;
-    return {
-      id: 'month-collections',
-      label: 'Collections this month',
-      value: money(pace.collectedCents),
-      detail: `${pct(pace.pctOfTarget)} of the ${money(pace.targetCents)} goal · ${paceLabel}`,
-      tone: pace.status === 'behind' ? 'attention' : 'steady',
-      href: '/reports',
-    };
+/** Month production vs the production goal. Null = no goal or no data. */
+export function productionPace(input: OwnerPulseInput): MetricPace | null {
+  return metricPace({
+    actual: input.thisMonth.productionCents,
+    target: input.targets.productionCents,
+    monthElapsed: input.monthElapsed,
+    recordedDays: input.thisMonth.days,
+  });
+}
+
+/**
+ * Month new-patients-SEEN vs the new-patient goal. Scheduled patients never
+ * enter this math. Null when no goal is set or no day recorded the count —
+ * a month of unanswered questions is "not recorded", not "0 patients".
+ * The on-pace band is ±1 patient: counts are not judged to a decimal.
+ */
+export function newPatientsSeenPace(input: OwnerPulseInput): MetricPace | null {
+  return metricPace({
+    actual: input.thisMonth.newPatientsSeen,
+    target: input.targets.newPatientsSeen,
+    monthElapsed: input.monthElapsed,
+    recordedDays: input.thisMonth.newPatientsSeenRecordedDays,
+    onPaceBand: 1,
+  });
+}
+
+const paceLabel = (pace: MetricPace, fmt: (n: number) => string): string =>
+  pace.status === 'on_pace'
+    ? 'on pace'
+    : `${fmt(Math.abs(pace.diff))} ${pace.status === 'ahead' ? 'ahead of' : 'behind'} pace`;
+
+/**
+ * The three month-to-date scoreboard lines. Every claim carries its math; a
+ * missing goal yields the factual total and "no goal configured"; a metric
+ * nobody recorded yields "not recorded", never 0.
+ */
+export function monthPaceLines(input: OwnerPulseInput): MonthPaceLine[] {
+  const { thisMonth, prevMonth, monthElapsed, targets } = input;
+
+  const prod = productionPace(input);
+  const prodCompareBase =
+    prevMonth && prevMonth.days >= COMPARE_MIN_DAYS && prevMonth.productionCents > 0
+      ? prevMonth.productionCents * monthElapsed
+      : null;
+  const production: MonthPaceLine = {
+    id: 'production',
+    label: 'Production month to date',
+    value: thisMonth.days > 0 ? money(thisMonth.productionCents) : '—',
+    detail: prod
+      ? `${pct(prod.pctOfTarget)} of the ${money(prod.target)} goal · ${paceLabel(prod, money)}`
+      : thisMonth.days === 0
+        ? 'No closeouts recorded this month yet.'
+        : prodCompareBase !== null
+          ? `No production goal is set. Last month had reached about ${money(prodCompareBase)} by this point.`
+          : 'No production goal is set — this is the factual total.',
+    tone: prod?.status === 'behind' ? 'attention' : prod ? 'steady' : 'calm',
+    href: '/reports',
+    pace: prod,
+  };
+
+  const coll = collectionsPace(input);
+  const collections: MonthPaceLine = {
+    id: 'collections',
+    label: 'Collections month to date',
+    value: thisMonth.days > 0 ? money(thisMonth.collectedCents) : '—',
+    detail: coll
+      ? `${pct(coll.pctOfTarget)} of the ${money(coll.target)} goal · ${paceLabel(coll, money)}`
+      : thisMonth.days === 0
+        ? 'No closeouts recorded this month yet.'
+        : 'No collections goal is set — this is the factual total.',
+    tone: coll?.status === 'behind' ? 'attention' : coll ? 'steady' : 'calm',
+    href: '/reports',
+    pace: coll,
+  };
+
+  const seen = newPatientsSeenPace(input);
+  const seenRecorded = thisMonth.newPatientsSeenRecordedDays > 0;
+  const npDetailParts: string[] = [];
+  if (seen) {
+    npDetailParts.push(`of the ${seen.target} goal · ${paceLabel(seen, String)}`);
+  } else if (seenRecorded) {
+    npDetailParts.push('No new-patient goal is set — this is the factual count.');
+  } else if (targets.newPatientsSeen > 0) {
+    npDetailParts.push('Not recorded yet this month — counts arrive with Close the Day.');
+  } else {
+    npDetailParts.push('Not recorded yet this month.');
   }
-  if (input.thisMonth.days > 0) {
-    return {
-      id: 'month-collections',
-      label: 'Collections this month',
-      value: money(input.thisMonth.collectedCents),
-      detail: 'No monthly collections goal is set.',
-      tone: 'calm',
-      href: '/settings',
-    };
+  if (input.weeklyNewPatientPace !== null) {
+    npDetailParts.push(
+      `About ${input.weeklyNewPatientPace}/week keeps the month on pace (calendar approximation).`
+    );
   }
-  return null;
+  const newPatients: MonthPaceLine = {
+    id: 'new_patients',
+    label: 'New patients seen month to date',
+    value: seenRecorded ? String(thisMonth.newPatientsSeen) : '—',
+    detail: npDetailParts.join(' '),
+    tone: seen?.status === 'behind' ? 'attention' : seen ? 'steady' : 'calm',
+    href: '/deposit-log',
+    pace: seen,
+  };
+
+  return [production, collections, newPatients];
 }
 
 /* -------------------------- missed appointments ------------------------ */
@@ -370,13 +475,11 @@ export type MonthDetail = {
   monthLabel: string;
   /** Closed-out days backing every figure below. */
   daysLogged: number;
-  /** Month-to-date production, factual. Purple Envelope has no production target. */
-  productionLabel: string;
   /**
-   * Comparison against the previous month's recorded pace — only when the
-   * prior month has enough days to make the math meaningful. Never a target.
+   * The month scoreboard: production, collections, and new patients seen —
+   * each against only its own optional goal. This is these numbers' one home.
    */
-  productionCompare: string | null;
+  paceLines: MonthPaceLine[];
   /** Month-to-date missed appointments with breakdown and a grounded trend. */
   missed: MissedMonth;
   /** Up to six months of recorded history for the compact trend. */
@@ -392,20 +495,13 @@ export function buildMonthDetail(
 ): MonthDetail | null {
   if (input.thisMonth.days === 0) return null;
   const [y, m] = input.today.split('-').map(Number);
-  const prodBaseline =
-    input.prevMonth && input.prevMonth.days >= COMPARE_MIN_DAYS && input.prevMonth.productionCents > 0
-      ? input.prevMonth.productionCents * input.monthElapsed
-      : null;
   return {
     monthLabel: new Date(Date.UTC(y, m - 1, 1, 12)).toLocaleDateString('en-US', {
       month: 'long',
       timeZone: 'UTC',
     }),
     daysLogged: input.thisMonth.days,
-    productionLabel: money(input.thisMonth.productionCents),
-    productionCompare: prodBaseline
-      ? `Last month had reached about ${money(prodBaseline)} by this point`
-      : null,
+    paceLines: monthPaceLines(input),
     missed: missedMonth(input),
     trend: months.slice(-6).map(mo => ({
       month: mo.month,
@@ -487,8 +583,7 @@ export function ownerRecommendation(
   input: OwnerPulseInput,
   goals: GoalLike[],
 ): OwnerRecommendation {
-  const { today, latest, thisMonth, prevMonth, monthElapsed, targetCents, pacedTargetCents } =
-    input;
+  const { today, latest, thisMonth, prevMonth, monthElapsed } = input;
 
   // 0 — nothing recorded at all: say so instead of judging an empty office.
   if (latest === null && thisMonth.days === 0 && prevMonth === null) {
@@ -562,8 +657,8 @@ export function ownerRecommendation(
         receipts: [
           {
             label: 'Collected vs paced goal',
-            value: `${money(pace.collectedCents)} vs ${money(pace.pacedTargetCents)}`,
-            source: `deposit_logs vs ${money(targetCents)} goal × ${pct(monthElapsed)} elapsed`,
+            value: `${money(pace.actual)} vs ${money(pace.pacedTarget)}`,
+            source: `deposit_logs vs ${money(pace.target)} goal × ${pct(monthElapsed)} elapsed`,
           },
           {
             label: 'Production month to date',
@@ -580,19 +675,36 @@ export function ownerRecommendation(
   if (pace && pace.status === 'behind') {
     return {
       id: 'collections_behind',
-      text: `Collections are running ${money(pace.diffCents)} behind the paced monthly goal with ${thisMonth.days} day${thisMonth.days === 1 ? '' : 's'} closed out. Reports has the day-by-day detail.`,
+      text: `Collections are running ${money(pace.diff)} behind the paced monthly goal with ${thisMonth.days} day${thisMonth.days === 1 ? '' : 's'} closed out. Reports has the day-by-day detail.`,
       receipts: [
         {
           label: 'Collected vs paced goal',
-          value: `${money(pace.collectedCents)} vs ${money(pace.pacedTargetCents)}`,
-          source: `deposit_logs vs ${money(targetCents)} goal × ${pct(monthElapsed)} elapsed`,
+          value: `${money(pace.actual)} vs ${money(pace.pacedTarget)}`,
+          source: `deposit_logs vs ${money(pace.target)} goal × ${pct(monthElapsed)} elapsed`,
         },
       ],
       action: { label: 'Open reports', to: '/reports' },
     };
   }
 
-  // 5 — a goal that is about to run out of runway.
+  // 5 — production behind its own goal (only when the office configured one).
+  const prodPace = productionPace(input);
+  if (prodPace && prodPace.status === 'behind') {
+    return {
+      id: 'production_behind',
+      text: `Production is running ${money(prodPace.diff)} behind the paced monthly goal with ${thisMonth.days} day${thisMonth.days === 1 ? '' : 's'} closed out. Worth a look at the schedule before the month gets away.`,
+      receipts: [
+        {
+          label: 'Produced vs paced goal',
+          value: `${money(prodPace.actual)} vs ${money(prodPace.pacedTarget)}`,
+          source: `deposit_logs vs ${money(prodPace.target)} goal × ${pct(monthElapsed)} elapsed`,
+        },
+      ],
+      action: { label: 'Open reports', to: '/reports' },
+    };
+  }
+
+  // 6 — a goal that is about to run out of runway.
   const goal = buildGoalBrief(goals, today);
   if (goal && goal.state === 'needs_push' && goal.daysLeft <= 3 && goal.remaining > 0) {
     return {
@@ -612,7 +724,22 @@ export function ownerRecommendation(
     clearReceipts.push({
       label: 'Collections pace',
       value: pace.status === 'ahead' ? 'Ahead' : 'On pace',
-      source: `${money(pace.collectedCents)} vs ${money(pace.pacedTargetCents)} paced goal`,
+      source: `${money(pace.actual)} vs ${money(pace.pacedTarget)} paced goal`,
+    });
+  }
+  if (prodPace) {
+    clearReceipts.push({
+      label: 'Production pace',
+      value: prodPace.status === 'ahead' ? 'Ahead' : 'On pace',
+      source: `${money(prodPace.actual)} vs ${money(prodPace.pacedTarget)} paced goal`,
+    });
+  }
+  const seenPace = newPatientsSeenPace(input);
+  if (seenPace) {
+    clearReceipts.push({
+      label: 'New patients seen',
+      value: seenPace.status === 'behind' ? 'Behind' : seenPace.status === 'ahead' ? 'Ahead' : 'On pace',
+      source: `${seenPace.actual} vs ~${seenPace.pacedTarget} paced goal (seen only, never scheduled)`,
     });
   }
   if (missed.trend !== null) {
@@ -666,10 +793,15 @@ export function dailySummary(
     pace === null
       ? null
       : pace.status === 'ahead'
-        ? `collections are ${money(pace.diffCents)} ahead of monthly pace`
+        ? `collections are ${money(pace.diff)} ahead of monthly pace`
         : pace.status === 'behind'
-          ? `collections are ${money(pace.diffCents)} behind monthly pace`
+          ? `collections are ${money(pace.diff)} behind monthly pace`
           : 'collections are on monthly pace';
+
+  const npClause =
+    day.newPatientsSeen !== null && day.newPatientsSeen > 0
+      ? `${day.newPatientsSeen} new patient${day.newPatientsSeen === 1 ? '' : 's'} completed first visits`
+      : null;
 
   const missedClause =
     missed === 0
@@ -697,7 +829,7 @@ export function dailySummary(
     opener = `${dayName} was steady.`;
   }
 
-  const clauses = [prodClause, paceClause, missedClause].filter(Boolean) as string[];
+  const clauses = [prodClause, paceClause, npClause, missedClause].filter(Boolean) as string[];
   let sentence = `${opener} ${clauses.join(', ')}.`;
   // First clause already starts the sentence; make sure it reads as one line.
   sentence = sentence.replace(/\.\s*$/, '.');

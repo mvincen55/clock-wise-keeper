@@ -1,10 +1,14 @@
 /**
- * Owner daily pulse — the deterministic layer behind the redesigned Owner
- * Home. These tests pin the honesty rules that make the surface trustworthy:
+ * Office daily pulse — the canonical deterministic layer behind every role
+ * dashboard. These tests pin the honesty rules that make the surfaces
+ * trustworthy:
  *
- *  - a day with no closeout is "not entered", never $0;
+ *  - a day with no closeout is "not entered", never $0 / 0 patients;
+ *  - each metric paces ONLY against its own goal — production never touches
+ *    the collections target and scheduled patients never advance the seen goal;
  *  - pace math only exists when a goal is configured;
  *  - trend claims require enough recorded data on both sides;
+ *  - prior-month actuals are comparisons, never relabeled as targets;
  *  - the recommendation always carries receipts that match its inputs, and
  *    stays silent (all_clear) when nothing warrants a suggestion;
  *  - the summary sentence is built only from recorded facts.
@@ -14,13 +18,16 @@ import type { DayVitals, VitalsSummary } from '@/hooks/usePracticeVitals';
 import {
   buildDailyBrief,
   buildGoalBrief,
+  buildMonthDetail,
   closeoutDayLabel,
   collectionsPace,
   dailySummary,
   missedBreakdown,
   missedMonth,
-  monthCollectionsFact,
+  monthPaceLines,
+  newPatientsSeenPace,
   ownerRecommendation,
+  productionPace,
   type GoalLike,
   type OwnerPulseInput,
 } from '@/lib/owner-pulse';
@@ -29,6 +36,8 @@ const day = (date: string, over: Partial<DayVitals> = {}): DayVitals => ({
   date,
   productionCents: 742_000,
   collectedCents: 615_000,
+  newPatientsScheduled: 3,
+  newPatientsSeen: 2,
   hygieneCancellations: 0,
   hygieneNoShows: 0,
   doctorCancellations: 0,
@@ -39,6 +48,10 @@ const day = (date: string, over: Partial<DayVitals> = {}): DayVitals => ({
 const summary = (over: Partial<VitalsSummary> = {}): VitalsSummary => ({
   productionCents: 4_218_000,
   collectedCents: 5_840_000,
+  newPatientsScheduled: 14,
+  newPatientsSeen: 11,
+  newPatientsScheduledRecordedDays: 6,
+  newPatientsSeenRecordedDays: 6,
   hygieneCancellations: 4,
   hygieneNoShows: 2,
   doctorCancellations: 3,
@@ -48,7 +61,7 @@ const summary = (over: Partial<VitalsSummary> = {}): VitalsSummary => ({
   ...over,
 });
 
-/** A healthy mid-August office: goal configured, prior month on record. */
+/** A healthy mid-August office: goals configured, prior month on record. */
 const base = (over: Partial<OwnerPulseInput> = {}): OwnerPulseInput => ({
   today: '2026-08-10',
   todayVitals: day('2026-08-10'),
@@ -56,21 +69,33 @@ const base = (over: Partial<OwnerPulseInput> = {}): OwnerPulseInput => ({
   thisMonth: summary(),
   prevMonth: { month: '2026-07', ...summary({ disruptions: 30, days: 21, productionCents: 13_000_000 }) },
   monthElapsed: 10 / 31,
-  targetCents: 13_500_000,
-  pacedTargetCents: Math.round(13_500_000 * (10 / 31)),
+  targets: { productionCents: 0, collectionsCents: 13_500_000, newPatientsSeen: 0 },
+  weeklyNewPatientPace: null,
+  scheduledThisWeek: 5,
+  scheduledThisWeekRecordedDays: 2,
   officePhase: 'after_close',
   ...over,
 });
 
+/** The same office with all three goals configured. */
+const allGoals = (over: Partial<OwnerPulseInput> = {}): OwnerPulseInput =>
+  base({
+    targets: { productionCents: 14_000_000, collectionsCents: 13_500_000, newPatientsSeen: 40 },
+    weeklyNewPatientPace: 10,
+    ...over,
+  });
+
 /* ---------------------------- daily financial --------------------------- */
 
 describe('daily brief', () => {
-  it("shows today's actual production and collections when the closeout exists", () => {
+  it("shows today's actual production, collections, and new patients", () => {
     const brief = buildDailyBrief(base());
     expect(brief.scope).toBe('today');
     expect(brief.dayLabel).toBe("Today's closeout");
     expect(brief.facts.find(f => f.id === 'production')?.value).toBe('$7,420');
     expect(brief.facts.find(f => f.id === 'collected')?.value).toBe('$6,150');
+    expect(brief.facts.find(f => f.id === 'np-seen')?.value).toBe('2');
+    expect(brief.facts.find(f => f.id === 'np-scheduled')?.value).toBe('3');
     expect(brief.note).toBeNull();
   });
 
@@ -96,7 +121,11 @@ describe('daily brief', () => {
       base({
         todayVitals: null,
         latest: null,
-        thisMonth: summary({ days: 0, collectedCents: 0, productionCents: 0, disruptions: 0 }),
+        thisMonth: summary({
+          days: 0, collectedCents: 0, productionCents: 0, disruptions: 0,
+          newPatientsScheduled: 0, newPatientsSeen: 0,
+          newPatientsScheduledRecordedDays: 0, newPatientsSeenRecordedDays: 0,
+        }),
         prevMonth: null,
       }),
     );
@@ -104,11 +133,29 @@ describe('daily brief', () => {
     expect(brief.facts).toHaveLength(0);
   });
 
-  it('production not recorded on a real closeout reads as a dash, not $0', () => {
-    const brief = buildDailyBrief(base({ todayVitals: day('2026-08-10', { productionCents: null }) }));
-    const prod = brief.facts.find(f => f.id === 'production');
-    expect(prod?.value).toBe('—');
-    expect(prod?.detail).toMatch(/not recorded/i);
+  it('unrecorded values on a real closeout read as dashes, never 0', () => {
+    const brief = buildDailyBrief(
+      base({
+        todayVitals: day('2026-08-10', {
+          productionCents: null,
+          newPatientsScheduled: null,
+          newPatientsSeen: null,
+        }),
+      }),
+    );
+    for (const id of ['production', 'np-seen', 'np-scheduled']) {
+      const fact = brief.facts.find(f => f.id === id);
+      expect(fact?.value).toBe('—');
+      expect(fact?.detail).toMatch(/not recorded/i);
+    }
+  });
+
+  it('an explicit zero is a real answer, not a dash', () => {
+    const brief = buildDailyBrief(
+      base({ todayVitals: day('2026-08-10', { newPatientsScheduled: 0, newPatientsSeen: 0 }) }),
+    );
+    expect(brief.facts.find(f => f.id === 'np-seen')?.value).toBe('0');
+    expect(brief.facts.find(f => f.id === 'np-scheduled')?.value).toBe('0');
   });
 
   it('labels older closeouts by weekday within a week and by date beyond it', () => {
@@ -118,22 +165,61 @@ describe('daily brief', () => {
   });
 });
 
-describe('collections pace', () => {
-  it('is correct against the paced target when a goal is configured', () => {
+/* ------------------------------ metric paces ----------------------------- */
+
+describe('metric paces', () => {
+  it('collections pace uses only the collections target', () => {
     const pace = collectionsPace(base());
-    // $58,400 collected vs $13,500,000 × 10/31 ≈ $43,548 paced — ahead.
+    // $58,400 collected vs $135,000 × 10/31 ≈ $43,548 paced — ahead.
     expect(pace?.status).toBe('ahead');
-    expect(pace?.diffCents).toBe(5_840_000 - Math.round(13_500_000 * (10 / 31)));
-    const fact = monthCollectionsFact(base());
-    expect(fact?.value).toBe('$58,400');
-    expect(fact?.detail).toContain('43% of the $135,000 goal');
-    expect(fact?.detail).toMatch(/ahead of pace/);
+    expect(pace?.diff).toBe(5_840_000 - Math.round(13_500_000 * (10 / 31)));
+    expect(pace?.target).toBe(13_500_000);
+  });
+
+  it('production pace exists ONLY when a production target is configured', () => {
+    // base() has a collections goal but no production goal: collections pace
+    // exists, production pace does not — the goals never cross-wire.
+    expect(collectionsPace(base())).not.toBeNull();
+    expect(productionPace(base())).toBeNull();
+
+    const pace = productionPace(allGoals());
+    expect(pace?.target).toBe(14_000_000);
+    expect(pace?.actual).toBe(4_218_000);
+  });
+
+  it('collections pace never exists from a production-only goal', () => {
+    const input = base({
+      targets: { productionCents: 14_000_000, collectionsCents: 0, newPatientsSeen: 0 },
+    });
+    expect(productionPace(input)).not.toBeNull();
+    expect(collectionsPace(input)).toBeNull();
+  });
+
+  it('seen patients pace uses only the new-patient goal, never scheduled counts', () => {
+    const pace = newPatientsSeenPace(allGoals());
+    // 11 seen vs 40 × 10/31 ≈ 13 paced — behind by 2 (outside the ±1 band).
+    expect(pace?.actual).toBe(11); // seen, not the 14 scheduled
+    expect(pace?.status).toBe('behind');
+
+    // Piling on scheduled patients changes nothing about the seen goal.
+    const flooded = newPatientsSeenPace(
+      allGoals({ thisMonth: summary({ newPatientsScheduled: 99 }) }),
+    );
+    expect(flooded?.actual).toBe(11);
+    expect(flooded?.status).toBe('behind');
+  });
+
+  it('a count goal is judged with a ±1 patient band, not a decimal', () => {
+    const pace = newPatientsSeenPace(allGoals({ thisMonth: summary({ newPatientsSeen: 12 }) }));
+    // 12 vs paced 13 → within ±1 → on pace.
+    expect(pace?.status).toBe('on_pace');
   });
 
   it('reports behind pace with the shortfall amount', () => {
     const input = base({ thisMonth: summary({ collectedCents: 3_000_000 }) });
     expect(collectionsPace(input)?.status).toBe('behind');
-    expect(monthCollectionsFact(input)?.detail).toMatch(/behind pace/);
+    const line = monthPaceLines(input).find(l => l.id === 'collections');
+    expect(line?.detail).toMatch(/behind pace/);
   });
 
   it('a small gap counts as on pace, not a scare', () => {
@@ -143,16 +229,65 @@ describe('collections pace', () => {
   });
 
   it('no configured goal → no percentage, no pace verdict', () => {
-    const input = base({ targetCents: 0, pacedTargetCents: 0 });
+    const input = base({ targets: { productionCents: 0, collectionsCents: 0, newPatientsSeen: 0 } });
     expect(collectionsPace(input)).toBeNull();
-    const fact = monthCollectionsFact(input);
-    expect(fact?.detail).toBe('No monthly collections goal is set.');
-    expect(fact?.detail).not.toMatch(/%/);
+    expect(productionPace(input)).toBeNull();
+    expect(newPatientsSeenPace(input)).toBeNull();
+    const line = monthPaceLines(input).find(l => l.id === 'collections');
+    expect(line?.detail).toMatch(/No collections goal is set/);
+    expect(line?.detail).not.toMatch(/%/);
   });
 
-  it('no closeouts this month → no month fact at all', () => {
-    const input = base({ thisMonth: summary({ days: 0, collectedCents: 0 }) });
-    expect(monthCollectionsFact(input)).toBeNull();
+  it('a month of unanswered new-patient questions is "not recorded", never 0', () => {
+    const input = allGoals({
+      thisMonth: summary({ newPatientsSeen: 0, newPatientsSeenRecordedDays: 0 }),
+    });
+    expect(newPatientsSeenPace(input)).toBeNull(); // no fake "0 of 40, behind"
+    const line = monthPaceLines(input).find(l => l.id === 'new_patients');
+    expect(line?.value).toBe('—');
+    expect(line?.detail).toMatch(/Not recorded yet this month/);
+  });
+});
+
+/* ----------------------------- month lines ------------------------------ */
+
+describe('month pace lines', () => {
+  it('renders three lines, each against only its own goal', () => {
+    const lines = monthPaceLines(allGoals());
+    expect(lines.map(l => l.id)).toEqual(['production', 'collections', 'new_patients']);
+    expect(lines[0].pace?.target).toBe(14_000_000);
+    expect(lines[1].pace?.target).toBe(13_500_000);
+    expect(lines[2].pace?.target).toBe(40);
+  });
+
+  it('prior-month production is a comparison, never a target', () => {
+    // No production goal: the line offers last month's recorded pace as
+    // context, with no percentage and no ahead/behind verdict.
+    const line = monthPaceLines(base()).find(l => l.id === 'production');
+    expect(line?.pace).toBeNull();
+    expect(line?.detail).toMatch(/No production goal is set/);
+    expect(line?.detail).toMatch(/Last month had reached about/);
+    expect(line?.detail).not.toMatch(/behind pace|ahead of pace|% of the/);
+  });
+
+  it('the weekly new-patient pace is labeled as an approximation', () => {
+    const line = monthPaceLines(allGoals()).find(l => l.id === 'new_patients');
+    expect(line?.detail).toMatch(/About 10\/week/);
+    expect(line?.detail).toMatch(/calendar approximation/);
+  });
+
+  it('no closeouts this month → no month detail at all', () => {
+    const detail = buildMonthDetail(
+      base({ thisMonth: summary({ days: 0, collectedCents: 0 }) }),
+      [],
+    );
+    expect(detail).toBeNull();
+  });
+
+  it('month detail carries the pace lines as the month numbers’ one home', () => {
+    const detail = buildMonthDetail(allGoals(), []);
+    expect(detail?.paceLines).toHaveLength(3);
+    expect(detail?.daysLogged).toBe(6);
   });
 });
 
@@ -310,6 +445,19 @@ describe('what I’d look at', () => {
     expect(rec.text).not.toMatch(/staff|fault|blame/i);
   });
 
+  it('production behind its own goal is called out factually, with receipts', () => {
+    // Production behind the production goal while collections stay healthy.
+    const rec = ownerRecommendation(
+      allGoals({
+        thisMonth: summary({ productionCents: 2_000_000, newPatientsSeen: 13 }),
+        prevMonth: null,
+      }),
+      [],
+    );
+    expect(rec.id).toBe('production_behind');
+    expect(rec.receipts[0].source).toMatch(/\$140,000 goal/);
+  });
+
   it('a sprint out of runway suggests rescoping', () => {
     const rec = ownerRecommendation(base(), [
       goal({ progress: 2, ends_on: '2026-08-12', starts_on: '2026-08-03' }),
@@ -333,10 +481,11 @@ describe('what I’d look at', () => {
 /* ----------------------------- summary sentence -------------------------- */
 
 describe('daily summary sentence', () => {
-  it('reads the day from real numbers', () => {
+  it('reads the day from real numbers, including new patients seen', () => {
     const s = dailySummary(base(), buildDailyBrief(base()), 0);
     expect(s).toContain('$7,420');
     expect(s).toMatch(/ahead of monthly pace/);
+    expect(s).toMatch(/2 new patients completed first visits/);
     expect(s).toMatch(/no missed appointments/);
   });
 
@@ -361,8 +510,7 @@ describe('daily summary sentence', () => {
 
   it('a rough schedule day is called out without inventing a financial verdict', () => {
     const input = base({
-      targetCents: 0,
-      pacedTargetCents: 0,
+      targets: { productionCents: 0, collectionsCents: 0, newPatientsSeen: 0 },
       todayVitals: day('2026-08-10', { hygieneCancellations: 2, hygieneNoShows: 1, doctorNoShows: 1 }),
     });
     const s = dailySummary(input, buildDailyBrief(input), 0);

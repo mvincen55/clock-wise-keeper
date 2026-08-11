@@ -13,9 +13,32 @@ export type VitalsForm = {
   hygieneNoShows: number;
   doctorCancellations: number;
   doctorNoShows: number;
+  /**
+   * Aggregate whole-number answers, kept as text so blank stays blank:
+   * '' = not recorded, '0' = an explicit, deliberate zero. Counts only —
+   * never a patient name or appointment detail.
+   */
+  newPatientsScheduled: string;
+  newPatientsSeen: string;
 };
 
-export type VitalsCountKey = Exclude<keyof VitalsForm, 'production'>;
+export type VitalsCountKey = Exclude<
+  keyof VitalsForm,
+  'production' | 'newPatientsScheduled' | 'newPatientsSeen'
+>;
+
+/**
+ * Parse a whole-count answer: '' → null (not recorded), otherwise a
+ * nonnegative integer. The save path uses this so a blank question can never
+ * silently become a stored zero.
+ */
+export function parseCountAnswer(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (trimmed === '') return null;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, Math.round(n));
+}
 
 const ROWS: { key: VitalsCountKey; label: string }[] = [
   { key: 'hygieneCancellations', label: 'Hygiene cancellations' },
@@ -71,6 +94,46 @@ export default function DailyVitalsCard({ value, onChange }: Props) {
           <p className="text-xs text-muted-foreground">
             What the practice produced today — the deposit is what was collected.
           </p>
+        </div>
+
+        {/* New patients: two separate aggregate counts. Scheduled is the
+            pipeline; seen is the only number that advances the goal. Blank
+            means "not recorded" — 0 is a real answer, so it must be typed. */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="dep-np-scheduled">
+              How many new-patient appointments did we schedule today?
+            </Label>
+            <Input
+              id="dep-np-scheduled"
+              inputMode="numeric"
+              placeholder="Count"
+              value={value.newPatientsScheduled}
+              onChange={e =>
+                onChange({ ...value, newPatientsScheduled: e.target.value.replace(/[^\d]/g, '') })
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              Booked today for a first visit — the pipeline. A count only; 0 is a real answer.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="dep-np-seen">
+              How many new patients completed their first visit today?
+            </Label>
+            <Input
+              id="dep-np-seen"
+              inputMode="numeric"
+              placeholder="Count"
+              value={value.newPatientsSeen}
+              onChange={e =>
+                onChange({ ...value, newPatientsSeen: e.target.value.replace(/[^\d]/g, '') })
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              Completed first visits — the only number that counts toward the new-patient goal.
+            </p>
+          </div>
         </div>
 
         <div className="space-y-4">

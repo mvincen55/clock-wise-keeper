@@ -45,7 +45,7 @@ import {
 } from '@/hooks/useDepositLog';
 import { useOrgBranding, useOrgDepositSettings } from '@/hooks/useOrgBranding';
 import DepositSettingsCard from '@/components/DepositSettingsCard';
-import DailyVitalsCard, { type VitalsForm } from '@/components/DailyVitalsCard';
+import DailyVitalsCard, { parseCountAnswer, type VitalsForm } from '@/components/DailyVitalsCard';
 import PrivacyViewCapture from '@/components/close-day/PrivacyViewCapture';
 import StaffingRealityCard, {
   EMPTY_STAFFING,
@@ -137,6 +137,12 @@ export default function DepositLog() {
         hygieneNoShows: log?.hygiene_no_shows ?? 0,
         doctorCancellations: log?.doctor_cancellations ?? 0,
         doctorNoShows: log?.doctor_no_shows ?? 0,
+        // Null means "not recorded" and seeds a blank — an explicit stored 0
+        // round-trips as '0', never as an empty field.
+        newPatientsScheduled:
+          log?.new_patients_scheduled_count != null ? String(log.new_patients_scheduled_count) : '',
+        newPatientsSeen:
+          log?.new_patients_seen_count != null ? String(log.new_patients_seen_count) : '',
       },
       staffing: {
         assessment: (log?.staffing_assessment as StaffingAssessment | null) ?? null,
@@ -197,6 +203,8 @@ export default function DepositLog() {
         hygieneNoShows: form.vitals.hygieneNoShows,
         doctorCancellations: form.vitals.doctorCancellations,
         doctorNoShows: form.vitals.doctorNoShows,
+        newPatientsScheduledCount: parseCountAnswer(form.vitals.newPatientsScheduled),
+        newPatientsSeenCount: parseCountAnswer(form.vitals.newPatientsSeen),
         staffingAssessment: form.staffing.assessment,
         staffingPressure: form.staffing.pressure,
         staffingFactors: form.staffing.factors,

@@ -1,7 +1,8 @@
 import type { ManagerView, MemberView, OwnerView } from './types';
 import {
   assistantFixture, frontDeskBackupAssistFixture, frontDeskFixture, hygienistFixture,
-  managerFixture, managerFrontDeskFixture, managerNewFixture, memberNewFixture,
+  managerClosedFixture, managerFixture, managerFrontDeskFixture, managerNewFixture,
+  managerOffPaceFixture, memberClearFixture, memberHiddenFinancialsFixture, memberNewFixture,
   ownerClosedFixture, ownerFixture, ownerNewFixture,
 } from './fixtures';
 
@@ -9,11 +10,11 @@ import {
  * DESIGN-REVIEW MATRIX (temporary).
  *
  * One entry per composition the owner asked to review — including the states
- * that matter most in production: closed office, brand-new office, and
- * brand-new employee. Each carries the labels the review needs: permission
- * tier, primary operational role, backup roles, the real hook behind every
- * widget, and what was deliberately left out because Purple Envelope does not
- * hold trustworthy data for it.
+ * that matter most in production: closed office, brand-new office, metrics
+ * off pace, hidden financial metrics, and brand-new employee. Each carries
+ * the labels the review needs: permission tier, primary operational role,
+ * backup roles, the real hook behind every widget, and what was deliberately
+ * left out because Purple Envelope does not hold trustworthy data for it.
  */
 
 export type Scenario = {
@@ -31,27 +32,41 @@ export type Scenario = {
 const NO_CLINICAL = [
   'Per-patient revenue and payroll — only office-day aggregates from the deposit log exist.',
   'Patient names, appointments, balances, and treatment detail — outside the non-HIPAA boundary.',
-  'Schedule utilization and practice-health scores — would require PMS data the app does not read.',
+  'Individual production attribution and per-person rankings — the pulse is office-level only.',
+];
+
+const PULSE_SOURCES: [string, string][] = [
+  ['Daily pulse + summary sentence', 'usePracticeVitals (deposit_logs) → owner-pulse.ts, deterministic'],
+  ['Month pace lines', 'metric-pace.ts — each metric vs ONLY its own org-configured goal'],
+  ['New-patient pipeline', 'deposit_logs new_patients_scheduled_count (never goal progress)'],
 ];
 
 const MEMBER_SOURCES: [string, string][] = [
-  ['Status + today', 'useTodayTimeEntries / GlobalTimeControl state'],
-  ['Next action', 'derived from the first open item across the hooks below'],
-  ['Open for me', 'useMyTrainingAssignments, useMyAcknowledgments, useChecklistBypasses'],
-  ['My recorded time chart', 'time_entries, self-scoped by RLS'],
-  ['PTO balance', 'useCurrentPtoBalance'],
-  ['Goals', 'useGoals (own + office sprints)'],
+  ['Next move', 'derived from the first open item across my assigned-work hooks'],
+  ['Our office pulse', 'usePracticeVitals → member-pulse.ts, filtered by per-metric visibility'],
+  ['For my role', 'member-pulse.ts rolePulseItems — operational role, never permission tier'],
+  ['My open work', 'useMyTrainingAssignments, useMyAcknowledgments, useChecklistBypasses'],
+  ['Office goal', 'useTeamGoals (shared sprints)'],
+  ['My time & PTO', 'useTodayEntry + useCurrentPtoBalance (analytics live on Timesheet)'],
   ['Role lane shortcuts', 'useMyOperationalRoles + static route registry (opRoles.ts)'],
+];
+
+const MANAGER_SOURCES: [string, string][] = [
+  ...PULSE_SOURCES,
+  ['What needs your hands', 'manager-pulse.ts buildInterventionQueue — fixed consequence order'],
+  ['Close the Day status', 'useDepositLog(today) → closeDayStatus (pure)'],
+  ['Staffing', 'useOrgAttendanceSnapshot + staffing.ts (owners excluded; phase-aware)'],
+  ['Approvals / reviews / training', 'useApprovalCounts, useAccountability, useTraining'],
 ];
 
 const ADMIN_SOURCES: [string, string][] = [
   ['Office status + staffing', 'useOrgAttendanceSnapshot + staffing.ts (owners excluded; phase-aware)'],
   ['Approvals', 'useApprovalCounts'],
   ['Attendance to review', 'staffing.ts attendanceReview — only facts already true'],
-  ['Checklist progress', 'useChecklists'],
   ['Acknowledgments', 'useKnowledgeAcknowledgments'],
   ['Training', 'useTrainingAssignments'],
   ['Goals', 'useGoals / useTeamGoals'],
+  ...PULSE_SOURCES,
 ];
 
 export const SCENARIOS: Scenario[] = [
@@ -64,7 +79,6 @@ export const SCENARIOS: Scenario[] = [
     view: ownerFixture,
     sources: [
       ...ADMIN_SOURCES,
-      ['Daily pulse + summary sentence', 'usePracticeVitals (deposit_logs) → owner-pulse.ts, deterministic'],
       ["What I'd look at", 'owner-pulse.ts ownerRecommendation — fixed-priority signals with receipts'],
       ['Records at owner review', 'useAccountabilityReports'],
     ],
@@ -98,12 +112,35 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     slug: 'manager',
-    title: 'Manager — operational cockpit',
+    title: 'Manager — open office, live queues',
     tier: 'Manager',
     primary: 'Office manager',
     secondary: 'None',
     view: managerFixture,
-    sources: ADMIN_SOURCES,
+    sources: MANAGER_SOURCES,
+    omitted: NO_CLINICAL,
+  },
+  {
+    slug: 'manager-closed',
+    title: 'Manager — after close, closeout saved but unsealed',
+    tier: 'Manager',
+    primary: 'Office manager',
+    secondary: 'None',
+    view: managerClosedFixture,
+    sources: MANAGER_SOURCES,
+    omitted: [
+      ...NO_CLINICAL,
+      'Live staffing — the workday is over; the staffing band collapses to a calm summary.',
+    ],
+  },
+  {
+    slug: 'manager-off-pace',
+    title: 'Manager — collections materially behind pace',
+    tier: 'Manager',
+    primary: 'Office manager',
+    secondary: 'None',
+    view: managerOffPaceFixture,
+    sources: MANAGER_SOURCES,
     omitted: NO_CLINICAL,
   },
   {
@@ -113,7 +150,7 @@ export const SCENARIOS: Scenario[] = [
     primary: 'Office manager',
     secondary: 'None',
     view: managerNewFixture,
-    sources: ADMIN_SOURCES,
+    sources: MANAGER_SOURCES,
     omitted: NO_CLINICAL,
   },
   {
@@ -123,7 +160,7 @@ export const SCENARIOS: Scenario[] = [
     primary: 'Front desk',
     secondary: 'Office manager (covering today)',
     view: managerFrontDeskFixture,
-    sources: [...ADMIN_SOURCES, ['Personal lane', 'useMyOperationalRoles + opRoles.ts']],
+    sources: [...MANAGER_SOURCES, ['Personal lane', 'useMyOperationalRoles + opRoles.ts']],
     omitted: NO_CLINICAL,
   },
   {
@@ -150,16 +187,6 @@ export const SCENARIOS: Scenario[] = [
     omitted: [...NO_CLINICAL, 'Per-provider clinical output — no such data exists in the app.'],
   },
   {
-    slug: 'member-new',
-    title: 'Team member — brand-new employee',
-    tier: 'Team member',
-    primary: 'Hygienist',
-    secondary: 'None',
-    view: memberNewFixture,
-    sources: MEMBER_SOURCES,
-    omitted: [...NO_CLINICAL, 'Streak, hours, and open items are real zeros — a new account genuinely starts at zero.'],
-  },
-  {
     slug: 'dental-assistant',
     title: 'Team member — dental assistant',
     tier: 'Team member',
@@ -171,6 +198,39 @@ export const SCENARIOS: Scenario[] = [
       ...NO_CLINICAL,
       'Operatory and inventory state — only surfaced where an office has configured checklists for it.',
     ],
+  },
+  {
+    slug: 'member-hidden-financials',
+    title: 'Team member — production & collections set to admins only',
+    tier: 'Team member',
+    primary: 'Hygienist',
+    secondary: 'None',
+    view: memberHiddenFinancialsFixture,
+    sources: MEMBER_SOURCES,
+    omitted: [
+      ...NO_CLINICAL,
+      'Production and collections — hidden by their own visibility settings; omitted cleanly, no locked teaser.',
+    ],
+  },
+  {
+    slug: 'member-clear',
+    title: 'Team member — nothing assigned (no open work)',
+    tier: 'Team member',
+    primary: 'Hygienist',
+    secondary: 'None',
+    view: memberClearFixture,
+    sources: MEMBER_SOURCES,
+    omitted: [...NO_CLINICAL, 'A wall of zeros — "clear" is said once, not five times.'],
+  },
+  {
+    slug: 'member-new',
+    title: 'Team member — brand-new employee',
+    tier: 'Team member',
+    primary: 'Hygienist',
+    secondary: 'None',
+    view: memberNewFixture,
+    sources: MEMBER_SOURCES,
+    omitted: [...NO_CLINICAL, 'Hours and open items are real zeros — a new account genuinely starts at zero.'],
   },
   {
     slug: 'front-desk-backup-assistant',

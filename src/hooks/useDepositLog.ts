@@ -60,6 +60,12 @@ export interface DepositLogSave {
   hygieneNoShows: number;
   doctorCancellations: number;
   doctorNoShows: number;
+  /**
+   * Aggregate new-patient counts for the day. Null = not recorded — a blank
+   * answer must never silently become 0, while an explicit 0 is a real answer.
+   */
+  newPatientsScheduledCount: number | null;
+  newPatientsSeenCount: number | null;
   staffingAssessment?: StaffingAssessment | null;
   staffingPressure?: string[];
   staffingFactors?: string[];
@@ -96,6 +102,8 @@ export function useSaveDepositLog() {
           hygiene_no_shows: input.hygieneNoShows,
           doctor_cancellations: input.doctorCancellations,
           doctor_no_shows: input.doctorNoShows,
+          new_patients_scheduled_count: input.newPatientsScheduledCount,
+          new_patients_seen_count: input.newPatientsSeenCount,
           ...(input.staffingAssessment !== undefined && {
             staffing_assessment: input.staffingAssessment,
           }),

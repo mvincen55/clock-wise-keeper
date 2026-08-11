@@ -108,7 +108,13 @@ export default function SealDayCard({ log, date, collectionsCents, staffing, met
   };
 
   const sealed = !!log?.sealed_at;
-  const canSeal = !!log && !dirty;
+  // A current-day closeout answers both new-patient questions before sealing —
+  // an explicit 0 counts, blank does not. Older migrated records may stay
+  // "not recorded" without being rewritten as zeros.
+  const missingNewPatients =
+    date >= getToday() &&
+    (log?.new_patients_scheduled_count == null || log?.new_patients_seen_count == null);
+  const canSeal = !!log && !dirty && !missingNewPatients;
 
   return (
     <Card>
@@ -127,6 +133,22 @@ export default function SealDayCard({ log, date, collectionsCents, staffing, met
           <div className="flex justify-between">
             <span className="text-muted-foreground">Production</span>
             <span>{log?.production_cents != null ? formatCents(log.production_cents) : '—'}</span>
+          </div>
+          {/* Two separate numbers on purpose: seen advances the goal;
+              scheduled is only the pipeline. Never combined into one total. */}
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">New patients seen</span>
+            <span>
+              {log?.new_patients_seen_count != null ? log.new_patients_seen_count : 'Not recorded'}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">New patients scheduled (pipeline)</span>
+            <span>
+              {log?.new_patients_scheduled_count != null
+                ? log.new_patients_scheduled_count
+                : 'Not recorded'}
+            </span>
           </div>
           {metrics.length > 0 ? (
             <>
@@ -246,7 +268,9 @@ export default function SealDayCard({ log, date, collectionsCents, staffing, met
             <p className="text-xs text-muted-foreground">
               {dirty
                 ? 'Save your changes first — the seal covers what is on file.'
-                : 'Same-day edits stay open after sealing. Later edits need an owner or manager and are always audit-logged.'}
+                : missingNewPatients
+                  ? 'Answer both new-patient questions in Practice Vitals (0 is a real answer), then save, before sealing today.'
+                  : 'Same-day edits stay open after sealing. Later edits need an owner or manager and are always audit-logged.'}
             </p>
           </div>
         )}

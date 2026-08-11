@@ -63,20 +63,22 @@ describe('owner — clear and closed states', () => {
 describe('manager — empty office', () => {
   it('clear queues celebrate, sprints offer setup, no floor claim off-hours', () => {
     renderView(<ManagerDashboard view={managerNewFixture} />);
-    expect(screen.getByText(/Nothing outstanding\./)).toBeInTheDocument();
-    expect(screen.getByText(/No team sprint is running\./)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Start a sprint/ })).toHaveAttribute('href', '/goals');
+    expect(screen.getByText(/Nothing is waiting on you\./)).toBeInTheDocument();
+    expect(screen.getByText(/No office goal is running\./)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Choose a goal/ })).toHaveAttribute('href', '/goals');
     expect(screen.queryByText(/on the floor/i)).not.toBeInTheDocument();
   });
 });
 
 describe('member — brand-new employee', () => {
-  it('shows clear state and a goal setup action, never percent-from-nothing', () => {
-    renderView(<MemberDashboard view={memberNewFixture} />);
+  it('shows clear state without percent-from-nothing or a fake chart', () => {
+    const { container } = renderView(<MemberDashboard view={memberNewFixture} />);
     expect(screen.getByText(/You're clear\./)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Create a goal/ })).toHaveAttribute('href', '/goals');
-    // The empty personal chart renders its no-data sentence, not a fake shape.
-    expect(screen.getByText(/Nothing recorded in this window yet/)).toBeInTheDocument();
+    // The shared goal band stays neutral — no invented progress from nothing.
+    expect(screen.getByText(/No office goal is running\./)).toBeInTheDocument();
+    // The seven-day personal chart no longer exists on Home at all.
+    expect(container.textContent).not.toMatch(/My recorded time, last 7 days/);
+    expect(container.textContent).not.toMatch(/%/);
   });
 });
 

@@ -5,6 +5,7 @@ import { useTick } from '@/hooks/useTick';
 import { useOrgAttendanceSnapshot } from '@/hooks/useOrgAttendanceSnapshot';
 import { useApprovalCounts } from '@/hooks/useApprovalCounts';
 import { usePracticeVitals } from '@/hooks/usePracticeVitals';
+import { useDepositLog } from '@/hooks/useDepositLog';
 import { useTeamGoals, type TeamGoal } from '@/hooks/useTeamGoals';
 import { useOfficeNudges } from '@/hooks/useOfficeNudges';
 import { useUnresolvedBypasses } from '@/hooks/useChecklistBypasses';
@@ -15,32 +16,33 @@ import {
 } from '@/hooks/useKnowledgeAcknowledgments';
 import { useTrainingAssignments } from '@/hooks/useTraining';
 import { useCurrentPtoBalance } from '@/hooks/usePtoEngine';
-import { useMomentum } from '@/hooks/useMomentum';
 import { useMissingShifts } from '@/hooks/useMissingShifts';
 import { useTodayEntry } from '@/hooks/useTimeEntries';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyOperationalRoles } from '@/hooks/useMyOperationalRoles';
-import { useTimeEntries } from '@/hooks/useTimeEntries';
 import { shortcutsFor, roleLabel as opRoleLabel, roleMission } from './opRoles';
-import { calculatePunchMinutes } from '@/lib/time-utils';
 import { getClockStatus, getRunningMinutes } from '@/lib/clock-status';
-import { formatDate, formatTime, getToday, minutesToHHMM, shiftDate } from '@/lib/time-utils';
+import { formatDate, formatTime, getToday, minutesToHHMM } from '@/lib/time-utils';
 import { staffingSummary } from './staffing';
 import {
-  buildDailyBrief, buildGoalBrief, buildMonthDetail, dailySummary, monthCollectionsFact,
+  buildDailyBrief, buildGoalBrief, buildMonthDetail, dailySummary, monthPaceLines,
   ownerRecommendation, type OwnerPulseInput,
 } from '@/lib/owner-pulse';
+import { buildInterventionQueue, buildManagerBrief, closeDayStatus } from '@/lib/manager-pulse';
+import { memberOfficeLines, rolePulseItems } from '@/lib/member-pulse';
 import type {
   DashboardHeader, DashboardView, Figure, ManagerView, MemberView, OwnerView,
-  PermissionTier, ProgressRow, RoleContext, RoleLane, Series, Signal,
+  PermissionTier, RoleContext, RoleLane, Signal,
 } from './types';
 
 /**
  * Composes the EXISTING product hooks into the three role view models.
  *
- * This file adds no queries, no tables, and no business rules — every number
- * below already powers another surface in the app. Anything Purple Envelope
- * cannot verify from real records is simply not rendered.
+ * This file adds no queries beyond the product's own hooks, no tables, and no
+ * business rules — the pulse math lives in the shared deterministic layer
+ * (owner-pulse.ts / manager-pulse.ts / member-pulse.ts on top of
+ * metric-pace.ts), so Owner, Manager, and Team read the SAME calculations.
+ * Anything Purple Envelope cannot verify from real records is not rendered.
  *
  * Time semantics live in `staffing.ts`: "scheduled sometime today" is never
  * presented as "expected to be working right now", and a closed office never
@@ -65,12 +67,6 @@ const TIER_OF: Record<'owner' | 'manager' | 'employee', PermissionTier> = {
   employee: 'member',
 };
 
-/** Short weekday label for chart columns. */
-function dayTick(date: string): string {
-  const [y, m, d] = date.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString('en-US', { weekday: 'narrow', timeZone: 'UTC' });
-}
-
 export function useDashboardView(): { view: DashboardView | null; isLoading: boolean } {
   const now = useTick(60_000);
   const { user } = useAuth();
@@ -81,6 +77,8 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
   const { data: snapshot = [] } = useOrgAttendanceSnapshot();
   const { data: approvals } = useApprovalCounts();
   const { data: vitals } = usePracticeVitals();
+  const today = getToday();
+  const { data: todayLog } = useDepositLog(today);
   const { data: sprintData } = useTeamGoals();
   const sprints: TeamGoal[] = sprintData?.live ?? [];
   const { data: nudges = [] } = useOfficeNudges();
@@ -92,13 +90,9 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
   const { data: myAcks = [] } = useMyKnowledgeAcknowledgments();
   const { data: assignments = [] } = useTrainingAssignments();
   const pto = useCurrentPtoBalance();
-  const { data: momentum } = useMomentum();
   const { data: todayEntry } = useTodayEntry();
 
   const ops = useMyOperationalRoles();
-  const today = getToday();
-  const weekStart = shiftDate(today, -6);
-  const { data: weekEntries = [] } = useTimeEntries(weekStart, today);
   const fourteenDaysAgo = new Date(new Date(today + 'T12:00:00Z').getTime() - 14 * 86_400_000)
     .toISOString()
     .slice(0, 10);
@@ -178,30 +172,32 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
       });
     }
 
-    /**
-     * The member's personal chart, from their own `time_entries` punches.
-     * The office arrivals trend intentionally does NOT live on Home — it is an
-     * attendance surface an admin opens on purpose, from Team.
-     */
-    const mySeries: Series = {
-      id: 'my-week',
-      title: 'My recorded time, last 7 days',
-      question: 'How is my week tracking?',
-      caption: 'Hours from your own punches. Corrections are reflected once approved.',
-      href: '/timesheet',
-      format: 'hours',
-      points: Array.from({ length: 7 }, (_, i) => shiftDate(weekStart, i)).map(d => {
-        const entry = weekEntries.find(e => e.entry_date === d);
-        const mins = entry ? calculatePunchMinutes(entry.punches ?? []) : 0;
-        return { x: dayTick(d), value: Math.round((mins / 60) * 10) / 10, muted: mins === 0 };
-      }),
-    };
+    const staffing = staffingSummary(snapshot, now);
+
+    // The one shared pulse input every role reads. Built once, from the same
+    // recorded facts, so the three dashboards can never disagree.
+    const pulseInput: OwnerPulseInput | null = vitals
+      ? {
+          today,
+          todayVitals: vitals.today,
+          latest: vitals.latest,
+          thisMonth: vitals.thisMonth,
+          prevMonth: vitals.prevMonth,
+          monthElapsed: vitals.monthElapsed,
+          targets: vitals.targets,
+          weeklyNewPatientPace: vitals.weeklyNewPatientPace,
+          scheduledThisWeek: vitals.scheduledThisWeek,
+          scheduledThisWeekRecordedDays: vitals.scheduledThisWeekRecordedDays,
+          officePhase: staffing.office.phase,
+        }
+      : null;
+
+    const goal = buildGoalBrief(sprints, today);
 
     /* ------------------------------ owner ------------------------------ */
     if (ctx.role === 'owner') {
       // Owners are already excluded from `snapshot` at the hook boundary —
       // an owner without punches can never appear absent or out.
-      const staffing = staffingSummary(snapshot, now);
       const ownerReviews = orgReports.filter(r => r.status === 'awaiting_owner');
       const overdueAcks = ackRoster.filter(a => !a.acknowledged_at && a.overdue_at);
       const verifySprints = sprints.filter(s => s.status === 'pending_verification');
@@ -248,29 +244,14 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
       // loading line instead of fabricated zeros.
       let summary: string | null = null;
       let brief: OwnerView['brief'] = null;
-      let monthFact: OwnerView['monthFact'] = null;
       let lookAt: OwnerView['lookAt'] = null;
       let month: OwnerView['month'] = null;
-      if (vitals) {
-        const pulseInput: OwnerPulseInput = {
-          today,
-          todayVitals: vitals.today,
-          latest: vitals.latest,
-          thisMonth: vitals.thisMonth,
-          prevMonth: vitals.prevMonth,
-          monthElapsed: vitals.monthElapsed,
-          targetCents: vitals.targetCents,
-          pacedTargetCents: vitals.pacedTargetCents,
-          officePhase: staffing.office.phase,
-        };
+      if (pulseInput && vitals) {
         brief = buildDailyBrief(pulseInput);
-        monthFact = monthCollectionsFact(pulseInput);
         lookAt = ownerRecommendation(pulseInput, sprints);
         summary = dailySummary(pulseInput, brief, decisionCount);
         month = buildMonthDetail(pulseInput, vitals.months);
       }
-
-      const goal = buildGoalBrief(sprints, today);
 
       // Operational exceptions: only real, unresolved signals. A zero here is
       // silence, not a row — normal staffing mostly disappears.
@@ -304,7 +285,6 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         office: staffing.office,
         summary,
         brief,
-        monthFact,
         lookAt,
         decisionCount,
         decisions,
@@ -318,164 +298,45 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
 
     /* ----------------------------- manager ----------------------------- */
     if (ctx.role === 'manager') {
-      const staffing = staffingSummary(snapshot, now);
-      const trainingDue = assignments.filter(a => a.status !== 'completed').length;
-      const openAcks = ackRoster.filter(a => !a.acknowledged_at).length;
       const managerReviews = orgReports.filter(r => r.status === 'awaiting_manager');
+      const openAcks = ackRoster.filter(a => !a.acknowledged_at).length;
+      const trainingDue = assignments.filter(a => a.status !== 'completed').length;
 
-      const approvalsFigure: Figure = {
-        id: 'approvals',
-        value: String(approvals?.total ?? 0),
-        label: 'Approvals',
-        detail: (approvals?.total ?? 0) > 0 ? 'PTO, corrections, changes' : 'Queue is clear',
-        tone: (approvals?.total ?? 0) > 0 ? 'attention' : 'calm',
-        href: '/approvals',
-      };
-      const reviewFigure: Figure = {
-        id: 'attendance-review',
-        value: String(staffing.reviewCount),
-        label: 'Attendance to review',
-        detail: staffing.reviewCount > 0 ? staffing.reviewDetail : 'Nothing needs review',
-        tone: staffing.reviewCount > 0 ? 'attention' : 'calm',
-        href: '/team',
-      };
+      const closeDay = closeDayStatus(todayLog ?? null, staffing.office.phase);
 
-      // The figure strip answers the question that matches the time of day:
-      // live staffing while the office works, a day summary when it does not.
-      const figures: Figure[] =
-        staffing.office.phase === 'open'
-          ? [
-              {
-                id: 'here',
-                value: `${staffing.presentNow ?? 0}/${staffing.expectedNow ?? 0}`,
-                label: 'In right now',
-                detail: 'Against who is expected at this hour',
-                tone: 'steady',
-                href: '/team',
-              },
-              {
-                id: 'not-in',
-                value: String(staffing.missingNow ?? 0),
-                label: 'Not in yet',
-                detail: (staffing.missingNow ?? 0) > 0 ? 'Expected now, no punch' : 'Everyone expected is in',
-                tone: (staffing.missingNow ?? 0) > 0 ? 'attention' : 'calm',
-                href: '/team',
-              },
-              approvalsFigure,
-              reviewFigure,
-            ]
-          : staffing.office.phase === 'before_open'
-            ? [
-                { id: 'office', value: '—', label: 'Office', detail: staffing.office.detail, tone: 'calm', href: '/team' },
-                {
-                  id: 'scheduled',
-                  value: String(staffing.scheduledToday),
-                  label: 'Scheduled today',
-                  detail: 'Shifts on the calendar',
-                  tone: 'calm',
-                  href: '/team',
-                },
-                approvalsFigure,
-                reviewFigure,
-              ]
-            : staffing.office.phase === 'unknown_hours'
-              ? [
-                  {
-                    id: 'scheduled',
-                    value: String(staffing.scheduledToday),
-                    label: 'Scheduled today',
-                    detail: 'Shift times not set',
-                    tone: 'calm',
-                    href: '/team',
-                  },
-                  {
-                    id: 'punched',
-                    value: String(snapshot.filter(s => s.has_punches).length),
-                    label: 'Punched in today',
-                    detail: 'Recorded time today',
-                    tone: 'calm',
-                    href: '/team',
-                  },
-                  approvalsFigure,
-                  reviewFigure,
-                ]
-              : [
-                  { id: 'office', value: 'Closed', label: 'Office', detail: staffing.office.detail, tone: 'calm' },
-                  {
-                    id: 'worked',
-                    value: String(snapshot.filter(s => s.has_punches).length),
-                    label: 'Worked today',
-                    detail: staffing.scheduledToday > 0 ? `${staffing.scheduledToday} scheduled` : 'No shifts today',
-                    tone: 'calm',
-                    href: '/team',
-                  },
-                  approvalsFigure,
-                  reviewFigure,
-                ];
-
-      const attentionAll: Signal[] = [
-        {
-          id: 'pto',
-          label: 'PTO requests pending',
-          detail: 'Approve or decline before the schedule locks.',
-          value: String(approvals?.ptoRequests ?? 0),
-          href: '/approvals',
-          tone: 'attention',
-        },
-        {
-          id: 'corrections',
-          label: 'Time corrections pending',
-          detail: 'Each one keeps the original punch on record.',
-          value: String(approvals?.corrections ?? 0),
-          href: '/approvals',
-          tone: 'attention',
-        },
-        {
-          id: 'reviews',
-          label: 'Records awaiting your review',
-          detail: 'Accountability chain — you cannot review your own.',
-          value: String(managerReviews.length),
-          href: '/management',
-          tone: 'urgent',
-        },
-        {
-          id: 'acks',
-          label: 'Unsigned policy acknowledgments',
-          detail: 'Exact published versions still unsigned.',
-          value: String(openAcks),
-          href: '/playbook',
-          tone: 'attention',
-        },
-        {
-          id: 'training',
-          label: 'Training assignments open',
-          detail: 'Assigned modules not yet completed.',
-          value: String(trainingDue),
-          href: '/training',
-          tone: 'attention',
-        },
-        {
-          id: 'nudges',
-          label: 'Unresolved office notes',
-          detail: 'Notes Purple Envelope flagged, still open.',
-          value: String(nudges.length),
-          href: '/inbox',
-          tone: 'attention',
-        },
-      ];
-      const attention = attentionAll.filter(s => s.value !== '0');
-
-      const progress: ProgressRow[] = sprints
-        .filter(s => s.status === 'active')
-        .slice(0, 4)
-        .map(s => ({
-          id: s.id,
-          label: s.title,
-          done: Math.min(s.progress, s.target_count),
-          total: s.target_count,
-          detail: `${s.metric} · ends ${formatDate(s.ends_on)}`,
-          href: '/goals',
-        }));
+      let summary: string | null = null;
+      let brief: ManagerView['brief'] = null;
+      let performance: ManagerView['performance'] = null;
+      let pipeline: ManagerView['pipeline'] = null;
+      let next: ManagerView['next'] = null;
+      let queue: ManagerView['queue'] = [];
+      if (pulseInput && vitals) {
+        const managerBrief = buildManagerBrief(pulseInput, todayLog?.staffing_assessment ?? null);
+        summary = managerBrief.summary;
+        brief = managerBrief.daily;
+        performance = monthPaceLines(pulseInput);
+        pipeline = {
+          scheduledThisWeek: vitals.scheduledThisWeek,
+          recordedDays: vitals.scheduledThisWeekRecordedDays,
+        };
+        const interventions = buildInterventionQueue({
+          input: pulseInput,
+          closeDay,
+          staffingAssessment: todayLog?.staffing_assessment ?? null,
+          lowConfidenceCount: todayLog?.needs_manager_review ? 1 : 0,
+          ptoRequests: approvals?.ptoRequests ?? 0,
+          timeCorrections: approvals?.corrections ?? 0,
+          changeRequests: approvals?.changeRequests ?? 0,
+          managerReviews: managerReviews.length,
+          bypasses: bypasses.length,
+          overdueAcks: openAcks,
+          openTraining: trainingDue,
+          nudges: nudges.length,
+          goals: sprints,
+        });
+        next = interventions.next;
+        queue = interventions.queue;
+      }
 
       const manager: ManagerView = {
         kind: 'manager',
@@ -483,10 +344,15 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         roleContext,
         lanes,
         office: staffing.office,
-        figures,
+        summary,
+        brief,
+        performance,
+        pipeline,
+        next,
+        queue,
+        closeDay,
         staffing,
-        attention,
-        progress,
+        goal,
       };
       return { view: manager, isLoading: false };
     }
@@ -498,7 +364,6 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
     const openTraining = assignments.filter(a => a.assigned_to === user?.id && a.status !== 'completed');
     const openAcks = myAcks.filter(a => !a.acknowledged_at);
     const openReports = myReports.filter(r => r.status === 'awaiting_member');
-    const mySprints = sprints.filter(s => s.status === 'active');
 
     const status =
       clockState === 'clocked_in'
@@ -603,27 +468,28 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
     // instead of five rows of zeros saying it five times.
     const mine = mineAll.filter(s => s.value !== '0');
 
-    const progress: ProgressRow[] = mySprints.slice(0, 3).map(s => ({
-      id: s.id,
-      label: s.title,
-      done: Math.min(s.progress, s.target_count),
-      total: s.target_count,
-      detail: `${s.metric} · ends ${formatDate(s.ends_on)}`,
-      href: '/goals',
-    }));
+    // Our Office Pulse: the canonical month lines, filtered per-metric by the
+    // office's visibility settings. A hidden metric simply is not here.
+    const officePulse =
+      pulseInput && vitals ? memberOfficeLines(pulseInput, vitals.visibility) : [];
+    const workingPhases = ['before_open', 'open', 'unknown_hours'];
+    const officePulseNote =
+      officePulse.length === 0
+        ? null
+        : workingPhases.includes(staffing.office.phase)
+          ? 'Financial figures update after Close the Day — they are not live during the day.'
+          : 'From the deposit log, as of the most recent closeout.';
 
-    const figures: Figure[] = [
-      {
-        id: 'streak',
-        value: String(momentum?.streak ?? 0),
-        label: 'Day streak',
-        detail: momentum?.pausedToday ? 'Paused today' : 'Verified records only',
-      },
+    const rolePulse =
+      pulseInput && vitals ? rolePulseItems(ops.primary, pulseInput, vitals.visibility) : [];
+
+    // Personal utilities — real, useful, and deliberately not the headline.
+    const utilities: Figure[] = [
       {
         id: 'hours',
         value: minutesToHHMM(runningMinutes),
-        label: 'Today',
-        detail: 'Recorded time',
+        label: 'Recorded today',
+        detail: 'Full history on your timesheet',
         href: '/timesheet',
       },
       {
@@ -634,52 +500,32 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         href: '/pto',
       },
       {
-        id: 'open',
-        value: String(openTraining.length + openAcks.length + bypasses.length),
-        label: 'Open items',
-        detail: 'Assigned to you',
+        id: 'timesheet',
+        value: '→',
+        label: 'Timesheet',
+        detail: 'Punches, corrections, week totals',
+        href: '/timesheet',
       },
     ];
-
-    const office: Signal[] = [];
-    if (mySprints.length > 0) {
-      office.push({
-        id: 'sprints',
-        label: 'Office sprints running',
-        detail: 'Shared goals you can contribute to.',
-        value: String(mySprints.length),
-        href: '/goals',
-        tone: 'calm',
-      });
-    }
-    if (nudges.length > 0) {
-      office.push({
-        id: 'nudges',
-        label: 'Notes for you',
-        detail: 'Quiet suggestions, always yours to dismiss.',
-        value: String(nudges.length),
-        href: '/inbox',
-        tone: 'attention',
-      });
-    }
 
     const member: MemberView = {
       kind: 'member',
       header,
       roleContext,
-      chart: mySeries,
       lanes,
-      status,
       next,
+      officePulse,
+      officePulseNote,
+      rolePulse,
       mine,
-      progress,
-      figures,
-      office,
+      goal,
+      status,
+      utilities,
     };
     return { view: member, isLoading: false };
   }, [
-    ctx, ctxLoading, profile, now, today, snapshot, approvals, vitals, sprintData, sprints, nudges, bypasses,
-    orgReports, myReports, ackRoster, myAcks, assignments, pto, momentum, todayEntry, missingDays, user,
-    ops, weekEntries, weekStart,
+    ctx, ctxLoading, profile, now, today, snapshot, approvals, vitals, todayLog, sprintData, sprints,
+    nudges, bypasses, orgReports, myReports, ackRoster, myAcks, assignments, pto, todayEntry,
+    missingDays, user, ops,
   ]);
 }
