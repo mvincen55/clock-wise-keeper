@@ -10,7 +10,6 @@ import { useConsumedSearchParam } from '@/hooks/useDeepLink';
 import { OrgSnapshotPanel } from '@/components/OrgSnapshotPanel';
 import PracticeVitalsCard from '@/components/PracticeVitalsCard';
 import AccountabilityReviewQueue from '@/components/accountability/AccountabilityReviewQueue';
-import AcknowledgmentEscalationSettingsCard from '@/components/knowledge/AcknowledgmentEscalationSettingsCard';
 
 const ADMIN_LINKS = [
   { to: '/approvals', icon: CheckSquare, label: 'Approvals', description: 'Review pending requests' },
@@ -20,7 +19,7 @@ const ADMIN_LINKS = [
   { to: '/team', icon: Users, label: 'Team', description: 'Roster, schedules, and details' },
   { to: '/reports', icon: FileText, label: 'Reports', description: 'Hours, payroll, and exports' },
   { to: '/work-zones', icon: MapPin, label: 'Work Zones', description: 'GPS auto-clock zones' },
-  { to: '/settings', icon: Settings, label: 'Office Settings', description: 'Payroll, closures, branding' },
+  { to: '/settings', icon: Settings, label: 'Office Settings', description: 'Branding, payroll, policies, escalation, workflows' },
   { to: '/settings/reminders', icon: BellRing, label: 'Reminders', description: 'Automated reminder rules' },
 ];
 
@@ -84,8 +83,6 @@ export default function Management() {
       </Card>
 
       <AccountabilityReviewQueue highlightId={linkedRecordId} />
-
-      <AcknowledgmentEscalationSettingsCard />
 
       <OrgSnapshotPanel />
 

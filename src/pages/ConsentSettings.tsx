@@ -10,7 +10,6 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import OrgBrandingCard from '@/components/OrgBrandingCard';
 import { useConsentSettings, useUpdateConsentSettings } from '@/hooks/useConsentSettings';
 import { useConsentAudit, AUDIT_ACTION_LABELS } from '@/hooks/useConsentAudit';
 import { useConsentForms } from '@/hooks/useConsentForms';
@@ -76,8 +75,15 @@ export default function ConsentSettings() {
         </p>
       </div>
 
-      {/* Branding: the same identity used across the product and every print sheet. */}
-      <OrgBrandingCard isManager={isManager} />
+      {/* Practice identity & branding has one home now — Settings → Office —
+          instead of a second copy of the card living here. */}
+      <p className="text-sm text-muted-foreground">
+        Practice identity &amp; branding (name, logo, colors) lives in{' '}
+        <Link to="/settings/office" className="text-primary underline-offset-2 hover:underline">
+          Settings → Office
+        </Link>
+        . Every print sheet uses that same identity.
+      </p>
 
       <Card className="card-elevated">
         <CardHeader className="pb-3">

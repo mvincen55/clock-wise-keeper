@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Gift, Plus, ShieldCheck, Sparkles, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import { useMyPermissionGrants } from '@/hooks/useEmployeePermissions';
+import { hasGrant } from '@/lib/permissions';
 import SprintVerifyDialog from '@/components/SprintVerifyDialog';
 import SprintBuilderDialog from '@/components/SprintBuilderDialog';
 import { SPRINT_ROLE_LABELS } from '@/hooks/useSprintIdeas';
@@ -54,7 +56,11 @@ export default function SprintCard({ highlightId }: { highlightId?: string | nul
   const [dialogOpen, setDialogOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
 
-  const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
+  // Sprint management opens to admins and to members holding the
+  // manage_office_goals grant (team_goals RLS enforces the same rule).
+  const grants = useMyPermissionGrants();
+  const isManager =
+    ctx?.role === 'owner' || ctx?.role === 'manager' || hasGrant(grants, 'manage_office_goals');
   const sprint = data?.active ?? null;
   // A sprint notification scrolls to the card; the ring appears when the
   // running sprint is the one the notification was about.

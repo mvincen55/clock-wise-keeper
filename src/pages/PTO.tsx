@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import {
-  usePtoSettings, useUpsertPtoSettings,
-  usePtoSnapshots, useUpsertPtoSnapshot,
+  usePtoSettings,
+  usePtoSnapshots,
   usePtoLedger, useRecalculatePto,
   useCurrentPtoBalance, PTO_TIERS, getTierForDate,
   PtoLedgerWeek,
@@ -16,11 +17,9 @@ import { PtoCorrectionModal } from '@/components/PtoCorrectionModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, TrendingUp, Clock, Settings as SettingsIcon, Printer, RefreshCw, AlertTriangle, Loader2, Plus, XCircle, Pencil, Check, X } from 'lucide-react';
+import { CalendarDays, TrendingUp, Clock, Printer, RefreshCw, AlertTriangle, Loader2, Plus, XCircle, Pencil, Check, X } from 'lucide-react';
 import { formatDate } from '@/lib/time-utils';
 import { useToast } from '@/hooks/use-toast';
 import { useConsumedSearchParam, useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
@@ -53,58 +52,13 @@ export default function PTO() {
     if (linkedRequestId) setTab('requests');
   }, [linkedRequestId]);
 
-  const { data: settings, isLoading: settingsLoading } = usePtoSettings();
+  const { data: settings } = usePtoSettings();
   const { data: snapshots } = usePtoSnapshots();
   const { data: ledger } = usePtoLedger();
   const { data: daysOff } = useDaysOff();
   const updateHours = useUpdateDayOffHours();
-  const upsertSettings = useUpsertPtoSettings();
-  const upsertSnapshot = useUpsertPtoSnapshot();
   const recalc = useRecalculatePto();
   const ptoState = useCurrentPtoBalance();
-
-  // Local form state for settings (neutral defaults until the DB row loads)
-  const [hireDate, setHireDate] = useState('');
-  const [workedCap, setWorkedCap] = useState(40);
-  const [maxBalance, setMaxBalance] = useState(100);
-  const [allowNegative, setAllowNegative] = useState(false);
-  const [snapDate, setSnapDate] = useState('');
-  const [snapBalance, setSnapBalance] = useState(0);
-
-  // Sync from DB
-  useEffect(() => {
-    if (settings) {
-      setHireDate(settings.hire_date);
-      setWorkedCap(Number(settings.worked_hours_cap_weekly));
-      setMaxBalance(Number(settings.max_balance));
-      setAllowNegative(settings.allow_negative);
-    }
-  }, [settings]);
-
-  useEffect(() => {
-    if (snapshots?.length) {
-      setSnapDate(snapshots[0].snapshot_date);
-      setSnapBalance(Number(snapshots[0].snapshot_balance_hours));
-    }
-  }, [snapshots]);
-
-  const handleSaveSettings = async () => {
-    try {
-      await upsertSettings.mutateAsync({
-        hire_date: hireDate,
-        worked_hours_cap_weekly: workedCap,
-        max_balance: maxBalance,
-        allow_negative: allowNegative,
-      });
-      await upsertSnapshot.mutateAsync({
-        snapshot_date: snapDate,
-        snapshot_balance_hours: snapBalance,
-      });
-      toast({ title: 'PTO settings saved' });
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    }
-  };
 
   const handleRecalc = async () => {
     try {
@@ -448,81 +402,17 @@ export default function PTO() {
           </Card>
         </TabsContent>
 
-        {/* Settings */}
+        {/* PTO policy now lives in Settings -> People & policies with every
+            other office policy; admins get a direct link. */}
         <TabsContent value="settings">
           <Card className="card-elevated">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <SettingsIcon className="h-5 w-5" />
-                PTO Policy Settings
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label>Hire Date</Label>
-                  <Input type="date" value={hireDate} onChange={e => setHireDate(e.target.value)} className="w-48" />
-                  <p className="text-xs text-muted-foreground">
-                    Current tier: {currentTier.label} → {(currentTier.rate * 100).toFixed(2)}% (cap {currentTier.weeklyCap}h/wk)
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <Label>Worked-Hours Cap (weekly)</Label>
-                  <Input type="number" min={0} value={workedCap} onChange={e => setWorkedCap(parseFloat(e.target.value) || 40)} className="w-24" />
-                  <p className="text-xs text-muted-foreground">Hours worked beyond this are not counted for accrual.</p>
-                </div>
-                <div className="space-y-1">
-                  <Label>Max PTO Balance</Label>
-                  <Input type="number" min={0} value={maxBalance} onChange={e => setMaxBalance(parseFloat(e.target.value) || 100)} className="w-24" />
-                  <p className="text-xs text-muted-foreground">Accrual stops when balance reaches this cap.</p>
-                </div>
-                <div className="space-y-1">
-                  <Label>Allow Negative PTO Usage</Label>
-                  <div className="flex items-center gap-2 pt-1">
-                    <Switch checked={allowNegative} onCheckedChange={setAllowNegative} />
-                    <span className="text-xs text-muted-foreground">{allowNegative ? 'Enabled' : 'Disabled (default)'}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="border-t pt-4 space-y-3">
-                <h4 className="font-semibold text-sm">Balance Snapshot Anchor</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <Label>Snapshot Date</Label>
-                    <Input type="date" value={snapDate} onChange={e => setSnapDate(e.target.value)} className="w-48" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Snapshot Balance (hours)</Label>
-                    <Input type="number" step="0.01" value={snapBalance} onChange={e => setSnapBalance(parseFloat(e.target.value) || 0)} className="w-32" />
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  The engine recalculates forward from this snapshot. All weekly accruals and PTO usage after this date are computed.
-                </p>
-              </div>
-
-              <div className="flex gap-2">
-                <Button onClick={handleSaveSettings} disabled={upsertSettings.isPending}>
-                  {upsertSettings.isPending ? 'Saving...' : 'Save Settings'}
-                </Button>
-                <Button variant="secondary" onClick={handleRecalc} disabled={recalc.isPending}>
-                  {recalc.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                  Recalculate Now
-                </Button>
-              </div>
-
-              <div className="p-3 rounded-lg bg-muted/50">
-                <h4 className="font-medium text-sm mb-2">Office Accrual Tiers</h4>
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  {PTO_TIERS.map((t, i) => (
-                    <div key={i} className="flex justify-between">
-                      <span>{t.label}</span>
-                      <span className="font-semibold">{(t.rate * 100).toFixed(2)}% (max {t.weeklyCap}h/wk)</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+            <CardContent className="p-6 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                PTO policy settings moved to Settings, next to the other office policies.
+              </p>
+              <Button asChild variant="outline">
+                <Link to="/settings/people">Open PTO policy settings</Link>
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

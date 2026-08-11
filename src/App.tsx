@@ -171,6 +171,9 @@ const router = createBrowserRouter(
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/work-zones" element={<ProtectedRoute><WorkZones /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            {/* Deep-linkable settings tabs (/settings/reminders stays its own
+                page — the static segment outranks this param route). */}
+            <Route path="/settings/:tab" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/pto" element={<ProtectedRoute><PTO /></ProtectedRoute>} />
             <Route path="/my-requests" element={<ProtectedRoute><MyRequests /></ProtectedRoute>} />
             <Route path="/approvals" element={<ProtectedRoute><ApprovalQueue /></ProtectedRoute>} />

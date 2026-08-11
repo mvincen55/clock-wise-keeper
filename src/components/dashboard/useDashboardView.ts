@@ -20,6 +20,7 @@ import { useMissingShifts } from '@/hooks/useMissingShifts';
 import { useTodayEntry } from '@/hooks/useTimeEntries';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyOperationalRoles } from '@/hooks/useMyOperationalRoles';
+import { useMyPermissionGrants } from '@/hooks/useEmployeePermissions';
 import { shortcutsFor, roleLabel as opRoleLabel, roleMission } from './opRoles';
 import { getClockStatus, getRunningMinutes } from '@/lib/clock-status';
 import { formatDate, formatTime, getToday, minutesToHHMM } from '@/lib/time-utils';
@@ -92,6 +93,8 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
   const { data: todayEntry } = useTodayEntry();
 
   const ops = useMyOperationalRoles();
+  // Per-employee grants unlock tier-gated shortcuts (RLS enforces server-side).
+  const grants = useMyPermissionGrants();
   const fourteenDaysAgo = new Date(new Date(today + 'T12:00:00Z').getTime() - 14 * 86_400_000)
     .toISOString()
     .slice(0, 10);
@@ -132,7 +135,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
      */
     const laneUrgent = (role: typeof ops.primary): Signal[] => {
       if (!role) return [];
-      const usesChecklists = shortcutsFor(role, tier).some(sc => sc.to === '/checklists');
+      const usesChecklists = shortcutsFor(role, tier, grants).some(sc => sc.to === '/checklists');
       if (!usesChecklists || bypasses.length === 0) return [];
       return [
         {
@@ -153,7 +156,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         label: opRoleLabel(ops.primary),
         kind: 'primary',
         mission: roleMission(ops.primary),
-        shortcuts: shortcutsFor(ops.primary, tier),
+        shortcuts: shortcutsFor(ops.primary, tier, grants),
         // The primary lane never repeats a line already shown above in the
         // member's own open-items list — one item, one place.
         urgent: [],
@@ -166,7 +169,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         label: opRoleLabel(role),
         kind: 'backup',
         mission: roleMission(role),
-        shortcuts: shortcutsFor(role, tier).slice(0, 4),
+        shortcuts: shortcutsFor(role, tier, grants).slice(0, 4),
         urgent: covering ? laneUrgent(role) : [],
         covering,
         note: covering ? 'Also covering today' : 'Backup — can cover, not assigned',
@@ -527,6 +530,6 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
   }, [
     ctx, ctxLoading, profile, now, today, snapshot, approvals, vitals, todayLog, sprintData,
     nudges, bypasses, orgReports, myReports, ackRoster, myAcks, assignments, pto, todayEntry,
-    missingDays, user, ops,
+    missingDays, user, ops, grants,
   ]);
 }

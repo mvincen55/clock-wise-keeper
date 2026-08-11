@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Navigate } from 'react-router-dom';
+import { useOrgContext } from '@/hooks/useOrgContext';
 import { useWorkZones, useCreateZone, useUpdateZone, useDeleteZone, WorkZone } from '@/hooks/useWorkZones';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -89,6 +91,7 @@ function ZoneForm({ zone, onSave, onCancel }: {
 }
 
 export default function WorkZones() {
+  const { data: ctx, isLoading: ctxLoading } = useOrgContext();
   const { data: zones, isLoading } = useWorkZones();
   const createZone = useCreateZone();
   const updateZone = useUpdateZone();
@@ -96,6 +99,11 @@ export default function WorkZones() {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editingZone, setEditingZone] = useState<WorkZone | null>(null);
+  // Zone configuration is office infrastructure — manager territory, matching
+  // the Settings card that links here. Members are routed home. (After every
+  // hook call, so the hook order never varies between renders.)
+  const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
+  if (!ctxLoading && ctx && !isManager) return <Navigate to="/" replace />;
 
   const handleCreate = async (data: any) => {
     try {
