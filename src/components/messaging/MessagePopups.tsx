@@ -56,8 +56,12 @@ export default function MessagePopups() {
           qc.invalidateQueries({ queryKey: ['conversations'] });
 
           const conversationId = n.related_table === 'conversations' ? n.related_id : null;
-          const tabVisible = document.visibilityState === 'visible';
-          if (tabVisible && isConversationOnScreen(conversationId)) return;
+          // "Away" means the app window is not the one being worked in —
+          // another app has focus, or the tab is hidden entirely. A tab that
+          // is visible on screen but unfocused still counts as away: the
+          // person asked for a notice on the computer, not just in the tab.
+          const away = !document.hasFocus() || document.visibilityState !== 'visible';
+          if (!away && isConversationOnScreen(conversationId)) return;
 
           const dest = resolveNotificationDestination(n).to;
           toast(n.title, {
@@ -67,7 +71,7 @@ export default function MessagePopups() {
             action: { label: 'Open', onClick: () => navigateRef.current(dest) },
           });
 
-          if (!tabVisible && 'Notification' in window && Notification.permission === 'granted') {
+          if (away && 'Notification' in window && Notification.permission === 'granted') {
             // tag: one bubble per conversation — a burst of messages updates
             // in place instead of stacking.
             const desktop = new Notification(n.title, {
