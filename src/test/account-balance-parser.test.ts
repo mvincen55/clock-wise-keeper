@@ -2,7 +2,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   detectHeaderColumns,
-  groupWordsIntoLines,
   inferPatientName,
   mergeCaptureRows,
   parseLedgerWords,
@@ -67,17 +66,26 @@ function screenshot(rows: RowSpec[]): OcrWord[] {
 
 describe('detectHeaderColumns', () => {
   it('locates header columns from word geometry', () => {
-    const lines = groupWordsIntoLines(headerWords());
-    const header = detectHeaderColumns(lines);
+    const header = detectHeaderColumns(headerWords());
     expect(header).not.toBeNull();
     expect(header!.columns.map(col => col.key)).toEqual([
       'date', 'tooth', 'description', 'patient', 'charge', 'payment', 'balance',
     ]);
   });
 
+  it('splits column bands at the whitespace gaps between header words', () => {
+    const header = detectHeaderColumns(headerWords())!;
+    const tooth = header.columns.find(c => c.key === 'tooth')!;
+    const desc = header.columns.find(c => c.key === 'description')!;
+    // TEETH ends at x=155, DESCRIPTION starts at x=170 — the boundary sits in
+    // that gap, NOT at the midpoint of the header word centers.
+    expect(tooth.xEnd).toBeGreaterThan(155);
+    expect(desc.xStart).toBeLessThanOrEqual(170);
+    expect(desc.xStart).toBe(tooth.xEnd);
+  });
+
   it('returns null without a trustworthy header', () => {
-    const lines = groupWordsIntoLines([word('Random', 10, 10), word('Text', 100, 10)]);
-    expect(detectHeaderColumns(lines)).toBeNull();
+    expect(detectHeaderColumns([word('Random', 10, 10), word('Text', 100, 10)])).toBeNull();
   });
 });
 
@@ -124,6 +132,33 @@ describe('parseLedgerWords', () => {
     const { rows } = parseLedgerWords(words, 'cap-1');
     expect(rows).toHaveLength(1);
     expect(rows[0].rawDescription).toBe('PT RESCHEDULED DUE TO OFFICE');
+  });
+
+  it('an OCR-degraded date (O for 0) still anchors its transaction row', () => {
+    const words = screenshot([
+      { date: '02/12/2026', desc: ['Periodic', 'oral', 'evaluation'], charge: '65.00', balance: '65.00' },
+      { date: 'O5/2O/2026', desc: ['Prophylaxis-adult'], charge: '129.00', balance: '194.00' },
+    ]);
+    const { rows } = parseLedgerWords(words, 'cap-1');
+    expect(rows).toHaveLength(2);
+    expect(rows[1].dateISO).toBe('2026-05-20');
+    expect(rows[1].chargeCents).toBe(12900);
+  });
+
+  it('an unexplainable mismatch flags ONLY that row — later rows stay calm', () => {
+    const words = screenshot([
+      { date: '02/12/2026', desc: ['Periodic', 'oral', 'evaluation'], charge: '100.00', balance: '100.00' },
+      // Charge and balance disagree and neither is a digit-plausible misread
+      // of what the math wants — no repair, targeted flags instead.
+      { date: '03/01/2026', desc: ['Prophylaxis-adult'], charge: '55.00', balance: '199.00' },
+      { date: '04/01/2026', desc: ['Bitewing', 'Four', 'Image'], charge: '55.00', balance: '254.00' },
+    ]);
+    const { rows } = parseLedgerWords(words, 'cap-1');
+    expect(rows).toHaveLength(3);
+    expect(rows[1].lowConfidenceFields.sort()).toEqual(['balance', 'charge']);
+    // The rows around it are proven by their own local math and stay clean.
+    expect(rows[0].lowConfidenceFields).toEqual([]);
+    expect(rows[2].lowConfidenceFields).toEqual([]);
   });
 });
 

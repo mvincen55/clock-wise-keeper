@@ -85,11 +85,20 @@ export function parseSignedInput(input: string): Cents | null {
   return parsed ? parsed.cents : null;
 }
 
-/** "MM/DD/YYYY" (Dentrix) or "MM/DD/YY" → ISO yyyy-mm-dd, else null. */
+/**
+ * "MM/DD/YYYY" (Dentrix) or "MM/DD/YY" → ISO yyyy-mm-dd, else null.
+ *
+ * Tolerant of ledger-cell OCR noise: row markers ("*", "·") and stray
+ * punctuation around the date are ignored, and common digit-glyph confusions
+ * inside a date-shaped token (O→0, l/I→1) are repaired. Only the date shape
+ * itself is trusted — text without a valid month/day never parses.
+ */
 export function parseLedgerDate(raw: string): string | null {
   if (!raw) return null;
-  const m = raw.trim().match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
+  const deNoised = raw.replace(/\s+/g, '').replace(/[Oo]/g, '0').replace(/[lI]/g, '1');
+  const m = deNoised.match(/(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})(?!\d)/);
   if (!m) return null;
+  if (m[3].length === 3) return null; // "203" is a truncated year, not a date
   const month = parseInt(m[1], 10);
   const day = parseInt(m[2], 10);
   let year = parseInt(m[3], 10);

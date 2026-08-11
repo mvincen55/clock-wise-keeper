@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, Check, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, CircleAlert, Plus, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,17 +10,19 @@ import { formatCents, parseSignedInput } from '@/lib/account-balance/money';
 import type { RowPatch } from '@/lib/account-balance/session';
 import {
   CLASSIFICATION_LABELS,
+  type BalanceDerivedCorrection,
   type LedgerClassification,
-  type LedgerMoneyField,
   type LedgerRow,
+  type LedgerVerifyField,
   type ReconciliationResult,
 } from '@/lib/account-balance/types';
 
 /**
  * Stage 2 — VERIFY WHAT WAS READ. A clean editable review of the extracted
- * ledger: every cell can be corrected, garbage rows deleted, missed rows
- * added, and rows reordered when OCR clearly misplaced one. Low-confidence
- * reads say "Please verify" out loud; nothing is fixed silently.
+ * ledger. Rows the running-balance math has proven look calm; only the cells
+ * the software genuinely could not establish are highlighted. Balance-derived
+ * corrections say out loud what OCR read and what the ledger math indicates —
+ * nothing is fixed silently, and nothing proven demands busywork.
  *
  * All edits dispatch into the in-memory session reducer — no persistence.
  */
@@ -28,6 +30,8 @@ import {
 interface LedgerVerifyTableProps {
   rows: LedgerRow[];
   reconciliation: ReconciliationResult;
+  /** Rows whose PATIENT cell reads as an OCR artifact of the dominant name. */
+  patientOutlierRowIds?: string[];
   onUpdateRow: (rowId: string, patch: RowPatch) => void;
   onMarkVerified: (rowId: string) => void;
   onDeleteRow: (rowId: string) => void;
@@ -36,6 +40,25 @@ interface LedgerVerifyTableProps {
 }
 
 const CLASSIFICATIONS = Object.keys(CLASSIFICATION_LABELS) as LedgerClassification[];
+
+const FIELD_LABELS: Record<LedgerVerifyField, string> = {
+  date: 'date',
+  charge: 'charge',
+  payment: 'payment',
+  balance: 'balance',
+  patient: 'patient',
+};
+
+/** "Read as … — ledger math says …" note under a corrected money cell. */
+function CorrectionNote({ correction }: { correction: BalanceDerivedCorrection }) {
+  return (
+    <div className="mt-1 max-w-[12rem] text-[11px] leading-tight text-sky-700 dark:text-sky-400">
+      {correction.ocrText === ''
+        ? `Cell was unreadable — ledger math says ${formatCents(correction.correctedCents)}`
+        : `Read as “${correction.ocrText}” — ledger math says ${formatCents(correction.correctedCents)}`}
+    </div>
+  );
+}
 
 /** Money cell — free typing, committed (and parsed) on blur. */
 function MoneyCell({
@@ -110,6 +133,7 @@ function TextCell({
 export default function LedgerVerifyTable({
   rows,
   reconciliation,
+  patientOutlierRowIds,
   onUpdateRow,
   onMarkVerified,
   onDeleteRow,
@@ -117,12 +141,36 @@ export default function LedgerVerifyTable({
   onMoveRow,
 }: LedgerVerifyTableProps) {
   const resultByRow = new Map(reconciliation.rowResults.map(r => [r.rowId, r]));
+  const outlierSet = new Set(patientOutlierRowIds ?? []);
 
-  const verifyBadge = (row: LedgerRow, field: LedgerMoneyField) =>
-    row.lowConfidenceFields.includes(field) && !row.staffVerified;
+  const verifyBadge = (row: LedgerRow, field: LedgerVerifyField) =>
+    !row.staffVerified &&
+    (row.lowConfidenceFields.includes(field) ||
+      (field === 'patient' && outlierSet.has(row.id)));
+
+  const correctionFor = (row: LedgerRow, field: BalanceDerivedCorrection['field']) =>
+    row.corrections?.find(c => c.field === field);
+
+  const jumpToFirstMismatch = () => {
+    if (!reconciliation.firstMismatchRowId) return;
+    document
+      .getElementById(`ledger-${reconciliation.firstMismatchRowId}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
 
   return (
     <div className="space-y-2">
+      {reconciliation.firstMismatchRowId !== null && (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm">
+          <span className="flex items-center gap-1.5">
+            <CircleAlert className="h-4 w-4 shrink-0 text-destructive" />
+            The running balance stops matching partway down this ledger.
+          </span>
+          <Button variant="outline" size="sm" className="h-7 shrink-0 text-xs" onClick={jumpToFirstMismatch}>
+            Go to first mismatch
+          </Button>
+        </div>
+      )}
       <div className="overflow-x-auto rounded-md border">
         <table className="w-full min-w-[880px] text-sm">
           <thead>
@@ -142,13 +190,25 @@ export default function LedgerVerifyTable({
           <tbody>
             {rows.map((row, index) => {
               const result = resultByRow.get(row.id);
+              // Tint only the CULPRIT rows (their own delta disagrees with the
+              // displayed balances) — not every row after an early mistake.
+              const culprit = result ? !result.deltaMatches : false;
               const mismatch = result ? !result.matches : false;
               const isFirstMismatch = reconciliation.firstMismatchRowId === row.id;
-              const needsVerify = row.lowConfidenceFields.length > 0 && !row.staffVerified;
+              const flaggedFields: LedgerVerifyField[] = [
+                ...row.lowConfidenceFields,
+                ...(outlierSet.has(row.id) && !row.lowConfidenceFields.includes('patient')
+                  ? (['patient'] as const)
+                  : []),
+              ];
+              const needsVerify = flaggedFields.length > 0 && !row.staffVerified;
+              const provenByMath =
+                !needsVerify && !culprit && !mismatch && row.balanceCents !== null;
               return (
                 <tr
                   key={row.id}
-                  className={`border-b align-top ${mismatch ? 'bg-destructive/5' : ''}`}
+                  id={`ledger-${row.id}`}
+                  className={`border-b align-top ${culprit ? 'bg-destructive/5' : ''}`}
                 >
                   <td className="px-2 py-1.5">
                     <Input
@@ -178,10 +238,15 @@ export default function LedgerVerifyTable({
                   <td className="px-2 py-1.5">
                     <TextCell
                       value={row.patientName}
-                      className="w-32"
+                      className={`w-32 ${verifyBadge(row, 'patient') ? 'border-destructive' : ''}`}
                       ariaLabel={`Row ${index + 1} patient`}
                       onCommit={patientName => onUpdateRow(row.id, { patientName })}
                     />
+                    {verifyBadge(row, 'patient') && (
+                      <div className="mt-1 max-w-[9rem] text-[11px] leading-tight text-destructive">
+                        Doesn't match the rest of the ledger — check this cell.
+                      </div>
+                    )}
                   </td>
                   <td className="px-2 py-1.5 text-right">
                     <MoneyCell
@@ -190,6 +255,9 @@ export default function LedgerVerifyTable({
                       ariaLabel={`Row ${index + 1} charge`}
                       onCommit={chargeCents => onUpdateRow(row.id, { chargeCents })}
                     />
+                    {correctionFor(row, 'charge') && (
+                      <CorrectionNote correction={correctionFor(row, 'charge')!} />
+                    )}
                   </td>
                   <td className="px-2 py-1.5 text-right">
                     <MoneyCell
@@ -198,6 +266,9 @@ export default function LedgerVerifyTable({
                       ariaLabel={`Row ${index + 1} payment`}
                       onCommit={paymentCents => onUpdateRow(row.id, { paymentCents })}
                     />
+                    {correctionFor(row, 'payment') && (
+                      <CorrectionNote correction={correctionFor(row, 'payment')!} />
+                    )}
                   </td>
                   <td className="px-2 py-1.5 text-right">
                     <MoneyCell
@@ -206,11 +277,14 @@ export default function LedgerVerifyTable({
                       ariaLabel={`Row ${index + 1} running balance`}
                       onCommit={balanceCents => onUpdateRow(row.id, { balanceCents })}
                     />
-                    {mismatch && (
+                    {correctionFor(row, 'balance') && (
+                      <CorrectionNote correction={correctionFor(row, 'balance')!} />
+                    )}
+                    {culprit && (
                       <div className="mt-1 text-[11px] font-medium text-destructive">
                         {isFirstMismatch
                           ? 'The running balance stops matching at this transaction.'
-                          : `Math expects ${formatCents(result!.expectedBalanceCents)}`}
+                          : `This row's math doesn't add up — expected ${formatCents(result!.expectedBalanceCents)}.`}
                       </div>
                     )}
                   </td>
@@ -240,6 +314,9 @@ export default function LedgerVerifyTable({
                     {needsVerify ? (
                       <div className="space-y-1">
                         <Badge variant="destructive" className="text-[10px]">Please verify</Badge>
+                        <div className="text-[11px] leading-tight text-muted-foreground">
+                          Check: {flaggedFields.map(f => FIELD_LABELS[f]).join(', ')}
+                        </div>
                         <Button
                           variant="outline"
                           size="sm"
@@ -252,6 +329,13 @@ export default function LedgerVerifyTable({
                       </div>
                     ) : row.staffVerified ? (
                       <Badge variant="secondary" className="text-[10px]">Verified</Badge>
+                    ) : provenByMath ? (
+                      <Badge
+                        variant="outline"
+                        className="border-emerald-600/50 text-[10px] text-emerald-700 dark:text-emerald-400"
+                      >
+                        Matches ledger math
+                      </Badge>
                     ) : (
                       <Badge variant="outline" className="text-[10px]">Read OK</Badge>
                     )}

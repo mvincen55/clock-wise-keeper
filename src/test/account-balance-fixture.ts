@@ -26,6 +26,8 @@ export function makeRow(partial: Partial<LedgerRow> & { id: string }): LedgerRow
     paymentCents: partial.paymentCents ?? null,
     balanceCents: partial.balanceCents ?? null,
     ocrConfidence: partial.ocrConfidence ?? 0.95,
+    patientNameConfidence: partial.patientNameConfidence ?? 0.95,
+    corrections: partial.corrections,
     lowConfidenceFields: partial.lowConfidenceFields ?? [],
     classification: 'UNKNOWN',
     classificationConfidence: 0,

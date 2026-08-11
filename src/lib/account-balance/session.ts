@@ -8,7 +8,13 @@
  */
 import { classifyTransaction } from './classify';
 import { mergeCaptureRows, nextRowId } from './parser';
-import type { AnswerMap, LedgerMoneyField, LedgerRow, LedgerClassification } from './types';
+import type {
+  AnswerMap,
+  BalanceDerivedCorrection,
+  LedgerVerifyField,
+  LedgerRow,
+  LedgerClassification,
+} from './types';
 
 export type WorkflowStage = 'capture' | 'verify' | 'review' | 'explanation';
 
@@ -60,8 +66,16 @@ export type LedgerSessionAction =
   | { type: 'clearAll' };
 
 /** Fields a staff edit verifies (clears the "Please verify" flag for). */
-const PATCH_TO_FIELD: Array<[keyof RowPatch, LedgerMoneyField]> = [
+const PATCH_TO_FIELD: Array<[keyof RowPatch, LedgerVerifyField]> = [
   ['dateISO', 'date'],
+  ['chargeCents', 'charge'],
+  ['paymentCents', 'payment'],
+  ['balanceCents', 'balance'],
+  ['patientName', 'patient'],
+];
+
+/** Money patches that supersede a balance-derived correction on that cell. */
+const PATCH_TO_CORRECTION: Array<[keyof RowPatch, BalanceDerivedCorrection['field']]> = [
   ['chargeCents', 'charge'],
   ['paymentCents', 'payment'],
   ['balanceCents', 'balance'],
@@ -94,6 +108,15 @@ export function ledgerSessionReducer(
           next.lowConfidenceFields = row.lowConfidenceFields.filter(
             f => !verified.includes(f)
           );
+          // A staff-typed money value supersedes the balance-derived
+          // correction note for that cell.
+          if (next.corrections) {
+            const superseded = PATCH_TO_CORRECTION
+              .filter(([key]) => key in action.patch)
+              .map(([, field]) => field);
+            const remaining = next.corrections.filter(c => !superseded.includes(c.field));
+            next.corrections = remaining.length > 0 ? remaining : undefined;
+          }
           // Re-run the deterministic classifier when the facts changed and
           // the staff did not set the classification themselves.
           const factsChanged =

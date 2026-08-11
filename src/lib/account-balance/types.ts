@@ -38,7 +38,27 @@ export const CLASSIFICATION_LABELS: Record<LedgerClassification, string> = {
   UNKNOWN: 'Unknown',
 };
 
-export type LedgerMoneyField = 'date' | 'charge' | 'payment' | 'balance';
+/** Fields the Verify UI can flag for targeted human review. */
+export type LedgerVerifyField = 'date' | 'charge' | 'payment' | 'balance' | 'patient';
+
+/** @deprecated Original name for {@link LedgerVerifyField}; kept for compatibility. */
+export type LedgerMoneyField = LedgerVerifyField;
+
+/**
+ * A money cell whose value was corrected or filled from the ledger's own
+ * running-balance math (delta = displayed balance − previous balance).
+ * The original OCR reading is preserved so staff can see exactly what
+ * happened — in session memory only, like every other row field.
+ */
+export interface BalanceDerivedCorrection {
+  field: 'charge' | 'payment' | 'balance';
+  /** What OCR read ('' when the cell was blank/unreadable). */
+  ocrText: string;
+  /** What that reading parsed to (null when unparseable/blank). */
+  ocrCents: Cents | null;
+  /** The value the running balances mathematically require. */
+  correctedCents: Cents;
+}
 
 /** One reconstructed ledger transaction. In-memory only. */
 export interface LedgerRow {
@@ -62,8 +82,15 @@ export interface LedgerRow {
   balanceCents: Cents | null;
   /** 0–1 mean OCR confidence for the source line. */
   ocrConfidence: number;
-  /** Fields OCR was not sure about — the UI shows "Please verify". */
-  lowConfidenceFields: LedgerMoneyField[];
+  /** 0–1 mean OCR confidence of the PATIENT cell (absent = no cell read). */
+  patientNameConfidence?: number;
+  /** Money cells repaired/filled from the running-balance checksum. */
+  corrections?: BalanceDerivedCorrection[];
+  /**
+   * Fields needing targeted human review — only what neither OCR confidence
+   * nor the running-balance math could settle. The UI shows "Please verify".
+   */
+  lowConfidenceFields: LedgerVerifyField[];
   classification: LedgerClassification;
   /** 0–1 — how confidently the deterministic rules classified this row. */
   classificationConfidence: number;
@@ -90,6 +117,13 @@ export interface RowReconciliation {
   expectedBalanceCents: Cents;
   /** False when a displayed balance disagrees with the math. */
   matches: boolean;
+  /**
+   * False only when THIS row's charge+payment disagrees with how the
+   * displayed balances actually moved around it. Unlike `matches` (which
+   * cascades once the running total diverges), this pinpoints culprit rows,
+   * so the UI can highlight the actual problem instead of everything after it.
+   */
+  deltaMatches: boolean;
 }
 
 export interface ReconciliationResult {

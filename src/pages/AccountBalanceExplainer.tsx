@@ -207,6 +207,8 @@ export default function AccountBalanceExplainer() {
     </div>
   );
 
+  const patientOutliers = inference.outlierRowIds;
+
   const verifyStage = (
     <div className="space-y-4">
       {patientNameConflict && (
@@ -216,6 +218,22 @@ export default function AccountBalanceExplainer() {
             Make sure these screenshots belong to one account ({inference.distinctNames.join(' · ')}).
             Fix the Patient column below or set the correct name — printing stays blocked until this
             is resolved.
+          </AlertDescription>
+        </Alert>
+      )}
+      {!patientNameConflict && patientOutliers.length > 0 && (
+        <Alert>
+          <FileSearch className="h-4 w-4" />
+          <AlertTitle>
+            {patientOutliers.length === 1
+              ? 'One patient cell looks garbled'
+              : `${patientOutliers.length} patient cells look garbled`}
+          </AlertTitle>
+          <AlertDescription>
+            The ledger consistently reads as {inference.name || 'one patient'} — the highlighted
+            cell{patientOutliers.length === 1 ? '' : 's'} below just didn't scan cleanly. Fix or
+            confirm {patientOutliers.length === 1 ? 'it' : 'them'}; this is not treated as a second
+            patient account.
           </AlertDescription>
         </Alert>
       )}
@@ -238,6 +256,7 @@ export default function AccountBalanceExplainer() {
       <LedgerVerifyTable
         rows={state.rows}
         reconciliation={reconciliation}
+        patientOutlierRowIds={patientOutliers}
         onUpdateRow={(rowId, patch) => dispatch({ type: 'updateRow', rowId, patch })}
         onMarkVerified={rowId => dispatch({ type: 'markVerified', rowId })}
         onDeleteRow={rowId => dispatch({ type: 'deleteRow', rowId })}

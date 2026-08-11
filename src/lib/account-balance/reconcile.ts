@@ -49,16 +49,29 @@ export function reconcileLedger(rows: LedgerRow[], toleranceCents = 0): Reconcil
     first.balanceCents !== null ? first.balanceCents - rowDeltaCents(first) : 0;
 
   let running = openingBalanceCents;
+  // Localized check: compare each displayed balance against the PREVIOUS
+  // displayed balance plus the deltas since it. Unlike the global walk, an
+  // early bad row does not drag every later row into mismatch here.
+  let prevDisplayed: Cents | null = null;
+  let deltaSincePrevDisplayed = 0;
   for (const row of rows) {
     running += rowDeltaCents(row);
+    deltaSincePrevDisplayed += rowDeltaCents(row);
     const displayed = row.balanceCents;
     let matches = true;
+    let deltaMatches = true;
     if (displayed !== null) {
       matches = Math.abs(displayed - running) <= toleranceCents;
+      if (prevDisplayed !== null) {
+        deltaMatches =
+          Math.abs(displayed - prevDisplayed - deltaSincePrevDisplayed) <= toleranceCents;
+      }
+      prevDisplayed = displayed;
+      deltaSincePrevDisplayed = 0;
       displayedEnding = displayed;
       if (!matches && firstMismatchRowId === null) firstMismatchRowId = row.id;
     }
-    rowResults.push({ rowId: row.id, expectedBalanceCents: running, matches });
+    rowResults.push({ rowId: row.id, expectedBalanceCents: running, matches, deltaMatches });
   }
 
   const differenceCents = displayedEnding === null ? 0 : displayedEnding - running;
