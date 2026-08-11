@@ -26,13 +26,18 @@ export type Tone = 'urgent' | 'attention' | 'steady' | 'calm';
 /** Permission/authority tier — what you are allowed to see and do. */
 export type PermissionTier = 'owner' | 'manager' | 'member';
 
-/** A link into an existing surface. `minTier` hides links the tier cannot open. */
+/**
+ * A link into an existing surface. `minTier` hides links the tier cannot
+ * open; `permission` names a per-employee grant that unlocks the link for a
+ * member anyway (mirroring the RLS that actually enforces it).
+ */
 export type Shortcut = {
   id: string;
   label: string;
   to: string;
   detail?: string;
   minTier?: PermissionTier;
+  permission?: string;
 };
 
 /**

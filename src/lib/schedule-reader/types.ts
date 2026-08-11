@@ -248,7 +248,9 @@ export type OperationalRole =
   | 'hygienist'
   | 'dental_assistant'
   | 'front_desk'
+  | 'treatment_coordinator'
   | 'office_manager'
+  | 'assistant_office_manager'
   | 'sterilization'
   | 'floater'
   | 'other';
@@ -258,7 +260,9 @@ export const OPERATIONAL_ROLES: readonly OperationalRole[] = [
   'hygienist',
   'dental_assistant',
   'front_desk',
+  'treatment_coordinator',
   'office_manager',
+  'assistant_office_manager',
   'sterilization',
   'floater',
   'other',

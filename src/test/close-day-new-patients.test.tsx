@@ -38,6 +38,9 @@ vi.mock('@/hooks/useDepositLog', async importOriginal => {
 vi.mock('@/hooks/useTeamGoals', () => ({
   useCreateSprint: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
+vi.mock('@/hooks/useEmployeePermissions', () => ({
+  useMyPermissionGrants: () => new Set<string>(),
+}));
 
 const vitals = (over: Partial<VitalsForm> = {}): VitalsForm => ({
   production: '',

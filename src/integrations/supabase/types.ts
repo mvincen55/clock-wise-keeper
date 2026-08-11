@@ -2068,6 +2068,48 @@ export type Database = {
           },
         ]
       }
+      employee_permissions: {
+        Row: {
+          created_at: string
+          employee_id: string
+          granted_by: string | null
+          id: string
+          org_id: string
+          permission: string
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          granted_by?: string | null
+          id?: string
+          org_id: string
+          permission: string
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          granted_by?: string | null
+          id?: string
+          org_id?: string
+          permission?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_permissions_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_permissions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_tags: {
         Row: {
           created_at: string
@@ -5173,6 +5215,35 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "org_moment_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_permission_delegation: {
+        Row: {
+          managers_can_manage: boolean
+          org_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          managers_can_manage?: boolean
+          org_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          managers_can_manage?: boolean
+          org_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_permission_delegation_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: true
             referencedRelation: "orgs"

@@ -116,6 +116,37 @@ export function rolePulseItems(
     }
   }
 
+  if (role === 'treatment_coordinator') {
+    if (visibility.newPatients) {
+      const pace = newPatientsSeenPace(input);
+      if (pace) {
+        items.push({
+          id: 'np-seen-pace',
+          label: 'New patients seen this month',
+          value: String(pace.actual),
+          detail: `Goal ${pace.target} · ${
+            pace.status === 'on_pace'
+              ? 'on pace'
+              : `${Math.abs(pace.diff)} ${pace.status === 'ahead' ? 'ahead of' : 'behind'} pace`
+          } — completed first visits only.`,
+          href: '/goals',
+          tone: pace.status === 'behind' ? 'attention' : 'steady',
+        });
+      }
+    }
+    const missed = thisMonth.disruptions;
+    if (missed > 0) {
+      items.push({
+        id: 'disruptions',
+        label: 'Missed appointments this month',
+        value: String(missed),
+        detail: 'Rebooking broken treatment is the lever.',
+        href: '/broken-appointments',
+        tone: 'attention',
+      });
+    }
+  }
+
   if (role === 'hygienist') {
     const hygieneMissed = thisMonth.hygieneCancellations + thisMonth.hygieneNoShows;
     items.push({
