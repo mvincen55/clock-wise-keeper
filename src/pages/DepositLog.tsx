@@ -10,6 +10,7 @@
  * comes from the saved record.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -44,7 +45,6 @@ import {
   type StaffingAssessment,
 } from '@/hooks/useDepositLog';
 import { useOrgBranding, useOrgDepositSettings } from '@/hooks/useOrgBranding';
-import DepositSettingsCard from '@/components/DepositSettingsCard';
 import DailyVitalsCard, { parseCountAnswer, type VitalsForm } from '@/components/DailyVitalsCard';
 import PrivacyViewCapture from '@/components/close-day/PrivacyViewCapture';
 import StaffingRealityCard, {
@@ -53,7 +53,6 @@ import StaffingRealityCard, {
 } from '@/components/close-day/StaffingRealityCard';
 import SealDayCard from '@/components/close-day/SealDayCard';
 import CloseDayCoachCard from '@/components/close-day/CloseDayCoachCard';
-import ScheduleIntelligenceSetupCard from '@/components/close-day/ScheduleIntelligenceSetupCard';
 import { useProviderDayMetrics } from '@/hooks/useScheduleIntelligence';
 import { useOrgContext } from '@/hooks/useOrgContext';
 
@@ -487,11 +486,16 @@ export default function DepositLog() {
         </div>
       )}
 
+      {/* Close the Day configuration (schedule intelligence, printed wording)
+          lives in Settings → Workflows with every other office setting. */}
       {isManager && (
-        <div className="space-y-4">
-          <ScheduleIntelligenceSetupCard />
-          <DepositSettingsCard />
-        </div>
+        <p className="text-xs text-muted-foreground">
+          Looking for schedule-capture setup or the printed deposit wording?{' '}
+          <Link to="/settings/workflows" className="text-primary underline-offset-2 hover:underline">
+            Close the Day settings moved to Settings
+          </Link>
+          .
+        </p>
       )}
 
       {/* Print-only: the two paper copies, fed from the SAVED record so

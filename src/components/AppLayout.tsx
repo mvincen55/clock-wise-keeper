@@ -59,7 +59,7 @@ const DESTINATIONS: Destination[] = [
   },
   {
     to: '/management', icon: Gauge, label: 'Management', managerOnly: true,
-    match: ['/approvals', '/reports', '/work-zones'],
+    match: ['/approvals', '/reports'],
   },
 ];
 

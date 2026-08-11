@@ -1,21 +1,15 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useOfficeClosures, useGenerateClosures, useAddClosure, useDeleteClosure } from '@/hooks/useOfficeClosures';
-import { usePayrollSettings, useUpsertPayrollSettings } from '@/hooks/usePayrollSettings';
-import { useAuth } from '@/hooks/useAuth';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Loader2, Shield, Timer, CalendarDays, Plus, Trash2, DollarSign, RefreshCw, MapPin } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { formatDate } from '@/lib/time-utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  BellRing, FileSignature, MapPin, ScrollText, type LucideIcon,
+} from 'lucide-react';
 import PrivacyTermsCard from '@/components/onboarding/PrivacyTermsCard';
 import OrgBrandingCard from '@/components/OrgBrandingCard';
 import EscalationPoliciesCard from '@/components/accountability/EscalationPoliciesCard';
+import AcknowledgmentEscalationSettingsCard from '@/components/knowledge/AcknowledgmentEscalationSettingsCard';
 import MessagingSettingsCard from '@/components/settings/MessagingSettingsCard';
 import { PracticeSettingsCard } from '@/components/settings/PracticeSettingsCard';
 import { FofPolicySettingsCard } from '@/components/settings/FofPolicySettingsCard';
@@ -24,275 +18,177 @@ import ProcedureMetaCard from '@/components/settings/ProcedureMetaCard';
 import { BrokenApptSettingsCard } from '@/components/settings/BrokenApptSettingsCard';
 import { StaffInitialsCard } from '@/components/settings/StaffInitialsCard';
 import MySignatureCard from '@/components/letterhead/MySignatureCard';
+import PayrollSettingsCard from '@/components/settings/PayrollSettingsCard';
+import OfficeClosuresCard from '@/components/settings/OfficeClosuresCard';
+import SecurityPrivacyCard from '@/components/settings/SecurityPrivacyCard';
+import PtoPolicySettingsCard from '@/components/settings/PtoPolicySettingsCard';
+import ScheduleIntelligenceSetupCard from '@/components/close-day/ScheduleIntelligenceSetupCard';
+import DepositSettingsCard from '@/components/DepositSettingsCard';
 
-const WEEKDAY_OPTIONS = [
-  { value: '0', label: 'Sunday' },
-  { value: '1', label: 'Monday' },
-  { value: '2', label: 'Tuesday' },
-  { value: '3', label: 'Wednesday' },
-  { value: '4', label: 'Thursday' },
-  { value: '5', label: 'Friday' },
-  { value: '6', label: 'Saturday' },
-];
+/**
+ * Settings — the one organized home for configuration.
+ *
+ * Four sections, deep-linkable as /settings/:tab:
+ *   office    — who the practice is and how it runs (identity, goals,
+ *               payroll, closures, work zones)
+ *   people    — people policies (accountability chains, acknowledgment
+ *               escalation, PTO policy, messaging)
+ *   workflows — how clinical/office workflows behave (providers, procedures,
+ *               FOF, broken appointments, Close the Day, documents & letters)
+ *   me        — personal preferences (signature, staff code, reminders,
+ *               auto-logout, privacy record)
+ *
+ * Regular members see only "My settings" — the office tabs are manager
+ * territory, matching the RLS that backs every card. Settings that live on
+ * their own pages (work zones, forms & consents, correspondence, reminders)
+ * are linked from here so this page stays the single index.
+ */
+
+const MANAGER_TABS = ['office', 'people', 'workflows', 'me'] as const;
+type SettingsTab = (typeof MANAGER_TABS)[number];
+
+/** A settings surface that lives on its own page, indexed from here. */
+function SettingsLinkCard({
+  icon: Icon,
+  title,
+  description,
+  to,
+  cta,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  to: string;
+  cta: string;
+}) {
+  return (
+    <Card className="card-elevated">
+      <CardHeader className="border-b">
+        <CardTitle className="flex items-center gap-2">
+          <Icon className="h-5 w-5" />
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">{description}</p>
+        <Button variant="outline" asChild>
+          <Link to={to}>{cta}</Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function Settings() {
-  const { toast } = useToast();
-  const { sessionTimeoutMinutes, setSessionTimeoutMinutes } = useAuth();
   const { data: ctx } = useOrgContext();
-  // Payroll settings and closure management write org-level data — manager only.
-  // Employees see the closure calendar read-only.
+  const navigate = useNavigate();
+  const { tab } = useParams();
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
-  // Closures
-  const currentYear = new Date().getFullYear();
-  const [closureYear, setClosureYear] = useState(currentYear);
-  const { data: closures, isLoading: closuresLoading } = useOfficeClosures(closureYear);
-  const generateClosures = useGenerateClosures();
-  const addClosure = useAddClosure();
-  const deleteClosure = useDeleteClosure();
-  const [addClosureOpen, setAddClosureOpen] = useState(false);
-  const [newClosure, setNewClosure] = useState({ date: '', name: '' });
-
-  // Payroll settings
-  const { data: payrollSettings } = usePayrollSettings();
-  const upsertPayroll = useUpsertPayrollSettings();
-
-  const handleGenerate = async () => {
-    try {
-      await generateClosures.mutateAsync(closureYear);
-      toast({ title: `Generated closures for ${closureYear}` });
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    }
-  };
-
-  const handleAddClosure = async () => {
-    if (!newClosure.date || !newClosure.name) return;
-    try {
-      await addClosure.mutateAsync({ closure_date: newClosure.date, name: newClosure.name });
-      setAddClosureOpen(false);
-      setNewClosure({ date: '', name: '' });
-      toast({ title: 'Closure added' });
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    }
-  };
+  // Members only have personal settings; managers land on the office tab.
+  // An out-of-range or unauthorized tab quietly falls back — no error state.
+  const fallback: SettingsTab = isManager ? 'office' : 'me';
+  const requested = (MANAGER_TABS as readonly string[]).includes(tab ?? '') ? (tab as SettingsTab) : fallback;
+  const active: SettingsTab = isManager ? requested : 'me';
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">Configure branding, payroll, closures, and security</p>
+        <p className="text-muted-foreground">
+          {isManager
+            ? 'Every office and personal setting, in one place.'
+            : 'Your personal preferences.'}
+        </p>
       </div>
 
-      {/* The office's identity: name, logo, accent color (blueprint 3 and 9). */}
-      <OrgBrandingCard isManager={isManager} />
+      <Tabs value={active} onValueChange={v => navigate(`/settings/${v}`)}>
+        {isManager && (
+          <TabsList className="flex w-full flex-wrap h-auto justify-start">
+            <TabsTrigger value="office">Office</TabsTrigger>
+            <TabsTrigger value="people">People &amp; policies</TabsTrigger>
+            <TabsTrigger value="workflows">Workflows</TabsTrigger>
+            <TabsTrigger value="me">My settings</TabsTrigger>
+          </TabsList>
+        )}
 
-      <PrivacyTermsCard />
-
-      {/* Personal: initials stamped into Broken Appointments outputs */}
-      <StaffInitialsCard />
-
-      {/* Personal: my stored signature for office letters (self-service) */}
-      <MySignatureCard />
-
-      {isManager && <EscalationPoliciesCard />}
-
-      {/* Practice-wide settings (manager only) */}
-      {isManager && <PracticeSettingsCard />}
-
-      {/* Treating provider registry (manager only) — one source for FOF + Forms */}
-      {isManager && <ProviderRegistryCard />}
-      {isManager && <ProcedureMetaCard />}
-
-      {/* FOF policy wording (manager only) */}
-      {isManager && <FofPolicySettingsCard />}
-
-      {/* Broken-appointment policy parameters (manager only) */}
-      {isManager && <BrokenApptSettingsCard />}
-
-      {/* Payroll Settings (manager only) */}
-      {isManager && <MessagingSettingsCard />}
-
-      {isManager && (
-      <Card className="card-elevated">
-        <CardHeader className="border-b">
-          <CardTitle className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5" />
-            Payroll Settings
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 space-y-4">
-          <div className="flex flex-wrap gap-4 items-end">
-            <div className="space-y-1">
-              <Label className="text-xs">Pay Period</Label>
-              <Select
-                value={payrollSettings?.pay_period_type || 'weekly'}
-                onValueChange={v => upsertPayroll.mutate({ pay_period_type: v })}
-              >
-                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="weekly">Weekly</SelectItem>
-                  <SelectItem value="biweekly">Bi-Weekly</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Week Starts</Label>
-              <Select
-                value={String(payrollSettings?.week_start_day ?? 1)}
-                onValueChange={v => upsertPayroll.mutate({ week_start_day: parseInt(v) })}
-              >
-                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {WEEKDAY_OPTIONS.map(o => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Missing Shift Buffer (min)</Label>
-              <Input
-                type="number"
-                min={0}
-                value={payrollSettings?.missing_shift_buffer_minutes ?? 60}
-                onChange={e => upsertPayroll.mutate({ missing_shift_buffer_minutes: parseInt(e.target.value) || 60 })}
-                className="w-24 text-sm"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Timezone</Label>
-              <p className="text-sm font-medium px-3 py-2 rounded-md border bg-muted">Eastern (ET)</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      )}
-
-      {/* Work Zones (manager only) — lives here instead of the sidebar */}
-      {isManager && (
-      <Card className="card-elevated">
-        <CardHeader className="border-b">
-          <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            Work Zones
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">
-            Geofenced clock-in zones and location tracking configuration.
-          </p>
-          <Button variant="outline" asChild>
-            <Link to="/work-zones">Manage Work Zones</Link>
-          </Button>
-        </CardContent>
-      </Card>
-      )}
-
-      {/* Office Closures */}
-      <Card className="card-elevated">
-        <CardHeader className="border-b">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <CalendarDays className="h-5 w-5" />
-              Office Closures
-            </CardTitle>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setClosureYear(y => y - 1)}>←</Button>
-              <span className="font-semibold text-sm">{closureYear}</span>
-              <Button variant="outline" size="sm" onClick={() => setClosureYear(y => y + 1)}>→</Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-4 space-y-4">
-          {isManager && (
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={handleGenerate} disabled={generateClosures.isPending} variant="secondary">
-              {generateClosures.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-              Generate for {closureYear}
-            </Button>
-            <Dialog open={addClosureOpen} onOpenChange={setAddClosureOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Custom
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader><DialogTitle>Add Custom Closure</DialogTitle></DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <Label>Date</Label>
-                    <Input type="date" value={newClosure.date} onChange={e => setNewClosure({ ...newClosure, date: e.target.value })} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Name</Label>
-                    <Input value={newClosure.name} onChange={e => setNewClosure({ ...newClosure, name: e.target.value })} placeholder="Office event, snow day..." />
-                  </div>
-                  <Button onClick={handleAddClosure} disabled={addClosure.isPending} className="w-full">Save</Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-          )}
-
-          {closuresLoading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : !closures?.length ? (
-            <p className="text-center text-muted-foreground py-8">No closures for {closureYear}. Click "Generate" to add standard holidays.</p>
-          ) : (
-            <div className="divide-y rounded-lg border">
-              {closures.map(c => (
-                <div key={c.id} className="flex items-center justify-between px-4 py-2.5">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs px-2 py-0.5 rounded bg-success/20 text-success font-medium">Closed</span>
-                    <div>
-                      <p className="text-sm font-medium">{c.name}</p>
-                      <p className="text-xs text-muted-foreground">{formatDate(c.closure_date)}</p>
-                    </div>
-                  </div>
-                  {isManager && (
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteClosure.mutate(c.id)}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Security & Privacy */}
-      <Card className="card-elevated">
-        <CardHeader className="border-b">
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            Security &amp; Privacy
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 space-y-4">
-          <div className="flex items-center gap-4">
-            <Timer className="h-5 w-5 text-muted-foreground shrink-0" />
-            <div className="flex-1">
-              <Label className="text-sm font-medium">Auto-Logout Timeout</Label>
-              <p className="text-xs text-muted-foreground">Minutes of inactivity before automatic sign out (0 = disabled)</p>
-            </div>
-            <Input
-              type="number"
-              min={0}
-              max={480}
-              value={sessionTimeoutMinutes}
-              onChange={e => setSessionTimeoutMinutes(parseInt(e.target.value) || 0)}
-              className="w-24 text-sm"
+        {/* ------------------------------ office ------------------------------ */}
+        {isManager && (
+          <TabsContent value="office" className="mt-4 space-y-6">
+            {/* The office's identity: name, logo, accent color. */}
+            <OrgBrandingCard isManager={isManager} />
+            {/* Performance goals, PMS, confirmation window. */}
+            <PracticeSettingsCard />
+            <OfficeClosuresCard isManager={isManager} />
+            <PayrollSettingsCard />
+            <SettingsLinkCard
+              icon={MapPin}
+              title="Work Zones"
+              description="Geofenced clock-in zones and location tracking configuration."
+              to="/work-zones"
+              cta="Manage Work Zones"
             />
-          </div>
-        </CardContent>
-      </Card>
+          </TabsContent>
+        )}
 
+        {/* ------------------------------ people ------------------------------ */}
+        {isManager && (
+          <TabsContent value="people" className="mt-4 space-y-6">
+            {/* Accountability record chains (who reviews whom). */}
+            <EscalationPoliciesCard />
+            {/* Acknowledgment chasing: quiet hours, ladder, snoozes — moved
+                here from the Management page so policies live with policies. */}
+            <AcknowledgmentEscalationSettingsCard />
+            <PtoPolicySettingsCard />
+            <MessagingSettingsCard />
+          </TabsContent>
+        )}
+
+        {/* ---------------------------- workflows ----------------------------- */}
+        {isManager && (
+          <TabsContent value="workflows" className="mt-4 space-y-6">
+            <ProviderRegistryCard />
+            <ProcedureMetaCard />
+            <FofPolicySettingsCard />
+            <BrokenApptSettingsCard />
+            {/* Close the Day configuration — moved from the bottom of the
+                Close the Day page, which now links here. */}
+            <ScheduleIntelligenceSetupCard />
+            <DepositSettingsCard />
+            <SettingsLinkCard
+              icon={FileSignature}
+              title="Forms &amp; Consents"
+              description="Team permissions, signature rules, privacy, and the consent audit trail."
+              to="/consents/settings"
+              cta="Open Forms &amp; Consents settings"
+            />
+            <SettingsLinkCard
+              icon={ScrollText}
+              title="Letterhead &amp; Correspondence"
+              description="Letter defaults, school/work note wording, and library permissions."
+              to="/letters/settings"
+              cta="Open correspondence settings"
+            />
+          </TabsContent>
+        )}
+
+        {/* -------------------------------- me -------------------------------- */}
+        <TabsContent value="me" className="mt-4 space-y-6">
+          {/* Personal: my stored signature for office letters (self-service) */}
+          <MySignatureCard />
+          {/* Personal: initials stamped into Broken Appointments outputs */}
+          <StaffInitialsCard />
+          <SettingsLinkCard
+            icon={BellRing}
+            title="Reminders"
+            description="Your goal due-notice reminders: on/off, delivery hour, and channel."
+            to="/settings/reminders"
+            cta="Open reminder settings"
+          />
+          <SecurityPrivacyCard />
+          <PrivacyTermsCard />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
