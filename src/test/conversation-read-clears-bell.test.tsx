@@ -13,6 +13,20 @@ import { useEffect, type ReactElement } from 'react';
 
 type Row = Record<string, unknown> & { id: string; is_read: boolean };
 
+interface SelectChain {
+  eq: (col: string, val: unknown) => SelectChain;
+  order: (col: string, opts?: unknown) => SelectChain;
+  limit: (n: number) => Promise<{ data: Row[]; error: null }>;
+}
+
+interface UpdateChain {
+  eq: (col: string, val: unknown) => UpdateChain;
+  then: (
+    onOk: (v: { error: null }) => unknown,
+    onErr?: (e: unknown) => unknown,
+  ) => Promise<unknown>;
+}
+
 let notificationRows: Row[] = [];
 const rpcCalls: { fn: string; args: unknown }[] = [];
 const updateCalls: { table: string; values: Record<string, unknown>; filters: Record<string, unknown> }[] = [];
@@ -36,7 +50,7 @@ vi.mock('@/integrations/supabase/client', () => ({
     },
     from: (table: string) => ({
       select: () => {
-        const chain: any = {
+        const chain: SelectChain = {
           eq: () => chain,
           order: () => chain,
           limit: async () => ({ data: table === 'notifications' ? notificationRows : [], error: null }),
@@ -46,22 +60,20 @@ vi.mock('@/integrations/supabase/client', () => ({
       update: (values: Record<string, unknown>) => {
         const call = { table, values, filters: {} as Record<string, unknown> };
         updateCalls.push(call);
-        const chain: any = {
-          eq: (col: string, val: unknown) => {
+        const chain: UpdateChain = {
+          eq: (col, val) => {
             call.filters[col] = val;
             return chain;
           },
           // The fake persists: matching rows take the update, so a refetch
           // after invalidation sees what the server would now return.
-          then: (ok: any, err: any) => {
+          then: (onOk, onErr) => {
             if (table === 'notifications') {
               notificationRows = notificationRows.map(n =>
-                Object.entries(call.filters).every(([k, v]) => (n as Record<string, unknown>)[k] === v)
-                  ? { ...n, ...values }
-                  : n,
+                Object.entries(call.filters).every(([k, v]) => n[k] === v) ? { ...n, ...values } : n,
               );
             }
-            return Promise.resolve({ error: null }).then(ok, err);
+            return Promise.resolve({ error: null }).then(onOk, onErr);
           },
         };
         return chain;
