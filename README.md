@@ -36,6 +36,26 @@ Golden rules that must survive every change:
 3. **Defaults are the product.** A new office should get a sensible, working configuration out of the box.
 4. **Invite-only access.** No public sign-up into an org. Access is gated by an allowlist (see Access model).
 
+## The endgame (read before designing anything)
+
+This app is a stepping stone. What's being built is **the operating system for independent dental offices** — the intelligence and operations layer that sits *beside* the practice-management system (Dentrix, Eaglesoft, Open Dental), never replacing it, never becoming clinical. The strategic frame is explicitly **anti-DSO**: DSOs win through operational consistency, pooled knowledge, and negotiating scale. Purple Envelope exists to give independent offices that same leverage **without** selling the practice — a collective of independents, not a platform extracting from them. We never sell to DSOs. Every design decision should be made with this destination in mind, because the current app's schemas, settings architecture, and org model are the foundation the rest gets built on.
+
+### The layers this grows into
+
+1. **Office brain (now).** The AI *is* that office. Its authoritative world is the office's own rules, policies, and vocabulary — external dental knowledge informs, office rules govern. Prompt architecture is layered: a **global Purple Envelope doctrine** (never invent office rules, surface conflicts instead of picking silently, humans approve, cite the office rule behind every suggestion), then an **office layer** (policies/brand — mostly *pointers into retrievable office knowledge*, not prose stuffed in the prompt, so reasoning stays traceable and tokens stay cheap), then a **per-user layer** (how this team member communicates and learns; updates rarely; visible to that person — no hidden dossiers, consistent with the communicated-expectations principle that governs escalation).
+2. **Module library.** "Connectors" are mostly our own code shipped dark: the full catalog lives in the build, searching it and hitting "connect" flips an org flag and runs that module's setup. Visibility per module is a **list, not a boolean**: seen-by-all (default), selected-orgs, or private-to-one-org. Custom builds are paid; most requests should resolve as *settings* on existing features, then as *recombinations of existing primitives*, and only rarely as new code. Paid builds default into the shared catalog (priority, not ownership); private stays possible and priced higher. True external integrations remain the rare, expensive case.
+3. **The collective pool (the moat).** Offices opt in (at onboarding, in the ToS) to share the **structural** — module usage patterns, settings shapes, contributed templates with branding stripped — never the brand, voice, or content that makes an office *theirs*. Contribution must be **exhaust from work offices already do**, never an extra task; access to network intelligence is reciprocal (contributors see the pool). Insurance intelligence has a stricter provenance rule: **only payer-issued documents** (PTEs, EOBs, denials, payer faxes/portal docs) feed the shared pool, keyed by carrier + group + plan year, date-stamped, aging visibly. Office-typed notes stay private tribal knowledge. **Fee schedules never cross office boundaries — ever.** That line is legal (antitrust), not stylistic.
+4. **Claims-adjacent future.** Long-term: document ingestion → payer-pattern learning → claim-readiness → clearinghouse connectivity. All of it gated behind a future **BAA-enabled tier** that does not exist yet.
+
+### What this means for code written today
+
+- **Today's no-PHI rule stands absolute** — but don't architect as if it's permanent. Patient-enabled capabilities belong behind feature flags in a separable lane; a schema or service choice that would *foreclose* a future BAA tier is a bug against the vision.
+- **Everything org-scoped, everything a setting.** If an office could reasonably want it different, it's configurable — and most settings should surface through onboarding, not a settings page.
+- **Design new features as catalog modules** (flag-gated, setup-on-enable, seed-on-first-visit) even while there's one org. The check-request pattern — message + dismiss-with-status + reason-required + a typed field — is the model: new tools are recombinations of proven primitives.
+- **Schema choices should anticipate the pool.** Anything insurance-shaped gets provenance (source document type + date) and carrier/group/plan-year keying from day one, even when it's private-only.
+- **AI features must show their work** — which office rule, which document, which approval produced a suggestion. Trust is the product; traceability is how trust is enforced in code.
+- **The office's identity is sacred.** Branding, vocabulary, tone, patient-facing names: per-office, never pooled, never overwritten by a "better" default.
+
 ## HIPAA boundary (how the rule is enforced in code)
 
 The FOF (fee form) prints patient-facing documents, and AI features read office knowledge — so the boundary is enforced architecturally:
