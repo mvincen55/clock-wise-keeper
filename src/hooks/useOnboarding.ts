@@ -5,7 +5,10 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import { PRIVACY_TERMS_DOCUMENT } from '@/lib/privacy-terms';
 import { STAFF_CODE_PATTERN, suggestStaffCode } from '@/lib/staff-code';
 
-// Onboarding: the four things a new member does before the app opens.
+// Onboarding: the three things a new member does before the app opens
+// (privacy terms, work style, basics). Setting a first goal is NOT part of the
+// gate — it becomes the member's first task on Home after they land in the app,
+// and goal_done_at simply records when that task got done.
 // Managers only ever see whether each step is done — never the answers.
 
 export type OnboardingProgress = {
@@ -19,6 +22,7 @@ export type OnboardingProgress = {
   completed_at: string | null;
 };
 
+/** 'goal' is the post-onboarding first task on Home, not a gating step. */
 export type OnboardingStep = 'terms' | 'work_style' | 'basics' | 'goal';
 
 const STEP_COLUMN: Record<OnboardingStep, keyof OnboardingProgress> = {
@@ -57,11 +61,10 @@ export function useOnboardingStatus() {
       const ack = ackRes.data ?? null;
       // A version bump invalidates the old signature — sign again, once.
       const termsSigned = !!ack;
+      // goal_done_at deliberately not required — the first goal is a task on
+      // Home after onboarding, never a gate that keeps the app closed.
       const complete =
-        termsSigned &&
-        !!progress?.work_style_done_at &&
-        !!progress?.basics_done_at &&
-        !!progress?.goal_done_at;
+        termsSigned && !!progress?.work_style_done_at && !!progress?.basics_done_at;
 
       return { progress, ack, termsSigned, complete };
     },
@@ -99,9 +102,11 @@ export function useCompleteStep() {
         [STEP_COLUMN[step]]: now,
       } as Record<string, unknown>;
 
+      // Completing the later first-goal task must not shift the original
+      // completion time, so an existing stamp is kept.
       merged.completed_at =
-        merged.terms_done_at && merged.work_style_done_at && merged.basics_done_at && merged.goal_done_at
-          ? now
+        merged.terms_done_at && merged.work_style_done_at && merged.basics_done_at
+          ? (merged.completed_at ?? now)
           : null;
 
       const { error } = existing
@@ -286,7 +291,7 @@ export function useTeamOnboardingStatus() {
       const [progress, acks] = await Promise.all([
         supabase
           .from('member_onboarding')
-          .select('user_id, terms_done_at, work_style_done_at, basics_done_at, goal_done_at, completed_at')
+          .select('user_id, terms_done_at, work_style_done_at, basics_done_at')
           .eq('org_id', ctx!.org_id),
         supabase
           .from('policy_acknowledgments')
@@ -295,17 +300,22 @@ export function useTeamOnboardingStatus() {
           .eq('document', PRIVACY_TERMS_DOCUMENT),
       ]);
       const signed = new Map((acks.data ?? []).map(a => [a.user_id, a.signed_at]));
-      return (progress.data ?? []).map(p => ({
-        user_id: p.user_id,
-        complete: !!p.completed_at,
-        steps: {
+      return (progress.data ?? []).map(p => {
+        const steps = {
           terms: !!signed.get(p.user_id),
           work_style: !!p.work_style_done_at,
           basics: !!p.basics_done_at,
-          goal: !!p.goal_done_at,
-        },
-        signed_at: signed.get(p.user_id) ?? null,
-      }));
+        };
+        return {
+          user_id: p.user_id,
+          // Computed from the steps, not stored completed_at — members who
+          // finished these three before the goal step was cut never get
+          // another chance to write completed_at.
+          complete: steps.terms && steps.work_style && steps.basics,
+          steps,
+          signed_at: signed.get(p.user_id) ?? null,
+        };
+      });
     },
   });
 }

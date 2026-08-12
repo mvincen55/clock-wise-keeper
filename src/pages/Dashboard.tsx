@@ -12,6 +12,7 @@ import SprintCard from '@/components/SprintCard';
 import MyMomentumCard from '@/components/MyMomentumCard';
 import MyAccountabilityCard from '@/components/accountability/MyAccountabilityCard';
 import UserNotesBoard from '@/components/UserNotesBoard';
+import FirstGoalTaskCard from '@/components/goals/FirstGoalTaskCard';
 import OwnerDashboard from '@/components/dashboard/OwnerDashboard';
 import ManagerDashboard from '@/components/dashboard/ManagerDashboard';
 import MemberDashboard from '@/components/dashboard/MemberDashboard';
@@ -83,6 +84,10 @@ export default function Home() {
 
   return (
     <div className="pb-10">
+      {/* First-login task: greets a freshly onboarded member until their
+          first monthly goal exists. Sits above every command center. */}
+      <FirstGoalTaskCard />
+
       {view?.kind === 'owner' && <OwnerDashboard view={view} />}
       {view?.kind === 'manager' && <ManagerDashboard view={view} />}
       {view?.kind === 'member' && <MemberDashboard view={view} />}

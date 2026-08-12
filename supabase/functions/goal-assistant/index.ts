@@ -9,9 +9,9 @@
 //                   Pathfinder conversation).
 //   polish_goal  -> rewrite a raw goal into one clear professional sentence.
 //   chat         -> persistent per-goal conversation with Pathfinder.
-//   role_ideas   -> goal starters for a role, grounded ONLY in the office's
-//                   actual policy material (org config, assistant memories,
-//                   published knowledge) — never invented examples.
+//
+// (Role goal starters are curated client-side in goal-examples.ts — the old
+// role_ideas mode produced weaker suggestions than the presets and was cut.)
 //
 // Tone rule: encouraging, never competitive, never ranked.
 // Privacy rule: a member's work-style profile may quietly shape the plan, but
@@ -149,9 +149,8 @@ Deno.serve(async (req) => {
       title?: string;
       description?: string;
       message?: string;
-      role?: string;
     };
-    const allowed = ["breakdown", "draft_update", "polish_goal", "chat", "role_ideas"];
+    const allowed = ["breakdown", "draft_update", "polish_goal", "chat"];
     const mode = allowed.includes(body.mode ?? "") ? body.mode! : "breakdown";
 
     // ---- polish_goal: no goal row exists yet ----
@@ -190,146 +189,6 @@ Deno.serve(async (req) => {
         time_bound: bounded(sm.time_bound, 60),
       };
       return json({ title, original: rawTitle, target, smart });
-    }
-
-    // ---- role_ideas: goal starters grounded in the office's own policies ----
-    if (mode === "role_ideas") {
-      const ROLE_LABELS: Record<string, string> = {
-        front_desk: "Front desk",
-        assistant: "Dental assistant",
-        hygienist: "Hygienist",
-        provider: "Doctor / provider",
-        billing: "Billing / insurance",
-        manager: "Office manager",
-      };
-      const roleLabel = ROLE_LABELS[bounded(body.role, 20)];
-      if (!roleLabel) return json({ error: "Bad request" }, 400);
-
-      // Everything office-authored is staff free text, so it gets scrubbed.
-      const safe = (v: unknown, n: number) => scrubFreeText(bounded(v, n), n).text;
-
-      // The office's actual policy material, in the app's grounding order
-      // (org config, assistant memories, published knowledge), read under the
-      // caller's JWT so RLS scopes everything to their org.
-      const [practiceRes, baRes, memoriesRes, itemsRes] = await Promise.all([
-        supabase
-          .from("org_practice_settings")
-          .select("confirmation_lead_days")
-          .eq("org_id", membership.org_id)
-          .maybeSingle(),
-        supabase
-          .from("broken_appt_settings")
-          .select("notice_business_hours, fee_amount")
-          .eq("org_id", membership.org_id)
-          .maybeSingle(),
-        supabase
-          .from("assistant_memories")
-          .select("content")
-          .eq("org_id", membership.org_id)
-          .eq("kind", "office")
-          .eq("is_active", true)
-          .eq("status", "active")
-          .order("created_at", { ascending: true })
-          .limit(40),
-        supabase
-          .from("knowledge_items")
-          .select("current_published_version_id")
-          .eq("org_id", membership.org_id)
-          .is("archived_at", null)
-          .not("current_published_version_id", "is", null)
-          .limit(40),
-      ]);
-
-      const confirmationLeadDays = practiceRes.data?.confirmation_lead_days ?? 2;
-      const configLines = [
-        `Org setting — appointment confirmation window: the team confirms appointments ${confirmationLeadDays} day(s) before the visit.`,
-        baRes.data
-          ? `Org setting — broken-appointment policy: at least ${baRes.data.notice_business_hours} business hours' notice to cancel or reschedule; $${Number(baRes.data.fee_amount)} scheduling fee.`
-          : "",
-      ].filter(Boolean);
-
-      const memoryLines = (memoriesRes.data ?? []).map(
-        (m) => `Office memory: ${safe(m.content, 300)}`,
-      );
-
-      const versionIds = (itemsRes.data ?? [])
-        .map((i) => i.current_published_version_id as string | null)
-        .filter((id): id is string => !!id);
-      const policyLines: string[] = [];
-      if (versionIds.length > 0) {
-        const [versionsRes, blocksRes] = await Promise.all([
-          supabase
-            .from("knowledge_versions")
-            .select("id, title, summary")
-            .in("id", versionIds)
-            .eq("status", "published"),
-          supabase
-            .from("knowledge_blocks")
-            .select("version_id, plain_text")
-            .in("version_id", versionIds)
-            .order("sort_order")
-            .limit(400),
-        ]);
-        const textByVersion = new Map<string, string>();
-        for (const b of blocksRes.data ?? []) {
-          const prior = textByVersion.get(b.version_id as string) ?? "";
-          if (prior.length < 500) {
-            textByVersion.set(
-              b.version_id as string,
-              `${prior} ${(b.plain_text as string) ?? ""}`.trim(),
-            );
-          }
-        }
-        for (const v of versionsRes.data ?? []) {
-          const bodyText = safe(textByVersion.get(v.id as string), 500);
-          policyLines.push(
-            `Published policy "${safe(v.title, 120)}": ${safe(v.summary, 200)}${
-              bodyText ? ` — ${bodyText}` : ""
-            }`,
-          );
-        }
-      }
-
-      const material = [...configLines, ...memoryLines, ...policyLines];
-
-      const raw = await callModel(
-        apiKey,
-        [
-          {
-            role: "system",
-            content:
-              "You suggest monthly goal starters for one role in a dental practice's team app. The office's OWN policy material (provided below) is the only source of office-specific facts. " +
-              "Rules: 1) Ground every idea in a specific line of the material and name that source in a short 'basis' (e.g. 'Confirmation window setting', 'Published policy: Recall'). 2) NEVER invent an office-specific number, time window, fee, or rule that is not in the material — that is the whole point of this mode. 3) If the material does not cover this role's work, return at most ONE generally-good-practice idea that asserts no office-specific specifics, with basis exactly 'No office policy on file'. Fewer well-grounded ideas beat padding — zero ideas is an acceptable answer. " +
-              "4) Each idea is one encouraging sentence (max 140 chars) phrased as a personal monthly goal for this role, with a measurable target (max 40 chars) consistent with the material. 5) Also give up to 4 one-tap measurable target chips (max 32 chars each) consistent with the ideas. 6) Calm, professional, never gamified. " +
-              'Reply with ONLY JSON: {"ideas":[{"title":string,"target":string,"basis":string}],"targets":[string]}',
-          },
-          {
-            role: "user",
-            content: `Role: ${roleLabel}\n\nOFFICE POLICY MATERIAL:\n${
-              material.length > 0
-                ? material.join("\n")
-                : "(the office has no recorded policies yet)"
-            }`,
-          },
-        ],
-        700,
-      );
-      if (raw === null) return json({ error: "AI request failed" }, 502);
-      const parsed = parseJsonBlock<{ ideas?: unknown; targets?: unknown }>(raw);
-      if (!parsed) return json({ error: "Pathfinder could not suggest ideas" }, 502);
-      const ideas = (Array.isArray(parsed.ideas) ? parsed.ideas : [])
-        .map((i: Record<string, unknown>) => ({
-          title: bounded(i?.title, 160),
-          target: bounded(i?.target, 60),
-          basis: bounded(i?.basis, 80),
-        }))
-        .filter((i) => i.title !== "")
-        .slice(0, 4);
-      const targets = (Array.isArray(parsed.targets) ? parsed.targets : [])
-        .map((t: unknown) => bounded(t, 40))
-        .filter((t) => t !== "")
-        .slice(0, 4);
-      return json({ ideas, targets });
     }
 
     const goalId = bounded(body.goalId, 60);

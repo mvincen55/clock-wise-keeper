@@ -84,7 +84,7 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
       ? {
           complete: onboardingRow.complete,
           stepsDone: Object.values(onboardingRow.steps).filter(Boolean).length,
-          stepsTotal: 4,
+          stepsTotal: 3,
         }
       : null,
   });

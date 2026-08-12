@@ -23,8 +23,13 @@ this is now the build document. Onboarding starts right after invite acceptance
    reports/print/exports; in-app UI and the AI use first names.
 4. **Onboarding gates the app.** Incomplete → redirected to /onboarding.
    Managers see status only (done/not + who signed terms), never private content.
-5. **First goal as the finale** — the member leaves onboarding having already
-   touched the culture loop.
+5. **First goal moved OUT of onboarding** (2026-08-12, reversing "first goal as
+   the finale"): onboarding is three screens — terms, work-style, basics — and
+   the app opens right after basics. Setting the first monthly goal instead
+   greets the member as their first task at the top of Home
+   (`FirstGoalTaskCard`) and ticks itself off the moment any goal of theirs
+   exists (recorded in `member_onboarding.goal_done_at`; the join-pipeline
+   badge managers see counts only the three gating steps).
 
 ## Prompt 20 — Team onboarding v1 (pending)
 
@@ -41,7 +46,7 @@ this is now the build document. Onboarding starts right after invite acceptance
 >
 > 3) BASICS: preferred first name (used everywhere in-app and by the AI), team assignment (clinical / clerical — feeds announcements), and their EMPLOYEE TAG: a 2–4 character short code shown on reports and printed sheets instead of full names. Default suggestion = first name + last initial ("Megan V" → "MV"); owner/manager can edit anyone's tag. Must be unique across ALL employees current AND archived (never reused — check the full history). In-app UI and the AI keep using first names normally; tags appear on reports, print sheets, and exports.
 >
-> 4) FIRST GOAL (finale): the normal set-a-goal flow with Pathfinder polish, framed as "one thing you want to get better at this month."
+> 4) ~~FIRST GOAL (finale)~~ — SUPERSEDED 2026-08-12 by decision 5: the first goal is no longer an onboarding screen. It's the first task on Home after onboarding completes.
 >
 > Route /onboarding: members with incomplete onboarding are redirected there after login until done (they can always see the privacy terms again from Settings).
 
