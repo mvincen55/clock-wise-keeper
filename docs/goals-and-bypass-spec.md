@@ -79,17 +79,18 @@ and Prompt 8 line 5 · Prompt 5 (SMART) — SUPERSEDED, do not send.
 14. **Goals follow the member across the app** (Prompt 9): current-month team goal
     (title, progress, latest status) shows on Team cards and EmployeeDetail for
     EVERY role; private goals never appear there.
-15. **Role goal starters are policy-grounded, never invented** (2026-08-04): the
-    "Pick your role" ideas call goal-assistant mode `role_ideas`, which grounds
-    every suggestion in the office's actual policy material — org config (e.g.
-    `org_practice_settings.confirmation_lead_days`, broken-appointment notice
-    window), active `assistant_memories`, and published knowledge — and cites
-    its source under each idea ("Based on: …"). The model is forbidden to
-    assert an office-specific number, window, fee, or rule that is not in that
-    material; thin material means fewer ideas, never padding. The hardcoded
-    presets in `goal-examples.ts` are only a fallback when the function fails,
-    clearly labeled as generic examples (their confirmation starter is wired to
-    the configured window so even the fallback never contradicts settings).
+15. **Role goal starters are curated, shown instantly** (2026-08-12, reversing
+    the 2026-08-04 policy-grounded-AI decision): the "Pick your role" ideas are
+    the hand-written presets in `goal-examples.ts` — no AI round-trip, no
+    loading state. The `role_ideas` goal-assistant mode was cut after review:
+    grounding in thin policy material produced a single bland idea that read
+    the office policy back as a "goal" ("I will reach out to all upcoming
+    patients…"), strictly worse than the curated examples it was hiding.
+    Starters are framed as something to get better at (an outcome plus a
+    deadline or count), never a restatement of the job description. The
+    no-contradiction invariant survives where it mattered: the only
+    office-specific number any preset asserts is the confirmation window,
+    worded live from `org_practice_settings.confirmation_lead_days`.
 
 ## Prompt 1 — Goals (sent)
 

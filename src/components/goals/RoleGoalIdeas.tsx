@@ -1,20 +1,19 @@
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Lightbulb, Loader2, Plus } from 'lucide-react';
+import { Lightbulb, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePracticeSettings } from '@/hooks/usePracticeSettings';
-import { useRoleGoalIdeas } from '@/hooks/useGoals';
 import { GENERIC_TARGETS, getRolePresets, type RoleKey } from './goal-examples';
 
 /**
  * Role-based SMART starters plus one-tap measurable targets. Purely a helper:
  * picking an example fills the fields, and everything stays editable.
  *
- * Ideas come from Pathfinder grounded in the office's ACTUAL policy material
- * (org settings, assistant memories, published knowledge) — each one shows the
- * policy it is based on. The shipped example presets appear only when
- * Pathfinder can't answer, clearly labeled as examples.
+ * The starters are the curated presets in goal-examples.ts, shown instantly —
+ * no AI round-trip. The only office-specific number any of them asserts (the
+ * confirmation window) is read from Practice Settings, so the wording never
+ * contradicts how the office actually works.
  */
 export default function RoleGoalIdeas({
   onPickExample,
@@ -33,19 +32,8 @@ export default function RoleGoalIdeas({
   );
   const preset = presets.find(r => r.key === role) ?? null;
 
-  const grounded = useRoleGoalIdeas(role);
-  const usingFallback = !!role && grounded.isError;
-  const ideas: { title: string; target: string; basis?: string }[] =
-    grounded.data?.ideas ?? (usingFallback ? (preset?.ideas ?? []) : []);
-  // Never show the shipped example chips while a policy-grounded answer is
-  // still possible; generic placeholders carry no office-specific claims.
-  const targets = !role
-    ? GENERIC_TARGETS
-    : grounded.isLoading
-      ? []
-      : grounded.data
-        ? (grounded.data.targets.length > 0 ? grounded.data.targets : GENERIC_TARGETS)
-        : (preset?.targets ?? []);
+  const ideas = preset?.ideas ?? [];
+  const targets = preset ? preset.targets : GENERIC_TARGETS;
 
   return (
     <div className="space-y-3 rounded-lg border border-dashed border-primary/30 bg-muted/30 p-3">
@@ -72,21 +60,7 @@ export default function RoleGoalIdeas({
         ))}
       </div>
 
-      {role && grounded.isLoading && (
-        <div className="flex items-center gap-2 py-1 text-[11px] text-muted-foreground">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          Reading your office&apos;s policies…
-        </div>
-      )}
-
-      {role && usingFallback && ideas.length > 0 && (
-        <p className="text-[11px] text-muted-foreground">
-          Couldn&apos;t read your office&apos;s policies right now — these are generic
-          examples, so check them against how your office actually works.
-        </p>
-      )}
-
-      {role && ideas.length > 0 && (
+      {ideas.length > 0 && (
         <div className="space-y-1.5">
           {ideas.map(idea => (
             <Button
@@ -102,11 +76,6 @@ export default function RoleGoalIdeas({
                 <span className="mt-0.5 block text-[11px] text-muted-foreground">
                   Measured by: {idea.target}
                 </span>
-                {idea.basis ? (
-                  <span className="mt-0.5 block text-[11px] text-muted-foreground/80">
-                    Based on: {idea.basis}
-                  </span>
-                ) : null}
               </span>
             </Button>
           ))}

@@ -6,13 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Cake, Check, Loader2, PenLine, Sparkles } from 'lucide-react';
+import { Cake, Check, Loader2, PenLine } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import PrivacyTermsBody from '@/components/onboarding/PrivacyTermsBody';
 import RankQuestion from '@/components/onboarding/RankQuestion';
-import SetGoalCard from '@/components/goals/SetGoalCard';
 import { PRIVACY_TERMS_ACKNOWLEDGMENT } from '@/lib/privacy-terms';
 import {
   FAVORITE_QUESTIONS,
@@ -20,9 +19,7 @@ import {
   WORK_STYLE_QUESTIONS,
 } from '@/lib/work-style-questions';
 
-import { currentMonth, useGoalsMonth } from '@/hooks/useGoals';
 import {
-  useCompleteStep,
   useOnboardingStatus,
   useSaveBasics,
   useSaveWorkStyle,
@@ -30,11 +27,13 @@ import {
 } from '@/hooks/useOnboarding';
 import { useMyStaffCode } from '@/hooks/useStaffCodes';
 
-const STEPS = ['Privacy', 'About you', 'Basics', 'First goal'] as const;
+const STEPS = ['Privacy', 'About you', 'Basics'] as const;
 
 /**
- * The flow a new member completes after accepting their invite. Four screens,
- * in order, and the app stays closed until the last one is done.
+ * The flow a new member completes after accepting their invite. Three screens,
+ * in order, and the app stays closed until the last one is done. Setting a
+ * first goal is deliberately NOT part of this flow — it greets them as their
+ * first task on Home right after they land in the app (FirstGoalTaskCard).
  * (Their operational role isn't asked here — the inviting owner/manager
  * already answered that on the invite.)
  */
@@ -51,8 +50,7 @@ export default function Onboarding() {
     if (!status) return;
     if (!status.termsSigned) setStep(0);
     else if (!status.progress?.work_style_done_at) setStep(1);
-    else if (!status.progress?.basics_done_at) setStep(2);
-    else setStep(3);
+    else setStep(2);
   }, [status]);
 
   if (isReady && status?.complete) return <Navigate to="/" replace />;
@@ -87,10 +85,8 @@ export default function Onboarding() {
           <TermsStep onDone={() => setStep(1)} />
         ) : step === 1 ? (
           <WorkStyleStep onDone={() => setStep(2)} />
-        ) : step === 2 ? (
-          <BasicsStep onDone={() => setStep(3)} />
         ) : (
-          <GoalStep onDone={() => navigate('/', { replace: true })} />
+          <BasicsStep onDone={() => navigate('/', { replace: true })} />
         )}
 
         {user && (
@@ -314,36 +310,5 @@ export function BasicsStep({ onDone }: { onDone: () => void }) {
         </Button>
       </CardContent>
     </Card>
-  );
-}
-
-function GoalStep({ onDone }: { onDone: () => void }) {
-  const month = currentMonth();
-  const { user } = useAuth();
-  const { data } = useGoalsMonth(month);
-  const goal = data?.goals.find(g => g.user_id === user?.id);
-  const completeStep = useCompleteStep();
-
-  // The moment a goal exists, the last box ticks itself.
-  useEffect(() => {
-    if (!goal) return;
-    completeStep.mutate('goal', { onSuccess: onDone });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [goal?.id]);
-
-  return (
-    <div className="space-y-4">
-      <Card className="card-elevated border-primary/30">
-        <CardContent className="flex gap-3 p-4">
-          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-          <p className="text-sm text-muted-foreground">
-            Last one: pick <strong className="text-foreground">one thing you want to get better
-            at this month</strong>. Keep it small and real — you can change it later.
-          </p>
-        </CardContent>
-      </Card>
-
-      <SetGoalCard month={month} />
-    </div>
   );
 }

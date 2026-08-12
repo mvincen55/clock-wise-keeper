@@ -2,9 +2,11 @@
  * Role-based SMART starters. These are coaching prompts, never rules — a member
  * can ignore them entirely and write the goal in their own words.
  *
- * The front-desk confirmation starter is worded from the office's
- * confirmation window (org_practice_settings.confirmation_lead_days) so the
- * suggestion always matches the office's actual policy.
+ * Every starter is framed as something to get better at (an outcome with a
+ * deadline or count), never a restatement of the job description. The only
+ * office-specific number asserted anywhere is the confirmation window, worded
+ * from org_practice_settings.confirmation_lead_days so the suggestion always
+ * matches the office's actual policy.
  */
 export type RoleKey =
   | 'front_desk'
@@ -51,14 +53,14 @@ export function confirmationPhrases(leadDays: number): {
   if (leadDays <= 1) {
     return {
       title:
-        'Confirm every next-day appointment by 4pm each workday this month so the schedule stays full',
+        'Keep the schedule full by getting every next-day appointment confirmed by 4pm, every workday this month',
       target: '100% of next-day appointments confirmed',
       chip: '100% next-day confirmations',
     };
   }
   const word = DAY_WORDS[leadDays] ?? String(leadDays);
   return {
-    title: `Confirm every appointment ${word} days ahead by 4pm each workday this month so the schedule stays full`,
+    title: `Keep the schedule full by getting every appointment confirmed ${word} days ahead, by 4pm every workday this month`,
     target: `100% of appointments confirmed ${word} days out`,
     chip: `100% ${word}-day-out confirmations`,
   };

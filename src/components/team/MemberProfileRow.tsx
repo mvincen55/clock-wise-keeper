@@ -138,10 +138,10 @@ export default function MemberProfileRow({ employee }: { employee: Member }) {
         ) : (
           <Badge variant="outline" className="border-warning/30 text-warning">
             Pending Onboarding{' '}
-            {['terms', 'work_style', 'basics', 'goal'].filter(
+            {['terms', 'work_style', 'basics'].filter(
               k => status.steps[k as keyof typeof status.steps],
             ).length}
-            /4
+            /3
           </Badge>
         )
       ) : (
