@@ -41,7 +41,7 @@ import {
   useMessages,
   useMessageSearch,
   useSendMessage,
-  useMarkConversationRead,
+  useThreadReadMarker,
   useConversationReceipts,
   useEnsureDm,
   useEnsureAiConversation,
@@ -137,7 +137,6 @@ export default function Messages() {
   const { toast } = useToast();
   const send = useSendMessage();
   const aiReply = useOfficeAiReply();
-  const markRead = useMarkConversationRead();
   const ensureDm = useEnsureDm();
   const ensureAi = useEnsureAiConversation();
   const { data: attachments = [] } = useConversationAttachments(activeId);
@@ -228,15 +227,9 @@ export default function Messages() {
     requestDesktopNotificationPermission();
   }, []);
 
-  // Keep last_read_at advancing while the thread is open so unread counts stay
-  // accurate and other people's receipts reflect reality.
-  const newestAt = messages.length ? messages[messages.length - 1].created_at : null;
-  useEffect(() => {
-    if (!activeId || !active) return;
-    const stale = !active.lastReadAt || (newestAt !== null && newestAt > active.lastReadAt);
-    if (active.unreadCount > 0 || stale) markRead.mutate(activeId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeId, active?.unreadCount, active?.lastReadAt, newestAt]);
+  // Keep read state advancing while the thread is open — unread counts, other
+  // people's receipts, and the notification bell all settle together.
+  useThreadReadMarker(active, messages.length ? messages[messages.length - 1].created_at : null);
 
 
   const activeFilters =

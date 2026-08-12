@@ -17,6 +17,14 @@ bottom of every desktop page. The Inbox's requests tab now uses the office's
 configured `requests_label` (default renamed 'Doctor Requests' → 'Requests' —
 requests can go to any teammate, not only the doctor).
 
+Update (2026-08-12): reading a conversation now also retires its bell
+notifications. Marking a thread read used to advance only last_read_at, so the
+per-message rows notify_new_message writes stayed unread in the bell after the
+messages had been seen in the chat. The shared `useThreadReadMarker` hook (the
+one open-thread contract for the Messages page and the dock) marks the
+conversation read whenever the thread, or any bell row pointing at it, is
+unread — and `useMarkConversationRead` settles both stores in one pass.
+
 ## Product decisions (the "why")
 
 1. **One messaging system, three kinds of conversations.** Member DMs/groups,

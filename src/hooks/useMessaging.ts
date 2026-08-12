@@ -1,8 +1,10 @@
+import { useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { useNotifications, type Notification } from '@/hooks/useNotifications';
 
 export type ConversationType = 'dm' | 'group' | 'announcement' | 'ai';
 
@@ -336,19 +338,95 @@ export function useOfficeAiReply() {
   });
 }
 
+/**
+ * True when a bell notification points at this conversation — the rows
+ * notify_new_message writes, one per incoming message.
+ */
+export function isConversationNotification(
+  n: Pick<Notification, 'related_table' | 'related_id'>,
+  conversationId: string | null | undefined,
+): boolean {
+  return !!conversationId && n.related_table === 'conversations' && n.related_id === conversationId;
+}
+
 export function useMarkConversationRead() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (conversationId: string) => {
+      if (!user) throw new Error('Not ready');
       const { error } = await supabase.rpc('mark_conversation_read', { _conv: conversationId });
       if (error) throw error;
+      // Reading the thread also retires its bell notifications. The
+      // notify_new_message trigger writes one per incoming message; without
+      // this, messages already seen in the chat keep the bell badge lit until
+      // each row is clicked by hand.
+      const { error: bellError } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('recipient_user_id', user.id)
+        .eq('related_table', 'conversations')
+        .eq('related_id', conversationId)
+        .eq('is_read', false);
+      if (bellError) throw bellError;
       return conversationId;
     },
-    onSuccess: id => {
+    // Optimistic on the bell: the badge clears the moment the thread is read,
+    // never waiting on the database write.
+    onMutate: async (conversationId: string) => {
+      await qc.cancelQueries({ queryKey: ['notifications', user?.id] });
+      const previous = qc.getQueryData<Notification[]>(['notifications', user?.id]);
+      qc.setQueryData<Notification[]>(['notifications', user?.id], old =>
+        old
+          ? old.map(n =>
+              !n.is_read && isConversationNotification(n, conversationId) ? { ...n, is_read: true } : n,
+            )
+          : old,
+      );
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) qc.setQueryData(['notifications', user?.id], context.previous);
+    },
+    onSettled: (_data, _err, conversationId) => {
       qc.invalidateQueries({ queryKey: ['conversations'] });
-      qc.invalidateQueries({ queryKey: ['conversation-receipts', id] });
+      qc.invalidateQueries({ queryKey: ['conversation-receipts', conversationId] });
+      qc.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
+}
+
+/**
+ * Keeps an on-screen thread's read state honest — the shared contract between
+ * the Messages page and the chat dock.
+ *
+ * Two stores answer "has this person seen these messages?": the participant's
+ * last_read_at (unread counts, other people's receipts) and the bell rows the
+ * notify_new_message trigger writes per message. While the thread is open,
+ * anything unread in either store triggers one mark-read pass that settles
+ * both — so a conversation someone is looking at, or reopens later, never
+ * lingers in the notification bell.
+ */
+export function useThreadReadMarker(
+  conversation: ConversationSummary | null,
+  newestMessageAt: string | null,
+) {
+  const markRead = useMarkConversationRead();
+  const { data: notifications } = useNotifications();
+  const conversationId = conversation?.id ?? null;
+  const unreadBellRows = useMemo(
+    () => (notifications ?? []).some(n => !n.is_read && isConversationNotification(n, conversationId)),
+    [notifications, conversationId],
+  );
+
+  useEffect(() => {
+    if (!conversation || markRead.isPending) return;
+    const stale =
+      !conversation.lastReadAt ||
+      (newestMessageAt !== null && newestMessageAt > conversation.lastReadAt);
+    if (conversation.unreadCount > 0 || stale || unreadBellRows) markRead.mutate(conversation.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, conversation?.unreadCount, conversation?.lastReadAt, newestMessageAt, unreadBellRows]);
 }
 
 

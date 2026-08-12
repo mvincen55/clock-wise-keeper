@@ -22,7 +22,7 @@ import {
   useConversations,
   useMessages,
   useSendMessage,
-  useMarkConversationRead,
+  useThreadReadMarker,
   useEnsureAiConversation,
   useOfficeAiReply,
   conversationTitle,
@@ -64,7 +64,6 @@ function DockThread({
   const [draft, setDraft] = useState('');
   const send = useSendMessage();
   const aiReply = useOfficeAiReply();
-  const markRead = useMarkConversationRead();
   const { data: messages = [] } = useMessages(conversation.id);
 
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -79,13 +78,7 @@ function DockThread({
     return () => markConversationClosed(conversation.id);
   }, [conversation.id]);
 
-  const newestAt = messages.length ? messages[messages.length - 1].created_at : null;
-  useEffect(() => {
-    const stale =
-      !conversation.lastReadAt || (newestAt !== null && newestAt > conversation.lastReadAt);
-    if (conversation.unreadCount > 0 || stale) markRead.mutate(conversation.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversation.id, conversation.unreadCount, conversation.lastReadAt, newestAt]);
+  useThreadReadMarker(conversation, messages.length ? messages[messages.length - 1].created_at : null);
 
   const submit = () => {
     if (!draft.trim()) return;
