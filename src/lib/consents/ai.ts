@@ -1,5 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
-import { heuristicConvert, sanitizeBlocks, sanitizeCategory, guessCategory } from './convert';
+import {
+  cleanupConvertedContent, heuristicConvert, sanitizeBlocks, sanitizeCategory, guessCategory,
+} from './convert';
 import type { ConsentTemplateContent, FormCategory } from './types';
 
 /** Template content as plain text, for AI review modes and version compare. */
@@ -38,7 +40,7 @@ export async function convertUploadedForm(name: string, text: string): Promise<C
     });
     if (error) throw error;
     const raw = (data as { result?: { category?: unknown; blocks?: unknown } })?.result;
-    const content = sanitizeBlocks(raw?.blocks ?? raw);
+    const content = cleanupConvertedContent(sanitizeBlocks(raw?.blocks ?? raw));
     if (content.blocks.length === 0) throw new Error('empty conversion');
     return {
       content,
@@ -50,7 +52,7 @@ export async function convertUploadedForm(name: string, text: string): Promise<C
     // draft from the local converter, and the review screen says which
     // engine produced it.
     return {
-      content: heuristicConvert(name, text),
+      content: cleanupConvertedContent(heuristicConvert(name, text)),
       category: guessCategory(name, text),
       engine: 'basic',
       notice:

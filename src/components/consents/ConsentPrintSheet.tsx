@@ -7,6 +7,7 @@ import {
   packetLineTotal,
   packetQuantity,
   packetTotals,
+  patientRowCovers,
   templateLayout,
   type ConsentBlock,
   type ConsentForm,
@@ -345,8 +346,9 @@ export default function ConsentPrintSheet({
   const layout = templateLayout(content);
   const visible = content.blocks.filter(b => {
     if (!blockVisible(b, form.id, fill)) return false;
-    // The standard patient row owns the name — body copies never print twice.
-    if (layout.patientRow && b.type === 'patient_name') return false;
+    // The standard patient row owns the name and date of birth — body copies
+    // never print twice.
+    if (layout.patientRow && patientRowCovers(b)) return false;
     return true;
   });
   const pages = splitIntoPages(visible);

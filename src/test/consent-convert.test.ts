@@ -5,14 +5,16 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  guessCategory, guessSectionKind, heuristicConvert, inferProcedureCodes,
-  sanitizeBlocks, sanitizeCategory,
+  cleanupConvertedContent, guessCategory, guessSectionKind, heuristicConvert,
+  inferProcedureCodes, sanitizeBlocks, sanitizeCategory, suggestedFormName,
 } from '@/lib/consents/convert';
+import { makeBlock } from '@/lib/consents/types';
 
 const SCANNED_FORM = `
 EXTRACTION CONSENT
 
 Patient Name: ____________________  Date: ________
+DOB: ______________
 
 I understand that my tooth cannot be saved and must be removed.
 
@@ -63,9 +65,76 @@ describe('heuristicConvert', () => {
     expect(roles).toContain('doctor');
   });
 
+  it('maps a DOB line to a Date of Birth field', () => {
+    expect(content.blocks.some(b => b.type === 'date' && b.label === 'Date of Birth')).toBe(true);
+  });
+
+  it('never adds a date field beside a signature — the printed line has its own date column', () => {
+    content.blocks.forEach((b, i) => {
+      if (b.type === 'signature') expect(content.blocks[i + 1]?.type).not.toBe('date');
+    });
+  });
+
   it('always ends usable: a form with no detected signature gets one', () => {
     const bare = heuristicConvert('Notes', 'Just a paragraph of text with nothing else.');
     expect(bare.blocks.some(b => b.type === 'signature')).toBe(true);
+  });
+});
+
+describe('suggestedFormName', () => {
+  it('strips the extension and separator runs', () => {
+    expect(suggestedFormName('Extraction_Consent.pdf')).toBe('Extraction Consent');
+  });
+
+  it('drops the junk print drivers and cloud drives bolt onto names', () => {
+    expect(suggestedFormName('Informed Refusal of X rays - Google Docs.pdf'))
+      .toBe('Informed Refusal of X rays');
+    expect(suggestedFormName('Microsoft Word - Crown Consent.pdf')).toBe('Crown Consent');
+    expect(suggestedFormName('Copy of Sedation Consent (2).docx')).toBe('Sedation Consent');
+    expect(suggestedFormName('Denture Care - Copy.pdf')).toBe('Denture Care');
+  });
+
+  it('keeps hyphenated words but splits fully dash-glued names', () => {
+    expect(suggestedFormName('Pre-Op Instructions.pdf')).toBe('Pre-Op Instructions');
+    expect(suggestedFormName('informed-refusal-of-x-rays.pdf')).toBe('informed refusal of x rays');
+  });
+
+  it('never returns empty, even for junk-only names', () => {
+    expect(suggestedFormName('Copy of (1).pdf')).not.toBe('');
+  });
+});
+
+describe('cleanupConvertedContent', () => {
+  it('drops fields the printed master layout already provides', () => {
+    const cleaned = cleanupConvertedContent({
+      blocks: [
+        makeBlock('title', { label: 'Radiograph Refusal' }),
+        makeBlock('patient_name', { label: 'Patient Name' }),
+        makeBlock('date', { label: 'DOB' }),
+        makeBlock('paragraph', { body: 'I decline the recommended radiographs.' }),
+        makeBlock('signature', { role: 'patient' }),
+        makeBlock('date', { label: 'Date' }),
+      ],
+    });
+    expect(cleaned.blocks.map(b => b.type)).toEqual(['title', 'paragraph', 'signature']);
+  });
+
+  it('keeps meaningful date fields', () => {
+    const cleaned = cleanupConvertedContent({
+      blocks: [
+        makeBlock('date', { label: 'Date of last cleaning' }),
+        makeBlock('signature', { role: 'patient' }),
+        makeBlock('date', { label: 'Date of next visit' }),
+      ],
+    });
+    expect(cleaned.blocks).toHaveLength(3);
+  });
+
+  it('scrubs the heuristic output the same way the AI path is scrubbed', () => {
+    const cleaned = cleanupConvertedContent(heuristicConvert('Extraction Consent', SCANNED_FORM));
+    const types = cleaned.blocks.map(b => b.type);
+    expect(types).not.toContain('patient_name');
+    expect(cleaned.blocks.some(b => b.type === 'date' && b.label === 'Date of Birth')).toBe(false);
   });
 });
 

@@ -2,6 +2,7 @@ import {
   FORM_CATEGORIES,
   SIGNATURE_ROLES,
   makeBlock,
+  patientRowCovers,
   type ConsentBlock,
   type ConsentBlockType,
   type ConsentSectionKind,
@@ -23,6 +24,36 @@ import {
  * Conversions are never auto-published: both paths land on the side-by-side
  * review screen where a manager approves, edits, re-runs, or discards.
  */
+
+// ---------------------------------------------------------------------------
+// Form-name suggestion from the uploaded file's name
+// ---------------------------------------------------------------------------
+
+/**
+ * Derives a clean form name from a file name. Print drivers, scanner apps,
+ * and cloud drives bolt junk onto document names ("Informed Refusal - Google
+ * Docs.pdf", "Microsoft Word - Crown Consent.pdf", "Copy of … (2)") — none
+ * of which belongs in the office's form library or on the printed header.
+ */
+export function suggestedFormName(fileName: string): string {
+  let name = fileName.replace(/\.[a-z0-9]{2,6}$/i, '').replace(/_+/g, ' ').trim();
+  for (let prev = ''; prev !== name;) {
+    prev = name;
+    name = name
+      .replace(/^microsoft (word|excel|powerpoint)\s*[-–—:]\s*/i, '')
+      .replace(/^copy of\s+/i, '')
+      .replace(/\s*[-–—]\s*google\s*(docs|drive|sheets|slides)$/i, '')
+      .replace(/\s*[-–—]\s*copy$/i, '')
+      .replace(/\s*\(\d+\)$/, '')
+      .trim();
+  }
+  // Dashes between spaces are separators; dashes inside words ("Pre-Op")
+  // stay — unless the whole name is dash-glued with no spaces at all.
+  name = name.replace(/\s+[-–—]+\s+/g, ' ');
+  if (!/\s/.test(name)) name = name.replace(/[-–—]+/g, ' ');
+  name = name.replace(/\s{2,}/g, ' ').trim();
+  return name || fileName.replace(/\.[a-z0-9]{2,6}$/i, '').replace(/[-_]+/g, ' ').trim();
+}
 
 // ---------------------------------------------------------------------------
 // Category + section-kind detection
@@ -143,8 +174,9 @@ export function heuristicConvert(name: string, text: string): ConsentTemplateCon
 
     if (/signature/i.test(line) && (BLANK_LINE_RE.test(line) || /signature\s*[:_]?\s*$/i.test(line))) {
       flushAll();
+      // The printed signature line carries its own date column, so a
+      // "Signature ___ Date ___" line is one block — never signature + date.
       blocks.push(makeBlock('signature', { role: signatureRoleFor(line), required: true }));
-      if (/date/i.test(line)) blocks.push(makeBlock('date', { label: 'Date', required: true }));
       continue;
     }
     if (/^date\b/i.test(line) && BLANK_LINE_RE.test(line)) {
@@ -155,6 +187,11 @@ export function heuristicConvert(name: string, text: string): ConsentTemplateCon
     if (/patient('s)? name/i.test(line) && BLANK_LINE_RE.test(line)) {
       flushAll();
       blocks.push(makeBlock('patient_name', { label: 'Patient Name', required: true }));
+      continue;
+    }
+    if (/\b(dob|date of birth|birth ?date)\b/i.test(line) && BLANK_LINE_RE.test(line) && line.length < 60) {
+      flushAll();
+      blocks.push(makeBlock('date', { label: 'Date of Birth' }));
       continue;
     }
     if (/tooth|teeth/i.test(line) && (BLANK_LINE_RE.test(line) || /#/.test(line)) && line.length < 60) {
@@ -215,7 +252,6 @@ export function heuristicConvert(name: string, text: string): ConsentTemplateCon
   if (!blocks.some(b => b.type === 'signature')) {
     blocks.push(makeBlock('section', { label: 'Consent', kind: 'consent_statement' }));
     blocks.push(makeBlock('signature', { role: 'patient', required: true }));
-    blocks.push(makeBlock('date', { label: 'Date', required: true }));
   }
 
   return { blocks };
@@ -289,6 +325,30 @@ export function sanitizeBlocks(raw: unknown): ConsentTemplateContent {
   }
 
   return { blocks };
+}
+
+const BARE_DATE_LABEL_RE = /^(date(\s+signed)?)?\s*:?$/i;
+
+/**
+ * Drops converted blocks the printed master layout already provides, so the
+ * review preview, the builder, and the printout never show a field twice:
+ * the page-one patient row owns Patient Name and Date of Birth, and every
+ * signature line prints with its own date column. Both conversion engines
+ * pass through here before the review screen.
+ */
+export function cleanupConvertedContent(content: ConsentTemplateContent): ConsentTemplateContent {
+  const blocks: ConsentBlock[] = [];
+  for (const block of content.blocks) {
+    if (patientRowCovers(block)) continue;
+    const prev = blocks[blocks.length - 1];
+    if (
+      block.type === 'date' &&
+      prev?.type === 'signature' &&
+      BARE_DATE_LABEL_RE.test((block.label ?? '').trim())
+    ) continue;
+    blocks.push(block);
+  }
+  return { ...content, blocks };
 }
 
 /** Validate a category string from AI/user input to the known set. */

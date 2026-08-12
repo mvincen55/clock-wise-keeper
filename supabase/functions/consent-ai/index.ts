@@ -62,10 +62,14 @@ const BLOCK_SCHEMA = `Each block is one of:
 
 const CONVERT_SYSTEM =
   "You convert a dental office's consent/instruction form (extracted text of a BLANK master form) into structured template blocks. " +
-  "Reproduce the office's wording faithfully — do not rewrite, summarize, or invent clinical content. " +
+  "Reproduce the office's wording faithfully — do not rewrite, summarize, or invent clinical content. Keep the original title wording. " +
   "Recognize headings, paragraphs, bullet lists, initial lines, signature lines (and whose signature), date fields, patient-name fields, " +
   "tooth-number fields, procedure fields, cost/fee fields, yes/no questions, checkboxes, and medication selections. " +
   "Classify section headings with the closest \"kind\". Underscore runs (____) mark fill-in fields — emit the matching field block instead of the underscores. " +
+  "The app prints every template inside a master layout that already provides the office letterhead, the form name in the page header, " +
+  "a patient row (Patient Name and Date of Birth) at the top of page one, and a date column beside every signature line. " +
+  "Do NOT emit blocks for those: skip letterhead/practice-name text, skip patient-name and date-of-birth fill-in fields, " +
+  "and never add a separate date field next to a signature line. " +
   `${BLOCK_SCHEMA}\n` +
   'Reply with ONLY JSON: {"category": "general_consent"|"surgical_consent"|"restorative"|"endodontic"|"periodontal"|"implant"|"orthodontic"|"sedation"|"medication"|"financial"|"preoperative"|"postoperative"|"office_policy"|"other", "blocks": [ ... ]}';
 

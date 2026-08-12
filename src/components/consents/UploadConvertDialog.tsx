@@ -24,7 +24,7 @@ import ConsentPrintSheet from '@/components/consents/ConsentPrintSheet';
 import NoPhiNote from '@/components/NoPhiNote';
 import { extractFormText, type ExtractedDoc } from '@/lib/consents/extract';
 import { convertUploadedForm, type ConversionResult } from '@/lib/consents/ai';
-import { inferProcedureCodes } from '@/lib/consents/convert';
+import { inferProcedureCodes, suggestedFormName } from '@/lib/consents/convert';
 import { useProcedureMeta } from '@/hooks/useProcedureMeta';
 import {
   FORM_CATEGORIES, FORM_CATEGORY_LABELS, type FormCategory,
@@ -117,7 +117,9 @@ export default function UploadConvertDialog({
   const pickFile = (picked: File | null) => {
     setFile(picked);
     if (picked && !name.trim()) {
-      setName(picked.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim());
+      // Suggest a clean name — without the "- Google Docs" / "Copy of" /
+      // "(2)" junk file names pick up on the way here.
+      setName(suggestedFormName(picked.name));
     }
   };
 
@@ -162,7 +164,7 @@ export default function UploadConvertDialog({
       }
       setExtracted(doc);
       setOriginalPages(previews);
-      await runConversion(doc, name.trim() || file.name);
+      await runConversion(doc, name.trim() || suggestedFormName(file.name));
     } catch (err) {
       toast({
         title: 'Could not convert this document',
@@ -299,58 +301,76 @@ export default function UploadConvertDialog({
 
         {step === 'review' && conversion && (
           <>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={conversion.engine === 'ai' ? 'default' : 'secondary'}>
-                {conversion.engine === 'ai' ? 'AI conversion' : 'Basic conversion'}
-              </Badge>
-              <Select value={category} onValueChange={v => setCategory(v as FormCategory)}>
-                <SelectTrigger className="h-8 w-48"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {FORM_CATEGORIES.map(c => (
-                    <SelectItem key={c} value={c}>{FORM_CATEGORY_LABELS[c]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                value={name}
-                onChange={e => setName(e.target.value)}
-                className="h-8 w-64"
-                aria-label="Form name"
-              />
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+                <div className="min-w-64 flex-1 space-y-1">
+                  <Label htmlFor="review-form-name" className="text-xs text-muted-foreground">
+                    Form name
+                  </Label>
+                  <Input
+                    id="review-form-name"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    className="h-8"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Category</Label>
+                  <Select value={category} onValueChange={v => setCategory(v as FormCategory)}>
+                    <SelectTrigger className="h-8 w-44" aria-label="Category"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {FORM_CATEGORIES.map(c => (
+                        <SelectItem key={c} value={c}>{FORM_CATEGORY_LABELS[c]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="review-procedures" className="text-xs text-muted-foreground">
+                    Connected procedures (CDT codes)
+                  </Label>
+                  <Input
+                    id="review-procedures"
+                    value={procedureCodesText}
+                    onChange={e => setProcedureCodesText(e.target.value)}
+                    className="h-8 w-64"
+                    placeholder="e.g. D0210, D0274"
+                  />
+                </div>
+                <Badge
+                  variant={conversion.engine === 'ai' ? 'default' : 'secondary'}
+                  className="mb-1.5"
+                >
+                  {conversion.engine === 'ai' ? 'AI conversion' : 'Basic conversion'}
+                </Badge>
+              </div>
+              {(procedureCodesText || suggestedCodes.length > 0) && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {suggestedCodes
+                    .filter(c => !procedureCodesText.toUpperCase().includes(c))
+                    .map(code => (
+                      <Button
+                        key={code}
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        onClick={() =>
+                          setProcedureCodesText(t => (t.trim() ? `${t.trim().replace(/,\s*$/, '')}, ${code}` : code))
+                        }
+                      >
+                        + {code}?
+                      </Button>
+                    ))}
+                  <p className="text-[11px] text-muted-foreground">
+                    Procedures are inferred from the form's title and text — edit freely. Suggestions with a “?” need your confirmation.
+                  </p>
+                </div>
+              )}
               {conversion.notice && (
-                <p className="flex w-full items-start gap-1.5 text-xs text-warning">
+                <p className="flex items-start gap-1.5 text-xs text-warning">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{conversion.notice}
                 </p>
               )}
-              <div className="flex w-full flex-wrap items-center gap-2">
-                <Input
-                  value={procedureCodesText}
-                  onChange={e => setProcedureCodesText(e.target.value)}
-                  className="h-8 w-72"
-                  placeholder="Connected procedures (CDT codes)"
-                  aria-label="Connected procedures"
-                />
-                {suggestedCodes
-                  .filter(c => !procedureCodesText.toUpperCase().includes(c))
-                  .map(code => (
-                    <Button
-                      key={code}
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs"
-                      onClick={() =>
-                        setProcedureCodesText(t => (t.trim() ? `${t.trim().replace(/,\s*$/, '')}, ${code}` : code))
-                      }
-                    >
-                      + {code}?
-                    </Button>
-                  ))}
-                {(procedureCodesText || suggestedCodes.length > 0) && (
-                  <p className="w-full text-[11px] text-muted-foreground">
-                    Inferred from the form's title and text — edit freely. Suggestions with a “?” need your confirmation.
-                  </p>
-                )}
-              </div>
             </div>
 
             <div className="grid flex-1 min-h-0 gap-4 md:grid-cols-2">

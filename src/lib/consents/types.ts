@@ -200,6 +200,22 @@ export function templateLayout(content: ConsentTemplateContent): TemplateLayout 
   return { ...DEFAULT_LAYOUT, ...(content.layout ?? {}) };
 }
 
+const DOB_LABEL_RE = /^(patient(?:'s)?\s+)?(dob|date\s+of\s+birth|birth\s*date)\s*:?$/i;
+const NAME_LABEL_RE = /^patient(?:'s)?\s+(full\s+)?name\s*:?$/i;
+
+/**
+ * True for body blocks the standard page-one patient row already prints —
+ * the patient's name and date of birth. The print sheet skips them whenever
+ * the patient row is on so those fields never appear twice, and upload
+ * conversion drops them from converted content entirely.
+ */
+export function patientRowCovers(block: Pick<ConsentBlock, 'type' | 'label'>): boolean {
+  if (block.type === 'patient_name') return true;
+  if (block.type !== 'date' && block.type !== 'short_answer') return false;
+  const label = (block.label ?? '').trim();
+  return DOB_LABEL_RE.test(label) || (block.type === 'short_answer' && NAME_LABEL_RE.test(label));
+}
+
 let blockSeq = 0;
 
 /** Ids only need to be unique within a template; keep them short and stable. */
