@@ -370,6 +370,10 @@ async function createAutoPunch(
       employee_id: employeeId,
       seq: nextSeq,
       punch_type: punchType,
+      // punch_kind stays NULL: GPS knows presence, never intent. A zone exit
+      // could be lunch or the end of the day, and we do not guess — so an
+      // auto punch never carries break/shift semantics and never triggers
+      // (or dodges) checklist enforcement.
       punch_time: punchTime,
       source: "auto_location",
       low_confidence: lowConfidence,

@@ -533,7 +533,7 @@ function makeMember(args: MemberScenarioArgs): MemberView {
     goal: buildGoalBrief(args.goals ?? fxGoals, input.today),
     status: {
       label: 'On the clock',
-      detail: '2h 14m recorded today. Clock out from the bar when you finish.',
+      detail: '2h 14m recorded today. End your shift from the bar when you finish.',
       tone: 'steady',
     },
     utilities: [

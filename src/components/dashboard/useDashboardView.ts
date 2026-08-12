@@ -373,20 +373,26 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
       clockState === 'clocked_in'
         ? {
             label: 'On the clock',
-            detail: `${minutesToHHMM(runningMinutes)} recorded today. Clock out from the bar when you finish.`,
+            detail: `${minutesToHHMM(runningMinutes)} recorded today. End your shift from the bar when you finish.`,
             tone: 'steady' as const,
           }
-        : punches.length > 0
+        : clockState === 'on_break'
           ? {
-              label: 'Clocked out',
-              detail: `${minutesToHHMM(runningMinutes)} recorded today.`,
+              label: 'On a break',
+              detail: `${minutesToHHMM(runningMinutes)} recorded today. Clock back in when you're back.`,
               tone: 'calm' as const,
             }
-          : {
-              label: 'Not clocked in',
-              detail: 'Your punches appear here as soon as you clock in.',
-              tone: 'calm' as const,
-            };
+          : punches.length > 0
+            ? {
+                label: 'Clocked out',
+                detail: `${minutesToHHMM(runningMinutes)} recorded today.`,
+                tone: 'calm' as const,
+              }
+            : {
+                label: 'Not clocked in',
+                detail: 'Your punches appear here as soon as you clock in.',
+                tone: 'calm' as const,
+              };
 
     const next =
       openReports.length > 0

@@ -119,6 +119,7 @@ function eventTypeLabel(type: string): string {
     clock_out: 'Clock Out',
     break_start: 'Break Start',
     break_end: 'Break End',
+    shift_end: 'Shift End',
     manual_edit: 'Manual Edit',
     punch_edit: 'Punch Edit',
     punch_added: 'Punch Added',

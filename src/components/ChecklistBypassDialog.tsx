@@ -16,9 +16,10 @@ interface Props {
 }
 
 /**
- * Shown before a clock-out punch is written when daily per-person checklist
- * items are still open. Matter-of-fact, never shaming — and never trapping:
- * "Bypass & clock out" always clocks the person out.
+ * Shown before an END-SHIFT punch is written when daily per-person checklist
+ * items are still open. Never shown for a lunch/break — leaving temporarily
+ * is not leaving work unresolved for the day. Matter-of-fact, never shaming —
+ * and never trapping: "Bypass & end shift" always clocks the person out.
  */
 export default function ChecklistBypassDialog({
   open,
@@ -37,10 +38,12 @@ export default function ChecklistBypassDialog({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {incompleteCount} checklist item{incompleteCount === 1 ? '' : 's'} still open
+            End your shift with {incompleteCount} checklist item{incompleteCount === 1 ? '' : 's'} still open?
           </AlertDialogTitle>
           <AlertDialogDescription>
-            Your manager and {doctorLabel} will be notified that you bypassed your checklist.
+            Ending your shift now will notify your manager and {doctorLabel} that you bypassed
+            your checklist. Just stepping out for lunch or a break? Use Break instead — breaks
+            never touch your checklist.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -58,7 +61,7 @@ export default function ChecklistBypassDialog({
           {openSharedCount > 0 && (
             <p className="text-xs text-muted-foreground">
               For information: {openSharedCount} shared team item{openSharedCount === 1 ? ' is' : 's are'} also
-              still open. Shared items don't affect your clock-out.
+              still open. Shared items never affect your clock-out.
             </p>
           )}
         </div>
@@ -72,7 +75,7 @@ export default function ChecklistBypassDialog({
             disabled={busy}
             className={buttonVariants({ variant: 'destructive' })}
           >
-            Bypass &amp; clock out
+            Bypass &amp; end shift
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

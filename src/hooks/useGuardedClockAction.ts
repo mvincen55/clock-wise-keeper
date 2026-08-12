@@ -6,6 +6,7 @@ import { useClockAction } from '@/hooks/useTimeEntries';
 import { useChecklistGating } from '@/hooks/useChecklistGating';
 import { useMessagingSettings } from '@/hooks/useMessagingSettings';
 import { DEFAULT_MESSAGING_SETTINGS } from '@/lib/messaging-settings';
+import { shouldInterceptForChecklist, type ClockActionKind } from '@/lib/clock-status';
 
 function ordinal(n: number): string {
   const s = ['th', 'st', 'nd', 'rd'];
@@ -14,9 +15,12 @@ function ordinal(n: number): string {
 }
 
 /**
- * Wraps useClockAction: clock-out is intercepted while daily per-person
- * checklist items are open. The punch is never withheld once the member
- * chooses to bypass — nobody gets trapped at the office.
+ * Wraps useClockAction: ending the shift is intercepted while daily
+ * per-person checklist items are open. Breaks are not — the checklist exists
+ * to stop work leaving unresolved for the DAY, not to stand between anyone
+ * and their lunch, so 'break_start' punches straight through with no dialog,
+ * no bypass record, and no notification. The punch is never withheld once
+ * the member chooses to bypass — nobody gets trapped at the office.
  */
 export function useGuardedClockAction() {
   const clockAction = useClockAction();
@@ -28,15 +32,15 @@ export function useGuardedClockAction() {
 
   const doctorLabel = messaging?.doctor_recipient_label ?? DEFAULT_MESSAGING_SETTINGS.doctor_recipient_label;
 
-  const run = (action: 'clock_in' | 'clock_out') => {
-    if (action === 'clock_out' && (gating?.incompleteCount ?? 0) > 0) {
+  const run = (action: ClockActionKind) => {
+    if (shouldInterceptForChecklist(action, gating?.incompleteCount ?? 0)) {
       setDialogOpen(true);
       return;
     }
     clockAction.mutate(action);
   };
 
-  const bypassAndClockOut = async (reason: string) => {
+  const bypassAndEndShift = async (reason: string) => {
     setBypassing(true);
     let escalationLevel = 1;
     try {
@@ -51,16 +55,16 @@ export function useGuardedClockAction() {
 
     setDialogOpen(false);
     setBypassing(false);
-    clockAction.mutate('clock_out');
+    clockAction.mutate('shift_end');
     qc.invalidateQueries({ queryKey: ['checklist-bypasses'] });
 
     if (escalationLevel > 1) {
       toast.warning(
-        `This is your ${ordinal(escalationLevel)} clock-out with an unanswered checklist bypass. Your manager and ${doctorLabel} have been notified again — this needs an answer.`,
+        `This is your ${ordinal(escalationLevel)} shift end with an unanswered checklist bypass. Your manager and ${doctorLabel} have been notified again — this needs an answer.`,
         { duration: 10000 }
       );
     } else {
-      toast.info(`Clocked out. Your manager and ${doctorLabel} were notified about the open checklist items.`);
+      toast.info(`Shift ended. Your manager and ${doctorLabel} were notified about the open checklist items.`);
     }
   };
 
@@ -69,7 +73,7 @@ export function useGuardedClockAction() {
     isPending: clockAction.isPending || bypassing,
     dialogOpen,
     closeDialog: () => setDialogOpen(false),
-    bypassAndClockOut,
+    bypassAndEndShift,
     bypassing,
     incompleteCount: gating?.incompleteCount ?? 0,
     openSharedCount: gating?.openSharedCount ?? 0,

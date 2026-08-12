@@ -89,6 +89,9 @@ export function useSavePunchEdits() {
         }
         await supabase.from('punches').update({
           punch_time: ep.punch_time, punch_type: ep.punch_type, source: ep.source as any,
+          // Flipping in/out invalidates the member's stated intent — clear it
+          // rather than leave e.g. an 'in' punch marked shift_end.
+          ...(orig && orig.punch_type !== ep.punch_type ? { punch_kind: null } : {}),
           is_edited: true, original_punch_time: orig?.punch_time || ep.punch_time,
           edited_at: new Date().toISOString(), edited_by: user.id,
         }).eq('id', ep.id!);

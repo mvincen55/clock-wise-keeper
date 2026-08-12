@@ -6401,6 +6401,7 @@ export type Database = {
           low_confidence: boolean
           org_id: string
           original_punch_time: string | null
+          punch_kind: Database["public"]["Enums"]["punch_kind"] | null
           punch_time: string
           punch_type: Database["public"]["Enums"]["punch_type"]
           raw_text: string | null
@@ -6422,6 +6423,7 @@ export type Database = {
           low_confidence?: boolean
           org_id: string
           original_punch_time?: string | null
+          punch_kind?: Database["public"]["Enums"]["punch_kind"] | null
           punch_time: string
           punch_type: Database["public"]["Enums"]["punch_type"]
           raw_text?: string | null
@@ -6443,6 +6445,7 @@ export type Database = {
           low_confidence?: boolean
           org_id?: string
           original_punch_time?: string | null
+          punch_kind?: Database["public"]["Enums"]["punch_kind"] | null
           punch_time?: string
           punch_type?: Database["public"]["Enums"]["punch_type"]
           raw_text?: string | null
@@ -9310,6 +9313,7 @@ export type Database = {
       pto_request_type: "pto" | "sick" | "unpaid" | "other"
       pto_transaction_source: "system" | "manager" | "request"
       pto_transaction_type: "accrual" | "taken" | "adjustment"
+      punch_kind: "clock_in" | "break_start" | "break_end" | "shift_end"
       punch_type: "in" | "out"
       report_run_status: "pending" | "processing" | "completed" | "failed"
       source_type: "manual" | "import" | "auto_location" | "system_adjustment"
@@ -9466,6 +9470,7 @@ export const Constants = {
       pto_request_type: ["pto", "sick", "unpaid", "other"],
       pto_transaction_source: ["system", "manager", "request"],
       pto_transaction_type: ["accrual", "taken", "adjustment"],
+      punch_kind: ["clock_in", "break_start", "break_end", "shift_end"],
       punch_type: ["in", "out"],
       report_run_status: ["pending", "processing", "completed", "failed"],
       source_type: ["manual", "import", "auto_location", "system_adjustment"],

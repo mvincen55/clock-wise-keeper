@@ -53,7 +53,9 @@ export function closeoutCutoffMinutes(endMinutes: number | null, graceMinutes: n
  * - A note that needs a reply clears only by replying or by an explicit
  *   acknowledgement — opening it is not reading it.
  * - A plain note clears the moment it is opened.
- * - A note that landed after the person clocked out was never theirs today.
+ * - A note that landed after the person left for the day was never theirs
+ *   today. `clockedOutAt` is the final departure (see finalClockOutAt in
+ *   lib/clock-status) — never a lunch/break punch-out.
  */
 export function outstandingCloseoutMessages(
   received: ReceivedMessage[],

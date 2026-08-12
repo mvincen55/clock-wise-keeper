@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useMessagingSettings } from '@/hooks/useMessagingSettings';
 import { getToday, easternWallToUtcIso, hhmmToMinutes } from '@/lib/time-utils';
+import { finalClockOutAt } from '@/lib/clock-status';
 import {
   closeoutCutoffMinutes,
   outstandingCloseoutMessages,
@@ -97,17 +98,16 @@ export function useMessagesCloseout(): CloseoutState & { isLoading: boolean } {
         .gte('created_at', dayStart)
         .lte('created_at', cutoffIso);
 
-      // Already clocked out when it landed? Then it was never theirs to read today.
-      const { data: lastOut } = await supabase
+      // Already gone for the day when it landed? Then it was never theirs to
+      // read today. Only a real departure counts — a lunch/break punch-out is
+      // not leaving, so notes that arrive during a break stay owed.
+      const { data: todayPunches } = await supabase
         .from('punches')
-        .select('punch_time')
+        .select('punch_time, punch_type, punch_kind')
         .eq('employee_id', ctx!.employee_id)
-        .eq('punch_type', 'out')
         .gte('punch_time', dayStart)
-        .order('punch_time', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      const clockedOutAt = lastOut?.punch_time ?? null;
+        .order('punch_time', { ascending: true });
+      const clockedOutAt = finalClockOutAt(todayPunches ?? []);
 
       const myReplies = await supabase
         .from('office_request_replies')

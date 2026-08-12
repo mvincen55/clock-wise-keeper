@@ -10,6 +10,7 @@ import { useAttendanceDayStatus, useRecomputeAttendance } from '@/hooks/useAtten
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { MissingShiftBanner } from '@/components/MissingShiftBanner';
 import { minutesToHHMM, formatTime, formatDate, easternWallMinutes } from '@/lib/time-utils';
+import { punchLabel } from '@/lib/clock-status';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -175,7 +176,7 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
                 const hasGps = p.location_lat != null && p.location_lng != null;
                 return (
                   <div key={p.id} className="flex items-center gap-3 text-sm">
-                    <span className={`text-xs font-semibold uppercase w-8 ${p.punch_type === 'in' ? 'text-success' : 'text-destructive'}`}>{p.punch_type}</span>
+                    <span className={`text-xs font-semibold uppercase w-12 ${p.punch_kind === 'break_start' ? 'text-warning' : p.punch_type === 'in' ? 'text-success' : 'text-destructive'}`}>{punchLabel(p)}</span>
                     <span className={`time-display ${isEdited ? 'text-destructive font-semibold' : ''}`}>{formatTime(p.punch_time)}</span>
                     {isEdited && <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/20 text-destructive font-medium">edited</span>}
                     {p.source !== 'manual' && <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">{p.source === 'auto_location' ? 'GPS' : p.source}</span>}

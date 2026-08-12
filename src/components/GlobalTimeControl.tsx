@@ -9,7 +9,7 @@ import { useGeoTracking, LocationState } from '@/hooks/useGeoTracking';
 import { useWorkZones } from '@/hooks/useWorkZones';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useTick } from '@/hooks/useTick';
-import { getClockStatus, getRunningMinutes } from '@/lib/clock-status';
+import { getClockStatus, getRunningMinutes, clockInActionFor, punchLabel, type ClockStatus } from '@/lib/clock-status';
 import { minutesToHHMM, formatTime } from '@/lib/time-utils';
 import ChecklistBypassDialog from '@/components/ChecklistBypassDialog';
 import BypassReasonDialog from '@/components/BypassReasonDialog';
@@ -18,7 +18,7 @@ import { CorrectionRequestModal } from '@/components/CorrectionRequestModal';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, LogIn, LogOut, MapPin, Pencil, Table2 } from 'lucide-react';
+import { Coffee, Loader2, LogIn, LogOut, MapPin, Pencil, Table2 } from 'lucide-react';
 
 type ClockContextValue = {
   clocksIn: boolean;
@@ -27,7 +27,10 @@ type ClockContextValue = {
   isLoading: boolean;
   isBusy: boolean;
   clockIn: () => void;
-  clockOut: () => void;
+  /** Temporarily off the clock — lunch or a break. Never touches the checklist. */
+  startBreak: () => void;
+  /** Done for the day — the only action that runs checklist enforcement. */
+  endShift: () => void;
   isManager: boolean;
   autoClockEnabled: boolean;
   setAutoClockEnabled: (v: boolean) => void;
@@ -50,6 +53,10 @@ export function useClock() {
  * checklist-bypass guard dialogs, the gentle-chase notes, and GPS auto-clock —
  * which previously only ran while the Dashboard was open. The visible
  * controls (header chip, mobile bar) are thin consumers.
+ *
+ * Leaving the clocked-in state is two different acts — a break and the end of
+ * the shift — and the member says which. Only "End shift" can open the
+ * checklist-bypass dialog.
  */
 export function ClockProvider({ children }: { children: ReactNode }) {
   const clocksIn = useClocksIn();
@@ -81,14 +88,17 @@ export function ClockProvider({ children }: { children: ReactNode }) {
     isLoading,
     isBusy: clockAction.isPending,
     clockIn: () => {
-      clockAction.run('clock_in');
+      // First 'in' of the day is the clock-in; a later one is a return from
+      // break. Derived from the punch sequence, never from the time of day.
+      clockAction.run(clockInActionFor(punches));
       chaseAtClockIn();
       if (!reasonPrompted && (unresolvedBypasses?.length ?? 0) > 0) {
         setReasonPrompted(true);
         setReasonPromptOpen(true);
       }
     },
-    clockOut: () => clockAction.run('clock_out'),
+    startBreak: () => clockAction.run('break_start'),
+    endShift: () => clockAction.run('shift_end'),
     isManager,
     autoClockEnabled,
     setAutoClockEnabled: (v: boolean) => {
@@ -113,7 +123,7 @@ export function ClockProvider({ children }: { children: ReactNode }) {
         openSharedCount={clockAction.openSharedCount}
         busy={clockAction.bypassing}
         onGoBack={clockAction.closeDialog}
-        onBypass={clockAction.bypassAndClockOut}
+        onBypass={clockAction.bypassAndEndShift}
       />
       <BypassReasonDialog
         bypass={unresolvedBypasses?.[0] ?? null}
@@ -147,6 +157,18 @@ const GEO_LABEL: Record<LocationState['status'], string> = {
   unavailable: 'Location unavailable',
 };
 
+/** Chip styling per punch: arrivals green, breaks amber, departures red. */
+function punchChip(p: PunchRow): { label: string; cls: string } {
+  const label = punchLabel(p);
+  const cls =
+    p.punch_kind === 'break_start'
+      ? 'bg-warning/20 text-warning'
+      : p.punch_type === 'in'
+        ? 'bg-success/20 text-success'
+        : 'bg-destructive/20 text-destructive';
+  return { label, cls };
+}
+
 /** Popover body: recent punches, correction access, and the full timesheet. */
 function ClockPopoverBody({ runningMinutes }: { runningMinutes: number }) {
   const clock = useClock();
@@ -161,19 +183,22 @@ function ClockPopoverBody({ runningMinutes }: { runningMinutes: number }) {
       {clock.punches.length > 0 ? (
         <div className="space-y-1.5">
           <p className="text-xs font-medium text-muted-foreground">Today's punches</p>
-          {clock.punches.map(p => (
-            <div key={p.id} className="flex items-center gap-2 rounded-md bg-muted/50 px-2 py-1.5">
-              <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${p.punch_type === 'in' ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'}`}>
-                {p.punch_type}
-              </span>
-              <span className={`time-display text-xs ${p.is_edited ? 'text-destructive font-semibold' : ''}`}>
-                {formatTime(p.punch_time)}
-              </span>
-              {p.location_lat != null && p.location_lng != null && (
-                <MapPin className="ml-auto h-3 w-3 text-primary" />
-              )}
-            </div>
-          ))}
+          {clock.punches.map(p => {
+            const chip = punchChip(p);
+            return (
+              <div key={p.id} className="flex items-center gap-2 rounded-md bg-muted/50 px-2 py-1.5">
+                <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${chip.cls}`}>
+                  {chip.label}
+                </span>
+                <span className={`time-display text-xs ${p.is_edited ? 'text-destructive font-semibold' : ''}`}>
+                  {formatTime(p.punch_time)}
+                </span>
+                {p.location_lat != null && p.location_lng != null && (
+                  <MapPin className="ml-auto h-3 w-3 text-primary" />
+                )}
+              </div>
+            );
+          })}
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">No punches yet today.</p>
@@ -209,6 +234,50 @@ function ClockPopoverBody({ runningMinutes }: { runningMinutes: number }) {
   );
 }
 
+const STATUS_LABEL: Record<ClockStatus, string> = {
+  clocked_in: 'Clocked in',
+  on_break: 'On break',
+  clocked_out: 'Clocked out',
+};
+
+/**
+ * The clock actions for the current status. Clocked in shows BOTH ways out —
+ * a break and the end of the shift — as separate, labeled buttons: the member
+ * states which one they mean, and nothing infers it for them.
+ */
+function ClockActions({ status }: { status: ClockStatus }) {
+  const clock = useClock();
+  const disabled = clock.isBusy || clock.isLoading;
+
+  if (clock.isBusy) {
+    return (
+      <Button size="sm" variant="outline" className="h-8" disabled>
+        <Loader2 className="h-4 w-4 animate-spin" />
+      </Button>
+    );
+  }
+
+  if (status === 'clocked_in') {
+    return (
+      <div className="flex items-center gap-1.5">
+        <Button size="sm" variant="outline" className="h-8" disabled={disabled} onClick={clock.startBreak}>
+          <Coffee className="mr-1.5 h-4 w-4" />Break
+        </Button>
+        <Button size="sm" variant="destructive" className="h-8" disabled={disabled} onClick={clock.endShift}>
+          <LogOut className="mr-1.5 h-4 w-4" />End Shift
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Button size="sm" variant="default" className="h-8" disabled={disabled} onClick={clock.clockIn}>
+      <LogIn className="mr-1.5 h-4 w-4" />
+      {status === 'on_break' ? 'Clock Back In' : 'Clock In'}
+    </Button>
+  );
+}
+
 /**
  * Compact global time control (blueprint §6). `header` renders the desktop
  * utility-header chip; `bar` renders the mobile sticky clock bar that sits
@@ -225,25 +294,9 @@ export default function GlobalTimeControl({ variant }: { variant: 'header' | 'ba
   const clockedIn = status === 'clocked_in';
 
   const statusDot = (
-    <span className={`h-2 w-2 shrink-0 rounded-full ${clockedIn ? 'bg-success animate-pulse' : 'bg-muted-foreground'}`} />
-  );
-
-  const actionButton = (
-    <Button
-      size="sm"
-      variant={clockedIn ? 'destructive' : 'default'}
-      className="h-8"
-      disabled={clock.isBusy || clock.isLoading}
-      onClick={clockedIn ? clock.clockOut : clock.clockIn}
-    >
-      {clock.isBusy ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : clockedIn ? (
-        <><LogOut className="mr-1.5 h-4 w-4" />Clock Out</>
-      ) : (
-        <><LogIn className="mr-1.5 h-4 w-4" />Clock In</>
-      )}
-    </Button>
+    <span className={`h-2 w-2 shrink-0 rounded-full ${
+      clockedIn ? 'bg-success animate-pulse' : status === 'on_break' ? 'bg-warning' : 'bg-muted-foreground'
+    }`} />
   );
 
   if (variant === 'header') {
@@ -264,7 +317,7 @@ export default function GlobalTimeControl({ variant }: { variant: 'header' | 'ba
             <ClockPopoverBody runningMinutes={runningMinutes} />
           </PopoverContent>
         </Popover>
-        {actionButton}
+        <ClockActions status={status} />
       </div>
     );
   }
@@ -278,7 +331,7 @@ export default function GlobalTimeControl({ variant }: { variant: 'header' | 'ba
               {statusDot}
               <div>
                 <p className="text-xs font-medium leading-tight">
-                  {clockedIn ? 'Clocked in' : 'Clocked out'}
+                  {STATUS_LABEL[status]}
                 </p>
                 <p className="time-display text-sm font-bold leading-tight tabular-nums">
                   {clockedIn
@@ -292,7 +345,7 @@ export default function GlobalTimeControl({ variant }: { variant: 'header' | 'ba
             <ClockPopoverBody runningMinutes={runningMinutes} />
           </PopoverContent>
         </Popover>
-        {actionButton}
+        <ClockActions status={status} />
       </div>
     </div>
   );

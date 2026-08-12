@@ -3,12 +3,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { getToday, nowEasternIso } from '@/lib/time-utils';
+import { punchTypeForAction, type ClockActionKind } from '@/lib/clock-status';
 
 export type PunchRow = {
   id: string;
   time_entry_id: string;
   seq: number;
   punch_type: 'in' | 'out';
+  /** Stated intent; null = unknown (legacy rows, imports, GPS auto-punches). */
+  punch_kind: ClockActionKind | null;
   punch_time: string;
   source: 'manual' | 'import' | 'auto_location' | 'system_adjustment';
   raw_text: string | null;
@@ -111,10 +114,13 @@ export function useClockAction() {
   const today = getToday();
 
   return useMutation({
-    mutationFn: async (action: 'clock_in' | 'clock_out') => {
+    // The semantic action comes from the member's explicit choice in the UI —
+    // 'break_start' and 'shift_end' are different states on purpose, so the
+    // record (and everything downstream) knows a lunch from a departure.
+    mutationFn: async (action: ClockActionKind) => {
       if (!user || !ctx) throw new Error('Not authenticated or no org context');
 
-      const punchType: 'in' | 'out' = action === 'clock_in' ? 'in' : 'out';
+      const punchType: 'in' | 'out' = punchTypeForAction(action);
       const now = nowEasternIso();
 
       let { data: entry } = await supabase
@@ -165,6 +171,7 @@ export function useClockAction() {
         employee_id: ctx.employee_id,
         seq: nextSeq,
         punch_type: punchType,
+        punch_kind: action,
         punch_time: now,
         source: 'manual' as const,
       });

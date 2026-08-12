@@ -228,7 +228,7 @@ Dispatcher behavior: `MAX_RETRIES = 5`, message TTL, rate-limit aware, dead-lett
 
 **Hard dependency:** if the `process-email-queue` cron is not running, *no email of any kind sends*. Queue entries just accumulate.
 
-## Checklist data model (exact — the upcoming bypass feature builds on this)
+## Checklist data model (exact — the end-of-shift gate builds on this)
 
 Migration `20260723200000_checklists.sql`:
 
@@ -236,7 +236,18 @@ Migration `20260723200000_checklists.sql`:
 - `checklist_items` — `cadence` ∈ `daily | weekly | monthly | yearly`; `per_person` (true = every teammate gets their own checkbox; false = one shared box, app records who checked it); `is_active`.
 - `checklist_completions` — one row per completion keyed by **`period_key`** (Eastern-local): `YYYY-MM-DD` daily, `week-YYYY-MM-DD` (Monday) weekly, `YYYY-MM` monthly, `YYYY` yearly. `UNIQUE(item_id, period_key, completed_by)`.
 - Policies: members read; admins manage; you can only check/uncheck your own box (admins can clear anyone's for mistake-fixing).
-- Hook: `useChecklists.ts`. There is **no link today between checklist completion and clock-out** — that connection is the planned bypass feature (`docs/goals-and-bypass-spec.md`).
+- Hook: `useChecklists.ts`. The clock connection is the **end-of-shift gate** (`docs/goals-and-bypass-spec.md` Prompt 2): `useGuardedClockAction` intercepts an explicit **End shift** while daily per-person items are open (rule in `src/lib/checklist-gating.ts`, mirrored byte-for-byte in `supabase/functions/_shared/` and re-verified server-side by `checklist-bypass`, which records the bypass and notifies manager + owner).
+
+## Clock semantics — a break is not the end of the day
+
+Migration `20260812190000_punch_semantic_kinds.sql`: `punches.punch_kind` ∈ `clock_in | break_start | break_end | shift_end` (NULL = no stated intent: pre-migration rows, imports, GPS auto-punches, manual corrections). `punch_type` (`in`/`out`) stays the mechanical pairing the hours math runs on; `punch_kind` is what the member **said** they were doing — the UI offers **Break** and **End shift** as separate actions, and the meaning is never inferred from time of day, schedule, hours worked, or punch count.
+
+Rules (`src/lib/clock-status.ts`, tested in `src/test/clock-semantics.test.ts` + `src/test/guarded-clock-action.test.tsx`):
+
+- Only `shift_end` runs checklist enforcement (`shouldInterceptForChecklist`). A break never opens the bypass dialog, never records a `checklist_bypasses` row, never notifies anyone, and leaves checklist progress untouched.
+- The first `in` of a day is `clock_in`; any later `in` is `break_end` — structural, never time-based.
+- `finalClockOutAt` is the only sanctioned meaning of "gone for the day" (a `break_start` never counts; an unknown-kind `out` counts only while it is the day's last punch). `useMessagesCloseout` uses it so notes that land during lunch stay owed.
+- GPS auto-punches carry no kind — presence, never intent — and never trigger (or dodge) enforcement.
 
 ## AI features
 

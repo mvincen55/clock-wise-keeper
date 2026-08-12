@@ -113,18 +113,26 @@ async function buildContext(
 
   const { data: punches } = await db
     .from("punches")
-    .select("punch_type, punch_time, source, is_edited")
+    .select("punch_type, punch_kind, punch_time, source, is_edited")
     .eq("employee_id", employee.id)
     .order("punch_time", { ascending: false })
     .limit(12);
 
   if (punches?.length) {
+    // punch_kind is the member's stated intent \u2014 an "out" for lunch is not the
+    // end of their day. Surface it so the agent never reads a break as leaving.
+    const kindNote: Record<string, string> = {
+      clock_in: "clock in",
+      break_start: "break/lunch start",
+      break_end: "back from break",
+      shift_end: "end of shift",
+    };
     parts.push(
       "Recent punches (shown in Eastern, stored UTC \u2014 newest first):\n" +
         punches
           .map(
             (p) =>
-              `  ${p.punch_type} ${east(p.punch_time as string)} (${p.source ?? "app"}${p.is_edited ? ", edited" : ""})`,
+              `  ${p.punch_type}${p.punch_kind ? ` [${kindNote[p.punch_kind as string] ?? p.punch_kind}]` : ""} ${east(p.punch_time as string)} (${p.source ?? "app"}${p.is_edited ? ", edited" : ""})`,
           )
           .join("\n"),
     );

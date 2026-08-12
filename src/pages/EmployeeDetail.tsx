@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft, Clock, CalendarDays, Plus, ShieldAlert } from 'lucide-react';
 import { formatDate, formatTime, minutesToHHMM } from '@/lib/time-utils';
+import { punchLabel } from '@/lib/clock-status';
 import AccountabilityHistory from '@/components/accountability/AccountabilityHistory';
 import IncidentReportModal from '@/components/IncidentReportModal';
 import IncidentReportDetail from '@/components/IncidentReportDetail';
@@ -272,8 +273,8 @@ export default function EmployeeDetail() {
                   {entry.punches && entry.punches.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
                       {(entry.punches as any[]).sort((a: any, b: any) => a.seq - b.seq).map((p: any) => (
-                        <span key={p.id} className={`text-xs px-1.5 py-0.5 rounded ${p.punch_type === 'in' ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'}`}>
-                          {p.punch_type} {formatTime(p.punch_time)}
+                        <span key={p.id} className={`text-xs px-1.5 py-0.5 rounded ${p.punch_kind === 'break_start' ? 'bg-warning/20 text-warning' : p.punch_type === 'in' ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'}`}>
+                          {punchLabel(p)} {formatTime(p.punch_time)}
                         </span>
                       ))}
                     </div>
