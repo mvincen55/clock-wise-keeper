@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import { getToday, nowEasternIso } from '@/lib/time-utils';
+import { getToday } from '@/lib/time-utils';
 
 export type PunchRow = {
   id: string;
@@ -104,84 +105,37 @@ export function useTimeEntries(
   });
 }
 
+/**
+ * Maps record_punch's structured rejections to person-readable copy.
+ * Alternation rejections are sequence validation, not a withheld punch —
+ * the toast should read like a state notice, not an error dump.
+ */
+export function friendlyPunchError(message: string): string | null {
+  if (message.includes('PUNCH_ALREADY_IN')) return "You're already clocked in.";
+  if (message.includes('PUNCH_NO_OPEN_IN')) return 'No open clock-in to close.';
+  if (message.includes('PUNCH_NO_EMPLOYEE')) return 'No employee record is linked to your account.';
+  if (message.includes('PUNCH_UNLINKED_EMPLOYEE')) return 'No employee record is linked to your account.';
+  return null;
+}
+
 export function useClockAction() {
   const { user } = useAuth();
-  const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
   const today = getToday();
 
   return useMutation({
     mutationFn: async (action: 'clock_in' | 'clock_out') => {
-      if (!user || !ctx) throw new Error('Not authenticated or no org context');
+      if (!user) throw new Error('Not authenticated');
 
-      const punchType: 'in' | 'out' = action === 'clock_in' ? 'in' : 'out';
-      const now = nowEasternIso();
-
-      let { data: entry } = await supabase
-        .from('time_entries')
-        .select('id')
-        .eq('employee_id', ctx.employee_id)
-        .eq('entry_date', today)
-        .maybeSingle();
-
-      if (!entry) {
-        const { data: newEntry, error } = await supabase
-          .from('time_entries')
-          .insert({ user_id: user.id, org_id: ctx.org_id, employee_id: ctx.employee_id, entry_date: today, source: 'manual' as const })
-          .select('id')
-          .single();
-        if (error) {
-          // Concurrent insert — fetch the existing row
-          if ((error as any).code === '23505') {
-            const { data: existing } = await supabase
-              .from('time_entries')
-              .select('id')
-              .eq('employee_id', ctx.employee_id)
-              .eq('entry_date', today)
-              .maybeSingle();
-            if (!existing) throw error;
-            entry = existing;
-          } else {
-            throw error;
-          }
-        } else {
-          entry = newEntry;
-        }
-      }
-
-      const { data: maxPunch } = await supabase
-        .from('punches')
-        .select('seq')
-        .eq('time_entry_id', entry.id)
-        .order('seq', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const nextSeq = (maxPunch?.seq ?? -1) + 1;
-
-      const { error: punchError } = await supabase.from('punches').insert({
-        time_entry_id: entry.id,
-        org_id: ctx.org_id,
-        employee_id: ctx.employee_id,
-        seq: nextSeq,
-        punch_type: punchType,
-        punch_time: now,
-        source: 'manual' as const,
-      });
-      if (punchError) throw punchError;
-
-      // total_minutes is now recomputed by trg_recompute_punch trigger.
-
-      await supabase.from('audit_events').insert({
-        user_id: user.id,
-        org_id: ctx.org_id,
-        employee_id: ctx.employee_id,
-        actor_id: user.id,
-        event_type: action,
-        event_details: { punch_time: now } as any,
-        related_date: today,
-        related_entry_id: entry.id,
-      });
+      // Server-authoritative punching: the RPC resolves the employee from
+      // the JWT, stamps server time, assigns seq, and writes the audit row
+      // in the same transaction. The client sends nothing but the action.
+      const { data, error } = await supabase.rpc('record_punch', { p_action: action });
+      if (error) throw error;
+      return data;
+    },
+    onError: (err: Error) => {
+      toast.error(friendlyPunchError(err.message ?? '') ?? 'Clock action failed. Please try again.');
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['time-entry', today] });

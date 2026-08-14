@@ -83,6 +83,11 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
+    // Punch writes go through _record_punch_internal (service role only):
+    // employees no longer hold INSERT policies on time_entries/punches, and
+    // the shared SQL core owns alternation, seq, and audit semantics.
+    const admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
     // Validate user via getClaims
     const token = authHeader.replace("Bearer ", "");
     const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
@@ -120,13 +125,8 @@ serve(async (req) => {
 
     const employeeId = empData.id;
     const orgId = empData.org_id;
-
-    // Resolve user's timezone for local date calculation
-    const { data: tzData } = await supabase.rpc('get_user_timezone', { p_user_id: userId });
-    const userTz = tzData || 'America/New_York';
-
-    const localDateStr = new Date(now).toLocaleString('en-CA', { timeZone: userTz }).split(',')[0];
-    const today = localDateStr;
+    // entry_date is derived inside _record_punch_internal from the punch
+    // instant and get_user_timezone — no client-side date math here.
 
     // Get active work zones for user (RLS enforces ownership)
     const { data: zones } = await supabase
@@ -197,36 +197,14 @@ serve(async (req) => {
       }
 
       if (zoneStatus === "entered") {
-        const { data: todayEntry } = await supabase
-          .from("time_entries")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("entry_date", today)
-          .maybeSingle();
-
-        if (todayEntry) {
-          const { data: lastPunch } = await supabase
-            .from("punches")
-            .select("punch_type")
-            .eq("time_entry_id", todayEntry.id)
-            .order("seq", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (lastPunch?.punch_type === "in") {
-            actionTaken = "none";
-            reason = "already_clocked_in";
-          } else {
-            const result = await createAutoPunch(supabase, userId, orgId, employeeId, today, "in", now, lowConfidence, lat, lng, todayEntry.id);
-            actionTaken = "auto_clock_in";
-            reason = "entered_zone";
-            punchId = result.punchId;
-          }
-        } else {
-          const result = await createAutoPunch(supabase, userId, orgId, employeeId, today, "in", now, lowConfidence, lat, lng, null);
+        const result = await recordAutoPunch(admin, employeeId, userId, "in", now, lowConfidence, lat, lng);
+        if (result.ok) {
           actionTaken = "auto_clock_in";
           reason = "entered_zone";
           punchId = result.punchId;
+        } else {
+          actionTaken = "none";
+          reason = "already_clocked_in";
         }
       }
     } else if (zoneStatus === "exited") {
@@ -241,34 +219,17 @@ serve(async (req) => {
       }
 
       if (zoneStatus === "exited") {
-        const { data: todayEntry } = await supabase
-          .from("time_entries")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("entry_date", today)
-          .maybeSingle();
-
-        if (todayEntry) {
-          const { data: lastPunch } = await supabase
-            .from("punches")
-            .select("punch_type")
-            .eq("time_entry_id", todayEntry.id)
-            .order("seq", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (lastPunch?.punch_type === "out" || !lastPunch) {
-            actionTaken = "none";
-            reason = "already_clocked_out";
-          } else {
-            const result = await createAutoPunch(supabase, userId, orgId, employeeId, today, "out", now, lowConfidence, lat, lng, todayEntry.id);
-            actionTaken = "auto_clock_out";
-            reason = "exited_zone";
-            punchId = result.punchId;
-          }
+        // The SQL core also owns the midnight continuation rule: an exit
+        // shortly after midnight closes yesterday's still-open entry
+        // instead of skipping (the old path required a same-day entry).
+        const result = await recordAutoPunch(admin, employeeId, userId, "out", now, lowConfidence, lat, lng);
+        if (result.ok) {
+          actionTaken = "auto_clock_out";
+          reason = "exited_zone";
+          punchId = result.punchId;
         } else {
           actionTaken = "none";
-          reason = "no_entry_to_clock_out";
+          reason = "no_open_clock_in";
         }
       }
     }
@@ -304,102 +265,43 @@ serve(async (req) => {
   }
 });
 
-async function createAutoPunch(
-  supabase: any,
-  userId: string,
-  orgId: string,
+type AutoPunchResult =
+  | { ok: true; punchId: string; entryId: string }
+  | { ok: false; rejection: "already_in" | "no_open_in" };
+
+// One punch-writing path for the whole system: _record_punch_internal
+// owns entry upsert, midnight continuation, alternation, seq assignment,
+// and the audit row — this function only relays the zone decision. The
+// validated event timestamp is passed through (bounded to −24h/+1h by
+// validateLocationInput above); an alternation rejection is a normal
+// no-op here, never an error.
+async function recordAutoPunch(
+  admin: any,
   employeeId: string,
-  date: string,
+  actorUserId: string,
   punchType: "in" | "out",
   punchTime: string,
   lowConfidence: boolean,
   lat: number,
-  lng: number,
-  existingEntryId: string | null
-) {
-  let entryId = existingEntryId;
-
-  if (!entryId) {
-    const { data: newEntry, error } = await supabase
-      .from("time_entries")
-      .insert({
-        user_id: userId,
-        org_id: orgId,
-        employee_id: employeeId,
-        entry_date: date,
-        source: "auto_location",
-      })
-      .select("id")
-      .single();
-
-    if (error) {
-      // 23505 = unique_violation on (employee_id, entry_date) — someone else already created it.
-      if ((error as any).code === "23505") {
-        const { data: existing } = await supabase
-          .from("time_entries")
-          .select("id")
-          .eq("employee_id", employeeId)
-          .eq("entry_date", date)
-          .maybeSingle();
-        if (!existing) throw error;
-        entryId = existing.id;
-      } else {
-        throw error;
-      }
-    } else {
-      entryId = newEntry.id;
-    }
-  }
-
-  // Get next seq
-  const { data: maxPunch } = await supabase
-    .from("punches")
-    .select("seq")
-    .eq("time_entry_id", entryId)
-    .order("seq", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const nextSeq = (maxPunch?.seq ?? -1) + 1;
-
-  const { data: punch, error: punchError } = await supabase
-    .from("punches")
-    .insert({
-      time_entry_id: entryId,
-      org_id: orgId,
-      employee_id: employeeId,
-      seq: nextSeq,
-      punch_type: punchType,
-      punch_time: punchTime,
-      source: "auto_location",
-      low_confidence: lowConfidence,
-      location_lat: lat,
-      location_lng: lng,
-    })
-    .select("id")
-    .single();
-
-  if (punchError) throw punchError;
-
-  // NOTE: total_minutes is recomputed automatically by trg_recompute_punch.
-
-  // Audit
-  await supabase.from("audit_events").insert({
-    user_id: userId,
-    org_id: orgId,
-    employee_id: employeeId,
-    actor_id: userId,
-    event_type: `auto_${punchType}`,
-    event_details: {
-      punch_time: punchTime,
-      source: "auto_location",
-      low_confidence: lowConfidence,
-      lat,
-      lng,
-    },
-    related_date: date,
-    related_entry_id: entryId,
+  lng: number
+): Promise<AutoPunchResult> {
+  const { data, error } = await admin.rpc("_record_punch_internal", {
+    p_employee_id: employeeId,
+    p_action: punchType === "in" ? "clock_in" : "clock_out",
+    p_source: "auto_location",
+    p_punch_time: punchTime,
+    p_low_confidence: lowConfidence,
+    p_lat: lat,
+    p_lng: lng,
+    p_actor: actorUserId,
   });
 
-  return { punchId: punch.id, entryId };
+  if (error) {
+    const msg = error.message ?? "";
+    if (msg.includes("PUNCH_ALREADY_IN")) return { ok: false, rejection: "already_in" };
+    if (msg.includes("PUNCH_NO_OPEN_IN")) return { ok: false, rejection: "no_open_in" };
+    throw error;
+  }
+
+  return { ok: true, punchId: data.punch_id, entryId: data.entry_id };
 }

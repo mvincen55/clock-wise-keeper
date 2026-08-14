@@ -5,27 +5,26 @@ import { useAddDayOff } from '@/hooks/useDaysOff';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { supabase } from '@/integrations/supabase/client';
-import { formatDate, easternWallToUtcIso } from '@/lib/time-utils';
+import { formatDate } from '@/lib/time-utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertTriangle, CalendarDays, Clock, MapPin, Plus, Trash2, X } from 'lucide-react';
+import { AlertTriangle, CalendarDays, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 
-type ResolveAction = 'pto' | 'remote' | 'manual' | 'excused' | 'ignore';
-
-type PunchPair = { clockIn: string; clockOut: string };
-const emptyPair = (): PunchPair => ({ clockIn: '', clockOut: '' });
+// Punch backfill was removed from this banner in the server-authoritative
+// punching phase: punch rows can no longer be written from the client, so
+// worked-but-unrecorded days go through the manager (correction requests
+// gain the missing-day path in the transactional-editing phase).
+type ResolveAction = 'pto' | 'excused' | 'ignore';
 
 export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftDay[] }) {
   const [actionDay, setActionDay] = useState<MissingShiftDay | null>(null);
   const [action, setAction] = useState<ResolveAction | null>(null);
   const [reason, setReason] = useState('');
-  const [punchPairs, setPunchPairs] = useState<PunchPair[]>([emptyPair()]);
   const createException = useCreateException();
   const resolveException = useResolveException();
   const addDayOff = useAddDayOff();
@@ -37,18 +36,6 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
   const openDays = missingDays.filter(d => !d.exception || d.exception.status === 'open');
 
   if (!openDays.length) return null;
-
-  const updatePair = (idx: number, field: keyof PunchPair, value: string) => {
-    setPunchPairs(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
-  };
-
-  const addPair = () => {
-    if (punchPairs.length < 4) setPunchPairs(prev => [...prev, emptyPair()]);
-  };
-
-  const removePair = (idx: number) => {
-    if (punchPairs.length > 1) setPunchPairs(prev => prev.filter((_, i) => i !== idx));
-  };
 
   const handleAction = async () => {
     if (!actionDay || !action || !user || !org) return;
@@ -73,79 +60,6 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
             id: exc.id,
             reason_text: reason || 'PTO entry added',
             resolution_action: 'pto_added',
-          });
-        }
-      } else if (action === 'remote' || action === 'manual') {
-        // Validate all pairs have both times
-        const validPairs = punchPairs.filter(p => p.clockIn && p.clockOut);
-        if (validPairs.length === 0) {
-          toast({ title: 'Please enter at least one clock in and out time', variant: 'destructive' });
-          return;
-        }
-        if (!reason && action === 'manual') {
-          toast({ title: 'Reason required for manual punch entry', variant: 'destructive' });
-          return;
-        }
-
-        // Convert Eastern wall-clock inputs to real UTC, then total the pairs
-        const toUtc = (hhmm: string) => {
-          const [h, m] = hhmm.split(':').map(Number);
-          return easternWallToUtcIso(actionDay.date, h, m || 0);
-        };
-        const utcPairs = validPairs.map(pair => ({
-          inIso: toUtc(pair.clockIn),
-          outIso: toUtc(pair.clockOut),
-        }));
-        let totalMin = 0;
-        for (const pair of utcPairs) {
-          totalMin += Math.round((new Date(pair.outIso).getTime() - new Date(pair.inIso).getTime()) / 60000);
-        }
-
-        const { data: entry, error: entryErr } = await supabase.from('time_entries').insert({
-          user_id: user.id,
-          org_id: org.org_id,
-          employee_id: org.employee_id,
-          entry_date: actionDay.date,
-          source: 'manual' as const,
-          is_remote: action === 'remote',
-          total_minutes: totalMin,
-          notes: reason || (action === 'remote' ? 'Remote work (from missing shift)' : 'Manual entry (from missing shift)'),
-        }).select('id').single();
-        if (entryErr) throw entryErr;
-
-        // Insert all punch pairs (real UTC)
-        const punchInserts = utcPairs.flatMap((pair, i) => [
-          {
-            time_entry_id: entry.id, seq: i * 2, punch_type: 'in' as const,
-            punch_time: pair.inIso,
-            source: 'manual' as const, employee_id: org.employee_id, org_id: org.org_id,
-          },
-          {
-            time_entry_id: entry.id, seq: i * 2 + 1, punch_type: 'out' as const,
-            punch_time: pair.outIso,
-            source: 'manual' as const, employee_id: org.employee_id, org_id: org.org_id,
-          },
-        ]);
-
-        await supabase.from('punches').insert(punchInserts);
-
-        await supabase.from('audit_events').insert({
-          user_id: user.id,
-          org_id: org.org_id,
-          employee_id: org.employee_id,
-          event_type: 'missing_shift_resolved',
-          event_details: { action, reason, date: actionDay.date, punch_pairs: validPairs.length } as any,
-          related_date: actionDay.date,
-          related_entry_id: entry.id,
-        });
-
-        const { data: exc } = await supabase.from('attendance_exceptions')
-          .select('id').eq('exception_date', actionDay.date).maybeSingle();
-        if (exc) {
-          await resolveException.mutateAsync({
-            id: exc.id,
-            reason_text: reason || `${action} punches added`,
-            resolution_action: action === 'remote' ? 'remote_added' : 'manual_punches_added',
           });
         }
       } else if (action === 'excused' || action === 'ignore') {
@@ -180,7 +94,6 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
       setActionDay(null);
       setAction(null);
       setReason('');
-      setPunchPairs([emptyPair()]);
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     }
@@ -198,7 +111,7 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
             <div key={day.date} className="flex flex-wrap items-center gap-3 bg-background rounded-lg px-3 py-2">
               <span className="text-sm font-medium">{formatDate(day.date)}</span>
               <span className="text-xs text-muted-foreground">No work recorded for your scheduled shift.</span>
-              <Button size="sm" variant="outline" onClick={() => { setActionDay(day); setAction(null); setPunchPairs([emptyPair()]); }}>
+              <Button size="sm" variant="outline" onClick={() => { setActionDay(day); setAction(null); }}>
                 Respond
               </Button>
             </div>
@@ -223,49 +136,21 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
               <Button variant="outline" className="justify-start" onClick={() => setAction('pto')}>
                 <CalendarDays className="mr-2 h-4 w-4" /> Add PTO Entry
               </Button>
-              <Button variant="outline" className="justify-start" onClick={() => setAction('remote')}>
-                <MapPin className="mr-2 h-4 w-4" /> Mark Remote &amp; Add Punches
-              </Button>
-              <Button variant="outline" className="justify-start" onClick={() => setAction('manual')}>
-                <Clock className="mr-2 h-4 w-4" /> Add Manual Clock In/Out
-              </Button>
               <Button variant="outline" className="justify-start" onClick={() => setAction('excused')}>
                 Mark as Excused (requires comment)
               </Button>
               <Button variant="ghost" className="justify-start text-muted-foreground" onClick={() => setAction('ignore')}>
                 <X className="mr-2 h-4 w-4" /> Ignore (requires comment)
               </Button>
+              <p className="text-xs text-muted-foreground pt-1">
+                Worked this day? Punch times are recorded by the server and can't be
+                typed in here — ask your manager to correct the day's record.
+              </p>
             </div>
           )}
 
           {action && (
             <div className="space-y-4">
-              {(action === 'remote' || action === 'manual') && (
-                <div className="space-y-3">
-                  {punchPairs.map((pair, idx) => (
-                    <div key={idx} className="flex items-end gap-2">
-                      <div className="space-y-1 flex-1">
-                        <Label className="text-xs">In {idx + 1}</Label>
-                        <Input type="time" value={pair.clockIn} onChange={e => updatePair(idx, 'clockIn', e.target.value)} />
-                      </div>
-                      <div className="space-y-1 flex-1">
-                        <Label className="text-xs">Out {idx + 1}</Label>
-                        <Input type="time" value={pair.clockOut} onChange={e => updatePair(idx, 'clockOut', e.target.value)} />
-                      </div>
-                      {punchPairs.length > 1 && (
-                        <Button size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground hover:text-destructive" onClick={() => removePair(idx)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                  {punchPairs.length < 4 && (
-                    <Button variant="outline" size="sm" onClick={addPair}>
-                      <Plus className="h-3.5 w-3.5 mr-1" /> Add Another Pair
-                    </Button>
-                  )}
-                </div>
-              )}
               <div className="space-y-1">
                 <Label className="text-xs">
                   {action === 'pto' ? 'Notes (optional)' : 'Reason (required)'}
