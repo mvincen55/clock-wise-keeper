@@ -1,6 +1,5 @@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { History, Loader2 } from 'lucide-react';
 import { hourLabel } from '@/hooks/useReminderPrefs';
 import { useReminderLog, type ReminderLogRow } from '@/hooks/useReminderLog';
@@ -58,7 +57,7 @@ export default function ReminderLog() {
             Nothing logged in the last two weeks. Entries appear after the next reminder run.
           </p>
         ) : (
-          <ScrollArea className="max-h-[26rem] pr-3">
+          <div className="max-h-[26rem] overflow-y-auto overscroll-contain pr-3">
             <div className="space-y-5">
               {days.map(([day, rows]) => (
                 <div key={day} className="space-y-2">
@@ -90,7 +89,7 @@ export default function ReminderLog() {
                 </div>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         )}
       </CardContent>
     </Card>

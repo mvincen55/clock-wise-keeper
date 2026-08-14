@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { useNotifications, useUnreadCount, useMarkNotificationRead, useMarkAllRead, type Notification } from '@/hooks/useNotifications';
 import { resolveNotificationDestination, type OrgRole } from '@/lib/notification-routing';
@@ -196,8 +195,8 @@ export default function NotificationBell() {
       </Button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-popover border border-border rounded-lg shadow-lg z-50">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="absolute right-0 top-full mt-2 w-80 bg-popover border border-border rounded-lg shadow-lg z-50 flex max-h-[calc(100vh-6rem)] flex-col overflow-hidden">
+          <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-border">
             <h3 className="font-semibold text-sm text-foreground">Notifications</h3>
             {unreadCount > 0 && (
               <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => markAllRead.mutate()}>
@@ -207,7 +206,7 @@ export default function NotificationBell() {
             )}
           </div>
           {!!tickets?.length && (
-            <div className="border-b border-border px-4 py-3">
+            <div className="min-h-0 overflow-y-auto overscroll-contain border-b border-border px-4 py-3">
               <h4 className="mb-2 text-xs font-medium text-muted-foreground">Your problem reports</h4>
               <div className="space-y-3">
                 {tickets.map(t => (
@@ -242,7 +241,10 @@ export default function NotificationBell() {
             </div>
           )}
 
-          <ScrollArea className="max-h-[400px]">
+          {/* Native overflow instead of Radix ScrollArea: the Radix viewport
+              sizes itself with h-full, which a max-height-only parent cannot
+              resolve, so the list clipped without ever scrolling. */}
+          <div className="min-h-0 max-h-[400px] overflow-y-auto overscroll-contain">
             {!notifications?.length ? (
               <p className="text-sm text-muted-foreground text-center py-8">No notifications</p>
             ) : (
@@ -255,7 +257,7 @@ export default function NotificationBell() {
                 />
               ))
             )}
-          </ScrollArea>
+          </div>
         </div>
       )}
     </div>
