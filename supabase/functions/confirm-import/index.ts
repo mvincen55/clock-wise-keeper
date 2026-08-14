@@ -61,6 +61,19 @@ serve(async (req) => {
     const orgId = importCheck.org_id || importerEmp?.org_id;
     if (!orgId) throw new Error("No org context for import");
 
+    // Admin-only since the server-authoritative punching phase: employee
+    // INSERT policies on time_entries/punches are gone, so import writes
+    // ride the org-admin ALL policies. Gate explicitly rather than letting
+    // a non-admin run partway and fail row-by-row on RLS.
+    const { data: isAdmin, error: adminCheckError } = await supabase.rpc("is_org_admin", { _org_id: orgId });
+    if (adminCheckError) throw adminCheckError;
+    if (!isAdmin) {
+      return new Response(
+        JSON.stringify({ error: "Timesheet imports are manager-only. Ask an office manager or owner to run this import." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Preload all employees in this org for matching.
     // NOTE: employees has no employee_code column — matching is by display_name.
     // Selecting a nonexistent column here used to error out silently, leaving the

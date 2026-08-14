@@ -8826,6 +8826,10 @@ export type Database = {
         Args: { _message_id: string; _note?: string }
         Returns: undefined
       }
+      record_punch: {
+        Args: { p_action: string }
+        Returns: Json
+      }
       request_attendance_recompute: {
         Args: { p_end_date: string; p_start_date: string; p_user_id: string }
         Returns: number
