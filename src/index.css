@@ -201,6 +201,13 @@
   display: none;
 }
 
+/* Printable Onboarding sheets (blank template + Phase 3 record). Hidden on
+   screen; shown only when printing from the onboarding builder or an
+   instance. Employment records only — no patient data. */
+.onboarding-print-root {
+  display: none;
+}
+
 @page consent {
   size: letter;
   margin: 0.5in;
@@ -892,6 +899,249 @@
 }
 
 .inc-footer-item {
+  white-space: nowrap;
+}
+
+@page onboarding {
+  size: letter;
+  margin: 0.5in;
+}
+
+/* Onboarding checklist sheets — the blank per-role template and, in the
+   instance record, the dual-signed history. Built in the incident sheet's
+   document language; brand accent overridden per org via BrandPrintStyle. */
+.onb-sheet {
+  --onb-navy: #53406e; /* brand accent default; org_branding overrides */
+  --onb-ink: #2b2733;
+  --onb-muted: #6b6577;
+  --onb-line: #d5cfe0;
+  --onb-tint: #f3f0f8;
+  page: onboarding;
+  width: 7.5in;
+  min-height: 10in;
+  display: flex;
+  flex-direction: column;
+  margin: 0 auto;
+  background: white;
+  color: var(--onb-ink);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 9.5pt;
+  line-height: 1.4;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.onb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16pt;
+  padding-bottom: 8pt;
+  border-bottom: 1.25pt solid var(--onb-navy);
+  margin-bottom: 10pt;
+}
+
+.onb-logo {
+  max-height: 0.9in;
+  max-width: 2.8in;
+  object-fit: contain;
+}
+
+.onb-practice {
+  font-size: 15pt;
+  font-weight: 700;
+  color: var(--onb-navy);
+}
+
+.onb-head-meta {
+  text-align: right;
+}
+
+.onb-title {
+  font-size: 13pt;
+  font-weight: 700;
+  color: var(--onb-navy);
+  margin-bottom: 3pt;
+}
+
+.onb-meta-item {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6pt;
+  font-size: 8.5pt;
+}
+
+.onb-meta-key {
+  color: var(--onb-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 7pt;
+  align-self: center;
+}
+
+.onb-meta-value {
+  font-weight: 600;
+}
+
+.onb-who {
+  display: flex;
+  gap: 24pt;
+  margin: 4pt 0 10pt;
+}
+
+.onb-who-slot {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.onb-who-line {
+  border-bottom: 0.75pt solid var(--onb-ink);
+  height: 14pt;
+}
+
+.onb-who-label {
+  font-size: 7pt;
+  color: var(--onb-muted);
+  margin-top: 2pt;
+}
+
+.onb-legend {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12pt;
+  font-size: 7.5pt;
+  color: var(--onb-muted);
+  margin-bottom: 6pt;
+}
+
+.onb-legend-cols {
+  display: flex;
+  gap: 0;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 6.5pt;
+}
+
+.onb-legend-cols span {
+  width: 78pt;
+}
+
+.onb-section {
+  margin-bottom: 8pt;
+  break-inside: avoid;
+}
+
+.onb-section-title {
+  font-size: 9pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--onb-navy);
+  background: var(--onb-tint);
+  padding: 3pt 6pt;
+  border-radius: 3pt;
+  margin-bottom: 3pt;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.onb-item {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10pt;
+  padding: 3pt 2pt;
+  border-bottom: 0.5pt solid var(--onb-line);
+  break-inside: avoid;
+}
+
+.onb-item-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.onb-item-title {
+  font-size: 9pt;
+}
+
+.onb-item-detail {
+  font-size: 7.5pt;
+  color: var(--onb-muted);
+}
+
+.onb-item-signs {
+  display: flex;
+  flex: none;
+}
+
+.onb-sign-slot {
+  width: 78pt;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 6pt;
+}
+
+.onb-sign-line {
+  border-bottom: 0.75pt solid var(--onb-ink);
+  height: 12pt;
+  width: 100%;
+}
+
+.onb-sign-label {
+  font-size: 6pt;
+  color: var(--onb-muted);
+  margin-top: 1.5pt;
+}
+
+/* Record mode (Phase 3): completed sign-offs print as stamped values. */
+.onb-sign-value {
+  font-size: 8.5pt;
+  font-weight: 600;
+  text-align: center;
+}
+
+.onb-sign-meta {
+  font-size: 6pt;
+  color: var(--onb-muted);
+  text-align: center;
+  margin-top: 1pt;
+}
+
+.onb-unverified {
+  font-style: italic;
+}
+
+.onb-foot {
+  font-size: 7pt;
+  color: var(--onb-muted);
+  text-align: center;
+  margin-top: auto;
+  padding-top: 6pt;
+  padding-bottom: 6pt;
+  border-top: 0.5pt solid var(--onb-line);
+}
+
+/* Same brand band that anchors the FOF and incident sheets. */
+.onb-footer {
+  padding: 4.5pt 10pt;
+  border-radius: 5pt;
+  background: var(--onb-navy);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12pt;
+  font-size: 7pt;
+  letter-spacing: 0.02em;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.onb-footer-item {
   white-space: nowrap;
 }
 
@@ -2955,7 +3205,8 @@
   body:has(.goals-print-root) > *:not(.goals-print-root),
   body:has(.consent-print-root) > *:not(.consent-print-root),
   body:has(.letter-print-root) > *:not(.letter-print-root),
-  body:has(.abx-print-root) > *:not(.abx-print-root) {
+  body:has(.abx-print-root) > *:not(.abx-print-root),
+  body:has(.onboarding-print-root) > *:not(.onboarding-print-root) {
     display: none !important;
   }
 
@@ -2965,7 +3216,8 @@
   .goals-print-root,
   .consent-print-root,
   .letter-print-root,
-  .abx-print-root {
+  .abx-print-root,
+  .onboarding-print-root {
     display: block !important;
   }
 

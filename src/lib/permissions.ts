@@ -9,7 +9,8 @@
 export type PermissionKey =
   | 'edit_closeout_history'
   | 'view_reports'
-  | 'manage_office_goals';
+  | 'manage_office_goals'
+  | 'manage_onboarding';
 
 export type PermissionDef = {
   key: PermissionKey;
@@ -40,6 +41,13 @@ export const PERMISSION_DEFS: readonly PermissionDef[] = [
     label: 'Manage office goals',
     description: 'Create, edit, and close office sprints on the Goals page.',
     enforcedAt: 'team_goals write policies',
+  },
+  {
+    key: 'manage_onboarding',
+    label: 'Manage onboarding',
+    description:
+      'Build and edit new-hire onboarding templates and start onboarding for a hire.',
+    enforcedAt: 'can_manage_onboarding() in the onboarding_templates write policies',
   },
 ] as const;
 

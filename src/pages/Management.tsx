@@ -2,7 +2,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
-  BookOpenCheck, CheckSquare, FileText, FolderCog, Users, UserCheck, MapPin, Settings, BellRing, ChevronRight, Loader2,
+  BookOpenCheck, CheckSquare, ClipboardList, FileText, FolderCog, Users, UserCheck, MapPin, Settings, BellRing, ChevronRight, Loader2,
 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useApprovalCounts } from '@/hooks/useApprovalCounts';
@@ -17,6 +17,7 @@ const ADMIN_LINKS = [
   { to: '/practice-setup', icon: FolderCog, label: 'Practice Setup', description: 'Sort existing documents and create human-confirmed office drafts' },
   { to: '/acknowledgments', icon: UserCheck, label: 'Office Acknowledgments', description: 'See who has opened, signed, paused, or missed a required office version' },
   { to: '/team', icon: Users, label: 'Team', description: 'Roster, schedules, and details' },
+  { to: '/new-hires/templates', icon: ClipboardList, label: 'New-Hire Onboarding', description: 'Per-role onboarding checklists with dual sign-off' },
   { to: '/reports', icon: FileText, label: 'Reports', description: 'Hours, payroll, and exports' },
   { to: '/work-zones', icon: MapPin, label: 'Work Zones', description: 'GPS auto-clock zones' },
   { to: '/settings', icon: Settings, label: 'Office Settings', description: 'Branding, payroll, policies, escalation, workflows' },

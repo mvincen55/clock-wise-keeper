@@ -85,6 +85,56 @@ checks).
    and probe the endpoint per `docs/runbook.md` §1 — an anon-key POST to
    `/functions/v1/attest` must return 401, not NOT_FOUND.
 
+## Phase 2 — Onboarding templates (built)
+
+Owner/manager (plus delegated) builder for per-role onboarding checklists.
+Typed authoring only — AI parse-a-document-into-a-template is a documented
+future item.
+
+**Schema** (`supabase/migrations/20260825130000_onboarding_templates.sql`):
+`onboarding_templates` (name, free-text `role_label` — never an enum,
+`is_active`), `onboarding_template_sections`, `onboarding_template_items`
+(title + optional `detail` sub-note + `sort_order`), all org_id + RLS.
+Members read; writes require `can_manage_onboarding()` = org admin OR the
+new `manage_onboarding` key in the existing `employee_permissions` grants
+(owner-controlled delegation via `can_manage_permissions`, exactly like
+`manage_office_goals`). The permission CHECK constraint is re-declared with
+the full key list; `src/lib/permissions.ts` carries the registry entry.
+
+**UI**: `/new-hires/templates` (library: create, duplicate-as-starting-
+point, seed-on-first-visit) and `/new-hires/templates/:templateId` (editor:
+sections/items CRUD, up/down reorder that renumbers cleanly, active toggle,
+delete with the "instances keep their snapshot" note). Linked from
+Management. Reordering logic is pure (`src/lib/onboarding-order.ts`).
+
+**Print**: `OnboardingTemplatePrintSheet` renders the BLANK checklist on the
+org letterhead — same asset path as the FOF print (`useOrgBranding.logoUrl`,
+practice-name text fallback), `BrandPrintStyle` accent, `.onb-sheet` CSS,
+`.onboarding-print-root` portal added to the hide-everything-else print
+rules.
+
+**Seed**: ONE generic dental front-desk template
+(`src/lib/onboarding-template-defaults.ts` — paperwork / safety / policies /
+systems / core training / daily duties / reviews), seeded client-side on
+first visit to an EMPTY library only (server-side count re-check guards the
+race), fully editable afterward.
+
+**Tests**: `src/test/onboarding-templates.test.ts` (reorder integrity, seed
+idempotency + genericness, migration RLS asserts, live org-isolation
+probes), `src/test/onboarding-print.test.tsx` (print snapshot + logo/text
+fallback), `employee-permissions.test.ts` updated for the new key.
+
+**Deploy (manual, in this order):**
+
+1. Apply migration `20260825130000_onboarding_templates.sql`
+   (`supabase db push --project-ref lfiplzmxpmybtbzhmnkp` or SQL editor).
+   **Staging first.** Additive only (the permission CHECK is re-created with
+   a superset list — existing grant rows all remain valid).
+2. No new edge function in this phase — nothing to deploy.
+3. Verify: as an owner, open Management → New-Hire Onboarding; an empty org
+   library seeds the starter template; Print blank shows the letterhead
+   (logo or practice-name fallback).
+
 ## Documented future items (not built)
 
 - Linking checklist items to training modules with pass gates (shared
