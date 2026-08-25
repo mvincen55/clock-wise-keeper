@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import OnboardingTemplatePrintSheet from '@/components/onboarding/OnboardingTemplatePrintSheet';
+import OnboardingRecordPrintSheet from '@/components/onboarding/OnboardingRecordPrintSheet';
 import {
   GENERIC_FRONT_DESK_TEMPLATE,
 } from '@/lib/onboarding-template-defaults';
@@ -68,6 +69,51 @@ describe('onboarding template print sheet', () => {
     expect(noLogo).not.toContain('<img');
     expect(noLogo).toContain('Northfield Dental Group');
     expect(noLogo).toContain('onb-practice');
+  });
+
+  it('the record sheet prints initials, dates, and verification status per side', () => {
+    const html = renderToStaticMarkup(
+      <OnboardingRecordPrintSheet
+        employeeName="Hire Probe"
+        templateName="Front Desk Onboarding (starter)"
+        roleLabel="Front Desk"
+        startedAt="2026-08-20T13:00:00Z"
+        status="active"
+        completedAt={null}
+        items={[
+          {
+            id: 'i1',
+            section_title: 'Basics',
+            item_title: 'Verified both ways',
+            item_detail: '',
+            trainer_initials: 'TRN',
+            trainer_signed_at: '2026-08-21T13:00:00Z',
+            trainer_attestation_id: 'a1',
+            trainee_initials: 'NEW',
+            trainee_signed_at: '2026-08-21T13:05:00Z',
+            trainee_attestation_id: 'a2',
+          },
+          {
+            id: 'i2',
+            section_title: 'Basics',
+            item_title: 'Initials fallback, one side open',
+            item_detail: '',
+            trainer_initials: 'TRN',
+            trainer_signed_at: '2026-08-22T13:00:00Z',
+            trainer_attestation_id: null,
+            trainee_initials: '',
+            trainee_signed_at: null,
+            trainee_attestation_id: null,
+          },
+        ]}
+        branding={BRANDING}
+      />,
+    );
+    expect(html).toMatchSnapshot();
+    expect(html).toContain('PIN verified');
+    expect(html).toContain('initials only — unverified');
+    // The open slot prints the blank rule so the sheet can finish on paper.
+    expect(html).toContain('onb-sign-line');
   });
 
   it('every item carries the two sign-off slots (trainer + team member)', () => {

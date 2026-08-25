@@ -52,7 +52,20 @@ type AttestationRow = {
 const APPLIERS: Record<
   string,
   (admin: SupabaseClient, attestation: AttestationRow) => Promise<{ error?: string }>
-> = {};
+> = {
+  // Onboarding dual sign-off: the private SQL core decides the SIDE from who
+  // attested (the instance's employee = trainee, anyone else = trainer) and
+  // stamps the item — the client never wires an attestation into a row.
+  onboarding_item_signoff: async (admin, attestation) => {
+    const { data, error } = await admin.rpc("_apply_onboarding_signoff_internal", {
+      _attestation_id: attestation.id,
+    });
+    if (error) return { error: error.message };
+    const verdict = data as { applied?: boolean; error?: string } | null;
+    if (!verdict?.applied) return { error: verdict?.error ?? "Could not record the sign-off" };
+    return {};
+  },
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {

@@ -135,6 +135,60 @@ fallback), `employee-permissions.test.ts` updated for the new key.
    library seeds the starter template; Print blank shows the letterhead
    (logo or practice-name fallback).
 
+## Phase 3 — Instances and dual sign-off (built)
+
+**Schema** (`supabase/migrations/20260825140000_onboarding_instances.sql`):
+`onboarding_instances` (employee, template provenance ref + SNAPSHOT of
+name/role, status, started/completed) and `onboarding_instance_items` (one
+row per item, values copied from the template at start; trainer slot +
+trainee slot, each with initials, signed_at, and an attestation reference).
+An item's `completed_at` is stamped ONLY when both slots are signed — the
+both-signatures rule lives in the SQL, not the UI.
+
+**Write model = snapshot immutability**: clients hold SELECT only on both
+tables (org-member read — the shared-terminal flow means any signed-in
+member session must render an instance). Writes:
+
+- `start_onboarding_instance(employee, template)` — SECURITY DEFINER RPC,
+  `can_manage_onboarding()` gated: validates active template with items,
+  refuses a duplicate active instance, copies the snapshot in one
+  transaction, notifies the hire when they have a login.
+- PIN path: the `attest` function's `onboarding_item_signoff` applier calls
+  `_apply_onboarding_signoff_internal` (service_role only), which decides
+  the SIDE server-side — the attesting employee IS the instance's employee →
+  trainee slot, anyone else → trainer slot — stamps the staff code
+  (`employees.tag`) as initials, links the attestation, and refuses
+  double-signing. Order-agnostic by construction.
+- Fallback path (`require_pin_on_signoff` off):
+  `record_onboarding_signoff_fallback` RPC — member-gated, refuses outright
+  while PINs are required, validates 2-8 char initials, never writes an
+  attestation reference, so the record reads "initials only — unverified".
+
+**UI**: `/new-hires` (managers/owners: all instances with progress + Start
+dialog; members: their own), `/new-hires/:instanceId` (sections, per-side
+status chips, tap-to-sign → `SignoffDialog` with two order-agnostic panels;
+PIN entry or prefilled-editable initials per the org setting), Print record
+via `OnboardingRecordPrintSheet` (initials, verification status, dates;
+unsigned slots print blank rules). Linked from Management and Workplace →
+Growth.
+
+**Tests**: `src/test/onboarding-instances.test.ts` (both-signatures rule,
+unverified labeling, snapshot immutability grants/policy asserts, applier
+side-decision asserts, live end-to-end probe: start → both PIN sign-offs →
+completion stamps), record-sheet snapshot in `onboarding-print.test.tsx`.
+
+**Deploy (manual, in this order):**
+
+1. Apply migration `20260825140000_onboarding_instances.sql` (staging
+   first; additive only — requires Phase 1 + 2 migrations already applied).
+2. Redeploy the updated function:
+   `supabase functions deploy attest --project-ref lfiplzmxpmybtbzhmnkp`
+   (it now carries the onboarding applier).
+3. Verify: start an onboarding from the starter template, sign one item
+   from both sides with two PINs on one screen, confirm the item flips to
+   Done only after the second PIN, and Print record shows both slots as
+   "PIN verified".
+
 ## Documented future items (not built)
 
 - Linking checklist items to training modules with pass gates (shared

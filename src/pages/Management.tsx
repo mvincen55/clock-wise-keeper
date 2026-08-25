@@ -17,7 +17,7 @@ const ADMIN_LINKS = [
   { to: '/practice-setup', icon: FolderCog, label: 'Practice Setup', description: 'Sort existing documents and create human-confirmed office drafts' },
   { to: '/acknowledgments', icon: UserCheck, label: 'Office Acknowledgments', description: 'See who has opened, signed, paused, or missed a required office version' },
   { to: '/team', icon: Users, label: 'Team', description: 'Roster, schedules, and details' },
-  { to: '/new-hires/templates', icon: ClipboardList, label: 'New-Hire Onboarding', description: 'Per-role onboarding checklists with dual sign-off' },
+  { to: '/new-hires', icon: ClipboardList, label: 'New-Hire Onboarding', description: 'Per-role onboarding checklists with dual sign-off' },
   { to: '/reports', icon: FileText, label: 'Reports', description: 'Hours, payroll, and exports' },
   { to: '/work-zones', icon: MapPin, label: 'Work Zones', description: 'GPS auto-clock zones' },
   { to: '/settings', icon: Settings, label: 'Office Settings', description: 'Branding, payroll, policies, escalation, workflows' },
