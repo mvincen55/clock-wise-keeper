@@ -54,6 +54,7 @@ const USER_ONLY: Array<{ name: string; body: unknown; notDeployedOk?: boolean }>
     },
     notDeployedOk: true,
   },
+  { name: 'onboarding-lifecycle', body: {}, notDeployedOk: true },
 ];
 
 /**

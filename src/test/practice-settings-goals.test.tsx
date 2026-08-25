@@ -29,6 +29,7 @@ const settings: PracticeSettings = {
   require_pin_on_signoff: true,
   pin_lockout_attempts: 5,
   pin_lockout_minutes: 15,
+  onboarding_review_days: [7, 30, 60, 90],
 };
 
 vi.mock('@/hooks/usePracticeSettings', async importOriginal => {

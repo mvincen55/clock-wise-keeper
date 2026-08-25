@@ -69,3 +69,5 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = true
   [functions.attest]
     verify_jwt = true
+  [functions.onboarding-lifecycle]
+    verify_jwt = false

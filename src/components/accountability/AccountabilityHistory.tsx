@@ -35,9 +35,9 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import {
   useOrgAccountabilityReports,
   useEmployeeAccountabilityReports,
-  POLICY_LABELS,
+  REPORT_KIND_LABELS,
   type AccountabilityReport,
-  type PolicyKind,
+  type ReportKind,
 } from '@/hooks/useAccountability';
 import AccountabilityAuditTimeline from './AccountabilityAuditTimeline';
 import ReportsAnalyst from './ReportsAnalyst';
@@ -49,7 +49,7 @@ function RecordRow({ r, who }: { r: AccountabilityReport; who?: string }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-medium">
           {who ? `${who} · ` : ''}
-          {POLICY_LABELS[r.kind] ?? r.kind}
+          {REPORT_KIND_LABELS[r.kind] ?? r.kind}
         </span>
         <Badge variant="secondary">
           Closed {r.closed_at ? formatDate(r.closed_at.slice(0, 10)) : ''}
@@ -85,7 +85,7 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
 
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const [kind, setKind] = useState<'all' | PolicyKind>('all');
+  const [kind, setKind] = useState<'all' | ReportKind>('all');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [pendingFormat, setPendingFormat] = useState<'csv' | 'xlsx' | null>(null);
 
@@ -131,7 +131,7 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
   const buildRows = () =>
     closed.map(r => [
       nameByUser.get(r.subject_user_id ?? '') ?? '',
-      POLICY_LABELS[r.kind] ?? r.kind,
+      REPORT_KIND_LABELS[r.kind] ?? r.kind,
       r.period_start,
       r.period_end,
       r.summary,
@@ -239,13 +239,13 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
             </div>
             <div>
               <Label className="text-xs">Kind</Label>
-              <Select value={kind} onValueChange={v => setKind(v as 'all' | PolicyKind)}>
+              <Select value={kind} onValueChange={v => setKind(v as 'all' | ReportKind)}>
                 <SelectTrigger className="h-9 w-[190px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All kinds</SelectItem>
-                  {Object.entries(POLICY_LABELS).map(([k, label]) => (
+                  {Object.entries(REPORT_KIND_LABELS).map(([k, label]) => (
                     <SelectItem key={k} value={k}>
                       {label}
                     </SelectItem>

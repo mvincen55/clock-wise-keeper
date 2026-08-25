@@ -33,6 +33,8 @@ export type PracticeSettings = {
   pin_lockout_attempts: number;
   /** How long a locked PIN stays locked, in minutes. */
   pin_lockout_minutes: number;
+  /** Day offsets for scheduled onboarding reviews (manager checklist tasks). */
+  onboarding_review_days: number[];
 };
 
 export type PracticeSettingsPatch = Partial<PracticeSettings>;
@@ -59,7 +61,7 @@ export function usePracticeSettings() {
       const { data } = await supabase
         .from('org_practice_settings')
         .select(
-          'collections_visibility, monthly_collections_target_cents, production_visibility, monthly_production_target_cents, new_patients_visibility, monthly_new_patients_seen_target_count, mobile_capture_enabled, confirmation_lead_days, pms_system, require_pin_on_signoff, pin_lockout_attempts, pin_lockout_minutes'
+          'collections_visibility, monthly_collections_target_cents, production_visibility, monthly_production_target_cents, new_patients_visibility, monthly_new_patients_seen_target_count, mobile_capture_enabled, confirmation_lead_days, pms_system, require_pin_on_signoff, pin_lockout_attempts, pin_lockout_minutes, onboarding_review_days'
         )
         .eq('org_id', ctx!.org_id)
         .maybeSingle();
@@ -76,6 +78,7 @@ export function usePracticeSettings() {
         require_pin_on_signoff: data?.require_pin_on_signoff ?? true,
         pin_lockout_attempts: data?.pin_lockout_attempts ?? 5,
         pin_lockout_minutes: data?.pin_lockout_minutes ?? 15,
+        onboarding_review_days: data?.onboarding_review_days ?? [7, 30, 60, 90],
       };
     },
   });

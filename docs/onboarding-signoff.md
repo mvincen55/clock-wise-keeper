@@ -189,6 +189,58 @@ completion stamps), record-sheet snapshot in `onboarding-print.test.tsx`.
    Done only after the second PIN, and Print record shows both slots as
    "PIN verified".
 
+## Phase 4 — Lifecycle wiring (built)
+
+Connects instances to machinery that already exists
+(`supabase/migrations/20260825150000_onboarding_lifecycle.sql`):
+
+- **Stale items → escalation engine.** New `escalation_policies` kind
+  `onboarding_stale` (seeded per org: ANY 1 item open past 14 days; both
+  numbers office-editable in the same Settings card as the other rules,
+  member-visible per the existing visible-threshold policy). The daily
+  sweep creates ONE factual one-off task per stale instance on the office's
+  manager checklist (`source='onboarding_stale'`, idempotent via
+  `source_ref.instance_id`) plus admin notifications — counts and days
+  only, the standard never-threatening tone.
+- **Review tasks.** `start_onboarding_instance` now also schedules dated
+  one-off manager-checklist items (`source='onboarding_review'`) at the
+  org-configurable marks (`org_practice_settings.onboarding_review_days`,
+  default `{7,30,60,90}`; editable in Settings → People & policies →
+  Onboarding Reviews). Dated items complete against their own day's
+  period key — the existing checklist rule.
+- **Completion → HR file.** When every item is dual-signed AND every
+  scheduled review is checked off, the sweep writes the completion entry to
+  the EXISTING permanent record (`accountability_reports`, new kind
+  `onboarding_complete`, closed on arrival, subject = the employee; the
+  `subject_user_id` column is now nullable for loginless hires — a
+  permissive-only change), marks the instance complete with
+  `hr_report_id` linked, retires the stale task, and notifies the hire and
+  admins. It shows up on EmployeeDetail's "Accountability record" card like
+  every other filed record.
+- **Engine**: `_onboarding_lifecycle_sweep_internal()` (service_role only)
+  driven by the `onboarding-lifecycle` edge function (cron service-role
+  bearer, or owner/manager "run now"), scheduled daily by pg_cron
+  (`onboarding-lifecycle-daily`, 13:20 UTC) with the existing vault secret.
+
+**Tests**: `src/test/onboarding-lifecycle.test.ts` — trigger timing (pure
+mirrors + SQL asserts), review scheduling and the settings parser, HR-entry
+asserts, factual-tone check, and a live end-to-end probe (reviews scheduled
+→ backdated stale item raises exactly one task → dual sign → completion
+blocked until reviews are checked → HR entry written, instance completed,
+stale task retired).
+
+**Deploy (manual, in this order):**
+
+1. Apply migration `20260825150000_onboarding_lifecycle.sql` (staging
+   first; requires Phases 1-3 applied; needs pg_cron/pg_net and the
+   `email_queue_service_role_key` vault secret that the existing engines
+   already use).
+2. Deploy the function:
+   `supabase functions deploy onboarding-lifecycle --project-ref lfiplzmxpmybtbzhmnkp`.
+3. Verify: `select jobname from cron.job where jobname = 'onboarding-lifecycle-daily';`
+   returns one row; POST to the function with the service-role bearer
+   returns `{"ok":true,...}`; an anon-key POST returns 401.
+
 ## Documented future items (not built)
 
 - Linking checklist items to training modules with pass gates (shared
