@@ -27,6 +27,12 @@ export type PracticeSettings = {
   confirmation_lead_days: number;
   /** The office's practice management system (canonical list in src/lib/pms.ts). */
   pms_system: PmsSystem;
+  /** Sign-offs require a server-verified PIN; off = editable-initials fallback. */
+  require_pin_on_signoff: boolean;
+  /** Wrong-PIN attempts before a temporary lock. */
+  pin_lockout_attempts: number;
+  /** How long a locked PIN stays locked, in minutes. */
+  pin_lockout_minutes: number;
 };
 
 export type PracticeSettingsPatch = Partial<PracticeSettings>;
@@ -53,7 +59,7 @@ export function usePracticeSettings() {
       const { data } = await supabase
         .from('org_practice_settings')
         .select(
-          'collections_visibility, monthly_collections_target_cents, production_visibility, monthly_production_target_cents, new_patients_visibility, monthly_new_patients_seen_target_count, mobile_capture_enabled, confirmation_lead_days, pms_system'
+          'collections_visibility, monthly_collections_target_cents, production_visibility, monthly_production_target_cents, new_patients_visibility, monthly_new_patients_seen_target_count, mobile_capture_enabled, confirmation_lead_days, pms_system, require_pin_on_signoff, pin_lockout_attempts, pin_lockout_minutes'
         )
         .eq('org_id', ctx!.org_id)
         .maybeSingle();
@@ -67,6 +73,9 @@ export function usePracticeSettings() {
         mobile_capture_enabled: data?.mobile_capture_enabled ?? false,
         confirmation_lead_days: data?.confirmation_lead_days ?? DEFAULT_CONFIRMATION_LEAD_DAYS,
         pms_system: normalizePmsSystem(data?.pms_system),
+        require_pin_on_signoff: data?.require_pin_on_signoff ?? true,
+        pin_lockout_attempts: data?.pin_lockout_attempts ?? 5,
+        pin_lockout_minutes: data?.pin_lockout_minutes ?? 15,
       };
     },
   });

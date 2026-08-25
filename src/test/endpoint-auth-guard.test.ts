@@ -43,6 +43,17 @@ const USER_ONLY: Array<{ name: string; body: unknown; notDeployedOk?: boolean }>
   { name: 'ask-docs', body: { question: 'probe' } },
   { name: 'assistant-auditor', body: {} },
   { name: 'training-roleplay', body: { mode: 'start', module_id: '00000000-0000-0000-0000-000000000000' } },
+  {
+    name: 'attest',
+    body: {
+      employee_id: '00000000-0000-0000-0000-000000000000',
+      pin: '0000',
+      action_type: 'probe_action',
+      related_table: 'attestations',
+      related_id: '00000000-0000-0000-0000-000000000000',
+    },
+    notDeployedOk: true,
+  },
 ];
 
 /**
