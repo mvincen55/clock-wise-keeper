@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useMemo } from 'react';
 import { getToday } from '@/lib/time-utils';
+import { accrualBasisWorkedHours } from '@/lib/payroll-utils';
 
 /* ───────── Office PTO Policy ─────────
    Accrual tiers are still hardcoded office policy; they move to
@@ -234,7 +235,14 @@ export function useRecalculatePto() {
         .gte('date_start', snap.snapshot_date)
         .order('date_start');
 
-      // 5. Build weekly periods from snapshot date (Sun-Sat)
+      // 5. Build weekly periods from snapshot date (Sun-Sat).
+      // NOTE: these accrual weeks are Sunday-fixed, while the payroll
+      // report's weeks follow payroll_settings.week_start_day. Aligning
+      // the engine would shift every historical ledger week boundary and
+      // silently rewrite past accrual rows, so the discrepancy stands
+      // and is documented in the PTO policy settings card instead. The
+      // existing snapshot/ledger recompute pattern governs any future
+      // realignment.
       const snapDate = new Date(snap.snapshot_date + 'T00:00:00');
       // Align to next Sunday (week start = 0 for Sunday)
       const firstSunday = new Date(snapDate);
@@ -260,12 +268,14 @@ export function useRecalculatePto() {
       const ledgerRows: any[] = [];
 
       for (const week of weeks) {
-        // Worked hours from time_entries in this week
+        // Worked hours from time_entries in this week. Overtime never
+        // accrues PTO: the basis is capped at min(raw, office cap, 40)
+        // — hours over 40/week stay out regardless of the cap setting.
         const workedMinutes = (entries || [])
           .filter(e => e.entry_date >= week.start && e.entry_date <= week.end)
           .reduce((sum, e) => sum + (e.total_minutes || 0), 0);
         const workedHoursRaw = workedMinutes / 60;
-        const workedHoursCapped = Math.min(workedHoursRaw, Number(s.worked_hours_cap_weekly));
+        const workedHoursCapped = accrualBasisWorkedHours(workedHoursRaw, Number(s.worked_hours_cap_weekly));
 
         // PTO taken from days_off in this week
         const ptoTaken = (daysOff || [])

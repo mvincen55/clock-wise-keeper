@@ -34,6 +34,7 @@ export function livePunches<T extends { voided_at: string | null }>(punches: T[]
 export type TimeEntryRow = {
   id: string;
   user_id: string;
+  employee_id: string | null;
   entry_date: string;
   total_minutes: number | null;
   source: 'manual' | 'import' | 'auto_location' | 'system_adjustment';
