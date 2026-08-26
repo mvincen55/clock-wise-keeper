@@ -23,7 +23,7 @@ import {
   type PolicyKind,
 } from '@/hooks/useAccountability';
 
-const KINDS: PolicyKind[] = ['tardy_threshold', 'bypass_unresolved', 'checklist_gap', 'goal_stall'];
+const KINDS: PolicyKind[] = ['tardy_threshold', 'bypass_unresolved', 'checklist_gap', 'goal_stall', 'onboarding_stale'];
 
 const DEFAULTS: Omit<EscalationPolicy, 'id' | 'org_id' | 'kind'> = {
   threshold_count: 3,

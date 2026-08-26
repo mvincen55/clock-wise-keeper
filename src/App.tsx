@@ -60,6 +60,10 @@ import Privacy from "@/pages/Privacy";
 import AcceptInvite from "@/pages/AcceptInvite";
 import ResetPassword from "@/pages/ResetPassword";
 import Onboarding from "@/pages/Onboarding";
+import OnboardingTemplates from "@/pages/OnboardingTemplates";
+import OnboardingTemplateEditor from "@/pages/OnboardingTemplateEditor";
+import NewHires from "@/pages/NewHires";
+import OnboardingInstanceDetail from "@/pages/OnboardingInstanceDetail";
 import OAuthConsent from "@/pages/OAuthConsent";
 import { Loader2 } from "lucide-react";
 import { useOnboardingStatus } from "@/hooks/useOnboarding";
@@ -211,6 +215,10 @@ const router = createBrowserRouter(
             <Route path="/goals" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
             <Route path="/settings/reminders" element={<ProtectedRoute><ReminderSettings /></ProtectedRoute>} />
             <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
+            <Route path="/new-hires" element={<ProtectedRoute><NewHires /></ProtectedRoute>} />
+            <Route path="/new-hires/templates" element={<ProtectedRoute><OnboardingTemplates /></ProtectedRoute>} />
+            <Route path="/new-hires/templates/:templateId" element={<ProtectedRoute><OnboardingTemplateEditor /></ProtectedRoute>} />
+            <Route path="/new-hires/:instanceId" element={<ProtectedRoute><OnboardingInstanceDetail /></ProtectedRoute>} />
             <Route path="/requests" element={<Navigate to="/inbox/requests" replace />} />
             <Route path="/messages" element={<Navigate to="/inbox/messages" replace />} />
             <Route path="/nudges" element={<Navigate to="/inbox/nudges" replace />} />

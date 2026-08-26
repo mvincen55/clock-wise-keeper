@@ -5,9 +5,10 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, ArrowLeft, Clock, CalendarDays, Plus, ShieldAlert } from 'lucide-react';
+import { Loader2, ArrowLeft, Clock, CalendarDays, Plus, ShieldAlert, KeyRound } from 'lucide-react';
 import { formatDate, formatTime, minutesToHHMM } from '@/lib/time-utils';
 import AccountabilityHistory from '@/components/accountability/AccountabilityHistory';
+import PinManagementDialog from '@/components/team/PinManagementDialog';
 import IncidentReportModal from '@/components/IncidentReportModal';
 import IncidentReportDetail from '@/components/IncidentReportDetail';
 import { useEmployeeIncidentReports, type IncidentReport } from '@/hooks/useIncidentReports';
@@ -57,6 +58,7 @@ export default function EmployeeDetail() {
   const [incidentFormOpen, setIncidentFormOpen] = useState(false);
   const [editingIncident, setEditingIncident] = useState<IncidentReport | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<IncidentReport | null>(null);
+  const [pinDialogOpen, setPinDialogOpen] = useState(false);
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
@@ -95,11 +97,23 @@ export default function EmployeeDetail() {
         <Link to="/team">
           <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl md:text-3xl font-bold">{employee.display_name}</h1>
           <p className="text-muted-foreground">{employee.email || 'No email'} · Eastern (ET)</p>
         </div>
+        {/* The PIN this member enters to confirm sign-offs on shared terminals. */}
+        <Button variant="outline" size="sm" onClick={() => setPinDialogOpen(true)}>
+          <KeyRound className="mr-2 h-4 w-4" />
+          Sign-off PIN
+        </Button>
       </div>
+
+      <PinManagementDialog
+        employeeId={employee.id}
+        employeeName={employee.display_name}
+        open={pinDialogOpen}
+        onClose={() => setPinDialogOpen(false)}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3">

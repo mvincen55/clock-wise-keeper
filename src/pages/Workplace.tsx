@@ -1,6 +1,6 @@
 import {
   Table2, CalendarDays, Clock, Send, Calendar, BookOpen, Users,
-  Target, GraduationCap,
+  Target, GraduationCap, ClipboardCheck,
 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import HubLinkGrid, { HubSection } from '@/components/HubLinkGrid';
@@ -30,6 +30,7 @@ const SECTIONS: HubSection[] = [
     links: [
       { to: '/goals', icon: Target, label: 'Goals', description: 'Personal goals, sprints, and office challenges.' },
       { to: '/training', icon: GraduationCap, label: 'Training', description: 'Assigned training and mastery tracks.' },
+      { to: '/new-hires', icon: ClipboardCheck, label: 'New-Hire Onboarding', description: 'Onboarding checklists, signed off by trainer and new hire.' },
     ],
   },
 ];

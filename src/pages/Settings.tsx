@@ -18,6 +18,9 @@ import ProviderRegistryCard from '@/components/settings/ProviderRegistryCard';
 import ProcedureMetaCard from '@/components/settings/ProcedureMetaCard';
 import { BrokenApptSettingsCard } from '@/components/settings/BrokenApptSettingsCard';
 import { StaffInitialsCard } from '@/components/settings/StaffInitialsCard';
+import { MyPinCard } from '@/components/settings/MyPinCard';
+import SignoffPinSettingsCard from '@/components/settings/SignoffPinSettingsCard';
+import OnboardingReviewSettingsCard from '@/components/settings/OnboardingReviewSettingsCard';
 import MySignatureCard from '@/components/letterhead/MySignatureCard';
 import PayrollSettingsCard from '@/components/settings/PayrollSettingsCard';
 import OfficeClosuresCard from '@/components/settings/OfficeClosuresCard';
@@ -139,6 +142,10 @@ export default function Settings() {
             <EmployeePermissionsCard />
             {/* Accountability record chains (who reviews whom). */}
             <EscalationPoliciesCard />
+            {/* PIN-verified sign-offs: required or initials fallback, lockout. */}
+            <SignoffPinSettingsCard />
+            {/* Onboarding review marks (week-1/30/60/90 by default). */}
+            <OnboardingReviewSettingsCard />
             {/* Acknowledgment chasing: quiet hours, ladder, snoozes — moved
                 here from the Management page so policies live with policies. */}
             <AcknowledgmentEscalationSettingsCard />
@@ -181,6 +188,8 @@ export default function Settings() {
           <MySignatureCard />
           {/* Personal: initials stamped into Broken Appointments outputs */}
           <StaffInitialsCard />
+          {/* Personal: the PIN that confirms sign-offs on shared terminals */}
+          <MyPinCard />
           <SettingsLinkCard
             icon={BellRing}
             title="Reminders"

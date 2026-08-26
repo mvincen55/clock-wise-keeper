@@ -19,6 +19,13 @@ const migration = readFileSync(
   resolve(__dirname, '../../supabase/migrations/20260811180000_employee_permissions.sql'),
   'utf8',
 );
+// The onboarding migration re-declares the permission CHECK with the full
+// current key list (adding manage_onboarding), so the registry is asserted
+// against the LATEST constraint definition.
+const onboardingMigration = readFileSync(
+  resolve(__dirname, '../../supabase/migrations/20260825130000_onboarding_templates.sql'),
+  'utf8',
+);
 
 describe('permission registry', () => {
   it('every key carries a label, description, and enforcement receipt', () => {
@@ -26,6 +33,7 @@ describe('permission registry', () => {
       'edit_closeout_history',
       'view_reports',
       'manage_office_goals',
+      'manage_onboarding',
     ]);
     for (const def of PERMISSION_DEFS) {
       expect(def.label).toBeTruthy();
@@ -74,8 +82,9 @@ describe('grants unlock shortcuts without widening the tier', () => {
 describe('the migration enforces grants in RLS', () => {
   it('creates the grants table with exactly the registry keys', () => {
     expect(migration).toContain('CREATE TABLE IF NOT EXISTS public.employee_permissions');
+    // Latest CHECK definition (onboarding migration) carries every key.
     for (const key of PERMISSION_KEYS) {
-      expect(migration).toContain(`'${key}'`);
+      expect(onboardingMigration).toContain(`'${key}'`);
     }
   });
 

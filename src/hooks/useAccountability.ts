@@ -7,13 +7,26 @@ export type PolicyKind =
   | 'tardy_threshold'
   | 'bypass_unresolved'
   | 'checklist_gap'
-  | 'goal_stall';
+  | 'goal_stall'
+  | 'onboarding_stale';
 
 export const POLICY_LABELS: Record<PolicyKind, string> = {
   tardy_threshold: 'Late arrivals',
   bypass_unresolved: 'Unresolved clock-out bypasses',
   checklist_gap: 'Checklist gaps',
   goal_stall: 'Stalled goals',
+  onboarding_stale: 'Stalled onboarding items',
+};
+
+/**
+ * Record kinds cover every accountability_reports row: the policy-driven
+ * ones plus records other machinery files (onboarding completion entries).
+ */
+export type ReportKind = PolicyKind | 'onboarding_complete';
+
+export const REPORT_KIND_LABELS: Record<ReportKind, string> = {
+  ...POLICY_LABELS,
+  onboarding_complete: 'Onboarding completed',
 };
 
 export interface EscalationPolicy {
@@ -41,7 +54,7 @@ export function chainLabel(p: EscalationPolicy): string {
 export interface AccountabilityReport {
   id: string;
   org_id: string;
-  kind: PolicyKind;
+  kind: ReportKind;
   subject_user_id?: string;
   subject_employee_id?: string | null;
   period_start: string;
