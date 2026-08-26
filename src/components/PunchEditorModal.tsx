@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/select';
 import { Trash2, Plus, ArrowDownUp, Zap, AlertTriangle, Pencil, MapPin, RefreshCw } from 'lucide-react';
 import { PunchRow } from '@/hooks/useTimeEntries';
-import { EditablePunch, useSavePunchEdits } from '@/hooks/usePunchEditor';
+import { EditablePunch, SavePunchEditsResult, useSavePunchEdits } from '@/hooks/usePunchEditor';
 import { useWorkSchedule, getScheduleForWeekday } from '@/hooks/useWorkSchedule';
 import { useToast } from '@/hooks/use-toast';
 import { formatTime, nowEasternIso, easternTimeInputValue, easternWallToUtcIso } from '@/lib/time-utils';
@@ -28,9 +28,15 @@ import { formatTime, nowEasternIso, easternTimeInputValue, easternWallToUtcIso }
 type Props = {
   open: boolean;
   onClose: () => void;
-  entryId: string;
+  /** Null for a fully missed day — the save RPC creates the entry (employeeId required). */
+  entryId: string | null;
   entryDate: string;
   punches: PunchRow[];
+  /** The entry owner, required when entryId is null; purely informational otherwise. */
+  employeeId?: string | null;
+  employeeName?: string;
+  /** Fired after a successful save with the RPC result (audit event ids included). */
+  onSaved?: (result: SavePunchEditsResult | null) => void;
 };
 
 function punchToEditable(p: PunchRow): EditablePunch {
@@ -68,7 +74,7 @@ const SOURCE_LABELS: Record<string, string> = {
   system_adjustment: 'System',
 };
 
-export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }: Props) {
+export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, employeeId, employeeName, onSaved }: Props) {
   const originalPunches = useMemo(() => punches.map(punchToEditable), [punches]);
   const [editedPunches, setEditedPunches] = useState<EditablePunch[]>([]);
   const [reason, setReason] = useState('');
@@ -234,14 +240,20 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
   const handleSave = async () => {
     if (!reason.trim()) return;
     try {
-      await saveMutation.mutateAsync({
+      const result = await saveMutation.mutateAsync({
         entryId,
         entryDate,
+        employeeId,
         original: originalPunches,
         edited: editedPunches,
         reason: reason.trim(),
       });
-      toast({ title: 'Punches saved with audit trail' });
+      toast({
+        title: result
+          ? `Punches saved with audit trail (${result.applied_ops} change${result.applied_ops === 1 ? '' : 's'})`
+          : 'No changes to save',
+      });
+      onSaved?.(result);
       onClose();
     } catch (err: any) {
       toast({ title: 'Error saving', description: err.message, variant: 'destructive' });
@@ -256,7 +268,7 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Pencil className="h-5 w-5 text-primary" />
-            Edit Punches
+            Edit Punches{employeeName ? ` — ${employeeName}` : ''}
           </DialogTitle>
           <DialogDescription>
             {entryDate} — Edit, add, or void punches. Removing a punch voids it:

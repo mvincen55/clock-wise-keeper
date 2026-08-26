@@ -1607,6 +1607,7 @@ export type Database = {
       }
       correction_requests: {
         Row: {
+          applied_audit_event_ids: string[] | null
           created_at: string
           created_by: string
           employee_id: string
@@ -1622,6 +1623,7 @@ export type Database = {
           target_table: string
         }
         Insert: {
+          applied_audit_event_ids?: string[] | null
           created_at?: string
           created_by: string
           employee_id: string
@@ -1637,6 +1639,7 @@ export type Database = {
           target_table: string
         }
         Update: {
+          applied_audit_event_ids?: string[] | null
           created_at?: string
           created_by?: string
           employee_id?: string
@@ -2261,7 +2264,7 @@ export type Database = {
           preferred_name: string | null
           tag: string | null
           team: string | null
-          timezone: string
+          timezone: string | null
           updated_at: string
           user_id: string | null
         }
@@ -2278,7 +2281,7 @@ export type Database = {
           preferred_name?: string | null
           tag?: string | null
           team?: string | null
-          timezone?: string
+          timezone?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -2295,7 +2298,7 @@ export type Database = {
           preferred_name?: string | null
           tag?: string | null
           team?: string | null
-          timezone?: string
+          timezone?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -5688,6 +5691,7 @@ export type Database = {
           roleplay_persona_style: string
           roleplay_policy_tone: string
           security_alert_managers: boolean
+          timezone: string
           updated_at: string
         }
         Insert: {
@@ -5711,6 +5715,7 @@ export type Database = {
           roleplay_persona_style?: string
           roleplay_policy_tone?: string
           security_alert_managers?: boolean
+          timezone?: string
           updated_at?: string
         }
         Update: {
@@ -5734,6 +5739,7 @@ export type Database = {
           roleplay_persona_style?: string
           roleplay_policy_tone?: string
           security_alert_managers?: boolean
+          timezone?: string
           updated_at?: string
         }
         Relationships: [
@@ -9521,6 +9527,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      save_punch_edits: {
+        Args: {
+          p_edits: Json
+          p_employee_id?: string
+          p_entry_date?: string
+          p_entry_id: string
+          p_reason: string
+        }
+        Returns: Json
       }
       search_office_doc_chunks: {
         Args: {

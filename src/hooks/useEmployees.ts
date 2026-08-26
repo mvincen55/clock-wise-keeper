@@ -72,7 +72,9 @@ export function useAddEmployee() {
           org_id: ctx.org_id,
           display_name: input.display_name,
           email: input.email || null,
-          timezone: input.timezone || 'America/New_York',
+          // NULL = inherit the office timezone; only an explicit choice
+          // becomes a per-person override (Phase 6).
+          timezone: input.timezone || null,
         })
         .select()
         .single();

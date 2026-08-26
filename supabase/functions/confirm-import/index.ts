@@ -21,6 +21,10 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey, {
       global: { headers: { Authorization: authHeader } },
     });
+    // Punch UPDATEs (the overwrite-void) require service role since the
+    // transactional-editing phase removed client UPDATE on punches for
+    // every role. Used ONLY after the explicit is_org_admin gate below.
+    const admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Refuse in the caller's own terms. Throwing here fell into the catch
     // below and came back as a 500, which reads like a broken import rather
@@ -177,7 +181,9 @@ serve(async (req) => {
       if (existing && strategy === "overwrite") {
         // Punch rows are never deleted (void-not-delete): supersede the
         // live punches by voiding them; they keep their seq forever.
-        const { error: voidError } = await supabase
+        // Service-role write (client punch UPDATE is closed for all
+        // roles); the void is DB-audited by trg_audit_punch_change.
+        const { error: voidError } = await admin
           .from("punches")
           .update({
             voided_at: new Date().toISOString(),

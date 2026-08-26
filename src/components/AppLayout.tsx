@@ -21,6 +21,7 @@ import OfficeBrandStyle from '@/components/OfficeBrandStyle';
 import GlobalTimeControl, { ClockProvider } from '@/components/GlobalTimeControl';
 import { useApprovalCounts } from '@/hooks/useApprovalCounts';
 import { useOpenNudgeCount } from '@/hooks/useOfficeNudges';
+import { useTimezoneSync } from '@/hooks/useTimezoneSync';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -107,6 +108,9 @@ function CountBadge({ count, floating }: { count: number; floating?: boolean }) 
 }
 
 export default function AppLayout({ children }: { children: ReactNode }) {
+  // Display timezone follows org context (person's override, else the
+  // office setting) — one sync point for every wall-clock render.
+  useTimezoneSync();
   const { privacyLock, signOut, user } = useAuth();
   const { data: ctx } = useOrgContext();
   const { data: branding } = useOrgBranding();

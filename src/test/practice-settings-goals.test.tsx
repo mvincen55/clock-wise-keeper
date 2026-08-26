@@ -30,6 +30,7 @@ const settings: PracticeSettings = {
   pin_lockout_attempts: 5,
   pin_lockout_minutes: 15,
   onboarding_review_days: [7, 30, 60, 90],
+  timezone: 'America/New_York',
 };
 
 vi.mock('@/hooks/usePracticeSettings', async importOriginal => {

@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useCreateOrg } from '@/hooks/useOrgSetup';
+import { OFFICE_TIMEZONES } from '@/components/settings/PracticeSettingsCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Building2, Loader2 } from 'lucide-react';
 
 export default function OrgSetup() {
   const { data: ctx, isLoading } = useOrgContext();
   const createOrg = useCreateOrg();
   const [orgName, setOrgName] = useState('');
+  const [timezone, setTimezone] = useState('America/New_York');
 
   if (isLoading) {
     return (
@@ -46,12 +49,28 @@ export default function OrgSetup() {
               value={orgName}
               onChange={e => setOrgName(e.target.value)}
               placeholder="Acme Corp"
-              onKeyDown={e => e.key === 'Enter' && orgName.trim() && createOrg.mutate(orgName.trim())}
+              onKeyDown={e => e.key === 'Enter' && orgName.trim() && createOrg.mutate({ name: orgName.trim(), timezone })}
             />
+          </div>
+          <div className="space-y-1">
+            <Label>Office Timezone</Label>
+            <Select value={timezone} onValueChange={setTimezone}>
+              <SelectTrigger aria-label="Office Timezone">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {OFFICE_TIMEZONES.map(tz => (
+                  <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Punch times are stamped on the server in this timezone. Change it any time in Settings.
+            </p>
           </div>
           <Button
             className="w-full"
-            onClick={() => createOrg.mutate(orgName.trim())}
+            onClick={() => createOrg.mutate({ name: orgName.trim(), timezone })}
             disabled={createOrg.isPending || !orgName.trim()}
           >
             {createOrg.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

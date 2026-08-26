@@ -1,10 +1,18 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useTimeEntries, TimeEntryRow, PunchRow } from '@/hooks/useTimeEntries';
 import { useDaysOff } from '@/hooks/useDaysOff';
 import { useTardies, TardyRow } from '@/hooks/useTardies';
 import { useAttendanceExceptions } from '@/hooks/useAttendanceExceptions';
+import { useAttendanceDayStatus } from '@/hooks/useAttendanceDayStatus';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
-import { minutesToHHMM, formatTime, formatDate } from '@/lib/time-utils';
+import { useOrgEmployees } from '@/hooks/useEmployees';
+import { useOwnerUserIds } from '@/hooks/useOrgAttendanceSnapshot';
+import { minutesToHHMM, formatTime, formatDate, getToday } from '@/lib/time-utils';
+import {
+  computeWeeklyTotals, detectDayIssue, formatHoursMinutes, formatOtFlag,
+  weekStartOf, type TimeStatus, type WeeklyTotalRow,
+} from '@/lib/payroll-utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -236,6 +244,9 @@ export default function Reports() {
   const { data: daysOff } = useDaysOff();
   const { data: tardies } = useTardies(startDate || undefined, endDate || undefined);
   const { data: exceptions } = useAttendanceExceptions(startDate || undefined, endDate || undefined);
+  const { data: dayStatus } = useAttendanceDayStatus(startDate || undefined, endDate || undefined);
+  const { data: orgEmployees } = useOrgEmployees();
+  const { data: ownerUserIds } = useOwnerUserIds();
 
   const totalMinutes = entries?.reduce((sum, e) => sum + (e.total_minutes || 0), 0) || 0;
   const tardyMap = new Map<string, TardyRow>();
@@ -246,6 +257,64 @@ export default function Reports() {
   const totalMinutesLate = activeTardies.reduce((s, t) => s + t.minutes_late, 0);
   const totalDays = entries?.length || 0;
   const editedDays = entries?.filter(e => e.punches.some(p => p.is_edited)).length || 0;
+
+  // ---- The payroll dimension: one week definition, per-employee ----
+  const employeeName = (id: string | null | undefined) =>
+    (orgEmployees || []).find(e => e.id === id)?.display_name || 'Unassigned';
+  const today = getToday();
+
+  // OT flags: per employee per payroll week from server-computed totals
+  // (voided punches never count). 2400 minutes = 40 hours.
+  const weeklyTotals: WeeklyTotalRow[] = computeWeeklyTotals(entries || [], weekStartDay);
+  const weeklyByKey = new Map(weeklyTotals.map(w => [`${w.employee_id}|${w.week_start}`, w]));
+  const weeklyFor = (e: TimeEntryRow): WeeklyTotalRow | undefined =>
+    e.employee_id ? weeklyByKey.get(`${e.employee_id}|${weekStartOf(e.entry_date, weekStartDay)}`) : undefined;
+
+  // Missing-time flags. Missing days come from attendance_day_status —
+  // the same schedule resolution the recompute engine maintains — so a
+  // day only counts as missing when it was scheduled with no punches,
+  // no day-off coverage, and no office closure. Owners never clock, so
+  // their rows are excluded. Unpaired sequences and pairing anomalies
+  // come from the entries' live punches.
+  const dayIssueByEntry = new Map<string, Exclude<TimeStatus, 'OK' | 'MISSING DAY'>>();
+  for (const e of entries || []) {
+    const issue = detectDayIssue(e.punches, e.total_minutes, e.entry_date, today);
+    if (issue) dayIssueByEntry.set(e.id, issue);
+  }
+  const missingDays = (dayStatus || []).filter(r =>
+    r.is_absent && r.entry_date < today && !(r.user_id && ownerUserIds?.has(r.user_id)),
+  );
+  type TimeFlag = { employeeLabel: string; date: string; kind: TimeStatus };
+  const timeFlags: TimeFlag[] = [
+    ...missingDays.map(r => ({
+      employeeLabel: employeeName(r.employee_id),
+      date: r.entry_date,
+      kind: 'MISSING DAY' as TimeStatus,
+    })),
+    ...(entries || [])
+      .filter(e => dayIssueByEntry.has(e.id))
+      .map(e => ({
+        employeeLabel: employeeName(e.employee_id),
+        date: e.entry_date,
+        kind: dayIssueByEntry.get(e.id)! as TimeStatus,
+      })),
+  ].sort((a, b) => a.date.localeCompare(b.date) || a.employeeLabel.localeCompare(b.employeeLabel));
+  const flaggedEmployeeCount = new Set(timeFlags.map(f => f.employeeLabel)).size;
+
+  const timeStatusFor = (e: TimeEntryRow): TimeStatus => dayIssueByEntry.get(e.id) ?? 'OK';
+
+  // Daily rows grouped by employee so the org-wide report reads per
+  // person instead of as undifferentiated dates.
+  const groupedEntries = (() => {
+    const groups = new Map<string, { label: string; rows: TimeEntryRow[] }>();
+    for (const e of entries || []) {
+      const key = e.employee_id ?? 'unassigned';
+      const g = groups.get(key) ?? { label: employeeName(e.employee_id), rows: [] };
+      g.rows.push(e);
+      groups.set(key, g);
+    }
+    return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label));
+  })();
 
   // Fetch audit events and resolve actor names
   useEffect(() => {
@@ -340,17 +409,25 @@ export default function Reports() {
       return;
     }
 
-    // Timesheet CSV — built from already-loaded entries (same data shown on screen)
+    // Timesheet CSV — built from already-loaded entries (same data shown
+    // on screen). Weekly Total / OT Hours flag the payroll week; this
+    // system does not compute overtime pay — it flags so the payroll
+    // operator cannot miss it. MISSING DAY rows are appended after the
+    // dailies so a day with no entry still reaches the CSV.
     const isTimesheet = ['weekly', 'pay_period', 'monthly'].includes(reportType);
     if (isTimesheet) {
-      const header = ['Date', 'First In', 'First In Source', 'Last Out', 'Last Out Source', 'Total', 'Minutes Late', 'Status', 'Remote', 'Edited', 'Comment'];
-      const rows = (entries || []).map(e => {
+      const header = ['Employee', 'Date', 'First In', 'First In Source', 'Last Out', 'Last Out Source', 'Total', 'Minutes Late', 'Status', 'Remote', 'Edited', 'Comment', 'Weekly Total', 'OT Hours', 'Time Status'];
+      const sortedForCsv = [...(entries || [])].sort((a, b) =>
+        employeeName(a.employee_id).localeCompare(employeeName(b.employee_id)) || a.entry_date.localeCompare(b.entry_date));
+      const rows = sortedForCsv.map(e => {
         const firstIn = e.punches.find(p => p.punch_type === 'in');
         const lastOut = [...e.punches].reverse().find(p => p.punch_type === 'out');
         const tardy = tardyMap.get(e.entry_date);
         const hasEdits = e.punches.some(p => p.is_edited);
+        const weekly = weeklyFor(e);
         const sourceLabel = (s: string) => s === 'auto_location' ? 'GPS' : s === 'system_adjustment' ? 'System' : s === 'import' ? 'Import' : 'Manual';
         return [
+          employeeName(e.employee_id),
           formatDate(e.entry_date),
           firstIn ? formatTime(firstIn.punch_time) : '',
           firstIn ? sourceLabel(firstIn.source) : '',
@@ -362,10 +439,19 @@ export default function Reports() {
           e.is_remote ? 'Yes' : '',
           hasEdits ? 'Yes' : '',
           e.entry_comment || '',
+          weekly ? minutesToHHMM(weekly.total_minutes) : '',
+          weekly && weekly.ot_minutes > 0 ? formatHoursMinutes(weekly.ot_minutes) : '',
+          timeStatusFor(e),
         ].map(escapeCsv).join(',');
       });
-      const totalRow = ['Total', '', '', '', '', minutesToHHMM(totalMinutes), '', '', '', '', ''].join(',');
-      const csv = [header.join(','), ...rows, totalRow].join('\n');
+      const missingRows = missingDays.map(r => [
+        employeeName(r.employee_id),
+        formatDate(r.entry_date),
+        '', '', '', '', '', '', '', '', '', '', '', '',
+        'MISSING DAY',
+      ].map(escapeCsv).join(','));
+      const totalRow = ['Total', '', '', '', '', '', minutesToHHMM(totalMinutes), '', '', '', '', '', '', '', ''].join(',');
+      const csv = [header.join(','), ...rows, ...missingRows, totalRow].join('\n');
       downloadCsvBlob(csv, `timesheet_${startDate}_${endDate}.csv`);
       return;
     }
@@ -597,6 +683,35 @@ export default function Reports() {
       {/* Generated Report */}
       {generated && (
         <div className="space-y-4">
+          {/* Missing-time banner: the manager cannot run payroll blind.
+              Warns loudly, never blocks the report, never blocks a punch. */}
+          {(reportType === 'weekly' || reportType === 'pay_period' || reportType === 'monthly') && timeFlags.length > 0 && (
+            <div className="rounded-lg border-2 border-destructive bg-destructive/10 p-4 space-y-2">
+              <p className="font-bold text-destructive flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5" />
+                {flaggedEmployeeCount} employee{flaggedEmployeeCount === 1 ? ' has' : 's have'} missing or incomplete time
+              </p>
+              <ul className="text-sm space-y-1">
+                {timeFlags.map((f, i) => (
+                  <li key={i} className="flex items-center gap-2">
+                    <span className="font-medium">{f.employeeLabel}</span>
+                    <span className="text-muted-foreground">{formatDate(f.date)}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                      f.kind === 'MISSING DAY' ? 'bg-destructive/20 text-destructive'
+                      : f.kind === 'MISSING PUNCH' ? 'bg-warning/20 text-warning'
+                      : 'bg-destructive/20 text-destructive'
+                    }`}>{f.kind}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted-foreground">
+                Fix these from the{' '}
+                <Link to="/days-off" className="underline font-medium">Attendance table</Link>
+                {' '}before sending hours to payroll. The report stays available either way.
+              </p>
+            </div>
+          )}
+
           <div className="no-print flex justify-end">
             <Button variant="outline" size="sm" onClick={handlePrint}>
               <Printer className="mr-2 h-4 w-4" />
@@ -650,6 +765,37 @@ export default function Reports() {
                     </div>
                   </div>
 
+                  {/* Weekly totals + OT flags, per employee per payroll week */}
+                  {weeklyTotals.length > 0 && (
+                    <div className="border-b">
+                      <div className="px-4 py-2 bg-muted/40 flex items-center gap-2">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Weekly Totals</h3>
+                        <span
+                          className="text-[10px] text-muted-foreground cursor-help"
+                          title="This system does not compute overtime pay. It flags weeks over 40 hours so your payroll operator (Paychex or otherwise) cannot miss them."
+                        >
+                          ⓘ OT is flagged, never paid out here
+                        </span>
+                      </div>
+                      <div className="divide-y">
+                        {weeklyTotals.map(w => (
+                          <div key={`${w.employee_id}|${w.week_start}`} className="grid grid-cols-[1.2fr_120px_80px_1fr] items-center gap-2 px-4 py-2 text-sm">
+                            <span className="font-medium">{employeeName(w.employee_id)}</span>
+                            <span className="text-muted-foreground text-xs">Week of {formatDate(w.week_start)}</span>
+                            <span className="font-mono font-semibold">{minutesToHHMM(w.total_minutes)}</span>
+                            <span>
+                              {w.ot_minutes > 0 && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/20 text-destructive font-bold">
+                                  {formatOtFlag(w.ot_minutes)}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Column headers */}
                   <div className="grid grid-cols-[1fr_90px_90px_70px_auto_auto] md:grid-cols-[1.2fr_100px_100px_80px_120px_1fr] gap-2 px-4 py-2 bg-muted/50 border-b text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                     <span>Date</span>
@@ -660,8 +806,18 @@ export default function Reports() {
                     <span>Notes</span>
                   </div>
 
-                  {/* Rows */}
-                  {(entries || []).map(renderTimesheetRow)}
+                  {/* Rows, grouped per employee */}
+                  {groupedEntries.map(group => (
+                    <div key={group.label}>
+                      {groupedEntries.length > 0 && (
+                        <div className="px-4 py-1.5 bg-muted/30 border-b text-xs font-semibold flex justify-between">
+                          <span>{group.label}</span>
+                          <span className="font-mono">{minutesToHHMM(group.rows.reduce((s, e) => s + (e.total_minutes || 0), 0))}</span>
+                        </div>
+                      )}
+                      {group.rows.map(renderTimesheetRow)}
+                    </div>
+                  ))}
 
                   {/* Footer */}
                   <div className="grid grid-cols-[1fr_90px_90px_70px_auto_auto] md:grid-cols-[1.2fr_100px_100px_80px_120px_1fr] gap-2 px-4 py-3 bg-muted/30 border-t-2 font-bold text-sm">

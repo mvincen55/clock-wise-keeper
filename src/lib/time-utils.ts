@@ -2,11 +2,47 @@
  * Time utilities.
  *
  * CONVENTION: `punch_time` and all timestamps in the database are REAL UTC
- * (`new Date().toISOString()`). Display formatting always converts to
- * America/New_York. Never mix these two concepts.
+ * (`new Date().toISOString()`). Display formatting always converts to the
+ * app timezone below. Never mix these two concepts.
+ *
+ * TIMEZONE: the app timezone is module state, not a constant — set once
+ * from org context via useTimezoneSync (a module-level setter was chosen
+ * over threading a parameter through ~50 call sites). It resolves as the
+ * signed-in person's explicit timezone, else the office timezone, else
+ * the default. Server-side truth (entry dating in the punch RPC) uses
+ * get_user_timezone in the database and never depends on this value.
+ *
+ * NAMING: the `eastern*` helpers predate the org setting; they operate on
+ * the ACTIVE app timezone, not literally Eastern. Kept to avoid churning
+ * every call site; new code can read them as "app-timezone wall clock".
  */
 
-const APP_TZ = 'America/New_York';
+const DEFAULT_APP_TZ = 'America/New_York';
+let APP_TZ = DEFAULT_APP_TZ;
+
+/**
+ * Sets the display timezone (IANA name). Null/empty restores the default.
+ * A name Intl doesn't recognize also falls back to the default — the value
+ * comes from the database, and one bad row must not throw inside the ~50
+ * render sites that format wall-clock times.
+ */
+export function setAppTimezone(tz: string | null | undefined): void {
+  if (!tz) {
+    APP_TZ = DEFAULT_APP_TZ;
+    return;
+  }
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    APP_TZ = tz;
+  } catch {
+    APP_TZ = DEFAULT_APP_TZ;
+  }
+}
+
+/** The active display timezone (IANA name). */
+export function getAppTimezone(): string {
+  return APP_TZ;
+}
 
 /**
  * Plain-date arithmetic on "YYYY-MM-DD" strings.

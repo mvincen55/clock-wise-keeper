@@ -17,6 +17,7 @@ export type CorrectionRequestRow = {
   reviewed_by: string | null;
   reviewed_at: string | null;
   resolution_note: string | null;
+  applied_audit_event_ids: string[] | null;
   created_at: string;
 };
 
@@ -156,12 +157,12 @@ export function useReviewCorrectionRequest() {
         throw new Error('Denial reason must be at least 10 characters');
       }
 
-      const updateStatus = params.status === 'approved' ? 'applied' : params.status;
-      
+      // Honest statuses: approval means APPROVED. 'applied' is set only
+      // below, after a change actually lands (checked, not assumed).
       const { error } = await supabase
         .from('correction_requests')
         .update({
-          status: updateStatus,
+          status: params.status,
           reviewed_by: user.id,
           reviewed_at: new Date().toISOString(),
           resolution_note: params.resolution_note.trim(),
@@ -176,15 +177,20 @@ export function useReviewCorrectionRequest() {
         .eq('id', params.id)
         .single();
 
+      let applied = false;
       if (req) {
-        // Apply the proposed change to the target record when approved
+        // PTO corrections apply directly; the status upgrade to
+        // 'applied' happens only when every write verifiably landed.
         if (params.status === 'approved' && req.target_table === 'pto_requests') {
           const proposed = req.proposed_change as Record<string, any>;
+          let applyOk = false;
           if (proposed.action === 'cancel') {
-            await supabase
+            const { data: rows, error: applyError } = await supabase
               .from('pto_requests')
               .update({ status: 'cancelled' })
-              .eq('id', req.target_id);
+              .eq('id', req.target_id)
+              .select('id');
+            applyOk = !applyError && !!rows?.length;
           } else if (proposed.action === 'correct') {
             const updates: Record<string, any> = {};
             if (proposed.start_date) updates.start_date = proposed.start_date;
@@ -192,11 +198,20 @@ export function useReviewCorrectionRequest() {
             if (proposed.hours_requested !== undefined) updates.hours_requested = proposed.hours_requested;
             if (proposed.pto_type) updates.pto_type = proposed.pto_type;
             if (Object.keys(updates).length > 0) {
-              await supabase
+              const { data: rows, error: applyError } = await supabase
                 .from('pto_requests')
                 .update(updates as never)
-                .eq('id', req.target_id);
+                .eq('id', req.target_id)
+                .select('id');
+              applyOk = !applyError && !!rows?.length;
             }
+          }
+          if (applyOk) {
+            const { error: statusError } = await supabase
+              .from('correction_requests')
+              .update({ status: 'applied' })
+              .eq('id', params.id);
+            applied = !statusError;
           }
         }
 
@@ -215,7 +230,8 @@ export function useReviewCorrectionRequest() {
           event_details: { correction_request_id: req.id, target_employee_id: req.employee_id } as any,
         });
 
-        // Notify the employee about the decision
+        // Notify the employee about the decision — saying exactly what
+        // happened: applied only when it actually applied.
         if (req.created_by !== user.id) {
           await createNotification({
             org_id: req.org_id,
@@ -224,18 +240,49 @@ export function useReviewCorrectionRequest() {
             notification_type: params.status === 'approved' ? 'correction_approved' : 'correction_denied',
             title: params.status === 'approved' ? 'Correction Request Approved' : 'Correction Request Denied',
             message: params.status === 'approved'
-              ? 'Your correction request has been approved and applied'
+              ? (applied
+                  ? 'Your correction request has been approved and applied'
+                  : 'Your correction request has been approved — your manager will apply the fix')
               : `Your correction request has been denied: ${params.resolution_note.trim()}`,
             related_table: 'correction_requests',
             related_id: req.id,
           });
         }
       }
+      return { applied };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['correction-requests'] });
       qc.invalidateQueries({ queryKey: ['audit-history'] });
       qc.invalidateQueries({ queryKey: ['pto-requests'] });
+      qc.invalidateQueries({ queryKey: ['approval-counts'] });
+    },
+  });
+}
+
+/**
+ * Marks an approved request as APPLIED, referencing the audit events
+ * that actually applied it (from save_punch_edits' result). The status
+ * never claims something happened that did not: the update is checked.
+ */
+export function useMarkCorrectionApplied() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: { id: string; audit_event_ids: string[] }) => {
+      const { data: rows, error } = await supabase
+        .from('correction_requests')
+        .update({
+          status: 'applied',
+          applied_audit_event_ids: params.audit_event_ids,
+        } as never)
+        .eq('id', params.id)
+        .select('id');
+      if (error) throw error;
+      if (!rows?.length) throw new Error('Could not mark the request applied.');
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['correction-requests'] });
       qc.invalidateQueries({ queryKey: ['approval-counts'] });
     },
   });
