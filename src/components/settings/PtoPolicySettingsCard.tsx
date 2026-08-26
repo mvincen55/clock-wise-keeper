@@ -109,7 +109,15 @@ export default function PtoPolicySettingsCard() {
           <div className="space-y-1">
             <Label>Worked-Hours Cap (weekly)</Label>
             <Input type="number" min={0} value={workedCap} onChange={e => setWorkedCap(parseFloat(e.target.value) || 40)} className="w-24" />
-            <p className="text-xs text-muted-foreground">Hours worked beyond this are not counted for accrual.</p>
+            <p className="text-xs text-muted-foreground">
+              Hours worked beyond this are not counted for accrual.
+              Overtime hours (over 40/week) never accrue PTO, whatever this cap is set to.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Note: accrual weeks run Sunday–Saturday, which can differ from the payroll
+              report's week-start setting; the accrual ledger keeps its historical week
+              boundaries on purpose.
+            </p>
           </div>
           <div className="space-y-1">
             <Label>Max PTO Balance</Label>
