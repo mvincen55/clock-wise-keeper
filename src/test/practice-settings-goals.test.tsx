@@ -26,6 +26,7 @@ const settings: PracticeSettings = {
   mobile_capture_enabled: false,
   confirmation_lead_days: 2,
   pms_system: 'not_configured',
+  timezone: 'America/New_York',
 };
 
 vi.mock('@/hooks/usePracticeSettings', async importOriginal => {
