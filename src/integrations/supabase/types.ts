@@ -1550,6 +1550,7 @@ export type Database = {
       }
       correction_requests: {
         Row: {
+          applied_audit_event_ids: string[] | null
           created_at: string
           created_by: string
           employee_id: string
@@ -1565,6 +1566,7 @@ export type Database = {
           target_table: string
         }
         Insert: {
+          applied_audit_event_ids?: string[] | null
           created_at?: string
           created_by: string
           employee_id: string
@@ -1580,6 +1582,7 @@ export type Database = {
           target_table: string
         }
         Update: {
+          applied_audit_event_ids?: string[] | null
           created_at?: string
           created_by?: string
           employee_id?: string
@@ -8837,6 +8840,16 @@ export type Database = {
       }
       record_punch: {
         Args: { p_action: string }
+        Returns: Json
+      }
+      save_punch_edits: {
+        Args: {
+          p_edits: Json
+          p_entry_date?: string
+          p_entry_id?: string
+          p_reason: string
+          p_employee_id?: string
+        }
         Returns: Json
       }
       request_attendance_recompute: {

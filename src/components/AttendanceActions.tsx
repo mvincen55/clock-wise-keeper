@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useAddDayOff } from '@/hooks/useDaysOff';
@@ -31,15 +30,67 @@ interface AttendanceActionsProps {
 export function AttendanceActions({ row, alwaysShow = false }: AttendanceActionsProps) {
   const { user } = useAuth();
   const { data: ctx } = useOrgContext();
-  const navigate = useNavigate();
   const { toast } = useToast();
   const [action, setAction] = useState<ActionType>(null);
   const [punchEditorOpen, setPunchEditorOpen] = useState(false);
+  // Loaded when the editor opens: the ROW's real entry and punches.
+  // entryId stays null for a fully missed day (the RPC creates the entry).
+  const [editorData, setEditorData] = useState<{
+    entryId: string | null;
+    punches: import('@/hooks/useTimeEntries').PunchRow[];
+    employeeId: string;
+    employeeName?: string;
+  } | null>(null);
+  const [editorLoading, setEditorLoading] = useState(false);
   const addDayOff = useAddDayOff();
   const addClosure = useAddClosure();
   const createException = useCreateException();
   const resolveException = useResolveException();
   const recompute = useRecomputeAttendance();
+
+  // The row belongs to whichever employee the attendance table shows —
+  // never assume the caller. (Preflight adjustment #8: every action in
+  // this menu targets the ROW's employee.)
+  const resolveEmployee = async (): Promise<{ id: string; name?: string } | null> => {
+    if (row.employee_id) {
+      const { data } = await supabase.from('employees').select('id, display_name').eq('id', row.employee_id).maybeSingle();
+      if (data) return { id: data.id, name: data.display_name };
+    }
+    const { data } = await supabase.from('employees').select('id, display_name').eq('user_id', row.user_id).limit(1).maybeSingle();
+    return data ? { id: data.id, name: data.display_name } : null;
+  };
+
+  const openPunchEditor = async () => {
+    setEditorLoading(true);
+    try {
+      const emp = await resolveEmployee();
+      if (!emp) {
+        toast({ title: 'No employee record for this row', variant: 'destructive' });
+        return;
+      }
+      const { data: entry } = await supabase
+        .from('time_entries')
+        .select('id')
+        .eq('employee_id', emp.id)
+        .eq('entry_date', row.entry_date)
+        .maybeSingle();
+      let punches: import('@/hooks/useTimeEntries').PunchRow[] = [];
+      if (entry) {
+        const { data: p } = await supabase
+          .from('punches')
+          .select('*')
+          .eq('time_entry_id', entry.id)
+          .order('seq', { ascending: true });
+        punches = (p || []) as import('@/hooks/useTimeEntries').PunchRow[];
+      }
+      setEditorData({ entryId: entry?.id ?? null, punches, employeeId: emp.id, employeeName: emp.name });
+      setPunchEditorOpen(true);
+    } catch (err: any) {
+      toast({ title: 'Could not load punches', description: err.message, variant: 'destructive' });
+    } finally {
+      setEditorLoading(false);
+    }
+  };
 
   // Day off form
   const [dayOffForm, setDayOffForm] = useState({
@@ -76,14 +127,17 @@ export function AttendanceActions({ row, alwaysShow = false }: AttendanceActions
     if (!dayOffForm.reason.trim()) return;
     if (requiresNotes && !dayOffForm.notes.trim()) return;
     try {
+      const emp = await resolveEmployee();
+      if (!emp) throw new Error('No employee record for this row');
       await addDayOff.mutateAsync({
         date_start: row.entry_date,
         date_end: row.entry_date,
         type: dayOffForm.type as any,
         hours: dayOffForm.hours ? parseFloat(dayOffForm.hours) : undefined,
         notes: `${dayOffForm.notes}${dayOffForm.notes ? ' — ' : ''}Reason: ${dayOffForm.reason}`,
+        target: { user_id: row.user_id, employee_id: emp.id },
       });
-      await recompute.mutateAsync({ startDate: row.entry_date, endDate: row.entry_date });
+      await recompute.mutateAsync({ startDate: row.entry_date, endDate: row.entry_date, userId: row.user_id });
       toast({ title: 'Day off created' });
       setAction(null);
     } catch (err: any) {
@@ -112,7 +166,7 @@ export function AttendanceActions({ row, alwaysShow = false }: AttendanceActions
           related_date: row.entry_date,
         });
       }
-      await recompute.mutateAsync({ startDate: row.entry_date, endDate: row.entry_date });
+      await recompute.mutateAsync({ startDate: row.entry_date, endDate: row.entry_date, userId: row.user_id });
       toast({ title: 'Office closure created' });
       setAction(null);
     } catch (err: any) {
@@ -123,12 +177,18 @@ export function AttendanceActions({ row, alwaysShow = false }: AttendanceActions
   const handleIgnore = async () => {
     if (!ignoreReason.trim()) return;
     try {
-      await createException.mutateAsync({ exception_date: row.entry_date, type: 'other' });
+      const emp = await resolveEmployee();
+      if (!emp) throw new Error('No employee record for this row');
+      await createException.mutateAsync({
+        exception_date: row.entry_date,
+        type: 'other',
+        target: { user_id: row.user_id, employee_id: emp.id },
+      });
       const { data: exceptions } = await supabase
         .from('attendance_exceptions')
         .select('id')
         .eq('exception_date', row.entry_date)
-        .eq('user_id', user?.id || '')
+        .eq('user_id', row.user_id)
         .limit(1);
       if (exceptions?.[0]) {
         await resolveException.mutateAsync({
@@ -138,7 +198,7 @@ export function AttendanceActions({ row, alwaysShow = false }: AttendanceActions
           status: 'ignored',
         });
       }
-      await recompute.mutateAsync({ startDate: row.entry_date, endDate: row.entry_date });
+      await recompute.mutateAsync({ startDate: row.entry_date, endDate: row.entry_date, userId: row.user_id });
       toast({ title: 'Day ignored' });
       setAction(null);
     } catch (err: any) {
@@ -180,14 +240,10 @@ export function AttendanceActions({ row, alwaysShow = false }: AttendanceActions
             Add Closure
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => {
-            if (row.is_absent) {
-              navigate(`/timesheet?date=${row.entry_date}`);
-            } else {
-              setPunchEditorOpen(true);
-            }
-          }}>
-            <Pencil className="h-3.5 w-3.5 mr-2" />
+          <DropdownMenuItem disabled={editorLoading} onClick={() => { void openPunchEditor(); }}>
+            {editorLoading
+              ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+              : <Pencil className="h-3.5 w-3.5 mr-2" />}
             {row.is_absent ? 'Add Punches' : 'Add/Edit Punches'}
           </DropdownMenuItem>
           {row.is_absent && (
@@ -202,14 +258,21 @@ export function AttendanceActions({ row, alwaysShow = false }: AttendanceActions
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Punch Editor */}
-      {!row.is_absent && (
+      {/* Punch Editor — the row's real entry and punches, or null-entry
+          mode for a fully missed day. The save RPC resolves the target
+          employee from the entry row and creates the entry when needed. */}
+      {editorData && (
         <PunchEditorModal
           open={punchEditorOpen}
-          onClose={() => setPunchEditorOpen(false)}
-          entryId=""
+          onClose={() => { setPunchEditorOpen(false); setEditorData(null); }}
+          entryId={editorData.entryId}
           entryDate={row.entry_date}
-          punches={[]}
+          punches={editorData.punches}
+          employeeId={editorData.employeeId}
+          employeeName={editorData.employeeName}
+          onSaved={() => {
+            void recompute.mutateAsync({ startDate: row.entry_date, endDate: row.entry_date, userId: row.user_id });
+          }}
         />
       )}
 

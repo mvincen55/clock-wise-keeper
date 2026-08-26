@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 export type AttendanceDayStatusRow = {
   id: string;
   user_id: string;
+  employee_id: string | null;
   entry_date: string;
   schedule_expected_start: string | null;
   schedule_expected_end: string | null;
@@ -55,12 +56,14 @@ export function useRecomputeAttendance() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ startDate, endDate }: { startDate: string; endDate: string }) => {
+    mutationFn: async ({ startDate, endDate, userId }: { startDate: string; endDate: string; userId?: string }) => {
       if (!user) throw new Error('Not authenticated');
       // Server-side authorized entry point: self, or an admin/manager of the
       // target's org. The raw engine is no longer callable by clients.
+      // userId targets ANOTHER member's attendance (admin flows — e.g. a
+      // manager acting on an attendance row); defaults to the caller.
       const { data, error } = await supabase.rpc('request_attendance_recompute', {
-        p_user_id: user.id,
+        p_user_id: userId ?? user.id,
         p_start_date: startDate,
         p_end_date: endDate,
       });

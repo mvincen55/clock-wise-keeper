@@ -37,13 +37,18 @@ export function useCreateException() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { exception_date: string; type?: 'missing_shift' | 'other' }) => {
+    mutationFn: async (input: {
+      exception_date: string;
+      type?: 'missing_shift' | 'other';
+      /** Whose exception this is (admin flows). Defaults to the caller's own record. */
+      target?: { user_id: string; employee_id: string };
+    }) => {
       if (!user || !ctx) throw new Error('Not authenticated');
       const { error } = await supabase.from('attendance_exceptions').upsert(
         {
-          user_id: user.id,
+          user_id: input.target?.user_id ?? user.id,
           org_id: ctx.org_id,
-          employee_id: ctx.employee_id,
+          employee_id: input.target?.employee_id ?? ctx.employee_id,
           exception_date: input.exception_date,
           type: input.type || 'missing_shift',
           status: 'open' as const,
