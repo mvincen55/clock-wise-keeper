@@ -12,7 +12,9 @@
 --      NULL (inherit). A non-null value is now an EXPLICIT per-person
 --      override.
 --   3. get_user_timezone resolves: explicit user timezone if set, else
---      the org timezone, else the legacy fallbacks, else the default.
+--      the office timezone (or the default) for anyone with an
+--      employee row, else the legacy fallbacks for employee-less
+--      accounts, else the default — and validates the result.
 --      _record_punch_internal already takes its entry-dating timezone
 --      from this function (the Phase 1 plug-in point), so server-side
 --      punch dating follows the office setting with no further change.
@@ -44,27 +46,55 @@ UPDATE public.employees
    SET timezone = NULL
  WHERE timezone = 'America/New_York';
 
+-- SECURITY SHAPE (pre-merge review finding, closed here): of the
+-- sources below, employees.timezone and org_practice_settings.timezone
+-- are admin-controlled under RLS, but the legacy pto_settings row is
+-- writable by the employee it belongs to. Entry dating must never
+-- consult an employee-writable source, so the office branch uses a
+-- LEFT JOIN with a COALESCE'd default: anyone holding an employee row
+-- resolves THERE unconditionally — office setting when configured,
+-- default otherwise — and the legacy branches are reachable only for
+-- accounts with no employee row at all, which cannot punch (the punch
+-- RPCs require one) and so never date a wage record.
+--
+-- The final validity guard keeps an unrecognized name (only reachable
+-- by an admin writing garbage through the API) from erroring punch
+-- recording or recompute: a clock-out punch is never withheld for any
+-- reason, so a bad value falls back to the default instead of raising.
 CREATE OR REPLACE FUNCTION public.get_user_timezone(p_user_id uuid)
 RETURNS text
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  v_tz text;
+BEGIN
   SELECT COALESCE(
-    -- Explicit per-person override, when set.
-    (SELECT e.timezone FROM public.employees e WHERE e.user_id = p_user_id AND e.timezone IS NOT NULL LIMIT 1),
-    -- The office timezone.
-    (SELECT ops.timezone
+    -- Explicit per-person override (admin-managed), when set.
+    (SELECT e.timezone FROM public.employees e
+      WHERE e.user_id = p_user_id AND e.timezone IS NOT NULL LIMIT 1),
+    -- Anyone with an employee row resolves here, always.
+    (SELECT COALESCE(ops.timezone, 'America/New_York')
        FROM public.employees e
-       JOIN public.org_practice_settings ops ON ops.org_id = e.org_id
+       LEFT JOIN public.org_practice_settings ops ON ops.org_id = e.org_id
       WHERE e.user_id = p_user_id
       LIMIT 1),
-    -- Legacy fallbacks, kept for accounts predating the org setting.
+    -- Legacy fallbacks: employee-less accounts only (cannot punch).
     (SELECT sv.timezone FROM public.schedule_versions sv
-     WHERE sv.user_id = p_user_id
-     ORDER BY sv.effective_start_date DESC LIMIT 1),
+      WHERE sv.user_id = p_user_id
+      ORDER BY sv.effective_start_date DESC LIMIT 1),
     (SELECT ps.timezone FROM public.pto_settings ps WHERE ps.user_id = p_user_id),
     'America/New_York'
-  );
+  ) INTO v_tz;
+
+  BEGIN
+    PERFORM now() AT TIME ZONE v_tz;
+  EXCEPTION WHEN OTHERS THEN
+    v_tz := 'America/New_York';
+  END;
+
+  RETURN v_tz;
+END;
 $$;

@@ -32,6 +32,19 @@ describe('setAppTimezone / getAppTimezone', () => {
     expect(getAppTimezone()).toBe('America/New_York');
   });
 
+  it('rejects unrecognized zone names instead of poisoning every render', () => {
+    // The value comes from the database; a bad row must not make the
+    // Intl formatters throw across the app. Invalid → default.
+    setAppTimezone('America/New_Yrok');
+    expect(getAppTimezone()).toBe('America/New_York');
+    expect(easternTimeInputValue('2026-01-15T15:00:00Z')).toBe('10:00');
+
+    // Falls back to the default even when a valid zone was active before.
+    setAppTimezone('America/Chicago');
+    setAppTimezone('Not/AZone');
+    expect(getAppTimezone()).toBe('America/New_York');
+  });
+
   it('wall-clock helpers follow the active zone', () => {
     const instant = '2026-01-15T15:00:00Z'; // 10:00 EST / 09:00 CST / 05:00 HST
     expect(easternTimeInputValue(instant)).toBe('10:00');

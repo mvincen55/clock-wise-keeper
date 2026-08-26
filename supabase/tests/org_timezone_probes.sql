@@ -14,13 +14,17 @@
 --   2  a fresh employee row inserted without a timezone lands NULL
 --      (inherit) — the old column default is really gone
 --   3  resolver chain: NULL employee tz inherits the office timezone;
---      an explicit employee tz overrides it; the pto_settings legacy
---      fallback still works for accounts with no office setting; and
---      with nothing set anywhere the default is America/New_York
+--      an explicit employee tz overrides it; a SELF-WRITTEN
+--      pto_settings timezone can NEVER influence anyone holding an
+--      employee row — even in an org with no practice-settings row
+--      (the pre-merge review's exploit, closed by the LEFT JOIN
+--      branch); and with nothing set anywhere the default applies
 --   4  end-to-end entry dating: a punch through the RPC core for an
 --      office set to Pacific/Honolulu is dated on Honolulu's calendar,
 --      not New York's (06:00 UTC = Jan 14 in Honolulu, Jan 15 in NY)
---   5  data fix: no employees row still holds the literal old default
+--   5  an unrecognized office timezone falls back to the default and
+--      punch recording still succeeds (a clock-out is never withheld)
+--   6  data fix: no employees row still holds the literal old default
 --      (valid immediately after the migration; an explicit
 --      America/New_York override chosen later would trip this)
 -- ============================================================
@@ -99,8 +103,9 @@ BEGIN
 END $$;
 
 -- ---------- PROBE 3: the resolution chain ----------
--- Legacy fixture: second org has NO office setting; its first user has an
--- old pto_settings row carrying a timezone.
+-- Exploit fixture: the second org has NO practice-settings row, and its
+-- first user writes their OWN pto_settings timezone (the RLS policy
+-- "Own pto_settings" allows exactly this). Entry dating must ignore it.
 INSERT INTO public.pto_settings (employee_id, org_id, user_id, timezone) VALUES
   ('6e000000-0000-4000-8000-0000000000ed', '6f000000-0000-4000-8000-0000000000fe',
    '6a000000-0000-4000-8000-0000000000ab', 'America/Denver');
@@ -125,10 +130,13 @@ BEGIN
   UPDATE public.employees SET timezone = NULL
    WHERE id = '6e000000-0000-4000-8000-0000000000ee';
 
-  -- (c) no office setting → legacy pto_settings fallback still honored.
+  -- (c) THE EXPLOIT, CLOSED: an employee-linked user in an org with no
+  -- practice-settings row self-writes pto_settings.timezone. The
+  -- resolver must land on the admin-controlled office branch (default,
+  -- since no row) and never reach the self-writable source.
   v_tz := public.get_user_timezone('6a000000-0000-4000-8000-0000000000ab');
-  IF v_tz <> 'America/Denver' THEN
-    RAISE EXCEPTION 'PROBE 3 FAILED: legacy pto_settings fallback broken — expected America/Denver, got %', v_tz;
+  IF v_tz <> 'America/New_York' THEN
+    RAISE EXCEPTION 'PROBE 3 FAILED: self-written pto_settings tz leaked into resolution — got %, expected America/New_York', v_tz;
   END IF;
 
   -- (d) nothing anywhere → the historical default.
@@ -137,7 +145,7 @@ BEGIN
     RAISE EXCEPTION 'PROBE 3 FAILED: bare account should default to America/New_York, got %', v_tz;
   END IF;
 
-  RAISE NOTICE 'PROBE 3 OK (override > office > legacy > default)';
+  RAISE NOTICE 'PROBE 3 OK (override > office > default; self-writable sources shadowed)';
 END $$;
 
 -- ---------- PROBE 4: server entry dating follows the office ----------
@@ -174,16 +182,48 @@ BEGIN
   RAISE NOTICE 'PROBE 4 OK (entry dated on the office calendar)';
 END $$;
 
--- ---------- PROBE 5: the old literal default was cleared ----------
+-- ---------- PROBE 5: an unrecognized name never blocks a punch ----------
+DO $$
+DECLARE
+  v_tz text;
+  r jsonb;
+  v_date date;
+BEGIN
+  -- Only an admin writing garbage through the API can produce this;
+  -- even then, dating falls back to the default and recording works.
+  UPDATE public.org_practice_settings SET timezone = 'Not/AZone'
+   WHERE org_id = '6f000000-0000-4000-8000-0000000000ff';
+
+  v_tz := public.get_user_timezone('6a000000-0000-4000-8000-0000000000aa');
+  IF v_tz <> 'America/New_York' THEN
+    RAISE EXCEPTION 'PROBE 5 FAILED: invalid office tz resolved to % instead of the default', v_tz;
+  END IF;
+
+  -- 06:00 UTC on Jan 20 = 01:00 EST Jan 20 → dated Jan 20 under the
+  -- fallback (would have errored outright before the validity guard).
+  r := public._record_punch_internal(
+    p_employee_id := '6e000000-0000-4000-8000-0000000000ee',
+    p_action      := 'clock_in',
+    p_punch_time  := '2026-01-20 06:00:00+00'::timestamptz,
+    p_actor       := '6a000000-0000-4000-8000-0000000000aa');
+  SELECT entry_date INTO v_date FROM public.time_entries WHERE id = (r->>'entry_id')::uuid;
+  IF v_date <> DATE '2026-01-20' THEN
+    RAISE EXCEPTION 'PROBE 5 FAILED: fallback dating gave % — expected 2026-01-20', v_date;
+  END IF;
+
+  RAISE NOTICE 'PROBE 5 OK (invalid office tz cannot block or misdate punches)';
+END $$;
+
+-- ---------- PROBE 6: the old literal default was cleared ----------
 DO $$
 DECLARE
   n int;
 BEGIN
   SELECT count(*) INTO n FROM public.employees WHERE timezone = 'America/New_York';
   IF n > 0 THEN
-    RAISE EXCEPTION 'PROBE 5 FAILED: % employees still hold literal America/New_York (expected 0 immediately after migration)', n;
+    RAISE EXCEPTION 'PROBE 6 FAILED: % employees still hold literal America/New_York (expected 0 immediately after migration)', n;
   END IF;
-  RAISE NOTICE 'PROBE 5 OK (no residue of the old default)';
+  RAISE NOTICE 'PROBE 6 OK (no residue of the old default)';
 END $$;
 
 DO $$ BEGIN RAISE NOTICE 'ALL PROBES PASSED — rolling back fixtures.'; END $$;

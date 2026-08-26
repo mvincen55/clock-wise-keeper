@@ -20,9 +20,23 @@
 const DEFAULT_APP_TZ = 'America/New_York';
 let APP_TZ = DEFAULT_APP_TZ;
 
-/** Sets the display timezone (IANA name). Null/empty restores the default. */
+/**
+ * Sets the display timezone (IANA name). Null/empty restores the default.
+ * A name Intl doesn't recognize also falls back to the default — the value
+ * comes from the database, and one bad row must not throw inside the ~50
+ * render sites that format wall-clock times.
+ */
 export function setAppTimezone(tz: string | null | undefined): void {
-  APP_TZ = tz || DEFAULT_APP_TZ;
+  if (!tz) {
+    APP_TZ = DEFAULT_APP_TZ;
+    return;
+  }
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    APP_TZ = tz;
+  } catch {
+    APP_TZ = DEFAULT_APP_TZ;
+  }
 }
 
 /** The active display timezone (IANA name). */
