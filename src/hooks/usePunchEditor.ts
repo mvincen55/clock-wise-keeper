@@ -29,7 +29,11 @@ export function useSavePunchEdits() {
       employee_id: ctx.employee_id,
       actor_id: user.id,
       event_type,
-      event_details: event_details as any,
+      // target_employee_id is the editor's own record here because every
+      // working call site is self-scoped; the transactional-editing phase
+      // replaces this whole path with a server RPC that resolves the
+      // target from the entry row instead.
+      event_details: { ...event_details, target_employee_id: ctx.employee_id } as any,
       related_entry_id,
       related_date,
     });

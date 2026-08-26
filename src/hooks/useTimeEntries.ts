@@ -178,6 +178,8 @@ export function useUpdateEntry() {
             new_value: audit.new_value,
             reason_comment: audit.reason_comment,
             edit_source: 'manual_edit',
+            // Self-scoped path (own timesheet): the target is the caller's record.
+            target_employee_id: ctx.employee_id,
           } as any,
           related_entry_id: entryId,
         });

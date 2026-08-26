@@ -107,7 +107,8 @@ export function AttendanceActions({ row, alwaysShow = false }: AttendanceActions
           employee_id: ctx.employee_id,
           actor_id: user.id,
           event_type: 'mark_office_closed',
-          event_details: { date: row.entry_date, name: closureForm.name, reason: closureForm.reason },
+          // Office-scoped event: no single employee's record is the target.
+          event_details: { date: row.entry_date, name: closureForm.name, reason: closureForm.reason, target_employee_id: null },
           related_date: row.entry_date,
         });
       }
