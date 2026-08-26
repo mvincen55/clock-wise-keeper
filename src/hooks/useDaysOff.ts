@@ -40,15 +40,18 @@ export function useAddDayOff() {
       date_start: string; date_end: string;
       type: 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'medical_leave' | 'other';
       hours?: number; notes?: string;
+      /** Whose day off this is (admin flows). Defaults to the caller's own record. */
+      target?: { user_id: string; employee_id: string };
     }) => {
       if (!user) throw new Error('Not authenticated — please log in');
       if (!ctx) throw new Error('Organization not found — make sure you have an org set up');
+      const { target, ...fields } = input;
       const { error } = await supabase.from('days_off').insert({
-        user_id: user.id,
+        user_id: target?.user_id ?? user.id,
         org_id: ctx.org_id,
-        employee_id: ctx.employee_id,
+        employee_id: target?.employee_id ?? ctx.employee_id,
         created_by: user.id,
-        ...input,
+        ...fields,
       });
       if (error) throw error;
     },
