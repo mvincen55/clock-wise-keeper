@@ -8852,16 +8852,6 @@ export type Database = {
         Args: { _message_id: string; _note?: string }
         Returns: undefined
       }
-      save_punch_edits: {
-        Args: {
-          p_edits: Json
-          p_entry_date?: string
-          p_entry_id?: string
-          p_reason: string
-          p_employee_id?: string
-        }
-        Returns: Json
-      }
       request_attendance_recompute: {
         Args: { p_end_date: string; p_start_date: string; p_user_id: string }
         Returns: number
@@ -9096,6 +9086,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      save_punch_edits: {
+        Args: {
+          p_edits: Json
+          p_employee_id?: string
+          p_entry_date?: string
+          p_entry_id: string
+          p_reason: string
+        }
+        Returns: Json
       }
       search_office_doc_chunks: {
         Args: {
