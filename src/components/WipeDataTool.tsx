@@ -129,12 +129,10 @@ export default function WipeDataTool() {
           .select('id');
         punchCount = deletedPunches?.length || 0;
 
-        // 3. Delete audit events linked to entries
-        const { data: deletedAudits } = await supabase
-          .from('audit_events')
-          .delete()
-          .in('related_entry_id', entryIds)
-          .select('id');
+        // 3. Audit events are NOT deleted: the audit log is append-only
+        // (DB triggers reject UPDATE/DELETE for every role). The wipe
+        // itself leaves punch_deleted audit rows, so even a wipe is on
+        // the record — that's the point of a wage-and-hour audit trail.
 
         // 4. Delete time entries
         await supabase
@@ -290,7 +288,8 @@ export default function WipeDataTool() {
                 onCheckedChange={v => setConfirmDelete(v === true)}
               />
               <label htmlFor="confirm-delete" className="text-xs leading-tight cursor-pointer">
-                This will delete ALL punches, time entries, tardies, missing shift exceptions, and related attendance events in this range.
+                This will delete ALL punches, time entries, tardies, missing shift exceptions, and days off in this range.
+                Audit history is retained — the audit log is append-only, and the wipe itself is recorded there.
               </label>
             </div>
             <div className="flex items-start gap-2">

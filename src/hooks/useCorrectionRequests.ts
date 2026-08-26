@@ -211,7 +211,8 @@ export function useReviewCorrectionRequest() {
           target_id: req.target_id,
           after_json: params.status === 'approved' ? (req.proposed_change as any) : undefined,
           reason: params.resolution_note.trim(),
-          event_details: { correction_request_id: req.id } as any,
+          // target_employee_id = whose record; actor_id = who decided.
+          event_details: { correction_request_id: req.id, target_employee_id: req.employee_id } as any,
         });
 
         // Notify the employee about the decision
@@ -307,6 +308,7 @@ export function useWriteManagerEditAudit() {
         after_json: params.after_json as any,
         reason: params.reason,
         related_date: params.related_date,
+        event_details: { target_employee_id: params.employee_id } as any,
       });
       if (error) throw error;
     },
