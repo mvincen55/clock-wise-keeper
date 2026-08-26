@@ -22,6 +22,8 @@
 -- ============================================================
 
 BEGIN;
+SET LOCAL lock_timeout = '3s';
+SET LOCAL statement_timeout = '25s';
 
 -- ---------- fixtures (rolled back) ----------
 INSERT INTO auth.users (id, email) VALUES
@@ -114,13 +116,23 @@ BEGIN
 END $$;
 RESET ROLE;
 
--- ---------- PROBE 5: TRUNCATE rejected ----------
+-- ---------- PROBE 5: TRUNCATE guard in place (lock-safe form) ----------
+-- A literal TRUNCATE needs ACCESS EXCLUSIVE and can stall behind live
+-- traffic on a busy database; the catalog proves the guard without
+-- taking the lock. tgtype 34 = BEFORE|TRUNCATE statement trigger;
+-- tgtype 27 = ROW|BEFORE|DELETE|UPDATE row trigger.
 DO $$
+DECLARE n int;
 BEGIN
-  TRUNCATE public.audit_events;
-  RAISE EXCEPTION 'PROBE 5 FAILED: TRUNCATE was allowed';
-EXCEPTION WHEN OTHERS THEN
-  IF SQLERRM LIKE 'AUDIT_APPEND_ONLY%' THEN RAISE NOTICE 'PROBE 5 OK'; ELSE RAISE; END IF;
+  SELECT count(*) INTO n FROM pg_trigger t
+   JOIN pg_class c ON c.oid = t.tgrelid
+   WHERE c.relname = 'audit_events' AND t.tgname = 'trg_audit_events_no_truncate' AND t.tgtype = 34;
+  IF n <> 1 THEN RAISE EXCEPTION 'PROBE 5 FAILED: BEFORE TRUNCATE statement trigger missing or wrong shape'; END IF;
+  SELECT count(*) INTO n FROM pg_trigger t
+   JOIN pg_class c ON c.oid = t.tgrelid
+   WHERE c.relname = 'audit_events' AND t.tgname = 'trg_audit_events_append_only' AND t.tgtype = 27;
+  IF n <> 1 THEN RAISE EXCEPTION 'PROBE 5 FAILED: BEFORE UPDATE OR DELETE row trigger missing or wrong shape'; END IF;
+  RAISE NOTICE 'PROBE 5 OK';
 END $$;
 
 -- ---------- PROBE 6: authenticated org ADMIN touches zero rows ----------

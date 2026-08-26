@@ -229,7 +229,7 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
       {auditDialog && (
         <EditAuditDialog open onClose={() => setAuditDialog(null)} onConfirm={handleAuditConfirm} fieldChanged={auditDialog.field} oldValue={auditDialog.old} newValue={auditDialog.new} />
       )}
-      <PunchEditorModal open={punchEditorOpen} onClose={() => setPunchEditorOpen(false)} entryId={entry.id} entryDate={entry.entry_date} punches={punches} />
+      <PunchEditorModal open={punchEditorOpen} onClose={() => setPunchEditorOpen(false)} entryId={entry.id} entryDate={entry.entry_date} punches={entry.all_punches || punches} />
       <AuditHistoryModal
         open={auditHistoryOpen}
         onClose={() => setAuditHistoryOpen(false)}
