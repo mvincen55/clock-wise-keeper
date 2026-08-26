@@ -45,6 +45,8 @@ function punchToEditable(p: PunchRow): EditablePunch {
     source: p.source,
     location_lat: p.location_lat,
     location_lng: p.location_lng,
+    voided_at: p.voided_at ?? null,
+    void_reason: p.void_reason ?? null,
   };
 }
 
@@ -99,7 +101,7 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
 
   const warnings = useMemo(() => {
     const w: string[] = [];
-    const active = editedPunches.filter(p => !p.is_deleted);
+    const active = editedPunches.filter(p => !p.is_deleted && !p.voided_at);
     const times = active.map(p => new Date(p.punch_time).getTime());
     const uniqueTimes = new Set(times);
     if (uniqueTimes.size < times.length) w.push('Duplicate timestamps detected');
@@ -134,37 +136,37 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
     }));
   };
 
+  const newEditable = (punch_type: 'in' | 'out', punch_time: string): EditablePunch => ({
+    id: null,
+    punch_type,
+    punch_time,
+    original_punch_time: null,
+    is_deleted: false,
+    is_new: true,
+    is_edited: false,
+    source: 'manual',
+    location_lat: null,
+    location_lng: null,
+    voided_at: null,
+    void_reason: null,
+  });
+
   const addPunch = () => {
-    const nowIso = nowEasternIso();
-    setEditedPunches(prev => [
-      ...prev,
-      {
-        id: null,
-        punch_type: 'in' as const,
-        punch_time: nowIso,
-        original_punch_time: null,
-        is_deleted: false,
-        is_new: true,
-        is_edited: false,
-        source: 'manual',
-        location_lat: null,
-        location_lng: null,
-      },
-    ]);
+    setEditedPunches(prev => [...prev, newEditable('in', nowEasternIso())]);
   };
 
   const autoSort = () => {
     setEditedPunches(prev => {
-      const active = prev.filter(p => !p.is_deleted);
-      const deleted = prev.filter(p => p.is_deleted);
+      const active = prev.filter(p => !p.is_deleted && !p.voided_at);
+      const rest = prev.filter(p => p.is_deleted || !!p.voided_at);
       active.sort((a, b) => new Date(a.punch_time).getTime() - new Date(b.punch_time).getTime());
-      return [...active, ...deleted];
+      return [...active, ...rest];
     });
   };
 
   const convertAllGpsToManual = () => {
     setEditedPunches(prev => prev.map(p => {
-      if (p.source === 'auto_location' && !p.is_deleted) {
+      if (p.source === 'auto_location' && !p.is_deleted && !p.voided_at) {
         return { ...p, source: 'manual', is_edited: !p.is_new ? true : p.is_edited };
       }
       return p;
@@ -172,7 +174,7 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
     setQuickFixUsed(true);
   };
 
-  const hasGpsPunches = editedPunches.some(p => p.source === 'auto_location' && !p.is_deleted);
+  const hasGpsPunches = editedPunches.some(p => p.source === 'auto_location' && !p.is_deleted && !p.voided_at);
 
   // Quick fixes
   const setClockOutToScheduledEnd = () => {
@@ -182,14 +184,14 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
       return;
     }
     const endIso = fromLocalTimeInput(entryDate, sched.end_time);
-    const active = editedPunches.filter(p => !p.is_deleted);
+    const active = editedPunches.filter(p => !p.is_deleted && !p.voided_at);
     const lastIn = [...active].reverse().find(p => p.punch_type === 'in');
     if (!lastIn) {
       toast({ title: 'No clock-in found to pair with', variant: 'destructive' });
       return;
     }
     const lastOutIdx = editedPunches.findIndex(
-      (p, i) => !p.is_deleted && p.punch_type === 'out' && i === editedPunches.length - 1
+      (p, i) => !p.is_deleted && !p.voided_at && p.punch_type === 'out' && i === editedPunches.length - 1
     );
     if (lastOutIdx >= 0) {
       updatePunch(lastOutIdx, 'punch_time', endIso);
@@ -197,28 +199,13 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
         setEditedPunches(prev => prev.map((p, i) => i === lastOutIdx ? { ...p, is_edited: true } : p));
       }
     } else {
-      setEditedPunches(prev => [
-        ...prev,
-        {
-          id: null, punch_type: 'out' as const, punch_time: endIso,
-          original_punch_time: null, is_deleted: false, is_new: true, is_edited: false,
-          source: 'manual', location_lat: null, location_lng: null,
-        },
-      ]);
+      setEditedPunches(prev => [...prev, newEditable('out', endIso)]);
     }
     setQuickFixUsed(true);
   };
 
   const setClockOutToNow = () => {
-    const nowIso = nowEasternIso();
-    setEditedPunches(prev => [
-      ...prev,
-      {
-        id: null, punch_type: 'out' as const, punch_time: nowIso,
-        original_punch_time: null, is_deleted: false, is_new: true, is_edited: false,
-        source: 'manual', location_lat: null, location_lng: null,
-      },
-    ]);
+    setEditedPunches(prev => [...prev, newEditable('out', nowEasternIso())]);
     setQuickFixUsed(true);
   };
 
@@ -228,23 +215,17 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
       toast({ title: 'No schedule found', variant: 'destructive' });
       return;
     }
-    const active = editedPunches.filter(p => !p.is_deleted);
+    const active = editedPunches.filter(p => !p.is_deleted && !p.voided_at);
     if (active.length === 0) {
-      const startIso = fromLocalTimeInput(entryDate, sched.start_time);
-      const endIso = fromLocalTimeInput(entryDate, sched.end_time);
       setEditedPunches(prev => [
         ...prev,
-        { id: null, punch_type: 'in' as const, punch_time: startIso, original_punch_time: null, is_deleted: false, is_new: true, is_edited: false, source: 'manual', location_lat: null, location_lng: null },
-        { id: null, punch_type: 'out' as const, punch_time: endIso, original_punch_time: null, is_deleted: false, is_new: true, is_edited: false, source: 'manual', location_lat: null, location_lng: null },
+        newEditable('in', fromLocalTimeInput(entryDate, sched.start_time)),
+        newEditable('out', fromLocalTimeInput(entryDate, sched.end_time)),
       ]);
     } else {
       const last = active[active.length - 1];
       if (last.punch_type === 'in') {
-        const endIso = fromLocalTimeInput(entryDate, sched.end_time);
-        setEditedPunches(prev => [
-          ...prev,
-          { id: null, punch_type: 'out' as const, punch_time: endIso, original_punch_time: null, is_deleted: false, is_new: true, is_edited: false, source: 'manual', location_lat: null, location_lng: null },
-        ]);
+        setEditedPunches(prev => [...prev, newEditable('out', fromLocalTimeInput(entryDate, sched.end_time))]);
       }
     }
     setQuickFixUsed(true);
@@ -267,7 +248,7 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
     }
   };
 
-  const activePunches = editedPunches.filter(p => !p.is_deleted);
+  const activePunches = editedPunches.filter(p => !p.is_deleted && !p.voided_at);
 
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
@@ -278,7 +259,8 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
             Edit Punches
           </DialogTitle>
           <DialogDescription>
-            {entryDate} — Edit, add, or remove punches. All changes are audited.
+            {entryDate} — Edit, add, or void punches. Removing a punch voids it:
+            the record stays, greyed out, and stops counting. All changes are audited.
           </DialogDescription>
         </DialogHeader>
 
@@ -286,6 +268,24 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches }:
         <div className="space-y-2">
           {editedPunches.map((p, i) => {
             if (p.is_deleted) return null;
+            if (p.voided_at) {
+              // Voided punches are immutable history: visible, struck
+              // through, never editable, never re-deletable.
+              return (
+                <div key={p.id || `voided-${i}`} className="rounded-lg bg-muted/30 p-2 opacity-60">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="w-20 text-xs font-semibold uppercase text-muted-foreground">{p.punch_type}</span>
+                    <span className="line-through text-muted-foreground time-display">{formatTime(p.punch_time)}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">VOIDED</span>
+                    {p.void_reason && (
+                      <span className="text-[10px] text-muted-foreground truncate" title={p.void_reason}>
+                        {p.void_reason}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            }
             const orig = originalPunches.find(o => o.id === p.id);
             const sourceChanged = orig && p.source !== orig.source;
             const wasEdited = p.is_edited || p.is_new || sourceChanged;

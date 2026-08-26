@@ -120,26 +120,32 @@ export default function WipeDataTool() {
       const entryIds = (entries || []).map(e => e.id);
       let punchCount = 0;
 
-      // 2. Delete punches for those entries
+      // 2. VOID punches for those entries. Time records are never
+      // destroyed (DB triggers reject DELETE on punches/time_entries for
+      // every role): voided punches keep their rows and seq, stop
+      // counting, and each void is audited. The entries themselves stay
+      // and recompute to zero.
       if (entryIds.length > 0) {
-        const { data: deletedPunches } = await supabase
+        const { data: voidedPunches, error: voidError } = await supabase
           .from('punches')
-          .delete()
+          .update({
+            voided_at: new Date().toISOString(),
+            voided_by: user.id,
+            void_reason: 'Wiped by owner (data wipe tool)',
+          })
           .in('time_entry_id', entryIds)
+          .is('voided_at', null)
           .select('id');
-        punchCount = deletedPunches?.length || 0;
+        if (voidError) throw voidError;
+        punchCount = voidedPunches?.length || 0;
 
-        // 3. Audit events are NOT deleted: the audit log is append-only
-        // (DB triggers reject UPDATE/DELETE for every role). The wipe
-        // itself leaves punch_deleted audit rows, so even a wipe is on
-        // the record — that's the point of a wage-and-hour audit trail.
+        // 3. Audit events are NOT deleted: the audit log is append-only.
+        // The wipe itself leaves punch_edit audit rows for every void,
+        // so even a wipe is on the record — that's the point of a
+        // wage-and-hour audit trail.
 
-        // 4. Delete time entries
-        await supabase
-          .from('time_entries')
-          .delete()
-          .gte('entry_date', startDate)
-          .lte('entry_date', endDate);
+        // 4. Time entries are retained (deletion is DB-forbidden); the
+        // void updates above recompute their totals to zero.
       }
 
       // 5. Delete tardies in range
@@ -212,9 +218,9 @@ export default function WipeDataTool() {
         </CardHeader>
         <CardContent className="p-4 space-y-3">
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <span className="text-muted-foreground">Time entries deleted:</span>
+            <span className="text-muted-foreground">Time entries cleared (kept, zeroed):</span>
             <span className="font-semibold">{wipeSummary.entries}</span>
-            <span className="text-muted-foreground">Punches deleted:</span>
+            <span className="text-muted-foreground">Punches voided:</span>
             <span className="font-semibold">{wipeSummary.punches}</span>
             <span className="text-muted-foreground">Tardies deleted:</span>
             <span className="font-semibold">{wipeSummary.tardies}</span>
@@ -288,8 +294,9 @@ export default function WipeDataTool() {
                 onCheckedChange={v => setConfirmDelete(v === true)}
               />
               <label htmlFor="confirm-delete" className="text-xs leading-tight cursor-pointer">
-                This will delete ALL punches, time entries, tardies, missing shift exceptions, and days off in this range.
-                Audit history is retained — the audit log is append-only, and the wipe itself is recorded there.
+                This will VOID all punches (zeroing the affected days) and delete tardies, missing shift
+                exceptions, and days off in this range. Punch rows, time entries, and audit history are
+                retained — time records are append-only, and the wipe itself is recorded in the audit trail.
               </label>
             </div>
             <div className="flex items-start gap-2">

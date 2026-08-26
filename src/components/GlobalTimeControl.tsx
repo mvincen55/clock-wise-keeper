@@ -126,7 +126,7 @@ export function ClockProvider({ children }: { children: ReactNode }) {
           onClose={() => setPunchEditorOpen(false)}
           entryId={todayEntry.id}
           entryDate={todayEntry.entry_date}
-          punches={punches}
+          punches={todayEntry.all_punches || punches}
         />
       )}
       {todayEntry && (

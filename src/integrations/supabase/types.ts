@@ -6408,6 +6408,9 @@ export type Database = {
           source: Database["public"]["Enums"]["source_type"]
           time_entry_id: string
           time_verified: boolean
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
         }
         Insert: {
           created_at?: string
@@ -6429,6 +6432,9 @@ export type Database = {
           source?: Database["public"]["Enums"]["source_type"]
           time_entry_id: string
           time_verified?: boolean
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Update: {
           created_at?: string
@@ -6450,6 +6456,9 @@ export type Database = {
           source?: Database["public"]["Enums"]["source_type"]
           time_entry_id?: string
           time_verified?: boolean
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Relationships: [
           {

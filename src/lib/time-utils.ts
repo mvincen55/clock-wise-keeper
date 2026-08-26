@@ -173,9 +173,11 @@ export function easternWallMinutes(iso: string | Date): number {
   return h * 60 + get('minute');
 }
 
-export function calculatePunchMinutes(punches: { punch_type: string; punch_time: string }[]): number {
+export function calculatePunchMinutes(punches: { punch_type: string; punch_time: string; voided_at?: string | null }[]): number {
   let total = 0;
-  const sorted = [...punches].sort((a, b) => new Date(a.punch_time).getTime() - new Date(b.punch_time).getTime());
+  const sorted = punches
+    .filter(p => !p.voided_at)
+    .sort((a, b) => new Date(a.punch_time).getTime() - new Date(b.punch_time).getTime());
 
   for (let i = 0; i < sorted.length - 1; i += 2) {
     if (sorted[i].punch_type === 'in' && sorted[i + 1]?.punch_type === 'out') {

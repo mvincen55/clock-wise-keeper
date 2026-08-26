@@ -119,6 +119,7 @@ serve(async (req) => {
 
     let imported = 0;
     let skipped = 0;
+    let punchInsertFailures = 0;
     const ambiguous: any[] = [];
 
     for (const row of rows || []) {
@@ -174,7 +175,18 @@ serve(async (req) => {
       }
 
       if (existing && strategy === "overwrite") {
-        await supabase.from("punches").delete().eq("time_entry_id", existing.id);
+        // Punch rows are never deleted (void-not-delete): supersede the
+        // live punches by voiding them; they keep their seq forever.
+        const { error: voidError } = await supabase
+          .from("punches")
+          .update({
+            voided_at: new Date().toISOString(),
+            voided_by: user.id,
+            void_reason: "Superseded by re-import (overwrite)",
+          })
+          .eq("time_entry_id", existing.id)
+          .is("voided_at", null);
+        if (voidError) throw voidError;
         await supabase.from("time_entries").update({
           total_minutes: totalMin,
           raw_total_hhmm: row.total_hhmm,
@@ -207,7 +219,19 @@ serve(async (req) => {
         entryId = newEntry.id;
       }
 
-      // Build punches — real UTC, DST-aware
+      // Build punches — real UTC, DST-aware. Seq continues past
+      // MAX(seq) over ALL existing punches on the entry (voided rows
+      // keep their seq forever, and punches_entry_seq_uidx would reject
+      // a collision — merge imports used to trip exactly that).
+      const { data: maxSeqRow } = await supabase
+        .from("punches")
+        .select("seq")
+        .eq("time_entry_id", entryId)
+        .order("seq", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      let nextSeq = (maxSeqRow?.seq ?? -1) + 1;
+
       const punchTimes: string[] = row.punch_times || [];
       const builtPunches = buildPunches(row.entry_date, punchTimes);
       const punchInserts: any[] = [];
@@ -218,6 +242,7 @@ serve(async (req) => {
             .select("id")
             .eq("time_entry_id", entryId)
             .eq("punch_time", bp.punch_time)
+            .is("voided_at", null)
             .maybeSingle();
           if (dup) continue;
         }
@@ -226,7 +251,7 @@ serve(async (req) => {
           time_entry_id: entryId,
           org_id: orgId,
           employee_id: targetEmployeeId,
-          seq: bp.seq,
+          seq: nextSeq++,
           punch_type: bp.punch_type,
           punch_time: bp.punch_time,
           source: "import",
@@ -258,7 +283,12 @@ serve(async (req) => {
 
       if (punchInserts.length > 0) {
         const { error: punchError } = await supabase.from("punches").insert(punchInserts);
-        if (punchError) console.error("Punch insert error:", punchError);
+        if (punchError) {
+          // Surface, never swallow: the day imported but its punches did
+          // not — the response carries the count so the UI can say so.
+          console.error("Punch insert error:", punchError);
+          punchInsertFailures++;
+        }
       }
 
       // Import notes
@@ -298,7 +328,7 @@ serve(async (req) => {
     await supabase.from("imports").update({ status: "confirmed" }).eq("id", import_id);
 
     return new Response(
-      JSON.stringify({ success: true, imported, skipped, ambiguous }),
+      JSON.stringify({ success: true, imported, skipped, ambiguous, punch_insert_failures: punchInsertFailures }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
