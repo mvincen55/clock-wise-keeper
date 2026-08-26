@@ -72,7 +72,9 @@ BEGIN
   SELECT p.prosecdef, p.proconfig INTO v_secdef, v_config
     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
    WHERE n.nspname = 'public' AND p.proname = 'get_user_timezone';
-  IF NOT v_secdef OR NOT ('search_path=public' = ANY(v_config)) THEN
+  IF NOT v_secdef
+     OR v_config IS NULL
+     OR array_to_string(v_config, ',') NOT LIKE '%search_path%public%' THEN
     RAISE EXCEPTION 'PROBE 1 FAILED: get_user_timezone lost SECURITY DEFINER or its pinned search_path';
   END IF;
 
