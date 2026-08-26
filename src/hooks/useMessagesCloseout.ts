@@ -103,6 +103,7 @@ export function useMessagesCloseout(): CloseoutState & { isLoading: boolean } {
         .select('punch_time')
         .eq('employee_id', ctx!.employee_id)
         .eq('punch_type', 'out')
+        .is('voided_at', null)
         .gte('punch_time', dayStart)
         .order('punch_time', { ascending: false })
         .limit(1)
