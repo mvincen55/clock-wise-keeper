@@ -21,7 +21,15 @@ export type PunchRow = {
   original_punch_time: string | null;
   edited_at: string | null;
   edited_by: string | null;
+  voided_at: string | null;
+  voided_by: string | null;
+  void_reason: string | null;
 };
+
+/** Non-voided punches only — the set every computation and display uses. */
+export function livePunches<T extends { voided_at: string | null }>(punches: T[]): T[] {
+  return punches.filter(p => !p.voided_at);
+}
 
 export type TimeEntryRow = {
   id: string;
@@ -34,7 +42,10 @@ export type TimeEntryRow = {
   updated_at: string;
   is_remote: boolean;
   entry_comment: string | null;
+  /** Non-voided punches — safe for totals, status, and display. */
   punches: PunchRow[];
+  /** Every punch including voided — for the editor and audit views only. */
+  all_punches: PunchRow[];
 };
 
 export function useTodayEntry() {
@@ -61,7 +72,8 @@ export function useTodayEntry() {
         .select('*')
         .eq('time_entry_id', entry.id)
         .order('seq', { ascending: true });
-      return { ...entry, punches: punches || [] } as TimeEntryRow;
+      const all = (punches || []) as PunchRow[];
+      return { ...entry, punches: livePunches(all), all_punches: all } as TimeEntryRow;
     },
   });
 }
@@ -97,10 +109,10 @@ export function useTimeEntries(
         .select('*')
         .in('time_entry_id', ids)
         .order('seq', { ascending: true });
-      return entries.map(e => ({
-        ...e,
-        punches: (allPunches || []).filter(p => p.time_entry_id === e.id),
-      })) as TimeEntryRow[];
+      return entries.map(e => {
+        const all = ((allPunches || []) as PunchRow[]).filter(p => p.time_entry_id === e.id);
+        return { ...e, punches: livePunches(all), all_punches: all };
+      }) as TimeEntryRow[];
     },
   });
 }
@@ -178,6 +190,8 @@ export function useUpdateEntry() {
             new_value: audit.new_value,
             reason_comment: audit.reason_comment,
             edit_source: 'manual_edit',
+            // Self-scoped path (own timesheet): the target is the caller's record.
+            target_employee_id: ctx.employee_id,
           } as any,
           related_entry_id: entryId,
         });

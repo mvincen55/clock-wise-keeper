@@ -81,8 +81,9 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
           user_id: user.id,
           org_id: org.org_id,
           employee_id: org.employee_id,
+          actor_id: user.id,
           event_type: 'missing_shift_' + action,
-          event_details: { reason, date: actionDay.date } as any,
+          event_details: { reason, date: actionDay.date, target_employee_id: org.employee_id } as any,
           related_date: actionDay.date,
         });
       }
