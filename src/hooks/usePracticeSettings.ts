@@ -27,6 +27,8 @@ export type PracticeSettings = {
   confirmation_lead_days: number;
   /** The office's practice management system (canonical list in src/lib/pms.ts). */
   pms_system: PmsSystem;
+  /** The office timezone (IANA name). Drives display and server entry dating. */
+  timezone: string;
 };
 
 export type PracticeSettingsPatch = Partial<PracticeSettings>;
@@ -53,7 +55,7 @@ export function usePracticeSettings() {
       const { data } = await supabase
         .from('org_practice_settings')
         .select(
-          'collections_visibility, monthly_collections_target_cents, production_visibility, monthly_production_target_cents, new_patients_visibility, monthly_new_patients_seen_target_count, mobile_capture_enabled, confirmation_lead_days, pms_system'
+          'collections_visibility, monthly_collections_target_cents, production_visibility, monthly_production_target_cents, new_patients_visibility, monthly_new_patients_seen_target_count, mobile_capture_enabled, confirmation_lead_days, pms_system, timezone'
         )
         .eq('org_id', ctx!.org_id)
         .maybeSingle();
@@ -67,6 +69,7 @@ export function usePracticeSettings() {
         mobile_capture_enabled: data?.mobile_capture_enabled ?? false,
         confirmation_lead_days: data?.confirmation_lead_days ?? DEFAULT_CONFIRMATION_LEAD_DAYS,
         pms_system: normalizePmsSystem(data?.pms_system),
+        timezone: (data as { timezone?: string } | null)?.timezone || 'America/New_York',
       };
     },
   });
