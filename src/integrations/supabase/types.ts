@@ -2162,7 +2162,7 @@ export type Database = {
           preferred_name: string | null
           tag: string | null
           team: string | null
-          timezone: string
+          timezone: string | null
           updated_at: string
           user_id: string | null
         }
@@ -2179,7 +2179,7 @@ export type Database = {
           preferred_name?: string | null
           tag?: string | null
           team?: string | null
-          timezone?: string
+          timezone?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -2196,7 +2196,7 @@ export type Database = {
           preferred_name?: string | null
           tag?: string | null
           team?: string | null
-          timezone?: string
+          timezone?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -5272,6 +5272,7 @@ export type Database = {
           roleplay_persona_style: string
           roleplay_policy_tone: string
           security_alert_managers: boolean
+          timezone: string
           updated_at: string
         }
         Insert: {
@@ -5291,6 +5292,7 @@ export type Database = {
           roleplay_persona_style?: string
           roleplay_policy_tone?: string
           security_alert_managers?: boolean
+          timezone?: string
           updated_at?: string
         }
         Update: {
@@ -5310,6 +5312,7 @@ export type Database = {
           roleplay_persona_style?: string
           roleplay_policy_tone?: string
           security_alert_managers?: boolean
+          timezone?: string
           updated_at?: string
         }
         Relationships: [

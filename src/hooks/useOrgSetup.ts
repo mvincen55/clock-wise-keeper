@@ -10,8 +10,10 @@ export function useCreateOrg() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (orgName: string) => {
+    mutationFn: async (input: string | { name: string; timezone?: string }) => {
       if (!user) throw new Error('Not authenticated');
+      const orgName = typeof input === 'string' ? input : input.name;
+      const timezone = typeof input === 'string' ? undefined : input.timezone;
 
       const { data: org, error: orgErr } = await supabase
         .from('orgs')
@@ -34,6 +36,15 @@ export function useCreateOrg() {
           email: user.email,
         });
       if (empErr) throw empErr;
+
+      // The office timezone chosen at onboarding drives punch dating and
+      // every wall-clock display. Best-effort: a failure here leaves the
+      // default (America/New_York), editable any time in Settings.
+      if (timezone) {
+        await supabase
+          .from('org_practice_settings')
+          .upsert({ org_id: org.id, timezone } as never, { onConflict: 'org_id' });
+      }
 
       return org;
     },

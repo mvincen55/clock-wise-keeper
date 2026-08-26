@@ -85,6 +85,18 @@ function GoalInput({
   );
 }
 
+/** Common office timezones (IANA names). The select also keeps any
+ * already-stored custom zone so a value set elsewhere never vanishes. */
+export const OFFICE_TIMEZONES: { value: string; label: string }[] = [
+  { value: 'America/New_York', label: 'Eastern (New York)' },
+  { value: 'America/Chicago', label: 'Central (Chicago)' },
+  { value: 'America/Denver', label: 'Mountain (Denver)' },
+  { value: 'America/Phoenix', label: 'Arizona (no DST)' },
+  { value: 'America/Los_Angeles', label: 'Pacific (Los Angeles)' },
+  { value: 'America/Anchorage', label: 'Alaska (Anchorage)' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii (Honolulu)' },
+];
+
 export function PracticeSettingsCard() {
   const { toast } = useToast();
   const { data: settings, isLoading } = usePracticeSettings();
@@ -214,6 +226,30 @@ export function PracticeSettingsCard() {
                 </div>
               ))}
             </section>
+
+            <div className="space-y-2">
+              <Label className="text-xs">Office Timezone</Label>
+              <Select
+                value={settings?.timezone ?? 'America/New_York'}
+                onValueChange={v => saveSetting({ timezone: v })}
+              >
+                <SelectTrigger className="w-56" aria-label="Office Timezone">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {OFFICE_TIMEZONES.map(tz => (
+                    <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
+                  ))}
+                  {settings?.timezone && !OFFICE_TIMEZONES.some(tz => tz.value === settings.timezone) && (
+                    <SelectItem value={settings.timezone}>{settings.timezone}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Sets the wall clock for punches, timesheets, and reports. Punch times are
+                stamped by the server in this timezone — the device clock is never trusted.
+              </p>
+            </div>
 
             <div className="space-y-2">
               <Label className="text-xs">Practice Management System</Label>
