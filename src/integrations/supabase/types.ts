@@ -8097,6 +8097,19 @@ export type Database = {
         Args: { p_end: string; p_start: string; p_user_id: string }
         Returns: undefined
       }
+      _record_punch_internal: {
+        Args: {
+          p_action: string
+          p_actor?: string
+          p_employee_id: string
+          p_lat?: number
+          p_lng?: number
+          p_low_confidence?: boolean
+          p_punch_time?: string
+          p_source?: string
+        }
+        Returns: Json
+      }
       acknowledge_knowledge_version: {
         Args: { p_assignment_id: string; p_typed_name: string }
         Returns: {
@@ -8826,6 +8839,7 @@ export type Database = {
         Args: { p_end_date: string; p_start_date: string; p_user_id: string }
         Returns: number
       }
+      record_punch: { Args: { p_action: string }; Returns: Json }
       reorder_user_notes: {
         Args: { _expected_rev: number; _ordered_ids: string[] }
         Returns: {
@@ -8837,10 +8851,6 @@ export type Database = {
       report_message: {
         Args: { _message_id: string; _note?: string }
         Returns: undefined
-      }
-      record_punch: {
-        Args: { p_action: string }
-        Returns: Json
       }
       save_punch_edits: {
         Args: {
