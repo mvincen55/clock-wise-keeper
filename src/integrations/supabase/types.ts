@@ -2556,6 +2556,7 @@ export type Database = {
       }
       fof_settings: {
         Row: {
+            payment_policy: Json | null
           address_line1: string
           address_line2: string
           created_at: string
@@ -2575,6 +2576,7 @@ export type Database = {
           website: string
         }
         Insert: {
+            payment_policy?: Json | null
           address_line1?: string
           address_line2?: string
           created_at?: string
@@ -2594,6 +2596,7 @@ export type Database = {
           website?: string
         }
         Update: {
+            payment_policy?: Json | null
           address_line1?: string
           address_line2?: string
           created_at?: string
@@ -5826,6 +5829,7 @@ export type Database = {
       }
       procedure_meta: {
         Row: {
+            payment_class: string | null
           active: boolean
           code: string
           created_at: string
@@ -5841,6 +5845,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+            payment_class?: string | null
           active?: boolean
           code: string
           created_at?: string
@@ -5856,6 +5861,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+            payment_class?: string | null
           active?: boolean
           code?: string
           created_at?: string

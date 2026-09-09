@@ -3527,3 +3527,14 @@
     }
   }
 }
+
+/* Policy schedules can contain any number of events; never clip later payments. */
+.fof-policy-sheet .fof-cells { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.fof-policy-sheet .fof-row > span:first-child { overflow-wrap: anywhere; }
+.fof-policy-sheet .fof-option, .fof-policy-sheet .fof-agreement { overflow: visible; }
+.fof-payment-allocations { font-size: 8pt; overflow-wrap: anywhere; }
+.fof-payment-allocations > div { break-inside: avoid; margin-bottom: 5pt; }
+@media print {
+  .fof-policy-sheet .fof-options, .fof-policy-sheet .fof-option, .fof-policy-sheet .fof-agreement { break-inside: auto; page-break-inside: auto; }
+  .fof-policy-sheet .fof-row, .fof-policy-sheet .fof-cell { break-inside: avoid; }
+}

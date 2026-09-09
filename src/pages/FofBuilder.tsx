@@ -63,21 +63,9 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useFofPaymentPolicy } from '@/hooks/useFofPaymentPolicy';
-import { useProcedureTreatmentClasses } from '@/hooks/useProcedureTreatmentClasses';
-import {
-  buildBuilderPaymentPlan,
-  resolveTreatmentClass,
-  TREATMENT_CLASSES,
-  TREATMENT_CLASS_LABELS,
-  type PlanLineInput,
-  type TreatmentClass,
-} from '@/lib/fof/payment-plan';
-
 import { useMyProfile } from '@/hooks/useMyProfile';
 import FofAssistantWidget from '@/components/fof/FofAssistantWidget';
 import FofPrintSheet from '@/components/fof/FofPrintSheet';
-import FofPaymentScheduleEditor from '@/components/fof/FofPaymentScheduleEditor';
 import { useFofSettings, useFofTemplates } from '@/hooks/useFofTemplates';
 import {
   useDeleteProcedureBundle,
@@ -89,6 +77,9 @@ import {
 } from '@/hooks/useFeeSchedules';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { computeFof } from '@/lib/fof/compute';
+import { suggestedPaymentLabels } from '@/lib/fof/payment-engine';
+import { useFofPolicySettings, usePaymentClassifications } from '@/hooks/useFofPolicySettings';
+import { PaymentScheduleEditor, usePaymentScheduleEditor } from '@/components/fof/PaymentScheduleEditor';
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
 import { resolveImportedFee } from '@/lib/fof/import-fee';
 import {
@@ -214,16 +205,6 @@ interface BuilderLine {
    * downgrade), 'yes' = alternate-benefit downgrade applies (e.g. Altus).
    */
   downgrade: string;
-  /**
-   * Staff override of how this procedure is PAID (a payment classification,
-   * not an insurance category). '' = use the office's stored classification
-   * for the code, then the code-range suggestion.
-   */
-  paymentClass: string;
-  /** Staff moved this row into a specific treatment group. '' = automatic. */
-  paymentGroup: string;
-  /** 'yes' = the patient has already paid this row (prior payment). */
-  paidAlready: string;
 }
 
 let lineCounter = 0;
@@ -242,9 +223,6 @@ const newLine = (): BuilderLine => ({
   entryDate: '',
   feeFlag: '',
   downgrade: '',
-  paymentClass: '',
-  paymentGroup: '',
-  paidAlready: '',
 });
 
 interface BuilderState {
@@ -271,8 +249,6 @@ interface BuilderState {
   importUsed: string; // 'yes' when rows came from a screenshot import (office copy notes it)
   prepayOptionState: string; // '' = follow template, 'on'/'off' = per-form override
   installmentOptionState: string;
-  /** '' = a form-wide discount still needs allocating, 'prorata' = staff spread it. */
-  adjustmentAllocation: string;
   isSenior: string; // '' or 'yes' — patient is 65+; memory only
   insuranceOverride: string;
   writeOffOverride: string;
@@ -281,23 +257,11 @@ interface BuilderState {
   prepayOverride: string;
   installmentOverrides: string[];
   installmentLabelOverrides: string[]; // '' = auto-generated visit name
-  /**
-   * Payment-policy schedule edits, keyed by the STABLE collection-event id
-   * the engine produced (not by position) so an edit can never silently
-   * jump to a different payment when the plan changes. An edit whose row
-   * disappears is reported as stale instead of being applied elsewhere.
-   */
-  paymentAmountOverrides: Record<string, string>;
-  paymentLabelOverrides: Record<string, string>;
 }
 
 type ScalarField = keyof Omit<
   BuilderState,
-  | 'lines'
-  | 'installmentOverrides'
-  | 'installmentLabelOverrides'
-  | 'paymentAmountOverrides'
-  | 'paymentLabelOverrides'
+  'lines' | 'installmentOverrides' | 'installmentLabelOverrides'
 >;
 
 type BuilderAction =
@@ -309,9 +273,6 @@ type BuilderAction =
   | { type: 'removeLine'; index: number }
   | { type: 'setInstallment'; index: number; value: string }
   | { type: 'setInstallmentLabel'; index: number; value: string }
-  | { type: 'setPaymentAmount'; rowId: string; value: string }
-  | { type: 'setPaymentLabel'; rowId: string; value: string }
-  | { type: 'clearPaymentEdits' }
   | { type: 'clearOverrides' }
   | { type: 'clearAll' };
 
@@ -339,7 +300,6 @@ const initialState = (): BuilderState => ({
   importUsed: '',
   prepayOptionState: '',
   installmentOptionState: '',
-  adjustmentAllocation: '',
   isSenior: '',
   insuranceOverride: '',
   writeOffOverride: '',
@@ -348,8 +308,6 @@ const initialState = (): BuilderState => ({
   prepayOverride: '',
   installmentOverrides: [],
   installmentLabelOverrides: [],
-  paymentAmountOverrides: {},
-  paymentLabelOverrides: {},
 });
 
 function reducer(state: BuilderState, action: BuilderAction): BuilderState {
@@ -386,20 +344,6 @@ function reducer(state: BuilderState, action: BuilderAction): BuilderState {
       next[action.index] = action.value;
       return { ...state, installmentLabelOverrides: next };
     }
-    case 'setPaymentAmount': {
-      const next = { ...state.paymentAmountOverrides };
-      if (action.value.trim() === '') delete next[action.rowId];
-      else next[action.rowId] = action.value;
-      return { ...state, paymentAmountOverrides: next };
-    }
-    case 'setPaymentLabel': {
-      const next = { ...state.paymentLabelOverrides };
-      if (action.value.trim() === '') delete next[action.rowId];
-      else next[action.rowId] = action.value;
-      return { ...state, paymentLabelOverrides: next };
-    }
-    case 'clearPaymentEdits':
-      return { ...state, paymentAmountOverrides: {}, paymentLabelOverrides: {} };
     case 'clearOverrides':
       return {
         ...state,
@@ -410,8 +354,6 @@ function reducer(state: BuilderState, action: BuilderAction): BuilderState {
         discountOverride: '',
         prepayOverride: '',
         installmentOverrides: [],
-        paymentAmountOverrides: {},
-        paymentLabelOverrides: {},
       };
     case 'clearAll':
       return initialState();
@@ -487,6 +429,9 @@ function OverrideRow({ label, computedCents, value, overridden, onChange }: Over
 }
 
 export default function FofBuilder() {
+  const policyQuery = useFofPolicySettings();
+  const classificationQuery = usePaymentClassifications();
+  const paymentPolicy = policyQuery.data?.payment_policy;
   const { data: templates, isLoading: templatesLoading } = useFofTemplates();
   const { data: practice } = useFofSettings();
   const { data: branding } = useOrgBranding();
@@ -1033,88 +978,6 @@ export default function FofBuilder() {
   const schedulePortion = parseOverride(state.portionOverride) ?? projectedPortion;
   const scheduleFromVisits = visitWork ? buildVisitSchedule(schedulePortion, visitWork) : null;
 
-  // ---- The office's own payment policy -----------------------------------
-  // When the office has configured how it collects (thresholds, phases,
-  // implant exception, wording), that policy produces the schedule and every
-  // surface — editor, preview, office copy, print — reads this one result.
-  // Offices with no policy keep the legacy schedule above, untouched.
-  const { data: paymentPolicy } = useFofPaymentPolicy();
-  const { data: configuredClasses } = useProcedureTreatmentClasses();
-
-  const policyLines = useMemo(() => {
-    if (!paymentPolicy?.enabled) return [];
-    return feeLineEntries.map(entry => {
-      const source = state.lines.find(l => l.key === entry.key);
-      const est = perLineByKey.get(entry.key);
-      const code = entry.line.code;
-      // A membership-covered procedure costs the patient nothing, so it
-      // carries no payment of its own.
-      const covered = source ? freeUnderMembership(source) : false;
-      const oop = covered
-        ? 0
-        : Math.max(
-            0,
-            (est?.officeFeeCents ?? entry.line.officeFeeCents) -
-              (est?.writeOffCents ?? 0) -
-              (est?.insurancePaysCents ?? 0)
-          );
-      const manual = (source?.paymentClass ?? '') as TreatmentClass | '';
-      return {
-        id: entry.key,
-        code,
-        oopCents: oop,
-        visit: entry.visit,
-        // A row flagged as work-up on this plan is work-up, whatever the
-        // office's stored classification says.
-        manualClass: manual || (source?.workupFlag === 'yes' ? 'work_up' : null),
-        configuredClass: configuredClasses?.[code] ?? null,
-        manualGroupId: source?.paymentGroup?.trim() || null,
-        alreadyPaid: source?.paidAlready === 'yes',
-        label: entry.line.description || undefined,
-      } satisfies PlanLineInput;
-    });
-  }, [paymentPolicy?.enabled, feeLineEntries, perLineByKey, state.lines, configuredClasses, membershipActive]);
-
-  // Money taken off the whole form rather than off named procedures. Left
-  // unallocated it stops the form printing, because spreading it silently
-  // could move a group past the office's threshold.
-  const globalAdjustmentCents =
-    (parseCurrencyInput(state.officeDiscountInput) ?? 0) +
-    (parseCurrencyInput(state.patientCreditInput) ?? 0) +
-    (discounts?.autoDiscount?.cents ?? 0) +
-    (parseOverride(state.portionOverride) !== undefined
-      ? Math.max(0, projectedPortion - (parseOverride(state.portionOverride) ?? 0))
-      : 0);
-
-  const policyPlan = useMemo(() => {
-    if (!paymentPolicy?.enabled || policyLines.length === 0) return null;
-    const amounts: Record<string, Cents> = {};
-    for (const [rowId, raw] of Object.entries(state.paymentAmountOverrides)) {
-      const cents = parseOverride(raw);
-      if (cents !== undefined) amounts[rowId] = cents;
-    }
-    const labels: Record<string, string> = {};
-    for (const [rowId, raw] of Object.entries(state.paymentLabelOverrides)) {
-      if (raw.trim()) labels[rowId] = raw.trim();
-    }
-    return buildBuilderPaymentPlan({
-      policy: paymentPolicy,
-      lines: policyLines,
-      adjustmentCents: globalAdjustmentCents,
-      adjustmentAllocation:
-        state.adjustmentAllocation === 'prorata' ? 'prorata' : 'unallocated',
-      overrides: { amounts, labels },
-    });
-  }, [
-    paymentPolicy,
-    policyLines,
-    globalAdjustmentCents,
-    state.adjustmentAllocation,
-    state.paymentAmountOverrides,
-    state.paymentLabelOverrides,
-  ]);
-
-
   const autoVisitPlan =
     projectedPortion > 0 && projectedPortion < DAY_OF_SERVICE_THRESHOLD_CENTS
       ? VISIT_PLANS.dayOfService
@@ -1135,7 +998,7 @@ export default function FofBuilder() {
       ? { ...basePlan, labels: ['At the First Visit', ...basePlan.labels.slice(1)] }
       : basePlan;
   // Staff-edited payment names take over the auto visit labels.
-  const legacyVisitPlan = rawVisitPlan
+  const visitPlan = rawVisitPlan
     ? {
         ...rawVisitPlan,
         labels: rawVisitPlan.labels.map(
@@ -1143,9 +1006,6 @@ export default function FofBuilder() {
         ),
       }
     : rawVisitPlan;
-  // A configured office's policy schedule wins; everyone else keeps the
-  // legacy plan exactly as before.
-  const visitPlan = policyPlan?.visitPlan ?? legacyVisitPlan;
 
   // The downgrade note prints only when it changed the math: an insurance
   // estimate is active and some line's benefit basis is below its allowed.
@@ -1224,10 +1084,22 @@ export default function FofBuilder() {
     [state.portionOverride, state.discountOverride, state.prepayOverride, state.installmentOverrides]
   );
 
-  const computation = useMemo(
-    () => (effectiveTemplate ? computeFof(effectiveTemplate, amounts, overrides, visitPlan) : null),
-    [effectiveTemplate, amounts, overrides, visitPlan]
-  );
+  const baselineComputation = effectiveTemplate ? computeFof(effectiveTemplate, amounts, overrides, visitPlan) : null;
+  const policyLines = feeLineEntries.map(entry => {
+    const estimateLine = perLineByKey.get(entry.key);
+    const builderLine = state.lines.find(l => l.key === entry.key)!;
+    return {
+      id: entry.key, code: entry.line.code, visit: builderLine.visit,
+      classification: classificationQuery.data?.[entry.line.code] ?? 'review' as const,
+      responsibilityCents: builderLine.feeInput.trim() && parseCurrencyInput(builderLine.feeInput) === null ? NaN : freeUnderMembership(builderLine) ? 0 : entry.line.officeFeeCents -
+        (effectiveTemplate?.showInsuranceEstimate ? estimateLine?.insurancePaysCents ?? 0 : 0) -
+        (effectiveTemplate?.showWriteOff ? estimateLine?.writeOffCents ?? 0 : 0),
+    };
+  });
+  const paymentEditor = usePaymentScheduleEditor(orgCtx?.org_id, paymentPolicy, policyLines, baselineComputation?.effective.patientPortionCents ?? 0);
+  const computation = effectiveTemplate ? computeFof(effectiveTemplate, amounts, overrides, visitPlan, paymentEditor.model?.schedule) : null;
+  const legacyOverrideReview = !!paymentPolicy && (state.installmentOverrides.some(Boolean) || state.installmentLabelOverrides.some(Boolean) || !!state.paymentCountOverride);
+  const policyBlocked = policyQuery.isLoading || !!policyQuery.error || (!!paymentPolicy && (classificationQuery.isLoading || !!classificationQuery.error || legacyOverrideReview || !!paymentEditor.model?.schedule.issues.length));
 
   // AI pass over the payment names and treatment wording. HIPAA: the
   // request is built ONLY from CDT codes, code-derived labels, and
@@ -1262,8 +1134,9 @@ export default function FofBuilder() {
             }))
           )
         : null;
-    const autoSlots =
-      safeSchedule?.labels ?? rawVisitPlan?.labels ?? computation.installmentLabels;
+    const autoSlots = paymentPolicy
+      ? computation.installmentLabels.map((_, i) => `Payment ${i + 1}`)
+      : safeSchedule?.labels ?? rawVisitPlan?.labels ?? computation.installmentLabels;
     const { data, error } = await supabase.functions.invoke('name-visits', {
       body: {
         ...buildNameVisitsPayload(visitEntries, autoSlots),
@@ -1277,6 +1150,7 @@ export default function FofBuilder() {
   };
 
   const aiNamePayments = async () => {
+    const requestedSchedule = paymentEditor.model?.schedule;
     setAiNaming(true);
     try {
       const result = await aiCall(false);
@@ -1284,6 +1158,11 @@ export default function FofBuilder() {
       const names: string[] = result.data?.names ?? [];
       if (names.length !== result.slotCount) {
         throw new Error('AI returned an unexpected number of names');
+      }
+      if (paymentPolicy && requestedSchedule) {
+        paymentEditor.update(s => ({ ...s, overrides: suggestedPaymentLabels(requestedSchedule, s.overrides, names) }));
+        toast.success('Suggested names added; existing staff wording is preserved');
+        return;
       }
       names.forEach((name, i) =>
         dispatch({ type: 'setInstallmentLabel', index: i, value: name })
@@ -1322,7 +1201,7 @@ export default function FofBuilder() {
         }
         const names: string[] = result.data?.names ?? [];
         const noManualNames = state.installmentLabelOverrides.every(l => !l || l.trim() === '');
-        if (names.length === result.slotCount && noManualNames) {
+        if (!paymentPolicy && names.length === result.slotCount && noManualNames) {
           names.forEach((name, i) =>
             dispatch({ type: 'setInstallmentLabel', index: i, value: name })
           );
@@ -1597,7 +1476,7 @@ export default function FofBuilder() {
         tooth: l.tooth.trim(),
         visit: String(effectiveVisit(l)),
         category:
-          CATEGORY_SHORT[l.category] + (l.workupFlag === 'yes' ? ' \u00b7 Work Up' : ''),
+          CATEGORY_SHORT[l.category] + (!paymentPolicy && l.workupFlag === 'yes' ? ' \u00b7 Work Up' : ''),
         description,
         officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
         // No-coverage lines print no allowable — a carrier fee is
@@ -1614,7 +1493,7 @@ export default function FofBuilder() {
       };
     });
 
-  const sheet = effectiveTemplate && computation && (
+  const sheet = effectiveTemplate && computation && !policyBlocked && (
     <FofPrintSheet
       practice={practice ?? DEFAULT_PRACTICE_INFO}
       template={effectiveTemplate}
@@ -1646,33 +1525,12 @@ export default function FofBuilder() {
               Templates
             </Link>
           </Button>
-          <Button
-            onClick={() => window.print()}
-            disabled={!template || !!policyPlan?.result.blocksPrint}
-            title={
-              policyPlan?.result.blocksPrint
-                ? 'Resolve the payment schedule notice before printing'
-                : undefined
-            }
-          >
+          <Button onClick={() => window.print()} disabled={!template || policyBlocked}>
             <Printer className="h-4 w-4 mr-2" />
             Print
           </Button>
         </div>
       </div>
-
-      {policyPlan?.result.blocksPrint && (
-        <Alert variant="destructive">
-          <ShieldCheck className="h-4 w-4" />
-          <AlertTitle>The payment schedule needs a decision first</AlertTitle>
-          <AlertDescription>
-            {policyPlan.result.issues
-              .filter(i => i.blocksPrint)
-              .map(i => i.message)
-              .join(' ')}
-          </AlertDescription>
-        </Alert>
-      )}
 
       <Alert>
         <ShieldCheck className="h-4 w-4" />
@@ -1682,7 +1540,6 @@ export default function FofBuilder() {
           Print the form before leaving this page; file the signed copy per office policy.
         </AlertDescription>
       </Alert>
-
 
       {templatesLoading ? (
         <div className="flex items-center justify-center py-16">
@@ -2251,81 +2108,7 @@ export default function FofBuilder() {
                           </Label>
                         </div>
                       )}
-                      {paymentPolicy?.enabled && (
-                        <div className="grid gap-2 sm:grid-cols-3 rounded-md border p-2">
-                          <div className="space-y-0.5">
-                            <span className={microLabel}>How it's paid</span>
-                            <Select
-                              value={line.paymentClass || 'auto'}
-                              onValueChange={v =>
-                                dispatch({
-                                  type: 'setLine',
-                                  index: i,
-                                  patch: { paymentClass: v === 'auto' ? '' : v },
-                                })
-                              }
-                            >
-                              <SelectTrigger className="h-10">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="auto">
-                                  Automatic —{' '}
-                                  {
-                                    TREATMENT_CLASS_LABELS[
-                                      resolveTreatmentClass(lineCode, paymentPolicy, {
-                                        configuredClass:
-                                          (configuredClasses?.[lineCode] as TreatmentClass) ?? null,
-                                      })
-                                    ]
-                                  }
-                                </SelectItem>
-                                {TREATMENT_CLASSES.map(c => (
-                                  <SelectItem key={c} value={c}>
-                                    {TREATMENT_CLASS_LABELS[c]}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-0.5">
-                            <span className={microLabel}>Group with</span>
-                            <Input
-                              autoComplete="off"
-                              placeholder="Automatic"
-                              value={line.paymentGroup}
-                              onChange={e =>
-                                dispatch({
-                                  type: 'setLine',
-                                  index: i,
-                                  patch: { paymentGroup: e.target.value },
-                                })
-                              }
-                            />
-                          </div>
-                          <div className="flex items-end gap-2 pb-1">
-                            <Switch
-                              id={`fof-paid-${line.key}`}
-                              checked={line.paidAlready === 'yes'}
-                              onCheckedChange={v =>
-                                dispatch({
-                                  type: 'setLine',
-                                  index: i,
-                                  patch: { paidAlready: v ? 'yes' : '' },
-                                })
-                              }
-                            />
-                            <Label
-                              htmlFor={`fof-paid-${line.key}`}
-                              className="text-xs text-muted-foreground font-normal"
-                            >
-                              Already paid
-                            </Label>
-                          </div>
-                        </div>
-                      )}
-
-                      {(line.workupFlag === 'yes' ||
+                      {!paymentPolicy && (line.workupFlag === 'yes' ||
                         line.category === 'other' ||
                         categorizeCdtCode(lineCode) === 'workup') && (
                         <div className="flex items-center gap-2">
@@ -2586,8 +2369,12 @@ export default function FofBuilder() {
                       />
                     </>
                   )}
-                  {effectiveTemplate!.showInstallmentOption && (
+                  {paymentPolicy && <><PaymentScheduleEditor editor={paymentEditor} /><Button variant="outline" disabled={aiNaming || feeLines.length === 0 || policyBlocked} onClick={aiNamePayments}>Suggest payment names</Button></>}
+                  {policyBlocked && <p role="alert" className="text-destructive">Payment policy review is required before printing. Check policy loading, classifications, adjustments, and saved overrides.</p>}
+                  {(effectiveTemplate!.showInstallmentOption || legacyOverrideReview) && (
                     <>
+                      {legacyOverrideReview && <div role="alert">Previous payment overrides are retained below. Review and transfer them to the event-based editor, then use Reset all to clear the previous schedule overrides.</div>}
+                      <div hidden={!!paymentPolicy && !legacyOverrideReview}>
                       <div className="flex items-center gap-2 pt-1">
                         <span className="flex-1 text-sm font-medium">Payment plan</span>
                         <Select
@@ -2629,29 +2416,7 @@ export default function FofBuilder() {
                           AI names
                         </Button>
                       </div>
-                      {policyPlan ? (
-                        <FofPaymentScheduleEditor
-                          result={policyPlan.result}
-                          amountOverrides={state.paymentAmountOverrides}
-                          labelOverrides={state.paymentLabelOverrides}
-                          onAmountChange={(rowId, value) =>
-                            dispatch({ type: 'setPaymentAmount', rowId, value })
-                          }
-                          onLabelChange={(rowId, value) =>
-                            dispatch({ type: 'setPaymentLabel', rowId, value })
-                          }
-                          onClearEdits={() => dispatch({ type: 'clearPaymentEdits' })}
-                          adjustmentCents={globalAdjustmentCents}
-                          adjustmentAllocated={state.adjustmentAllocation === 'prorata'}
-                          onAllocateAdjustment={() =>
-                            dispatch({ type: 'set', field: 'adjustmentAllocation', value: 'prorata' })
-                          }
-                          onUnallocateAdjustment={() =>
-                            dispatch({ type: 'set', field: 'adjustmentAllocation', value: '' })
-                          }
-                        />
-                      ) : (
-                        computation.computed.installmentsCents.map((cents, i) => (
+                      {computation.computed.installmentsCents.map((cents, i) => (
                         <div key={i} className="flex items-center gap-2">
                           {/* The payment name is live text — edit it and the
                               printout follows; clear it to go back to auto. */}
@@ -2692,8 +2457,8 @@ export default function FofBuilder() {
                             </Button>
                           )}
                         </div>
-                        ))
-                      )}
+                      ))}
+                      </div>
                     </>
                   )}
                 </CardContent>
@@ -2701,7 +2466,7 @@ export default function FofBuilder() {
             )}
 
             <div className="flex justify-end">
-              <Button variant="outline" onClick={() => dispatch({ type: 'clearAll' })}>
+              <Button variant="outline" onClick={() => { dispatch({ type: 'clearAll' }); paymentEditor.reset(); }}>
                 Clear form
               </Button>
             </div>

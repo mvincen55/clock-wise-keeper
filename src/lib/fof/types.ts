@@ -126,6 +126,7 @@ export interface FofComputedValues {
 }
 
 export interface FofComputation {
+  paymentSchedule?: import('./payment-engine').PaymentSchedule;
   computed: FofComputedValues;
   effective: FofComputedValues;
   /** Labels for the installment rows actually computed (visit plan aware). */
