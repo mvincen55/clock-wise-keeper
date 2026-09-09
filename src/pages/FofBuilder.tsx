@@ -67,9 +67,13 @@ import { useFofPaymentPolicy } from '@/hooks/useFofPaymentPolicy';
 import { useProcedureTreatmentClasses } from '@/hooks/useProcedureTreatmentClasses';
 import {
   buildBuilderPaymentPlan,
+  resolveTreatmentClass,
+  TREATMENT_CLASSES,
+  TREATMENT_CLASS_LABELS,
   type PlanLineInput,
   type TreatmentClass,
 } from '@/lib/fof/payment-plan';
+
 import { useMyProfile } from '@/hooks/useMyProfile';
 import FofAssistantWidget from '@/components/fof/FofAssistantWidget';
 import FofPrintSheet from '@/components/fof/FofPrintSheet';
@@ -2247,6 +2251,80 @@ export default function FofBuilder() {
                           </Label>
                         </div>
                       )}
+                      {paymentPolicy?.enabled && (
+                        <div className="grid gap-2 sm:grid-cols-3 rounded-md border p-2">
+                          <div className="space-y-0.5">
+                            <span className={microLabel}>How it's paid</span>
+                            <Select
+                              value={line.paymentClass || 'auto'}
+                              onValueChange={v =>
+                                dispatch({
+                                  type: 'setLine',
+                                  index: i,
+                                  patch: { paymentClass: v === 'auto' ? '' : v },
+                                })
+                              }
+                            >
+                              <SelectTrigger className="h-10">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="auto">
+                                  Automatic —{' '}
+                                  {
+                                    TREATMENT_CLASS_LABELS[
+                                      resolveTreatmentClass(lineCode, paymentPolicy, {
+                                        configuredClass:
+                                          (configuredClasses?.[lineCode] as TreatmentClass) ?? null,
+                                      })
+                                    ]
+                                  }
+                                </SelectItem>
+                                {TREATMENT_CLASSES.map(c => (
+                                  <SelectItem key={c} value={c}>
+                                    {TREATMENT_CLASS_LABELS[c]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-0.5">
+                            <span className={microLabel}>Group with</span>
+                            <Input
+                              autoComplete="off"
+                              placeholder="Automatic"
+                              value={line.paymentGroup}
+                              onChange={e =>
+                                dispatch({
+                                  type: 'setLine',
+                                  index: i,
+                                  patch: { paymentGroup: e.target.value },
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="flex items-end gap-2 pb-1">
+                            <Switch
+                              id={`fof-paid-${line.key}`}
+                              checked={line.paidAlready === 'yes'}
+                              onCheckedChange={v =>
+                                dispatch({
+                                  type: 'setLine',
+                                  index: i,
+                                  patch: { paidAlready: v ? 'yes' : '' },
+                                })
+                              }
+                            />
+                            <Label
+                              htmlFor={`fof-paid-${line.key}`}
+                              className="text-xs text-muted-foreground font-normal"
+                            >
+                              Already paid
+                            </Label>
+                          </div>
+                        </div>
+                      )}
+
                       {(line.workupFlag === 'yes' ||
                         line.category === 'other' ||
                         categorizeCdtCode(lineCode) === 'workup') && (
