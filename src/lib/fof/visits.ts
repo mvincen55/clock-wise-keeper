@@ -13,6 +13,14 @@ export interface VisitPlan {
   key: string;
   labels: string[];
   weights: number[];
+  /**
+   * Exact per-payment amounts in cents. Set by the organization's payment
+   * policy engine (src/lib/fof/payment-plan), which allocates every cent
+   * itself; when present these amounts are used verbatim instead of a
+   * weighted split, so the editor, preview, office copy and print all show
+   * the one schedule the engine produced.
+   */
+  amounts?: Cents[];
 }
 
 /** Portions under this default to a single day-of-service payment. */
