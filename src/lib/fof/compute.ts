@@ -47,9 +47,13 @@ export function computeFof(
   const computedPrepayTotal = Math.max(0, effectivePortion - effectiveDiscount);
   const effectivePrepayTotal = overrides.prepayTotalCents ?? computedPrepayTotal;
 
-  const computedInstallments = visitPlan
-    ? splitCentsWeighted(effectivePortion, visitPlan.weights)
-    : splitCents(effectivePortion, template.installmentCount);
+  // A policy-driven plan carries its own exact allocation (every cent already
+  // assigned to a real collection event) — never re-split it by weight.
+  const computedInstallments = visitPlan?.amounts
+    ? visitPlan.amounts
+    : visitPlan
+      ? splitCentsWeighted(effectivePortion, visitPlan.weights)
+      : splitCents(effectivePortion, template.installmentCount);
   const effectiveInstallments = computedInstallments.map(
     (value, i) => overrides.installmentsCents?.[i] ?? value
   );
