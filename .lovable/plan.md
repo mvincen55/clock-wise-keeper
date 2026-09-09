@@ -1,57 +1,43 @@
-# Invite link stuck on "Loading invite..." — diagnosis and smallest safe fix
+# Financial Options Form — payment-plan engine rebuild
 
-## What I tested (read-only, nothing changed)
+## What I verified (inspection only, nothing changed)
 
-Latest pending invite (2026-08-04 13:13 UTC, recipient masked `te***`, org Harelick Dental, role employee, expires 2026-08-11, not yet accepted) used as the diagnostic target.
+- This is the real application: `src/pages/FofBuilder.tsx` (2,538 lines) plus `src/lib/fof/*` and `src/components/fof/FofPrintSheet.tsx` all exist here. The git remote is the Lovable-hosted mirror of the GitHub project (the remote URL is the internal sync URL, not a `github.com/mvincen55/clock-wise-keeper` URL), so repo identity is confirmed by file contents, not by the remote string.
+- Harelick's organization ID, read from the organization configuration table (no patient data): **852fc8e0-4071-499b-b655-f86d6f789cd5** ("HARELICK DENTAL ASSOCIATES, LLC"). It is the only organization present and already has a form-settings row.
 
-Unauthenticated lookup call to the deployed `accept-invite` function with that token:
+## Root cause
 
-- HTTP status: **200**
-- Elapsed: sub-second (single round trip, no retry, no cold-start stall)
-- Response shape: `{ invite: { email, role, invited_name, expires_at, accepted_at, org_id, orgs: { name } } }` — correct and complete
-- No error in the function response; recent function logs show only normal boot/shutdown lines, no invocation errors
+The current schedule is not a policy engine at all. `buildVisitSchedule` in `src/lib/fof/visits.ts` spreads the patient's whole out-of-pocket across visits **in proportion to each visit's gross fees**, then applies a universal "collect the next visit one visit early" rule, halves the final visit, and folds any payment under $100 backwards. On top of that:
 
-Live reproduction of `/accept-invite?token=…` in a signed-out browser: the page renders the "Join …" signup screen correctly within ~1.5s. Console shows only pre-existing React ref warnings and router future-flag warnings — no runtime error.
+- Treatment classification lives in hardcoded CDT number ranges (`visitSegmentsForCode`, `suggestVisitStage`, `decideVisitPlan`), not in office settings.
+- The $1,000 threshold (`DAY_OF_SERVICE_THRESHOLD_CENTS`) is applied to the **whole form**, not per treatment group, and Harelick's defaults are baked into `visits.ts` constants and migration defaults.
+- Work-up is only a "due at this visit, don't prepay" flag; it still counts toward the form-wide threshold and the proportional allocation. `D6190` is not classified as work-up (`NO_PREPAY_CODES` contains only `D5982`).
+- Implants, crowns, dentures and non-delivery treatment all end up in one blended schedule; there is no separate group threshold, no restorative booking milestone, and no per-row allocation record.
+- `MIN_STANDALONE_PAYMENT_CENTS` moves money between milestones — the unconfirmed rule that must go for Harelick.
 
-One important observation from the reproduction: **the lookup edge function was called twice** for a single page load.
+## Approach
 
-## Root cause (most likely)
+Build a new, organization-driven engine beside the existing code and switch the builder onto it, rather than patching `buildVisitSchedule`.
 
-The backend is healthy. The hang is client-side, in `src/pages/AcceptInvite.tsx`.
-
-The invite-loading effect depends on `[token, user, authLoading]`, so it re-runs whenever auth state settles, and it has no cancellation. Each run does an async lookup and then, on completion, decides the next step using the `authLoading` value **captured when that run started**.
-
-Sequence that produces the permanent spinner:
-
-```text
-run #1 starts (authLoading = true)   -> async lookup in flight
-auth resolves -> authLoading = false -> run #2 starts, second lookup in flight
-run #2 finishes -> setStep('signup')  (correct screen briefly)
-run #1 finishes LATE with stale authLoading=true -> setStep('loading')  <-- stuck
-```
-
-Nothing ever re-runs the effect after that, so the page sits on "Loading invite..." forever. Whether it sticks depends on which of the two in-flight lookups resolves last, which explains why it is intermittent and why my signed-out reproduction happened to land on the good ordering.
-
-A second, independent path to the same permanently-true `authLoading` lives in `src/hooks/useAuth.tsx`: the allowlist check runs inside a `setTimeout` async callback with no `try/catch`. If `supabase.rpc('is_allowed_user')` rejects (network blip, transient 5xx — likely on a phone opening an email link), the callback throws, `setLoading(false)` is never reached, and `authLoading` stays `true` forever — again a permanent "Loading invite..." screen. Recipients on a session that is not yet allowlisted go through exactly this branch, which is why a *fresh* invite recipient is the one hitting it.
-
-## Smallest safe fix
-
-Two small, contained changes. No schema, no edge-function, no data changes.
-
-1. `src/pages/AcceptInvite.tsx`
-   - Add a `cancelled` guard (effect cleanup) so a stale run can never write state after a newer run.
-   - Read the current auth state from a ref instead of the captured closure value when deciding the post-lookup step, or gate the effect to only run once `authLoading === false` (plus a `token`-keyed guard so the lookup fires once per token).
-   - Result: exactly one lookup per token, and no late writer can push the page back to `loading`.
-
-2. `src/hooks/useAuth.tsx`
-   - Wrap the deferred allowlist check in `try/finally` so `setLoading(false)` always runs, even when the RPC rejects. Treat a failed check as "not allowed" rather than leaving auth in a permanent loading state.
+1. **Policy configuration (new organization-scoped table `fof_payment_policy`)** — threshold cents + inclusive boundary, work-up code list and timing, per-treatment-class strategies above/below threshold, implant advance-payment exception, milestone set (including "first of impressions or try-in"), mixed-group combining behaviour, rounding target (last installment), and wording. Owner/manager write, member read, same policy shape as `procedure_meta`. Harelick's confirmed values are inserted **only for its verified organization ID**; the shipped table defaults stay neutral so no other office inherits them.
+2. **Procedure classification** — extend `procedure_meta` with a treatment class (`work_up`, `implant_surgical`, `restorative_lab`, `denture_partial`, `other_no_delivery`, `zero_fee_marker`) and a work-up flag; CDT ranges become a *suggestion* only, editable per office and per plan. `D6190` seeds as work-up for Harelick.
+3. **Engine (`src/lib/fof/payment-plan/`)** — four clean stages, integer cents throughout:
+   - line responsibility (reuses the existing line-level insurance math in `insurance.ts`; no gross-fee proration),
+   - appointments and treatment groups (related crowns prepped together share one group and one threshold),
+   - policy application per group (thresholds, thirds/halves, implant exception, work-up excluded),
+   - milestone merge: contributions land on stable milestone identities (`schedule`, `prep`, `surgery`, `impression_or_tryin`, `delivery`, `work_up`), and only milestones explicitly linked to the same real collection event combine. Each row keeps its component allocations. Balancing cents land on the last installment.
+4. **Builder + print** — one shared schedule result feeds the editor, patient preview, office copy and print sheet. Staff can retype classification, grouping and milestones; manual amount/label overrides survive and any stale override is flagged instead of silently dropped. AI naming continues to touch labels only.
+5. **Retire for Harelick** the "shift a full visit earlier" behaviour and the $100 folding rule.
 
 ## Tests
 
-- Unit test on the invite-step reducer/effect: simulate a late-resolving lookup started while `authLoading` was true, after a newer lookup already set `signup`; assert the final step is `signup`, not `loading`.
-- Unit test on `AuthProvider`: mock `is_allowed_user` to reject; assert `loading` becomes `false` and `isAllowed` is `false`.
-- Component test: render `/accept-invite?token=…` with a mocked 200 lookup and assert exactly one lookup call and that the join form renders.
+All 16 listed regression cases, including the approved $800 extraction + $2,000 crown case ($1,066.67 / $1,066.67 / $666.66) and the full self-pay fixture producing $1,896 / $1,604.50 / $1,604.50 / $1,022.67 / $1,022.67 / $1,022.66 = $8,173, plus a cross-office isolation test (two organizations, same procedures, different schedules). Existing FOF tests stay green; repository build and type checks run at the end.
 
-## Note for after the fix
+## Open questions I will surface rather than guess
 
-Separate from the spinner: a recipient who signs up is signed in *before* `allowed_users` contains their email, so `AuthProvider` may sign them straight back out before `acceptInvite()` completes. Worth confirming as a follow-up once the spinner is fixed — it is a different failure (bounce back to the sign-in form, not a hang).
+- Whether a global office discount or patient credit that has no defined allocation should block the schedule or be allocated by group share (the plan surfaces it for review; the office decides).
+- Whether below-threshold "other" treatment should still print a single day-of-service row or no schedule at all when it is the only item.
+
+## Not in scope
+
+No production data changes, no deployment, no courtesy/insurance-policy changes, no patient-data persistence. The migration will be written but only applied with your approval.
