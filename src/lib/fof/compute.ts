@@ -7,6 +7,7 @@ import type {
 } from './types';
 import { percentOfCents, splitCents } from './money';
 import { splitCentsWeighted, type VisitPlan } from './visits';
+import type { PaymentSchedule } from './payment-engine';
 
 /**
  * Derive all money values on the form from the template rules and the
@@ -22,7 +23,8 @@ export function computeFof(
   template: FofTemplate,
   amounts: FofAmounts,
   overrides: FofOverrides = {},
-  visitPlan?: VisitPlan
+  visitPlan?: VisitPlan,
+  paymentSchedule?: PaymentSchedule
 ): FofComputation {
   const total = amounts.totalCents ?? 0;
   const insurance = template.showInsuranceEstimate ? amounts.insuranceEstimateCents ?? 0 : 0;
@@ -39,25 +41,21 @@ export function computeFof(
   const effectivePortion = overrides.patientPortionCents ?? computedPortion;
 
   const computedDiscount = percentOfCents(
-    amounts.prepayDiscountBaseCents ?? effectivePortion,
+    Math.max(0, (amounts.prepayDiscountBaseCents ?? effectivePortion) - (paymentSchedule?.paidCents ?? 0)),
     template.discountPercent
   );
   const effectiveDiscount = overrides.discountCents ?? computedDiscount;
 
-  const computedPrepayTotal = Math.max(0, effectivePortion - effectiveDiscount);
+  const computedPrepayTotal = Math.max(0, effectivePortion - (paymentSchedule?.paidCents ?? 0) - effectiveDiscount);
   const effectivePrepayTotal = overrides.prepayTotalCents ?? computedPrepayTotal;
 
-  // A policy-driven plan carries its own exact allocation (every cent already
-  // assigned to a real collection event) — never re-split it by weight.
-  const computedInstallments = visitPlan?.amounts
-    ? visitPlan.amounts
-    : visitPlan
-      ? splitCentsWeighted(effectivePortion, visitPlan.weights)
-      : splitCents(effectivePortion, template.installmentCount);
+  const computedInstallments = paymentSchedule ? paymentSchedule.rows.map(row => row.cents) : visitPlan
+    ? splitCentsWeighted(effectivePortion, visitPlan.weights)
+    : splitCents(effectivePortion, template.installmentCount);
   const effectiveInstallments = computedInstallments.map(
-    (value, i) => overrides.installmentsCents?.[i] ?? value
+    (value, i) => paymentSchedule ? value : overrides.installmentsCents?.[i] ?? value
   );
-  const installmentLabels = visitPlan
+  const installmentLabels = paymentSchedule ? paymentSchedule.rows.map(row => row.label) : visitPlan
     ? visitPlan.labels
     : computedInstallments.map((_, i) => template.installmentLabels[i] ?? `Installment ${i + 1}`);
 
@@ -75,6 +73,7 @@ export function computeFof(
   };
 
   return {
+    paymentSchedule,
     computed,
     effective,
     installmentLabels,

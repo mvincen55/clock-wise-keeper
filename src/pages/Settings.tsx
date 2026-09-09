@@ -14,7 +14,6 @@ import EmployeePermissionsCard from '@/components/settings/EmployeePermissionsCa
 import MessagingSettingsCard from '@/components/settings/MessagingSettingsCard';
 import { PracticeSettingsCard } from '@/components/settings/PracticeSettingsCard';
 import { FofPolicySettingsCard } from '@/components/settings/FofPolicySettingsCard';
-import { FofPaymentPolicyCard } from '@/components/settings/FofPaymentPolicyCard';
 import ProviderRegistryCard from '@/components/settings/ProviderRegistryCard';
 import ProcedureMetaCard from '@/components/settings/ProcedureMetaCard';
 import { BrokenApptSettingsCard } from '@/components/settings/BrokenApptSettingsCard';
@@ -154,7 +153,6 @@ export default function Settings() {
             <ProviderRegistryCard />
             <ProcedureMetaCard />
             <FofPolicySettingsCard />
-            <FofPaymentPolicyCard />
             <BrokenApptSettingsCard />
             {/* Close the Day configuration — moved from the bottom of the
                 Close the Day page, which now links here. */}

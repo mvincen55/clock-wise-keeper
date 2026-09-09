@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Loader2, Stethoscope } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { PaymentPolicyEditor } from './PaymentPolicyEditor';
 
 function dollars(cents: number): string {
   return (cents / 100).toFixed(2);
@@ -19,7 +20,7 @@ export function FofPolicySettingsCard() {
 
   const update = (patch: Partial<typeof settings>) => {
     upsert.mutate(patch, {
-      onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
+      onError: (err) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
     });
   };
 
@@ -39,6 +40,7 @@ export function FofPolicySettingsCard() {
           </div>
         ) : (
           <>
+            <PaymentPolicyEditor value={settings?.payment_policy ?? null} save={payment_policy => update({ payment_policy })} />
             <div className="space-y-2">
               <Label className="text-xs">Membership Plan Display Name</Label>
               <Input
@@ -71,7 +73,7 @@ export function FofPolicySettingsCard() {
               </p>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            {!settings?.payment_policy && <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-xs">Day-of-Service Threshold</Label>
                 <div className="relative">
@@ -112,6 +114,7 @@ export function FofPolicySettingsCard() {
               </div>
             </div>
 
+            }
             <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
               <div className="space-y-0.5">
                 <Label className="text-sm">Downgrade-to-amalgam default</Label>

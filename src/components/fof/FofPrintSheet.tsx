@@ -166,6 +166,10 @@ export default function FofPrintSheet({
   importedFromScreenshot,
 }: FofPrintSheetProps) {
   const { effective } = computation;
+  const schedule = computation.paymentSchedule;
+  const remainingCents = schedule?.remainingCents ?? effective.patientPortionCents;
+  // Browser Print cannot bypass the same review gate used by the editor.
+  if (schedule?.issues.length) return <div className="fof-sheet" role="alert">Payment schedule requires staff review before printing.</div>;
   const totalCents = amounts.totalCents ?? 0;
   const showDiscountRow = template.discountPercent > 0 || template.discountLabel.trim() !== '';
 
@@ -235,7 +239,7 @@ export default function FofPrintSheet({
 
   return (
     <>
-    <div className={`fof-sheet${densityClass}`}>
+    <div className={`fof-sheet${densityClass}${schedule ? ' fof-policy-sheet' : ''}`}>
       <header className="fof-head">
         {practice.logoUrl !== '' && (
           <img className="fof-logo" src={practice.logoUrl} alt={practice.practiceName} />
@@ -319,6 +323,7 @@ export default function FofPrintSheet({
             <span>You Pay (Your Portion)</span>
             <span>{formatCents(effective.patientPortionCents)}</span>
           </div>
+          {!!schedule?.paidCents && <><div className="fof-row"><span>Explicit prior payments</span><span>−{formatCents(schedule.paidCents)}</span></div><div className="fof-row fof-row-total"><span>Remaining amount due</span><span>{formatCents(remainingCents)}</span></div></>}
         </div>
 
         {callout && (
@@ -352,8 +357,8 @@ export default function FofPrintSheet({
               </div>
               <div className="fof-option-body">
                 <div className="fof-row">
-                  <span>Total Patient Portion</span>
-                  <span>{formatCents(effective.patientPortionCents)}</span>
+                  <span>{schedule?.paidCents ? 'Remaining Patient Portion' : 'Total Patient Portion'}</span>
+                  <span>{formatCents(remainingCents)}</span>
                 </div>
                 {showDiscountRow && (
                   <div className="fof-row">
@@ -399,7 +404,7 @@ export default function FofPrintSheet({
                 ))}
                 <div className="fof-row fof-row-total">
                   <span>Total Due</span>
-                  <span>{formatCents(effective.patientPortionCents)}</span>
+                  <span>{formatCents(remainingCents)}</span>
                 </div>
               </div>
             </div>
@@ -411,7 +416,7 @@ export default function FofPrintSheet({
           <div className="fof-cells">
             <div className="fof-cell">
               <div className="fof-cell-head">Total Patient Portion</div>
-              <div className="fof-cell-amount">{formatCents(effective.patientPortionCents)}</div>
+              <div className="fof-cell-amount">{formatCents(remainingCents)}</div>
             </div>
             {showDiscountRow && (
               <div className="fof-cell">
@@ -441,7 +446,7 @@ export default function FofPrintSheet({
             ))}
             <div className="fof-cell fof-cell-total">
               <div className="fof-cell-head">Total Due</div>
-              <div className="fof-cell-amount">{formatCents(effective.patientPortionCents)}</div>
+              <div className="fof-cell-amount">{formatCents(remainingCents)}</div>
             </div>
           </div>
         </section>
@@ -698,6 +703,12 @@ export default function FofPrintSheet({
             </div>
           )}
         </div>
+
+        {schedule && <section className="fof-payment-allocations"><div className="fof-card-title">Payment allocations & reconciliation</div>
+          <p>Full obligation {formatCents(schedule.obligationCents)} · Prior payments {formatCents(schedule.paidCents)} · Remaining {formatCents(schedule.remainingCents)}</p>
+          {schedule.priorPayments.map(p => <div key={p.procedureId}>Recorded paid: {schedule.groupLabels[p.groupId]} / {schedule.procedureLabels[p.procedureId]} — {formatCents(p.cents)}</div>)}
+          {schedule.rows.map(row => <div key={row.id}><strong>{row.label}: {formatCents(row.cents)}</strong>{row.allocations.filter(a => a.cents > 0).map((a, i) => <div key={i}>{schedule.groupLabels[a.groupId]} / {schedule.procedureLabels[a.procedureId]} ({a.milestone}): {formatCents(a.cents)}</div>)}</div>)}
+        </section>}
 
         <p className="fof-office-note">
           File this page with the signed Financial Options Form. Internal record of the

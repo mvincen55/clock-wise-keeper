@@ -1,5 +1,11 @@
 # Financial Options Form — payment-plan engine rebuild
 
+> This inspection plan is superseded by `docs/fof-payment-policy.md` and the
+> directly implemented payment engine. The replacement uses `payment_policy`
+> on `fof_settings` and `payment_class` on `procedure_meta`; do not apply the
+> superseded SQL drafts. Migrations remain pending review; do not deploy or
+> apply production changes as part of this code-only task.
+
 ## What I verified (inspection only, nothing changed)
 
 - This is the real application: `src/pages/FofBuilder.tsx` (2,538 lines) plus `src/lib/fof/*` and `src/components/fof/FofPrintSheet.tsx` all exist here. The git remote is the Lovable-hosted mirror of the GitHub project (the remote URL is the internal sync URL, not a `github.com/mvincen55/clock-wise-keeper` URL), so repo identity is confirmed by file contents, not by the remote string.
