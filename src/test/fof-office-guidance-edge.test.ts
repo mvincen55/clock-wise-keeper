@@ -14,7 +14,7 @@ function setup(options: {member?:boolean;notes?:string;recipes?:unknown[];finish
     return builder;
   };
   const gateway=vi.fn().mockResolvedValue(new Response(JSON.stringify({choices:[{finish_reason:options.finish??'stop',message:{content:JSON.stringify({recipes:options.recipes??[recipe]})}}]})));
-  const client={from,auth:{getUser:async()=>({data:{user:{id:'staff'}}})}};
+  const client={from,rpc:async()=>({data:true}),auth:{getUser:async()=>({data:{user:{id:'staff'}}})}};
   const edge=loadEdge(`supabase/functions/${options.legacy?'name-visits':'fof-office-guidance'}/index.ts`,{'https://esm.sh/@supabase/supabase-js@2':{createClient:()=>client}},gateway);
   const run=(body:unknown={orgId})=>edge.handle(new Request('https://example.test',{method:'POST',headers:{Authorization:'Bearer synthetic'},body:JSON.stringify(body)}));
   return {run,gateway,filters,writes};
@@ -48,6 +48,8 @@ describe('office-only AI guidance endpoint',()=>{
     const test=setup(options);expect((await test.run()).status).toBe(502);expect(test.writes).not.toHaveBeenCalled();
   });
   it('closes the old visit-naming relay to patient plans',async()=>{
-    const test=setup({legacy:true});expect((await test.run({slots:['PRIVATE'],visits:[]})).status).toBe(400);expect(test.gateway).not.toHaveBeenCalled();
+    const test=setup({legacy:true});const response=await test.run({slots:['PRIVATE'],visits:[]});expect(response.status).toBe(410);expect(test.gateway).not.toHaveBeenCalled();
+    expect((await response.json()).error).toContain('No patient plan was read or sent to AI');
+    expect(test.filters.mock.calls.every(call=>call[0]==='org_members')).toBe(true);
   });
 });
