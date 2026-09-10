@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrgContext } from '@/hooks/useOrgContext';
 import { useMemo } from 'react';
 import { getToday } from '@/lib/time-utils';
 import { accrualBasisWorkedHours } from '@/lib/payroll-utils';
@@ -63,12 +64,13 @@ export type PtoLedgerWeek = {
 export function usePtoSettings() {
   const { user } = useAuth();
   return useQuery({
-    queryKey: ['pto-settings'],
+    queryKey: ['pto-settings', user?.id],
     enabled: !!user,
     queryFn: async () => {
       const { data } = await supabase
         .from('pto_settings')
         .select('*')
+        .eq('user_id', user!.id)
         .maybeSingle();
       return data as PtoSettings | null;
     },
@@ -77,13 +79,14 @@ export function usePtoSettings() {
 
 export function useUpsertPtoSettings() {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: Partial<Omit<PtoSettings, 'id' | 'user_id'>>) => {
-      if (!user) throw new Error('Not authenticated');
+      if (!user || !ctx) throw new Error('Not authenticated');
       const { error } = await supabase
         .from('pto_settings')
-        .upsert({ user_id: user.id, ...input } as any, { onConflict: 'user_id' });
+        .upsert({ user_id: user.id, org_id: ctx.org_id, employee_id: ctx.employee_id, ...input } as any, { onConflict: 'employee_id' });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pto-settings'] }),
@@ -95,12 +98,13 @@ export function useUpsertPtoSettings() {
 export function usePtoSnapshots() {
   const { user } = useAuth();
   return useQuery({
-    queryKey: ['pto-snapshots'],
+    queryKey: ['pto-snapshots', user?.id],
     enabled: !!user,
     queryFn: async () => {
       const { data } = await supabase
         .from('pto_snapshots')
         .select('*')
+        .eq('user_id', user!.id)
         .order('snapshot_date', { ascending: false });
       return (data || []) as PtoSnapshot[];
     },
@@ -109,14 +113,15 @@ export function usePtoSnapshots() {
 
 export function useUpsertPtoSnapshot() {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: { snapshot_date: string; snapshot_balance_hours: number }) => {
-      if (!user) throw new Error('Not authenticated');
+      if (!user || !ctx) throw new Error('Not authenticated');
       const { error } = await supabase
         .from('pto_snapshots')
         .upsert(
-          { user_id: user.id, ...input } as any,
+          { user_id: user.id, org_id: ctx.org_id, employee_id: ctx.employee_id, ...input } as any,
           { onConflict: 'user_id,snapshot_date' }
         );
       if (error) throw error;
@@ -130,12 +135,13 @@ export function useUpsertPtoSnapshot() {
 export function usePtoLedger() {
   const { user } = useAuth();
   return useQuery({
-    queryKey: ['pto-ledger'],
+    queryKey: ['pto-ledger', user?.id],
     enabled: !!user,
     queryFn: async () => {
       const { data } = await supabase
         .from('pto_ledger_weeks')
         .select('*')
+        .eq('user_id', user!.id)
         .order('period_start', { ascending: true });
       return (data || []) as PtoLedgerWeek[];
     },
@@ -165,7 +171,7 @@ export function useRecalculatePto() {
 
       const { data: empRecord } = await supabase
         .from('employees')
-        .select('id')
+        .select('id, hire_date')
         .eq('org_id', orgId)
         .eq('user_id', user.id)
         .limit(1)
@@ -177,6 +183,7 @@ export function useRecalculatePto() {
       let { data: settings } = await supabase
         .from('pto_settings')
         .select('*')
+        .eq('user_id', user!.id)
         .maybeSingle();
 
       if (!settings) {
@@ -184,47 +191,36 @@ export function useRecalculatePto() {
           user_id: user.id,
           org_id: orgId,
           employee_id: employeeId,
-          hire_date: getToday(),
+          hire_date: empRecord.hire_date ?? getToday(),
           worked_hours_cap_weekly: 40,
           max_balance: 100,
           allow_negative: false,
           timezone: 'America/New_York',
         };
-        const { error } = await supabase.from('pto_settings').upsert(defaults as any, { onConflict: 'user_id' });
+        const { error } = await supabase.from('pto_settings').upsert(defaults as any, { onConflict: 'employee_id' });
         if (error) throw error;
-        const { data: reloaded } = await supabase.from('pto_settings').select('*').maybeSingle();
+        const { data: reloaded } = await supabase.from('pto_settings').select('*').eq('employee_id', employeeId).maybeSingle();
         settings = reloaded;
       }
       if (!settings) throw new Error('Failed to create PTO settings');
       const s = settings as PtoSettings;
 
-      // 2. Load or auto-create snapshot
+      // 2. Require a confirmed starting snapshot
       let { data: snapshots } = await supabase
         .from('pto_snapshots')
         .select('*')
+        .eq('user_id', user!.id)
         .order('snapshot_date', { ascending: false })
         .limit(1);
 
-      if (!snapshots?.length) {
-        const defaultSnap = {
-          user_id: user.id,
-          org_id: orgId,
-          employee_id: employeeId,
-          snapshot_date: '2026-02-14',
-          snapshot_balance_hours: -1.63,
-        };
-        const { error } = await supabase.from('pto_snapshots').upsert(defaultSnap as any, { onConflict: 'user_id,snapshot_date' });
-        if (error) throw error;
-        const { data: reloaded } = await supabase.from('pto_snapshots').select('*').order('snapshot_date', { ascending: false }).limit(1);
-        snapshots = reloaded;
-      }
-      if (!snapshots?.length) throw new Error('Failed to create PTO snapshot');
+      if (!snapshots?.length) throw new Error('Enter a confirmed PTO starting balance and date before recalculating.');
       const snap = snapshots[0] as PtoSnapshot;
 
       // 3. Load time entries from snapshot_date forward
       const { data: entries } = await supabase
         .from('time_entries')
         .select('entry_date, total_minutes')
+        .eq('employee_id', employeeId)
         .gte('entry_date', snap.snapshot_date)
         .order('entry_date');
 
@@ -232,6 +228,7 @@ export function useRecalculatePto() {
       const { data: daysOff } = await supabase
         .from('days_off')
         .select('date_start, date_end, hours, type')
+        .eq('employee_id', employeeId)
         .gte('date_start', snap.snapshot_date)
         .order('date_start');
 

@@ -66,7 +66,7 @@ describe('missed appointments', () => {
 
   it('a clean day reads calm, not alarming', () => {
     renderView(<OwnerDashboard view={ownerClosedFixture} />);
-    expect(screen.getByText(/None recorded — clean schedule day/)).toBeInTheDocument();
+    expect(screen.getByText(/None recorded · clean schedule day/)).toBeInTheDocument();
   });
 
   it('no trend claim renders without enough comparison data', () => {
