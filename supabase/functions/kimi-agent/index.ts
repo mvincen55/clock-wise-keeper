@@ -651,6 +651,7 @@ function formatCents(cents: number): string {
 }
 
 interface FofSettingsRow {
+  payment_policy?: unknown;
   membership_plan_name: string;
   day_of_service_threshold_cents: number;
   min_standalone_payment_cents: number;
@@ -676,14 +677,15 @@ function buildDynamicPolicySummary(
   codeRules: FofCodeRule[],
   guidance: string[]
 ): string {
-  const parts: string[] = [BASE_POLICY_SUMMARY];
+  const parts: string[] = [settings?.payment_policy ? 'Payment collection follows the current office payment-policy configuration below. Do not apply legacy first-visit thresholds or invent collection events.' : BASE_POLICY_SUMMARY];
 
   const planName = settings?.membership_plan_name?.trim() || "membership";
   const dayOfService = settings?.day_of_service_threshold_cents ?? 100_000;
   const minStandalone = settings?.min_standalone_payment_cents ?? 10_000;
   const downgradeDefault = settings?.downgrade_default_on ?? false;
 
-  parts.push(
+  if (settings?.payment_policy) parts.push(`Current authoritative payment configuration: ${JSON.stringify(settings.payment_policy)}. Amounts are calculated in integer cents; do not change these rules through chat. Configure financial rules in office settings. Code-bank notes provide treatment wording and grouping guidance, not an override of the configured financial rules.`);
+  else parts.push(
     `Current office settings: prepay-in-full earns the standard prepay discount. Patient portions under ${formatCents(dayOfService)} are paid at the visit (nothing due at scheduling). Plans with first-visit patient portions under ${formatCents(minStandalone)} follow the same simple day-of-service rule. Downgrade-to-amalgam handling is ${downgradeDefault ? "on by default" : "off by default"}${downgradeDefault ? "" : " and only turned on for specific insurance plans"}.`
   );
 
@@ -1018,24 +1020,26 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return json({ error: "Unauthorized" }, 401);
 
-    const { data: membership } = await supabase
-      .from("org_members")
-      .select("org_id, role")
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .limit(1)
-      .maybeSingle();
-    if (!membership) return json({ error: "Unauthorized" }, 403);
-    const isManager = membership.role === "owner" || membership.role === "manager";
-
     const body = (await req.json()) as {
       mode?: string;
+      orgId?: string;
       scope?: string;
       scope_doc_ids?: unknown;
       messages?: { role?: string; content?: string }[];
       context?: { visits?: { procedures?: string[] }[]; treatment?: string };
       trainingEnabled?: boolean;
     };
+    if (body.orgId != null && !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(body.orgId)) return json({ error: 'Invalid office' }, 400);
+    let membershipQuery = supabase
+      .from("org_members")
+      .select("org_id, role")
+      .eq("user_id", user.id)
+      .eq("status", "active");
+    if (body.orgId) membershipQuery = membershipQuery.eq("org_id", body.orgId);
+    const { data: membership } = await membershipQuery.limit(1).maybeSingle();
+    if (!membership) return json({ error: "Unauthorized" }, 403);
+    const isManager = membership.role === "owner" || membership.role === "manager";
+
     const mode: "fof" | "ask" = body.mode === "fof" ? "fof" : "ask";
     // Contextual scope: the Office Handbook and Insurance Desk limit document
     // search to their own content. Unknown/absent scope = full knowledge base.
@@ -1124,13 +1128,13 @@ Deno.serve(async (req) => {
             .order("created_at", { ascending: true })
             .limit(30)
         : Promise.resolve({ data: [] }),
-      supabase.from("office_docs").select("id").limit(200),
-      loadCodeNotes(supabase),
-      supabase.from("fee_schedules").select("name, kind").eq("is_active", true).order("sort_order"),
+      supabase.from("office_docs").select("id").eq("org_id", membership.org_id).limit(200),
+      loadCodeNotes(supabase, 120, 400, membership.org_id),
+      supabase.from("fee_schedules").select("name, kind").eq("org_id", membership.org_id).eq("is_active", true).order("sort_order"),
       mode === "fof"
         ? supabase
             .from("fof_settings")
-            .select("membership_plan_name, day_of_service_threshold_cents, min_standalone_payment_cents, downgrade_default_on")
+            .select("membership_plan_name, day_of_service_threshold_cents, min_standalone_payment_cents, downgrade_default_on, payment_policy")
             .eq("org_id", membership.org_id)
             .maybeSingle()
         : Promise.resolve({ data: null }),

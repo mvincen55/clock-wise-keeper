@@ -2,6 +2,7 @@ import type { PaymentClass } from './payment-policy';
 
 interface GroupingLine {
   id: string; classification: PaymentClass | 'review'; visit: string; tooth?: string; explicitGroup?: string;
+  groupingHint?: 'same_tooth' | 'same_visit' | 'separate';
 }
 
 /** A treatment phase can span appointments. Appointment numbers are not phase IDs.
@@ -16,8 +17,9 @@ export function treatmentGroupIds(lines: GroupingLine[]): Map<string, string> {
     for (let j = 0; j < i; j++) {
       const a = lines[i], b = lines[j];
       if (a.explicitGroup?.trim() || b.explicitGroup?.trim() || a.classification !== b.classification) continue;
+      if (a.groupingHint === 'separate' || b.groupingHint === 'separate') continue;
       const sharedAppointment = a.visit.trim() !== '' && a.visit.trim() === b.visit.trim();
-      const courseSpansAppointments = ['implant', 'restoration', 'denture'].includes(a.classification);
+      const courseSpansAppointments = ['implant', 'restoration', 'denture'].includes(a.classification) && a.groupingHint !== 'same_visit' && b.groupingHint !== 'same_visit';
       const sharedTooth = courseSpansAppointments && [...teeth[i]].some(tooth => teeth[j].has(tooth));
       if (sharedAppointment || sharedTooth) parent[root(i)] = root(j);
     }

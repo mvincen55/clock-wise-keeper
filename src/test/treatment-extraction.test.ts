@@ -24,7 +24,7 @@ describe('screenshot completeness', () => {
   ])('rejects %s and returns no salvaged rows', (_name, raw, reason) => {
     expect(completeTreatmentRows(raw, reason)).toBeNull();
   });
-  it('endpoint reports an actionable incomplete result, then allows a complete retry', async () => {
+  it('retired endpoint directs older clients to private browser import without reading an image', async () => {
     const builder = { select: () => builder, eq: () => builder, limit: () => builder, maybeSingle: async () => ({ data: { org_id: 'org-a' } }) };
     const client = { auth: { getUser: async () => ({ data: { user: { id: 'a' } } }) }, rpc: async () => ({ data: true }), from: () => builder };
     const gateway = vi.fn()
@@ -33,12 +33,12 @@ describe('screenshot completeness', () => {
     const { handle } = loadEdge('supabase/functions/parse-treatment/index.ts', { 'https://esm.sh/@supabase/supabase-js@2': { createClient: () => client } }, gateway);
     const request = () => new Request('https://example.test', { method: 'POST', headers: { Authorization: 'Bearer synthetic' }, body: JSON.stringify({ image: 'data:image/png;base64,AAAA' }) });
     const incomplete = await handle(request());
-    expect(incomplete.status).toBe(422);
+    expect(incomplete.status).toBe(410);
     const body = await incomplete.json();
-    expect(body).toMatchObject({ status: 'incomplete', code: 'INCOMPLETE_IMPORT' });
-    expect(body.error).toContain('Nothing was imported');
+    expect(body.error).toContain('privately in your browser');
     expect(body).not.toHaveProperty('rows');
     const complete = await handle(request());
-    expect(await complete.json()).toEqual({ status: 'complete', rows: [row] });
+    expect(complete.status).toBe(410);
+    expect(gateway).not.toHaveBeenCalled();
   });
 });

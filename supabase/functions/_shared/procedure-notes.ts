@@ -46,15 +46,19 @@ const text = (value: unknown, cap: number): string =>
 export async function loadCodeNotes(
   supabase: { from: (table: string) => any },
   maxEntries = 120,
-  maxChars = 400
+  maxChars = 400,
+  orgId?: string
 ): Promise<CodeNote[]> {
   try {
-    const { data } = await supabase
+    let query = supabase
       .from("fee_schedule_items")
-      .select("code, description, notes, schedule_id, fee_schedules!inner(name, kind)")
+      .select("code, description, notes, schedule_id, fee_schedules!inner(name, kind, org_id, is_active)")
+      .eq("fee_schedules.is_active", true)
       .neq("notes", "")
       .order("code")
       .limit(maxEntries);
+    if (orgId) query = query.eq("fee_schedules.org_id", orgId);
+    const { data } = await query;
     return ((data ?? []) as RawRow[])
       .map((row): CodeNote | null => {
         // PostgREST returns the embedded row as an object; tolerate arrays.

@@ -77,7 +77,9 @@ import {
 } from '@/hooks/useFeeSchedules';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { computeFof } from '@/lib/fof/compute';
-import { suggestedPaymentLabels } from '@/lib/fof/payment-engine';
+import { useFofOfficeGuidance } from '@/hooks/useFofOfficeGuidance';
+import type { CurrentFofContext } from '@/lib/fof/current-form-assistant';
+import { readLocalTreatment, type LocalTreatmentRow } from '@/lib/fof/local-treatment-import';
 import { useFofPolicySettings, usePaymentClassifications } from '@/hooks/useFofPolicySettings';
 import { PaymentScheduleEditor, usePaymentScheduleEditor } from '@/components/fof/PaymentScheduleEditor';
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
@@ -91,7 +93,7 @@ import {
 import { categorizeCdtCode } from '@/lib/fof/cdt';
 import { resolvePatientName } from '@/lib/fof/cdt-names';
 import { computeFofDiscounts } from '@/lib/fof/discounts';
-import { buildNameVisitsPayload, safeProcedureLabel } from '@/lib/fof/ai';
+import { safeProcedureLabel } from '@/lib/fof/ai';
 import {
   buildVisitSchedule,
   DAY_OF_SERVICE_THRESHOLD_CENTS,
@@ -459,7 +461,8 @@ export default function FofBuilder() {
   const [payScheduleId, setPayScheduleId] = useState<string>(NO_SCHEDULE);
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
   const [bundleName, setBundleName] = useState('');
-  const [aiNaming, setAiNaming] = useState(false);
+  const officeGuidance = useFofOfficeGuidance();
+  const aiNaming = officeGuidance.isFetching;
   const [doctorName, setDoctorName] = useState(FOF_NO_DOCTOR);
   useEffect(() => {
     const doctors = practice?.doctorNames ?? [];
@@ -476,12 +479,21 @@ export default function FofBuilder() {
     body: string;
     action: string;
     onConfirm: () => void;
+    previewUrl?: string;
   }>(null);
 
   const { data: bundles } = useProcedureBundles();
   const saveBundle = useSaveProcedureBundle();
   const deleteBundle = useDeleteProcedureBundle();
   const { data: orgCtx } = useOrgContext();
+  const importScope = useRef(0);
+  useEffect(() => {
+    importScope.current += 1;
+    setImporting(false);
+    setConfirmState(previous => previous?.previewUrl ? null : previous);
+  }, [orgCtx?.org_id, state.patientName]);
+  useEffect(() => () => { if (confirmState?.previewUrl) URL.revokeObjectURL(confirmState.previewUrl); }, [confirmState?.previewUrl]);
+  useEffect(() => () => { importScope.current += 1; }, []);
   const isManager = orgCtx?.role === 'owner' || orgCtx?.role === 'manager';
   // Who's signed in — printed on the office copy's created-by line.
   const { user } = useAuth();
@@ -1092,8 +1104,10 @@ export default function FofBuilder() {
   const policyLines = feeLineEntries.map(entry => {
     const estimateLine = perLineByKey.get(entry.key);
     const builderLine = state.lines.find(l => l.key === entry.key)!;
+    const recipe = officeGuidance.data?.recipes.find(recipe => recipe.code === entry.line.code.toUpperCase() && recipe.scheduleId === officeSchedule?.id);
     return {
       id: entry.key, code: entry.line.code, visit: builderLine.visit,
+      groupingHint: recipe?.grouping, guidance: recipe ? { title: recipe.title, summary: recipe.summary, sourceId: recipe.sourceId, classification: recipe.classification } : undefined,
       tooth: builderLine.tooth, procedureLabel: builderLine.description.trim() || safeProcedureLabel(entry.line.code) || undefined,
       classification: classificationQuery.data?.[entry.line.code] ?? 'review' as const,
       responsibilityCents: builderLine.feeInput.trim() && parseCurrencyInput(builderLine.feeInput) === null ? NaN : freeUnderMembership(builderLine) ? 0 : entry.line.officeFeeCents -
@@ -1106,118 +1120,12 @@ export default function FofBuilder() {
   const legacyOverrideReview = !!paymentPolicy && (state.installmentOverrides.some(Boolean) || state.installmentLabelOverrides.some(Boolean) || !!state.paymentCountOverride);
   const policyBlocked = policyQuery.isLoading || !!policyQuery.error || (!!paymentPolicy && (classificationQuery.isLoading || !!classificationQuery.error || legacyOverrideReview || !!paymentEditor.model?.schedule.issues.length));
 
-  // AI pass over the payment names and treatment wording. HIPAA: the
-  // request is built ONLY from CDT codes, code-derived labels, and
-  // strictly-validated tooth numbers (src/lib/fof/ai.ts) — staff-typed
-  // descriptions, edited labels, patient fields, and dollar amounts never
-  // leave the browser. The doctor name comes from the org's fof_settings
-  // dropdown, never free text.
-  const aiCall = async (wantTreatment: boolean) => {
-    if (!computation) return null;
-    const byVisit = new Map<number, { code: string; tooth: string }[]>();
-    for (const l of state.lines) {
-      if (!l.code.trim()) continue;
-      byVisit.set(effectiveVisit(l), [
-        ...(byVisit.get(effectiveVisit(l)) ?? []),
-        { code: l.code, tooth: l.tooth },
-      ]);
-    }
-    const visitEntries = [...byVisit.entries()]
-      .sort((a, b) => a[0] - b[0])
-      .map(([, entries]) => entries);
-    // Display slot labels can embed typed descriptions (custom codes
-    // fall back to them), so the AI slots are REBUILT from the
-    // code-derived safeLabels — same schedule structure, safe wording.
-    const safeSchedule =
-      rawVisitPlan?.key === 'visitSchedule' && visitWork
-        ? buildVisitSchedule(
-            schedulePortion,
-            visitWork.map(v => ({
-              label: v.safeLabel,
-              feeCents: v.feeCents,
-              dueAtVisitCents: v.dueAtVisitCents,
-            }))
-          )
-        : null;
-    const autoSlots = paymentPolicy
-      ? computation.installmentLabels.map((_, i) => `Payment ${i + 1}`)
-      : safeSchedule?.labels ?? rawVisitPlan?.labels ?? computation.installmentLabels;
-    const { data, error } = await supabase.functions.invoke('name-visits', {
-      body: {
-        ...buildNameVisitsPayload(visitEntries, autoSlots),
-        wantTreatment,
-        // "No specific doctor" → empty name; the AI writes as "we".
-        doctorName: doctorName === FOF_NO_DOCTOR ? '' : doctorName,
-      },
-    });
-    if (error) throw new Error(error.message);
-    return { data, slotCount: autoSlots.length };
-  };
-
+  // Refresh office-wide guidance only. No part of this form enters the request.
   const aiNamePayments = async () => {
-    const requestedSchedule = paymentEditor.model?.schedule;
-    setAiNaming(true);
-    try {
-      const result = await aiCall(false);
-      if (!result) return;
-      const names: string[] = result.data?.names ?? [];
-      if (names.length !== result.slotCount) {
-        throw new Error('AI returned an unexpected number of names');
-      }
-      if (paymentPolicy && requestedSchedule) {
-        paymentEditor.update(s => ({ ...s, overrides: suggestedPaymentLabels(requestedSchedule, s.overrides, names) }));
-        toast.success('Suggested names added; existing staff wording is preserved');
-        return;
-      }
-      names.forEach((name, i) =>
-        dispatch({ type: 'setInstallmentLabel', index: i, value: name })
-      );
-      toast.success('Payment names updated — edit any of them freely');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'AI naming failed');
-    } finally {
-      setAiNaming(false);
-    }
+    const result = await officeGuidance.refetch();
+    if (result.error) toast.error('Code-bank guidance could not be refreshed. Existing rules remain in use.');
+    else toast.success('Code-bank guidance refreshed. Staff corrections on this form are preserved.');
   };
-
-  // Auto-polish: once the treatment settles (2.5s of quiet), AI rewords
-  // the treatment summary like a human and names the payments — silently,
-  // and never overwriting anything staff already typed.
-  const aiSignature = useMemo(
-    () =>
-      JSON.stringify([
-        doctorName,
-        state.lines.map(l => [l.code, l.tooth, l.description, l.visit, l.feeInput]),
-      ]),
-    [state.lines, doctorName]
-  );
-  const [aiText, setAiText] = useState<{ signature: string; treatment: string } | null>(null);
-  const aiRanForRef = useRef<string>('');
-  useEffect(() => {
-    if (feeLines.length === 0 || importing || !computation) return;
-    if (aiRanForRef.current === aiSignature) return;
-    const timer = setTimeout(async () => {
-      aiRanForRef.current = aiSignature;
-      try {
-        const result = await aiCall(true);
-        if (!result) return;
-        if (typeof result.data?.treatment === 'string' && result.data.treatment.trim() !== '') {
-          setAiText({ signature: aiSignature, treatment: result.data.treatment.trim() });
-        }
-        const names: string[] = result.data?.names ?? [];
-        const noManualNames = state.installmentLabelOverrides.every(l => !l || l.trim() === '');
-        if (!paymentPolicy && names.length === result.slotCount && noManualNames) {
-          names.forEach((name, i) =>
-            dispatch({ type: 'setInstallmentLabel', index: i, value: name })
-          );
-        }
-      } catch {
-        // Silent — the auto wording is a bonus, never an error state.
-      }
-    }, 2500);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aiSignature, feeLines.length, importing]);
 
   // The reminder every import path goes through — no patient info in the
   // image, ever.
@@ -1232,126 +1140,80 @@ export default function FofBuilder() {
       onConfirm,
     });
 
-  // Screenshot import: staff crop out patient identifiers first; the
-  // image is parsed in memory (never stored) and only procedure rows come
-  // back. The Fee column fills the lines, but every ESTIMATE (allowable,
-  // ins pays, portion) is recomputed from our own schedules — never taken
-  // from the screenshot — and differing fees get flagged.
-  // Large screenshots (retina captures are often multi-MB PNGs) get
-  // downscaled/re-encoded in memory so they fit the function's payload
-  // cap; nothing ever touches disk or storage.
-  const shrinkForUpload = (dataUrl: string): Promise<string> =>
-    new Promise(resolve => {
-      if (dataUrl.length < 4_000_000) return resolve(dataUrl);
-      const img = new Image();
-      img.onload = () => {
-        const scale = Math.min(1, 2200 / Math.max(img.width, img.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return resolve(dataUrl);
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.9));
+  const commitImportedRows = (rows: LocalTreatmentRow[]) => {
+    // Renumber the screenshot's visit groups to start at Visit 1 (a
+    // case that begins at "Visit 5" in the PMS becomes Visit 1 here).
+    const visitNumbers = rows
+      .map(r => r.visit)
+      .filter((v): v is number => typeof v === 'number' && isFinite(v));
+    const minVisit = visitNumbers.length > 0 ? Math.min(...visitNumbers) : null;
+    let differed = 0;
+    let unpriced = 0;
+    const lines = rows.map(r => {
+      const base = lineFromCode(r.code);
+      const code = r.code.trim().toUpperCase();
+      // OFFICE column → our own fee schedule → the plain "Fee" column,
+      // which may be a carrier's contracted rate. See resolveImportedFee.
+      const resolved = resolveImportedFee({
+        code,
+        pmsOfficeFeeCents: r.officeFee !== null ? Math.round(r.officeFee * 100) : null,
+        onFileFeeCents: officeByCode.get(code)?.feeCents ?? null,
+        contractedFeeCents: r.fee !== null ? Math.round(r.fee * 100) : null,
+      });
+      if (resolved.unpriced) unpriced++;
+      else if (resolved.flag) differed++;
+      return {
+        ...base,
+        tooth: r.tooth,
+        description: base.description || r.description,
+        feeInput:
+          resolved.feeCents !== null ? formatCents(resolved.feeCents) : base.feeInput,
+        entryDate: r.entryDate,
+        visit:
+          r.visit !== null && minVisit !== null ? String(r.visit - minVisit + 1) : base.visit,
+        feeFlag: resolved.flag,
       };
-      img.onerror = () => resolve(dataUrl);
-      img.src = dataUrl;
     });
+    dispatch({ type: 'addLines', lines });
+    dispatch({ type: 'set', field: 'importUsed', value: 'yes' });
+    const notes: string[] = [];
+    if (differed > 0) {
+      notes.push(`${differed} fee difference${differed === 1 ? '' : 's'} flagged`);
+    }
+    if (unpriced > 0) {
+      notes.push(`${unpriced} with no office fee on file`);
+    }
+    const summary = `Imported ${lines.length} procedure${lines.length === 1 ? '' : 's'}${
+      notes.length ? ` — ${notes.join(', ')}` : ''
+    }. Estimates come from your fee schedules, not the screenshot.`;
+    // A row priced off the screenshot needs a look before it prints, so
+    // it does not get a green tick.
+    if (unpriced > 0) toast.warning(summary);
+    else toast.success(summary);
+  };
 
+  // OCR and its review image stay in this browser. Only confirmed rows enter
+  // the form; no cloud AI or upload fallback exists.
   const importScreenshot = async (file: File) => {
+    const scope = ++importScope.current;
     setImporting(true);
     try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(new Error('Could not read the image'));
-        reader.readAsDataURL(file);
+      const result = await readLocalTreatment(file, Object.fromEntries([...officeByCode].map(([code,item]) => [code,item.description])));
+      if (scope !== importScope.current) return;
+      if (!result.rows.length) throw new Error('No procedures were read. Nothing was imported.');
+      setConfirmState({
+        title: 'Review ' + result.rows.length + ' extracted procedures',
+        body: 'Compare every row with your screenshot. Confirm all procedures, tooth numbers, fees and visit groups were captured. Nothing has been imported yet.\n\n' +
+          result.rows.map((row,i) => (i+1) + '. ' + row.code + (row.tooth ? ' #' + row.tooth : '') + ' · ' +
+            (row.officeFee !== null ? 'Office ' + formatCents(Math.round(row.officeFee*100)) : row.fee !== null ? 'Fee ' + formatCents(Math.round(row.fee*100)) : 'Use office fee schedule') +
+            (row.visit !== null ? ' · Visit ' + row.visit : ' · Check visit')).join('\n') +
+          (result.warnings.length ? '\n\n' + result.warnings.join('\n') : ''),
+        action: 'Import reviewed rows', previewUrl: URL.createObjectURL(file),
+        onConfirm: () => { if (scope === importScope.current) commitImportedRows(result.rows); },
       });
-      const image = await shrinkForUpload(dataUrl);
-      const { data, error } = await supabase.functions.invoke('parse-treatment', {
-        body: { image },
-      });
-      if (error) {
-        // invoke() wraps non-2xx responses in a generic message; the
-        // function's JSON body has the actual reason.
-        let message = error.message;
-        try {
-          const body = (await (
-            error as { context?: { json?: () => Promise<unknown> } }
-          ).context?.json?.()) as { error?: string } | undefined;
-          if (body?.error) message = body.error;
-        } catch {
-          /* keep the generic message */
-        }
-        throw new Error(message);
-      }
-      if (data?.status !== 'complete') throw new Error(data?.error || 'The extraction was not confirmed complete. Nothing was imported. Please retry.');
-      const rows: {
-        code: string;
-        tooth: string;
-        description: string;
-        fee: number | null;
-        officeFee: number | null;
-        entryDate: string;
-        visit: number | null;
-      }[] = data?.rows ?? [];
-      if (rows.length === 0) throw new Error('No procedures found in the screenshot');
-      // Renumber the screenshot's visit groups to start at Visit 1 (a
-      // case that begins at "Visit 5" in the PMS becomes Visit 1 here).
-      const visitNumbers = rows
-        .map(r => r.visit)
-        .filter((v): v is number => typeof v === 'number' && isFinite(v));
-      const minVisit = visitNumbers.length > 0 ? Math.min(...visitNumbers) : null;
-      let differed = 0;
-      let unpriced = 0;
-      const lines = rows.map(r => {
-        const base = lineFromCode(r.code);
-        const code = r.code.trim().toUpperCase();
-        // OFFICE column → our own fee schedule → the plain "Fee" column,
-        // which may be a carrier's contracted rate. See resolveImportedFee.
-        const resolved = resolveImportedFee({
-          code,
-          pmsOfficeFeeCents: r.officeFee !== null ? Math.round(r.officeFee * 100) : null,
-          onFileFeeCents: officeByCode.get(code)?.feeCents ?? null,
-          contractedFeeCents: r.fee !== null ? Math.round(r.fee * 100) : null,
-        });
-        if (resolved.unpriced) unpriced++;
-        else if (resolved.flag) differed++;
-        return {
-          ...base,
-          tooth: r.tooth,
-          description: base.description || r.description,
-          feeInput:
-            resolved.feeCents !== null ? formatCents(resolved.feeCents) : base.feeInput,
-          entryDate: r.entryDate,
-          visit:
-            r.visit !== null && minVisit !== null ? String(r.visit - minVisit + 1) : base.visit,
-          feeFlag: resolved.flag,
-        };
-      });
-      dispatch({ type: 'addLines', lines });
-      dispatch({ type: 'set', field: 'importUsed', value: 'yes' });
-      const notes: string[] = [];
-      if (differed > 0) {
-        notes.push(`${differed} fee difference${differed === 1 ? '' : 's'} flagged`);
-      }
-      if (unpriced > 0) {
-        notes.push(`${unpriced} with no office fee on file`);
-      }
-      const summary = `Imported ${lines.length} procedure${lines.length === 1 ? '' : 's'}${
-        notes.length ? ` — ${notes.join(', ')}` : ''
-      }. Estimates come from your fee schedules, not the screenshot.`;
-      // A row priced off the screenshot needs a look before it prints, so
-      // it does not get a green tick.
-      if (unpriced > 0) toast.warning(summary);
-      else toast.success(summary);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Screenshot import failed');
-    } finally {
-      setImporting(false);
-    }
+    } catch (error) {
+      if (scope === importScope.current) toast.error(error instanceof Error ? error.message : 'Local screenshot reading failed. Nothing was imported.');
+    } finally { if (scope === importScope.current) setImporting(false); }
   };
 
   // Paste-to-import: Ctrl/Cmd+V with a screenshot on the clipboard runs
@@ -1417,34 +1279,33 @@ export default function FofBuilder() {
   // (AI's human wording once it arrives, list-style until then) until the
   // staff edits it, then their wording sticks.
   const noteEdited = state.noteEdited === 'yes';
-  const aiTreatment = aiText && aiText.signature === aiSignature ? aiText.treatment : '';
+  const guidedGroups = paymentEditor.model?.groups ?? [];
+  const aiTreatment = policyLines.some(line => line.guidance) && guidedGroups.length
+    ? 'Your treatment includes ' + guidedGroups.map(group => group.label).join(', ') + '.'
+    : '';
   const printedTreatment = noteEdited ? state.note : aiTreatment || autoTreatment;
 
-  // Context for the floating FOF assistant — de-identified BY
-  // CONSTRUCTION: code-derived procedure wording (never typed
-  // descriptions) plus the AI's own generated treatment text (never the
-  // staff-edited note, which could name the patient).
-  const assistantContext = useMemo(() => {
-    const byVisit = new Map<number, { code: string; tooth: string }[]>();
-    for (const l of state.lines) {
-      if (!l.code.trim()) continue;
-      byVisit.set(effectiveVisit(l), [
-        ...(byVisit.get(effectiveVisit(l)) ?? []),
-        { code: l.code, tooth: l.tooth },
-      ]);
-    }
-    if (byVisit.size === 0) return null;
-    const visitEntries = [...byVisit.entries()]
-      .sort((a, b) => a[0] - b[0])
-      .map(([, entries]) => entries);
-    return {
-      visits: buildNameVisitsPayload(visitEntries, []).visits,
-      treatment: aiTreatment,
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.lines, aiTreatment]);
+  // Current form facts never leave this component tree or enter AI requests.
+  const assistantContext: CurrentFofContext | null = computation ? {
+    amounts, computation, treatment: printedTreatment, policy: paymentPolicy ?? null,
+    issues: paymentEditor.model?.schedule.issues ?? [],
+    lines: feeLineEntries.map(entry => {
+      const line = state.lines.find(line => line.key === entry.key)!;
+      const estimate = perLineByKey.get(entry.key);
+      return { code: entry.line.code, tooth: line.tooth, description: line.description,
+        feeCents: entry.line.officeFeeCents, insuranceCents: estimate?.insurancePaysCents ?? 0, writeOffCents: estimate?.writeOffCents ?? 0 };
+    }),
+    insurance: { enabled: insuranceEnabled, scheduleId: insuranceActive ? feeScheduleId : null,
+      paymentScheduleId: payActive ? payScheduleId : null,
+      scheduleName: selectedSchedule?.name ?? (feeScheduleId === MANUAL_SCHEDULE ? 'Manually entered plan' : 'No carrier selected'),
+      deductibleCents: parseCurrencyInput(state.deductibleInput) ?? 0,
+      annualMaximumCents: parseCurrencyInput(state.annualMaxInput) ?? 0,
+      manuallyOverridden: !!state.insuranceOverride.trim() || !!state.writeOffOverride.trim(),
+      settings: (planRules ? `Entered coverage: preventive ${planRules.preventivePct}%, basic ${planRules.basicPct}%, major ${planRules.majorPct}%. Contracted write-offs ${planRules.writeoffApplies ? 'apply' : 'do not apply'}. Preventive care ${planRules.preventiveExemptFromMax ? 'does not use' : 'uses'} the annual maximum. ` : '') + (state.spans2Years === 'yes' ? `This estimate spans two benefit years; next-year maximum ${formatCents(parseCurrencyInput(state.nextMaxInput) ?? 0)} and deductible ${formatCents(parseCurrencyInput(state.nextDedInput) ?? 0)} also apply.` : 'This estimate uses the entered benefits for one benefit year.'),
+    },
+  } : null;
 
-  const isDirty = edited || paymentEditor.isDirty ||
+  const isDirty = importing || !!confirmState?.previewUrl || edited || paymentEditor.isDirty ||
     !!state.prepayOptionState || !!state.installmentOptionState || !!state.isSenior ||
     !!state.paymentCountOverride ||
     state.patientName.trim() !== '' ||
@@ -2383,7 +2244,7 @@ export default function FofBuilder() {
                       />
                     </>
                   )}
-                  {paymentPolicy && <><PaymentScheduleEditor editor={paymentEditor} /><Button variant="outline" disabled={aiNaming || feeLines.length === 0 || policyBlocked} onClick={aiNamePayments}>Suggest payment names</Button></>}
+                  {paymentPolicy && <><p className="text-sm text-muted-foreground" role="status">{officeGuidance.isFetching ? 'Reading office code-bank guidance…' : officeGuidance.error ? 'Code-bank guidance is unavailable. Existing office payment rules remain in use; you can refresh and review again.' : officeGuidance.data?.recipes.length ? 'Treatment wording and grouping are drafted from office code-bank notes. Review the draft and correct this form as needed.' : 'No office code-bank guidance is available yet. The saved payment classifications and office payment rules are in use.'}</p>{officeGuidance.data?.warnings.map((warning, i) => <p key={i} className="text-sm text-amber-700">{warning}</p>)}<PaymentScheduleEditor editor={paymentEditor} /><Button variant="outline" disabled={aiNaming || feeLines.length === 0 || policyBlocked} onClick={aiNamePayments}>Refresh code-bank guidance</Button></>}
                   {policyBlocked && <p role="alert" className="text-destructive">Payment policy review is required before printing. Check policy loading, classifications, adjustments, and saved overrides.</p>}
                   {(effectiveTemplate!.showInstallmentOption || legacyOverrideReview) && (
                     <>
@@ -2420,14 +2281,14 @@ export default function FofBuilder() {
                           size="sm"
                           disabled={aiNaming || feeLines.length === 0}
                           onClick={aiNamePayments}
-                          title="Have AI suggest friendlier payment names — edit freely after"
+                          title="Refresh office-wide code-bank guidance; no form details are sent"
                         >
                           {aiNaming ? (
                             <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                           ) : (
                             <Sparkles className="h-3.5 w-3.5 mr-1.5" />
                           )}
-                          AI names
+                          Code-bank guidance
                         </Button>
                       </div>
                       {computation.computed.installmentsCents.map((cents, i) => (
@@ -2480,7 +2341,7 @@ export default function FofBuilder() {
             )}
 
             <div className="flex justify-end">
-              <Button variant="outline" onClick={() => { dispatch({ type: 'clearAll' }); paymentEditor.reset(); setEdited(false); }}>
+              <Button variant="outline" onClick={() => { importScope.current += 1; setConfirmState(null); setImporting(false); dispatch({ type: 'clearAll' }); paymentEditor.reset(); setEdited(false); }}>
                 Clear form
               </Button>
             </div>
@@ -2501,7 +2362,8 @@ export default function FofBuilder() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{confirmState?.title}</AlertDialogTitle>
-            <AlertDialogDescription>{confirmState?.body}</AlertDialogDescription>
+            <AlertDialogDescription className="max-h-[35vh] overflow-y-auto whitespace-pre-line">{confirmState?.body}</AlertDialogDescription>
+            {confirmState?.previewUrl && <img src={confirmState.previewUrl} alt="Screenshot being reviewed locally" className="max-h-[30vh] w-full object-contain" />}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>

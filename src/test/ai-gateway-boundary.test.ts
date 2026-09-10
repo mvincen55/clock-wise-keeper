@@ -18,7 +18,7 @@ const CALLS_GATEWAY = /ai\.gateway\.lovable\.dev|openrouter/i;
  * Functions where the person-level content is the whole point of the request
  * and the user knowingly uploaded it (documented in phi-gateway-guard).
  */
-const CONSENTED = new Set(['parse-pdf', 'parse-treatment', 'ingest-doc', 'name-visits']);
+const CONSENTED = new Set(['parse-pdf', 'ingest-doc']);
 
 function sourceOf(name: string): string {
   const p = join(FUNCTIONS_DIR, name, 'index.ts');

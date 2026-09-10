@@ -12,6 +12,36 @@ import { LIVE_TEMPLATES, PRACTICE_DEFAULT_BRANDING } from './blank-form-fixtures
 const crown: ScheduleSourceLine = { id: 'a', code: 'D2740', visit: '1', responsibilityCents: 70000, classification: 'restoration' };
 const policy=harelickPolicyTemplate();
 describe('payment editor and shared print result', () => {
+  it('uses code-bank course names without changing charges or staff wording', () => {
+    const source: ScheduleSourceLine[] = [
+      {...crown,id:'abutment',code:'D6057',tooth:'8',visit:'3',responsibilityCents:40000,guidance:{sourceId:'note-a',title:'Implant Crown',summary:'Part of the implant crown course.',classification:'restoration'}},
+      {...crown,id:'crown',code:'D6058',tooth:'8',visit:'5',responsibilityCents:70000,guidance:{sourceId:'note-b',title:'Implant Crown',summary:'Restore the implant with a crown.',classification:'restoration'}},
+    ];
+    const {result,rerender}=renderHook(({rows})=>usePaymentScheduleEditor('a',policy,rows,110000),{initialProps:{rows:source}});
+    expect(result.current.model!.groups).toHaveLength(1);
+    expect(result.current.model!.groups[0].label).toBe('Implant Crown #8');
+    expect(result.current.model!.schedule.rows.reduce((sum,row)=>sum+row.cents,0)).toBe(110000);
+    const id=result.current.model!.groups[0].id;
+    act(()=>result.current.update(state=>({...state,groups:{[id]:{label:'Confirmed staff heading'}}})));
+    rerender({rows:source.map(row=>({...row,guidance:{...row.guidance!,title:'Implant Restoration'}}))});
+    expect(result.current.model!.groups[0].label).toBe('Confirmed staff heading');
+  });
+  it('requires a local classification decision when code-bank guidance conflicts', () => {
+    const source=[{...crown,tooth:'8',guidance:{sourceId:'note',title:'Implant Surgery',summary:'Implant surgery.',classification:'implant' as const}}];
+    const {result}=renderHook(()=>usePaymentScheduleEditor('a',policy,source,70000));
+    expect(result.current.model!.schedule.issues.join(' ')).toContain('classification differ');
+    act(()=>result.current.update(state=>({...state,lines:{a:{classification:'implant'}}})));
+    expect(result.current.model!.schedule.issues).toEqual([]);
+    expect(result.current.model!.schedule.rows.reduce((sum,row)=>sum+row.cents,0)).toBe(70000);
+  });
+  it('uses separate-course guidance while preserving explicit staff grouping', () => {
+    const source: ScheduleSourceLine[]=[{...crown,id:'a',tooth:'8',groupingHint:'separate'},{...crown,id:'b',tooth:'9',groupingHint:'separate'}];
+    const {result}=renderHook(()=>usePaymentScheduleEditor('a',policy,source,140000));
+    expect(result.current.model!.groups).toHaveLength(2);
+    act(()=>result.current.update(state=>({...state,lines:{a:{group:'confirmed-course'},b:{group:'confirmed-course'}}})));
+    expect(result.current.model!.groups).toHaveLength(1);
+    expect(result.current.model!.schedule.remainingCents).toBe(140000);
+  });
   it('blocks duplicate generic headings until distinct treatment details or a shared course resolve them', () => {
     const source=[{...crown,id:'a',visit:'3'},{...crown,id:'b',visit:'5'}];
     const {result}=renderHook(()=>usePaymentScheduleEditor('a',policy,source,140000));

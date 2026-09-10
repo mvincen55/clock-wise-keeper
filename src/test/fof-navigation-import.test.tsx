@@ -9,7 +9,9 @@ import { transferableAbortController } from 'node:util';
 // Node's Request (used by the data router) needs Node's signal, not jsdom's.
 vi.stubGlobal('AbortController', class { constructor() { return transferableAbortController(); } });
 
-const mocks = vi.hoisted(() => ({ invoke: vi.fn(), error: vi.fn(), token: 'one' }));
+const mocks = vi.hoisted(() => ({ invoke: vi.fn(), readLocal: vi.fn(), error: vi.fn(), token: 'one' }));
+vi.mock('@/lib/fof/local-treatment-import', () => ({ readLocalTreatment: mocks.readLocal }));
+vi.mock('@/hooks/useFofOfficeGuidance', () => ({ useFofOfficeGuidance: () => ({data:{recipes:[],warnings:[]},isFetching:false,refetch:vi.fn()}) }));
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { functions: { invoke: mocks.invoke } } }));
 vi.mock('sonner', () => ({ toast: { error: mocks.error, success: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'staff-a' }, session: { access_token: mocks.token } }) }));
@@ -34,7 +36,7 @@ function mount() {
   render(<RouterProvider router={router} />);
   return router;
 }
-beforeEach(() => { mocks.invoke.mockReset(); mocks.error.mockReset(); mocks.token = 'one'; mocks.invoke.mockResolvedValue({ data: {} }); });
+beforeEach(() => { mocks.invoke.mockReset(); mocks.readLocal.mockReset(); mocks.error.mockReset(); mocks.token = 'one'; mocks.invoke.mockResolvedValue({ data: {} }); URL.createObjectURL=vi.fn(()=>'blob:synthetic-review'); URL.revokeObjectURL=vi.fn(); });
 const leave = () => fireEvent.click(screen.getByRole('link', { name: 'Fees & Plans' }));
 
 describe('memory-only FOF navigation', () => {
@@ -86,11 +88,13 @@ it('an incomplete extraction cannot enter the successful UI import path; retry c
   mount();
   const input = document.querySelector<HTMLInputElement>('input[type=file]')!;
   const file = new File(['synthetic-image'], 'synthetic.png', { type: 'image/png' });
-  mocks.invoke.mockResolvedValueOnce({ data: { status: 'incomplete', rows: [{ code: 'D2740' }], error: 'Nothing was imported. Retry.' } });
+  mocks.readLocal.mockRejectedValueOnce(new Error('Nothing was imported. Retry.'));
   fireEvent.change(input, { target: { files: [file] } });
   await waitFor(() => expect(mocks.error).toHaveBeenCalledWith('Nothing was imported. Retry.'));
   expect(screen.getByPlaceholderText('D2740 / crown')).toHaveValue('');
-  mocks.invoke.mockResolvedValueOnce({ data: { status: 'complete', rows: [{ code: 'D2740', tooth: '3', description: 'Crown', fee: 100, officeFee: null, entryDate: '', visit: 5 }] } });
+  mocks.readLocal.mockResolvedValueOnce({ warnings: [], rows: [{ code: 'D2740', tooth: '3', description: 'Crown', fee: 100, officeFee: null, entryDate: '', visit: 5 }] });
   fireEvent.change(input, { target: { files: [file] } });
+  fireEvent.click(await screen.findByRole('button',{name:'Import reviewed rows'}));
   await waitFor(() => expect(screen.getByPlaceholderText('D2740 / crown')).toHaveValue('D2740'));
+  expect(mocks.invoke).not.toHaveBeenCalled();
 });
