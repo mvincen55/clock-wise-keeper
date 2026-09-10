@@ -1535,7 +1535,11 @@ export default function FofBuilder() {
               Templates
             </Link>
           </Button>
-          <Button onClick={() => window.print()} disabled={!template || policyBlocked}>
+          <Button onClick={() => {
+            const layoutReview = document.querySelector('.fof-layout-review');
+            if (layoutReview) { toast.error(layoutReview.textContent || 'Review the form layout before printing.'); return; }
+            window.print();
+          }} disabled={!template || policyBlocked}>
             <Printer className="h-4 w-4 mr-2" />
             Print
           </Button>

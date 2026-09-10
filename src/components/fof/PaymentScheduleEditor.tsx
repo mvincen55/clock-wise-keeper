@@ -58,10 +58,12 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
     for (const group of groups.values()) {
       const members = source.filter(line => procedures.find(p => p.id === line.id)?.groupId === group.id && line.responsibilityCents > 0);
       const labels = [...new Set(members.map(line => line.procedureLabel?.trim()).filter(Boolean))];
-      const teeth = [...new Set(members.flatMap(line => (line.tooth ?? '').trim().split(/[\s,;/]+/)).filter(Boolean))];
+      const teeth = [...new Set(members.flatMap(line => (line.tooth ?? '').trim().split(/[\s,;/]+/)).filter(Boolean).map(tooth => tooth.replace(/^#/, '').toUpperCase()))];
       const treatment = labels.length > 0 && labels.length <= 2 ? labels.join(' + ') : patientClassTitle[group.classification];
-      const toothLabel = teeth.length ? ` — ${teeth.length === 1 ? 'tooth' : 'teeth'} ${teeth.join(', ')}` : '';
-      group.label = state.groups[group.id]?.label?.trim() || `${treatment}${toothLabel}`;
+      const numberedTeeth = teeth.map(tooth => `#${tooth}`);
+      const toothLabel = numberedTeeth.length > 1 ? `${numberedTeeth.slice(0, -1).join(', ')} and ${numberedTeeth.at(-1)}` : numberedTeeth[0];
+      const treatmentTitle = treatment.replace(/\b[a-z]/g, letter => letter.toUpperCase());
+      group.label = state.groups[group.id]?.label?.trim() || `${treatmentTitle}${toothLabel ? ` ${toothLabel}` : ''}`;
       for (const kind of milestoneKinds) {
         const event = events.get(group.events[kind] ?? '');
         if (event) event.label = `${group.label} — ${policy.labels[kind] ?? kind}`;
@@ -88,6 +90,13 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
     for (const g of finalGroups) {
       const classes = source.filter(l => procedures.find(p => p.id === l.id)?.groupId === g.id).map(l => state.lines[l.id]?.classification ?? l.classification ?? 'review');
       if (new Set(classes).size > 1) schedule.issues.push('A group contains different payment classifications. Split it into groups and link their collection events.');
+    }
+    const activeGroups = new Set(schedule.rows.flatMap(row => row.allocations.filter(a => a.cents > 0).map(a => a.groupId)));
+    const namedGroups = new Set<string>();
+    for (const group of finalGroups.filter(g => activeGroups.has(g.id))) {
+      const name = group.label.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+      if (namedGroups.has(name)) schedule.issues.push(`Separate treatment groups both read “${group.label}”. Add distinct treatment names or tooth details, or combine them if they are one course, before printing.`);
+      namedGroups.add(name);
     }
     return { groups: finalGroups, events: finalEvents, procedures, schedule };
   }, [policy, source, expected, state]);

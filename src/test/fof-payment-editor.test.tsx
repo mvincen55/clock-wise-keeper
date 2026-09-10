@@ -12,6 +12,19 @@ import { LIVE_TEMPLATES, PRACTICE_DEFAULT_BRANDING } from './blank-form-fixtures
 const crown: ScheduleSourceLine = { id: 'a', code: 'D2740', visit: '1', responsibilityCents: 70000, classification: 'restoration' };
 const policy=harelickPolicyTemplate();
 describe('payment editor and shared print result', () => {
+  it('blocks duplicate generic headings until distinct treatment details or a shared course resolve them', () => {
+    const source=[{...crown,id:'a',visit:'3'},{...crown,id:'b',visit:'5'}];
+    const {result}=renderHook(()=>usePaymentScheduleEditor('a',policy,source,140000));
+    expect(result.current.model!.schedule.issues.some(i=>i.includes('both read'))).toBe(true);
+    const [first,second]=result.current.model!.groups;
+    act(()=>result.current.update(s=>({...s,groups:{[first.id]:{label:'Implant crown — tooth 8'},[second.id]:{label:'Implant crown — tooth 9'}}})));
+    expect(result.current.model!.schedule.issues).toEqual([]);
+    expect(result.current.model!.schedule.obligationCents).toBe(140000);
+    act(()=>result.current.update(s=>({...s,groups:{},lines:{a:{group:'shared-course'},b:{group:'shared-course'}}})));
+    expect(result.current.model!.groups).toHaveLength(1);
+    expect(result.current.model!.schedule.issues).toEqual([]);
+    expect(result.current.model!.schedule.rows.reduce((sum,r)=>sum+r.cents,0)).toBe(140000);
+  });
   it.each(['classification', 'group', 'adjustment', 'paid', 'deliveryGroup'] as const)('%s edits mark the form dirty and reset clears the edit', field => {
     const { result } = renderHook(() => usePaymentScheduleEditor('a', policy, [crown], 70000));
     expect(result.current.isDirty).toBe(false);
@@ -56,7 +69,7 @@ describe('payment editor and shared print result', () => {
   it('uses procedure and tooth names rather than visit numbers, with editable wording independent of amounts', () => {
     const source=[{...crown,visit:'3',tooth:'8',procedureLabel:'Implant crown'},{...crown,id:'b',visit:'5',tooth:'9',procedureLabel:'Implant crown'}];
     const {result}=renderHook(()=>usePaymentScheduleEditor('a',policy,source,140000));
-    expect(result.current.model!.groups.map(g=>g.label)).toEqual(['Implant crown — tooth 8','Implant crown — tooth 9']);
+    expect(result.current.model!.groups.map(g=>g.label)).toEqual(['Implant Crown #8','Implant Crown #9']);
     expect(result.current.model!.schedule.rows.every(r=>!r.label.includes('visit'))).toBe(true);
     const before=result.current.model!.schedule;
     const group=result.current.model!.groups[0];
@@ -64,6 +77,15 @@ describe('payment editor and shared print result', () => {
     expect(result.current.model!.schedule.signature).toBe(before.signature);
     expect(result.current.model!.schedule.rows.map(r=>r.cents)).toEqual(before.rows.map(r=>r.cents));
     expect(result.current.model!.groups[0].label).toBe('Custom patient wording');
+  });
+  it('uses the actual tooth numbers in concise single and multiple-tooth headings', () => {
+    const source = [
+      {...crown, id:'surgery', classification:'implant' as const, tooth:'#2, 7', visit:'1', procedureLabel:'Implant surgery'},
+      {...crown, id:'restoration', tooth:'5', visit:'3', procedureLabel:'Implant crown'},
+    ];
+    const {result} = renderHook(()=>usePaymentScheduleEditor('a',policy,source,140000));
+    expect(result.current.model!.groups.map(group=>group.label)).toEqual(['Implant Surgery #2 and #7','Implant Crown #5']);
+    expect(result.current.model!.schedule.rows.reduce((sum,row)=>sum+row.cents,0)).toBe(140000);
   });
   it('links a zero-fee delivery marker without adding money and flags a changed fee', () => {
     const marker = { id:'delivery', code:'Delivery', visit:'2', responsibilityCents:0 };

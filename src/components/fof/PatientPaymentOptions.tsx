@@ -12,7 +12,8 @@ export function PatientPaymentOptions({ schedule, computation, template, prepayM
     const key = JSON.stringify(groupIds);
     const title = groupIds.map(id => schedule.groupLabels[id]).filter(Boolean).join(' + ') || 'Payment';
     const prefix = `${title} — `;
-    const label = row.label.startsWith(prefix) ? row.label.slice(prefix.length) : row.label;
+    const eventLabel = row.label.startsWith(prefix) ? row.label.slice(prefix.length) : row.label;
+    const label = eventLabel === 'When this phase is scheduled' ? 'At scheduling' : eventLabel;
     const previous = sections[sections.length - 1];
     const section = previous?.key === key ? previous : { key, title, rows: [] };
     if (section !== previous) sections.push(section);
@@ -32,7 +33,7 @@ export function PatientPaymentOptions({ schedule, computation, template, prepayM
       <div className="fof-payment-plan-head"><div className="fof-payment-kicker">{both ? 'Option 2 · ' : ''}Pay as treatment progresses</div><span>Payment schedule</span></div>
       {sections.map((section, index) => <div className="fof-payment-phase" key={`${section.key}:${index}`}>
         <div className="fof-payment-phase-name">{section.title}</div>
-        <div className="fof-payment-milestones">{section.rows.map(row => <div className="fof-payment-milestone" key={row.id} data-payment-event={row.id}><span>{row.label}</span><strong>{formatCents(row.cents)}</strong></div>)}</div>
+        <div className="fof-payment-milestones" style={{gridTemplateColumns:`repeat(${Math.min(section.rows.length,3)},minmax(0,1fr))`}}>{section.rows.map(row => <div className="fof-payment-milestone" key={row.id} data-payment-event={row.id}><span>{row.label}</span><strong>{formatCents(row.cents)}</strong></div>)}</div>
       </div>)}
       <div className="fof-payment-plan-total"><span>Total on payment plan</span><strong>{formatCents(schedule.remainingCents)}</strong></div>
     </div>}

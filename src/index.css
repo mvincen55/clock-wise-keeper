@@ -3539,13 +3539,53 @@
 .fof-phase-schedule { border: 0.8pt solid var(--fof-line); border-radius: 5pt; }
 .fof-payment-plan-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10pt; padding: 8pt 12pt; border-bottom: 0.8pt solid var(--fof-line); }
 .fof-payment-plan-head > span { font-size: 7.5pt; color: var(--fof-muted); }
-.fof-payment-phase { padding: 7pt 12pt; border-bottom: 0.5pt solid var(--fof-line); break-inside: avoid; }
-.fof-payment-phase-name { font-size: 8.5pt; font-weight: 700; color: var(--fof-navy); margin-bottom: 4pt; overflow-wrap: anywhere; }
+.fof-payment-phase { display: grid; grid-template-columns: 1fr 2.6fr; align-items: center; column-gap: 12pt; padding: 8pt 12pt; border-bottom: 0.5pt solid var(--fof-line); break-inside: avoid; }
+.fof-payment-phase-name { display: flex; flex-direction: column; gap: 3pt; font-size: 9pt; font-weight: 600; line-height: 1.25; color: var(--fof-ink); overflow-wrap: anywhere; }
 .fof-payment-milestones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7pt 12pt; }
-.fof-payment-milestone { display: flex; flex-direction: column; gap: 3pt; border-left: 1.5pt solid var(--fof-line); padding-left: 7pt; break-inside: avoid; }
+.fof-payment-milestone { display: flex; flex-direction: column; gap: 3pt; padding-left: 0; break-inside: avoid; }
 .fof-payment-milestone span { font-size: 7.8pt; line-height: 1.25; color: var(--fof-muted); overflow-wrap: anywhere; }
 .fof-payment-milestone strong { font-size: 10pt; font-variant-numeric: tabular-nums; }
 .fof-payment-plan-total { display: flex; justify-content: space-between; padding: 8pt 12pt; color: var(--fof-navy); font-size: 10pt; font-weight: 700; break-inside: avoid; }
+.fof-composed-page { width: 7.5in; min-height: 10in; padding: 0; margin: 0 auto 16pt; break-after: page; }
+.fof-practice-name { max-width: 65%; color: var(--fof-navy); font-size: 16pt; font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; }
+.fof-page-source[data-composed="true"], .fof-page-measure { position: fixed; left: -100000px; top: 0; width: 7.5in; visibility: hidden; pointer-events: none; }
+.fof-page-measure > .fof-sheet { min-height: 0 !important; margin: 0 !important; padding: 0 !important; width: 7.5in !important; }
+.fof-composed-page .fof-payment-milestone span { font-size: 8.5pt; }
+.fof-composed-page .fof-payment-phase-name { font-size: 9pt; }
+.fof-composed-compact .fof-head { margin-bottom: 6pt; padding-bottom: 6pt; }
+.fof-composed-compact .fof-logo { height: 0.65in; }
+.fof-composed-compact .fof-hero, .fof-composed-compact .fof-cards { margin-bottom: 5pt; }
+.fof-composed-compact .fof-payment-phase { padding: 6pt 9pt; }
+.fof-composed-compact .fof-payment-options { margin: 5pt 0; }
+.fof-composed-compact .fof-payment-phase-name { gap: 2pt; }
+.fof-composed-compact .fof-payment-milestone { gap: 2pt; }
+.fof-composed-compact .fof-signatures { padding-top: 4pt; }
+.fof-composed-page .fof-payment-plan-head { background: var(--fof-navy); color: white; border-radius: 4pt 4pt 0 0; }
+.fof-composed-page .fof-payment-plan-head .fof-payment-kicker, .fof-composed-page .fof-payment-plan-head > span { color: white; }
+.fof-composed-page .fof-payment-milestone strong { color: var(--fof-navy); }
+.fof-composed-compact .fof-prepay-summary { padding: 5pt 10pt; margin-bottom: 5pt; }
+.fof-composed-compact .fof-payment-plan-head { padding: 5pt 10pt; }
+.fof-composed-compact .fof-payment-plan-total { padding: 5pt 10pt; }
+.fof-composed-compact .fof-sig-ack { margin-bottom: 9pt; }
+.fof-composed-compact .fof-choices { margin: 4pt 0 7pt; }
+.fof-composed-compact .fof-sig-caption { margin-bottom: 2pt; }
+.fof-composed-compact .fof-card { padding: 4pt 9pt; }
+.fof-composed-compact .fof-band { padding: 6pt 9pt; }
+.fof-payment-columns .fof-phase-schedule { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+.fof-payment-columns .fof-payment-plan-head, .fof-payment-columns .fof-payment-plan-total { grid-column: 1 / -1; }
+.fof-payment-columns .fof-payment-phase { display: block; border-right: 0.5pt solid var(--fof-line); }
+.fof-payment-columns .fof-payment-phase-name { margin-bottom: 5pt; }
+.fof-payment-columns .fof-payment-phase-name { flex-direction: row; align-items: baseline; flex-wrap: wrap; gap: 3pt 6pt; }
+.fof-payment-columns.fof-composed-compact .fof-payment-phase { padding-top: 4pt; padding-bottom: 4pt; }
+.fof-payment-columns .fof-payment-milestones { gap: 5pt; }
+.fof-payment-columns .fof-payment-milestone { padding-left: 4pt; }
+.fof-page-continuation { padding: 7pt 0; font-size: 8.5pt; color: var(--fof-muted); }
+.fof-page-number { margin-left: auto; white-space: nowrap; font-weight: 700; }
+.fof-layout-review { padding: 16pt; border: 1pt solid #ad3131; color: #8f2222; background: white; }
+@media print {
+  .fof-page-source[data-composed="true"] { display: none !important; }
+  .fof-composed-page { margin: 0; }
+}
 .fof-policy-sheet .fof-cells { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .fof-policy-sheet .fof-row > span:first-child { overflow-wrap: anywhere; }
 .fof-policy-sheet .fof-option, .fof-policy-sheet .fof-agreement { overflow: visible; }
