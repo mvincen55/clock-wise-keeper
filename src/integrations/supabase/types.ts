@@ -2556,7 +2556,6 @@ export type Database = {
       }
       fof_settings: {
         Row: {
-            payment_policy: Json | null
           address_line1: string
           address_line2: string
           created_at: string
@@ -2569,6 +2568,7 @@ export type Database = {
           membership_plan_name: string
           min_standalone_payment_cents: number
           org_id: string
+          payment_policy: Json | null
           phone: string
           practice_name: string
           print_form_title: string
@@ -2576,7 +2576,6 @@ export type Database = {
           website: string
         }
         Insert: {
-            payment_policy?: Json | null
           address_line1?: string
           address_line2?: string
           created_at?: string
@@ -2589,6 +2588,7 @@ export type Database = {
           membership_plan_name?: string
           min_standalone_payment_cents?: number
           org_id: string
+          payment_policy?: Json | null
           phone?: string
           practice_name?: string
           print_form_title?: string
@@ -2596,7 +2596,6 @@ export type Database = {
           website?: string
         }
         Update: {
-            payment_policy?: Json | null
           address_line1?: string
           address_line2?: string
           created_at?: string
@@ -2609,6 +2608,7 @@ export type Database = {
           membership_plan_name?: string
           min_standalone_payment_cents?: number
           org_id?: string
+          payment_policy?: Json | null
           phone?: string
           practice_name?: string
           print_form_title?: string
@@ -5829,7 +5829,6 @@ export type Database = {
       }
       procedure_meta: {
         Row: {
-            payment_class: string | null
           active: boolean
           code: string
           created_at: string
@@ -5840,12 +5839,12 @@ export type Database = {
           needs_teeth: boolean
           org_id: string
           patient_name: string
+          payment_class: string | null
           quantity_strategy: string
           unit_type: string
           updated_at: string
         }
         Insert: {
-            payment_class?: string | null
           active?: boolean
           code: string
           created_at?: string
@@ -5856,12 +5855,12 @@ export type Database = {
           needs_teeth?: boolean
           org_id: string
           patient_name?: string
+          payment_class?: string | null
           quantity_strategy?: string
           unit_type?: string
           updated_at?: string
         }
         Update: {
-            payment_class?: string | null
           active?: boolean
           code?: string
           created_at?: string
@@ -5872,6 +5871,7 @@ export type Database = {
           needs_teeth?: boolean
           org_id?: string
           patient_name?: string
+          payment_class?: string | null
           quantity_strategy?: string
           unit_type?: string
           updated_at?: string
@@ -9329,6 +9329,7 @@ export type Database = {
         Returns: boolean
       }
       user_owns_time_entry: { Args: { _entry_id: string }; Returns: boolean }
+      valid_fof_payment_policy: { Args: { p: Json }; Returns: boolean }
     }
     Enums: {
       app_org_role: "owner" | "manager" | "employee"
