@@ -71,7 +71,8 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
     }
     return { groups: finalGroups, events: finalEvents, procedures, schedule };
   }, [policy, source, expected, state]);
-  return { model, state, update, reset: () => update(empty), source };
+  const isDirty = Object.values(state).some(value => Object.keys(value).length > 0);
+  return { model, state, update, reset: () => update(empty), source, isDirty };
 }
 
 export function PaymentScheduleEditor({ editor }: { editor: ReturnType<typeof usePaymentScheduleEditor> }) {

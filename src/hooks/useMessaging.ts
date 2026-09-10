@@ -142,9 +142,10 @@ export function useConversations() {
 }
 
 export function useMessages(conversationId: string | null) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['messages', conversationId],
-    enabled: !!conversationId,
+    queryKey: ['messages', conversationId, user?.id],
+    enabled: !!conversationId && !!user,
     refetchInterval: 10000,
     queryFn: async (): Promise<MessageRow[]> => {
       const { data, error } = await supabase
@@ -169,9 +170,10 @@ export interface ParticipantReceipt {
  * participant's `last_read_at`. RLS only lets participants read these rows.
  */
 export function useConversationReceipts(conversationId: string | null) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['conversation-receipts', conversationId],
-    enabled: !!conversationId,
+    queryKey: ['conversation-receipts', conversationId, user?.id],
+    enabled: !!conversationId && !!user,
     refetchInterval: 10000,
     queryFn: async (): Promise<ParticipantReceipt[]> => {
       const { data, error } = await supabase
@@ -206,12 +208,13 @@ export interface MessageSearchHit extends MessageRow {
  * RLS does the scoping: nobody can search a conversation they are not in.
  */
 export function useMessageSearch(filters: MessageSearchFilters, conversations: ConversationSummary[]) {
+  const { user } = useAuth();
   const { data: ctx } = useOrgContext();
   const q = filters.query.trim();
 
   return useQuery({
-    queryKey: ['message-search', ctx?.org_id, q, filters.type, filters.senderId, filters.since, filters.conversationId],
-    enabled: !!ctx?.org_id && q.length >= 2,
+    queryKey: ['message-search', ctx?.org_id, user?.id, q, filters.type, filters.senderId, filters.since, filters.conversationId],
+    enabled: !!user && !!ctx?.org_id && q.length >= 2,
     queryFn: async (): Promise<MessageSearchHit[]> => {
       let builder = supabase
         .from('messages')

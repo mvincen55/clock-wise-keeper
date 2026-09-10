@@ -34,6 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // token refresh / tab-refocus re-auth of the vetted user apart from a real
   // sign-in, without reading state from a stale closure.
   const allowedUserIdRef = useRef<string | null>(null);
+  const evaluationVersionRef = useRef(0);
 
   // Access is decided server-side: the allowed_users table (maintained by
   // the invite flow) via the SECURITY DEFINER is_allowed_user(), the same
@@ -58,11 +59,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOutClean = useCallback(async () => {
     clearInactivityTimer();
+    evaluationVersionRef.current += 1;
     allowedUserIdRef.current = null;
-    await supabase.auth.signOut();
     setUser(null);
     setSession(null);
     setIsAllowed(false);
+    setLoading(false);
+    await supabase.auth.signOut();
   }, [clearInactivityTimer]);
 
   const resetInactivityTimer = useCallback(() => {
@@ -91,7 +94,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    let evaluationVersion = 0;
 
     const evaluate = (nextSession: Session | null) => {
       const nextUser = nextSession?.user ?? null;
@@ -105,7 +107,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const version = ++evaluationVersion;
+      const version = ++evaluationVersionRef.current;
+      allowedUserIdRef.current = null;
       setSession(nextSession);
       setUser(nextUser);
 
@@ -123,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // because supabase-js can deadlock on awaited calls inside that callback.
       setTimeout(async () => {
         const allowed = await checkAllowed(nextUser);
-        if (cancelled || version !== evaluationVersion) return;
+        if (cancelled || version !== evaluationVersionRef.current) return;
 
         allowedUserIdRef.current = allowed ? nextUser.id : null;
         setIsAllowed(allowed);
@@ -138,13 +141,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           if (!completingInvite) {
             await supabase.auth.signOut();
-            if (cancelled || version !== evaluationVersion) return;
+            if (cancelled || version !== evaluationVersionRef.current) return;
             setUser(null);
             setSession(null);
           }
         }
 
-        if (!cancelled && version === evaluationVersion) {
+        if (!cancelled && version === evaluationVersionRef.current) {
           setLoading(false);
         }
       }, 0);
@@ -154,11 +157,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       evaluate(nextSession);
     });
 
-    supabase.auth.getSession().then(({ data: { session: nextSession } }) => evaluate(nextSession));
+    const initialVersion = evaluationVersionRef.current;
+    supabase.auth.getSession().then(({ data: { session: nextSession } }) => {
+      if (!cancelled && initialVersion === evaluationVersionRef.current) evaluate(nextSession);
+    });
 
     return () => {
       cancelled = true;
-      evaluationVersion += 1;
+      evaluationVersionRef.current += 1;
       subscription.unsubscribe();
     };
   }, []);

@@ -287,9 +287,14 @@ Migration `20260723200000_checklists.sql`:
 ## Local development
 
 ```sh
-npm i
+bun install --frozen-lockfile  # same dependency versions as CI; do not reuse an unlocked install
 npm run dev      # vite, localhost:5173 (in the invite ALLOWED_ORIGINS)
 npm run test     # vitest
 ```
 
 Environment: committed `.env` holds the public Supabase URL + anon key (public by design — RLS is the perimeter). Edge-function secrets (`SUPABASE_SERVICE_ROLE_KEY`, `LOVABLE_API_KEY`) live only in Supabase.
+
+For audits and regressions, install from `bun.lock` in a fresh checkout first.
+An existing pnpm/npm installation can resolve newer transitive UI dependencies
+and produce results that do not describe the shipped application. Keep the lockfile
+unchanged; record runtime and dependency versions when reporting a failure.

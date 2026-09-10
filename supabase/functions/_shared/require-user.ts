@@ -6,10 +6,11 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-export type SignedInUser = { id: string; email: string | null };
+export type SignedInUser = { id: string; email: string | null; orgId: string };
 
 /**
- * Returns the signed-in user, or null when the request has no valid session.
+ * Returns an approved active member, or null on any failed authorization check.
+ * All consumers spend AI credits; invitation/onboarding functions do not use it.
  * The token is verified against the auth server — never trusted as sent.
  */
 export async function requireUser(req: Request): Promise<SignedInUser | null> {
@@ -22,7 +23,17 @@ export async function requireUser(req: Request): Promise<SignedInUser | null> {
     { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false } },
   );
 
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data?.user) return null;
-  return { id: data.user.id, email: data.user.email ?? null };
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data?.user) return null;
+    // The SECURITY DEFINER RPC avoids the known recursive allowed_users policy.
+    const allowed = await supabase.rpc('is_allowed_user');
+    if (allowed.error || allowed.data !== true) return null;
+    const membership = await supabase.from('org_members').select('org_id')
+      .eq('user_id', data.user.id).eq('status', 'active').limit(1).maybeSingle();
+    if (membership.error || !membership.data?.org_id) return null;
+    return { id: data.user.id, email: data.user.email ?? null, orgId: membership.data.org_id };
+  } catch {
+    return null;
+  }
 }

@@ -266,7 +266,8 @@ describe('conditional Future Appointments (engine-driven)', () => {
     setValue('Prior late cancellations', '2');
     const trigger = screen.getByRole('combobox', { name: 'Appointment 1 provider' });
     fireEvent.keyDown(trigger, { key: 'Enter' });
-    const option = await screen.findByRole('option', { name: 'Dr. Scott' });
+    const listbox = await screen.findByRole('listbox');
+    const option = within(listbox).getByRole('option', { name: 'Dr. Scott' });
     fireEvent.keyDown(option, { key: 'Enter' });
     expect(trigger.textContent).toContain('Dr. Scott');
     cleanup();

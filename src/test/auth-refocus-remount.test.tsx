@@ -51,6 +51,11 @@ function SignOutButton() {
   return <button onClick={() => doSignOut()}>sign out</button>;
 }
 
+function PrivacyLockButton() {
+  const { privacyLock } = useAuth();
+  return <button onClick={() => { void privacyLock().catch(() => {}); }}>privacy lock</button>;
+}
+
 describe('auth refocus must not remount the workspace', () => {
   beforeEach(() => {
     rpc.mockReset();
@@ -112,5 +117,46 @@ describe('auth refocus must not remount the workspace', () => {
     act(() => authCallback!('SIGNED_IN', makeSession('user-b', 'token-9')));
     await waitFor(() => expect(screen.getByText('workspace:token-9')).toBeTruthy());
     expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it('privacy lock hides data immediately even when remote sign-out fails', async () => {
+    initialSession = makeSession('user-a', 'token-1');
+    let reject!: (error: Error) => void;
+    signOut.mockImplementation(() => new Promise((_resolve, no) => { reject = no; }));
+    render(<AuthProvider><Gate /><PrivacyLockButton /></AuthProvider>);
+    await screen.findByText('workspace:token-1');
+    act(() => screen.getByText('privacy lock').click());
+    expect(screen.getByText('signed-out')).toBeTruthy();
+    await act(async () => reject(new Error('offline')));
+    expect(screen.queryByText('workspace:token-1')).toBeNull();
+  });
+
+  it('a late allowlist result cannot unlock a privacy-locked session', async () => {
+    let resolve!: (result: unknown) => void;
+    rpc.mockImplementation(() => new Promise(yes => { resolve = yes; }));
+    initialSession = makeSession('user-a', 'token-1');
+    render(<AuthProvider><Gate /><PrivacyLockButton /></AuthProvider>);
+    await waitFor(() => expect(rpc).toHaveBeenCalledTimes(1));
+    await act(async () => screen.getByText('privacy lock').click());
+    await act(async () => resolve({ data: true }));
+    expect(screen.getByText('signed-out')).toBeTruthy();
+    expect(screen.queryByText('workspace:token-1')).toBeNull();
+  });
+
+  it('external logout and rapid A/B/A switches cannot reuse an earlier approval', async () => {
+    initialSession = makeSession('user-a', 'token-1');
+    render(<AuthProvider><Gate /></AuthProvider>);
+    await screen.findByText('workspace:token-1');
+    act(() => authCallback!('SIGNED_OUT', null));
+    expect(screen.getByText('signed-out')).toBeTruthy();
+    let resolveB!: (r: unknown) => void;
+    rpc.mockImplementationOnce(() => new Promise(yes => { resolveB = yes; }));
+    act(() => authCallback!('SIGNED_IN', makeSession('user-b', 'b')));
+    await waitFor(() => expect(rpc).toHaveBeenCalledTimes(2));
+    act(() => authCallback!('SIGNED_IN', makeSession('user-a', 'a-new')));
+    await screen.findByText('workspace:a-new');
+    await act(async () => resolveB({ data: false }));
+    expect(screen.getByText('workspace:a-new')).toBeTruthy();
+    expect(signOut).not.toHaveBeenCalled();
   });
 });

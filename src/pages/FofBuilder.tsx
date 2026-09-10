@@ -13,7 +13,7 @@
  */
 import { useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Link } from 'react-router-dom';
+import { Link, useBlocker } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -441,6 +441,8 @@ export default function FofBuilder() {
   const { data: codeNames } = useCodeNames();
 
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
+  // Includes uncommitted money inputs; automatic defaults do not mark a form dirty.
+  const [edited, setEdited] = useState(false);
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [feeScheduleId, setFeeScheduleId] = useState<string>(NO_SCHEDULE);
   // Collapsible builder sections (UI-only; patient data untouched).
@@ -608,6 +610,7 @@ export default function FofBuilder() {
   // clears any per-form override so e.g. Out-of-Network and Self-Pay
   // always come up with Prepay in Full on, In-Network with it off.
   const handleTemplateChange = (nextTemplateId: string) => {
+    setEdited(true);
     setTemplateId(nextTemplateId);
     dispatch({ type: 'set', field: 'prepayOptionState', value: '' });
     dispatch({ type: 'set', field: 'installmentOptionState', value: '' });
@@ -650,6 +653,7 @@ export default function FofBuilder() {
   };
 
   const handleScheduleChange = (nextId: string) => {
+    setEdited(true);
     setFeeScheduleId(nextId);
     setPayScheduleId(NO_SCHEDULE);
     // A different carrier means a different plan: plan-specific toggles
@@ -1282,6 +1286,7 @@ export default function FofBuilder() {
         }
         throw new Error(message);
       }
+      if (data?.status !== 'complete') throw new Error(data?.error || 'The extraction was not confirmed complete. Nothing was imported. Please retry.');
       const rows: {
         code: string;
         tooth: string;
@@ -1438,7 +1443,9 @@ export default function FofBuilder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.lines, aiTreatment]);
 
-  const isDirty =
+  const isDirty = edited || paymentEditor.isDirty ||
+    !!state.prepayOptionState || !!state.installmentOptionState || !!state.isSenior ||
+    !!state.paymentCountOverride ||
     state.patientName.trim() !== '' ||
     state.note.trim() !== '' ||
     feeLines.length > 0;
@@ -1452,6 +1459,8 @@ export default function FofBuilder() {
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
+
+  const blocker = useBlocker(isDirty);
 
   const setField = (field: ScalarField) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -1508,7 +1517,7 @@ export default function FofBuilder() {
   );
 
   return (
-    <div className="p-4 md:p-6 space-y-4 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 space-y-4 max-w-7xl mx-auto" onChangeCapture={() => setEdited(true)}>
       <FofAssistantWidget context={assistantContext} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">Financial Options Form</h1>
@@ -1593,7 +1602,7 @@ export default function FofBuilder() {
                   </div>
                   <div className="space-y-1.5">
                     <Label>Doctor</Label>
-                    <Select value={doctorName} onValueChange={setDoctorName}>
+                    <Select value={doctorName} onValueChange={value => { setEdited(true); setDoctorName(value); }}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -1711,7 +1720,7 @@ export default function FofBuilder() {
                       {(schedules ?? []).some(sch => sch.kind === 'payment' && sch.isActive) && (
                         <div className="space-y-1.5">
                           <Label>Plan Payment Table (fee-schedule plans — optional)</Label>
-                          <Select value={payScheduleId} onValueChange={setPayScheduleId}>
+                          <Select value={payScheduleId} onValueChange={value => { setEdited(true); setPayScheduleId(value); }}>
                             <SelectTrigger>
                               <SelectValue />
                             </SelectTrigger>
@@ -2466,7 +2475,7 @@ export default function FofBuilder() {
             )}
 
             <div className="flex justify-end">
-              <Button variant="outline" onClick={() => { dispatch({ type: 'clearAll' }); paymentEditor.reset(); }}>
+              <Button variant="outline" onClick={() => { dispatch({ type: 'clearAll' }); paymentEditor.reset(); setEdited(false); }}>
                 Clear form
               </Button>
             </div>
@@ -2556,6 +2565,19 @@ export default function FofBuilder() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={blocker.state === 'blocked'} onOpenChange={open => { if (!open) blocker.reset?.(); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave and erase this form?</AlertDialogTitle>
+            <AlertDialogDescription>This unfinished form and its payment edits exist only on this page. Leaving will erase them.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => blocker.reset?.()}>Stay here</AlertDialogCancel>
+            <AlertDialogAction onClick={() => blocker.proceed?.()}>Leave and erase</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Brand accent for the preview and printed sheets (org rows). */}
       {branding && <BrandPrintStyle branding={branding} />}

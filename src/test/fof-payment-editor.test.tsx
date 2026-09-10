@@ -12,6 +12,23 @@ import { LIVE_TEMPLATES, PRACTICE_DEFAULT_BRANDING } from './blank-form-fixtures
 const crown: ScheduleSourceLine = { id: 'a', code: 'D2740', visit: '1', responsibilityCents: 70000, classification: 'restoration' };
 const policy=harelickPolicyTemplate();
 describe('payment editor and shared print result', () => {
+  it.each(['classification', 'group', 'adjustment', 'paid', 'deliveryGroup'] as const)('%s edits mark the form dirty and reset clears the edit', field => {
+    const { result } = renderHook(() => usePaymentScheduleEditor('a', policy, [crown], 70000));
+    expect(result.current.isDirty).toBe(false);
+    act(() => result.current.update(s => ({ ...s, lines: { a: { [field]: field === 'classification' ? 'implant' : 'synthetic' } } })));
+    expect(result.current.isDirty).toBe(true);
+    act(() => result.current.reset());
+    expect(result.current.isDirty).toBe(false);
+    expect(result.current.state.lines).toEqual({});
+  });
+  it.each(['groups', 'events', 'extraEvents', 'overrides'] as const)('%s edits mark the form dirty and are preserved until reset', field => {
+    const { result, rerender } = renderHook(() => usePaymentScheduleEditor('a', policy, [crown], 70000));
+    act(() => result.current.update(s => ({ ...s, [field]: field === 'extraEvents' ? [{ id: 'extra', label: 'Synthetic', order: 3 }] : { synthetic: {} } })));
+    rerender();
+    expect(result.current.isDirty).toBe(true);
+    act(() => result.current.reset());
+    expect(result.current.isDirty).toBe(false);
+  });
   it('links a zero-fee delivery marker without adding money and flags a changed fee', () => {
     const marker = { id:'delivery', code:'Delivery', visit:'2', responsibilityCents:0 };
     const {result,rerender}=renderHook(({source})=>usePaymentScheduleEditor('a',policy,source,70000),{initialProps:{source:[crown,marker]}});

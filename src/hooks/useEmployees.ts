@@ -2,11 +2,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 export function useOrgEmployees() {
   const { data: ctx } = useOrgContext();
   return useQuery({
-    queryKey: ['org-employees', ctx?.org_id],
+    queryKey: ['org-employees', ctx?.org_id, ctx?.user_id],
     enabled: !!ctx?.org_id,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -24,7 +25,7 @@ export function useOrgEmployees() {
 export function useArchivedEmployees() {
   const { data: ctx } = useOrgContext();
   return useQuery({
-    queryKey: ['org-employees-archived', ctx?.org_id],
+    queryKey: ['org-employees-archived', ctx?.org_id, ctx?.user_id],
     enabled: !!ctx?.org_id,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -92,7 +93,7 @@ export function useAddEmployee() {
 export function useEmployeeAttendanceSummary(dateRange: { start: string; end: string }) {
   const { data: ctx } = useOrgContext();
   return useQuery({
-    queryKey: ['org-attendance-summary', ctx?.org_id, dateRange.start, dateRange.end],
+    queryKey: ['org-attendance-summary', ctx?.org_id, dateRange.start, dateRange.end, ctx?.user_id],
     enabled: !!ctx?.org_id,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -108,9 +109,10 @@ export function useEmployeeAttendanceSummary(dateRange: { start: string; end: st
 }
 
 export function useEmployeeDetail(employeeId: string | undefined) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['employee-detail', employeeId],
-    enabled: !!employeeId,
+    queryKey: ['employee-detail', employeeId, user?.id],
+    enabled: !!employeeId && !!user,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('employees')
@@ -124,9 +126,10 @@ export function useEmployeeDetail(employeeId: string | undefined) {
 }
 
 export function useEmployeeTimeEntries(employeeId: string | undefined, dateRange: { start: string; end: string }) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['employee-time-entries', employeeId, dateRange.start, dateRange.end],
-    enabled: !!employeeId,
+    queryKey: ['employee-time-entries', employeeId, dateRange.start, dateRange.end, user?.id],
+    enabled: !!employeeId && !!user,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('time_entries')
@@ -142,9 +145,10 @@ export function useEmployeeTimeEntries(employeeId: string | undefined, dateRange
 }
 
 export function useEmployeeAttendance(employeeId: string | undefined, dateRange: { start: string; end: string }) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['employee-attendance', employeeId, dateRange.start, dateRange.end],
-    enabled: !!employeeId,
+    queryKey: ['employee-attendance', employeeId, dateRange.start, dateRange.end, user?.id],
+    enabled: !!employeeId && !!user,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('attendance_day_status')
