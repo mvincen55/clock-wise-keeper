@@ -109,6 +109,7 @@ const dashboardSprint: RouteBuilder = n => ({
  * legacy rows and anything not listed here.
  */
 const NOTIFICATION_ROUTES: Record<string, RouteBuilder> = {
+  employee_anniversary: n => ({ to: n.related_id && isSafeId(n.related_id) ? `/team/${n.related_id}` : '/team', label: 'Team · Work anniversary', exact: !!n.related_id && isSafeId(n.related_id) }),
   // ── PTO ──────────────────────────────────────────────────────────────
   pto_request_new: (n, ctx) =>
     isAdmin(ctx.role)

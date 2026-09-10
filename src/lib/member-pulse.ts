@@ -108,7 +108,7 @@ export function rolePulseItems(
       items.push({
         id: 'disruptions',
         label: 'Missed appointments this month',
-        value: String(missed),
+        value: thisMonth.disruptionsRecordedDays === 0 ? "Not recorded" : String(missed),
         detail: 'Confirmations and refills are the lever.',
         href: '/broken-appointments',
         tone: 'attention',
@@ -139,7 +139,7 @@ export function rolePulseItems(
       items.push({
         id: 'disruptions',
         label: 'Missed appointments this month',
-        value: String(missed),
+        value: thisMonth.disruptionsRecordedDays === 0 ? "Not recorded" : String(missed),
         detail: 'Rebooking broken treatment is the lever.',
         href: '/broken-appointments',
         tone: 'attention',
@@ -152,9 +152,9 @@ export function rolePulseItems(
     items.push({
       id: 'hygiene-missed',
       label: 'Hygiene cancellations + no-shows this month',
-      value: String(hygieneMissed),
+      value: thisMonth.disruptionsRecordedDays === 0 ? "Not recorded" : String(hygieneMissed),
       detail:
-        thisMonth.days > 0
+        (thisMonth.disruptionsRecordedDays ?? thisMonth.days) > 0
           ? `${thisMonth.hygieneCancellations} cancellation${thisMonth.hygieneCancellations === 1 ? '' : 's'} · ${thisMonth.hygieneNoShows} no-show${thisMonth.hygieneNoShows === 1 ? '' : 's'}`
           : 'Nothing recorded this month yet.',
       href: '/broken-appointments',
@@ -167,8 +167,8 @@ export function rolePulseItems(
     items.push({
       id: 'doctor-missed',
       label: 'Missed appointments this month',
-      value: String(missed),
-      detail: `${thisMonth.doctorCancellations + thisMonth.doctorNoShows} doctor-side · ${thisMonth.hygieneCancellations + thisMonth.hygieneNoShows} hygiene`,
+      value: thisMonth.disruptionsRecordedDays === 0 ? "Not recorded" : String(missed),
+      detail: thisMonth.disruptionsRecordedDays === 0 ? "Not included in the imported reports." : `${thisMonth.doctorCancellations + thisMonth.doctorNoShows} doctor-side · ${thisMonth.hygieneCancellations + thisMonth.hygieneNoShows} hygiene`,
       href: '/morning-huddle',
       tone: missed > 0 ? 'attention' : 'calm',
     });

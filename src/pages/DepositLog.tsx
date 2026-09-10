@@ -115,6 +115,8 @@ export default function DepositLog() {
   // Unsaved edits block printing: the printed sheets always come from the
   // saved record, so what's on paper is exactly what's on file.
   const [dirty, setDirty] = useState(false);
+  const [completingImport, setCompletingImport] = useState(false);
+  const [countsVerified, setCountsVerified] = useState(false);
 
   // Re-seed the form whenever a different day's record arrives.
   useEffect(() => {
@@ -151,9 +153,16 @@ export default function DepositLog() {
       },
     });
     setDirty(false);
+    setCompletingImport(false);
+    setCountsVerified(false);
   }, [log, isLoading, date]);
 
+  const hasImportedSource = log?.notes?.startsWith("Dentrix historical report:") ?? false;
+  const countsMissing = log?.missed_appointments_recorded === false;
+  const importedReport = hasImportedSource && countsMissing && !completingImport;
+
   const updateForm = (updater: (f: FormState) => FormState) => {
+    if (importedReport) return;
     setForm(f => (f ? updater(f) : f));
     setDirty(true);
   };
@@ -177,16 +186,16 @@ export default function DepositLog() {
       financing,
       bank: cash + checks,
       cards: insCc + ptCc,
-      grand: cash + checks + insCc + ptCc + illumitrac + financing,
+      grand: cash + checks + insCc + ptCc + illumitrac + financing + (log?.other_collections_cents ?? 0),
       checkAmounts,
     };
-  }, [form]);
+  }, [form, log]);
 
   const setField = (field: keyof Omit<FormState, 'checks' | 'vitals' | 'staffing'>) => (value: string) =>
     updateForm(f => ({ ...f, [field]: value }));
 
   const handleSave = () => {
-    if (!form || !totals) return;
+    if (!form || !totals || (countsMissing && !countsVerified)) return;
     save.mutate(
       {
         depositDate: date,
@@ -198,6 +207,7 @@ export default function DepositLog() {
         outsideFinancingCents: totals.financing,
         notes: form.notes,
         productionCents: parseCurrencyInput(form.vitals.production),
+        missedAppointmentsRecorded: countsMissing ? countsVerified : true,
         hygieneCancellations: form.vitals.hygieneCancellations,
         hygieneNoShows: form.vitals.hygieneNoShows,
         doctorCancellations: form.vitals.doctorCancellations,
@@ -262,11 +272,24 @@ export default function DepositLog() {
       </div>
 
       <CloseDayCoachCard />
+      {completingImport && countsMissing && <div className="rounded-lg border border-primary/30 p-4 text-sm space-y-2">
+        <p>The report did not supply daily missed-appointment counts. Enter the four counts in Practice Vitals, including a confirmed zero where appropriate. Add new-patient counts and staffing details before sealing.</p>
+        <label className="flex items-start gap-2"><input type="checkbox" checked={countsVerified} onChange={e=>{setCountsVerified(e.target.checked);setDirty(true);}}/>I have verified all four cancellation and no-show counts against this day's schedule.</label>
+      </div>}
+      {!!log?.other_collections_cents && <p className="text-sm text-muted-foreground">Receipts include {formatCents(log.other_collections_cents)} with an unclassified tender type. This amount is excluded from the cash-and-check bank subtotal.</p>}
 
       {!form || !totals ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
+      ) : importedReport ? (
+        <Card><CardHeader><CardTitle>Imported report history</CardTitle></CardHeader><CardContent className="space-y-3">
+          <p className="text-2xl font-semibold">{formatCents(totals.grand)} receipts</p>
+          <p>Procedure-date charges: {log?.production_cents == null ? 'Not recorded' : formatCents(log.production_cents)}</p>
+          <p className="text-sm text-muted-foreground">{log?.notes}</p>
+          <p className="text-sm">Daily cancellation, no-show and new-patient counts were not recorded. This historical extract has not been sealed as a complete closeout.</p>
+          <div className="flex flex-wrap gap-2"><Button onClick={()=>{setCompletingImport(true);setStep(1);}}>Complete this day's closeout</Button><Button variant="outline" asChild><Link to="/report-history">View financial details and source reports</Link></Button></div>
+        </CardContent></Card>
       ) : step === 0 ? (
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-4">
@@ -402,7 +425,7 @@ export default function DepositLog() {
                   <Printer className="h-4 w-4 mr-2" />
                   Print Both Copies
                 </Button>
-                <Button onClick={handleSave} disabled={save.isPending || (!dirty && !!log)}>
+                <Button onClick={handleSave} disabled={save.isPending || (countsMissing && !countsVerified) || (!dirty && !!log)}>
                   {save.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                   Save
                 </Button>
@@ -478,7 +501,7 @@ export default function DepositLog() {
             <Button variant="outline" size="sm" onClick={() => setStep(s => s + 1)}>
               Next step
             </Button>
-            <Button size="sm" onClick={handleSave} disabled={save.isPending || (!dirty && !!log)}>
+            <Button size="sm" onClick={handleSave} disabled={save.isPending || (countsMissing && !countsVerified) || (!dirty && !!log)}>
               {save.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Save
             </Button>
@@ -514,6 +537,7 @@ export default function DepositLog() {
               ptCcCents={log.pt_cc_cents}
               illumitracCents={log.illumitrac_cents}
               outsideFinancingCents={log.outside_financing_cents}
+              otherCollectionsCents={log.other_collections_cents ?? 0}
               preparedBy={log.prepared_by_name}
               initials={initialsOf(log.prepared_by_name)}
               branding={branding}

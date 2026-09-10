@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft, Clock, CalendarDays, Plus, ShieldAlert } from 'lucide-react';
 import { formatDate, formatTime, minutesToHHMM } from '@/lib/time-utils';
+import EmployeeSetupCard from '@/components/team/EmployeeSetupCard';
 import AccountabilityHistory from '@/components/accountability/AccountabilityHistory';
 import IncidentReportModal from '@/components/IncidentReportModal';
 import IncidentReportDetail from '@/components/IncidentReportDetail';
@@ -100,6 +101,8 @@ export default function EmployeeDetail() {
           <p className="text-muted-foreground">{employee.email || 'No email'} · Eastern (ET)</p>
         </div>
       </div>
+
+      <Card><CardHeader><CardTitle>Employment dates and PTO policy</CardTitle></CardHeader><CardContent><EmployeeSetupCard employeeId={employee.id}/></CardContent></Card>
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3">

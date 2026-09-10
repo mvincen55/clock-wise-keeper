@@ -26,6 +26,7 @@ export interface DepositPrintProps {
   ptCcCents: number;
   illumitracCents: number;
   outsideFinancingCents: number;
+  otherCollectionsCents?: number;
   /** Who prepared the deposit (from the saved record). */
   preparedBy: string;
   initials: string;
@@ -99,6 +100,7 @@ function CopyPage({
   ptCcCents,
   illumitracCents,
   outsideFinancingCents,
+  otherCollectionsCents = 0,
   preparedBy,
   initials,
   branding,
@@ -108,7 +110,7 @@ function CopyPage({
   const checksTotal = checksCents.reduce((a, b) => a + b, 0);
   const bankTotal = cashCents + checksTotal;
   const cardsTotal = insCcCents + ptCcCents;
-  const grandTotal = bankTotal + cardsTotal + illumitracCents + outsideFinancingCents;
+  const grandTotal = bankTotal + cardsTotal + illumitracCents + outsideFinancingCents + otherCollectionsCents;
 
   return (
     <div className="dep-sheet">
@@ -170,6 +172,7 @@ function CopyPage({
                 <SummaryRow label="Total Pt Credit Cards" cents={ptCcCents} />
                 <SummaryRow label={settings.membershipRowLabel} cents={illumitracCents} />
                 <SummaryRow label={settings.outsideFinancingLabel} cents={outsideFinancingCents} />
+                {otherCollectionsCents > 0 && <SummaryRow label="Unclassified tender receipts" cents={otherCollectionsCents} />}
               </>
             )}
             <div className="dep-sum-grand">

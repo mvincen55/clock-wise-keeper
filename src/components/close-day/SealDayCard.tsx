@@ -118,9 +118,9 @@ export default function SealDayCard({ log, date, collectionsCents, staffing, met
   // an explicit 0 counts, blank does not. Older migrated records may stay
   // "not recorded" without being rewritten as zeros.
   const missingNewPatients =
-    date >= getToday() &&
+    (date >= getToday() || log?.notes?.startsWith("Dentrix historical report:")) &&
     (log?.new_patients_scheduled_count == null || log?.new_patients_seen_count == null);
-  const canSeal = !!log && !dirty && !missingNewPatients;
+  const canSeal = !!log && !dirty && !missingNewPatients && log.missed_appointments_recorded !== false;
 
   return (
     <Card>

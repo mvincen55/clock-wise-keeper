@@ -1734,6 +1734,8 @@ export type Database = {
       deposit_logs: {
         Row: {
           capture_confidence: number | null
+          other_collections_cents?: number
+          missed_appointments_recorded?: boolean
           cash_cents: number
           checks: Json
           created_at: string
@@ -1767,6 +1769,8 @@ export type Database = {
         }
         Insert: {
           capture_confidence?: number | null
+          other_collections_cents?: number
+          missed_appointments_recorded?: boolean
           cash_cents?: number
           checks?: Json
           created_at?: string
@@ -1800,6 +1804,8 @@ export type Database = {
         }
         Update: {
           capture_confidence?: number | null
+          other_collections_cents?: number
+          missed_appointments_recorded?: boolean
           cash_cents?: number
           checks?: Json
           created_at?: string
@@ -2155,6 +2161,7 @@ export type Database = {
           email: string | null
           employment_status: Database["public"]["Enums"]["employment_status"]
           favorites: Json
+          real_hire_date?: string | null
           hire_date: string | null
           id: string
           learning_style: string | null
@@ -2172,6 +2179,7 @@ export type Database = {
           email?: string | null
           employment_status?: Database["public"]["Enums"]["employment_status"]
           favorites?: Json
+          real_hire_date?: string | null
           hire_date?: string | null
           id?: string
           learning_style?: string | null
@@ -2189,6 +2197,7 @@ export type Database = {
           email?: string | null
           employment_status?: Database["public"]["Enums"]["employment_status"]
           favorites?: Json
+          real_hire_date?: string | null
           hire_date?: string | null
           id?: string
           learning_style?: string | null
@@ -6251,7 +6260,7 @@ export type Database = {
           org_id: string
           timezone: string
           updated_at: string
-          user_id: string
+          user_id: string | null
           worked_hours_cap_weekly: number
         }
         Insert: {
@@ -6264,7 +6273,7 @@ export type Database = {
           org_id: string
           timezone?: string
           updated_at?: string
-          user_id: string
+          user_id: string | null
           worked_hours_cap_weekly?: number
         }
         Update: {
@@ -6277,7 +6286,7 @@ export type Database = {
           org_id?: string
           timezone?: string
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
           worked_hours_cap_weekly?: number
         }
         Relationships: [
@@ -6305,7 +6314,7 @@ export type Database = {
           org_id: string
           snapshot_balance_hours: number
           snapshot_date: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -6314,7 +6323,7 @@ export type Database = {
           org_id: string
           snapshot_balance_hours?: number
           snapshot_date: string
-          user_id: string
+          user_id: string | null
         }
         Update: {
           created_at?: string
@@ -6323,7 +6332,7 @@ export type Database = {
           org_id?: string
           snapshot_balance_hours?: number
           snapshot_date?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import MemberProfileRow from '@/components/team/MemberProfileRow';
+import EmployeeSetupCard from '@/components/team/EmployeeSetupCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -157,12 +158,14 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
           </div>
 
           <Tabs value={tab} onValueChange={setTab}>
-            <TabsList className="w-full grid grid-cols-4 mb-3">
+            <TabsList className="w-full grid grid-cols-5 mb-3">
+              <TabsTrigger value="setup" className="text-xs">Dates / PTO</TabsTrigger>
               <TabsTrigger value="attendance" className="text-xs"><Calendar className="h-3 w-3 mr-1" />Attendance</TabsTrigger>
               <TabsTrigger value="schedule" className="text-xs"><Clock className="h-3 w-3 mr-1" />Schedule</TabsTrigger>
               <TabsTrigger value="tardies" className="text-xs"><AlertTriangle className="h-3 w-3 mr-1" />Tardies</TabsTrigger>
               <TabsTrigger value="callouts" className="text-xs"><CalendarOff className="h-3 w-3 mr-1" />Callouts</TabsTrigger>
             </TabsList>
+            <TabsContent value="setup"><EmployeeSetupCard employeeId={employee.id}/></TabsContent>
             <TabsContent value="attendance"><AttendanceTab employeeId={employee.id} range={dateRange} /></TabsContent>
             <TabsContent value="schedule"><ScheduleTab employee={employee} /></TabsContent>
             <TabsContent value="tardies"><TardiesTab employeeId={employee.id} range={dateRange} /></TabsContent>
