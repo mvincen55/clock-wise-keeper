@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { treatmentGroupIds } from '@/lib/fof/treatment-groups';
 
-export interface ScheduleSourceLine { id: string; code: string; visit: string; tooth?: string; procedureLabel?: string; responsibilityCents: number; classification?: PaymentClass | 'review' }
+export interface ScheduleSourceLine { id: string; code: string; visit: string; tooth?: string; procedureLabel?: string; responsibilityCents: number; classification?: PaymentClass | 'review'; groupingHint?: 'same_tooth' | 'same_visit' | 'separate'; guidance?: { title: string; summary: string; sourceId: string; classification: PaymentClass | 'review' } }
 type LineEdit = { classification?: PaymentClass | 'review'; group?: string; adjustment?: string; paid?: string; deliveryGroup?: string };
 type EditorState = { lines: Record<string, LineEdit>; groups: Record<string, Partial<PaymentGroup>>; events: Record<string, Partial<CollectionEvent>>; extraEvents: CollectionEvent[]; overrides: Record<string, PaymentOverride> };
 const empty = (): EditorState => ({ lines: {}, groups: {}, events: {}, extraEvents: [], overrides: {} });
@@ -33,6 +33,7 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
       id: line.id, visit: line.visit, tooth: line.tooth,
       classification: state.lines[line.id]?.classification ?? line.classification ?? 'review',
       explicitGroup: state.lines[line.id]?.group,
+      groupingHint: line.groupingHint,
     })));
     const procedures = source.map(line => {
       const edit = state.lines[line.id] ?? {};
@@ -57,7 +58,7 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
     // These existing form fields stay local; they are never added to AI requests.
     for (const group of groups.values()) {
       const members = source.filter(line => procedures.find(p => p.id === line.id)?.groupId === group.id && line.responsibilityCents > 0);
-      const labels = [...new Set(members.map(line => line.procedureLabel?.trim()).filter(Boolean))];
+      const labels = [...new Set(members.map(line => line.guidance?.title || line.procedureLabel?.trim()).filter(Boolean))];
       const teeth = [...new Set(members.flatMap(line => (line.tooth ?? '').trim().split(/[\s,;/]+/)).filter(Boolean).map(tooth => tooth.replace(/^#/, '').toUpperCase()))];
       const treatment = labels.length > 0 && labels.length <= 2 ? labels.join(' + ') : patientClassTitle[group.classification];
       const numberedTeeth = teeth.map(tooth => `#${tooth}`);
@@ -83,6 +84,9 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
     const finalEvents = [...events.values()].map(e => ({ ...e, ...state.events[e.id], id: e.id }));
     const schedule = buildPaymentSchedule({ policy, procedures, groups: finalGroups, events: finalEvents, expectedObligationCents: expected, overrides: state.overrides });
     for (const line of source) {
+      if (line.guidance && !state.lines[line.id]?.classification && line.guidance.classification !== line.classification) {
+        schedule.issues.push(`Review ${line.code}: code-bank guidance and the saved payment classification differ. Confirm the classification for this form.`);
+      }
       const target = state.lines[line.id]?.deliveryGroup;
       if (target && (line.responsibilityCents !== 0 || !groups.has(target))) schedule.issues.push('Review a delivery marker whose fee or linked payment group changed.');
     }
@@ -121,6 +125,14 @@ export function PaymentScheduleEditor({ editor }: { editor: ReturnType<typeof us
         <label className="block text-sm">Payment classification <select aria-label={`Classification ${line.id}`} value={edit.classification ?? line.classification ?? 'review'} onChange={e => editLine(line.id, { classification: e.target.value as PaymentClass })}>
           {['review', ...paymentClasses].map(c => <option key={c} value={c}>{classTitle[c]}</option>)}
         </select></label>
+        {line.guidance && <div className="rounded bg-muted p-2 text-sm">
+          <p><strong>Code-bank draft: {line.guidance.title}</strong> — {line.guidance.summary}</p>
+          <p className="text-xs text-muted-foreground">Based on this procedure’s office fee-schedule notes. Changes below affect this form only; shared notes require Training mode in the FOF Assistant.</p>
+          {line.guidance.classification !== line.classification && !edit.classification && <div className="mt-2 flex gap-2">
+            {line.guidance.classification !== 'review' && <Button type="button" size="sm" onClick={() => editLine(line.id, { classification: line.guidance!.classification })}>Use suggested classification</Button>}
+            {line.classification && line.classification !== 'review' && <Button type="button" size="sm" variant="outline" onClick={() => editLine(line.id, { classification: line.classification })}>Keep saved classification</Button>}
+          </div>}
+        </div>}
         {line.responsibilityCents === 0 && <label className="block text-sm">Use this zero-fee appointment as delivery for <select aria-label={`Delivery marker ${line.id}`} value={edit.deliveryGroup ?? ''} onChange={e => editLine(line.id, { deliveryGroup: e.target.value })}><option value="">No payment milestone (for example, post-op)</option>{groups.filter(g => ['restoration','denture'].includes(g.classification)).map(g => <option key={g.id} value={g.id}>{g.label}</option>)}</select></label>}
         <label className="block text-sm">Payment group<Input aria-label={`Group ${line.id}`} value={edit.group ?? ''} placeholder={model.procedures.find(p => p.id === line.id)?.groupId} onChange={e => editLine(line.id, { group: e.target.value })} /></label>
         <div className="grid grid-cols-2 gap-2"><label className="text-sm">Allocated discount / credit<Input aria-label={`Adjustment ${line.id}`} value={edit.adjustment ?? ''} placeholder="0.00" onChange={e => editLine(line.id, { adjustment: e.target.value })} /></label>

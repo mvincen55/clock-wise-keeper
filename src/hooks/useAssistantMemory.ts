@@ -123,7 +123,9 @@ export function useCodeNotes() {
     queryFn: async (): Promise<CodeNote[]> => {
       const { data, error } = await supabase
         .from('fee_schedule_items')
-        .select('id, code, description, notes, schedule_id, fee_schedules!inner(name, kind)')
+        .select('id, code, description, notes, schedule_id, fee_schedules!inner(name, kind, org_id, is_active)')
+        .eq('fee_schedules.org_id', ctx!.org_id)
+        .eq('fee_schedules.is_active', true)
         .neq('notes', '')
         .order('code');
       if (error) throw error;

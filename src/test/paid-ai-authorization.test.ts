@@ -44,13 +44,13 @@ describe.each(['parse-treatment', 'consent-ai', 'commitment-listen'])('%s paid a
   });
 });
 
-it('an approved active member can reach screenshot processing', async () => {
+it('the retired screenshot endpoint never forwards an image, even for an approved member', async () => {
   const { handle, gateway, client } = setup('allowed', 'parse-treatment');
   const res = await handle(new Request('https://example.test', { method: 'POST', headers: { Authorization: 'Bearer synthetic' }, body: JSON.stringify({ image: 'data:image/png;base64,AAAA' }) }));
-  expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ status: 'complete', rows: [row] });
+  expect(res.status).toBe(410);
+  expect((await res.json()).error).toContain('privately in your browser');
   expect(client.rpc).toHaveBeenCalledWith('is_allowed_user');
-  expect(gateway).toHaveBeenCalledTimes(1);
+  expect(gateway).not.toHaveBeenCalled();
 });
 
 it.each(['consent-ai', 'commitment-listen'])('an approved active member can reach %s', async endpoint => {

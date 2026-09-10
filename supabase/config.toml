@@ -67,3 +67,6 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = true
   [functions.office-ai-chat]
     verify_jwt = true
+
+  [functions.fof-office-guidance]
+    verify_jwt = true

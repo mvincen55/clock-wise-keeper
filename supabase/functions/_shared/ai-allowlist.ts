@@ -64,6 +64,10 @@ export const AI_GATEWAY_ALLOWLIST: Record<string, GatewayEntry> = {
     handler: "scrub",
     reason: "General agent surface over staff-authored prompts.",
   },
+  "fof-office-guidance": {
+    handler: "scrub",
+    reason: "Compiles the complete office code bank only. Client patient fields are rejected; case-specific notes are withheld and remaining office text is scrubbed.",
+  },
   "reports-analyst": {
     handler: "scrub",
     reason: "Analyzes report rows that can carry staff notes.",
@@ -95,17 +99,9 @@ export const AI_GATEWAY_ALLOWLIST: Record<string, GatewayEntry> = {
     handler: "consented",
     reason: "User uploads a payroll/timesheet PDF and asks for it to be read.",
   },
-  "parse-treatment": {
-    handler: "consented",
-    reason: "User uploads a treatment plan and asks for it to be parsed.",
-  },
   "ingest-doc": {
     handler: "consented",
     reason: "Owner deliberately uploads office policy documents to the corpus.",
-  },
-  "name-visits": {
-    handler: "consented",
-    reason: "Sees procedure codes and visit structure only — no person fields.",
   },
 };
 

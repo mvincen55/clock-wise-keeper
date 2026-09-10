@@ -19,15 +19,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import CodeNotesPanel from '@/components/fof/CodeNotesPanel';
 import { fofTextNeedsReview } from '../../../supabase/functions/_shared/fof-privacy';
+import { answerCurrentForm, type CurrentFofContext } from '@/lib/fof/current-form-assistant';
+import { useCodeNotes } from '@/hooks/useAssistantMemory';
+import { useQueryClient } from '@tanstack/react-query';
 
 /**
- * Floating FOF assistant (bottom-right), powered by Kimi (via OpenRouter)
- * through the kimi-agent edge function. Managers train the AI's treatment
- * wording as they chat — stated preferences become standing rules every
- * future form follows — and can also ask it to remember office/site facts
- * or make code changes to the app itself (committed to GitHub, where
- * Lovable syncs them). Team members can ask questions, but nothing they
- * say is saved or trains anything.
+ * Current-form answers run locally against the live calculation. General
+ * office questions use kimi-agent; owner/manager Training explicitly enables
+ * shared office guidance updates. The assistant cannot change application code.
  *
  * Privacy boundary: no form context is transmitted. The browser-only name
  * is used to block accidental mentions before sending chat. Pattern checks
@@ -49,7 +48,7 @@ interface ChatMessage {
 }
 
 interface Props {
-  context: { visits: { procedures: string[] }[]; treatment: string } | null;
+  context: CurrentFofContext | null;
   /** Browser-only comparison; never include this value in a request. */
   patientName?: string;
 }
@@ -100,8 +99,10 @@ export function ActionChips({ actions }: { actions: AgentAction[] }) {
   );
 }
 
-export default function FofAssistantWidget({ patientName = '' }: Props) {
+export default function FofAssistantWidget({ context, patientName = '' }: Props) {
   const { data: ctx } = useOrgContext();
+  const { data: codeNotes } = useCodeNotes();
+  const queryClient = useQueryClient();
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
@@ -110,6 +111,11 @@ export default function FofAssistantWidget({ patientName = '' }: Props) {
   // nothing gets saved as a rule while it's off.
   const [training, setTraining] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [formMessages, setFormMessages] = useState<ChatMessage[]>([]);
+  const [channel, setChannel] = useState<'form' | 'office'>('form');
+  // This comparison stays in component memory, never query keys or storage.
+  const formVersion = JSON.stringify(context);
+  useEffect(() => { setFormMessages([]); }, [formVersion]);
   // Managers can flip to the code notes while training, to see everything
   // already written about the codes.
   const [view, setView] = useState<'chat' | 'notes'>('chat');
@@ -118,6 +124,7 @@ export default function FofAssistantWidget({ patientName = '' }: Props) {
   useEffect(() => {
     conversationScope.current += 1;
     setMessages([]);
+    setFormMessages([]);
     setInput('');
     setBusy(false);
   }, [ctx?.org_id, patientName]);
@@ -125,11 +132,17 @@ export default function FofAssistantWidget({ patientName = '' }: Props) {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages, busy, open]);
+  }, [messages, formMessages, busy, open]);
 
   const send = async () => {
     const text = input.trim();
     if (!text || busy) return;
+    if (channel === 'form') {
+      setFormMessages(previous => [...previous, { role: 'user', content: text },
+        { role: 'assistant', content: answerCurrentForm(text, context, codeNotes) }]);
+      setInput('');
+      return;
+    }
     const nameParts: string[] = patientName.toLocaleLowerCase().match(/[\p{L}]+/gu) ?? [];
     const words = new Set<string>(text.toLocaleLowerCase().match(/[\p{L}]+/gu) ?? []);
     if (fofTextNeedsReview(text) || nameParts.some(part => part.length > 1 && words.has(part))) {
@@ -145,6 +158,7 @@ export default function FofAssistantWidget({ patientName = '' }: Props) {
       const { data, error } = await supabase.functions.invoke('kimi-agent', {
         body: {
           mode: 'fof',
+          orgId: ctx?.org_id,
           messages: next.slice(-10).map(m => ({ role: m.role, content: m.content })),
           trainingEnabled: isManager && training,
         },
@@ -163,6 +177,14 @@ export default function FofAssistantWidget({ patientName = '' }: Props) {
           actions: Array.isArray(data?.actions) ? data.actions : undefined,
         },
       ]);
+      if (data?.savedRules?.length || data?.actions?.length) {
+        await queryClient.invalidateQueries({ queryKey: ['assistant-code-notes', ctx?.org_id] });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['fof-office-guidance', ctx?.org_id] }),
+          queryClient.invalidateQueries({ queryKey: ['assistant-memories', ctx?.org_id] }),
+          queryClient.invalidateQueries({ queryKey: ['code-knowledge', ctx?.org_id] }),
+        ]);
+      }
     } catch (err) {
       if (scope !== conversationScope.current) return;
       const detail = err instanceof Error && err.message !== 'No reply' ? ` (${err.message})` : '';
@@ -190,7 +212,7 @@ export default function FofAssistantWidget({ patientName = '' }: Props) {
             {isManager ? (
               <button
                 type="button"
-                onClick={() => setTraining(t => !t)}
+                onClick={() => { setTraining(t => !t); setChannel('office'); }}
                 title={training ? 'Click to pause training' : 'Click to resume training'}
                 className="ml-1"
               >
@@ -234,15 +256,19 @@ export default function FofAssistantWidget({ patientName = '' }: Props) {
             </button>
           </div>
 
+          <div className="flex gap-1 border-b p-2" aria-label="Assistant question scope">
+            <Button size="sm" variant={channel === 'form' ? 'default' : 'outline'} onClick={() => { setChannel('form'); setView('chat'); setInput(''); }}>Current form</Button>
+            <Button size="sm" variant={channel === 'office' ? 'default' : 'outline'} onClick={() => { setChannel('office'); setView('chat'); setInput(''); }}>Office knowledge</Button>
+          </div>
           {view === 'notes' ? (
             <div className="flex-1 overflow-y-auto p-3">
               <CodeNotesPanel />
             </div>
           ) : (
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-3">
-            {messages.length === 0 && (
+            {(channel === 'form' ? formMessages : messages).length === 0 && (
               <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
-                {isManager
+                {channel === 'form' ? 'Ask about this form’s total, payment schedule, treatment groups, insurance estimate, or code-bank notes. These answers use the current form here in your browser. Answers clear when the form changes.' : isManager
                   ? training
                     ? 'Ask about procedure codes, insurance rules, or office policies. Training mode can save general guidance to the office code bank. Patient-specific corrections belong in the form.'
                     : 'Ask about procedure codes, insurance rules, or office policies. Training is off; no office knowledge will be changed.'
@@ -250,7 +276,7 @@ export default function FofAssistantWidget({ patientName = '' }: Props) {
               </div>
 
             )}
-            {messages.map((m, i) => (
+            {(channel === 'form' ? formMessages : messages).map((m, i) => (
               <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
                 <div
                   className={
@@ -286,7 +312,7 @@ export default function FofAssistantWidget({ patientName = '' }: Props) {
                 value={input}
                 autoComplete="off"
                 onFocus={() => setView('chat')}
-                placeholder="Ask about a code or office policy…"
+                placeholder={channel === 'form' ? 'Ask about this form…' : 'Ask about a code or office policy…'}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) {
@@ -301,7 +327,7 @@ export default function FofAssistantWidget({ patientName = '' }: Props) {
             </div>
             {/* Persistent, at the point of typing — the accepted PHI mitigation. */}
             <p className="mt-1.5 px-0.5 text-[11px] text-muted-foreground">
-              Patient names stay in this browser. Do not enter patient details here. The full form is not shared with AI.
+              {channel === 'form' ? 'Current-form questions and answers stay in this browser. No patient form is sent to AI.' : 'Patient names stay in this browser. Office knowledge uses external AI: enter general office questions only, without patient details.'}
             </p>
           </div>
 

@@ -3,15 +3,18 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import FofAssistantWidget from '@/components/fof/FofAssistantWidget';
 import { FOF_PATIENT_CONTEXT_ENABLED, fofTextNeedsReview, fofRuleNeedsReview, fofTrainingWriteAllowed } from '../../supabase/functions/_shared/fof-privacy';
 import { printOnlyAdapter } from '@/lib/fof/persistence';
+import { currentFormFixture } from './fof-current-form-fixture';
 
 const mock = vi.hoisted(() => ({ invoke: vi.fn(), org: { org_id: 'office-one', role: 'manager' } }));
 beforeAll(() => { HTMLElement.prototype.scrollTo = vi.fn(); });
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { functions: { invoke: mock.invoke } } }));
 vi.mock('@/hooks/useOrgContext', () => ({ useOrgContext: () => ({ data: mock.org }) }));
 vi.mock('@/components/fof/CodeNotesPanel', () => ({ default: () => null }));
+vi.mock('@/hooks/useAssistantMemory', () => ({ useCodeNotes: () => ({ data: [] }) }));
+vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: vi.fn().mockResolvedValue(undefined) }) }));
 afterEach(() => { cleanup(); mock.invoke.mockReset(); mock.org = { org_id: 'office-one', role: 'manager' }; });
-const context = { visits: [{ procedures: ['D6058'] }], treatment: 'private form context' };
-function open() { fireEvent.click(screen.getByRole('button', { name: 'FOF Assistant' })); }
+const context = currentFormFixture();
+function open() { fireEvent.click(screen.getByRole('button', { name: 'FOF Assistant' })); fireEvent.click(screen.getByRole('button', { name: 'Office knowledge' })); }
 function send(text: string) {
   const input = screen.getByPlaceholderText('Ask about a code or office policy…');
   fireEvent.change(input, { target: { value: text } });
@@ -19,13 +22,36 @@ function send(text: string) {
 }
 
 describe('FOF assistant browser boundary', () => {
+  it('answers the current form locally and never mixes that conversation into office AI', async () => {
+    mock.invoke.mockResolvedValue({ data: { reply: 'General office answer' } });
+    render(<FofAssistantWidget patientName="Avery Morgan" context={context} />);
+    fireEvent.click(screen.getByRole('button', { name: 'FOF Assistant' }));
+    const localInput=screen.getByPlaceholderText('Ask about this form…');
+    fireEvent.change(localInput,{target:{value:'Why is this the patient portion?'}});fireEvent.keyDown(localInput,{key:'Enter'});
+    expect(screen.getByText(/Patient portion on this form: \$800.00/)).toBeTruthy();
+    expect(mock.invoke).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button',{name:'Office knowledge'}));send('What is the office rule?');
+    await waitFor(()=>expect(mock.invoke).toHaveBeenCalledOnce());
+    expect(JSON.stringify(mock.invoke.mock.calls[0][1].body)).not.toMatch(/800|Avery|Morgan|patient portion|private form/);
+  });
+  it('clears stale current-form answers when amounts change', async () => {
+    const view=render(<FofAssistantWidget context={context} />);
+    fireEvent.click(screen.getByRole('button',{name:'FOF Assistant'}));
+    const input=screen.getByPlaceholderText('Ask about this form…');
+    fireEvent.change(input,{target:{value:'What is the patient portion?'}});fireEvent.keyDown(input,{key:'Enter'});
+    const changed=currentFormFixture();changed.computation.effective.patientPortionCents=70000;
+    view.rerender(<FofAssistantWidget context={changed} />);
+    await waitFor(()=>expect(screen.queryByText(/Patient portion on this form: \$800.00/)).toBeNull());
+    fireEvent.change(input,{target:{value:'What is the patient portion?'}});fireEvent.keyDown(input,{key:'Enter'});
+    expect(screen.getByText(/Patient portion on this form: \$700.00/)).toBeTruthy();expect(mock.invoke).not.toHaveBeenCalled();
+  });
   it('keeps patient name and form context out of the request; training defaults off', async () => {
     mock.invoke.mockResolvedValue({ data: { reply: 'Office policy answer' } });
     render(<FofAssistantWidget patientName="Avery Morgan" context={context} />);
     open(); send('What is the office rule for D6058?');
     await waitFor(() => expect(mock.invoke).toHaveBeenCalledOnce());
     const body = mock.invoke.mock.calls[0][1].body;
-    expect(body).toEqual({ mode: 'fof', trainingEnabled: false, messages: [{ role: 'user', content: 'What is the office rule for D6058?' }] });
+    expect(body).toEqual({ mode: 'fof', orgId: 'office-one', trainingEnabled: false, messages: [{ role: 'user', content: 'What is the office rule for D6058?' }] });
     expect(JSON.stringify(body)).not.toMatch(/Avery|Morgan|private form|context/i);
   });
   it('blocks a lowercase first name copied from the current form before any network call', () => {
