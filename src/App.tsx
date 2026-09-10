@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { IdentityQueryProvider } from "@/components/IdentityQueryProvider";
 import { createBrowserRouter, createRoutesFromElements, RouterProvider, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import AppLayout from "@/components/AppLayout";
@@ -74,8 +74,6 @@ import MarketingStart from "@/pages/marketing/Start";
 import DesignReviewDashboard from './pages/DesignReviewDashboard';
 import DesignReview from "@/pages/DesignReview";
 import DesignReviewMoments from './pages/DesignReviewMoments';
-
-const queryClient = new QueryClient();
 
 function LoginRedirect() {
   const location = useLocation();
@@ -224,16 +222,19 @@ const router = createBrowserRouter(
   )
 );
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
+function IdentityWorkspace() {
+  const { user } = useAuth();
+  return (
+    <IdentityQueryProvider identity={user?.id ?? null}>
       <TooltipProvider>
         <Toaster />
         <Sonner />
         <RouterProvider router={router} />
       </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
-);
+    </IdentityQueryProvider>
+  );
+}
+
+const App = () => <AuthProvider><IdentityWorkspace /></AuthProvider>;
 
 export default App;

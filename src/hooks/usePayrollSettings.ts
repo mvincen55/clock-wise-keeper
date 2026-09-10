@@ -17,7 +17,7 @@ export type PayrollSettingsRow = {
 export function usePayrollSettings() {
   const { user } = useAuth();
   return useQuery({
-    queryKey: ['payroll-settings'],
+    queryKey: ['payroll-settings', user?.id],
     enabled: !!user,
     queryFn: async () => {
       const { data } = await supabase.from('payroll_settings').select('*').maybeSingle();

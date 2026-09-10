@@ -22,6 +22,8 @@ const json = (body: unknown, status = 200) =>
 
 import { requireUser } from "../_shared/require-user.ts";
 
+import { completeTreatmentRows, INCOMPLETE_IMPORT_MESSAGE } from "../_shared/treatment-extraction.ts";
+
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-2.5-flash";
 
@@ -75,52 +77,10 @@ Deno.serve(async (req) => {
     });
     if (!response.ok) return json({ error: "AI request failed" }, 502);
     const data = await response.json();
-    const raw: string = data?.choices?.[0]?.message?.content ?? "";
-    const match = raw.match(/\[[\s\S]*\]/);
-    let parsed: unknown = null;
-    if (match) {
-      try {
-        parsed = JSON.parse(match[0]);
-      } catch {
-        parsed = null;
-      }
-    }
-    if (!Array.isArray(parsed)) {
-      // Truncated output: salvage the complete row objects that did fit.
-      parsed = (raw.match(/\{[^{}]*\}/g) ?? [])
-        .map((o) => {
-          try {
-            return JSON.parse(o) as unknown;
-          } catch {
-            return null;
-          }
-        })
-        .filter((o) => o !== null);
-    }
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      return json({ error: "No rows found in the screenshot" }, 502);
-    }
-    const rows = parsed
-      .filter(
-        (r): r is Record<string, unknown> =>
-          !!r && typeof r === "object" && typeof (r as Record<string, unknown>).code === "string"
-      )
-      .slice(0, 40)
-      .map((r) => ({
-        code: String(r.code).trim(),
-        tooth: typeof r.tooth === "string" ? r.tooth.trim() : "",
-        description: typeof r.description === "string" ? r.description.trim() : "",
-        fee: typeof r.fee === "number" && isFinite(r.fee) && r.fee > 0 ? r.fee : null,
-        officeFee:
-          typeof r.officeFee === "number" && isFinite(r.officeFee) && r.officeFee > 0
-            ? r.officeFee
-            : null,
-        entryDate: typeof r.entryDate === "string" ? r.entryDate.trim() : "",
-        visit: typeof r.visit === "number" && isFinite(r.visit) && r.visit > 0 ? r.visit : null,
-      }))
-      .filter((r) => r.code !== "");
-    if (rows.length === 0) return json({ error: "No rows found in the screenshot" }, 502);
-    return json({ rows });
+    const choice = data?.choices?.[0];
+    const rows = completeTreatmentRows(choice?.message?.content, choice?.finish_reason);
+    if (!rows) return json({ status: "incomplete", code: "INCOMPLETE_IMPORT", error: INCOMPLETE_IMPORT_MESSAGE }, 422);
+    return json({ status: "complete", rows });
   } catch (_err) {
     return json({ error: "Unexpected error" }, 500);
   }

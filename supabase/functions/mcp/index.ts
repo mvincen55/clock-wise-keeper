@@ -16,6 +16,20 @@ function supabaseForUser(ctx: { getToken(): string | null | undefined }) {
     auth: { persistSession: false, autoRefreshToken: false }
   });
 }
+
+// Personal tools require an active membership and the caller's employee record.
+// This owned bundle is authoritative; the historical src/lib/mcp sources are absent.
+async function personalIdentity(sb: ReturnType<typeof supabaseForUser>, userId: string | null | undefined) {
+  if (!userId) return null;
+  const { data: member, error } = await sb.from("org_members").select("org_id")
+    .eq("user_id", userId).eq("status", "active").limit(1).maybeSingle();
+  if (error || !member) return null;
+  const { data: employee, error: employeeError } = await sb.from("employees").select("id")
+    .eq("org_id", member.org_id).eq("user_id", userId).maybeSingle();
+  if (employeeError || !employee) return null;
+  return { orgId: member.org_id, employeeId: employee.id, userId };
+}
+
 var whoami_default = defineTool({
   name: "whoami",
   title: "Who am I",
@@ -77,7 +91,9 @@ var list_time_entries_default = defineTool2({
       return { content: [{ type: "text", text: "Not authenticated" }], isError: true };
     }
     const sb = supabaseForUser2(ctx);
-    const { data, error } = await sb.from("time_entries").select("entry_date, total_minutes").gte("entry_date", start_date).lte("entry_date", end_date).order("entry_date", { ascending: false });
+    const identity = await personalIdentity(sb, ctx.getUserId());
+    if (!identity) return { content: [{ type: "text", text: "No active employee membership found." }], isError: true };
+    const { data, error } = await sb.from("time_entries").select("entry_date, total_minutes").eq("org_id", identity.orgId).eq("employee_id", identity.employeeId).eq("user_id", identity.userId).gte("entry_date", start_date).lte("entry_date", end_date).order("entry_date", { ascending: false });
     if (error) return { content: [{ type: "text", text: error.message }], isError: true };
     const rows = (data ?? []).map((r) => ({
       date: r.entry_date,
@@ -115,7 +131,7 @@ var list_pto_requests_default = defineTool3({
   title: "List PTO requests",
   description: "Lists the signed-in user's own PTO requests, most recent first. Optionally filter by status (pending, approved, denied, canceled).",
   inputSchema: {
-    status: z2.enum(["pending", "approved", "denied", "canceled", "any"]).optional().describe("Filter by status. Default 'any'."),
+    status: z2.enum(["pending", "approved", "denied", "cancelled", "canceled", "any"]).optional().describe("Filter by status. Default 'any'. 'canceled' is accepted as an alias for 'cancelled'."),
     limit: z2.number().int().min(1).max(100).optional().describe("Max rows to return (default 20).")
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
@@ -124,8 +140,10 @@ var list_pto_requests_default = defineTool3({
       return { content: [{ type: "text", text: "Not authenticated" }], isError: true };
     }
     const sb = supabaseForUser3(ctx);
-    let q = sb.from("pto_requests").select("id, start_date, end_date, hours, status, reason, created_at").order("created_at", { ascending: false }).limit(limit ?? 20);
-    if (status && status !== "any") q = q.eq("status", status);
+    const identity = await personalIdentity(sb, ctx.getUserId());
+    if (!identity) return { content: [{ type: "text", text: "No active employee membership found." }], isError: true };
+    let q = sb.from("pto_requests").select("id, start_date, end_date, hours_requested, status, note, created_at").eq("org_id", identity.orgId).eq("employee_id", identity.employeeId).order("created_at", { ascending: false }).limit(limit ?? 20);
+    if (status && status !== "any") q = q.eq("status", status === "canceled" ? "cancelled" : status);
     const { data, error } = await q;
     if (error) return { content: [{ type: "text", text: error.message }], isError: true };
     const payload = { count: data?.length ?? 0, requests: data ?? [] };
@@ -142,7 +160,7 @@ var mcp_default = defineMcp({
   name: "purple-envelope-mcp",
   title: "Purple Envelope",
   version: "0.1.0",
-  instructions: "Tools for Purple Envelope, a workforce time tracking app. Use `whoami` to check identity, `list_time_entries` to read the caller's daily hours, and `list_pto_requests` to read their PTO requests. All tools act as the signed-in user; row-level security scopes results to that user's org and employee.",
+  instructions: "Tools for Purple Envelope, a workforce time tracking app. Use `whoami` to check identity, `list_time_entries` to read the caller's daily hours, and `list_pto_requests` to read their PTO requests. All tools act as the signed-in user; personal tools explicitly filter the caller's active org and employee identity in addition to row-level security.",
   auth: auth.oauth.issuer({
     issuer: `https://${projectRef}.supabase.co/auth/v1`,
     acceptedAudiences: "authenticated"

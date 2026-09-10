@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 export const ALLOWED_ATTACHMENT_TYPES = [
   'image/png',
@@ -25,9 +26,10 @@ export interface AttachmentRow {
 
 /** Attachments for a conversation. RLS keeps this participant-only. */
 export function useConversationAttachments(conversationId: string | null) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['message-attachments', conversationId],
-    enabled: !!conversationId,
+    queryKey: ['message-attachments', conversationId, user?.id],
+    enabled: !!conversationId && !!user,
     refetchInterval: 20000,
     queryFn: async (): Promise<AttachmentRow[]> => {
       const { data, error } = await supabase
