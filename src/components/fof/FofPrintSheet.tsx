@@ -7,6 +7,7 @@ import type {
   FofTemplate,
 } from '@/lib/fof/types';
 import { formatCents } from '@/lib/fof/money';
+import { PatientPaymentOptions } from './PatientPaymentOptions';
 
 /**
  * The paper Financial Options Form — card-based layout: logo + date/patient
@@ -344,7 +345,7 @@ export default function FofPrintSheet({
         )}
       </section>
 
-      {bothOptions ? (
+      {schedule ? <PatientPaymentOptions schedule={schedule} computation={computation} template={template} prepayMark={prepayMark} /> : bothOptions ? (
         <section className="fof-options">
           <div className="fof-options-head">Choose Your Payment Option</div>
           <div className="fof-options-row">

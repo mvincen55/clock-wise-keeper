@@ -3529,6 +3529,23 @@
 }
 
 /* Policy schedules can contain any number of events; never clip later payments. */
+.fof-payment-options { margin: 8pt 0; }
+.fof-prepay-summary { display: flex; align-items: center; justify-content: space-between; gap: 12pt; padding: 9pt 12pt; border: 0.8pt solid var(--fof-navy); border-radius: 5pt; background: var(--fof-tint); margin-bottom: 9pt; break-inside: avoid; }
+.fof-payment-kicker { color: var(--fof-navy); font-size: 9pt; font-weight: 700; }
+.fof-prepay-summary p { margin-top: 3pt; color: var(--fof-muted); font-size: 8pt; }
+.fof-prepay-price { display: flex; flex-direction: column; text-align: right; flex-shrink: 0; }
+.fof-prepay-price strong { font-size: 17pt; line-height: 1.2; color: var(--fof-navy); }
+.fof-prepay-price span { margin-top: 2pt; font-size: 7pt; color: var(--fof-muted); }
+.fof-phase-schedule { border: 0.8pt solid var(--fof-line); border-radius: 5pt; }
+.fof-payment-plan-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10pt; padding: 8pt 12pt; border-bottom: 0.8pt solid var(--fof-line); }
+.fof-payment-plan-head > span { font-size: 7.5pt; color: var(--fof-muted); }
+.fof-payment-phase { padding: 7pt 12pt; border-bottom: 0.5pt solid var(--fof-line); break-inside: avoid; }
+.fof-payment-phase-name { font-size: 8.5pt; font-weight: 700; color: var(--fof-navy); margin-bottom: 4pt; overflow-wrap: anywhere; }
+.fof-payment-milestones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7pt 12pt; }
+.fof-payment-milestone { display: flex; flex-direction: column; gap: 3pt; border-left: 1.5pt solid var(--fof-line); padding-left: 7pt; break-inside: avoid; }
+.fof-payment-milestone span { font-size: 7.8pt; line-height: 1.25; color: var(--fof-muted); overflow-wrap: anywhere; }
+.fof-payment-milestone strong { font-size: 10pt; font-variant-numeric: tabular-nums; }
+.fof-payment-plan-total { display: flex; justify-content: space-between; padding: 8pt 12pt; color: var(--fof-navy); font-size: 10pt; font-weight: 700; break-inside: avoid; }
 .fof-policy-sheet .fof-cells { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .fof-policy-sheet .fof-row > span:first-child { overflow-wrap: anywhere; }
 .fof-policy-sheet .fof-option, .fof-policy-sheet .fof-agreement { overflow: visible; }

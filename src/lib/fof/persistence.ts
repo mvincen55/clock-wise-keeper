@@ -1,13 +1,10 @@
 import type { FofAmounts, FofOverrides, FofPatientFields } from './types';
 
 /**
- * Storage-ready seam for a future BAA-backed "save form" feature.
+ * Print-only contract. Patient names and form data remain in browser memory.
  *
- * HIPAA: saving a form snapshot means persisting PHI. That is only lawful
- * once the practice has a Business Associate Agreement with the storage
- * vendor (e.g. Supabase Team plan + HIPAA add-on). Until then the ONLY
- * adapter is printOnlyAdapter, which refuses to save. Do not add a real
- * adapter without confirming a signed BAA covers the destination.
+ * Product requirement: do not add a persistent adapter for patient forms.
+ * A later vendor/privacy change does not itself authorize saving names.
  */
 
 export interface FofFormSnapshot {

@@ -18,6 +18,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import CodeNotesPanel from '@/components/fof/CodeNotesPanel';
+import { fofTextNeedsReview } from '../../../supabase/functions/_shared/fof-privacy';
 
 /**
  * Floating FOF assistant (bottom-right), powered by Kimi (via OpenRouter)
@@ -28,10 +29,10 @@ import CodeNotesPanel from '@/components/fof/CodeNotesPanel';
  * Lovable syncs them). Team members can ask questions, but nothing they
  * say is saved or trains anything.
  *
- * HIPAA boundary: the request carries ONLY the de-identified context
- * passed in (code-derived procedure wording + AI-generated treatment
- * text) and the typed chat messages. No patient fields are ever
- * included, and chat history lives in component memory only.
+ * Privacy boundary: no form context is transmitted. The browser-only name
+ * is used to block accidental mentions before sending chat. Pattern checks
+ * are defense in depth, not a complete de-identification mechanism. Chat
+ * history lives in component memory and clears on patient/office changes.
  */
 
 export interface AgentAction {
@@ -49,6 +50,8 @@ interface ChatMessage {
 
 interface Props {
   context: { visits: { procedures: string[] }[]; treatment: string } | null;
+  /** Browser-only comparison; never include this value in a request. */
+  patientName?: string;
 }
 
 /** Chips for what the assistant actually did this turn (saves, commits, PRs). */
@@ -97,7 +100,7 @@ export function ActionChips({ actions }: { actions: AgentAction[] }) {
   );
 }
 
-export default function FofAssistantWidget({ context }: Props) {
+export default function FofAssistantWidget({ patientName = '' }: Props) {
   const { data: ctx } = useOrgContext();
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
   const [open, setOpen] = useState(false);
@@ -105,12 +108,20 @@ export default function FofAssistantWidget({ context }: Props) {
   const [busy, setBusy] = useState(false);
   // Managers can pause training (click the badge) — chat keeps working,
   // nothing gets saved as a rule while it's off.
-  const [training, setTraining] = useState(true);
+  const [training, setTraining] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // Managers can flip to the code notes while training, to see everything
   // already written about the codes.
   const [view, setView] = useState<'chat' | 'notes'>('chat');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const conversationScope = useRef(0);
+  useEffect(() => {
+    conversationScope.current += 1;
+    setMessages([]);
+    setInput('');
+    setBusy(false);
+  }, [ctx?.org_id, patientName]);
+  useEffect(() => { setTraining(false); }, [ctx?.org_id, ctx?.role]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -119,6 +130,13 @@ export default function FofAssistantWidget({ context }: Props) {
   const send = async () => {
     const text = input.trim();
     if (!text || busy) return;
+    const nameParts: string[] = patientName.toLocaleLowerCase().match(/[\p{L}]+/gu) ?? [];
+    const words = new Set<string>(text.toLocaleLowerCase().match(/[\p{L}]+/gu) ?? []);
+    if (fofTextNeedsReview(text) || nameParts.some(part => part.length > 1 && words.has(part))) {
+      setMessages(m => [...m, { role: 'assistant', content: 'Please remove patient names, dates, identifiers, and personal insurance details before sending. Ask about the general office rule or procedure code.' }]);
+      return;
+    }
+    const scope = conversationScope.current;
     const next: ChatMessage[] = [...messages, { role: 'user', content: text }];
     setMessages(next);
     setInput('');
@@ -128,12 +146,12 @@ export default function FofAssistantWidget({ context }: Props) {
         body: {
           mode: 'fof',
           messages: next.slice(-10).map(m => ({ role: m.role, content: m.content })),
-          context: context ?? undefined,
-          trainingEnabled: training,
+          trainingEnabled: isManager && training,
         },
       });
       if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.error);
+      if (scope !== conversationScope.current) return;
       const reply: string = data?.reply ?? '';
       if (!reply) throw new Error('No reply');
       setMessages(m => [
@@ -146,6 +164,7 @@ export default function FofAssistantWidget({ context }: Props) {
         },
       ]);
     } catch (err) {
+      if (scope !== conversationScope.current) return;
       const detail = err instanceof Error && err.message !== 'No reply' ? ` (${err.message})` : '';
       setMessages(m => [
         ...m,
@@ -155,7 +174,7 @@ export default function FofAssistantWidget({ context }: Props) {
         },
       ]);
     } finally {
-      setBusy(false);
+      if (scope === conversationScope.current) setBusy(false);
     }
   };
 
@@ -225,9 +244,9 @@ export default function FofAssistantWidget({ context }: Props) {
               <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
                 {isManager
                   ? training
-                    ? 'Discuss the treatment wording or ask about the form — when you state a preference ("never say X — say Y"), I save it as a standing rule. I can also remember office facts and, if you ask, change the app itself (code goes to GitHub and Lovable picks it up). Click "Training mode" above to pause rule-saving.'
-                    : 'Training is paused — I\'ll answer questions but save no wording rules. Click "Training off" above to resume. Memory and build requests still work.'
-                  : 'Ask me anything about this form, the payment schedule, or office policy. Wording preferences need a manager.'}
+                    ? 'Ask about procedure codes, insurance rules, or office policies. Training mode can save general guidance to the office code bank. Patient-specific corrections belong in the form.'
+                    : 'Ask about procedure codes, insurance rules, or office policies. Training is off; no office knowledge will be changed.'
+                  : 'Ask about procedure codes, insurance rules, or office policies. An owner or manager can update office guidance with Training mode on.'}
               </div>
 
             )}
@@ -267,7 +286,7 @@ export default function FofAssistantWidget({ context }: Props) {
                 value={input}
                 autoComplete="off"
                 onFocus={() => setView('chat')}
-                placeholder={isManager ? 'Teach me, ask me, or have me build…' : 'Ask a question…'}
+                placeholder="Ask about a code or office policy…"
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) {
@@ -282,7 +301,7 @@ export default function FofAssistantWidget({ context }: Props) {
             </div>
             {/* Persistent, at the point of typing — the accepted PHI mitigation. */}
             <p className="mt-1.5 px-0.5 text-[11px] text-muted-foreground">
-              Never include patient names — I only see the procedures, not the patient.
+              Patient names stay in this browser. Do not enter patient details here. The full form is not shared with AI.
             </p>
           </div>
 

@@ -29,6 +29,42 @@ describe('payment editor and shared print result', () => {
     act(() => result.current.reset());
     expect(result.current.isDirty).toBe(false);
   });
+  it('keeps the abutment and crown on one tooth in one restoration across appointments', () => {
+    const source=[{...crown,id:'abutment',code:'D6057',tooth:'8',visit:'3',responsibilityCents:114100},
+      {...crown,id:'crown',code:'D6058',tooth:'8',visit:'5',responsibilityCents:192700}];
+    const {result}=renderHook(()=>usePaymentScheduleEditor('a',policy,source,306800));
+    expect(result.current.model!.groups).toHaveLength(1);
+    expect(result.current.model!.schedule.rows.map(r=>r.cents)).toEqual([102267,102267,102266]);
+    expect(result.current.model!.schedule.issues).toEqual([]);
+  });
+  it('keeps surgical work together across appointments but separate from restoration on the same tooth', () => {
+    const source=[{...crown,id:'implant',code:'D6010',classification:'implant' as const,tooth:'8',visit:'1',responsibilityCents:271700},
+      {...crown,id:'stage2',code:'D6011',classification:'implant' as const,tooth:'8',visit:'2',responsibilityCents:49200},
+      {...crown,id:'crown',tooth:'8',visit:'3',responsibilityCents:306800}];
+    const {result}=renderHook(()=>usePaymentScheduleEditor('a',policy,source,627700));
+    expect(result.current.model!.groups).toHaveLength(2);
+    expect(result.current.model!.schedule.rows.map(r=>r.cents)).toEqual([160450,160450,102267,102267,102266]);
+  });
+  it('respects explicit separate courses on the same tooth and never removes duplicate charges', () => {
+    const source=[{...crown,id:'a',tooth:'8',visit:'3'},{...crown,id:'b',tooth:'8',visit:'5'}];
+    const {result}=renderHook(()=>usePaymentScheduleEditor('a',policy,source,140000));
+    expect(result.current.model!.schedule.obligationCents).toBe(140000);
+    act(()=>result.current.update(s=>({...s,lines:{a:{group:'First course'},b:{group:'Second course'}}})));
+    expect(result.current.model!.groups).toHaveLength(2);
+    expect(result.current.model!.schedule.rows.map(r=>r.cents)).toEqual([35000,35000,35000,35000]);
+  });
+  it('uses procedure and tooth names rather than visit numbers, with editable wording independent of amounts', () => {
+    const source=[{...crown,visit:'3',tooth:'8',procedureLabel:'Implant crown'},{...crown,id:'b',visit:'5',tooth:'9',procedureLabel:'Implant crown'}];
+    const {result}=renderHook(()=>usePaymentScheduleEditor('a',policy,source,140000));
+    expect(result.current.model!.groups.map(g=>g.label)).toEqual(['Implant crown — tooth 8','Implant crown — tooth 9']);
+    expect(result.current.model!.schedule.rows.every(r=>!r.label.includes('visit'))).toBe(true);
+    const before=result.current.model!.schedule;
+    const group=result.current.model!.groups[0];
+    act(()=>result.current.update(s=>({...s,groups:{[group.id]:{label:'Custom patient wording'}}})));
+    expect(result.current.model!.schedule.signature).toBe(before.signature);
+    expect(result.current.model!.schedule.rows.map(r=>r.cents)).toEqual(before.rows.map(r=>r.cents));
+    expect(result.current.model!.groups[0].label).toBe('Custom patient wording');
+  });
   it('links a zero-fee delivery marker without adding money and flags a changed fee', () => {
     const marker = { id:'delivery', code:'Delivery', visit:'2', responsibilityCents:0 };
     const {result,rerender}=renderHook(({source})=>usePaymentScheduleEditor('a',policy,source,70000),{initialProps:{source:[crown,marker]}});
