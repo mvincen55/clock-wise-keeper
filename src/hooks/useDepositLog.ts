@@ -56,6 +56,7 @@ export interface DepositLogSave {
   outsideFinancingCents: number;
   notes: string;
   productionCents: number | null;
+  missedAppointmentsRecorded?: boolean;
   hygieneCancellations: number;
   hygieneNoShows: number;
   doctorCancellations: number;
@@ -98,6 +99,7 @@ export function useSaveDepositLog() {
           outside_financing_cents: input.outsideFinancingCents,
           notes: input.notes.trim(),
           production_cents: input.productionCents,
+          ...(input.missedAppointmentsRecorded !== undefined && { missed_appointments_recorded: input.missedAppointmentsRecorded }),
           hygiene_cancellations: input.hygieneCancellations,
           hygiene_no_shows: input.hygieneNoShows,
           doctor_cancellations: input.doctorCancellations,

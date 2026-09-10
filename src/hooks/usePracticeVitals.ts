@@ -27,6 +27,7 @@ export type DayVitals = {
   /** Aggregate counts; null = not recorded in that closeout. */
   newPatientsScheduled: number | null;
   newPatientsSeen: number | null;
+  missedAppointmentsRecorded?: boolean;
   hygieneCancellations: number;
   hygieneNoShows: number;
   doctorCancellations: number;
@@ -40,13 +41,14 @@ export function collectedCentsOf(log: DepositLog): number {
     log.ins_cc_cents +
     log.pt_cc_cents +
     log.illumitrac_cents +
-    log.outside_financing_cents
+    log.outside_financing_cents + (log.other_collections_cents ?? 0)
   );
 }
 
 function toDayVitals(log: DepositLog): DayVitals {
   return {
     date: log.deposit_date,
+    missedAppointmentsRecorded: log.missed_appointments_recorded !== false,
     productionCents: log.production_cents,
     collectedCents: collectedCentsOf(log),
     newPatientsScheduled: log.new_patients_scheduled_count,
@@ -82,6 +84,8 @@ export type VitalsSummary = {
   doctorCancellations: number;
   doctorNoShows: number;
   disruptions: number;
+  productionRecordedDays?: number;
+  disruptionsRecordedDays?: number;
   days: number;
 };
 
@@ -97,6 +101,8 @@ export const EMPTY_SUMMARY: VitalsSummary = {
   doctorCancellations: 0,
   doctorNoShows: 0,
   disruptions: 0,
+  productionRecordedDays: 0,
+  disruptionsRecordedDays: 0,
   days: 0,
 };
 
@@ -121,6 +127,8 @@ export function summarizeVitals(days: DayVitals[]): VitalsSummary {
         d.hygieneNoShows +
         d.doctorCancellations +
         d.doctorNoShows,
+      productionRecordedDays: (acc.productionRecordedDays ?? 0) + (d.productionCents !== null ? 1 : 0),
+      disruptionsRecordedDays: (acc.disruptionsRecordedDays ?? 0) + (d.missedAppointmentsRecorded !== false ? 1 : 0),
       days: acc.days + 1,
     }),
     EMPTY_SUMMARY

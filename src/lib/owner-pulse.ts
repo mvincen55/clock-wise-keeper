@@ -103,6 +103,7 @@ export type MonthPaceLine = {
 };
 
 export type MissedMonth = {
+  recorded?: boolean;
   total: number;
   hygieneCancellations: number;
   hygieneNoShows: number;
@@ -197,7 +198,8 @@ export function missedBreakdown(d: {
   return parts.join(' · ');
 }
 
-export function missedCount(d: DayVitals): number {
+export function missedCount(d: DayVitals): number | null {
+  if (d.missedAppointmentsRecorded === false) return null;
   return d.hygieneCancellations + d.hygieneNoShows + d.doctorCancellations + d.doctorNoShows;
 }
 
@@ -247,8 +249,8 @@ function dayFacts(day: DayVitals): PulseFact[] {
     {
       id: 'missed',
       label: 'Missed appointments',
-      value: String(missed),
-      detail: missed > 0 ? missedBreakdown(day) : 'None recorded — clean schedule day',
+      value: missed === null ? "Not recorded" : String(missed),
+      detail: missed === null ? 'Not included in this report' : missed > 0 ? missedBreakdown(day) : 'None recorded · clean schedule day',
       tone: missed > 0 ? 'attention' : 'calm',
       href: '/deposit-log',
     },
@@ -321,7 +323,7 @@ export function productionPace(input: OwnerPulseInput): MetricPace | null {
     actual: input.thisMonth.productionCents,
     target: input.targets.productionCents,
     monthElapsed: input.monthElapsed,
-    recordedDays: input.thisMonth.days,
+    recordedDays: input.thisMonth.productionRecordedDays ?? input.thisMonth.days,
   });
 }
 
@@ -362,7 +364,7 @@ export function monthPaceLines(input: OwnerPulseInput): MonthPaceLine[] {
   const production: MonthPaceLine = {
     id: 'production',
     label: 'Production month to date',
-    value: thisMonth.days > 0 ? money(thisMonth.productionCents) : '—',
+    value: (thisMonth.productionRecordedDays ?? thisMonth.days) > 0 ? money(thisMonth.productionCents) : 'Not recorded',
     detail: prod
       ? `${pct(prod.pctOfTarget)} of the ${money(prod.target)} goal · ${paceLabel(prod, money)}`
       : thisMonth.days === 0
@@ -430,6 +432,7 @@ const TREND_MIN_DAYS = 5;
 export function missedMonth(input: OwnerPulseInput): MissedMonth {
   const { thisMonth, prevMonth, monthElapsed } = input;
   const total = thisMonth.disruptions;
+  const recorded = (thisMonth.disruptionsRecordedDays ?? thisMonth.days) > 0;
 
   let trend: MissedMonth['trend'] = null;
   let trendLabel: string | null = null;
@@ -437,8 +440,8 @@ export function missedMonth(input: OwnerPulseInput): MissedMonth {
 
   const canCompare =
     prevMonth !== null &&
-    prevMonth.days >= TREND_MIN_DAYS &&
-    thisMonth.days >= TREND_MIN_DAYS &&
+    (prevMonth.disruptionsRecordedDays ?? prevMonth.days) >= TREND_MIN_DAYS &&
+    (thisMonth.disruptionsRecordedDays ?? thisMonth.days) >= TREND_MIN_DAYS &&
     prevMonth.disruptions > 0 &&
     monthElapsed > 0;
 
@@ -458,6 +461,7 @@ export function missedMonth(input: OwnerPulseInput): MissedMonth {
 
   return {
     total,
+    recorded,
     hygieneCancellations: thisMonth.hygieneCancellations,
     hygieneNoShows: thisMonth.hygieneNoShows,
     doctorCancellations: thisMonth.doctorCancellations,
@@ -483,7 +487,7 @@ export type MonthDetail = {
   /** Month-to-date missed appointments with breakdown and a grounded trend. */
   missed: MissedMonth;
   /** Up to six months of recorded history for the compact trend. */
-  trend: { month: string; productionCents: number; disruptions: number }[];
+  trend: { month: string; productionCents: number; disruptions: number | null }[];
 };
 
 /** Prior-month production comparison needs at least this many recorded days. */
@@ -491,7 +495,7 @@ const COMPARE_MIN_DAYS = 5;
 
 export function buildMonthDetail(
   input: OwnerPulseInput,
-  months: { month: string; productionCents: number; disruptions: number }[],
+  months: { month: string; productionCents: number; disruptions: number; disruptionsRecordedDays?: number }[],
 ): MonthDetail | null {
   if (input.thisMonth.days === 0) return null;
   const [y, m] = input.today.split('-').map(Number);
@@ -506,7 +510,7 @@ export function buildMonthDetail(
     trend: months.slice(-6).map(mo => ({
       month: mo.month,
       productionCents: mo.productionCents,
-      disruptions: mo.disruptions,
+      disruptions: mo.disruptionsRecordedDays === 0 ? null : mo.disruptions,
     })),
   };
 }
@@ -758,7 +762,7 @@ export function ownerRecommendation(
   }
   return {
     id: 'all_clear',
-    text: 'Nothing is materially off track today. No intervention suggested.',
+    text: (thisMonth.disruptionsRecordedDays === 0) ? 'Financial history is available. Add daily schedule counts to complete the office picture.' : 'Nothing is materially off track today. No intervention suggested.',
     receipts: clearReceipts,
     action: null,
   };
@@ -804,7 +808,7 @@ export function dailySummary(
       : null;
 
   const missedClause =
-    missed === 0
+    missed === null ? 'missed appointments were not recorded' : missed === 0
       ? 'the schedule held with no missed appointments'
       : `${missedBreakdown(day)} ${missed === 1 ? 'is' : 'are'} the main thing worth watching`;
 
@@ -826,7 +830,7 @@ export function dailySummary(
   } else if (missed === 0 && pace?.status === 'ahead') {
     opener = `${dayName} was a strong day.`;
   } else {
-    opener = `${dayName} was steady.`;
+    opener = missed === null ? `${dayName}'s reported results are available.` : `${dayName} was steady.`;
   }
 
   const clauses = [prodClause, paceClause, npClause, missedClause].filter(Boolean) as string[];

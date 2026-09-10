@@ -65,7 +65,7 @@ export default function PracticeVitalsCard() {
             <Activity className="h-4 w-4 text-primary" />
             Practice vitals
           </span>
-          <PracticePulseOrb input={pulseInput} />
+          {thisMonth.disruptionsRecordedDays === 0 ? <span className="text-xs font-normal text-muted-foreground">Schedule counts not recorded</span> : <PracticePulseOrb input={pulseInput} />}
         </CardTitle>
       </CardHeader>
 
@@ -75,7 +75,7 @@ export default function PracticeVitalsCard() {
           <div className="flex items-baseline justify-between">
             <span className="text-sm text-muted-foreground">Production month to date</span>
             <span className="text-2xl font-semibold tabular-nums">
-              {formatCents(thisMonth.productionCents)}
+              {thisMonth.productionRecordedDays === 0 ? "Not recorded" : formatCents(thisMonth.productionCents)}
             </span>
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-muted">
@@ -108,7 +108,7 @@ export default function PracticeVitalsCard() {
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">Schedule disruption this month</p>
           <div className="space-y-2">
-            {pairs.map(p => (
+            {thisMonth.disruptionsRecordedDays === 0 ? <p className="text-sm text-muted-foreground">Not recorded in the imported reports.</p> : pairs.map(p => (
               <div key={p.label} className="grid grid-cols-[4.5rem_1fr] items-center gap-2">
                 <span className="text-xs text-muted-foreground">{p.label}</span>
                 <div className="space-y-1">
@@ -139,7 +139,7 @@ export default function PracticeVitalsCard() {
           <div className="grid gap-4 sm:grid-cols-2">
             {[
               { title: 'Production', max: trendMax, pick: (m: (typeof trendMonths)[number]) => m.productionCents, tone: 'bg-primary' },
-              { title: 'Disruptions', max: disruptMax, pick: (m: (typeof trendMonths)[number]) => m.disruptions, tone: 'bg-amber-500' },
+              { title: 'Disruptions', max: disruptMax, pick: (m: (typeof trendMonths)[number]) => m.disruptionsRecordedDays === 0 ? null : m.disruptions, tone: 'bg-amber-500' },
             ].map(chart => (
               <div key={chart.title} className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">{chart.title}, last 6 months</p>
@@ -149,13 +149,13 @@ export default function PracticeVitalsCard() {
                       key={m.month}
                       className="flex-1"
                       title={`${m.month}: ${
-                        chart.title === 'Production' ? formatCents(chart.pick(m)) : chart.pick(m)
+                        chart.pick(m) === null ? 'Not recorded' : chart.title === 'Production' ? formatCents(chart.pick(m)!) : chart.pick(m)
                       }`}
                     >
                       <div
-                        className={cn('w-full rounded-t', chart.tone)}
+                        className={cn('w-full rounded-t', chart.pick(m) === null ? 'border-b border-dashed border-muted-foreground' : chart.tone)}
                         style={{
-                          height: `${Math.max((chart.pick(m) / chart.max) * 56, 2)}px`,
+                          height: `${Math.max(((chart.pick(m) ?? 0) / chart.max) * 56, 2)}px`,
                         }}
                       />
                     </div>

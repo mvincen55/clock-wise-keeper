@@ -518,3 +518,19 @@ describe('daily summary sentence', () => {
     expect(s).not.toMatch(/solid financial/);
   });
 });
+
+describe('historical reports preserve unknown metrics', () => {
+  it('does not call an unrecorded schedule clean or claim zero missed appointments', () => {
+    const input = base({todayVitals:day('2026-08-10',{missedAppointmentsRecorded:false})});
+    const brief = buildDailyBrief(input);
+    expect(brief.facts.find(f=>f.id==='missed')?.value).toBe('Not recorded');
+    expect(dailySummary(input, brief, 0)).not.toContain('no missed appointments');
+  });
+  it('does not compare missing disruption history as an improvement', () => {
+    const input=base({thisMonth:summary({disruptions:0,disruptionsRecordedDays:0})});
+    expect(missedMonth(input)).toMatchObject({recorded:false,trend:null,baseline:null});
+  });
+  it('does not calculate production pace when no production was recorded', () => {
+    expect(productionPace(allGoals({thisMonth:summary({productionCents:0,productionRecordedDays:0})}))).toBeNull();
+  });
+});

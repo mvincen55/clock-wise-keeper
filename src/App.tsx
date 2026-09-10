@@ -11,6 +11,7 @@ import OfficeCalendar from "@/pages/OfficeCalendar";
 import Timesheet from "@/pages/Timesheet";
 import DaysOff from "@/pages/DaysOff";
 import Reports from "@/pages/Reports";
+import ReportHistory from "@/pages/ReportHistory";
 import WorkZones from "@/pages/WorkZones";
 import Settings from "@/pages/Settings";
 import PTO from "@/pages/PTO";
@@ -166,6 +167,7 @@ const router = createBrowserRouter(
             <Route path="/timesheet" element={<ProtectedRoute><Timesheet /></ProtectedRoute>} />
             <Route path="/days-off" element={<ProtectedRoute><DaysOff /></ProtectedRoute>} />
             <Route path="/office-calendar" element={<ProtectedRoute><OfficeCalendar /></ProtectedRoute>} />
+            <Route path="/report-history" element={<ProtectedRoute><ReportHistory /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/work-zones" element={<ProtectedRoute><WorkZones /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />

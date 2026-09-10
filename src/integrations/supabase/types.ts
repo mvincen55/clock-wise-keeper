@@ -1734,6 +1734,8 @@ export type Database = {
       deposit_logs: {
         Row: {
           capture_confidence: number | null
+          other_collections_cents?: number
+          missed_appointments_recorded?: boolean
           cash_cents: number
           checks: Json
           created_at: string
@@ -1767,6 +1769,8 @@ export type Database = {
         }
         Insert: {
           capture_confidence?: number | null
+          other_collections_cents?: number
+          missed_appointments_recorded?: boolean
           cash_cents?: number
           checks?: Json
           created_at?: string
@@ -1800,6 +1804,8 @@ export type Database = {
         }
         Update: {
           capture_confidence?: number | null
+          other_collections_cents?: number
+          missed_appointments_recorded?: boolean
           cash_cents?: number
           checks?: Json
           created_at?: string

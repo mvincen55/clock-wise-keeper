@@ -757,14 +757,14 @@ export default function OfficeCalendar() {
                     </div>
                     <div className="space-y-0.5">
                       {(officeEvents || [])
-                        .filter(e => e.event_date === dateStr && e.category === 'team_meeting')
+                        .filter(e => e.event_date === dateStr)
                         .map(e => (
                           <div
                             key={e.id}
                             className="truncate rounded border border-primary/40 bg-primary/10 px-1 py-0.5 text-[10px] font-medium leading-tight text-primary"
                             title={e.notes || e.title}
                           >
-                            👥 {e.title}
+                            {e.category === 'team_meeting' ? '👥 ' : ''}{e.title}
                           </div>
                         ))}
                       {namedClosures.map((evt, ei) => (

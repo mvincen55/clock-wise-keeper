@@ -98,18 +98,28 @@ export function useTimeEntries(
     queryKey: ['time-entries', startDate, endDate, scope, ctx?.employee_id],
     enabled: !!user && (scope === 'all' || !!ctx),
     queryFn: async () => {
-      let q = supabase.from('time_entries').select('*').order('entry_date', { ascending: false });
+      let q = supabase.from('time_entries').select('*').or('notes.is.null,notes.not.like.Superseded test record%').order('entry_date', { ascending: false });
       if (scope === 'own') q = q.eq('employee_id', ctx!.employee_id);
       if (startDate) q = q.gte('entry_date', startDate);
       if (endDate) q = q.lte('entry_date', endDate);
       const { data: entries } = await q;
       if (!entries?.length) return [];
       const ids = entries.map(e => e.id);
-      const { data: allPunches } = await supabase
-        .from('punches')
-        .select('*')
-        .in('time_entry_id', ids)
-        .order('seq', { ascending: true });
+      // A historical report can exceed PostgREST's 1,000-row response cap.
+      // Bound each ID group so all punch pairs remain visible in the report.
+      const chunks = Array.from({length: Math.ceil(ids.length / 50)}, (_, i) => ids.slice(i * 50, i * 50 + 50));
+      const punchGroups = await Promise.all(chunks.map(async group => {
+        const collected: PunchRow[] = [];
+        for (let offset = 0; ; offset += 1000) {
+          const { data, error } = await supabase.from('punches').select('*')
+            .in('time_entry_id', group).order('id').range(offset, offset + 999);
+          if (error) throw error;
+          collected.push(...(data ?? []) as PunchRow[]);
+          if ((data?.length ?? 0) < 1000) break;
+        }
+        return collected;
+      }));
+      const allPunches = punchGroups.flat().sort((a, b) => a.seq - b.seq);
       return entries.map(e => {
         const all = ((allPunches || []) as PunchRow[]).filter(p => p.time_entry_id === e.id);
         return { ...e, punches: livePunches(all), all_punches: all };

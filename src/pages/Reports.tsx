@@ -618,6 +618,7 @@ export default function Reports() {
       {/* Controls */}
       <div className="no-print">
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Reports</h1>
+        <Button asChild variant="outline"><Link to="/report-history">Dentrix report history</Link></Button>
         <p className="text-muted-foreground text-sm mt-1">Generate, print, and export time reports</p>
 
         <Card className="mt-4">

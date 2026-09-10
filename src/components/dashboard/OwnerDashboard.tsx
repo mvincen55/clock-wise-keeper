@@ -60,6 +60,7 @@ export default function OwnerDashboard({ view }: { view: OwnerView }) {
           {office.headline}
         </span>
         <ViewContext context={roleContext} />
+        <Link to="/report-history" className="text-sm font-medium text-primary underline underline-offset-4">Explore Dentrix report history</Link>
       </div>
 
       {/* B — TODAY'S OFFICE PULSE. The hero: briefing sentence + the facts. */}
@@ -270,10 +271,10 @@ export default function OwnerDashboard({ view }: { view: OwnerView }) {
                         month.missed.trend === 'above_pace' ? 'text-warning' : 'text-foreground',
                       )}
                     >
-                      {month.missed.total}
+                      {month.missed.recorded === false ? "Not recorded" : month.missed.total}
                     </span>
                   </div>
-                  {month.missed.total > 0 && (
+                  {month.missed.recorded !== false && month.missed.total > 0 && (
                     <p className="mt-1.5 text-[12px] text-muted-foreground">
                       {missedBreakdown(month.missed)}
                     </p>
@@ -289,7 +290,7 @@ export default function OwnerDashboard({ view }: { view: OwnerView }) {
                     </p>
                   ) : (
                     month.missed.total === 0 && (
-                      <p className="mt-1 text-[12px] text-muted-foreground">None recorded this month.</p>
+                      <p className="mt-1 text-[12px] text-muted-foreground">{month.missed.recorded === false ? "These reports do not contain daily cancellation or no-show counts." : "None recorded this month."}</p>
                     )
                   )}
                 </div>
@@ -315,7 +316,7 @@ export default function OwnerDashboard({ view }: { view: OwnerView }) {
                         },
                       ] as const
                     ).map((chart) => {
-                      const max = Math.max(1, ...month.trend.map(chart.pick));
+                      const max = Math.max(1, ...month.trend.map(m => chart.pick(m) ?? 0));
                       return (
                         <div key={chart.key} className="min-w-0">
                           <div className="flex items-baseline justify-between gap-3">
@@ -326,10 +327,10 @@ export default function OwnerDashboard({ view }: { view: OwnerView }) {
                           </div>
                           <div className="mt-2 flex h-14 items-end gap-1.5">
                             {month.trend.map((m) => (
-                              <div key={m.month} className="flex-1" title={`${m.month}: ${chart.fmt(chart.pick(m))}`}>
+                              <div key={m.month} className="flex-1" title={`${m.month}: ${chart.pick(m) === null ? "Not recorded" : chart.fmt(chart.pick(m)!)}`}>
                                 <div
-                                  className={cn('w-full', chart.tone)}
-                                  style={{ height: `${Math.max((chart.pick(m) / max) * 56, 2)}px` }}
+                                  className={cn('w-full', chart.pick(m) === null ? 'border-b border-dashed border-muted-foreground' : chart.tone)}
+                                  style={{ height: `${Math.max(((chart.pick(m) ?? 0) / max) * 56, 2)}px` }}
                                 />
                               </div>
                             ))}
