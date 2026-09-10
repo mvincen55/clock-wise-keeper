@@ -1094,6 +1094,7 @@ export default function FofBuilder() {
     const builderLine = state.lines.find(l => l.key === entry.key)!;
     return {
       id: entry.key, code: entry.line.code, visit: builderLine.visit,
+      tooth: builderLine.tooth, procedureLabel: builderLine.description.trim() || safeProcedureLabel(entry.line.code) || undefined,
       classification: classificationQuery.data?.[entry.line.code] ?? 'review' as const,
       responsibilityCents: builderLine.feeInput.trim() && parseCurrencyInput(builderLine.feeInput) === null ? NaN : freeUnderMembership(builderLine) ? 0 : entry.line.officeFeeCents -
         (effectiveTemplate?.showInsuranceEstimate ? estimateLine?.insurancePaysCents ?? 0 : 0) -
@@ -1518,7 +1519,7 @@ export default function FofBuilder() {
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-7xl mx-auto" onChangeCapture={() => setEdited(true)}>
-      <FofAssistantWidget context={assistantContext} />
+      <FofAssistantWidget context={assistantContext} patientName={state.patientName} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">Financial Options Form</h1>
         <div className="flex gap-2">
@@ -1534,7 +1535,11 @@ export default function FofBuilder() {
               Templates
             </Link>
           </Button>
-          <Button onClick={() => window.print()} disabled={!template || policyBlocked}>
+          <Button onClick={() => {
+            const layoutReview = document.querySelector('.fof-layout-review');
+            if (layoutReview) { toast.error(layoutReview.textContent || 'Review the form layout before printing.'); return; }
+            window.print();
+          }} disabled={!template || policyBlocked}>
             <Printer className="h-4 w-4 mr-2" />
             Print
           </Button>

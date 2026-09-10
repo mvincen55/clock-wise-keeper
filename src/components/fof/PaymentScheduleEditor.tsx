@@ -4,13 +4,15 @@ import { milestoneKinds, paymentClasses, type PaymentClass, type PaymentPolicy }
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { treatmentGroupIds } from '@/lib/fof/treatment-groups';
 
-export interface ScheduleSourceLine { id: string; code: string; visit: string; responsibilityCents: number; classification?: PaymentClass | 'review' }
+export interface ScheduleSourceLine { id: string; code: string; visit: string; tooth?: string; procedureLabel?: string; responsibilityCents: number; classification?: PaymentClass | 'review' }
 type LineEdit = { classification?: PaymentClass | 'review'; group?: string; adjustment?: string; paid?: string; deliveryGroup?: string };
 type EditorState = { lines: Record<string, LineEdit>; groups: Record<string, Partial<PaymentGroup>>; events: Record<string, Partial<CollectionEvent>>; extraEvents: CollectionEvent[]; overrides: Record<string, PaymentOverride> };
 const empty = (): EditorState => ({ lines: {}, groups: {}, events: {}, extraEvents: [], overrides: {} });
 const classTitle: Record<PaymentClass | 'review', string> = { workup: 'Work-up', implant: 'Implant surgery', restoration: 'Crown / bridge / implant restoration', denture: 'Denture / partial', other: 'Treatment without delivery', review: 'Needs classification' };
 const classOrder = { workup: 0, implant: 1, restoration: 2, denture: 2, other: 1, review: 3 };
+const patientClassTitle = { workup: 'Work-up', implant: 'Implant surgery', restoration: 'Restoration', denture: 'Denture / partial', other: 'Treatment', review: 'Treatment' };
 
 function MoneyEdit({ cents, label, commit }: { cents: number; label: string; commit: (cents: number) => void }) {
   const [raw, setRaw] = useState(Number.isFinite(cents) ? (cents / 100).toFixed(2) : '');
@@ -21,20 +23,24 @@ function MoneyEdit({ cents, label, commit }: { cents: number; label: string; com
 export function usePaymentScheduleEditor(orgId: string | undefined, policy: PaymentPolicy | null | undefined, source: ScheduleSourceLine[], expected: number) {
   const [stored, setStored] = useState<{ orgId?: string; value: EditorState }>({ orgId, value: empty() });
   const state = stored.orgId === orgId ? stored.value : empty();
-  const update = (fn: (old: EditorState) => EditorState) => setStored(old => ({ orgId, value: fn(old.orgId === orgId ? old.value : empty()) }));
+  const update = (fn: (old: EditorState) => EditorState) => setStored(old => ({orgId,value:fn(old.orgId===orgId?old.value:empty())}));
   const model = useMemo(() => {
     if (!policy) return null;
     const groups = new Map<string, PaymentGroup>();
     const events = new Map<string, CollectionEvent>();
     const parse = (value?: string) => value?.trim() ? parseCurrencyInput(value) ?? NaN : 0;
+    const groupIds = treatmentGroupIds(source.map(line => ({
+      id: line.id, visit: line.visit, tooth: line.tooth,
+      classification: state.lines[line.id]?.classification ?? line.classification ?? 'review',
+      explicitGroup: state.lines[line.id]?.group,
+    })));
     const procedures = source.map(line => {
       const edit = state.lines[line.id] ?? {};
       const classification = edit.classification ?? line.classification ?? 'review';
-      // Default distinct groups; staff explicitly joins procedures prepared together.
-      const groupId = edit.group?.trim() || `${classification}:${line.visit.trim() ? `appointment:${line.visit.trim()}` : line.id}`;
+      const groupId = groupIds.get(line.id)!;
       if (!groups.has(groupId)) {
         const baseOrder = classOrder[classification] * 1000 + groups.size * 10;
-        const groupLabel = edit.group?.trim() || `${classTitle[classification]} (${line.visit.trim() ? `visit ${line.visit.trim()}` : `${line.code || 'procedure'} ${groups.size + 1}`})`;
+        const groupLabel = patientClassTitle[classification];
         const links: PaymentGroup['events'] = {};
         for (const kind of milestoneKinds) {
           if (kind === 'tryin') continue; // No invented try-in appointment; staff can add it.
@@ -47,6 +53,22 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
       }
       return { id: line.id, code: line.code, groupId, responsibilityCents: line.responsibilityCents, adjustmentCents: parse(edit.adjustment), paidCents: parse(edit.paid) };
     });
+    // Patient wording is independent of appointment numbers and grouping identity.
+    // These existing form fields stay local; they are never added to AI requests.
+    for (const group of groups.values()) {
+      const members = source.filter(line => procedures.find(p => p.id === line.id)?.groupId === group.id && line.responsibilityCents > 0);
+      const labels = [...new Set(members.map(line => line.procedureLabel?.trim()).filter(Boolean))];
+      const teeth = [...new Set(members.flatMap(line => (line.tooth ?? '').trim().split(/[\s,;/]+/)).filter(Boolean).map(tooth => tooth.replace(/^#/, '').toUpperCase()))];
+      const treatment = labels.length > 0 && labels.length <= 2 ? labels.join(' + ') : patientClassTitle[group.classification];
+      const numberedTeeth = teeth.map(tooth => `#${tooth}`);
+      const toothLabel = numberedTeeth.length > 1 ? `${numberedTeeth.slice(0, -1).join(', ')} and ${numberedTeeth.at(-1)}` : numberedTeeth[0];
+      const treatmentTitle = treatment.replace(/\b[a-z]/g, letter => letter.toUpperCase());
+      group.label = state.groups[group.id]?.label?.trim() || `${treatmentTitle}${toothLabel ? ` ${toothLabel}` : ''}`;
+      for (const kind of milestoneKinds) {
+        const event = events.get(group.events[kind] ?? '');
+        if (event) event.label = `${group.label} — ${policy.labels[kind] ?? kind}`;
+      }
+    }
     for (const line of source) {
       const targetId = state.lines[line.id]?.deliveryGroup;
       const group = targetId ? groups.get(targetId) : undefined;
@@ -57,7 +79,7 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
       }
     }
     for (const event of state.extraEvents) events.set(event.id, event);
-    const finalGroups = [...groups.values()].map(g => ({ ...g, ...state.groups[g.id], id: g.id, events: { ...g.events, ...state.groups[g.id]?.events } }));
+    const finalGroups = [...groups.values()].map(g => ({ ...g, ...state.groups[g.id], id: g.id, label: g.label, events: { ...g.events, ...state.groups[g.id]?.events } }));
     const finalEvents = [...events.values()].map(e => ({ ...e, ...state.events[e.id], id: e.id }));
     const schedule = buildPaymentSchedule({ policy, procedures, groups: finalGroups, events: finalEvents, expectedObligationCents: expected, overrides: state.overrides });
     for (const line of source) {
@@ -68,6 +90,13 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
     for (const g of finalGroups) {
       const classes = source.filter(l => procedures.find(p => p.id === l.id)?.groupId === g.id).map(l => state.lines[l.id]?.classification ?? l.classification ?? 'review');
       if (new Set(classes).size > 1) schedule.issues.push('A group contains different payment classifications. Split it into groups and link their collection events.');
+    }
+    const activeGroups = new Set(schedule.rows.flatMap(row => row.allocations.filter(a => a.cents > 0).map(a => a.groupId)));
+    const namedGroups = new Set<string>();
+    for (const group of finalGroups.filter(g => activeGroups.has(g.id))) {
+      const name = group.label.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+      if (namedGroups.has(name)) schedule.issues.push(`Separate treatment groups both read “${group.label}”. Add distinct treatment names or tooth details, or combine them if they are one course, before printing.`);
+      namedGroups.add(name);
     }
     return { groups: finalGroups, events: finalEvents, procedures, schedule };
   }, [policy, source, expected, state]);
@@ -98,12 +127,15 @@ export function PaymentScheduleEditor({ editor }: { editor: ReturnType<typeof us
         <label className="text-sm">Explicitly paid already<Input aria-label={`Paid ${line.id}`} value={edit.paid ?? ''} placeholder="0.00" onChange={e => editLine(line.id, { paid: e.target.value })} /></label></div>
       </fieldset>;
     })}
-    {groups.map(group => <details key={group.id} className="border p-2"><summary>Appointments for {group.label}</summary>
+    {groups.map(group => <div key={group.id} className="border p-2 space-y-2">
+      <label className="block text-sm">Treatment name on the patient form<Input aria-label={`Treatment name ${group.id}`} value={group.label} onChange={e => editGroup(group.id, { label: e.target.value })} /></label>
+      {groups.some(other => other.id !== group.id && other.label === group.label) && <p className="text-sm text-muted-foreground">These treatments have the same name. Add the teeth or a clear description to distinguish them.</p>}
+      <details><summary>Appointments for {group.label}</summary>
       <label className="block text-sm">Combined arrangement (optional)<Input value={group.arrangementId ?? ''} onChange={e => editGroup(group.id, { arrangementId: e.target.value })} /></label>
       {milestoneKinds.map(kind => <label key={kind} className="block text-sm">{kind} <select aria-label={`${group.id} ${kind}`} value={group.events[kind] ?? ''} onChange={e => editGroup(group.id, { events: { ...group.events, [kind]: e.target.value } })}>
         <option value="">No appointment selected</option>{events.map(event => <option key={event.id} value={event.id}>{event.label}</option>)}
       </select></label>)}
-    </details>)}
+    </details></div>)}
     <details className="border p-2"><summary>Collection event names and order</summary>
       <p className="text-sm">Order records the actual appointment sequence, not a predicted calendar date. Use the same event above only when money is collected together.</p>
       {events.map(event => <div key={event.id} className="flex gap-2 py-1"><Input aria-label={`Event label ${event.id}`} value={event.label} onChange={e => editEvent(event.id, { label: e.target.value })} /><Input aria-label={`Event order ${event.id}`} className="w-24" type="number" value={event.order} onChange={e => editEvent(event.id, { order: Number(e.target.value) })} /></div>)}

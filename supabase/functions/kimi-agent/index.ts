@@ -33,6 +33,8 @@ import { formatCodeNote, loadCodeNotes, type CodeNote } from "../_shared/procedu
 import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
 
 import { scrubMessages } from "../_shared/ai-safe.ts";
+import { scrubFreeText } from "../_shared/phi-scrub.ts";
+import { FOF_PATIENT_CONTEXT_ENABLED, fofTextNeedsReview, fofRuleNeedsReview, fofTrainingWriteAllowed } from "../_shared/fof-privacy.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -751,7 +753,7 @@ function buildSystemPrompt(ctx: PromptContext): string {
     "answer questions and discuss anything above",
     `search the office document knowledge base with search_office_docs (${ctx.docCount} document${ctx.docCount === 1 ? "" : "s"} indexed)`,
   ];
-  if (ctx.isManager) {
+  if (ctx.isManager && (ctx.mode !== 'fof' || ctx.training)) {
     capabilities.push(
       "save durable memories with save_memory (kind 'office' for practice facts, 'site' for app/build facts) and retire wrong ones with forget_memory"
     );
@@ -771,7 +773,7 @@ function buildSystemPrompt(ctx: PromptContext): string {
     `CAPABILITIES — BE HONEST ABOUT THEM. The only things you can actually do are: ${capabilities.join("; ")}. Never claim you did something outside that list, and only say you saved/committed/opened something when the tool call succeeded this turn. If a tool errors, say so plainly.`
   );
 
-  if (ctx.isManager) {
+  if (ctx.isManager && (ctx.mode !== 'fof' || ctx.training)) {
     if (ctx.githubReady) {
       parts.push(
         "BUILDING THE APP (managers only — that is who you are talking to): work like a careful engineer. Read the relevant files with github_read_file BEFORE editing; match the codebase's existing patterns; keep commits small and focused; never invent file contents. github_commit_files replaces whole files, so include the complete new file content, not a diff. Choosing where to push: when the user clearly says push/ship/send it, commit straight to the default branch — Lovable syncs it automatically and the app updates (that IS how you 'talk to Lovable'); for anything risky (payroll/time math, RLS, migrations, auth) or when they want review, commit to a new feature branch and open a PR with github_open_pr so CI and a human gate it. You cannot run the tests yourself — CI runs them on GitHub after you push; say that. PUBLISHING: the production site updates only when a human clicks Publish in Lovable — you cannot click it; after pushing, tell them 'preview updates automatically; hit Publish in Lovable when you want it live.' When a task genuinely suits Lovable's own AI better (big visual redesigns, new Lovable Cloud/backend wiring, anything needing its editor), say so and give them a short ready-to-paste prompt for the Lovable chat, clearly labeled 'Prompt for Lovable:'. Database schema changes need a migration file AND someone to run it — flag that migrations in a commit do not apply themselves to the live database."
@@ -792,7 +794,7 @@ function buildSystemPrompt(ctx: PromptContext): string {
     );
   } else {
     parts.push(
-      "The user is a TEAM MEMBER (not a manager): answer questions helpfully, but you have no build, memory, or training tools for them — nothing they say changes standing knowledge or the app. If they state a preference or want something built, suggest they raise it with the office manager."
+      "This conversation is read-only: answer questions helpfully, but do not save, retire, or change any office knowledge. Updates require an owner or manager with Training mode on in the FOF assistant."
     );
   }
 
@@ -835,6 +837,7 @@ function buildSystemPrompt(ctx: PromptContext): string {
 
   // --- mode specifics ------------------------------------------------------
   if (ctx.mode === "fof") {
+    parts.push('PRIVACY: The full patient form and personal insurance details are not available to this assistant. Never claim to see the patient name, balances, eligibility, deductible remaining, or benefits remaining. Answer general office/code/carrier questions from supplied knowledge and retrieved documents; do not invent coverage or ask for patient identifiers. Never save case-specific facts.');
     parts.push(ctx.policySummary ?? BASE_POLICY_SUMMARY);
     if (ctx.guidance.length > 0) {
       parts.push(
@@ -906,7 +909,7 @@ function buildTools(ctx: { isManager: boolean; training: boolean; mode: string; 
       },
     },
   ];
-  if (!ctx.isManager) return tools;
+  if (!ctx.isManager || (ctx.mode === 'fof' && !ctx.training)) return tools;
 
   tools.push(
     {
@@ -1066,6 +1069,9 @@ Deno.serve(async (req) => {
     if (chat.length === 0 || chat[chat.length - 1].role !== "user") {
       return json({ error: "Bad request" }, 400);
     }
+    if (mode === 'fof' && chat.some(m => fofTextNeedsReview(m.content))) {
+      return json({ reply: 'Please remove patient names, dates, identifiers, and personal insurance details. I can help with general office policies and code guidance.', sources: [] });
+    }
     // Integrity: signature-only jailbreak check on the newest user turn.
     // Nothing typed is stored or scanned for meaning — only the pattern that
     // matched is logged, and the refusal never mentions the flag.
@@ -1081,10 +1087,10 @@ Deno.serve(async (req) => {
       return json({ answer: JAILBREAK_REFUSAL, reply: JAILBREAK_REFUSAL, sources: [] });
     }
 
-    const training = mode === "fof" && isManager && body.trainingEnabled !== false;
+    const training = mode === "fof" && fofTrainingWriteAllowed(membership.role, body.trainingEnabled);
 
     // De-identified FOF context (de-identified: code-derived wording only).
-    const visits = (Array.isArray(body.context?.visits) ? body.context!.visits! : [])
+    const visits = (FOF_PATIENT_CONTEXT_ENABLED && Array.isArray(body.context?.visits) ? body.context!.visits! : [])
       .slice(0, MAX_VISITS)
       .map(
         (v, i) =>
@@ -1095,7 +1101,7 @@ Deno.serve(async (req) => {
             .join(", ") || "—"}`
       )
       .join("\n");
-    const treatment = bounded(body.context?.treatment, MAX_TREATMENT_CHARS);
+    const treatment = FOF_PATIENT_CONTEXT_ENABLED ? bounded(body.context?.treatment, MAX_TREATMENT_CHARS) : '';
 
     // Standing knowledge, all under the caller's JWT so RLS scopes the org.
     const [memoriesRes, guidanceRes, docsRes, codeNotes, schedulesRes, fofSettingsRes, fofDiscountsRes, fofCodesRes] = await Promise.all([
@@ -1189,6 +1195,11 @@ Deno.serve(async (req) => {
 
     // deno-lint-ignore no-explicit-any
     const executeTool = async (name: string, args: any): Promise<string> => {
+      if (mode === 'fof' && ['save_memory', 'forget_memory', 'save_code_note', 'save_wording_rule'].includes(name)) {
+        if (!training) return 'ERROR: Only an owner or manager with Training mode on can update office knowledge.';
+        const text = [args?.content, args?.note, args?.rule].filter(v => typeof v === 'string').join(' ');
+        if (fofRuleNeedsReview(text)) return 'ERROR: Patient-specific information cannot be saved as office knowledge. Use a general office rule without case details.';
+      }
       switch (name) {
         case "search_office_docs":
           return await searchOfficeDocs(
@@ -1258,6 +1269,7 @@ Deno.serve(async (req) => {
         }
         case "save_code_note": {
           if (!isManager) return "ERROR: only managers can file code notes.";
+          if (mode === 'fof' && !training) return "ERROR: turn on Training mode before saving office code notes.";
           return await saveCodeNote(
             supabase,
             {
@@ -1308,7 +1320,7 @@ Deno.serve(async (req) => {
     // ---- agent loop --------------------------------------------------------
     // deno-lint-ignore no-explicit-any
     const convo: any[] = [
-      { role: "system", content: `${OFFICE_DOCTRINE}\n\n---\n\n${systemPrompt}` },
+      { role: "system", content: `${OFFICE_DOCTRINE}\n\n---\n\n${scrubFreeText(systemPrompt, systemPrompt.length).text}` },
       ...chat,
     ];
     let reply = "";
@@ -1344,8 +1356,7 @@ Deno.serve(async (req) => {
         return json({ error: "OpenRouter rejected the API key — check the OPENROUTER_API_KEY secret." });
       }
       if (!response.ok) {
-        const detail = await response.text();
-        console.error("OpenRouter error:", response.status, detail.slice(0, 500));
+        console.error("OpenRouter error:", response.status);
         return json({ error: "AI request failed. Try again." });
       }
       const completion = await response.json();
@@ -1401,7 +1412,7 @@ Deno.serve(async (req) => {
       sources: [...sources.values()],
     });
   } catch (err) {
-    console.error("kimi-agent error:", err);
+    console.error("kimi-agent request failed");
     return json({ error: "Something went wrong on the assistant's side. Try again in a moment." });
   }
 });

@@ -7,6 +7,9 @@ import type {
   FofTemplate,
 } from '@/lib/fof/types';
 import { formatCents } from '@/lib/fof/money';
+import { PatientPaymentOptions } from './PatientPaymentOptions';
+import { Fragment } from 'react';
+import AdaptivePatientPages from './AdaptivePatientPages';
 
 /**
  * The paper Financial Options Form — card-based layout: logo + date/patient
@@ -237,13 +240,15 @@ export default function FofPrintSheet({
           ? ' fof-roomy'
           : '';
 
+  const PatientPages = schedule ? AdaptivePatientPages : Fragment;
   return (
     <>
+    <PatientPages>
     <div className={`fof-sheet${densityClass}${schedule ? ' fof-policy-sheet' : ''}`}>
       <header className="fof-head">
-        {practice.logoUrl !== '' && (
+        {practice.logoUrl !== '' ? (
           <img className="fof-logo" src={practice.logoUrl} alt={practice.practiceName} />
-        )}
+        ) : <div className="fof-practice-name">{practice.practiceName}</div>}
         <div className="fof-head-meta">
           <div className="fof-meta-item">
             <CalendarIcon />
@@ -344,7 +349,7 @@ export default function FofPrintSheet({
         )}
       </section>
 
-      {bothOptions ? (
+      {schedule ? <PatientPaymentOptions schedule={schedule} computation={computation} template={template} prepayMark={prepayMark} /> : bothOptions ? (
         <section className="fof-options">
           <div className="fof-options-head">Choose Your Payment Option</div>
           <div className="fof-options-row">
@@ -551,6 +556,7 @@ export default function FofPrintSheet({
       </footer>
     </div>
 
+    </PatientPages>
     {/* OFFICE COPY — auto-printed second page recording exactly what was
         behind this FOF (codes, fees, insurance math). Never persisted;
         filed on paper with the signed form. Always printed — a form with
