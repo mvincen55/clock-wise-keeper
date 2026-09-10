@@ -8,6 +8,7 @@ export type PreparedReport = {
   provider_daily_financials_by_entry_date: ReportRow[]; procedure_monthly_counts_by_entry_date: ReportRow[];
   transaction_type_totals: ReportRow[]; staff_reported_hours: ReportRow[];
   staff_daily_punches: ReportRow[]; pay_rates: ReportRow[]; calendar_events: ReportRow[];
+  weekly_schedule_drafts?: ReportRow[];
   validation: ReportRow;
 };
 export function validatePreparedReport(value: unknown, orgId: string): PreparedReport {
@@ -17,6 +18,7 @@ export function validatePreparedReport(value: unknown, orgId: string): PreparedR
   const arrays = ['sources','monthly_financials_by_entry_date','daily_financials_by_entry_date','daily_receipts_by_type','provider_period_controls','provider_daily_financials_by_entry_date','procedure_monthly_counts_by_entry_date','transaction_type_totals','staff_reported_hours','staff_daily_punches','pay_rates','calendar_events'] as const;
   for (const key of arrays) if (!Array.isArray(p[key])) throw new Error(`Missing report section: ${key}`);
   if (!p.source_control_totals || !p.definitions || !p.validation || !p.sources.length || !p.daily_financials_by_entry_date.length) throw new Error('Report controls and source references are required.');
+  if (p.weekly_schedule_drafts !== undefined && (!Array.isArray(p.weekly_schedule_drafts) || p.weekly_schedule_drafts.some(r => !r || typeof r !== 'object' || !Number.isInteger(r.weekday) || r.weekday < 0 || r.weekday > 6))) throw new Error('Invalid weekly schedule notes.');
   const sum = (rows: ReportRow[], key: string) => rows.reduce((n,r) => { if (!Number.isSafeInteger(r[key])) throw new Error(`Invalid numeric value: ${key}`); return n+r[key]; },0);
   const c = p.source_control_totals;
   for (const key of ['posted_charges_cents','recorded_payments_cents','credit_adjustments_cents','charge_adjustments_cents']) {
