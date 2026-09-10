@@ -11,7 +11,8 @@ function setup(role: string, denied = '') {
   const tables: Record<string, Record<string, unknown>[]> = {
     org_members: [{ user_id: 'a', org_id: 'office-a', status: 'active', role }, { user_id: 'b', org_id: 'office-b', status: 'active', role }],
     employees: [{ id: 'ea', user_id: 'a', org_id: 'office-a' }, { id: 'eb', user_id: 'b', org_id: 'office-a' }, { id: 'ec', user_id: 'a', org_id: 'office-b' }],
-    time_entries: [{ employee_id: 'ea', user_id: 'a', org_id: 'office-a', entry_date: '2026-09-01', total_minutes: 480 }, { employee_id: 'eb', user_id: 'b', org_id: 'office-a', entry_date: '2026-09-01', total_minutes: 480 }, { employee_id: 'ec', user_id: 'a', org_id: 'office-b', entry_date: '2026-09-01', total_minutes: 60 }],
+    // Imported rows carry the uploader's user_id, not the employee's auth ID.
+    time_entries: [{ employee_id: 'ea', user_id: 'importer-b', org_id: 'office-a', entry_date: '2026-09-01', total_minutes: 480 }, { employee_id: 'eb', user_id: 'a', org_id: 'office-a', entry_date: '2026-09-01', total_minutes: 480 }, { employee_id: 'ec', user_id: 'a', org_id: 'office-b', entry_date: '2026-09-01', total_minutes: 60 }],
     // A manager can create someone else's request; created_by is NOT ownership.
     pto_requests: [{ id: 'own', employee_id: 'ea', org_id: 'office-a', created_by: 'b', hours_requested: 8, note: 'Synthetic', status: 'pending' }, { id: 'other', employee_id: 'eb', org_id: 'office-a', created_by: 'a', hours_requested: 16, note: 'Synthetic', status: 'pending' }, { id: 'cross-office', employee_id: 'ec', org_id: 'office-b', created_by: 'a', hours_requested: 8, note: 'Synthetic', status: 'pending' }],
   };
@@ -40,7 +41,7 @@ function setup(role: string, denied = '') {
 }
 
 describe.each(['employee','manager','owner'])('%s personal reports', role => {
-  it('returns eight personal hours, never the sixteen-hour office total', async () => {
+  it('includes imported personal hours, never the other employee’s uploaded hours', async () => {
     const { call } = setup(role);
     const result = await call('list_time_entries', { start_date: '2026-09-01', end_date: '2026-09-02' });
     expect(result.structuredContent).toMatchObject({ count: 1, total_hours: 8, total_minutes: 480 });

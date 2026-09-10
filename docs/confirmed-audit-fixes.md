@@ -45,8 +45,9 @@ no AGENTS.md files. No database schema changes are required by these fixes.
    none enter the form; a subsequent complete retry succeeds.
 
 4. **Personal MCP reports.** Both personal tools resolve the caller's active office
-   and employee record and filter explicitly by office/employee; time entries also
-   require the caller's user ID. PTO ownership uses employee_id, not created_by.
+   and employee record and filter explicitly by office/employee. Imported time rows
+   carry the uploader's user_id, so that field is not used for ownership. PTO
+   ownership uses employee_id, not created_by.
    The PTO selection now uses the actual hours_requested/note fields and accepts
    the old `canceled` spelling as an alias for the schema's `cancelled` value.
    No manager RLS permissions were narrowed. The shipped `mcp/index.ts` is the

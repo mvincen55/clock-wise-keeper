@@ -27,7 +27,7 @@ async function personalIdentity(sb: ReturnType<typeof supabaseForUser>, userId: 
   const { data: employee, error: employeeError } = await sb.from("employees").select("id")
     .eq("org_id", member.org_id).eq("user_id", userId).maybeSingle();
   if (employeeError || !employee) return null;
-  return { orgId: member.org_id, employeeId: employee.id, userId };
+  return { orgId: member.org_id, employeeId: employee.id };
 }
 
 var whoami_default = defineTool({
@@ -93,7 +93,8 @@ var list_time_entries_default = defineTool2({
     const sb = supabaseForUser2(ctx);
     const identity = await personalIdentity(sb, ctx.getUserId());
     if (!identity) return { content: [{ type: "text", text: "No active employee membership found." }], isError: true };
-    const { data, error } = await sb.from("time_entries").select("entry_date, total_minutes").eq("org_id", identity.orgId).eq("employee_id", identity.employeeId).eq("user_id", identity.userId).gte("entry_date", start_date).lte("entry_date", end_date).order("entry_date", { ascending: false });
+    // Imported time rows carry the importer's user_id; employee_id is ownership.
+    const { data, error } = await sb.from("time_entries").select("entry_date, total_minutes").eq("org_id", identity.orgId).eq("employee_id", identity.employeeId).gte("entry_date", start_date).lte("entry_date", end_date).order("entry_date", { ascending: false });
     if (error) return { content: [{ type: "text", text: error.message }], isError: true };
     const rows = (data ?? []).map((r) => ({
       date: r.entry_date,
