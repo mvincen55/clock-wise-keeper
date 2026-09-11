@@ -238,7 +238,7 @@ export class TransientRuntime {
         try {
           office = await this.authorize(s.capability);
         } catch {
-          s.paused = true;
+          await this.expire(s);
           continue;
         }
         if (!office.approved || !office.settings.enabled) {

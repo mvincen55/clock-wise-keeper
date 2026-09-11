@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { Database } from '@/integrations/supabase/types';
 import {
   authorizeOffice,
+  boundedAuthFetch,
   type AuthorizationConfig,
 } from './office-authorization';
 import { PayerRouter } from './payer-router';
@@ -111,7 +112,10 @@ export function createProductionRelay(raw: unknown, apiKey: string) {
           autoRefreshToken: false,
           detectSessionInUrl: false,
         },
-        global: { headers: { Authorization: `Bearer ${credential.bearer}` } },
+        global: {
+          headers: { Authorization: `Bearer ${credential.bearer}` },
+          fetch: boundedAuthFetch,
+        },
       },
     );
     const [directory, branding, provider] = await Promise.all([
@@ -173,7 +177,8 @@ export function createProductionRelay(raw: unknown, apiKey: string) {
       fromNumber: config.fromNumber,
       payerId: payer.payerId,
       payerNumber: phone(mapped('payer_phone')!),
-      officeFax: phone(mapped('office_fax')!),
+      officeFax:
+        task.delivery === 'answers' ? '' : phone(mapped('office_fax')!),
       webhookUrl: new URL('/webhooks/retell', config.publicOrigin).href,
       approvedPath: ready,
       retentionVerified: config.retentionVerified,

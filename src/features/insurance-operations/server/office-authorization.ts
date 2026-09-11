@@ -9,6 +9,13 @@ export interface AuthorizationConfig {
   configuredOfficeId: string;
   deploymentApproved: boolean;
 }
+export const boundedAuthFetch: typeof fetch = (input, init) =>
+  fetch(input, {
+    ...init,
+    signal: init?.signal
+      ? AbortSignal.any([init.signal, AbortSignal.timeout(10000)])
+      : AbortSignal.timeout(10000),
+  });
 /** Non-patient auth/config traffic only. Neither tasks nor webhook bodies are
  * arguments to this adapter. The patient relay must be a separately covered host. */
 export async function authorizeOffice(
@@ -24,7 +31,10 @@ export async function authorizeOffice(
       autoRefreshToken: false,
       detectSessionInUrl: false,
     },
-    global: { headers: { Authorization: `Bearer ${bearer}` } },
+    global: {
+      headers: { Authorization: `Bearer ${bearer}` },
+      fetch: boundedAuthFetch,
+    },
   });
   const { data: authentication, error: authError } =
     await client.auth.getUser(bearer);

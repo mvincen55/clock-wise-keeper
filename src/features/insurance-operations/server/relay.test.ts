@@ -178,7 +178,7 @@ it('handles signed tool results once, correlates calls and requests cancellation
     fromNumber: '+12025550101',
     payerId: syntheticTasks('s')[1].planIdentity.payerId,
     payerNumber: '+12025550102',
-    officeFax: '+12025550103',
+    officeFax: '', // Answers-only requests must not require a fax mapping.
     webhookUrl: 'https://relay.example/webhooks/retell',
     approvedPath: true,
     retentionVerified: true,

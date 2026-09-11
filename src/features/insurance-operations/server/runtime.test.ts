@@ -12,6 +12,7 @@ import { createHmac } from 'node:crypto';
 const owner = { userId: 'user', orgId: demoOrg };
 function fixture() {
   let enabled = true;
+  let authorized = true;
   let now = 10000;
   const adapter: CallAdapter = {
     mode: 'synthetic',
@@ -23,6 +24,7 @@ function fixture() {
   const runtime = new TransientRuntime(
     adapter,
     async (o) => {
+      if (!authorized) throw new Error('Authorization unavailable');
       if (o.orgId !== owner.orgId || o.userId !== owner.userId)
         throw new Error('Unauthorized');
       return {
@@ -35,6 +37,9 @@ function fixture() {
     60000,
   );
   return {
+    revoke: () => {
+      authorized = false;
+    },
     runtime,
     adapter,
     disable: () => {
@@ -112,6 +117,17 @@ describe('transient server runtime', () => {
     ).rejects.toThrow();
     expect(f.adapter.start).not.toHaveBeenCalled();
   });
+});
+it('expires the relay session and requests cancellation when authorization is lost', async () => {
+  const f = fixture();
+  const cap = await f.runtime.open(owner);
+  const task = syntheticTasks(cap.id)[1];
+  task.reviewed = true;
+  await f.runtime.start(owner, cap, [task], 1);
+  f.revoke();
+  await f.runtime.pump();
+  expect(f.adapter.cancel).toHaveBeenCalledWith('call');
+  await expect(f.runtime.read(owner, cap, 0)).rejects.toThrow();
 });
 describe('vendor boundary', () => {
   it('validates raw signed body, rejects replay age and altered data', () => {

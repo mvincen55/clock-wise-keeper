@@ -13,8 +13,8 @@ INSERT INTO public.org_members(org_id,user_id,role,status) VALUES
  ('f4444444-4444-4444-8444-444444444444','f1111111-1111-4111-8111-111111111111','owner','active'),
  ('f4444444-4444-4444-8444-444444444444','f2222222-2222-4222-8222-222222222222','employee','active'),
  ('f5555555-5555-4555-8555-555555555555','f3333333-3333-4333-8333-333333333333','owner','active');
-INSERT INTO public.important_numbers(id,org_id,label,value) VALUES
- ('f6666666-6666-4666-8666-666666666666','f4444444-4444-4444-8444-444444444444','Synthetic payer','+12025550100');
+INSERT INTO public.important_numbers(id,org_id,section,label,value) VALUES
+ ('f6666666-6666-4666-8666-666666666666','f4444444-4444-4444-8444-444444444444','Insurance','Synthetic payer','+12025550100');
 
 CREATE FUNCTION pg_temp.io_fixture_settings() RETURNS jsonb LANGUAGE sql AS $$ SELECT '{
  "version":1,"enabled":false,"defaultKind":"breakdown","defaultDelivery":"answers",

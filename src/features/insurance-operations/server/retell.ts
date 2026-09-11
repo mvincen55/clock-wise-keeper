@@ -77,7 +77,7 @@ export class RetellAdapter implements CallAdapter {
       [
         this.setup.fromNumber,
         this.setup.payerNumber,
-        this.setup.officeFax,
+        ...(task.delivery === 'answers' ? [] : [this.setup.officeFax]),
       ].every((n) => /^\+[1-9]\d{7,14}$/.test(n)) &&
       new URL(this.setup.webhookUrl).protocol === 'https:'
     );
@@ -324,7 +324,9 @@ export class RetellAdapter implements CallAdapter {
       .safeParse(input);
     if (
       !result.success ||
-      !a.task.questions.some((q) => questionId(q) === result.data.questionId)
+      !missingQuestions(a.task).some(
+        (q) => questionId(q) === result.data.questionId,
+      )
     )
       return false;
     const answer = {
