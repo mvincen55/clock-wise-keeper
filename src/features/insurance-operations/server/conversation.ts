@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isGeneric } from '../domain/schema';
+import { isMember } from '../domain/schema';
 import type { Task } from '../domain/workflow';
 
 /** Deployment-reviewed conversation flow specification, not a freeform staff
@@ -68,5 +68,5 @@ export function permittedPayerAction(
   return parsed.data;
 }
 export function memberFieldsNeeded(task: Task) {
-  return task.questions.some((q) => !isGeneric(q.key));
+  return task.questions.some((q) => isMember(q.key));
 }

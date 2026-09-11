@@ -7,6 +7,9 @@ import {
   questionLabels,
   genericKeys,
   memberKeys,
+  sessionKeys,
+  officeBreakdownQuestions,
+  scopeLabels,
   settingsSchema,
   type OfficeSettings,
   type Question,
@@ -25,10 +28,10 @@ export function QuestionEditor({
 }) {
   const keys =
     kind === 'breakdown'
-      ? genericKeys
+      ? [...genericKeys, ...sessionKeys]
       : kind === 'eligibility'
         ? memberKeys
-        : [...genericKeys, ...memberKeys];
+        : [...genericKeys, ...memberKeys, ...sessionKeys];
   return (
     <div className="space-y-2">
       {questions.map((q, i) => (
@@ -54,7 +57,7 @@ export function QuestionEditor({
             ))}
           </SelectField>
           <Field
-            label="Scope (plan/category/CDT)"
+            label="Scope (plan, procedure or CDT)"
             value={q.scope}
             onChange={(scope) =>
               onChange(questions.map((v, n) => (n === i ? { ...v, scope } : v)))
@@ -180,6 +183,66 @@ export function SettingsPanel({
       {requestKinds.map((kind) => (
         <section key={kind} className="space-y-3 rounded-lg border p-4">
           <h3 className="font-semibold">{requestLabels[kind]}</h3>
+          {kind !== 'eligibility' && (
+            <div className="space-y-2 rounded border p-3">
+              <h4 className="font-medium">What should the AI obtain?</h4>
+              <p className="text-sm">
+                Choose the questions to ask. Frequencies and age restrictions
+                stay separate for BWX, FMX, Prophy, Perio, Exams, Fluoride and
+                Sealants. Add exact CDT scopes when the payer distinguishes
+                procedures. Unusual notes remain in this session only.
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {officeBreakdownQuestions.map((q) => {
+                  const selected = draft.presets[kind].questions.some(
+                    (x) => x.key === q.key && x.scope === q.scope,
+                  );
+                  return (
+                    <Check
+                      key={`${q.key}:${q.scope}`}
+                      label={`${questionLabels[q.key]}${q.scope === 'plan' ? '' : ` — ${scopeLabels[q.scope]}`}`}
+                      checked={selected}
+                      onChange={(checked) =>
+                        set('presets', {
+                          ...draft.presets,
+                          [kind]: {
+                            ...draft.presets[kind],
+                            questions: checked
+                              ? [...draft.presets[kind].questions, q]
+                              : draft.presets[kind].questions.filter(
+                                  (x) => x.key !== q.key || x.scope !== q.scope,
+                                ),
+                          },
+                        })
+                      }
+                    />
+                  );
+                })}
+              </div>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  set('presets', {
+                    ...draft.presets,
+                    [kind]: {
+                      ...draft.presets[kind],
+                      questions: [
+                        ...draft.presets[kind].questions.filter(
+                          (q) =>
+                            !officeBreakdownQuestions.some(
+                              (x) => x.key === q.key && x.scope === q.scope,
+                            ),
+                        ),
+                        ...officeBreakdownQuestions,
+                      ],
+                    },
+                  })
+                }
+              >
+                Select full office breakdown checklist
+              </Button>
+            </div>
+          )}
           <QuestionEditor
             kind={kind}
             questions={draft.presets[kind].questions as Question[]}
@@ -222,6 +285,87 @@ export function SettingsPanel({
           </div>
         </section>
       ))}
+      <section className="space-y-3 rounded border p-4">
+        <h3 className="font-semibold">Office billing rules</h3>
+        <p className="text-sm">
+          Office instruction: use office fee for Altus and DD RI downgrades, and
+          when the patient is at maximum. Map those carriers below. These are
+          office instructions, not answers the AI should claim the payer
+          verified.
+        </p>
+        {(draft.billingPolicies ?? []).map((policy, i) => (
+          <div className="grid gap-3 sm:grid-cols-4" key={i}>
+            <SelectField
+              label="Billing-rule carrier"
+              value={policy.payerId}
+              onChange={(payerId) =>
+                set(
+                  'billingPolicies',
+                  draft.billingPolicies.map((p, n) =>
+                    n === i ? { ...p, payerId } : p,
+                  ),
+                )
+              }
+            >
+              <option value="">Choose carrier</option>
+              {data.directory.map((p) => (
+                <option value={p.id} key={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </SelectField>
+            {(['downgradeFee', 'maximumFee'] as const).map((key) => (
+              <SelectField
+                key={key}
+                label={
+                  key === 'downgradeFee'
+                    ? 'Fee for downgrades'
+                    : 'Fee when at maximum'
+                }
+                value={policy[key] ?? ''}
+                onChange={(value) =>
+                  set(
+                    'billingPolicies',
+                    draft.billingPolicies.map((p, n) =>
+                      n === i ? { ...p, [key]: value || null } : p,
+                    ),
+                  )
+                }
+              >
+                <option value="">No office instruction</option>
+                <option value="office_fee">Office fee</option>
+                <option value="insurance_fee">Insurance fee</option>
+              </SelectField>
+            ))}
+            <Button
+              variant="ghost"
+              onClick={() =>
+                set(
+                  'billingPolicies',
+                  draft.billingPolicies.filter((_, n) => n !== i),
+                )
+              }
+            >
+              Remove billing rule
+            </Button>
+          </div>
+        ))}
+        <Button
+          variant="outline"
+          onClick={() =>
+            set('billingPolicies', [
+              ...(draft.billingPolicies ?? []),
+              {
+                payerId: '',
+                downgradeFee: 'office_fee',
+                maximumFee: 'office_fee',
+              },
+            ])
+          }
+        >
+          Add carrier office-fee rule
+        </Button>
+      </section>
       <section className="space-y-3">
         <h3 className="font-semibold">Carrier-specific presets</h3>
         {draft.carrierOverrides.map((override, i) => (
@@ -373,15 +517,7 @@ export function SettingsPanel({
           </Link>
           .
         </p>
-        {(
-          [
-            'billing_npi',
-            'rendering_npi',
-            'tax_id',
-            'payer_phone',
-            'office_fax',
-          ] as const
-        ).map((role) => (
+        {(['billing_npi', 'tax_id', 'office_fax'] as const).map((role) => (
           <SelectField
             key={role}
             label={role.replace(/_/g, ' ')}
@@ -410,6 +546,90 @@ export function SettingsPanel({
             ))}
           </SelectField>
         ))}
+        {draft.mappings.map(
+          (mapping, i) =>
+            ['rendering_npi', 'payer_phone'].includes(mapping.role) && (
+              <div key={i} className="grid gap-3 sm:grid-cols-3">
+                <SelectField
+                  label={
+                    mapping.role === 'payer_phone'
+                      ? 'Payer telephone entry'
+                      : 'Rendering NPI entry'
+                  }
+                  value={mapping.entryId}
+                  onChange={(entryId) =>
+                    set(
+                      'mappings',
+                      draft.mappings.map((m, n) =>
+                        n === i ? { ...m, entryId } : m,
+                      ),
+                    )
+                  }
+                >
+                  <option value="">Choose canonical entry</option>
+                  {data.directory.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.label} — {e.value}
+                    </option>
+                  ))}
+                </SelectField>
+                {mapping.role === 'rendering_npi' && (
+                  <SelectField
+                    label="Rendering provider"
+                    value={mapping.providerId ?? ''}
+                    onChange={(providerId) =>
+                      set(
+                        'mappings',
+                        draft.mappings.map((m, n) =>
+                          n === i
+                            ? { ...m, providerId: providerId || null }
+                            : m,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="">Choose provider</option>
+                    {data.providers
+                      .filter((p) => p.active)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.display_name}
+                        </option>
+                      ))}
+                  </SelectField>
+                )}
+                <Button
+                  variant="ghost"
+                  onClick={() =>
+                    set(
+                      'mappings',
+                      draft.mappings.filter((_, n) => n !== i),
+                    )
+                  }
+                >
+                  Remove mapping
+                </Button>
+              </div>
+            ),
+        )}
+        <div className="flex gap-2">
+          {(['payer_phone', 'rendering_npi'] as const).map((role) => (
+            <Button
+              key={role}
+              variant="outline"
+              onClick={() =>
+                set('mappings', [
+                  ...draft.mappings,
+                  { role, entryId: '', providerId: null, confirmed: true },
+                ])
+              }
+            >
+              {role === 'payer_phone'
+                ? 'Add payer telephone'
+                : 'Add rendering provider NPI'}
+            </Button>
+          ))}
+        </div>
       </section>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field

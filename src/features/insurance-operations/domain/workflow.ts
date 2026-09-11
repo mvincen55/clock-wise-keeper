@@ -1,6 +1,7 @@
 import {
   dateSchema,
   isGeneric,
+  isMember,
   questionId,
   presetFor,
   type OfficeSettings,
@@ -98,6 +99,7 @@ export type Task = {
   attempts: Attempt[];
   events: TaskEvent[];
   selected: boolean;
+  billingPolicy?: OfficeSettings['billingPolicies'][number];
 };
 export function makeTask(
   sessionId: string,
@@ -255,7 +257,7 @@ export function usableAnswer(task: Task, q: Question) {
       a.state === 'answered' &&
       a.value !== null &&
       a.value !== undefined &&
-      (isGeneric(q.key)
+      (!isMember(q.key)
         ? !(task.forceFresh && a.source === 'plan_library')
         : a.source !== 'plan_library' &&
           (a.source !== 'staff' ||
@@ -287,7 +289,7 @@ export function informationIssues(task: Task): string[] {
   ])
     if (value && !dateSchema.safeParse(value).success)
       issues.push(`${label}: use YYYY-MM-DD`);
-  const patientNeeded = task.questions.some((q) => !isGeneric(q.key));
+  const patientNeeded = task.questions.some((q) => isMember(q.key));
   if (
     patientNeeded &&
     (!task.identity.memberId.trim() ||
@@ -300,7 +302,7 @@ export function informationIssues(task: Task): string[] {
     issues.push('Plan breakdown cannot include member questions');
   if (
     task.kind === 'eligibility' &&
-    task.questions.some((q) => isGeneric(q.key))
+    task.questions.some((q) => !isMember(q.key))
   )
     issues.push('Choose combined scope for plan and member questions');
   if (task.codes.some((c) => !/^D\d{4}$/.test(c)))

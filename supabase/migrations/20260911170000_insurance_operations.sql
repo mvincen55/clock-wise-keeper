@@ -49,7 +49,7 @@ begin
   if exists(select 1 from jsonb_array_elements(value->'rules') x group by x->>'key',x->>'scope' having count(*) > 1) then return false; end if;
   for r in select * from jsonb_array_elements(value->'rules') loop
     if jsonb_typeof(r->'key') is distinct from 'string' or jsonb_typeof(r->'scope') is distinct from 'string' or jsonb_typeof(r->'status') is distinct from 'string' then return false; end if;
-    if not public.io_keys(r,array['key','scope','status','value']) or r->>'key' not in ('coverage','individual_deductible','family_deductible','annual_plan_maximum','deductible_applies','benefit_year','waiting_period','missing_tooth','downgrade','age_limit','frequency','shared_frequency','exclusion','limitation') or r->>'scope' !~ '^(plan|preventive|basic|major|diagnostic|orthodontic|D[0-9]{4})$' or r->>'status' not in ('confirmed','unknown','conflicting') then return false; end if;
+    if not public.io_keys(r,array['key','scope','status','value']) or r->>'key' not in ('coverage','individual_deductible','family_deductible','annual_plan_maximum','deductible_applies','benefit_year','waiting_period','missing_tooth','downgrade','age_limit','frequency','shared_frequency','exclusion','limitation','rollover','out_of_network','fee_at_maximum') or r->>'scope' !~ '^(plan|preventive|basic|major|diagnostic|orthodontic|bwx|fmx|prophy|perio|exams|fluoride|sealants|D[0-9]{4})$' or r->>'status' not in ('confirmed','unknown','conflicting') then return false; end if;
     if not (r ?& array['key','scope','status','value']) then return false; end if;
     v := r->'value';
     if v = 'null'::jsonb then
@@ -64,7 +64,7 @@ begin
       if r->>'key' in ('individual_deductible','family_deductible','annual_plan_maximum') and v->>'unit' <> 'USD' then return false; end if;
     elsif jsonb_typeof(v) = 'object' and v ? 'meaning' then
       if not (v ?& array['meaning','codes']) or jsonb_typeof(v->'meaning') is distinct from 'string' or jsonb_typeof(v->'codes') is distinct from 'array' then return false; end if;
-      if not public.io_keys(v,array['meaning','codes']) or v->>'meaning' not in ('applies','does_not_apply','calendar_year','contract_year','not_covered','covered','alternate_benefit','shared_limit') or jsonb_typeof(v->'codes') <> 'array' or jsonb_array_length(v->'codes') > 30 or r->>'key' in ('coverage','individual_deductible','family_deductible','annual_plan_maximum') then return false; end if;
+      if not public.io_keys(v,array['meaning','codes']) or v->>'meaning' not in ('applies','does_not_apply','calendar_year','contract_year','not_covered','covered','alternate_benefit','shared_limit','office_fee','insurance_fee') or jsonb_typeof(v->'codes') <> 'array' or jsonb_array_length(v->'codes') > 30 or r->>'key' in ('coverage','individual_deductible','family_deductible','annual_plan_maximum') then return false; end if;
       if exists(select 1 from jsonb_array_elements_text(v->'codes') code where code !~ '^D[0-9]{4}$') then return false; end if;
     else return false;
     end if;
@@ -86,7 +86,7 @@ begin
   if (limits->>'holdSeconds')::integer not between 30 and 3600 or (limits->>'totalSeconds')::integer not between 60 and 7200 or (limits->>'retries')::integer not between 0 and 2 or (limits->>'holdSeconds')::integer > (limits->>'totalSeconds')::integer or jsonb_array_length(value->'questions') not between 1 and 60 then return false; end if;
   for q in select * from jsonb_array_elements(value->'questions') loop
     if not public.io_keys(q,array['key','scope','required']) or not (q ?& array['key','scope','required']) or jsonb_typeof(q->'key') is distinct from 'string' or jsonb_typeof(q->'scope') is distinct from 'string' or jsonb_typeof(q->'required') is distinct from 'boolean' then return false; end if;
-    if q->>'key' not in ('coverage','individual_deductible','family_deductible','annual_plan_maximum','deductible_applies','benefit_year','waiting_period','missing_tooth','downgrade','age_limit','frequency','shared_frequency','exclusion','limitation','eligible','effective_dates','remaining_deductible','remaining_maximum','remaining_frequency') or q->>'scope' !~ '^(plan|preventive|basic|major|diagnostic|orthodontic|D[0-9]{4})$' then return false; end if;
+    if q->>'key' not in ('coverage','individual_deductible','family_deductible','annual_plan_maximum','deductible_applies','benefit_year','waiting_period','missing_tooth','downgrade','age_limit','frequency','shared_frequency','exclusion','limitation','rollover','out_of_network','fee_at_maximum','eligible','effective_dates','remaining_deductible','remaining_maximum','remaining_frequency','unusual_notes') or q->>'scope' !~ '^(plan|preventive|basic|major|diagnostic|orthodontic|bwx|fmx|prophy|perio|exams|fluoride|sealants|D[0-9]{4})$' then return false; end if;
   end loop;
   return true;
 exception when others then return false;
@@ -102,7 +102,7 @@ begin
   perform pg_advisory_xact_lock(hashtextextended(p_org_id::text, 111));
   select version into current_version from public.insurance_operation_settings where org_id = p_org_id;
   if coalesce(current_version,0) <> p_expected_version then raise exception 'Settings changed; reload before saving'; end if;
-  if not public.io_keys(p_configuration,array['version','enabled','defaultKind','defaultDelivery','presets','bundles','carrierOverrides','mappings','concurrency','spendingLimitCents','freshnessDays','roles','alerts']) or not (p_configuration ?& array['version','enabled','defaultKind','defaultDelivery','presets','bundles','carrierOverrides','mappings','concurrency','spendingLimitCents','freshnessDays','roles','alerts']) then raise exception 'Invalid configuration'; end if;
+  if not public.io_keys(p_configuration,array['version','enabled','defaultKind','defaultDelivery','presets','bundles','carrierOverrides','mappings','billingPolicies','concurrency','spendingLimitCents','freshnessDays','roles','alerts']) or not (p_configuration ?& array['version','enabled','defaultKind','defaultDelivery','presets','bundles','carrierOverrides','mappings','billingPolicies','concurrency','spendingLimitCents','freshnessDays','roles','alerts']) then raise exception 'Invalid configuration'; end if;
   if (p_configuration->>'concurrency')::integer not between 1 and 3 or (p_configuration->>'spendingLimitCents')::integer not between 0 and 10000 or (p_configuration->>'freshnessDays')::integer not between 1 and 365 or p_configuration->>'defaultKind' not in ('breakdown','eligibility','combined') or p_configuration->>'defaultDelivery' not in ('answers','fax','answers_and_fax') or jsonb_typeof(p_configuration->'enabled') <> 'boolean' then raise exception 'Invalid limits'; end if;
   if jsonb_typeof(p_configuration->'roles') <> 'array' or jsonb_array_length(p_configuration->'roles') < 1 or exists(select 1 from jsonb_array_elements_text(p_configuration->'roles') role where role not in ('owner','manager','employee')) then raise exception 'Invalid roles'; end if;
   if not public.io_keys(p_configuration->'alerts',array['completion','attention','sound']) or not ((p_configuration->'alerts') ?& array['completion','attention','sound']) or exists(select 1 from jsonb_each(p_configuration->'alerts') a where jsonb_typeof(a.value) <> 'boolean') then raise exception 'Invalid alerts'; end if;
@@ -111,7 +111,7 @@ begin
     if public.io_validate_preset(preset) is distinct from true then raise exception 'Invalid preset'; end if;
     if not public.io_keys(preset,array['questions','limits']) or not public.io_keys(preset->'limits',array['holdSeconds','totalSeconds','retries']) or jsonb_array_length(preset->'questions') not between 1 and 60 or (preset#>>'{limits,holdSeconds}')::integer not between 30 and 3600 or (preset#>>'{limits,totalSeconds}')::integer not between 60 and 7200 or (preset#>>'{limits,retries}')::integer not between 0 and 2 or (preset#>>'{limits,holdSeconds}')::integer > (preset#>>'{limits,totalSeconds}')::integer then raise exception 'Invalid preset'; end if;
     for q in select * from jsonb_array_elements(preset->'questions') loop
-      if not public.io_keys(q,array['key','scope','required']) or q->>'key' not in ('coverage','individual_deductible','family_deductible','annual_plan_maximum','deductible_applies','benefit_year','waiting_period','missing_tooth','downgrade','age_limit','frequency','shared_frequency','exclusion','limitation','eligible','effective_dates','remaining_deductible','remaining_maximum','remaining_frequency') or q->>'scope' !~ '^(plan|preventive|basic|major|diagnostic|orthodontic|D[0-9]{4})$' or jsonb_typeof(q->'required') <> 'boolean' then raise exception 'Invalid question'; end if;
+      if not public.io_keys(q,array['key','scope','required']) or q->>'key' not in ('coverage','individual_deductible','family_deductible','annual_plan_maximum','deductible_applies','benefit_year','waiting_period','missing_tooth','downgrade','age_limit','frequency','shared_frequency','exclusion','limitation','rollover','out_of_network','fee_at_maximum','eligible','effective_dates','remaining_deductible','remaining_maximum','remaining_frequency','unusual_notes') or q->>'scope' !~ '^(plan|preventive|basic|major|diagnostic|orthodontic|bwx|fmx|prophy|perio|exams|fluoride|sealants|D[0-9]{4})$' or jsonb_typeof(q->'required') <> 'boolean' then raise exception 'Invalid question'; end if;
     end loop;
   end loop;
   if jsonb_typeof(p_configuration->'carrierOverrides') is distinct from 'array' or jsonb_array_length(p_configuration->'carrierOverrides') > 20 then raise exception 'Invalid carrier presets'; end if;
@@ -128,6 +128,13 @@ begin
     if not exists(select 1 from public.important_numbers where id = (mapping->>'entryId')::uuid and org_id = p_org_id) then raise exception 'Directory entry is outside this office'; end if;
     if mapping->>'providerId' is not null and not exists(select 1 from public.org_providers where id = (mapping->>'providerId')::uuid and org_id = p_org_id and active) then raise exception 'Provider is outside this office'; end if;
   end loop;
+  if p_configuration ? 'billingPolicies' then
+    if jsonb_typeof(p_configuration->'billingPolicies') is distinct from 'array' or jsonb_array_length(p_configuration->'billingPolicies') > 20 then raise exception 'Invalid billing policies'; end if;
+    for mapping in select * from jsonb_array_elements(p_configuration->'billingPolicies') loop
+      if not public.io_keys(mapping,array['payerId','downgradeFee','maximumFee']) or not (mapping ?& array['payerId','downgradeFee','maximumFee']) or coalesce(mapping->>'downgradeFee','office_fee') not in ('office_fee','insurance_fee') or coalesce(mapping->>'maximumFee','office_fee') not in ('office_fee','insurance_fee') then raise exception 'Invalid billing policy'; end if;
+      if not exists(select 1 from public.important_numbers where id=(mapping->>'payerId')::uuid and org_id=p_org_id) then raise exception 'Billing carrier is outside this office'; end if;
+    end loop;
+  end if;
   p_configuration := jsonb_set(p_configuration,'{version}',to_jsonb(p_expected_version+1));
   insert into public.insurance_operation_settings(org_id,version,enabled,configuration) values(p_org_id,p_expected_version+1,(p_configuration->>'enabled')::boolean,p_configuration)
   on conflict(org_id) do update set version = excluded.version, enabled = excluded.enabled, configuration = excluded.configuration, updated_at = now();

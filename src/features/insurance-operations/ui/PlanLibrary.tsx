@@ -182,6 +182,8 @@ export function RuleEditor({
               'covered',
               'alternate_benefit',
               'shared_limit',
+              'office_fee',
+              'insurance_fee',
             ].map((v) => (
               <option key={v}>{v}</option>
             ))}

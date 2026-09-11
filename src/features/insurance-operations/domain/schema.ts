@@ -24,7 +24,30 @@ export const genericKeys = [
   'shared_frequency',
   'exclusion',
   'limitation',
+  'rollover',
+  'out_of_network',
+  'fee_at_maximum',
 ] as const;
+export const sessionKeys = ['unusual_notes'] as const;
+export const procedureScopes = [
+  'bwx',
+  'fmx',
+  'prophy',
+  'perio',
+  'exams',
+  'fluoride',
+  'sealants',
+] as const;
+export const scopeLabels: Record<string, string> = {
+  bwx: 'BWX',
+  fmx: 'FMX',
+  prophy: 'Prophy',
+  perio: 'Perio',
+  exams: 'Exams',
+  fluoride: 'Fluoride',
+  sealants: 'Sealants',
+  plan: 'Plan',
+};
 export const memberKeys = [
   'eligible',
   'effective_dates',
@@ -33,7 +56,8 @@ export const memberKeys = [
   'remaining_frequency',
 ] as const;
 export type GenericKey = (typeof genericKeys)[number];
-export type QuestionKey = GenericKey | (typeof memberKeys)[number];
+export type QuestionKey =
+  GenericKey | (typeof memberKeys)[number] | (typeof sessionKeys)[number];
 export const questionLabels: Record<QuestionKey, string> = {
   coverage: 'Coverage percentage',
   individual_deductible: 'Nominal individual deductible',
@@ -54,6 +78,10 @@ export const questionLabels: Record<QuestionKey, string> = {
   remaining_deductible: 'Member remaining deductible',
   remaining_maximum: 'Member remaining maximum',
   remaining_frequency: 'Member remaining frequency',
+  rollover: 'Rollover',
+  out_of_network: 'Out of network',
+  fee_at_maximum: 'Insurance or office fee at maximum',
+  unusual_notes: 'Unusual notes (session only)',
 };
 export const dateSchema = z
   .string()
@@ -67,7 +95,9 @@ export const dateSchema = z
 const short = z.string().trim().max(160);
 export const scopeSchema = z
   .string()
-  .regex(/^(plan|preventive|basic|major|diagnostic|orthodontic|D\d{4})$/);
+  .regex(
+    /^(plan|preventive|basic|major|diagnostic|orthodontic|bwx|fmx|prophy|perio|exams|fluoride|sealants|D\d{4})$/,
+  );
 export const quantitySchema = z
   .object({
     amount: z.number().finite().min(0).max(10000000),
@@ -97,6 +127,8 @@ export const ruleValueSchema = z.union([
         'covered',
         'alternate_benefit',
         'shared_limit',
+        'office_fee',
+        'insurance_fee',
       ]),
       codes: z.array(z.string().regex(/^D\d{4}$/)).max(30),
     })
@@ -189,7 +221,7 @@ export type PlanVersion = PlanDraft & {
 export type Question = { key: QuestionKey; scope: string; required: boolean };
 export const questionSchema = z
   .object({
-    key: z.enum([...genericKeys, ...memberKeys]),
+    key: z.enum([...genericKeys, ...memberKeys, ...sessionKeys]),
     scope: scopeSchema,
     required: z.boolean(),
   })
@@ -266,6 +298,18 @@ export const settingsSchema = z
           .strict(),
       )
       .max(30),
+    billingPolicies: z
+      .array(
+        z
+          .object({
+            payerId: z.string().uuid(),
+            downgradeFee: z.enum(['office_fee', 'insurance_fee']).nullable(),
+            maximumFee: z.enum(['office_fee', 'insurance_fee']).nullable(),
+          })
+          .strict(),
+      )
+      .max(20)
+      .default([]),
     concurrency: z.number().int().min(1).max(3),
     spendingLimitCents: z.number().int().min(0).max(10000),
     freshnessDays: z.number().int().min(1).max(365),
@@ -310,6 +354,7 @@ export const defaultSettings: OfficeSettings = {
   bundles: [{ name: 'Preventive', codes: ['D0120', 'D1110'] }],
   carrierOverrides: [],
   mappings: [],
+  billingPolicies: [],
   concurrency: 1,
   spendingLimitCents: 500,
   freshnessDays: 90,
@@ -331,6 +376,30 @@ export const questionId = (q: Pick<Question, 'key' | 'scope'>) =>
   `${q.key}:${q.scope}`;
 export const isGeneric = (key: QuestionKey) =>
   (genericKeys as readonly string[]).includes(key);
+export const isMember = (key: QuestionKey) =>
+  (memberKeys as readonly string[]).includes(key);
+export const officeBreakdownQuestions: Question[] = [
+  ...procedureScopes.map((scope) => ({
+    key: 'frequency' as const,
+    scope,
+    required: true,
+  })),
+  ...procedureScopes.map((scope) => ({
+    key: 'age_limit' as const,
+    scope,
+    required: true,
+  })),
+  ...(
+    [
+      'downgrade',
+      'fee_at_maximum',
+      'rollover',
+      'waiting_period',
+      'out_of_network',
+      'unusual_notes',
+    ] as const
+  ).map((key) => ({ key, scope: 'plan', required: true })),
+];
 export function displayValue(value: unknown): string {
   if (value === null || value === undefined) return 'Unknown';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';

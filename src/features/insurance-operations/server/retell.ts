@@ -1,6 +1,12 @@
 import { createHmac, timingSafeEqual, createHash } from 'node:crypto';
 import { z } from 'zod';
-import { isGeneric, questionId, ruleValueSchema } from '../domain/schema';
+import {
+  isMember,
+  questionId,
+  questionLabels,
+  scopeLabels,
+  ruleValueSchema,
+} from '../domain/schema';
 import {
   missingQuestions,
   type Answer,
@@ -8,6 +14,7 @@ import {
   type TaskEvent,
 } from '../domain/workflow';
 import type { CallAdapter, LaunchResult } from '../adapters/call-contract';
+import { permittedPayerAction } from './conversation';
 
 export type RetellSetup = {
   apiKey: string;
@@ -106,13 +113,18 @@ export class RetellAdapter implements CallAdapter {
       expiresAt: this.now() + 60 * 60 * 1000,
     };
     this.attempts.set(attemptId, correlation);
-    const patientQuestions = missingQuestions(task).some(
-      (q) => !isGeneric(q.key),
+    const patientQuestions = missingQuestions(task).some((q) =>
+      isMember(q.key),
     );
     const scope = {
       kind: task.kind,
       delivery: task.delivery,
-      questions: missingQuestions(task),
+      questions: missingQuestions(task).map((q) => ({
+        ...q,
+        id: questionId(q),
+        label: questionLabels[q.key],
+        procedure: scopeLabels[q.scope] ?? q.scope,
+      })),
       codes: task.codes,
       plan: {
         group: task.planIdentity.groupRaw,
@@ -195,6 +207,65 @@ export class RetellAdapter implements CallAdapter {
     for (const [id, a] of this.attempts)
       if (a.task.sessionId === sessionId) this.attempts.delete(id);
   }
+  get activeCount() {
+    this.sweep();
+    return this.attempts.size;
+  }
+  /** Retell's signed custom-function envelope. The real-time transcript in
+   * call is ignored; only opaque correlation and allowlisted args are read. */
+  async tool(raw: string, signature: string) {
+    this.sweep();
+    if (
+      raw.length > 1024 * 1024 ||
+      !verifyRetell(raw, signature, this.setup.apiKey, this.now())
+    )
+      return false;
+    const digest = createHash('sha256').update(raw).digest('hex');
+    if (this.seen.has(digest)) return true;
+    let body;
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      return false;
+    }
+    const a = this.attempts.get(body.call?.metadata?.attempt_token);
+    if (
+      !a ||
+      a.terminal ||
+      typeof body.call?.call_id !== 'string' ||
+      (a.callRef && a.callRef !== body.call.call_id)
+    )
+      return false;
+    a.callRef = body.call.call_id;
+    let accepted = false;
+    if (body.name === 'record_benefit_answer')
+      accepted = this.recordAnswer(a.attemptId, body.args);
+    if (body.name === 'report_payer_state') {
+      const action = permittedPayerAction(
+        a.task,
+        body.args,
+        !!this.setup.officeFax,
+      );
+      if (action) {
+        if (action.action === 'hold') this.event(a, 'hold', 'Payer hold');
+        if (action.action === 'representative')
+          this.event(a, 'representative', 'Representative reached');
+        if (action.action === 'needs_staff')
+          this.event(a, 'needs_staff', action.reason);
+        if (action.action === 'request_fax')
+          this.event(
+            a,
+            'fax_requested',
+            'Payer fax request acknowledged; receipt not confirmed',
+          );
+        if (['finish', 'needs_staff'].includes(action.action) && a.callRef)
+          await this.cancel(a.callRef).catch(() => undefined);
+        accepted = true;
+      }
+    }
+    if (accepted) this.seen.set(digest, this.now() + 300000);
+    return accepted;
+  }
   webhook(raw: string, signature: string) {
     this.sweep();
     if (
@@ -238,7 +309,7 @@ export class RetellAdapter implements CallAdapter {
       .object({
         questionId: z.string().max(100),
         state: z.enum(['answered', 'unknown', 'unavailable']),
-        value: z.union([ruleValueSchema, z.string().max(160)]).nullable(),
+        value: z.union([ruleValueSchema, z.string().max(1000)]).nullable(),
         source: z.enum(['ivr', 'representative']),
         qualification: z.string().max(200),
       })
@@ -275,6 +346,7 @@ export class RetellAdapter implements CallAdapter {
       at: new Date(this.now()).toISOString(),
       kind,
       detail,
+      callRef: a.callRef,
     });
   }
   private sweep() {

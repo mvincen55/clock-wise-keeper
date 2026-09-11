@@ -7,6 +7,7 @@ import {
   questionId,
   questionLabels,
   requestLabels,
+  scopeLabels,
 } from '../domain/schema';
 import './print.css';
 
@@ -58,6 +59,26 @@ export function Report({
       </p>
       <p>CDT codes: {task.codes.join(', ') || 'None selected'}</p>
       <p>
+        Updated:{' '}
+        {[...task.answers.map((a) => a.at), ...(plan ? [plan.reviewedAt] : [])]
+          .sort()
+          .at(-1) || 'Not yet obtained'}
+      </p>
+      {task.billingPolicy && (
+        <aside className="io-office-policy">
+          <strong>Office billing instruction — not payer verification</strong>
+          <p>
+            Downgrades:{' '}
+            {task.billingPolicy.downgradeFee?.replace(/_/g, ' ') ||
+              'No instruction'}
+            . At maximum:{' '}
+            {task.billingPolicy.maximumFee?.replace(/_/g, ' ') ||
+              'No instruction'}
+            .
+          </p>
+        </aside>
+      )}
+      <p>
         Answers: {completeness(task)} · Call progress:{' '}
         {task.progress.replace(/_/g, ' ')} · Fax: {task.fax.replace(/_/g, ' ')}
       </p>
@@ -92,7 +113,10 @@ export function Report({
             return (
               <tr key={questionId(q)}>
                 <td>
-                  {questionLabels[q.key]} ({q.scope})
+                  {q.key === 'age_limit'
+                    ? 'Age limitation — procedure / restriction'
+                    : questionLabels[q.key]}{' '}
+                  ({scopeLabels[q.scope] ?? q.scope})
                   {q.required ? '' : ' — optional'}
                 </td>
                 <td>

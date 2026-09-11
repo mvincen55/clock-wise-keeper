@@ -233,9 +233,15 @@ export function InsuranceSession({
   );
   const resolved = tasks.map((t) => {
     const m = matches.get(t.id);
-    return t.progress === 'draft' && m?.state === 'matched'
-      ? applyPlan(t, m.candidates[0])
-      : t;
+    if (t.progress !== 'draft') return t;
+    const resolvedTask =
+      m?.state === 'matched' ? applyPlan(t, m.candidates[0]) : t;
+    return {
+      ...resolvedTask,
+      billingPolicy: settings?.billingPolicies?.find(
+        (p) => p.payerId === t.planIdentity.payerId,
+      ),
+    };
   });
   const update = (next: Task) =>
     setTasks((current) => current.map((t) => (t.id === next.id ? next : t)));
