@@ -54,7 +54,7 @@ const buildSections = (brokenApptLabel: string): HubSection[] => [
     title: 'Reference',
     links: [
       { to: '/important-numbers', icon: Phone, label: 'Important Numbers', description: 'Practice credentials, team, referral offices, labs, and carriers.' },
-      { to: '/insurance-desk', icon: ShieldCheck, label: 'Insurance Desk', description: 'Carrier manuals, claims guidance, plan rules, and provider references.' },
+      { to: '/insurance-desk', icon: ShieldCheck, label: 'Insurance Benefits', description: 'Check benefits, review plan rules, and access carrier manuals.' },
     ],
   },
   {

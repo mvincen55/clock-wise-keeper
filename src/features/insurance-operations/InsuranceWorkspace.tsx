@@ -57,10 +57,10 @@ import { SettingsPanel } from './ui/SettingsPanel';
 import { Results } from './ui/Results';
 
 const tabs = [
-  ['', 'Manuals'],
   ['benefits', 'Benefits'],
   ['plans', 'Plan Library'],
   ['claims', 'Claims'],
+  ['manuals', 'Manuals'],
   ['settings', 'Settings'],
 ] as const;
 export function InsuranceWorkspace({
@@ -114,7 +114,7 @@ export function InsuranceSession({
   getToken: () => Promise<string>;
 }) {
   const location = useLocation();
-  const active = location.pathname.split('/')[2] ?? '';
+  const active = location.pathname.split('/')[2] || 'benefits';
   const [tasks, setTasks] = useState<Task[]>([]);
   const [synthetic, setSynthetic] = useState(false);
   const [generation, setGeneration] = useState(0);
@@ -469,13 +469,13 @@ export function InsuranceSession({
   return (
     <div>
       {nav}
-      {active === '' ? (
+      {active === 'manuals' ? (
         manuals(sensitive)
       ) : (
         <div className="mx-auto max-w-6xl space-y-5 p-4 md:p-6">
           <div className="flex flex-wrap justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-semibold">Insurance Desk</h1>
+              <h1 className="text-2xl font-semibold">Insurance Benefits</h1>
               <p className="text-sm text-muted-foreground">
                 Keep this page open until results are printed; refreshing clears
                 the session.
