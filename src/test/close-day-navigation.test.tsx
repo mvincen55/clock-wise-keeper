@@ -116,3 +116,5 @@ describe('Schedule setup navigation', () => {
     expect(scheduleReturnUrl('https://example.com')).toBe(`/deposit-log?date=${getToday()}&step=2`);
   });
 });
+
+vi.mock('@/hooks/useProviders', () => ({ useProviders: () => ({ data: [] }) }));

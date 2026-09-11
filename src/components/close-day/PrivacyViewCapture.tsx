@@ -28,6 +28,9 @@ import {
 import { computeRollup, refereeMetrics } from '@/lib/schedule-reader/metrics-referee';
 import { useOrgEmployees } from '@/hooks/useEmployees';
 import { usePracticeSettings } from '@/hooks/usePracticeSettings';
+import { useProviders } from '@/hooks/useProviders';
+import DailyColumnReview from './DailyColumnReview';
+import type { LayoutColumn } from '@/lib/schedule-reader';
 import {
   toClassifierRules,
   toLayoutProfile,
@@ -76,7 +79,7 @@ function fmtMin(minutes: number): string {
   return h > 0 ? `${h}h ${m > 0 ? `${m}m` : ''}`.trim() : `${m}m`;
 }
 
-type Phase = 'idle' | 'confirm' | 'processing' | 'review' | 'done';
+type Phase = 'idle' | 'confirm' | 'processing' | 'columns' | 'review' | 'done';
 
 type Props = {
   canConfigure?: boolean;
@@ -108,6 +111,11 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
   const { data: employees } = useOrgEmployees();
   const { data: settings } = usePracticeSettings();
   const saveMetrics = useSaveScheduleMetrics();
+  const { data: registry = [], isPending: providersPending, isError: providersError } = useProviders();
+  const activeProviders = registry.filter(p => p.active);
+  const [dailyColumns, setDailyColumns] = useState<LayoutColumn[]>([]);
+  const columnReview = useRef<((columns: LayoutColumn[] | null) => void) | null>(null);
+  const captureVersion = useRef(0);
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [privacyConfirmed, setPrivacyConfirmed] = useState(false);
@@ -121,11 +129,15 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
 
   // Whatever happens — navigation, unmount, cancel — the frame dies.
   useEffect(() => {
+    setPhase('idle'); setAnalysis(null); setPrivacyConfirmed(false); setDetailsConfirmed(false);
     return () => {
+      captureVersion.current += 1;
+      columnReview.current?.(null);
+      columnReview.current = null;
       void destroyCapture(frameRef.current);
       frameRef.current = null;
     };
-  }, []);
+  }, [date]);
 
   const teardown = async () => {
     await destroyCapture(frameRef.current);
@@ -133,6 +145,7 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
   };
 
   const runPipeline = async (frame: CaptureFrame) => {
+    const version = ++captureVersion.current;
     frameRef.current = frame;
     setPhase('processing');
     setErrorCode(null);
@@ -140,12 +153,21 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
       const result = await processScheduleFrame(frame, {
         profile: toLayoutProfile(profileRow!),
         businessDate: date,
-        knownStaffNames: (employees ?? []).map(e => e.display_name),
+        knownStaffNames: [...(employees ?? []).map(e => e.display_name), ...activeProviders.map(p => p.displayName)],
+        providers: activeProviders,
+        reviewColumns: suggested => new Promise(resolve => {
+          if (version !== captureVersion.current) { resolve(null); return; }
+          columnReview.current = resolve;
+          setDailyColumns(suggested);
+          setPhase('columns');
+        }),
         phraseRules: toClassifierRules(phraseRows),
       });
+      if (version !== captureVersion.current) return;
       setAnalysis(result);
       setPhase('review');
     } catch (err) {
+      if (version !== captureVersion.current) return;
       const code = err instanceof ScheduleReaderError ? err.code : 'OCR_FAILED';
       setErrorCode(code);
       setPhase('idle');
@@ -154,7 +176,7 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
     } finally {
       // The image has done its one job. Destroy it — review works from the
       // sanitized analysis only.
-      await teardown();
+      if (frameRef.current === frame) await teardown();
     }
   };
 
@@ -323,13 +345,18 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
                 Save the deposit log first — the schedule metrics attach to today's record.
               </p>
             ) : (
-              <Button onClick={() => setPhase('confirm')}>
+              <Button disabled={providersPending || providersError} onClick={() => setPhase('confirm')}>
                 <Camera className="mr-2 h-4 w-4" />
                 Capture Today's Schedule
               </Button>
             )}
+            {providersError && <p role="alert">Could not load office providers. Reload before capturing.</p>}
           </>
         )}
+
+        {phase === 'columns' && frameRef.current && <DailyColumnReview initial={dailyColumns} providers={activeProviders} frame={frameRef.current} date={date}
+          onConfirm={columns => { setPhase('processing'); columnReview.current?.(columns); columnReview.current = null; }}
+          onCancel={() => { columnReview.current?.(null); columnReview.current = null; }} />}
 
         {phase === 'confirm' && (
           <div className="space-y-4">

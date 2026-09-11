@@ -11,6 +11,7 @@
  */
 import type { LayoutColumn, LayoutMatch, LayoutProfile, OcrWord } from './types';
 import { ScheduleReaderError } from './types';
+import { groupWordsIntoLines } from './privacy-detector';
 
 const TIME_WORD = /^\d{1,2}:\d{2}\s*(?:am|pm)?$/i;
 
@@ -158,10 +159,17 @@ export function draftColumnsFromFrame(
   frameHeight: number
 ): Array<Pick<LayoutColumn, 'xStart' | 'xEnd'>> {
   // Cluster header-band words by x-center gaps; each cluster is a column head.
-  const header = words
+  let header = words
     .filter(w => w.bbox.y0 < frameHeight * 0.15 && w.bbox.x0 > frameWidth * 0.1)
     .sort((a, b) => a.bbox.x0 - b.bbox.x0);
   if (header.length === 0) return [];
+
+  // Prefer the actual schedule header row over application menus/toolbars.
+  const headerRow = groupWordsIntoLines(header).map(line => ({
+    words: line.words,
+    score: line.words.filter(w => /^(?:(?:DR|DF|HY|HYG|HF)[#:]?\d|notes?$|memo$)/i.test(w.text)).length,
+  })).sort((a, b) => b.score - a.score)[0];
+  if (headerRow?.score >= 2) header = [...headerRow.words].sort((a, b) => a.bbox.x0 - b.bbox.x0);
 
   const clusters: Array<{ x0: number; x1: number }> = [];
   for (const w of header) {
