@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Link } from 'react-router-dom';
 import {
   AlertTriangle, CalendarX, Calculator, Camera, Check, ChevronDown, Copy, Info,
   Loader2, OctagonX, Plus, Printer, RotateCcw, ShieldCheck, Trash2,
@@ -152,7 +153,7 @@ function OutputBlock({ title, text, hint }: { title: string; text: string; hint?
 export default function BrokenAppointments() {
   const { data: ctx } = useOrgContext();
   const { data: branding } = useOrgBranding();
-  const { data: settings } = useBrokenApptSettings();
+  const { data: settings, isPending: settingsPending, isError: settingsError, refetch: retrySettings } = useBrokenApptSettings();
   const { data: templates, isLoading: templatesLoading } = useBrokenApptTemplates();
   const { data: practice } = usePracticeSettings();
   const { data: correspondence = DEFAULT_CORRESPONDENCE_SETTINGS } = useCorrespondenceSettings();
@@ -1312,10 +1313,13 @@ export default function BrokenAppointments() {
     lateWorkspace
   );
 
+  if (settingsPending || settingsError) return <div className="p-4 space-y-3"><p role={settingsError ? "alert" : "status"}>{settingsError ? "Could not load policy and office closures. Retry before calculating notice." : "Loading policy and office closures…"}</p>{settingsError && <Button onClick={() => void retrySettings()}>Try again</Button>}</div>;
+
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">{s.moduleNavLabel}</h1>
+        {(ctx?.role === "owner" || ctx?.role === "manager") && <Button variant="outline" asChild><Link to="/broken-appointments/settings">Policy settings</Link></Button>}
         <div className="flex items-center gap-2">
           <Badge variant="outline" title="Your office staff code — stamped on notes and the checklist">
             {staffCodeLabel(myStaffCode)}

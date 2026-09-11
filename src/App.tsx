@@ -13,6 +13,7 @@ import DaysOff from "@/pages/DaysOff";
 import Reports from "@/pages/Reports";
 import ReportHistory from "@/pages/ReportHistory";
 import WorkZones from "@/pages/WorkZones";
+import WorkflowSettings from '@/pages/WorkflowSettings';
 import Settings from "@/pages/Settings";
 import PTO from "@/pages/PTO";
 import MyRequests from "@/pages/MyRequests";
@@ -170,6 +171,10 @@ const router = createBrowserRouter(
             <Route path="/report-history" element={<ProtectedRoute><ReportHistory /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/work-zones" element={<ProtectedRoute><WorkZones /></ProtectedRoute>} />
+            <Route path="/fof/settings" element={<ProtectedRoute><WorkflowSettings kind="fof" /></ProtectedRoute>} />
+            <Route path="/broken-appointments/settings" element={<ProtectedRoute><WorkflowSettings kind="broken-appointments" /></ProtectedRoute>} />
+            <Route path="/settings/schedule-intelligence" element={<ProtectedRoute><WorkflowSettings kind="schedule-intelligence" /></ProtectedRoute>} />
+            <Route path="/settings/deposits" element={<ProtectedRoute><WorkflowSettings kind="deposits" /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             {/* Deep-linkable settings tabs (/settings/reminders stays its own
                 page — the static segment outranks this param route). */}

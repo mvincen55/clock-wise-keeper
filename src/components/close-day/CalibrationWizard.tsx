@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -28,16 +29,18 @@ import {
   ScheduleReaderError,
   type CaptureFrame,
   type ColumnKind,
-  type Department,
   type LayoutColumn,
-  type OperationalRole,
   type ScheduleStatus,
   type StatusLegendEntry,
 } from '@/lib/schedule-reader';
 import { recognizeFrame } from '@/lib/schedule-reader/ocr';
 import { ROLE_LABELS } from '@/hooks/useOperationalRoles';
-import { useSaveLayoutProfile } from '@/hooks/useScheduleIntelligence';
+import { useProviders } from '@/hooks/useProviders';
+import { providerColumn, suggestColumnProvider } from '@/lib/schedule-provider-mapping';
+import { useSaveLayoutProfile, useLayoutProfiles } from '@/hooks/useScheduleIntelligence';
 import { hhmmToMinutes } from '@/lib/time-utils';
+import ProviderWorkingSchedule from '@/components/close-day/ProviderWorkingSchedule';
+import { wipeOcrWords } from '@/lib/schedule-reader/destroy-capture';
 
 const PMS_OPTIONS = [
   'Dentrix',
@@ -88,12 +91,18 @@ type Props = {
  */
 export default function CalibrationWizard({ open, onClose }: Props) {
   const save = useSaveLayoutProfile();
+  const { data: registry = [], isPending: providersPending, isError: providersError } = useProviders();
+  const providers = registry.filter(p => p.active);
+  const { data: profiles = [] } = useLayoutProfiles();
 
   const [step, setStep] = useState(0);
   const [pms, setPms] = useState<string>('Other');
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState<'window' | 'screenshot' | null>(null);
   const [columns, setColumns] = useState<DraftColumn[]>([]);
+  const [pendingHours, setPendingHours] = useState<Record<string, boolean>>({});
+  const onPendingHours = useCallback((id: string, pending: boolean) => setPendingHours(prev => prev[id] === pending ? prev : { ...prev, [id]: pending }), []);
+  useEffect(() => { if (step !== 3) setPendingHours({}); }, [step]);
   const [legend, setLegend] = useState<Partial<Record<ScheduleStatus, StatusLegendEntry>>>({});
   const [sampling, setSampling] = useState<ScheduleStatus | null>(null);
   const [dayStart, setDayStart] = useState('08:00');
@@ -146,9 +155,13 @@ export default function CalibrationWizard({ open, onClose }: Props) {
     await teardown(); // a retry never leaks the previous frame
     frameRef.current = frame;
     const { words } = await recognizeFrame(frame.canvas);
+    try {
     const drafts = draftColumnsFromFrame(words, frame.width, frame.height);
     setColumns(
-      drafts.map(d => ({
+      drafts.map(d => {
+        const previous = profiles.flatMap(p => (p.layout_signature as unknown as { columns?: LayoutColumn[] }).columns ?? []);
+        const suggestion = suggestColumnProvider(words, d, frame.width, frame.height, providers, previous);
+        return ({
         xStart: d.xStart,
         xEnd: d.xEnd,
         pxStart: d.xStart * frame.width,
@@ -158,9 +171,15 @@ export default function CalibrationWizard({ open, onClose }: Props) {
         providerRole: null,
         department: null,
         employeeId: null,
-      }))
+        providerCode: suggestion.providerCode,
+        ...(suggestion.provider ? {
+          ...providerColumn(suggestion.provider),
+          workingHours: previous.find(c => c.providerId === suggestion.provider?.id && c.workingHours)?.workingHours,
+        } : {}),
+      }); })
     );
     setStep(1);
+    } finally { wipeOcrWords(words); }
   };
 
   const fail = async (err: unknown) => {
@@ -219,6 +238,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
   );
 
   const finish = async () => {
+    if (Object.values(pendingHours).some(Boolean)) return;
     const startMin = hhmmToMinutes(dayStart);
     const endMin = hhmmToMinutes(dayEnd);
     if (endMin <= startMin) {
@@ -226,8 +246,8 @@ export default function CalibrationWizard({ open, onClose }: Props) {
       return;
     }
     const providerCols = columns.filter(c => c.kind !== 'non_clinical');
-    if (providerCols.some(c => !c.providerLabel || !c.department)) {
-      toast.error('Give every clinical column a provider name and department.');
+    if (providerCols.length === 0 || providerCols.some(c => !c.providerId || !c.providerRole || !c.department)) {
+      toast.error('Select an office provider for every clinical column.');
       return;
     }
     try {
@@ -264,6 +284,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Calibrate Schedule Intelligence</DialogTitle>
+          <DialogDescription>Identify providers, review status colors, and confirm working hours for schedule capture.</DialogDescription>
         </DialogHeader>
 
         {step === 0 && (
@@ -325,6 +346,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
+                aria-label="Privacy-view schedule screenshot"
                 className="hidden"
                 onChange={e => onScreenshotPicked(e.target.files?.[0])}
               />
@@ -351,8 +373,9 @@ export default function CalibrationWizard({ open, onClose }: Props) {
         {step === 1 && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Name each schedule column. The preview below never leaves this device.
+              Select the provider for each column. Type and department fill in from the office registry. Recognized provider codes suggest previously confirmed matches; review them before continuing. The preview never leaves this device.
             </p>
+            {providersPending ? <p role="status">Loading office providers…</p> : providersError ? <p role="alert">Could not load providers. Close and retry calibration.</p> : providers.length === 0 ? <p>Add providers in Settings → Office before mapping schedule columns.</p> : null}
             <canvas ref={previewRef} className="w-full rounded border" />
             <div className="space-y-3">
               {columns.map((col, i) => (
@@ -377,48 +400,26 @@ export default function CalibrationWizard({ open, onClose }: Props) {
                     <>
                       <div className="space-y-1">
                         <Label className="text-xs">Provider</Label>
-                        <Input
-                          className="h-8 text-xs"
-                          placeholder="Dr. A / Hyg 1"
-                          value={col.providerLabel ?? ''}
-                          onChange={e => setColumn(i, { providerLabel: e.target.value || null })}
-                        />
+                        <Select value={col.providerId ?? ''} onValueChange={id => {
+                          const provider = providers.find(p => p.id === id);
+                          if (provider) {
+                            const existing = columns.find(c => c.providerId === id && c.workingHours);
+                            const previous = profiles.flatMap(p => (p.layout_signature as unknown as { columns?: LayoutColumn[] }).columns ?? []).find(c => c.providerId === id && c.workingHours);
+                            setColumn(i, { ...providerColumn(provider), workingHours: existing?.workingHours ?? previous?.workingHours });
+                          }
+                        }}>
+                          <SelectTrigger className="h-8 text-xs" aria-label={`Provider for column ${i + 1}`}><SelectValue placeholder="Select provider" /></SelectTrigger>
+                          <SelectContent>{providers.map(p => <SelectItem key={p.id} value={p.id}>{p.displayName}</SelectItem>)}</SelectContent>
+                        </Select>
+                        {col.providerCode && <p className="text-xs text-muted-foreground">Schedule ID: {col.providerCode}</p>}
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs">Provider type</Label>
-                        <Select
-                          value={col.providerRole ?? ''}
-                          onValueChange={v =>
-                            setColumn(i, { providerRole: v as OperationalRole })
-                          }
-                        >
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue placeholder="Pick one" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(['dentist', 'hygienist', 'other'] as OperationalRole[]).map(r => (
-                              <SelectItem key={r} value={r} className="text-xs">
-                                {ROLE_LABELS[r]}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <p className="text-xs py-2">{col.providerRole ? ROLE_LABELS[col.providerRole] : 'Select provider'}</p>
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs">Department</Label>
-                        <Select
-                          value={col.department ?? ''}
-                          onValueChange={v => setColumn(i, { department: v as Department })}
-                        >
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue placeholder="Pick one" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="hygiene" className="text-xs">Hygiene</SelectItem>
-                            <SelectItem value="doctor" className="text-xs">Doctor</SelectItem>
-                            <SelectItem value="other" className="text-xs">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <p className="text-xs py-2">{col.department === 'doctor' ? 'Doctor' : col.department === 'hygiene' ? 'Hygiene' : col.department ? 'Other' : 'Select provider'}</p>
                       </div>
                     </>
                   )}
@@ -429,7 +430,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
               <Button variant="ghost" onClick={onClose}>
                 Cancel
               </Button>
-              <Button onClick={() => setStep(2)}>Next: status colors</Button>
+              <Button disabled={providersPending || providersError || !columns.some(c => c.kind !== 'non_clinical') || columns.some(c => c.kind !== 'non_clinical' && !c.providerId)} onClick={() => setStep(2)}>Next: status colors</Button>
             </div>
           </div>
         )}
@@ -486,6 +487,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
 
         {step === 3 && (
           <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">The time grid describes the visible screenshot. Attach each provider’s weekly hours below so off-duty time is not treated as an opening.</p>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1.5">
                 <Label htmlFor="cal-start">Day starts</Label>
@@ -521,6 +523,11 @@ export default function CalibrationWizard({ open, onClose }: Props) {
                 </Select>
               </div>
             </div>
+            {[...new Map(columns.filter(c => c.kind !== 'non_clinical' && c.providerId).map(c => [c.providerId!, c])).values()].map(col => (
+              <ProviderWorkingSchedule key={col.providerId} providerId={col.providerId!} name={col.providerLabel!} value={col.workingHours}
+                onPendingChange={onPendingHours}
+                onChange={workingHours => setColumns(previous => previous.map(c => c.providerId === col.providerId ? { ...c, workingHours } : c))} />
+            ))}
             <div className="space-y-1.5">
               <Label>How do lunch and admin blocks appear?</Label>
               <Select value={blockStyle} onValueChange={v => setBlockStyle(v as typeof blockStyle)}>
@@ -548,7 +555,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
               <Button variant="ghost" onClick={() => setStep(2)}>
                 Back
               </Button>
-              <Button onClick={finish} disabled={save.isPending}>
+              <Button onClick={finish} disabled={save.isPending || Object.values(pendingHours).some(Boolean)}>
                 {save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Save layout profile
               </Button>
@@ -563,3 +570,4 @@ export default function CalibrationWizard({ open, onClose }: Props) {
     </Dialog>
   );
 }
+

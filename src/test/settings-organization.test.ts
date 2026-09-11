@@ -56,11 +56,12 @@ describe('settings is one organized, deep-linkable section', () => {
   });
 
   it('Close the Day setup moved here; the Deposit Log page links instead', () => {
-    expect(settings).toContain('ScheduleIntelligenceSetupCard');
-    expect(settings).toContain('DepositSettingsCard');
+    expect(settings).toContain('to="/settings/schedule-intelligence"');
+    expect(read('pages/WorkflowSettings.tsx')).toContain('ScheduleIntelligenceSetupCard');
+    expect(settings).toContain('to="/settings/deposits"');
     expect(depositLog).not.toContain('ScheduleIntelligenceSetupCard');
     expect(depositLog).not.toContain('<DepositSettingsCard');
-    expect(depositLog).toContain('to="/settings/workflows"');
+    expect(depositLog).toContain('to="/settings/deposits"');
   });
 
   it('PTO policy moved here; the PTO tab links instead of duplicating it', () => {

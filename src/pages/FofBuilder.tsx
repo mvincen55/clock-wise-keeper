@@ -1383,7 +1383,8 @@ export default function FofBuilder() {
       <FofAssistantWidget context={assistantContext} patientName={state.patientName} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">Financial Options Form</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {isManager && <Button variant="outline" asChild><Link to="/fof/settings">FOF Settings</Link></Button>}
           <Button variant="outline" asChild>
             <Link to="/fof/fees">
               <DollarSign className="h-4 w-4 mr-2" />

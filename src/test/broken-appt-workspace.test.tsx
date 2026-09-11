@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import BrokenAppointments from '@/pages/BrokenAppointments';
@@ -129,7 +130,7 @@ const answerNotice = (answer: 'Yes' | 'No') =>
 
 describe('decision-first workspace', () => {
   it('shows the trust line', () => {
-    render(<BrokenAppointments />);
+    render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     expect(
       screen.getByText(/Nothing entered here is saved or sent anywhere/i)
     ).toBeInTheDocument();
@@ -137,7 +138,7 @@ describe('decision-first workspace', () => {
   });
 
   it('the rung and every operational output appear WITHOUT any patient info', () => {
-    render(<BrokenAppointments />);
+    render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     pickNoShow();
     answerNotice('No');
     // No priors → first NS → Rung 2, shown immediately.
@@ -152,7 +153,7 @@ describe('decision-first workspace', () => {
   });
 
   it('no calculator required: answering No directly is enough', () => {
-    render(<BrokenAppointments />);
+    render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     pickNoShow();
     answerNotice('No');
     expect(screen.getByText('Rung 2', { selector: 'span' })).toBeInTheDocument();
@@ -162,7 +163,7 @@ describe('decision-first workspace', () => {
   });
 
   it('LC then NS lands on Rung 3 (letter 9106) — precedence preserved', () => {
-    render(<BrokenAppointments />);
+    render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     pickNoShow();
     answerNotice('No');
     setValue('Prior late cancellations', '1');
@@ -172,7 +173,7 @@ describe('decision-first workspace', () => {
   });
 
   it('enough notice short-circuits: on-time result, no history asked', () => {
-    render(<BrokenAppointments />);
+    render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     fireEvent.click(screen.getByLabelText(/Late cancellation with a retrievable message/i));
     answerNotice('Yes');
     expect(screen.getByText(/No fee — post 9102, reschedule normally/i)).toBeInTheDocument();
@@ -181,7 +182,7 @@ describe('decision-first workspace', () => {
   });
 
   it('the optional calculator applies its verdict into the notice answer', () => {
-    render(<BrokenAppointments />);
+    render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     pickNoShow();
     fireEvent.click(screen.getByRole('button', { name: /Not sure\? Calculate/i }));
     // Mon 8/10 9:00 appt, notice Sunday — late (weekend never counts).
@@ -198,7 +199,7 @@ describe('decision-first workspace', () => {
   });
 
   it('VIP toggle forces the Rung 5 stop with the holding reply only', () => {
-    render(<BrokenAppointments />);
+    render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     pickNoShow();
     answerNotice('No');
     fireEvent.click(screen.getByRole('switch', { name: /VIP-only scheduling/i }));
@@ -215,7 +216,7 @@ describe('decision-first workspace', () => {
   });
 
   it('mode B late text produces reply, note with pasted text, and no Pop-Up at Rung 1', () => {
-    render(<BrokenAppointments />);
+    render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: /respond to a cancellation text/i }));
     fireEvent.change(screen.getByPlaceholderText(/paste the text message/i), {
       target: { value: 'Running behind, cancel me please' },
@@ -238,7 +239,7 @@ describe('decision-first workspace', () => {
 
 describe('conditional Future Appointments (engine-driven)', () => {
   it('stays completely hidden when the rung takes no future-appointment action', () => {
-    render(<BrokenAppointments />);
+    render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     pickNoShow();
     answerNotice('No'); // Rung 2
     expect(screen.queryByText(/Future appointments/i)).not.toBeInTheDocument();
@@ -248,7 +249,7 @@ describe('conditional Future Appointments (engine-driven)', () => {
   });
 
   it('appears with its capture shortcut when the rung cancels future appointments', () => {
-    render(<BrokenAppointments />);
+    render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     pickNoShow();
     answerNotice('No');
     setValue('Prior late cancellations', '2'); // → Rung 4
@@ -260,7 +261,7 @@ describe('conditional Future Appointments (engine-driven)', () => {
   });
 
   it('rung 4 provider choice offers the FOF doctor list', async () => {
-    render(<BrokenAppointments />);
+    render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     pickNoShow();
     answerNotice('No');
     setValue('Prior late cancellations', '2');
@@ -276,7 +277,7 @@ describe('conditional Future Appointments (engine-driven)', () => {
   it('provider falls back to free text when no FOF doctors are configured', () => {
     fofDoctorNames = [];
     try {
-      render(<BrokenAppointments />);
+      render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
       pickNoShow();
       answerNotice('No');
       setValue('Prior late cancellations', '2');
@@ -295,7 +296,7 @@ describe('interactive checklist + staff attribution', () => {
   };
 
   it('checking stamps the canonical staff code with date and time', () => {
-    render(<BrokenAppointments />);
+    render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     runToRung2();
     const box = screen.getByRole('checkbox', { name: /Post 9100 \(auto-fee\)/i });
     fireEvent.click(box);
@@ -305,7 +306,7 @@ describe('interactive checklist + staff attribution', () => {
   });
 
   it('unchecking removes the stamp; rechecking stamps fresh', () => {
-    render(<BrokenAppointments />);
+    render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     runToRung2();
     const box = screen.getByRole('checkbox', { name: /Post 9100 \(auto-fee\)/i });
     fireEvent.click(box);
@@ -323,7 +324,7 @@ describe('interactive checklist + staff attribution', () => {
       configurable: true,
       value: { writeText: (t: string) => (written.push(t), Promise.resolve()) },
     });
-    render(<BrokenAppointments />);
+    render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     runToRung2();
     const blocks = [...document.querySelectorAll('pre')].map(p => p.textContent!);
     // Note + Pop-Up render as stamped blocks ending with the code.
@@ -343,7 +344,7 @@ describe('interactive checklist + staff attribution', () => {
 
   it('with no staff code assigned, outputs prompt for a manager instead of stamping', () => {
     myStaffCode = null;
-    render(<BrokenAppointments />);
+    render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     runToRung2();
     expect(screen.getAllByText(/No staff code assigned yet/i).length).toBeGreaterThan(0);
     expect(screen.queryByText('Appointment note (Dentrix)')).not.toBeInTheDocument();
@@ -357,7 +358,7 @@ describe('interactive checklist + staff attribution', () => {
 describe('PMS-aware behavior', () => {
   it('a non-Dentrix office sees no Dentrix help and no capture buttons', () => {
     pmsSystem = 'open_dental';
-    render(<BrokenAppointments />);
+    render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     pickNoShow();
     answerNotice('No');
     expect(screen.queryByRole('button', { name: /Capture from Dentrix/i })).not.toBeInTheDocument();
@@ -369,7 +370,7 @@ describe('PMS-aware behavior', () => {
 
   it('an unconfigured office gets no Dentrix assumptions either', () => {
     pmsSystem = 'not_configured';
-    render(<BrokenAppointments />);
+    render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     pickNoShow();
     answerNotice('No');
     expect(screen.queryByRole('button', { name: /Capture from/i })).not.toBeInTheDocument();
@@ -378,7 +379,7 @@ describe('PMS-aware behavior', () => {
   });
 
   it('a Dentrix office gets the contextual help control', () => {
-    render(<BrokenAppointments />);
+    render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     pickNoShow();
     answerNotice('No');
     expect(

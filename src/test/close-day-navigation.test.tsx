@@ -37,7 +37,7 @@ function SetupDestination() {
 function mount(step = 2) {
   return render(<MemoryRouter initialEntries={[`/deposit-log?date=2026-06-08&step=${step}`]}><Routes>
     <Route path="/deposit-log" element={<DepositLog />} />
-    <Route path="/settings/workflows" element={<SetupDestination />} />
+    <Route path="/settings/schedule-intelligence" element={<SetupDestination />} />
   </Routes></MemoryRouter>);
 }
 beforeEach(() => {
@@ -59,7 +59,7 @@ describe('Schedule setup navigation', () => {
   it.each(['owner', 'manager'])('offers setup to %s and returns to the saved date and step', role => {
     state.role = role; mount();
     fireEvent.click(screen.getByRole('button', { name: 'Set up Schedule Intelligence' }));
-    expect(screen.getByText('/settings/workflows?closingDate=2026-06-08#schedule-intelligence')).toBeInTheDocument();
+    expect(screen.getByText('/settings/schedule-intelligence?closingDate=2026-06-08')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('link', { name: 'Return' }));
     expect(screen.getByText('Privacy View Capture')).toBeInTheDocument();
     expect(screen.getByText(/Mon, Jun 8, 2026/)).toBeInTheDocument();

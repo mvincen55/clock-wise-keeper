@@ -71,6 +71,12 @@ export interface CaptureFrame {
 export type ColumnKind = 'provider' | 'overflow' | 'non_clinical';
 
 export interface LayoutColumn {
+  /** Canonical office provider; optional for older saved layouts. */
+  providerId?: string;
+  /** Confirmed short PMS header identifier, e.g. DR02. Never patient text. */
+  providerCode?: string;
+  /** Reviewed recurring hours; omitted weekdays remain unknown. */
+  workingHours?: Array<{ weekday: number; startMinutes: number; endMinutes: number }>;
   /** Relative horizontal position of the column, 0–1 of image width. */
   xStart: number;
   xEnd: number;
@@ -345,6 +351,8 @@ export interface ReducedRow {
 
 /** The full, validated result handed to the review UI. */
 export interface ScheduleAnalysis {
+  /** Providers with visible activity outside their confirmed weekly hours. */
+  availabilityConflicts?: string[];
   businessDate: string;
   layoutConfidence: number;
   privacy: PrivacyCheckResult;

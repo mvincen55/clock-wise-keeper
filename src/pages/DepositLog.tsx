@@ -537,8 +537,8 @@ export default function DepositLog() {
       {isManager && step === 0 && (
         <p className="text-xs text-muted-foreground">
           Printed deposit wording is managed in{' '}
-          <Link to="/settings/workflows" className="text-primary underline-offset-2 hover:underline">
-            Settings → Workflows
+          <Link to="/settings/deposits" className="text-primary underline-offset-2 hover:underline">
+            Deposit Print Settings
           </Link>
           .
         </p>

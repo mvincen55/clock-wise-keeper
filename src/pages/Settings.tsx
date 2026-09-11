@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
-import { useNavigate, useParams, useLocation, Link } from 'react-router-dom';
-import { scheduleReturnUrl } from '@/lib/close-day-navigation';
+import { useEffect } from 'react';
+import { useNavigate, useParams, useLocation, Link, Navigate } from 'react-router-dom';
+import { scheduleSetupUrl, scheduleReturnUrl } from '@/lib/close-day-navigation';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,18 +15,13 @@ import AcknowledgmentEscalationSettingsCard from '@/components/knowledge/Acknowl
 import EmployeePermissionsCard from '@/components/settings/EmployeePermissionsCard';
 import MessagingSettingsCard from '@/components/settings/MessagingSettingsCard';
 import { PracticeSettingsCard } from '@/components/settings/PracticeSettingsCard';
-import { FofPolicySettingsCard } from '@/components/settings/FofPolicySettingsCard';
 import ProviderRegistryCard from '@/components/settings/ProviderRegistryCard';
-import ProcedureMetaCard from '@/components/settings/ProcedureMetaCard';
-import { BrokenApptSettingsCard } from '@/components/settings/BrokenApptSettingsCard';
 import { StaffInitialsCard } from '@/components/settings/StaffInitialsCard';
 import MySignatureCard from '@/components/letterhead/MySignatureCard';
 import PayrollSettingsCard from '@/components/settings/PayrollSettingsCard';
 import OfficeClosuresCard from '@/components/settings/OfficeClosuresCard';
 import SecurityPrivacyCard from '@/components/settings/SecurityPrivacyCard';
 import PtoPolicySettingsCard from '@/components/settings/PtoPolicySettingsCard';
-import ScheduleIntelligenceSetupCard from '@/components/close-day/ScheduleIntelligenceSetupCard';
-import DepositSettingsCard from '@/components/DepositSettingsCard';
 
 /**
  * Settings — the one organized home for configuration.
@@ -87,7 +82,6 @@ export default function Settings() {
   const navigate = useNavigate();
   const { tab } = useParams();
   const location = useLocation();
-  const scheduleSection = useRef<HTMLElement>(null);
   const closingDate = new URLSearchParams(location.search).get('closingDate');
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
@@ -98,11 +92,13 @@ export default function Settings() {
   const active: SettingsTab = isManager ? requested : 'me';
   const showSchedule = active === 'workflows' && location.hash === '#schedule-intelligence';
   useEffect(() => {
-    if (showSchedule) {
-      scheduleSection.current?.scrollIntoView({ block: 'start' });
-      scheduleSection.current?.focus({ preventScroll: true });
+    if (active === 'office' && location.hash === '#office-closures') {
+      const target = document.getElementById('office-closures');
+      target?.scrollIntoView({ block: 'start' });
+      target?.focus({ preventScroll: true });
     }
-  }, [showSchedule]);
+  }, [active, location.hash]);
+  if (showSchedule) return <Navigate replace to={scheduleSetupUrl(closingDate ?? '')} />;
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
@@ -133,7 +129,8 @@ export default function Settings() {
             <OrgBrandingCard isManager={isManager} />
             {/* Performance goals, PMS, confirmation window. */}
             <PracticeSettingsCard />
-            <OfficeClosuresCard isManager={isManager} />
+            <div id="office-closures" tabIndex={-1} className="scroll-mt-6"><OfficeClosuresCard isManager={isManager} /></div>
+            <ProviderRegistryCard />
             <PayrollSettingsCard />
             <SettingsLinkCard
               icon={MapPin}
@@ -163,17 +160,10 @@ export default function Settings() {
         {/* ---------------------------- workflows ----------------------------- */}
         {isManager && (
           <TabsContent value="workflows" className="mt-4 space-y-6">
-            <ProviderRegistryCard />
-            <ProcedureMetaCard />
-            <FofPolicySettingsCard />
-            <BrokenApptSettingsCard />
-            {/* Close the Day configuration — moved from the bottom of the
-                Close the Day page, which now links here. */}
-            <section ref={scheduleSection} id="schedule-intelligence" tabIndex={-1} aria-label="Schedule Intelligence setup" className="scroll-mt-6 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <ScheduleIntelligenceSetupCard initiallyExpanded={showSchedule} />
-              {closingDate && <Button className="mt-3" variant="outline" asChild><Link to={scheduleReturnUrl(closingDate)}>Return to Close the Day</Link></Button>}
-            </section>
-            <DepositSettingsCard />
+            <SettingsLinkCard icon={FileSignature} title="FOF Settings" description="Payment policy, procedure behavior, templates, fees and plans." to="/fof/settings" cta="Open FOF Settings" />
+            <SettingsLinkCard icon={ScrollText} title="Broken Appointment Policy" description="Notice window, scheduling fee, prepayment and wording." to="/broken-appointments/settings" cta="Open Broken Appointment Policy" />
+            <SettingsLinkCard icon={MapPin} title="Schedule Intelligence" description="Schedule calibration, staffing expectations and capture options." to="/settings/schedule-intelligence" cta="Set up Schedule Intelligence" />
+            <SettingsLinkCard icon={FileSignature} title="Deposit Print Settings" description="Deposit labels and printed office instructions." to="/settings/deposits" cta="Open Deposit Print Settings" />
             <SettingsLinkCard
               icon={FileSignature}
               title="Forms &amp; Consents"

@@ -39,14 +39,31 @@ export function useBrokenApptSettings() {
     queryKey: ['broken-appt-settings', ctx?.org_id],
     enabled: !!ctx,
     staleTime: 5 * 60_000,
-    queryFn: async (): Promise<BaSettings> => {
+    queryFn: async (): Promise<BaSettings & { legacyOfficeClosedDates: string[] }> => {
       const { data, error } = await supabase
         .from('broken_appt_settings')
         .select('*')
         .eq('org_id', ctx!.org_id)
         .maybeSingle();
       if (error) throw error;
-      return data ? mapRow(data) : DEFAULT_BA_SETTINGS;
+      // Shared office calendar is authoritative; retain legacy module dates
+      // until the office removes them. Never silently calculate without closures.
+      const closures: string[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const { data: page, error: closureError } = await supabase
+          .from('office_closures').select('closure_date')
+          .eq('org_id', ctx!.org_id).eq('is_full_day', true)
+          .order('id').range(offset, offset + 499);
+        if (closureError) throw closureError;
+        closures.push(...(page ?? []).map(c => c.closure_date));
+        if (!page || page.length < 500) break;
+      }
+      const settings = data ? mapRow(data) : DEFAULT_BA_SETTINGS;
+      return {
+        ...settings,
+        legacyOfficeClosedDates: settings.officeClosedDates,
+        officeClosedDates: [...new Set([...settings.officeClosedDates, ...closures])].sort(),
+      };
     },
   });
 }
