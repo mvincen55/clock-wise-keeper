@@ -126,6 +126,8 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const profileRow = profiles?.find(p => p.is_default) ?? profiles?.[0];
+  const visibleStatuses = profileRow ? toLayoutProfile(profileRow)?.statusLegend ?? [] : [];
+  const eventHistoryVisible = visibleStatuses.some(s => s.status === 'cancelled') && visibleStatuses.some(s => s.status === 'no_show');
 
   // Whatever happens — navigation, unmount, cancel — the frame dies.
   useEffect(() => {
@@ -260,10 +262,10 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
         providers,
         blocks: analysis.blocks,
         captureConfidence: analysis.layoutConfidence,
-        needsReview: !!analysis.availabilityConflicts?.length || analysis.blocks.some(b => b.code === 'UNCLASSIFIED' && !b.userConfirmed),
+        needsReview: !eventHistoryVisible || providers.some(p => p.unclassifiedMinutes > 0) || !!analysis.availabilityConflicts?.length || analysis.blocks.some(b => b.code === 'UNCLASSIFIED' && !b.userConfirmed),
       });
       const r = analysis.rollup.byDepartment;
-      onVitalsFromSchedule?.({
+      if (eventHistoryVisible) onVitalsFromSchedule?.({
         hygieneCancellations: r.hygiene.cancellationCount,
         hygieneNoShows: r.hygiene.noShowCount,
         doctorCancellations: r.doctor.cancellationCount,
@@ -458,6 +460,7 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
               )}
             </div>
 
+            {!eventHistoryVisible && <p className="text-sm text-muted-foreground">This posted view does not distinguish cancellations and no-shows. Those counts remain for manual review, and your Practice Vitals answers will not be overwritten.</p>}
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
@@ -465,7 +468,7 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
                     <th className="py-1.5 pr-2 font-medium">Provider</th>
                     <th className="py-1.5 pr-2 font-medium">Dept</th>
                     <th className="py-1.5 pr-2 font-medium">Bookable</th>
-                    <th className="py-1.5 pr-2 font-medium">Scheduled</th>
+                    <th className="py-1.5 pr-2 font-medium">Appointment time</th>
                     <th className="py-1.5 pr-2 font-medium">True open</th>
                     <th className="py-1.5 pr-2 font-medium">Cancels</th>
                     <th className="py-1.5 pr-2 font-medium">No-shows</th>
@@ -481,10 +484,10 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
                       <td className="py-1.5 pr-2">{fmtMin(p.scheduledMinutes)}</td>
                       <td className="py-1.5 pr-2">{fmtMin(p.trueOpenMinutes)}</td>
                       <td className="py-1.5 pr-2">
-                        {p.cancellationCount} ({fmtMin(p.cancellationOpenMinutes)})
+                        {eventHistoryVisible ? `${p.cancellationCount} (${fmtMin(p.cancellationOpenMinutes)})` : 'Not distinguishable'}
                       </td>
                       <td className="py-1.5 pr-2">
-                        {p.noShowCount} ({fmtMin(p.noShowOpenMinutes)})
+                        {eventHistoryVisible ? `${p.noShowCount} (${fmtMin(p.noShowOpenMinutes)})` : 'Not distinguishable'}
                       </td>
                       <td className="py-1.5 pr-2">
                         {p.unclassifiedMinutes > 0 ? (
@@ -556,8 +559,7 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
               <p>Schedule metrics saved for {date}.</p>
               <p className="text-xs text-muted-foreground">
                 The captured image was destroyed after processing — it was never saved or
-                uploaded. Practice Vitals were prefilled from the confirmed numbers; correct them
-                in Step 2 if the schedule missed something.
+                uploaded. {eventHistoryVisible ? 'Practice Vitals were prefilled from the confirmed numbers; correct them in Step 2 if the schedule missed something.' : 'Practice Vitals were preserved. Review cancellation and no-show counts in Step 2 because this posted view does not distinguish them.'}
               </p>
             </div>
           </div>

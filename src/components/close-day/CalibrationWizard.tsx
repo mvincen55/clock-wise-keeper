@@ -43,6 +43,7 @@ import ProviderWorkingSchedule from '@/components/close-day/ProviderWorkingSched
 import { wipeOcrWords } from '@/lib/schedule-reader/destroy-capture';
 import { columnsFromRegions, isNotesOnlyColumn } from '@/lib/schedule-reader/appointment-regions';
 import { readProviderCodes } from '@/lib/schedule-reader/provider-codes';
+import { sufficientStatusLegend } from '@/lib/schedule-reader/completed-evidence';
 
 const PMS_OPTIONS = [
   'Dentrix',
@@ -237,7 +238,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
     setColumns(cols => cols.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
 
   const legendComplete = useMemo(
-    () => !!legend.scheduled && !!legend.open,
+    () => sufficientStatusLegend(legend),
     [legend]
   );
 
@@ -443,9 +444,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
         {step === 2 && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Teach the reader your status colors: pick a status, then click an appointment of
-              that kind in the preview. Scheduled and Open are required; skip statuses your
-              system doesn't show.
+              For an end-of-day posted screenshot, choose Completed and click a gray completed appointment. Then choose Open and click an unused time slot. Open plus either Completed or Scheduled is required. Gray lunch and note blocks are checked separately; gray alone does not prove a completed visit. Skip cancellation and no-show colors if posting has removed those distinctions.
             </p>
             <div className="flex flex-wrap gap-1.5">
               {STATUSES.map(({ status, label }) => {

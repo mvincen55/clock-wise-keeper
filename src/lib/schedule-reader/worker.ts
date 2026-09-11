@@ -21,6 +21,7 @@ import { suggestDailyColumns, type ScheduleProvider } from './provider-mapping';
 
 import type { LayoutColumn } from './types';
 import { applyProviderHours } from './provider-hours';
+import { applyCompletedEvidence } from './completed-evidence';
 import { buildKnownNames, checkPrivacy, groupWordsIntoLines } from './privacy-detector';
 import { detectTimeRail, matchLayout, wordsInColumn, type TimeRail } from './layout-detector';
 import { classifyNote } from './note-classifier';
@@ -202,7 +203,7 @@ export async function processScheduleFrame(
     const providerRows: Record<string, Array<ReturnType<typeof reduceRow>>> = {};
     const providers = [...byProvider.entries()].map(([label, cols]) => {
       const perColumnStatuses = cols.map(col =>
-        sampleColumnStatuses(ctx, col, rows, options.profile.statusLegend)
+        applyCompletedEvidence(sampleColumnStatuses(ctx, col, rows, options.profile.statusLegend), rows, regions, words, col, options.phraseRules)
       );
       const availability = applyProviderHours(
         rows.map((_, i) => reduceRow(perColumnStatuses.map(s => s[i]))),
