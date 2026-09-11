@@ -3407,6 +3407,82 @@ export type Database = {
           },
         ]
       }
+      insurance_operation_settings: {
+        Row: {
+          configuration: Json
+          enabled: boolean
+          org_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          configuration: Json
+          enabled?: boolean
+          org_id: string
+          updated_at?: string
+          version: number
+        }
+        Update: {
+          configuration?: Json
+          enabled?: boolean
+          org_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insurance_operation_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      insurance_plan_versions: {
+        Row: {
+          catalog_id: string
+          group_normalized: string
+          id: string
+          org_id: string
+          reference: Json
+          reviewed_at: string
+          reviewer_id: string
+          status: string
+          version: number
+        }
+        Insert: {
+          catalog_id: string
+          group_normalized: string
+          id?: string
+          org_id: string
+          reference: Json
+          reviewed_at?: string
+          reviewer_id: string
+          status?: string
+          version: number
+        }
+        Update: {
+          catalog_id?: string
+          group_normalized?: string
+          id?: string
+          org_id?: string
+          reference?: Json
+          reviewed_at?: string
+          reviewer_id?: string
+          status?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insurance_plan_versions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       insurance_plans: {
         Row: {
           annual_max_cents: number
@@ -8717,6 +8793,27 @@ export type Database = {
         Returns: string
       }
       initialize_practice_setup: { Args: { p_org_id: string }; Returns: string }
+      insurance_publish_plan: {
+        Args: {
+          p_catalog_id: string
+          p_expected_version: number
+          p_org_id: string
+          p_reference: Json
+          p_reviewed: boolean
+        }
+        Returns: Json
+      }
+      insurance_save_settings: {
+        Args: {
+          p_configuration: Json
+          p_expected_version: number
+          p_org_id: string
+        }
+        Returns: Json
+      }
+      io_keys: { Args: { allowed: string[]; value: Json }; Returns: boolean }
+      io_validate_preset: { Args: { value: Json }; Returns: boolean }
+      io_validate_reference: { Args: { value: Json }; Returns: boolean }
       is_allowed_user: { Args: never; Returns: boolean }
       is_conv_participant: { Args: { _conv: string }; Returns: boolean }
       is_org_admin: { Args: { _org_id: string }; Returns: boolean }
