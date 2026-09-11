@@ -58,8 +58,8 @@ const DEPT_LABELS: Record<string, string> = {
  * per dentist is a starting point, not a truth), and the operational phrase
  * shorthand the schedule reader should recognize.
  */
-export default function ScheduleIntelligenceSetupCard() {
-  const [expanded, setExpanded] = useState(false);
+export default function ScheduleIntelligenceSetupCard({ initiallyExpanded = false }: { initiallyExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(initiallyExpanded);
   const [wizardOpen, setWizardOpen] = useState(false);
 
   const { data: profiles } = useLayoutProfiles();
@@ -100,6 +100,7 @@ export default function ScheduleIntelligenceSetupCard() {
         <button
           className="flex w-full items-center justify-between"
           onClick={() => setExpanded(e => !e)}
+          aria-expanded={expanded}
         >
           <CardTitle className="flex items-center gap-2 text-base">
             <Ruler className="h-4 w-4 text-primary" />

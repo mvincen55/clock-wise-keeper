@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
@@ -84,10 +85,10 @@ export default function DailyVitalsCard({ value, onChange }: Props) {
       <CardContent className="space-y-5">
         <div className="space-y-1.5">
           <Label htmlFor="dep-production">Production</Label>
-          <Input
+          <CurrencyInput
             id="dep-production"
             inputMode="decimal"
-            placeholder="$0.00"
+            placeholder="0.00"
             value={value.production}
             onChange={e => onChange({ ...value, production: e.target.value })}
           />
@@ -96,27 +97,8 @@ export default function DailyVitalsCard({ value, onChange }: Props) {
           </p>
         </div>
 
-        {/* New patients: two separate aggregate counts. Scheduled is the
-            pipeline; seen is the only number that advances the goal. Blank
-            means "not recorded" — 0 is a real answer, so it must be typed. */}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="dep-np-scheduled">
-              How many new-patient appointments did we schedule today?
-            </Label>
-            <Input
-              id="dep-np-scheduled"
-              inputMode="numeric"
-              placeholder="Count"
-              value={value.newPatientsScheduled}
-              onChange={e =>
-                onChange({ ...value, newPatientsScheduled: e.target.value.replace(/[^\d]/g, '') })
-              }
-            />
-            <p className="text-xs text-muted-foreground">
-              Booked today for a first visit — the pipeline. A count only; 0 is a real answer.
-            </p>
-          </div>
+        {/* Completed first visits count toward the new-patient goal. */}
+        <div>
           <div className="space-y-1.5">
             <Label htmlFor="dep-np-seen">
               How many new patients completed their first visit today?

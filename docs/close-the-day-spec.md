@@ -111,7 +111,11 @@ print sheets, snapshots, audit trigger) is unchanged.
    spin today's lost minutes into a measurable team goal (reuses
    `team_goals` sprints; the referee's `goalProgress` validates the spec).
 
-## Setup (manager, on the Close the Day page)
+## Setup (owner or manager, Settings → Workflows)
+
+The unconfigured Schedule step links directly to Schedule Intelligence setup. Pending edits save before navigation; a failed save keeps the closer on the day. The selected date and Schedule step are retained in the return URL. Members must ask an owner or manager to configure it.
+
+Schedule capture is optional: Next step proceeds to Staffing without changing capture status. A day without a capture can still be sealed once the other required answers are saved. Practice Vitals asks for completed first visits, not new-patient appointments scheduled; historical scheduled counts remain preserved.
 
 Layout calibration wizard (PMS pick → capture → label columns → click status
 colors → working-day grid), staffing expectations, phrase shorthand, mobile

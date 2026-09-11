@@ -10,12 +10,13 @@
  * comes from the saved record.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { closingDate, scheduleSetupUrl } from '@/lib/close-day-navigation';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
@@ -101,8 +102,14 @@ const STEPS = [
 ] as const;
 
 export default function DepositLog() {
-  const [date, setDate] = useState(getToday());
-  const [step, setStep] = useState(0);
+  const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
+  const date = closingDate(params.get('date'));
+  const requestedStep = Number(params.get('step'));
+  const step = Number.isInteger(requestedStep) && requestedStep >= 0 && requestedStep < STEPS.length ? requestedStep : 0;
+  const setDate = (next: string) => setParams({ date: next, step: String(step) }, { replace: true });
+  const setStep = (next: number | ((previous: number) => number)) =>
+    setParams({ date, step: String(typeof next === 'function' ? next(step) : next) }, { replace: true });
   const { data: log, isLoading } = useDepositLog(date);
   const save = useSaveDepositLog();
   const { data: branding } = useOrgBranding();
@@ -115,6 +122,7 @@ export default function DepositLog() {
   // Unsaved edits block printing: the printed sheets always come from the
   // saved record, so what's on paper is exactly what's on file.
   const [dirty, setDirty] = useState(false);
+  const [openingSetup, setOpeningSetup] = useState(false);
   const [completingImport, setCompletingImport] = useState(false);
   const [countsVerified, setCountsVerified] = useState(false);
 
@@ -194,7 +202,7 @@ export default function DepositLog() {
   const setField = (field: keyof Omit<FormState, 'checks' | 'vitals' | 'staffing'>) => (value: string) =>
     updateForm(f => ({ ...f, [field]: value }));
 
-  const handleSave = () => {
+  const handleSave = (afterSave?: () => void) => {
     if (!form || !totals || (countsMissing && !countsVerified)) return;
     save.mutate(
       {
@@ -220,14 +228,26 @@ export default function DepositLog() {
         staffingNote: form.staffing.note,
       },
       {
-        onSuccess: () => toast.success('Saved'),
-        onError: err => toast.error(`Save failed: ${err.message}`),
+        onSuccess: () => { toast.success('Saved'); afterSave?.(); },
+        onError: err => { setOpeningSetup(false); toast.error(`Save failed: ${err.message}`); },
       }
     );
   };
 
+  const openScheduleSetup = () => {
+    if (!isManager || save.isPending) return;
+    const open = () => navigate(scheduleSetupUrl(date));
+    if (!dirty) { open(); return; }
+    if (countsMissing && !countsVerified) {
+      toast.error('Verify the four missed-appointment counts in Practice Vitals and save before opening setup.');
+      return;
+    }
+    setOpeningSetup(true);
+    handleSave(open);
+  };
+
   return (
-    <div className="p-4 md:p-6 space-y-4 max-w-4xl mx-auto">
+    <fieldset disabled={openingSetup} className="min-w-0 p-4 md:p-6 space-y-4 max-w-4xl mx-auto">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -300,10 +320,10 @@ export default function DepositLog() {
               <CardContent className="space-y-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="dep-cash">Cash</Label>
-                  <Input
+                  <CurrencyInput
                     id="dep-cash"
                     inputMode="decimal"
-                    placeholder="$0.00"
+                    placeholder="0.00"
                     value={form.cash}
                     onChange={e => setField('cash')(e.target.value)}
                   />
@@ -313,9 +333,9 @@ export default function DepositLog() {
                   {form.checks.map((check, i) => (
                     <div key={i} className="flex items-center gap-2">
                       <span className="w-6 text-right text-xs text-muted-foreground">{i + 1}</span>
-                      <Input
+                      <CurrencyInput
                         inputMode="decimal"
-                        placeholder="$0.00"
+                        placeholder="0.00"
                         value={check}
                         onChange={e =>
                           updateForm(f => {
@@ -357,19 +377,19 @@ export default function DepositLog() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="dep-inscc">Insurance Credit Cards</Label>
-                    <Input id="dep-inscc" inputMode="decimal" placeholder="$0.00" value={form.insCc} onChange={e => setField('insCc')(e.target.value)} />
+                    <CurrencyInput id="dep-inscc" inputMode="decimal" placeholder="0.00" value={form.insCc} onChange={e => setField('insCc')(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="dep-ptcc">Patient Credit Cards</Label>
-                    <Input id="dep-ptcc" inputMode="decimal" placeholder="$0.00" value={form.ptCc} onChange={e => setField('ptCc')(e.target.value)} />
+                    <CurrencyInput id="dep-ptcc" inputMode="decimal" placeholder="0.00" value={form.ptCc} onChange={e => setField('ptCc')(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="dep-illumitrac">{depositSettings?.membershipRowLabel ?? 'Membership'}</Label>
-                    <Input id="dep-illumitrac" inputMode="decimal" placeholder="$0.00" value={form.illumitrac} onChange={e => setField('illumitrac')(e.target.value)} />
+                    <CurrencyInput id="dep-illumitrac" inputMode="decimal" placeholder="0.00" value={form.illumitrac} onChange={e => setField('illumitrac')(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="dep-financing">{depositSettings?.outsideFinancingLabel ?? 'Outside Financing'}</Label>
-                    <Input id="dep-financing" inputMode="decimal" placeholder="$0.00" value={form.outsideFinancing} onChange={e => setField('outsideFinancing')(e.target.value)} />
+                    <CurrencyInput id="dep-financing" inputMode="decimal" placeholder="0.00" value={form.outsideFinancing} onChange={e => setField('outsideFinancing')(e.target.value)} />
                   </div>
                 </div>
                 <div className="space-y-1.5">
@@ -425,7 +445,7 @@ export default function DepositLog() {
                   <Printer className="h-4 w-4 mr-2" />
                   Print Both Copies
                 </Button>
-                <Button onClick={handleSave} disabled={save.isPending || (countsMissing && !countsVerified) || (!dirty && !!log)}>
+                <Button onClick={() => handleSave()} disabled={save.isPending || (countsMissing && !countsVerified) || (!dirty && !!log)}>
                   {save.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                   Save
                 </Button>
@@ -456,6 +476,9 @@ export default function DepositLog() {
       ) : step === 2 ? (
         <div className="max-w-2xl">
           <PrivacyViewCapture
+            canConfigure={isManager}
+            onSetup={openScheduleSetup}
+            setupPending={save.isPending}
             closeoutId={log?.id ?? null}
             date={date}
             onVitalsFromSchedule={counts =>
@@ -501,7 +524,7 @@ export default function DepositLog() {
             <Button variant="outline" size="sm" onClick={() => setStep(s => s + 1)}>
               Next step
             </Button>
-            <Button size="sm" onClick={handleSave} disabled={save.isPending || (countsMissing && !countsVerified) || (!dirty && !!log)}>
+            <Button size="sm" onClick={() => handleSave()} disabled={save.isPending || (countsMissing && !countsVerified) || (!dirty && !!log)}>
               {save.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Save
             </Button>
@@ -511,11 +534,11 @@ export default function DepositLog() {
 
       {/* Close the Day configuration (schedule intelligence, printed wording)
           lives in Settings → Workflows with every other office setting. */}
-      {isManager && (
+      {isManager && step === 0 && (
         <p className="text-xs text-muted-foreground">
-          Looking for schedule-capture setup or the printed deposit wording?{' '}
+          Printed deposit wording is managed in{' '}
           <Link to="/settings/workflows" className="text-primary underline-offset-2 hover:underline">
-            Close the Day settings moved to Settings
+            Settings → Workflows
           </Link>
           .
         </p>
@@ -546,6 +569,6 @@ export default function DepositLog() {
           </div>,
           document.body
         )}
-    </div>
+    </fieldset>
   );
 }
