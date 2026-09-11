@@ -160,13 +160,13 @@ export default function CalibrationWizard({ open, onClose }: Props) {
     setColumns(
       drafts.map(d => {
         const previous = profiles.flatMap(p => (p.layout_signature as unknown as { columns?: LayoutColumn[] }).columns ?? []);
-        const suggestion = suggestColumnProvider(words, d, frame.width, frame.height, providers, previous);
+        const suggestion = suggestColumnProvider(words, d, frame.width, frame.height, providers, previous, true);
         return ({
         xStart: d.xStart,
         xEnd: d.xEnd,
         pxStart: d.xStart * frame.width,
         pxEnd: d.xEnd * frame.width,
-        kind: 'provider' as ColumnKind,
+        kind: suggestion.notesOnly ? 'non_clinical' as ColumnKind : 'provider' as ColumnKind,
         providerLabel: null,
         providerRole: null,
         department: null,
@@ -373,7 +373,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
         {step === 1 && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Select the provider for each column. Type and department fill in from the office registry. Recognized provider codes suggest previously confirmed matches; review them before continuing. The preview never leaves this device.
+              Review the suggested providers and notes-only columns. These are starting examples, not permanent provider positions: each daily capture reads and confirms its own assignments. Type and department come from the office registry. The preview never leaves this device.
             </p>
             {providersPending ? <p role="status">Loading office providers…</p> : providersError ? <p role="alert">Could not load providers. Close and retry calibration.</p> : providers.length === 0 ? <p>Add providers in Settings → Office before mapping schedule columns.</p> : null}
             <canvas ref={previewRef} className="w-full rounded border" />
@@ -392,7 +392,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
                       <SelectContent>
                         <SelectItem value="provider">Provider column</SelectItem>
                         <SelectItem value="overflow">Overflow column</SelectItem>
-                        <SelectItem value="non_clinical">Non-clinical</SelectItem>
+                        <SelectItem value="non_clinical">Notes only / non-clinical</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

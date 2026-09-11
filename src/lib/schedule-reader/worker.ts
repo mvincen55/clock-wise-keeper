@@ -17,6 +17,9 @@
  * Nothing in this module performs network I/O.
  */
 import { recognizeFrame } from './ocr';
+import { suggestDailyColumns, type ScheduleProvider } from './provider-mapping';
+
+import type { LayoutColumn } from './types';
 import { applyProviderHours } from './provider-hours';
 import { buildKnownNames, checkPrivacy, groupWordsIntoLines } from './privacy-detector';
 import { detectTimeRail, matchLayout, wordsInColumn, type TimeRail } from './layout-detector';
@@ -40,6 +43,9 @@ import {
 } from './types';
 
 export interface ProcessOptions {
+  providers?: ScheduleProvider[];
+  /** Explicit per-capture review; assignments never change the saved layout. */
+  reviewColumns?: (suggested: LayoutColumn[]) => Promise<LayoutColumn[] | null>;
   profile: LayoutProfile;
   businessDate: string;
   /** Employee/provider names allowed on screen (needed for column mapping). */
@@ -152,7 +158,17 @@ export async function processScheduleFrame(
       });
     }
 
-    const match = matchLayout(words, frame.width, frame.height, options.profile);
+    let match = matchLayout(words, frame.width, frame.height, options.profile);
+    if (options.reviewColumns) {
+      const suggested = suggestDailyColumns(words, options.profile.signature.columns, frame.width, frame.height, options.providers ?? []);
+      const columns = await options.reviewColumns(suggested);
+      if (!columns) throw new ScheduleReaderError('PROCESSING_CANCELLED');
+      if (!columns.some(c => c.kind !== 'non_clinical') || columns.some(c => c.kind !== 'non_clinical' && !c.providerId)) {
+        throw new ScheduleReaderError('LAYOUT_NOT_RECOGNIZED');
+      }
+      match = { profile: options.profile, confidence: 1, needsColumnConfirmation: false,
+        frameColumns: columns.map(c => ({ ...c, pxStart: c.xStart * frame.width, pxEnd: c.xEnd * frame.width })) };
+    }
     if (match.confidence < 0.5) {
       throw new ScheduleReaderError('LAYOUT_NOT_RECOGNIZED', {
         confidence: match.confidence,
@@ -258,3 +274,4 @@ export async function processScheduleFrame(
     wipeOcrWords(words);
   }
 }
+
