@@ -20,7 +20,7 @@ insert into orgs values('${org}'),('${other}');insert into auth.users values('${
 await db.exec(
   readFileSync(
     new URL(
-      '../../supabase/migrations/20260911170000_insurance_operations.sql',
+      '../../supabase/migrations/20260911201150_12a42b7e-f779-4aa7-9075-dbfb4c7553b8.sql',
       import.meta.url,
     ),
     'utf8',
