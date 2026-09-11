@@ -17,6 +17,7 @@ export const PROVIDER_TYPE_LABELS: Record<ProviderType, string> = {
 };
 
 export type Provider = {
+  scheduleCode?: string | null;
   id: string;
   orgId: string;
   displayName: string;
@@ -51,3 +52,4 @@ export function activeDoctorNames(providers: Provider[]): string[] {
     .filter((p) => p.providerType === 'doctor')
     .map((p) => p.displayName);
 }
+

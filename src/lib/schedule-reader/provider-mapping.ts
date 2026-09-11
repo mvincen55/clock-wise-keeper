@@ -1,4 +1,4 @@
-export interface ScheduleProvider { id: string; displayName: string; providerType: 'doctor' | 'hygienist' | 'assistant' | 'other'; employeeId: string | null; active: boolean; }
+export interface ScheduleProvider { scheduleCode?: string | null; id: string; displayName: string; providerType: 'doctor' | 'hygienist' | 'assistant' | 'other'; employeeId: string | null; active: boolean; }
 type Provider = ScheduleProvider;
 import type { LayoutColumn, OcrWord, OcrBox, OperationalRole, Department } from './types';
 import { readProviderCodes } from './provider-codes';
@@ -17,6 +17,7 @@ export function suggestColumnProvider(words: OcrWord[], column: Pick<LayoutColum
   const codeWords = includeAppointmentCodes ? words.filter(w => (w.bbox.x0 + w.bbox.x1) / 2 >= column.xStart * width && (w.bbox.x0 + w.bbox.x1) / 2 < column.xEnd * width) : header;
   const codes = readProviderCodes(codeWords);
   const providerCode = codes.length === 1 ? codes[0] : undefined;
+  const registered = providers.filter(p => providerCode && p.scheduleCode === providerCode);
   const ids = new Set(previous.filter(c => providerCode && c.providerCode === providerCode && c.providerId).map(c => c.providerId));
   const normalize = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
   const headerName = normalize(header.map(w => w.text).join(' '));
@@ -26,7 +27,7 @@ export function suggestColumnProvider(words: OcrWord[], column: Pick<LayoutColum
     return p.active && (ids.has(p.id) || (headerName.length > 0 && normalize(p.displayName) === headerName) || (lastName.length >= 4 && tokens.has(lastName)));
   });
   const notesOnly = /\b(notes?|memo|reminders?)\b/i.test(header.map(w => w.text).join(' '));
-  return { providerCode, notesOnly, provider: !notesOnly && candidates.length === 1 ? candidates[0] : undefined };
+  return { providerCode, notesOnly, provider: !notesOnly && (registered.length === 1 ? (registered[0].active ? registered[0] : undefined) : registered.length > 1 ? undefined : candidates.length === 1 ? candidates[0] : undefined) };
 }
 
 /** Re-read each physical column every day. Never inherit yesterday's owner. */
@@ -45,4 +46,6 @@ export function suggestDailyColumns(words: OcrWord[], columns: LayoutColumn[], w
     };
   });
 }
+
+
 

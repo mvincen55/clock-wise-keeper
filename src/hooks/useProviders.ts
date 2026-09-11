@@ -19,6 +19,7 @@ function mapRow(r: {
   employee_id: string | null;
   active: boolean;
   sort_order: number;
+  schedule_code?: string | null;
 }): Provider {
   return {
     id: r.id,
@@ -28,6 +29,7 @@ function mapRow(r: {
     employeeId: r.employee_id,
     active: r.active,
     sortOrder: r.sort_order,
+    scheduleCode: r.schedule_code ?? null,
   };
 }
 
@@ -41,7 +43,7 @@ export function useProviders() {
     queryFn: async (): Promise<Provider[]> => {
       const { data, error } = await supabase
         .from('org_providers')
-        .select('id, org_id, display_name, provider_type, employee_id, active, sort_order')
+        .select('id, org_id, display_name, provider_type, employee_id, active, sort_order, schedule_code')
         .eq('org_id', ctx!.org_id);
       if (error) throw error;
       return sortProviders((data ?? []).map(mapRow));
@@ -105,8 +107,10 @@ export function useUpdateProvider() {
       employeeId?: string | null;
       active?: boolean;
       sortOrder?: number;
+      scheduleCode?: string | null;
     }) => {
       const patch: TablesUpdate<'org_providers'> = {};
+      if (input.scheduleCode !== undefined) patch.schedule_code = input.scheduleCode?.trim().toUpperCase() || null;
       if (input.displayName !== undefined) patch.display_name = input.displayName.trim();
       if (input.providerType !== undefined) patch.provider_type = input.providerType;
       if (input.employeeId !== undefined) patch.employee_id = input.employeeId;
@@ -118,3 +122,4 @@ export function useUpdateProvider() {
     onSuccess: invalidate,
   });
 }
+
