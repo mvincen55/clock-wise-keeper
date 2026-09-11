@@ -33,6 +33,7 @@ export default function ProviderRegistryCard() {
   const [type, setType] = useState<ProviderType>('doctor');
   const [editing, setEditing] = useState<Provider | null>(null);
   const [draftName, setDraftName] = useState('');
+  const [draftCode, setDraftCode] = useState('');
   const [draftType, setDraftType] = useState<ProviderType>('doctor');
   const [draftEmployee, setDraftEmployee] = useState<string>('none');
 
@@ -56,6 +57,7 @@ export default function ProviderRegistryCard() {
   const openEdit = (p: Provider) => {
     setEditing(p);
     setDraftName(p.displayName);
+    setDraftCode(p.scheduleCode ?? '');
     setDraftType(p.providerType);
     setDraftEmployee(p.employeeId ?? 'none');
   };
@@ -70,6 +72,7 @@ export default function ProviderRegistryCard() {
       await update.mutateAsync({
         id: editing.id,
         displayName: draftName,
+        scheduleCode: draftCode,
         providerType: draftType,
         employeeId: draftEmployee === 'none' ? null : draftEmployee,
       });
@@ -121,6 +124,7 @@ export default function ProviderRegistryCard() {
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-sm font-medium">{p.displayName}</span>
                     <Badge variant="secondary">{PROVIDER_TYPE_LABELS[p.providerType]}</Badge>
+                    {p.scheduleCode && <Badge variant="outline">{p.scheduleCode}</Badge>}
                     {staffName(p.employeeId) && (
                       <Badge variant="outline" className="gap-1 text-[10px]">
                         <Link2 className="h-3 w-3" />
@@ -203,6 +207,11 @@ export default function ProviderRegistryCard() {
               <Input id="prov-name" value={draftName} onChange={(e) => setDraftName(e.target.value)} />
             </div>
             <div className="space-y-1.5">
+              <Label htmlFor="prov-code">Schedule provider code</Label>
+              <Input id="prov-code" value={draftCode} onChange={e => setDraftCode(e.target.value.toUpperCase())} placeholder="DR02 or HY11" />
+              <p className="text-xs text-muted-foreground">Matches the code printed inside schedule appointments, across all days.</p>
+            </div>
+            <div className="space-y-1.5">
               <Label>Type</Label>
               <Select value={draftType} onValueChange={(v) => setDraftType(v as ProviderType)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -242,3 +251,5 @@ export default function ProviderRegistryCard() {
     </Card>
   );
 }
+
+

@@ -31,3 +31,12 @@ it('uses appointment-code mappings in their current occupied columns and exclude
   expect(isNotesOnlyColumn([],regions,{xStart:.6,xEnd:.8},500)).toBe(false);
   expect(previous[0].xStart).toBe(.7);
 });
+
+it('uses roster codes before calibration exists and overrides stale layout code mappings', () => {
+  const p = {id:'scott',displayName:'Dr. Scott',providerType:'doctor' as const,employeeId:null,active:true,scheduleCode:'DR02'};
+  const stale:LayoutColumn = {xStart:0,xEnd:1,kind:'provider',providerId:'old',providerCode:'DR02',providerLabel:'Old',providerRole:'dentist',department:'doctor',employeeId:null};
+  const result=suggestDailyColumns([word('DR02',80,99)], [stale], 500,240,[p]);
+  expect(result[0].providerId).toBe('scott');
+  expect(result[0].providerRole).toBe('dentist');
+  expect(suggestDailyColumns([word('DR02',80,99)], [stale],500,240,[{...p,active:false}])[0].providerId).toBeUndefined();
+});

@@ -5469,6 +5469,7 @@ export type Database = {
           employee_id: string | null
           id: string
           org_id: string
+          schedule_code: string | null
           provider_type: string
           sort_order: number
           updated_at: string
@@ -5480,6 +5481,7 @@ export type Database = {
           employee_id?: string | null
           id?: string
           org_id: string
+          schedule_code?: string | null
           provider_type?: string
           sort_order?: number
           updated_at?: string
@@ -5491,6 +5493,7 @@ export type Database = {
           employee_id?: string | null
           id?: string
           org_id?: string
+          schedule_code?: string | null
           provider_type?: string
           sort_order?: number
           updated_at?: string
@@ -9714,3 +9717,4 @@ export const Constants = {
     },
   },
 } as const
+
