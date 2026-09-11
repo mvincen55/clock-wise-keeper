@@ -14,18 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      insurance_operation_settings: {
-        Row: { org_id: string; version: number; enabled: boolean; configuration: Json; updated_at: string }
-        Insert: { org_id: string; version: number; enabled?: boolean; configuration: Json; updated_at?: string }
-        Update: { org_id?: string; version?: number; enabled?: boolean; configuration?: Json; updated_at?: string }
-        Relationships: [{ foreignKeyName: "insurance_operation_settings_org_id_fkey"; columns: ["org_id"]; isOneToOne: true; referencedRelation: "orgs"; referencedColumns: ["id"] }]
-      }
-      insurance_plan_versions: {
-        Row: { id: string; org_id: string; catalog_id: string; version: number; status: string; group_normalized: string; reference: Json; reviewed_at: string; reviewer_id: string }
-        Insert: { id?: string; org_id: string; catalog_id: string; version: number; status?: string; group_normalized: string; reference: Json; reviewed_at?: string; reviewer_id: string }
-        Update: { id?: string; org_id?: string; catalog_id?: string; version?: number; status?: string; group_normalized?: string; reference?: Json; reviewed_at?: string; reviewer_id?: string }
-        Relationships: [{ foreignKeyName: "insurance_plan_versions_org_id_fkey"; columns: ["org_id"]; isOneToOne: false; referencedRelation: "orgs"; referencedColumns: ["id"] }]
-      }
       _backup_audit_events_20260707: {
         Row: {
           action_type: string | null
@@ -1746,8 +1734,6 @@ export type Database = {
       deposit_logs: {
         Row: {
           capture_confidence: number | null
-          other_collections_cents?: number
-          missed_appointments_recorded?: boolean
           cash_cents: number
           checks: Json
           created_at: string
@@ -1759,11 +1745,13 @@ export type Database = {
           id: string
           illumitrac_cents: number
           ins_cc_cents: number
+          missed_appointments_recorded: boolean
           needs_manager_review: boolean
           new_patients_scheduled_count: number | null
           new_patients_seen_count: number | null
           notes: string
           org_id: string
+          other_collections_cents: number
           outside_financing_cents: number
           prepared_by: string | null
           prepared_by_name: string
@@ -1781,8 +1769,6 @@ export type Database = {
         }
         Insert: {
           capture_confidence?: number | null
-          other_collections_cents?: number
-          missed_appointments_recorded?: boolean
           cash_cents?: number
           checks?: Json
           created_at?: string
@@ -1794,11 +1780,13 @@ export type Database = {
           id?: string
           illumitrac_cents?: number
           ins_cc_cents?: number
+          missed_appointments_recorded?: boolean
           needs_manager_review?: boolean
           new_patients_scheduled_count?: number | null
           new_patients_seen_count?: number | null
           notes?: string
           org_id: string
+          other_collections_cents?: number
           outside_financing_cents?: number
           prepared_by?: string | null
           prepared_by_name?: string
@@ -1816,8 +1804,6 @@ export type Database = {
         }
         Update: {
           capture_confidence?: number | null
-          other_collections_cents?: number
-          missed_appointments_recorded?: boolean
           cash_cents?: number
           checks?: Json
           created_at?: string
@@ -1829,11 +1815,13 @@ export type Database = {
           id?: string
           illumitrac_cents?: number
           ins_cc_cents?: number
+          missed_appointments_recorded?: boolean
           needs_manager_review?: boolean
           new_patients_scheduled_count?: number | null
           new_patients_seen_count?: number | null
           notes?: string
           org_id?: string
+          other_collections_cents?: number
           outside_financing_cents?: number
           prepared_by?: string | null
           prepared_by_name?: string
@@ -2032,6 +2020,54 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_anniversary_reminders: {
+        Row: {
+          anniversary_date: string
+          created_at: string
+          employee_id: string
+          id: string
+          milestone_years: number
+          org_id: string
+          recipient_user_id: string
+          reminder_days: number
+        }
+        Insert: {
+          anniversary_date: string
+          created_at?: string
+          employee_id: string
+          id?: string
+          milestone_years: number
+          org_id: string
+          recipient_user_id: string
+          reminder_days: number
+        }
+        Update: {
+          anniversary_date?: string
+          created_at?: string
+          employee_id?: string
+          id?: string
+          milestone_years?: number
+          org_id?: string
+          recipient_user_id?: string
+          reminder_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_anniversary_reminders_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_anniversary_reminders_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_operational_roles: {
         Row: {
           confirmed_at: string | null
@@ -2173,12 +2209,12 @@ export type Database = {
           email: string | null
           employment_status: Database["public"]["Enums"]["employment_status"]
           favorites: Json
-          real_hire_date?: string | null
           hire_date: string | null
           id: string
           learning_style: string | null
           org_id: string
           preferred_name: string | null
+          real_hire_date: string | null
           tag: string | null
           team: string | null
           timezone: string | null
@@ -2191,12 +2227,12 @@ export type Database = {
           email?: string | null
           employment_status?: Database["public"]["Enums"]["employment_status"]
           favorites?: Json
-          real_hire_date?: string | null
           hire_date?: string | null
           id?: string
           learning_style?: string | null
           org_id: string
           preferred_name?: string | null
+          real_hire_date?: string | null
           tag?: string | null
           team?: string | null
           timezone?: string | null
@@ -2209,12 +2245,12 @@ export type Database = {
           email?: string | null
           employment_status?: Database["public"]["Enums"]["employment_status"]
           favorites?: Json
-          real_hire_date?: string | null
           hire_date?: string | null
           id?: string
           learning_style?: string | null
           org_id?: string
           preferred_name?: string | null
+          real_hire_date?: string | null
           tag?: string | null
           team?: string | null
           timezone?: string | null
@@ -5595,6 +5631,47 @@ export type Database = {
           },
         ]
       }
+      practice_report_imports: {
+        Row: {
+          id: string
+          imported_at: string
+          imported_by: string | null
+          org_id: string
+          payload: Json
+          report_end: string
+          report_start: string
+          source_key: string
+        }
+        Insert: {
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          org_id: string
+          payload: Json
+          report_end: string
+          report_start: string
+          source_key: string
+        }
+        Update: {
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          org_id?: string
+          payload?: Json
+          report_end?: string
+          report_start?: string
+          source_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "practice_report_imports_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       practice_setup_finding_sources: {
         Row: {
           created_at: string
@@ -6285,7 +6362,7 @@ export type Database = {
           org_id: string
           timezone?: string
           updated_at?: string
-          user_id: string | null
+          user_id?: string | null
           worked_hours_cap_weekly?: number
         }
         Update: {
@@ -6335,7 +6412,7 @@ export type Database = {
           org_id: string
           snapshot_balance_hours?: number
           snapshot_date: string
-          user_id: string | null
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -8119,11 +8196,6 @@ export type Database = {
       }
     }
     Functions: {
-      insurance_save_settings: { Args: { p_org_id: string; p_expected_version: number; p_configuration: Json }; Returns: Json }
-      insurance_publish_plan: { Args: { p_org_id: string; p_catalog_id: string; p_expected_version: number; p_reference: Json; p_reviewed: boolean }; Returns: Json }
-      io_keys: { Args: { value: Json; allowed: string[] }; Returns: boolean }
-      io_validate_reference: { Args: { value: Json }; Returns: boolean }
-      io_validate_preset: { Args: { value: Json }; Returns: boolean }
       _recompute_attendance_range_internal: {
         Args: { p_end_date: string; p_start_date: string; p_user_id: string }
         Returns: number
@@ -9156,6 +9228,7 @@ export type Database = {
           title: string
         }[]
       }
+      send_employee_anniversary_reminders: { Args: never; Returns: number }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       sign_accountability_report: {
