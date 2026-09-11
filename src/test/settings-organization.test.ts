@@ -35,7 +35,8 @@ describe('settings is one organized, deep-linkable section', () => {
     for (const tab of ['office', 'people', 'workflows', 'me']) {
       expect(settings).toContain(`TabsTrigger value="${tab}"`);
     }
-    expect(settings).toMatch(/navigate\(`\/settings\/\$\{v\}`\)/);
+    // Tab navigation retains the closing date used by the return link.
+    expect(settings).toMatch(/navigate\(`\/settings\/\$\{v\}\$\{location\.search\}`\)/);
   });
 
   it('members get personal settings only; office tabs are manager-gated', () => {
