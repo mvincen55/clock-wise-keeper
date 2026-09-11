@@ -147,7 +147,7 @@ export async function processScheduleFrame(
   frame: CaptureFrame,
   options: ProcessOptions
 ): Promise<ScheduleAnalysis> {
-  const { words, confidence: ocrConfidence } = await recognizeFrame(frame.canvas);
+  const { words, regions = [], confidence: ocrConfidence } = await recognizeFrame(frame.canvas);
 
   try {
     // Privacy gate FIRST. Failing it stops everything.
@@ -160,7 +160,7 @@ export async function processScheduleFrame(
 
     let match = matchLayout(words, frame.width, frame.height, options.profile);
     if (options.reviewColumns) {
-      const suggested = suggestDailyColumns(words, options.profile.signature.columns, frame.width, frame.height, options.providers ?? []);
+      const suggested = suggestDailyColumns(words, options.profile.signature.columns, frame.width, frame.height, options.providers ?? [], regions);
       const columns = await options.reviewColumns(suggested);
       if (!columns) throw new ScheduleReaderError('PROCESSING_CANCELLED');
       if (!columns.some(c => c.kind !== 'non_clinical') || columns.some(c => c.kind !== 'non_clinical' && !c.providerId)) {
