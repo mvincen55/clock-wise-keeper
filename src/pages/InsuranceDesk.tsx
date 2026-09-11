@@ -10,7 +10,8 @@
  * — never patient records.
  */
 import InsuranceManualReader from '@/components/insurance/InsuranceManualReader';
+import { InsuranceWorkspace } from '@/features/insurance-operations';
 
 export default function InsuranceDesk() {
-  return <InsuranceManualReader />;
+  return <InsuranceWorkspace manuals={sensitive => <InsuranceManualReader sensitiveSession={sensitive} />} />;
 }

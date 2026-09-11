@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useSensitiveSession } from '@/lib/sensitive-session';
 import { buildTicketContext, type TicketContext } from '@/lib/support-context';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -152,6 +153,11 @@ const ACCEPTED = 'image/*,application/pdf';
  * senior agent — the expensive, careful one.
  */
 export default function SupportWidget() {
+  const sensitive = useSensitiveSession();
+  return sensitive ? null : <SupportWidgetSession />;
+}
+
+function SupportWidgetSession() {
   const { user } = useAuth();
   const { data: org } = useOrgContext();
   const orgId = org?.org_id ?? null;

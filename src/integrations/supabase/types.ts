@@ -14,6 +14,18 @@ export type Database = {
   }
   public: {
     Tables: {
+      insurance_operation_settings: {
+        Row: { org_id: string; version: number; enabled: boolean; configuration: Json; updated_at: string }
+        Insert: { org_id: string; version: number; enabled?: boolean; configuration: Json; updated_at?: string }
+        Update: { org_id?: string; version?: number; enabled?: boolean; configuration?: Json; updated_at?: string }
+        Relationships: [{ foreignKeyName: "insurance_operation_settings_org_id_fkey"; columns: ["org_id"]; isOneToOne: true; referencedRelation: "orgs"; referencedColumns: ["id"] }]
+      }
+      insurance_plan_versions: {
+        Row: { id: string; org_id: string; catalog_id: string; version: number; status: string; group_normalized: string; reference: Json; reviewed_at: string; reviewer_id: string }
+        Insert: { id?: string; org_id: string; catalog_id: string; version: number; status?: string; group_normalized: string; reference: Json; reviewed_at?: string; reviewer_id: string }
+        Update: { id?: string; org_id?: string; catalog_id?: string; version?: number; status?: string; group_normalized?: string; reference?: Json; reviewed_at?: string; reviewer_id?: string }
+        Relationships: [{ foreignKeyName: "insurance_plan_versions_org_id_fkey"; columns: ["org_id"]; isOneToOne: false; referencedRelation: "orgs"; referencedColumns: ["id"] }]
+      }
       _backup_audit_events_20260707: {
         Row: {
           action_type: string | null
@@ -8107,6 +8119,11 @@ export type Database = {
       }
     }
     Functions: {
+      insurance_save_settings: { Args: { p_org_id: string; p_expected_version: number; p_configuration: Json }; Returns: Json }
+      insurance_publish_plan: { Args: { p_org_id: string; p_catalog_id: string | null; p_expected_version: number; p_reference: Json; p_reviewed: boolean }; Returns: Json }
+      io_keys: { Args: { value: Json; allowed: string[] }; Returns: boolean }
+      io_validate_reference: { Args: { value: Json }; Returns: boolean }
+      io_validate_preset: { Args: { value: Json }; Returns: boolean }
       _recompute_attendance_range_internal: {
         Args: { p_end_date: string; p_start_date: string; p_user_id: string }
         Returns: number

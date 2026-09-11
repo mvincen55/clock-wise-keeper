@@ -205,7 +205,7 @@ const router = createBrowserRouter(
             <Route path="/letters/settings" element={<ProtectedRoute><CorrespondenceSettingsPage /></ProtectedRoute>} />
             <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
             <Route path="/handbook" element={<ProtectedRoute><OfficeHandbook /></ProtectedRoute>} />
-            <Route path="/insurance-desk" element={<ProtectedRoute><InsuranceDesk /></ProtectedRoute>} />
+            <Route path="/insurance-desk/*" element={<ProtectedRoute><InsuranceDesk /></ProtectedRoute>} />
             {/* Old bookmark-safe path for the rebuilt handbook. */}
             <Route path="/policy-manual" element={<Navigate to="/handbook" replace />} />
             <Route path="/important-numbers" element={<ProtectedRoute><ImportantNumbers /></ProtectedRoute>} />

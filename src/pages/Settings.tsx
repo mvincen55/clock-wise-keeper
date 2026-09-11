@@ -164,6 +164,7 @@ export default function Settings() {
             <SettingsLinkCard icon={ScrollText} title="Broken Appointment Policy" description="Notice window, scheduling fee, prepayment and wording." to="/broken-appointments/settings" cta="Open Broken Appointment Policy" />
             <SettingsLinkCard icon={MapPin} title="Schedule Intelligence" description="Schedule calibration, staffing expectations and capture options." to="/settings/schedule-intelligence" cta="Set up Schedule Intelligence" />
             <SettingsLinkCard icon={FileSignature} title="Deposit Print Settings" description="Deposit labels and printed office instructions." to="/settings/deposits" cta="Open Deposit Print Settings" />
+            <SettingsLinkCard icon={ScrollText} title="Insurance operations" description="Benefit requests, reviewed plan rules, credentials and calling setup." to="/insurance-desk/settings" cta="Open insurance settings" />
             <SettingsLinkCard
               icon={FileSignature}
               title="Forms &amp; Consents"
