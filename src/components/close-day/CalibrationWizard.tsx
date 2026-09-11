@@ -41,6 +41,8 @@ import { useSaveLayoutProfile, useLayoutProfiles } from '@/hooks/useScheduleInte
 import { hhmmToMinutes } from '@/lib/time-utils';
 import ProviderWorkingSchedule from '@/components/close-day/ProviderWorkingSchedule';
 import { wipeOcrWords } from '@/lib/schedule-reader/destroy-capture';
+import { columnsFromRegions, isNotesOnlyColumn } from '@/lib/schedule-reader/appointment-regions';
+import { readProviderCodes } from '@/lib/schedule-reader/provider-codes';
 
 const PMS_OPTIONS = [
   'Dentrix',
@@ -154,9 +156,11 @@ export default function CalibrationWizard({ open, onClose }: Props) {
   const runCalibration = async (frame: CaptureFrame) => {
     await teardown(); // a retry never leaks the previous frame
     frameRef.current = frame;
-    const { words } = await recognizeFrame(frame.canvas);
+    const { words, regions = [] } = await recognizeFrame(frame.canvas);
     try {
-    const drafts = draftColumnsFromFrame(words, frame.width, frame.height);
+    const detected = columnsFromRegions(regions, frame.width);
+    const drafts = regions.length >= 3 && detected.length >= 2 && readProviderCodes(words).length
+      ? detected : draftColumnsFromFrame(words, frame.width, frame.height);
     setColumns(
       drafts.map(d => {
         const previous = profiles.flatMap(p => (p.layout_signature as unknown as { columns?: LayoutColumn[] }).columns ?? []);
@@ -166,7 +170,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
         xEnd: d.xEnd,
         pxStart: d.xStart * frame.width,
         pxEnd: d.xEnd * frame.width,
-        kind: suggestion.notesOnly ? 'non_clinical' as ColumnKind : 'provider' as ColumnKind,
+        kind: suggestion.notesOnly || isNotesOnlyColumn(words,regions,d,frame.width) ? 'non_clinical' as ColumnKind : 'provider' as ColumnKind,
         providerLabel: null,
         providerRole: null,
         department: null,
@@ -412,6 +416,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
                           <SelectContent>{providers.map(p => <SelectItem key={p.id} value={p.id}>{p.displayName}</SelectItem>)}</SelectContent>
                         </Select>
                         {col.providerCode && <p className="text-xs text-muted-foreground">Schedule ID: {col.providerCode}</p>}
+                        {col.providerCode && !col.providerId && <p className="text-xs text-muted-foreground">Code read from appointments. Select its provider once; saving the layout remembers this match.</p>}
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs">Provider type</Label>
