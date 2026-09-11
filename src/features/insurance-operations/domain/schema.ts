@@ -324,7 +324,30 @@ export const settingsSchema = z
   })
   .strict();
 export type OfficeSettings = z.infer<typeof settingsSchema>;
+export const officeBreakdownQuestions: Question[] = [
+  ...procedureScopes.map((scope) => ({
+    key: 'frequency' as const,
+    scope,
+    required: true,
+  })),
+  ...procedureScopes.map((scope) => ({
+    key: 'age_limit' as const,
+    scope,
+    required: true,
+  })),
+  ...(
+    [
+      'downgrade',
+      'fee_at_maximum',
+      'rollover',
+      'waiting_period',
+      'out_of_network',
+      'unusual_notes',
+    ] as const
+  ).map((key) => ({ key, scope: 'plan', required: true })),
+];
 const genericQuestions: Question[] = [
+  ...officeBreakdownQuestions,
   { key: 'coverage', scope: 'preventive', required: true },
   { key: 'annual_plan_maximum', scope: 'plan', required: true },
 ];
@@ -378,28 +401,6 @@ export const isGeneric = (key: QuestionKey) =>
   (genericKeys as readonly string[]).includes(key);
 export const isMember = (key: QuestionKey) =>
   (memberKeys as readonly string[]).includes(key);
-export const officeBreakdownQuestions: Question[] = [
-  ...procedureScopes.map((scope) => ({
-    key: 'frequency' as const,
-    scope,
-    required: true,
-  })),
-  ...procedureScopes.map((scope) => ({
-    key: 'age_limit' as const,
-    scope,
-    required: true,
-  })),
-  ...(
-    [
-      'downgrade',
-      'fee_at_maximum',
-      'rollover',
-      'waiting_period',
-      'out_of_network',
-      'unusual_notes',
-    ] as const
-  ).map((key) => ({ key, scope: 'plan', required: true })),
-];
 export function displayValue(value: unknown): string {
   if (value === null || value === undefined) return 'Unknown';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';

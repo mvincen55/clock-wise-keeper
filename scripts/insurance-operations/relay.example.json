@@ -1,0 +1,20 @@
+{
+  "officeId": "00000000-0000-4000-8000-000000000002",
+  "appOrigin": "https://app.example.invalid",
+  "publicOrigin": "https://relay.example.invalid",
+  "databaseUrl": "https://project.example.invalid",
+  "publicKey": "REPLACE_WITH_PUBLIC_SUPABASE_KEY",
+  "fromNumber": "+12025550101",
+  "approvedPath": false,
+  "retentionVerified": false,
+  "conservativeCentsPerMinute": 100,
+  "payers": [
+    {
+      "payerId": "00000000-0000-4000-8000-000000000001",
+      "agentId": "REPLACE_WITH_REVIEWED_AGENT_ID",
+      "agentVersion": 0,
+      "payerWorkflowTested": false
+    }
+  ],
+  "port": 8789
+}

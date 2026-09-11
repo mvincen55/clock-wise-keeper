@@ -1,54 +1,69 @@
-# Insurance operations — initial review build
+# Insurance operations — review and deployment
 
-This branch is a synthetic-review build, not a live calling release. No migration was applied to a connected database, no service was deployed, and no real call was placed. Claims is intentionally unavailable.
+## Office workflow and AI instructions
 
-## Boundaries
+Insurance Desk owns the Manuals, Benefits, Plan Library, Claims and Settings tabs. Manuals stays at its original route. The Workflows page links to the same Insurance Settings form. Claims is explicitly unavailable.
 
-The public export is `InsuranceWorkspace`. `/insurance-desk` preserves the manual reader; child tabs share one memory-only session. Only settings and reviewed, allowlisted generic plan versions enter Supabase. Existing FOF defaults remain estimates and are neither modified nor promoted into reviewed benefits. All reference queries include the office identity. Patient tasks never enter TanStack Query, browser storage, support capture, manual AI search, or a Supabase function.
+Settings defines what the AI obtains. The default breakdown checklist includes separate frequencies and age restrictions for BWX, FMX, Prophy, Perio, Exams, Fluoride and Sealants, plus downgrades, insurance versus office fee at maximum, rollover, waiting periods, out-of-network rules and unusual notes. Staff may deselect questions or use exact CDT scopes. Carrier presets override the office preset; each task retains its selected scope/version. The synthetic demonstration intentionally selects a smaller scope to prove the zero-call path.
 
-Browser task state, imports, capabilities, events and print previews are transient. Refresh cannot reconstruct the worklist. Auth/office changes unmount it, deliberate clear discards it, and a navigation warning covers leaving the module. Token refresh and hidden-page events do not clear it. The sensitive-session signal contains a boolean only and suppresses support capture and remote manual search/AI while work is present. Browser print/save output is deliberately user-controlled and can persist outside the application.
+The supplied Altus/DD RI office-fee instruction is shown in Settings. A manager maps the appropriate canonical carrier IDs and saves office billing rules for downgrades and maximum. Those rules are labeled office instructions on reports and are stripped from relay submissions. They are not inserted as payer answers or silently applied by a carrier-name guess. No production office configuration was changed.
 
-`server/runtime.ts` targets a supervised, long-lived process with in-memory sessions, a server scheduler and a one-hour maximum session lifetime. It does not target serverless process-global memory. Capabilities bind to user and office. Authorization and settings are rechecked before dispatch. Expiry stops queued work and requests active-call cancellation; cancellation is best effort. A closed/discarded page cannot recover results. Machine sleep and loss of connectivity do not guarantee timely alerts. Production hosts must disable body/access/error payload logging, crash dumps, swap/core dumps, APM payload collection and durable queues, and review infrastructure retention. Memory expiry is not a claim about instantaneous physical erasure or vendor deletion.
+Group identity and source review dates already belong to the plan snapshot. Reports label the latest answer/source timestamp as Updated. Unknown is distinct from no, completed phone calls may remain partial, and a fax promise is distinct from confirmed receipt. Unusual notes are asked only when selected, remain session-only, and cannot be published into the generic catalog.
 
-## Synthetic review
+## Data and module boundaries
 
-Use existing Bun dependencies. Start separate terminals:
+The public export is `InsuranceWorkspace`; new domain, UI, adapters, relay and print implementation live in this namespace. Reference adapters use existing carrier directory, provider and branding records. Existing FOF estimates are unchanged and never promoted into verified benefits.
 
-```sh
-bun src/features/insurance-operations/server/synthetic-server.ts
-bun run dev --host 127.0.0.1 --port 8080
-```
+Only office settings and reviewed allowlisted generic rules enter Supabase. Imports, identities, member results, raw notes, call references and print views remain in the current browser/relay session. They do not enter browser storage, Supabase patient tables, query persistence, support capture, ordinary AI or manual remote search. The shared sensitive-session signal contains only a boolean. Internal tabs preserve task state; refresh, clear, auth/office changes and leaving the module discard it. Token refresh alone does not clear it.
 
-Open `http://127.0.0.1:8080/scripts/insurance-operations/synthetic-harness.html`. This harness has no authenticated office data. Choose synthetic mode and load the two fixtures, review each row, Start selected, then Confirm Start. One breakdown completes from the reviewed synthetic catalog without calling the adapter; the combined request enters the local server, holds and returns unknown member answers. Background the page while it runs, return, review the partial status and print two reports. Refresh starts empty. The localhost endpoint accepts only the fixed synthetic identities and is not a patient relay.
+The approved transient relay may hold patient processing state for at most one hour. It uses a long-lived process and server scheduler, not a serverless memory-survival assumption or foreground timer. Capabilities bind to user and office. Restart loses the queue; refresh does not reconstruct it. Expiry stops dispatch and requests cancellation; remote cancellation and unload delivery are best effort. A vendor request that returns after session release triggers cancellation of the returned call. An ambiguous creation is never blindly retried. Printed/saved files are deliberately user-controlled output outside the transient application boundary.
 
-The generic notification text and denied-permission behavior have focused tests. The CSV mapping/background-tab demonstration passed with no page errors, preserved leading zeros and produced two patient reports. Reproduce with `node scripts/insurance-operations/check-browser.mjs` while both local servers run; set `PLAYWRIGHT_MODULE` to an external Playwright entry point if needed. Output is written under `outputs/` in the working directory. The physical minimized-window automation attempt was unsuccessful and is not accepted as a passing test. Verify a truly minimized window, OS notification delivery/permission denial, sleep/reconnect and browser discard on supported office browsers before release. No unattended printing is performed.
+## Implemented live integration
 
-## Live setup remains required
+- `relay.ts`: bounded JSON HTTP endpoints for authenticated readiness, open, start, events, pause/resume/cancel/retry/clear; origin checking; user/office capability isolation; no-store responses; transient result buffering; bounded connections; shutdown cleanup.
+- `production.ts`: executable Bun host, validated deployment configuration, Supabase bearer/role authorization, canonical branding, payer telephone, billing NPI, rendering-provider NPI, tax ID and fax resolution at dispatch. Browser phone destinations are not accepted.
+- `payer-router.ts` and `retell.ts`: per-payer pinned-agent dispatch, fixed caller/destination, ambiguous-create handling, status/cancel/reconciliation, signed raw-body webhook and custom-tool ingress, correlation, duplicate suppression and session release. Raw transcripts and recordings are ignored.
+- `agent-template.ts`: concrete Retell LLM configuration with native DTMF and end-call tools plus signed structured-answer/state endpoints. Prompts constrain procedure distinctions, exact frequency windows, age boundaries, downgrade basis, rollover conditions, waiting periods and out-of-network rules. It stops for staff authentication and tool rejection.
 
-`RetellAdapter`, the bounded conversation contract, authenticated transport interface and office authorizer are preparatory server components. This branch does **not** provide a deployed production HTTP relay, configured Retell agent, authenticated tool endpoint or operational webhook ingress. The only executable HTTP host is synthetic. Do not point real patients at it.
+The endpoints are implemented, but no production host, account, approved processing path, real payer configuration or live payer call has been supplied or deployed in this session. Agent behavior against real IVRs remains an operational acceptance test; the code and synthetic tests do not substitute for it.
 
-A live deployment must mount the session transport endpoints behind TLS and an explicit origin allowlist, enforce bounded/strict request bodies, validate each Supabase bearer against the configured office and role, own the server scheduler, mount raw-body signed webhooks and authenticated structured-answer tools, and isolate each office's runtime. `office-authorization.ts` reads only non-patient configuration. Mounting code must use the same authority for every endpoint, must not trust browser settings/phone destinations, and must never log request bodies or vendor responses.
+## Deployment procedure (not executed)
 
-The reviewed processing path is browser → approved transient relay → Retell → the actually selected model/telephony services → payer. Supabase stores office configuration only. Before enabling, review applicable agreements and the actual path, deploy a pinned agent version implementing `conversation.ts`, verify payer IVR/DTMF/hold/human handoff and structured tool answers, configure approved caller/payer/fax destinations from canonical office references, verify billing versus rendering NPI/tax identifiers, and test cancellation and ambiguous-create reconciliation. No real payer workflow has been validated by this build.
+1. Identify the approved persistent host and actual Retell/model/telephony services. Review agreements, retention, infrastructure logging and access. Disable request-body logging, APM payload capture, crash/core dumps, swap and durable queues. Terminate TLS at a covered reverse proxy; disable request/response buffering and body/access logging. Keep the app's existing service-worker behavior.
+2. Copy `scripts/insurance-operations/relay.example.json` into the host's protected configuration mount and replace every placeholder. Set the actual conservative all-in rate; the example rate is not a quote. Keep readiness approval flags false until reviewed. Set `RETELL_API_KEY` using the host secret manager, never a browser build variable or committed file.
+3. Generate the reviewable agent request body with `bun scripts/insurance-operations/print-agent-template.ts https://YOUR_APPROVED_RELAY APPROVED_MODEL`. Configure an agent with that LLM, the approved voice/telephony path, restricted retention and the `/webhooks/retell` callback. Custom functions use `/tools/retell`, signed wrapper payloads (`args_at_root: false`), and no request retries. Test it, publish a pinned version in the approved account, and enter its ID/version per payer in the relay configuration. No account/agent is created by the generator.
+4. Confirm canonical Important Numbers mappings in Insurance Settings, including each payer telephone and each rendering provider. Numbers must be unambiguous international phone numbers; NPI/tax entries must contain only the expected identifier. Fill office branding. Set staff roles, scope, limits and office policies.
+5. Run a supervised long-lived Bun process from the repository root: `INSURANCE_RELAY_CONFIG=/protected/relay.json bun src/features/insurance-operations/server/production.ts`. It binds loopback port 8789 by default. On Windows set that environment variable before the command. Use a service supervisor, not a transient browser terminal or serverless function. A separate approved proxy exposes the configured HTTPS origin.
+6. Only after operational approval set `VITE_INSURANCE_RELAY_ORIGIN` to that origin for the app deployment. The browser requires authenticated readiness in live mode. The office enabled checkbox alone cannot enable calling. Never point patient data at the synthetic host.
 
-Retell setup requires server-only API key, agent ID/version, approved caller/payer number, office fax, practice name, canonical credentials, and webhook URL. Its three approval flags default to blocking unless supplied explicitly. Live runtime construction additionally requires an actual conservative all-in cents-per-minute ceiling (fifth constructor argument); without it, cost reservation is infinite and dispatch remains blocked. Account for model, telephony, transfer and rounding charges before choosing that ceiling. Session reservations are conservative and are not a billing ledger or provider-enforced account spending cap.
+The relay authorizes with a public Supabase key plus the staff bearer; it needs no service-role key. Only non-patient identity/configuration/reference requests reach Supabase. Account tokens remain in memory. Auth expiration pauses dispatch until same-session authorization can be renewed. Global cost reservations are conservative session estimates, not a vendor-enforced account billing cap.
 
-Only after the production ingress and operational review exist should `VITE_INSURANCE_RELAY_ORIGIN` be set to that HTTPS origin. The frontend checks readiness mode; a build variable alone does not configure a service or approve processing. The office enabled toggle alone cannot enable the adapter.
+## Synthetic reproduction and evidence
 
-Official Retell references checked September 11, 2026:
+Start `bun src/features/insurance-operations/server/synthetic-server.ts` and `bun run dev --host 127.0.0.1 --port 8080`. Open `http://127.0.0.1:8080/scripts/insurance-operations/synthetic-harness.html`. Use synthetic mode, import the two fixtures (or load them), review each, start, review and print, then refresh. The localhost server accepts only fixed synthetic identities and never dials a phone.
 
-- [Create phone call](https://docs.retellai.com/api-references/create-phone-call): pinned outbound agent, per-call retention override, bounded duration. No guaranteed create idempotency was established, so an uncertain outcome remains ambiguous.
-- [Stop call](https://docs.retellai.com/api-references/stop-call): cancellation must be reconciled, not assumed successful.
-- [Secure webhooks](https://docs.retellai.com/features/secure-webhook): raw body plus timestamp HMAC, five-minute freshness, webhook-enabled key. Duplicate events are rejected in memory.
-- [Data storage settings](https://docs.retellai.com/accounts/privacy-disable): `basic_attributes_only` and one-day retention are requested. This is not zero vendor retention; metadata and other service layers require separate review. Webhook payloads may still contain sensitive data. The adapter ignores transcripts and recordings.
+`check-browser.mjs` demonstrates CSV mapping with leading zeros, a cached zero-call breakdown, a call-needed task, background-tab execution, partial results, two reports and refresh clearing. `check-desktop.mjs` opens an isolated Edge window, grants notifications only in that temporary browser context, removes Playwright background-throttling overrides, minimizes the actual window through Edge's native window-state protocol, and verifies it stays minimized from start to completion. It records native Notification `show` events with generic text and no body. Native Windows capture failed on this host, so no screenshot of the OS toast was claimed. The test records `document.visibilityState` separately; this automated host reports visible even while the native window state is minimized. Sleep/discard delivery is not guaranteed.
 
-## Verification and remaining release gates
+Run either browser check with Node while both local servers run. Set `PLAYWRIGHT_MODULE` to an external installed Playwright entry point if needed; Playwright is not an application dependency. Review artifacts are written to `outputs/` beneath the command's working directory.
 
-- TypeScript passed; production bundle passed. Repository prebuild lint is configured non-blocking and reports existing issues outside this feature. Feature-only ESLint passed.
-- Full suite before final additions: 141 files passed, three skipped; 1,736 tests passed, 53 skipped. Final focused suite: five files and 33 tests passed, including import, domain, runtime, alerts and print.
-- Workflow safety and migration naming checks passed (two workflows, 175 migrations).
-- The actual new migration passed 19 isolated PostgreSQL/PGlite schema, write-authorization and cross-office RLS checks. Reproduce with `bun scripts/insurance-operations/check-database.ts`; supply `PGLITE_MODULE` pointing at an externally installed PGlite module when it is not locally resolvable. PGlite is a test-only external tool, not an application dependency.
-- Full Supabase migration replay, generated-type parity and release database gates have not run: Docker, Supabase CLI and PostgreSQL CLI are unavailable here. Additive types were synchronized manually. Do not substitute the isolated fixture checks for the repository's release gate.
-- No edge function was edited. All-edge Deno and full authenticated-shell browser acceptance remain outstanding.
+## Release checks
 
-Keep this change in draft review until those release gates and the live integration acceptance work are complete. Some requested hardening remains future work: a catalog retirement control, broader import-format/browser acceptance, rendering-provider mapping ergonomics, and real payer/tool integration. Synthetic evidence does not establish live readiness or compliance.
+The existing full CI and Database/edge release gate passed on rebased commit `1e9ecb7` in PR #174, including replay from zero and scheduled-job/permission probes. The final branch adds insurance-specific real-auth RLS tests to `scripts/verify-release-db.sql` and checks its table/RPC declarations against fresh local Supabase generation. Check the PR's latest commit statuses before release.
+
+Local focused tests cover domain matching, imports, alerts/print, runtime limits, HTTP owner/capability isolation, duplicate launches, signed tool correlation and catalog exclusion of unusual notes. All 36 existing edge entry points passed Deno 2.9.4. The separate PGlite test passed 19 checks against the actual new migration; it supplements, rather than replaces, full replay. Reproduce with `PGLITE_MODULE` pointing at an external PGlite entry point and `bun scripts/insurance-operations/check-database.ts`.
+
+Shared integration files: `src/App.tsx`, `src/pages/InsuranceDesk.tsx`, `src/pages/Settings.tsx`, `src/components/SupportWidget.tsx`, `src/components/insurance/InsuranceManualReader.tsx`, additive `src/integrations/supabase/types.ts`, and new `src/lib/sensitive-session.ts`. Release coverage also extends `scripts/verify-release-db.sql` and `.github/workflows/database-replay.yml`; workflows still have read-only repository permissions and perform no deployment. The newer main-branch Workflows layout and Close the Day changes were preserved during rebase. No dependency or lockfile change is required.
+
+## Verified API references
+
+Checked September 11, 2026 against official Retell documentation and official `retell-sdk` 5.66.1 type declarations:
+
+- [Create phone call](https://docs.retellai.com/api-references/create-phone-call)
+- [Stop call](https://docs.retellai.com/api-references/stop-call)
+- [Secure webhooks](https://docs.retellai.com/features/secure-webhook)
+- [Custom functions](https://docs.retellai.com/build/single-multi-prompt/custom-function)
+- [DTMF tool](https://docs.retellai.com/build/single-multi-prompt/press-digit)
+- [Create Retell LLM](https://docs.retellai.com/api-references/create-retell-llm)
+- [Data storage settings](https://docs.retellai.com/accounts/privacy-disable)
+
+`basic_attributes_only` plus one-day retention is requested. This is not zero vendor retention. Metadata, model/telephony processing and infrastructure retention still require approval. No real-call readiness or legal compliance is inferred from a mock or native-browser test.

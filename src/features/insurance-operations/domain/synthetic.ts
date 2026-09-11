@@ -7,6 +7,17 @@ export const syntheticSettings = {
   enabled: true,
   spendingLimitCents: 1000,
 };
+// The demonstration intentionally selects a small scope so one row proves the
+// zero-call path. Office defaults use the configurable full breakdown checklist.
+const demoQuestions = [
+  { key: 'coverage' as const, scope: 'preventive', required: true },
+  { key: 'annual_plan_maximum' as const, scope: 'plan', required: true },
+];
+syntheticSettings.presets.breakdown.questions = structuredClone(demoQuestions);
+syntheticSettings.presets.combined.questions = [
+  ...structuredClone(demoQuestions),
+  ...structuredClone(syntheticSettings.presets.eligibility.questions),
+];
 export function syntheticPlan(now = new Date()): PlanVersion {
   const year = String(now.getFullYear());
   return {

@@ -171,6 +171,13 @@ export class RetellAdapter implements CallAdapter {
         },
       });
       if (typeof result.call_id !== 'string') return { state: 'ambiguous' };
+      if (!this.attempts.has(attemptId)) {
+        await this.request(
+          `/v2/stop-call/${encodeURIComponent(result.call_id)}`,
+          'POST',
+        ).catch(() => undefined);
+        return { state: 'not_created' };
+      }
       correlation.callRef = result.call_id;
       return { state: 'created', callRef: result.call_id };
     } catch {
