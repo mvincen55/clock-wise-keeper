@@ -30,7 +30,7 @@ export const ROLE_MODULES: Record<OperationalRole, RoleModule> = {
     mission: 'The desk: requests, forms, insurance answers, and the office rhythm.',
     shortcuts: [
       { id: 'fof', label: 'Financial options', to: '/fof' },
-      { id: 'insurance', label: 'Insurance desk', to: '/insurance-desk' },
+      { id: 'insurance', label: 'Insurance Benefits', to: '/insurance-desk' },
       { id: 'broken', label: 'Broken appointments', to: '/broken-appointments' },
       { id: 'consents', label: 'Forms & consents', to: '/consents' },
       { id: 'letters', label: 'Letters', to: '/letters' },
@@ -76,7 +76,7 @@ export const ROLE_MODULES: Record<OperationalRole, RoleModule> = {
     shortcuts: [
       { id: 'fof', label: 'Financial options', to: '/fof' },
       { id: 'consents', label: 'Forms & consents', to: '/consents' },
-      { id: 'insurance', label: 'Insurance desk', to: '/insurance-desk' },
+      { id: 'insurance', label: 'Insurance Benefits', to: '/insurance-desk' },
       { id: 'broken', label: 'Broken appointments', to: '/broken-appointments' },
       { id: 'letters', label: 'Letters', to: '/letters' },
       { id: 'training', label: 'Training', to: '/training' },

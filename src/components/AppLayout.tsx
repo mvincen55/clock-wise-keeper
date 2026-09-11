@@ -53,8 +53,12 @@ const DESTINATIONS: Destination[] = [
   {
     to: '/playbook', icon: BookOpen, label: 'Practice Playbook', shortLabel: 'Playbook',
     match: ['/morning-huddle', '/checklists', '/deposit-log', '/incident-reports', '/fof',
-            '/account-balance', '/broken-appointments', '/consents', '/insurance-desk',
+            '/account-balance', '/broken-appointments', '/consents',
             '/important-numbers', '/assistant'],
+  },
+  {
+    to: '/insurance-desk', icon: ShieldCheck, label: 'Insurance Benefits', shortLabel: 'Benefits',
+    match: [],
   },
   {
     to: '/inbox', icon: Inbox, label: 'Inbox',
@@ -268,7 +272,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           {/* Mobile sticky clock bar (above the bottom navigation). */}
           <GlobalTimeControl variant="bar" />
 
-          {/* Mobile five-item bottom navigation. Safe-area padding keeps the
+          {/* Mobile bottom navigation. Safe-area padding keeps the
               row clear of home indicators; nothing may float over it. */}
           <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 flex min-h-16 items-stretch border-t bg-card pb-[env(safe-area-inset-bottom)]">
             {destinations

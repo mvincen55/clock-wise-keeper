@@ -5,7 +5,7 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 
 // Reader pages that lock their panes to the viewport — a footer below them
 // would only re-introduce page scroll under the locked layout.
-const LOCKED_READER_ROUTES = ['/handbook', '/insurance-desk'];
+const LOCKED_READER_ROUTES = ['/handbook', '/insurance-desk/manuals'];
 
 /**
  * Discreet product attribution (blueprint §3): the office owns the shell —
