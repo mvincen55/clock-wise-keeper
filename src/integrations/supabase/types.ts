@@ -8120,7 +8120,7 @@ export type Database = {
     }
     Functions: {
       insurance_save_settings: { Args: { p_org_id: string; p_expected_version: number; p_configuration: Json }; Returns: Json }
-      insurance_publish_plan: { Args: { p_org_id: string; p_catalog_id: string | null; p_expected_version: number; p_reference: Json; p_reviewed: boolean }; Returns: Json }
+      insurance_publish_plan: { Args: { p_org_id: string; p_catalog_id: string; p_expected_version: number; p_reference: Json; p_reviewed: boolean }; Returns: Json }
       io_keys: { Args: { value: Json; allowed: string[] }; Returns: boolean }
       io_validate_reference: { Args: { value: Json }; Returns: boolean }
       io_validate_preset: { Args: { value: Json }; Returns: boolean }

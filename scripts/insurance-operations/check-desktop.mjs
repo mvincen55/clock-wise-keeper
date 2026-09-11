@@ -109,6 +109,10 @@ try {
   console.log(JSON.stringify(evidence));
   if (startedState !== 'minimized' || completedState !== 'minimized')
     throw new Error('Window did not remain minimized');
+  if (!notifications.some((event) => event.event === 'show' && event.body === ''))
+    throw new Error('Native notification did not show with an empty body');
+  if (notifications.some((event) => event.event === 'error') || errors.length)
+    throw new Error('Desktop acceptance reported a notification or page error');
   console.log('COMPLETE_AWAITING_TOAST_OBSERVATION');
   await new Promise((r) => setTimeout(r, 20000));
 } finally {
