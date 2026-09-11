@@ -111,7 +111,7 @@ print sheets, snapshots, audit trigger) is unchanged.
    spin today's lost minutes into a measurable team goal (reuses
    `team_goals` sprints; the referee's `goalProgress` validates the spec).
 
-## Setup (owner or manager, Settings → Workflows)
+## Setup (owner or manager, Settings → Schedule Intelligence)
 
 The unconfigured Schedule step links directly to Schedule Intelligence setup. Pending edits save before navigation; a failed save keeps the closer on the day. The selected date and Schedule step are retained in the return URL. Members must ask an owner or manager to configure it.
 
@@ -133,3 +133,11 @@ fallback toggle.
 - Color-legend matching assumes solid status blocks; offices with heavy
   gradients may see more unclassified time (which is safe — it is never
   counted as open).
+
+## Focused settings and provider schedules
+
+Schedule setup uses `/settings/schedule-intelligence`; FOF policy and procedure settings use `/fof/settings`, broken-appointment policy uses `/broken-appointments/settings`, and deposit wording uses `/settings/deposits`. The Workflows tab links to these pages. Provider registry and office closures live in Office settings. Broken-appointment notice calculations automatically exclude shared full-day office closures; legacy excluded dates remain effective until removed.
+
+Calibration selects active registry providers and derives their type and department. High-confidence header codes such as DR02 reuse a previously confirmed provider mapping. Unknown or ambiguous codes require selection; they never guess a doctor.
+
+Each selected provider can import weekly hours from CSV, text, or an image, then review and confirm the normalized weekday/time rows. Image reading runs locally. Original files are not retained; only reviewed hours are saved with the layout. PDFs and arbitrary calendar formats are not supported. Unlisted weekdays remain unknown. Confirmed off-duty time is blocked rather than counted as open; actual appointments outside confirmed hours remain in the metrics and trigger review.

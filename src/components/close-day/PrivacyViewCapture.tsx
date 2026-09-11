@@ -238,7 +238,7 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
         providers,
         blocks: analysis.blocks,
         captureConfidence: analysis.layoutConfidence,
-        needsReview: analysis.blocks.some(b => b.code === 'UNCLASSIFIED' && !b.userConfirmed),
+        needsReview: !!analysis.availabilityConflicts?.length || analysis.blocks.some(b => b.code === 'UNCLASSIFIED' && !b.userConfirmed),
       });
       const r = analysis.rollup.byDepartment;
       onVitalsFromSchedule?.({
@@ -280,7 +280,7 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
             </>
           ) : (
             <>
-              <p>Schedule Intelligence must be configured in Settings → Workflows before schedule capture is available for this office.</p>
+              <p>Schedule Intelligence must be configured in Settings → Schedule Intelligence before schedule capture is available for this office.</p>
               {canConfigure && onSetup ? (
                 <>
                   <Button className="h-auto min-h-10 w-full whitespace-normal sm:w-auto" onClick={onSetup} disabled={setupPending}>
@@ -423,6 +423,7 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
               <Badge variant="outline" className="border-success/40 text-success">
                 Privacy check passed
               </Badge>
+              {!!analysis.availabilityConflicts?.length && <p role="alert" className="text-sm text-warning">Visible appointments conflict with the saved working hours for {analysis.availabilityConflicts.join(', ')}. The appointments were retained; verify the hours. This capture will be flagged for manager review.</p>}
               {analysis.needsReview && (
                 <Badge variant="outline" className="border-warning/40 text-warning">
                   Review before saving

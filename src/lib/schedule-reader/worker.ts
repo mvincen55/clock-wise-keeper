@@ -17,6 +17,7 @@
  * Nothing in this module performs network I/O.
  */
 import { recognizeFrame } from './ocr';
+import { applyProviderHours } from './provider-hours';
 import { buildKnownNames, checkPrivacy, groupWordsIntoLines } from './privacy-detector';
 import { detectTimeRail, matchLayout, wordsInColumn, type TimeRail } from './layout-detector';
 import { classifyNote } from './note-classifier';
@@ -181,12 +182,17 @@ export async function processScheduleFrame(
     }
 
     const allBlocks: ClassifiedBlock[] = [];
+    const availabilityConflicts: string[] = [];
     const providerRows: Record<string, Array<ReturnType<typeof reduceRow>>> = {};
     const providers = [...byProvider.entries()].map(([label, cols]) => {
       const perColumnStatuses = cols.map(col =>
         sampleColumnStatuses(ctx, col, rows, options.profile.statusLegend)
       );
-      const reduced = rows.map((_, i) => reduceRow(perColumnStatuses.map(s => s[i])));
+      const availability = applyProviderHours(
+        rows.map((_, i) => reduceRow(perColumnStatuses.map(s => s[i]))),
+        cols[0].workingHours, options.businessDate, grid.dayStartMinutes, grid.minutesPerRow,
+      );
+      const reduced = availability.rows;
       providerRows[label] = reduced;
 
       const blocks = cols.flatMap((col, c) =>
@@ -200,9 +206,14 @@ export async function processScheduleFrame(
           col.department
         )
       );
+      if (availability.offDutyMinutes > 0) blocks.push({
+        code: 'PROVIDER_OFF', minutes: availability.offDutyMinutes,
+        providerLabel: label, department: cols[0].department,
+        confidence: 1, userConfirmed: true,
+      });
       allBlocks.push(...blocks);
 
-      return buildProviderMetrics({
+      const metrics = buildProviderMetrics({
         providerLabel: label,
         providerRole: cols[0].providerRole ?? 'other',
         department: cols[0].department ?? 'other',
@@ -216,6 +227,8 @@ export async function processScheduleFrame(
         ocrConfidence,
         layoutConfidence: match.confidence,
       });
+      if (availability.conflict) availabilityConflicts.push(label);
+      return availability.conflict ? { ...metrics, reviewStatus: 'needs_review' as const } : metrics;
     });
 
     const rollup = computeRollup(providers);
@@ -228,6 +241,7 @@ export async function processScheduleFrame(
     }
 
     return {
+      availabilityConflicts,
       businessDate: options.businessDate,
       layoutConfidence: match.confidence,
       privacy,

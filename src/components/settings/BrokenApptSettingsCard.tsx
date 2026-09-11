@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { CalendarX, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,9 +18,8 @@ import type { BaSettings } from '@/lib/broken-appts/types';
  */
 export function BrokenApptSettingsCard() {
   const { toast } = useToast();
-  const { data: settings, isLoading } = useBrokenApptSettings();
+  const { data: settings, isLoading, isError } = useBrokenApptSettings();
   const upsert = useUpsertBrokenApptSettings();
-  const [closedDateInput, setClosedDateInput] = useState('');
 
   const update = (patch: Partial<BaSettings>) => {
     upsert.mutate(patch, {
@@ -32,18 +31,6 @@ export function BrokenApptSettingsCard() {
   const numberField = (value: string, apply: (n: number) => void) => {
     const n = parseFloat(value);
     if (Number.isFinite(n) && n >= 0) apply(n);
-  };
-
-  const addClosedDate = () => {
-    if (!closedDateInput || !settings) return;
-    if (settings.officeClosedDates.includes(closedDateInput)) return;
-    update({ officeClosedDates: [...settings.officeClosedDates, closedDateInput].sort() });
-    setClosedDateInput('');
-  };
-
-  const removeClosedDate = (date: string) => {
-    if (!settings) return;
-    update({ officeClosedDates: settings.officeClosedDates.filter(d => d !== date) });
   };
 
   return (
@@ -60,7 +47,7 @@ export function BrokenApptSettingsCard() {
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading…
           </div>
-        ) : (
+        ) : isError ? <p role="alert">Could not load policy and office closures. Reload before editing settings.</p> : (
           <>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
@@ -162,39 +149,16 @@ export function BrokenApptSettingsCard() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs">Office Closed Dates (excluded from notice math)</Label>
-              <div className="flex flex-wrap gap-2">
-                {(settings?.officeClosedDates ?? []).map(date => (
-                  <span
-                    key={date}
-                    className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-1 text-xs"
-                  >
-                    {date}
-                    <button
-                      onClick={() => removeClosedDate(date)}
-                      className="text-muted-foreground hover:text-foreground"
-                      aria-label={`Remove ${date}`}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-              <div className="flex gap-2 max-w-sm">
-                <Input
-                  type="date"
-                  value={closedDateInput}
-                  onChange={e => setClosedDateInput(e.target.value)}
-                  aria-label="Closed date to add"
-                />
-                <Button variant="outline" onClick={addClosedDate} disabled={!closedDateInput}>
-                  Add
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Holidays and closure days — like weekends, they contribute zero business
-                hours to the cutoff.
-              </p>
+              <p className="text-sm font-medium">Office closed dates</p>
+              <p className="text-xs text-muted-foreground">Full-day closures from the shared Office Closures calendar are automatically excluded from notice calculations. Previously saved policy dates are also retained. Weekends are excluded automatically.</p>
+              <p className="text-xs text-muted-foreground">{settings?.officeClosedDates.length ?? 0} saved closed dates included.</p>
+              <Button variant="outline" asChild><Link to="/settings/office#office-closures">Manage Office Closures</Link></Button>
+              {!!settings?.legacyOfficeClosedDates.length && <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">Previously entered policy dates. Remove any that no longer apply; manage new closures in Office Closures.</p>
+                {settings.legacyOfficeClosedDates.map(date => <div key={date} className="flex items-center gap-2 text-xs">
+                  <span>{date}</span><Button size="sm" variant="ghost" onClick={() => update({ officeClosedDates: settings.legacyOfficeClosedDates.filter(d => d !== date) })}>Remove {date}</Button>
+                </div>)}
+              </div>}
             </div>
           </>
         )}

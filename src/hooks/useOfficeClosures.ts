@@ -35,17 +35,17 @@ const HOLIDAY_TEMPLATES = [
 
 function nthWeekday(year: number, month: number, weekday: number, n: number): string {
   const first = new Date(year, month - 1, 1);
-  let dayOfWeek = first.getDay();
-  let diff = (weekday - dayOfWeek + 7) % 7;
-  let day = 1 + diff + (n - 1) * 7;
+  const dayOfWeek = first.getDay();
+  const diff = (weekday - dayOfWeek + 7) % 7;
+  const day = 1 + diff + (n - 1) * 7;
   const d = new Date(year, month - 1, day);
   return d.toISOString().split('T')[0];
 }
 
 function lastWeekday(year: number, month: number, weekday: number): string {
   const last = new Date(year, month, 0); // last day of month
-  let dayOfWeek = last.getDay();
-  let diff = (dayOfWeek - weekday + 7) % 7;
+  const dayOfWeek = last.getDay();
+  const diff = (dayOfWeek - weekday + 7) % 7;
   last.setDate(last.getDate() - diff);
   return last.toISOString().split('T')[0];
 }
@@ -143,7 +143,9 @@ export function useGenerateClosures() {
       });
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['office-closures'] }),
+    onSuccess: async () => {
+      await Promise.all([qc.invalidateQueries({ queryKey: ['office-closures'] }), qc.invalidateQueries({ queryKey: ['broken-appt-settings'] })]);
+    },
   });
 }
 
@@ -164,7 +166,9 @@ export function useAddClosure() {
       });
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['office-closures'] }),
+    onSuccess: async () => {
+      await Promise.all([qc.invalidateQueries({ queryKey: ['office-closures'] }), qc.invalidateQueries({ queryKey: ['broken-appt-settings'] })]);
+    },
   });
 }
 
@@ -176,6 +180,8 @@ export function useDeleteClosure() {
       const { error } = await supabase.from('office_closures').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['office-closures'] }),
+    onSuccess: async () => {
+      await Promise.all([qc.invalidateQueries({ queryKey: ['office-closures'] }), qc.invalidateQueries({ queryKey: ['broken-appt-settings'] })]);
+    },
   });
 }

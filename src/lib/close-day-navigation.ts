@@ -8,7 +8,7 @@ export function closingDate(value: string | null): string {
 }
 
 export const scheduleSetupUrl = (date: string) =>
-  `/settings/workflows?closingDate=${closingDate(date)}#schedule-intelligence`;
+  `/settings/schedule-intelligence?closingDate=${closingDate(date)}`;
 
 export const scheduleReturnUrl = (date: string) =>
   `/deposit-log?date=${closingDate(date)}&step=2`;
