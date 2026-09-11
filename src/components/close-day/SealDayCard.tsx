@@ -114,12 +114,12 @@ export default function SealDayCard({ log, date, collectionsCents, staffing, met
   };
 
   const sealed = !!log?.sealed_at;
-  // A current-day closeout answers both new-patient questions before sealing —
+  // A current-day closeout answers the completed-first-visit question before sealing —
   // an explicit 0 counts, blank does not. Older migrated records may stay
   // "not recorded" without being rewritten as zeros.
   const missingNewPatients =
     (date >= getToday() || log?.notes?.startsWith("Dentrix historical report:")) &&
-    (log?.new_patients_scheduled_count == null || log?.new_patients_seen_count == null);
+    log?.new_patients_seen_count == null;
   const canSeal = !!log && !dirty && !missingNewPatients && log.missed_appointments_recorded !== false;
 
   return (
@@ -275,7 +275,7 @@ export default function SealDayCard({ log, date, collectionsCents, staffing, met
               {dirty
                 ? 'Save your changes first — the seal covers what is on file.'
                 : missingNewPatients
-                  ? 'Answer both new-patient questions in Practice Vitals (0 is a real answer), then save, before sealing today.'
+                  ? 'Answer the completed-first-visit question in Practice Vitals (0 is a real answer), then save, before sealing today.'
                   : 'Same-day edits stay open after sealing. Later edits need an owner or manager and are always audit-logged.'}
             </p>
           </div>

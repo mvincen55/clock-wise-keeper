@@ -1,4 +1,6 @@
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
+import { useNavigate, useParams, useLocation, Link } from 'react-router-dom';
+import { scheduleReturnUrl } from '@/lib/close-day-navigation';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -84,6 +86,9 @@ export default function Settings() {
   const { data: ctx } = useOrgContext();
   const navigate = useNavigate();
   const { tab } = useParams();
+  const location = useLocation();
+  const scheduleSection = useRef<HTMLElement>(null);
+  const closingDate = new URLSearchParams(location.search).get('closingDate');
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
   // Members only have personal settings; managers land on the office tab.
@@ -91,6 +96,13 @@ export default function Settings() {
   const fallback: SettingsTab = isManager ? 'office' : 'me';
   const requested = (MANAGER_TABS as readonly string[]).includes(tab ?? '') ? (tab as SettingsTab) : fallback;
   const active: SettingsTab = isManager ? requested : 'me';
+  const showSchedule = active === 'workflows' && location.hash === '#schedule-intelligence';
+  useEffect(() => {
+    if (showSchedule) {
+      scheduleSection.current?.scrollIntoView({ block: 'start' });
+      scheduleSection.current?.focus({ preventScroll: true });
+    }
+  }, [showSchedule]);
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
@@ -103,7 +115,8 @@ export default function Settings() {
         </p>
       </div>
 
-      <Tabs value={active} onValueChange={v => navigate(`/settings/${v}`)}>
+      {closingDate && <Button variant="outline" asChild><Link to={scheduleReturnUrl(closingDate)}>Return to Close the Day</Link></Button>}
+      <Tabs value={active} onValueChange={v => navigate(`/settings/${v}${location.search}`)}>
         {isManager && (
           <TabsList className="flex w-full flex-wrap h-auto justify-start">
             <TabsTrigger value="office">Office</TabsTrigger>
@@ -156,7 +169,10 @@ export default function Settings() {
             <BrokenApptSettingsCard />
             {/* Close the Day configuration — moved from the bottom of the
                 Close the Day page, which now links here. */}
-            <ScheduleIntelligenceSetupCard />
+            <section ref={scheduleSection} id="schedule-intelligence" tabIndex={-1} aria-label="Schedule Intelligence setup" className="scroll-mt-6 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <ScheduleIntelligenceSetupCard initiallyExpanded={showSchedule} />
+              {closingDate && <Button className="mt-3" variant="outline" asChild><Link to={scheduleReturnUrl(closingDate)}>Return to Close the Day</Link></Button>}
+            </section>
             <DepositSettingsCard />
             <SettingsLinkCard
               icon={FileSignature}

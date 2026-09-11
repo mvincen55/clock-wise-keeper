@@ -1,13 +1,4 @@
-/**
- * Close the Day — the two new-patient questions.
- *
- *  - both questions render in the Practice Vitals step, as aggregate counts;
- *  - blank stays blank ('' → null) and never silently becomes 0;
- *  - an explicit 0 is a deliberate, saved answer;
- *  - the Seal step shows both values, keeps them separate (seen vs scheduled),
- *    and refuses to seal a current-day closeout until both are answered;
- *  - nothing anywhere asks for a patient name or appointment identity.
- */
+/** Completed first visits remain required; the scheduled question is retired. */
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 
@@ -90,11 +81,21 @@ describe('parseCountAnswer', () => {
 /* --------------------------- vitals questions ---------------------------- */
 
 describe('Practice Vitals new-patient questions', () => {
-  it('renders both whole-number questions with aggregate framing', () => {
+  it('keeps production and all four missed-appointment questions, with a persistent currency prefix', () => {
+    render(<DailyVitalsCard value={vitals({ production: '6322.47' })} onChange={() => {}} />);
+    const production = screen.getByLabelText('Production');
+    expect(production).toHaveValue('6322.47');
+    expect(production.parentElement).toHaveTextContent('$');
+    for (const name of ['Hygiene cancellations', 'Hygiene no-shows', 'Doctor cancellations', 'Doctor no-shows']) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
+    expect(screen.getAllByRole('slider')).toHaveLength(4);
+  });
+  it('keeps completed visits and removes the scheduled question', () => {
     render(<DailyVitalsCard value={vitals()} onChange={() => {}} />);
     expect(
-      screen.getByLabelText(/How many new-patient appointments did we schedule today\?/),
-    ).toBeInTheDocument();
+      screen.queryByLabelText(/How many new-patient appointments did we schedule today\?/),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByLabelText(/How many new patients completed their first visit today\?/),
     ).toBeInTheDocument();
@@ -154,14 +155,14 @@ describe('Seal the Day summary', () => {
     expect(screen.getAllByText('Not recorded')).toHaveLength(2);
   });
 
-  it('a current-day closeout cannot seal until both questions are answered', () => {
+  it('a current-day closeout cannot seal until completed visits are answered', () => {
     renderSeal(log({ new_patients_seen_count: null }));
     expect(screen.getByRole('button', { name: /Seal the day/i })).toBeDisabled();
-    expect(screen.getByText(/Answer both new-patient questions/)).toBeInTheDocument();
+    expect(screen.getByText(/Answer the completed-first-visit question/)).toBeInTheDocument();
   });
 
   it('an explicit 0 answer satisfies the current-day gate', () => {
-    renderSeal(log({ new_patients_scheduled_count: 0, new_patients_seen_count: 0 }));
+    renderSeal(log({ new_patients_scheduled_count: null, new_patients_seen_count: 0 }));
     expect(screen.getByRole('button', { name: /Seal the day/i })).toBeEnabled();
   });
 

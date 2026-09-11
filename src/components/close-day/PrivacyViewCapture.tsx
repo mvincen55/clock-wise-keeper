@@ -79,6 +79,9 @@ function fmtMin(minutes: number): string {
 type Phase = 'idle' | 'confirm' | 'processing' | 'review' | 'done';
 
 type Props = {
+  canConfigure?: boolean;
+  onSetup?: () => void;
+  setupPending?: boolean;
   /** deposit_logs.id — the closeout identity. Null until the day is saved. */
   closeoutId: string | null;
   date: string;
@@ -99,8 +102,8 @@ type Props = {
  * one frame is grabbed and the stream stops → local OCR + analysis → the
  * closer reviews sanitized metrics → the frame is destroyed either way.
  */
-export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSchedule }: Props) {
-  const { data: profiles } = useLayoutProfiles();
+export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSchedule, canConfigure, onSetup, setupPending }: Props) {
+  const { data: profiles, isPending: profilesPending, isError: profilesError, refetch: retryProfiles } = useLayoutProfiles();
   const { data: phraseRows } = usePhraseRules();
   const { data: employees } = useOrgEmployees();
   const { data: settings } = usePracticeSettings();
@@ -270,11 +273,25 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>
-            Schedule Intelligence isn't calibrated for this office yet. An owner or manager sets
-            it up once from the Schedule Intelligence section below — after that, closing the day
-            can read the privacy-view schedule right here.
-          </p>
+          {profilesPending ? <p role="status">Checking Schedule Intelligence setup…</p> : profilesError ? (
+            <>
+              <p role="alert">Could not check Schedule Intelligence setup. Try again.</p>
+              <Button variant="outline" onClick={() => void retryProfiles()}>Try again</Button>
+            </>
+          ) : (
+            <>
+              <p>Schedule Intelligence must be configured in Settings → Workflows before schedule capture is available for this office.</p>
+              {canConfigure && onSetup ? (
+                <>
+                  <Button className="h-auto min-h-10 w-full whitespace-normal sm:w-auto" onClick={onSetup} disabled={setupPending}>
+                    {setupPending ? 'Saving progress…' : 'Set up Schedule Intelligence'}
+                  </Button>
+                  <p>Your changes will be saved before setup opens. Return to this closing date and the Schedule step when you’re done.</p>
+                </>
+              ) : <p>Ask an owner or manager to complete setup in Settings.</p>}
+            </>
+          )}
+          <p>You can skip schedule capture and select Next step to continue to Staffing. Continuing does not mark the schedule as captured; the day can still be sealed once the other required information is saved.</p>
         </CardContent>
       </Card>
     );
