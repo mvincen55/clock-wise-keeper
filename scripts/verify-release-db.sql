@@ -109,3 +109,4 @@ END;
 $$;
 
 SELECT 'release database probes passed' AS result;
+\ir insurance-operations/verify-database.sql

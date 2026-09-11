@@ -10,6 +10,8 @@ on:
       - 'scripts/verify-migration-files.mjs'
       - 'scripts/verify-release-db.sql'
       - 'scripts/verify-workflow-safety.mjs'
+      - 'scripts/insurance-operations/**'
+      - 'src/integrations/supabase/types.ts'
   push:
     branches: [main]
     paths:
@@ -20,6 +22,8 @@ on:
       - 'scripts/verify-migration-files.mjs'
       - 'scripts/verify-release-db.sql'
       - 'scripts/verify-workflow-safety.mjs'
+      - 'scripts/insurance-operations/**'
+      - 'src/integrations/supabase/types.ts'
 
 permissions:
   contents: read
@@ -62,6 +66,11 @@ jobs:
 
       - name: Verify release permissions and scheduled jobs
         run: psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' -v ON_ERROR_STOP=1 -f scripts/verify-release-db.sql
+
+      - name: Verify generated insurance database types
+        run: |
+          supabase gen types typescript --local --schema public > /tmp/insurance-database-types.ts
+          node scripts/insurance-operations/verify-generated-types.mjs /tmp/insurance-database-types.ts
 
       - name: Stop local Supabase
         if: always()

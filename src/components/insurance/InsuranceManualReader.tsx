@@ -84,7 +84,7 @@ function sectionTargets(reader: ReaderManual | undefined) {
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
-export default function InsuranceManualReader() {
+export default function InsuranceManualReader({ sensitiveSession = false }: { sensitiveSession?: boolean }) {
   const { manuals, isLoading } = useInsuranceManuals();
   const { data: ctx } = useOrgContext();
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
@@ -119,7 +119,7 @@ export default function InsuranceManualReader() {
   const searching = debounced.length >= 3;
 
   const scopeIds = searchAll ? null : activeDoc ? [activeDoc.id] : null;
-  const { data: hits, isLoading: searchLoading } = useManualSearch(debounced, scopeIds, searching);
+  const { data: hits, isLoading: searchLoading } = useManualSearch(debounced, scopeIds, searching && !sensitiveSession);
 
   // The original PDF is fetched when the viewer opens, or up-front when
   // confidence is low enough that the PDF leads.
@@ -383,7 +383,7 @@ export default function InsuranceManualReader() {
             : 'A manager can add insurance carrier manuals from Manage manuals on this page.'}
         </p>
         {isManager && (
-          <Button className="mt-4" onClick={() => setManageOpen(true)}>
+          <Button className="mt-4" disabled={sensitiveSession} onClick={() => setManageOpen(true)}>
             <Settings2 className="mr-1.5 h-4 w-4" />
             Manage manuals
           </Button>
@@ -409,12 +409,12 @@ export default function InsuranceManualReader() {
         </div>
         <div className="flex items-center gap-2">
           {isManager && (
-            <Button variant="outline" size="sm" onClick={() => setManageOpen(true)}>
+            <Button variant="outline" size="sm" disabled={sensitiveSession} onClick={() => setManageOpen(true)}>
               <Settings2 className="mr-1.5 h-4 w-4" />
               Manage manuals
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={() => setAskOpen(true)} disabled={!activeDoc}>
+          <Button variant="outline" size="sm" onClick={() => setAskOpen(true)} disabled={!activeDoc || sensitiveSession}>
             <Sparkles className="mr-1.5 h-4 w-4 text-primary" />
             Ask AI
           </Button>
@@ -426,6 +426,7 @@ export default function InsuranceManualReader() {
         <div className="relative min-w-0 flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            disabled={sensitiveSession}
             className="h-11 rounded-xl border-border bg-card pl-9 pr-9 shadow-sm focus-visible:ring-primary"
             placeholder={
               activeDoc && !searchAll
@@ -699,7 +700,7 @@ export default function InsuranceManualReader() {
       )}
 
       {/* Ask AI drawer, scoped to the open manual */}
-      <Sheet open={askOpen} onOpenChange={setAskOpen}>
+      <Sheet open={askOpen && !sensitiveSession} onOpenChange={setAskOpen}>
         <SheetContent side="right" className="flex w-full flex-col p-4 sm:max-w-md">
           <SheetHeader className="shrink-0 text-left">
             <SheetTitle className="flex items-center gap-2 text-base">
@@ -736,7 +737,7 @@ export default function InsuranceManualReader() {
         onPageChange={page => setViewer({ open: true, page })}
       />
 
-      <ManageManualsDialog open={manageOpen} onClose={() => setManageOpen(false)} manuals={manuals} />
+      {!sensitiveSession && <ManageManualsDialog open={manageOpen} onClose={() => setManageOpen(false)} manuals={manuals} />}
 
       <p className="hidden shrink-0 text-center text-[11px] text-muted-foreground lg:block">
         Clean reader formatting is generated from the carrier's PDF — wording is never
