@@ -3750,6 +3750,6 @@
 @media print { .handbook-table-wrap { overflow: visible; } .handbook-reference-table thead { display: table-header-group; } .handbook-reference-table tr { break-inside: avoid; } }
 .handbook-reference-table:has(thead th:nth-child(3)) { min-width: 30rem; }
 .handbook-reference-table th, .handbook-reference-table td { overflow-wrap: normal; word-break: normal; }
-.handbook-uploaded .handbook-article h3 { scroll-margin-top: 128px; }
+.handbook-uploaded .handbook-article h3 { scroll-margin-top: 112px; }
 @media(min-width: 1024px) { .handbook-uploaded .handbook-article h3 { scroll-margin-top: 24px; } }
 @media print { .handbook-reference-table:has(thead th:nth-child(3)) { min-width: 0; } }
