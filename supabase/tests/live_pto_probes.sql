@@ -82,6 +82,35 @@ DO $$ DECLARE e uuid='00000000-0000-0000-0000-000000000001'; week date=current_d
  RAISE EXCEPTION 'duplicate check accepted';
  EXCEPTION WHEN unique_violation THEN NULL; END;
 END $$;
+\ir ../migrations/20260914200000_worked_hour_adjustments.sql
+CREATE OR REPLACE FUNCTION public.is_org_admin(uuid) RETURNS boolean LANGUAGE sql AS $$ SELECT $1='00000000-0000-0000-0000-000000000010'::uuid AND current_setting('test.actor',true)='00000000-0000-0000-0000-000000000088' $$;
+SET test.actor='00000000-0000-0000-0000-000000000088';
+INSERT INTO time_entries SELECT id,org_id,current_date-extract(dow FROM current_date)::int-7,600 FROM employees;
+DO $$ DECLARE e uuid='00000000-0000-0000-0000-000000000001'; d date=current_date-extract(dow FROM current_date)::int-1; key uuid='00000000-0000-0000-0000-000000000101'; BEGIN
+ PERFORM add_worked_hour_adjustment(key,e,d,10,'Saturday landscaping');
+ PERFORM add_worked_hour_adjustment(key,e,d,10,'Saturday landscaping');
+ ASSERT (SELECT count(*)=1 FROM worked_hour_adjustments),'retry cannot duplicate adjustment';
+ ASSERT (SELECT worked_hours_raw=20 FROM get_live_pto_ledger(e) WHERE period_start=d-6),'Saturday adjustment changes the correct week';
+ PERFORM add_worked_hour_adjustment('00000000-0000-0000-0000-000000000102',e,d,-2.50,'Reverse estimated time');
+ ASSERT (SELECT worked_hours_raw=17.50 FROM get_live_pto_ledger(e) WHERE period_start=d-6),'negative offsets update live PTO';
+ BEGIN
+ PERFORM add_worked_hour_adjustment(gen_random_uuid(),e,d,-100,'Excessive offset'); RAISE EXCEPTION 'negative week accepted';
+ EXCEPTION WHEN raise_exception THEN ASSERT SQLERRM='The adjustment would make weekly worked hours negative'; END;
+ BEGIN
+ PERFORM add_worked_hour_adjustment(gen_random_uuid(),e,d,1,' '); RAISE EXCEPTION 'blank reason accepted';
+ EXCEPTION WHEN raise_exception THEN ASSERT SQLERRM LIKE 'Enter a date%'; END;
+END $$;
+SET test.actor='00000000-0000-0000-0000-000000000099';
+SET ROLE authenticated;
+DO $$ BEGIN
+ BEGIN
+ PERFORM add_worked_hour_adjustment(gen_random_uuid(),'00000000-0000-0000-0000-000000000001',current_date,1,'Employee attempt'); RAISE EXCEPTION 'employee access accepted';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN
+ UPDATE worked_hour_adjustments SET reason='rewrite'; RAISE EXCEPTION 'history rewrite accepted';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+RESET ROLE;
 ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
 CREATE POLICY own_employee ON employees USING (user_id::text=current_setting('test.actor',true));
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO authenticated;
