@@ -5,7 +5,11 @@ DO $$ DECLARE role_name text; BEGIN
   IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname=role_name) THEN EXECUTE format('CREATE ROLE %I',role_name); END IF;
  END LOOP;
 END $$;
-CREATE TABLE employees(id uuid,org_id uuid,user_id uuid,hire_date date,real_hire_date date,timezone text);
+CREATE TABLE orgs(id uuid PRIMARY KEY);
+CREATE TABLE employees(id uuid PRIMARY KEY,org_id uuid,user_id uuid,hire_date date,real_hire_date date,timezone text);
+CREATE SCHEMA auth;
+CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT nullif(current_setting('test.actor',true),'')::uuid $$;
+CREATE FUNCTION public.is_org_admin(uuid) RETURNS boolean LANGUAGE sql AS $$ SELECT false $$;
 CREATE TABLE pto_settings(employee_id uuid,org_id uuid,hire_date date,worked_hours_cap_weekly numeric,max_balance numeric,timezone text);
 CREATE TABLE pto_snapshots(employee_id uuid,org_id uuid,snapshot_date date,snapshot_balance_hours numeric);
 CREATE TABLE time_entries(employee_id uuid,org_id uuid,entry_date date,total_minutes numeric);
@@ -13,6 +17,8 @@ CREATE TABLE days_off(employee_id uuid,org_id uuid,date_start date,hours numeric
 CREATE TABLE pto_ledger_weeks(id uuid,user_id uuid,employee_id uuid,org_id uuid,period_start date,period_end date,worked_hours_raw numeric,worked_hours_capped numeric,pto_taken_hours numeric,tier_rate numeric,calculated_accrual numeric,weekly_cap numeric,accrual_credited numeric,running_balance numeric);
 \ir ../migrations/20260914150000_live_pto_ledger.sql
 \ir ../migrations/20260914170000_pto_join_date_anchor.sql
+\ir ../migrations/20260914180000_payroll_pto_evidence.sql
+INSERT INTO orgs VALUES ('00000000-0000-0000-0000-000000000010');
 INSERT INTO employees VALUES ('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000010',NULL,current_date,'2022-12-23','America/New_York');
 INSERT INTO pto_settings SELECT id,org_id,hire_date,40,100,timezone FROM employees;
 INSERT INTO pto_snapshots SELECT id,org_id,current_date-extract(dow FROM current_date)::int-7,10 FROM employees;
@@ -64,13 +70,27 @@ DO $$ DECLARE e uuid='00000000-0000-0000-0000-000000000001'; BEGIN
  INSERT INTO pto_snapshots SELECT id,org_id,hire_date,0 FROM employees;
  ASSERT (SELECT running_balance=0 FROM get_live_pto_ledger(e) ORDER BY period_start DESC LIMIT 1),'updated join date and explicit zero survive reload';
 END $$;
+DO $$ DECLARE e uuid='00000000-0000-0000-0000-000000000001'; week date=current_date-extract(dow FROM current_date)::int-7; BEGIN
+ INSERT INTO payroll_pto_records(org_id,employee_id,payroll_employee_id,payroll_employee_name,period_start,period_end,check_date,check_number,pto_hours,pto_ytd_hours,source_file,source_sha256,source_page)
+ SELECT org_id,id,'57','Test employee',week,week+6,current_date,'check-1',8,100,'source.pdf','hash',29 FROM employees;
+ INSERT INTO days_off SELECT id,org_id,week,8,'scheduled_with_notice' FROM employees;
+ ASSERT (SELECT pto_taken_hours=8 FROM get_live_pto_ledger(e) WHERE period_start=week),'payroll and daily leave count once, not twice; YTD never deducted';
+ UPDATE payroll_pto_records SET pto_hours=0;
+ ASSERT (SELECT pto_taken_hours=0 FROM get_live_pto_ledger(e) WHERE period_start=week),'confirmed zero payroll PTO overrides an unsupported daily amount';
+ BEGIN
+ INSERT INTO payroll_pto_records SELECT gen_random_uuid(),org_id,employee_id,payroll_employee_id,payroll_employee_name,period_start,period_end,check_date,check_number,pto_hours,pto_ytd_hours,worked_hours,source_file,source_sha256,source_page,earnings,review_note,created_at FROM payroll_pto_records;
+ RAISE EXCEPTION 'duplicate check accepted';
+ EXCEPTION WHEN unique_violation THEN NULL; END;
+END $$;
 ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
 CREATE POLICY own_employee ON employees USING (user_id::text=current_setting('test.actor',true));
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO authenticated;
+GRANT USAGE ON SCHEMA auth TO authenticated;
 SET ROLE authenticated;
 SET test.actor='00000000-0000-0000-0000-000000000099';
 DO $$ BEGIN
  ASSERT (SELECT count(*)=0 FROM get_live_pto_ledger('00000000-0000-0000-0000-000000000001')),'RLS must hide inaccessible employee';
+ ASSERT (SELECT count(*)=0 FROM payroll_pto_records),'payroll evidence must not expose another employee';
 END $$;
 RESET ROLE;
 ROLLBACK;
