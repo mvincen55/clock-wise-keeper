@@ -76,7 +76,8 @@ export function PtoRequestModal({ open, onClose }: Props) {
             </div>
             <div className="space-y-1">
               <Label>Hours (optional)</Label>
-              <Input type="number" value={hours} onChange={e => setHours(e.target.value)} placeholder="Auto: 8h/day" min={0} step={0.5} />
+              <Input type="number" value={hours} onChange={e => setHours(e.target.value)} placeholder="Enter PTO hours" min={0} step={0.5} />
+              <p className="text-xs text-muted-foreground">Only recorded PTO hours count toward usage. No hours are assumed.</p>
             </div>
           </div>
 
