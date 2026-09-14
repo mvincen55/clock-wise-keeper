@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useEmployeeDetail, useEmployeeAttendance, useEmployeeTimeEntries } from '@/hooks/useEmployees';
+import { useEmployeeDetail, useEmployeeTimeEntries } from '@/hooks/useEmployees';
+import { useResolvedEmployeeAttendance } from '@/hooks/useAttendanceFallback';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -59,7 +60,7 @@ export default function EmployeeDetail() {
   const { data: employee, isLoading: empLoading } = useEmployeeDetail(employeeId);
   const [range, setRange] = useState(() => getLast14Days());
   const { data: daysOff, isLoading: daysOffLoading, error: daysOffError } = useEmployeeDaysOff(employeeId, range.start, range.end);
-  const { data: attendance, isLoading: attLoading } = useEmployeeAttendance(employeeId, range);
+  const { rows: attendance, isLoading: attLoading } = useResolvedEmployeeAttendance(employeeId, range);
   const { data: entries } = useEmployeeTimeEntries(employeeId, range);
   const { data: incidents } = useEmployeeIncidentReports(employeeId);
 
@@ -262,7 +263,7 @@ export default function EmployeeDetail() {
             <p className="text-center text-muted-foreground py-8">No attendance data.</p>
           ) : (
             <div className="divide-y">
-              {attendance.map(row => {
+              {attendance.map((row: any) => {
                 const sb = statusBadge[row.status_code] || statusBadge.ok;
                 return (
                   <div key={row.id} className="flex items-center justify-between px-4 py-2.5">
