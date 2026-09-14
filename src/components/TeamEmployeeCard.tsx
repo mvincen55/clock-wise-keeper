@@ -26,6 +26,7 @@ import { useTeamOnboardingStatus } from '@/hooks/useOnboarding';
 import { employeeTeamStatus } from '@/lib/team-status';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Link } from 'react-router-dom';
+import EditEmployeeDialog from '@/components/team/EditEmployeeDialog';
 import { formatEmployeeName } from '@/lib/employee-name';
 
 type Employee = {
@@ -174,6 +175,7 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
             <TabsContent value="callouts"><CalloutsTab employeeId={employee.id} range={dateRange} /></TabsContent>
           </Tabs>
           <div className="mt-3 flex justify-end gap-2">
+            {canArchive && <EditEmployeeDialog employee={employee} />}
             {canArchive && (
               <Button
                 variant="outline"

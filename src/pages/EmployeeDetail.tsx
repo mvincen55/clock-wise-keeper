@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft, Clock, CalendarDays, Plus, ShieldAlert } from 'lucide-react';
 import { formatDate, formatTime, minutesToHHMM } from '@/lib/time-utils';
+import EditEmployeeDialog from '@/components/team/EditEmployeeDialog';
+import { formatEmployeeName } from '@/lib/employee-name';
 import EmployeeSetupCard from '@/components/team/EmployeeSetupCard';
 import AccountabilityHistory from '@/components/accountability/AccountabilityHistory';
 import IncidentReportModal from '@/components/IncidentReportModal';
@@ -97,9 +99,10 @@ export default function EmployeeDetail() {
           <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
         </Link>
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">{employee.display_name}</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">{formatEmployeeName(employee.display_name)}</h1>
           <p className="text-muted-foreground">{employee.email || 'No email'} · Eastern (ET)</p>
         </div>
+        <EditEmployeeDialog employee={employee} />
       </div>
 
       <Card><CardHeader><CardTitle>Employment dates and PTO policy</CardTitle></CardHeader><CardContent><EmployeeSetupCard employeeId={employee.id}/></CardContent></Card>

@@ -36,6 +36,7 @@ export default function Team() {
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({ name: '', email: '' });
   const [search, setSearch] = useState('');
+  const [addError, setAddError] = useState('');
   // A bypass notification lands on the exact bypass row below the roster.
   const linkedBypassId = useConsumedSearchParam('bypass');
 
@@ -63,9 +64,15 @@ export default function Team() {
 
   const handleAdd = async () => {
     if (!form.name.trim()) return;
-    await addEmployee.mutateAsync({ display_name: form.name, email: form.email || undefined });
-    setAddOpen(false);
-    setForm({ name: '', email: '' });
+    setAddError('');
+    try {
+      await addEmployee.mutateAsync({ display_name: form.name.trim(), email: form.email.trim() || undefined });
+      setAddOpen(false);
+      setForm({ name: '', email: '' });
+    } catch (error) {
+      setAddError(error && typeof error === 'object' && 'message' in error
+        ? String(error.message) : 'Could not add team member. Please try again.');
+    }
   };
 
   if (ctxLoading || empLoading) {
@@ -93,7 +100,7 @@ export default function Team() {
           <p className="text-muted-foreground">{ctx?.org_name} — {employees?.length || 0} employees</p>
         </div>
         <div className="flex items-center gap-2">
-          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+          <Dialog open={addOpen} onOpenChange={open => { setAddOpen(open); setAddError(''); }}>
             <DialogTrigger asChild>
               <Button size="sm"><Plus className="mr-1 h-4 w-4" />Add</Button>
             </DialogTrigger>
@@ -108,6 +115,7 @@ export default function Team() {
                   <Label>Email</Label>
                   <Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="jane@example.com" />
                 </div>
+                {addError && <p role="alert" className="text-sm text-destructive">{addError}</p>}
                 <Button onClick={handleAdd} disabled={addEmployee.isPending || !form.name.trim()} className="w-full">
                   {addEmployee.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Add Employee

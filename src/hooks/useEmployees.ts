@@ -90,6 +90,30 @@ export function useAddEmployee() {
   });
 }
 
+/** Update roster contact details only; invitations are a separate action. */
+export function useUpdateEmployeeDetails() {
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; display_name: string; email: string | null }) => {
+      if (!ctx || !['owner', 'manager'].includes(ctx.role)) throw new Error('Manager access required');
+      const name = input.display_name.trim();
+      if (!name) throw new Error('Name is required');
+      const { data, error } = await supabase.from('employees')
+        .update({ display_name: name, email: input.email?.trim() || null })
+        .eq('id', input.id).eq('org_id', ctx.org_id)
+        .select('id').single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_data, input) => {
+      qc.invalidateQueries({ queryKey: ['org-employees'] });
+      qc.invalidateQueries({ queryKey: ['org-employees-archived'] });
+      qc.invalidateQueries({ queryKey: ['employee-detail', input.id] });
+    },
+  });
+}
+
 export function useEmployeeAttendanceSummary(dateRange: { start: string; end: string }) {
   const { data: ctx } = useOrgContext();
   return useQuery({
