@@ -4,7 +4,7 @@ import type { OcrBox, OcrWord, LayoutColumn } from './types';
 export function isEmptyBlueGridColumn(image: {width:number;height:number;data:ArrayLike<number>}, col: Pick<LayoutColumn,'xStart'|'xEnd'>, yStart=0, yEnd=1): boolean {
   const left=Math.max(0,Math.ceil(col.xStart*image.width)+3), right=Math.min(image.width,Math.floor(col.xEnd*image.width)-3);
   const top=Math.max(0,Math.ceil(yStart*image.height)), bottom=Math.min(image.height,Math.floor(yEnd*image.height));
-  if(right-left<10 || bottom-top<20) return false;
+  if(right-left<10 || bottom-top<1) return false;
   let blue=0,total=0;
   for(let y=top;y<bottom;y++)for(let x=left;x<right;x++) {
     const i=(y*image.width+x)*4,r=image.data[i],g=image.data[i+1],b=image.data[i+2];
