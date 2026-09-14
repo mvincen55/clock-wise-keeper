@@ -56,6 +56,9 @@ export type PtoLedgerWeek = {
   weekly_cap: number;
   accrual_credited: number;
   running_balance: number;
+  reconciliation_hours?: number | null;
+  reconciliation_note?: string | null;
+  confirmed_balance?: number | null;
 };
 
 /* ───────── Hooks: Settings ───────── */
@@ -203,3 +206,4 @@ export function useCurrentPtoBalance() {
     };
   }, [ledger, snapshots, settings]);
 }
+
