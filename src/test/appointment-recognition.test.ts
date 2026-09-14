@@ -40,3 +40,21 @@ it('uses roster codes before calibration exists and overrides stale layout code 
   expect(result[0].providerRole).toBe('dentist');
   expect(suggestDailyColumns([word('DR02',80,99)], [stale],500,240,[{...p,active:false}])[0].providerId).toBeUndefined();
 });
+
+it('does not restore old empty lanes when only one occupied column is detected', () => {
+  const old:LayoutColumn[]=[0,.5].map(x=>({xStart:x,xEnd:x+.4,kind:'provider',providerLabel:null,providerRole:null,department:null,employeeId:null}));
+  const cols=suggestDailyColumns([word('DR02',40,95)],old,500,240,[],[{x0:100,x1:200,y0:20,y1:100}]);
+  expect(cols).toHaveLength(1);expect(cols[0].xStart).toBe(.2);
+});
+
+it('keeps a coded hold with the same doctor and does not use another doctor from its header', () => {
+  const providers=[{id:'scott',displayName:'Dr. Scott',scheduleCode:'DR02',providerType:'doctor' as const,employeeId:null,active:true},{id:'nicole',displayName:'Dr. Nicole',scheduleCode:'DR08',providerType:'doctor' as const,employeeId:null,active:true}];
+  const columns:LayoutColumn[]=[0,.5].map(x=>({xStart:x,xEnd:x+.5,kind:'provider',providerLabel:null,providerRole:null,department:null,employeeId:null}));
+  const words=[word('DR02',80,99,20),word('Nicole',10,99,300),word('DR08',20,99,300),word('HOLD',80,99,300)];
+  const uncoded=suggestDailyColumns(words,columns,500,240,providers);
+  expect(uncoded[0].providerId).toBe('scott');
+  expect(uncoded[1].kind).toBe('provider');
+  expect(uncoded[1].providerId).toBeFalsy();
+  const coded=suggestDailyColumns([...words,word('DR02',100,99,300)],columns,500,240,providers);
+  expect(coded.map(c=>c.providerId)).toEqual(['scott','scott']);
+});
