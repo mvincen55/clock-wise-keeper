@@ -13,7 +13,6 @@ import { minutesToHHMM, formatTime, formatDate, easternWallMinutes } from '@/lib
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -66,7 +65,6 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
   const [comment, setComment] = useState(entry.entry_comment || '');
   const [commentDirty, setCommentDirty] = useState(false);
-  const [auditDialog, setAuditDialog] = useState<{ field: string; old: string; new: string; pendingUpdate: any } | null>(null);
 
   const punches = entry.punches || [];
   const lateInfo = computeLateInfo(entry, schedule);
@@ -74,27 +72,6 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
   const needsReason = isLate && tardy && !tardy.reason_text && !tardy.resolved;
   const isIncomplete = punches.length > 0 && punches[punches.length - 1].punch_type === 'in';
   const isAbsent = punches.length === 0;
-
-  const handleRemoteToggle = () => {
-    setAuditDialog({
-      field: 'is_remote', old: entry.is_remote ? 'Remote' : 'On-site',
-      new: entry.is_remote ? 'On-site' : 'Remote', pendingUpdate: { is_remote: !entry.is_remote },
-    });
-  };
-
-  const handleAuditConfirm = async (reason: string) => {
-    if (!auditDialog) return;
-    try {
-      await updateEntry.mutateAsync({
-        entryId: entry.id, updates: auditDialog.pendingUpdate,
-        audit: { field_changed: auditDialog.field, old_value: auditDialog.old, new_value: auditDialog.new, reason_comment: reason },
-      });
-      toast({ title: 'Updated with audit' });
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    }
-    setAuditDialog(null);
-  };
 
   const handleSaveComment = async () => {
     try {
@@ -124,7 +101,7 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
         <td className="px-4 py-3">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className={`text-xs px-2 py-0.5 rounded ${entry.is_remote ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
-              {entry.is_remote ? 'Remote' : 'On-site'}
+              {entry.location_status === 'remote' ? 'Remote' : entry.location_status === 'onsite' ? 'On-site' : 'Location unavailable'}
             </span>
             {isAbsent && <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">Absent</span>}
             {isIncomplete && <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">Incomplete</span>}
@@ -178,7 +155,7 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
                     <span className={`text-xs font-semibold uppercase w-8 ${p.punch_type === 'in' ? 'text-success' : 'text-destructive'}`}>{p.punch_type}</span>
                     <span className={`time-display ${isEdited ? 'text-destructive font-semibold' : ''}`}>{formatTime(p.punch_time)}</span>
                     {isEdited && <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/20 text-destructive font-medium">edited</span>}
-                    {p.source !== 'manual' && <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">{p.source === 'auto_location' ? 'GPS' : p.source}</span>}
+                    {p.source !== 'manual' && <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">{p.source === 'auto_location' ? 'GPS' : p.source === 'import' ? 'Import' : p.source}</span>}
                     {hasGps && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary flex items-center gap-0.5"><MapPin className="h-2.5 w-2.5" /> GPS recorded</span>}
                     {p.low_confidence && <span className="text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning">low GPS</span>}
                   </div>
@@ -199,10 +176,6 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
                   )}
                 </div>
               )}
-              <div className="flex items-center gap-3 pt-2 border-t border-border">
-                <Label className="text-xs">Remote</Label>
-                <Switch checked={entry.is_remote} onCheckedChange={handleRemoteToggle} />
-              </div>
               <div className="space-y-1 pt-2 border-t border-border">
                 <Label className="text-xs">Daily Comment</Label>
                 <div className="flex gap-2">
@@ -225,9 +198,6 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
             </div>
           </td>
         </tr>
-      )}
-      {auditDialog && (
-        <EditAuditDialog open onClose={() => setAuditDialog(null)} onConfirm={handleAuditConfirm} fieldChanged={auditDialog.field} oldValue={auditDialog.old} newValue={auditDialog.new} />
       )}
       <PunchEditorModal open={punchEditorOpen} onClose={() => setPunchEditorOpen(false)} entryId={entry.id} entryDate={entry.entry_date} punches={entry.all_punches || punches} />
       <AuditHistoryModal
@@ -262,7 +232,7 @@ async function exportToExcel(
       const day = d.toLocaleDateString('en-US', { weekday: 'short' });
       const totalHHMM = entry.total_minutes != null ? minutesToHHMM(entry.total_minutes) : '';
       const totalHrs = entry.total_minutes != null ? Number((entry.total_minutes / 60).toFixed(2)) : '';
-      const location = entry.is_remote ? 'Remote' : 'On-site';
+      const location = entry.location_status === 'remote' ? 'Remote' : entry.location_status === 'onsite' ? 'On-site' : 'Location unavailable';
       const status = isAbsent ? 'Absent' : isIncomplete ? 'Incomplete' : isLate ? 'Late' : 'Arrived';
       const tardy = tardyMap.get(entry.entry_date);
       const tardyStatus = tardy ? tardy.approval_status : '';
@@ -379,8 +349,8 @@ export default function Timesheet() {
   const filteredEntries = useMemo(() => {
     let list = entriesWithStatus;
     // Remote filter
-    if (remoteFilter === 'remote') list = list.filter(e => e.entry.is_remote);
-    else if (remoteFilter === 'onsite') list = list.filter(e => !e.entry.is_remote);
+    if (remoteFilter === 'remote') list = list.filter(e => e.entry.location_status === 'remote');
+    else if (remoteFilter === 'onsite') list = list.filter(e => e.entry.location_status === 'onsite');
     
     switch (filterMode) {
       case 'absent': list = list.filter(e => e.isAbsent); break;
@@ -570,3 +540,4 @@ export default function Timesheet() {
     </div>
   );
 }
+

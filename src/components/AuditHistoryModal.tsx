@@ -3,6 +3,8 @@ import { useAuditHistoryByDate } from '@/hooks/useCorrectionRequests';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, History, User, FileText } from 'lucide-react';
 import { formatDate } from '@/lib/time-utils';
+import {auditSummary} from '@/lib/audit-summary';
+import {useOrgStaff} from '@/hooks/useStaffCodes';
 
 interface AuditHistoryModalProps {
   open: boolean;
@@ -21,6 +23,7 @@ const actionLabels: Record<string, { label: string; className: string }> = {
 };
 
 export function AuditHistoryModal({ open, onClose, employeeId, entryDate, employeeName }: AuditHistoryModalProps) {
+  const {data: staff} = useOrgStaff();
   const { data: events, isLoading } = useAuditHistoryByDate(
     open ? employeeId : undefined,
     open ? entryDate : undefined
@@ -52,54 +55,22 @@ export function AuditHistoryModal({ open, onClose, employeeId, entryDate, employ
         ) : (
           <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
             {events.map((evt: any) => {
-              const actionInfo = actionLabels[evt.action_type] || actionLabels[evt.event_type] || { label: evt.action_type || evt.event_type, className: 'bg-muted text-muted-foreground' };
+              const summary = auditSummary(evt);
+              const actor = staff?.find(person => person.userId === (evt.actor_id || evt.user_id));
               return (
                 <div key={evt.id} className="border rounded-lg p-3 space-y-2">
                   <div className="flex items-center justify-between">
-                    <Badge variant="outline" className={`text-xs ${actionInfo.className}`}>
-                      {actionInfo.label}
+                    <Badge variant="outline" className="text-xs">
+                      {summary.title}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
                       {new Date(evt.created_at).toLocaleString()}
                     </span>
                   </div>
 
-                  {evt.reason && (
-                    <p className="text-sm"><span className="font-medium">Reason:</span> {evt.reason}</p>
-                  )}
-
-                  {evt.target_table && (
-                    <p className="text-xs text-muted-foreground">
-                      Table: <span className="font-mono">{evt.target_table}</span>
-                    </p>
-                  )}
-
-                  {evt.before_json && (
-                    <div className="text-xs">
-                      <span className="font-medium text-muted-foreground">Before:</span>
-                      <pre className="mt-0.5 p-1.5 rounded bg-muted text-xs overflow-x-auto">
-                        {JSON.stringify(evt.before_json, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-
-                  {evt.after_json && (
-                    <div className="text-xs">
-                      <span className="font-medium text-muted-foreground">After:</span>
-                      <pre className="mt-0.5 p-1.5 rounded bg-muted text-xs overflow-x-auto">
-                        {JSON.stringify(evt.after_json, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-
-                  {/* Legacy event_details fallback */}
-                  {!evt.before_json && !evt.after_json && evt.event_details && (
-                    <div className="text-xs">
-                      <pre className="p-1.5 rounded bg-muted overflow-x-auto">
-                        {JSON.stringify(evt.event_details, null, 2)}
-                      </pre>
-                    </div>
-                  )}
+                  <p className="text-sm text-muted-foreground">By {actor?.displayName || (evt.actor_id || evt.user_id ? 'Team member' : 'System')}</p>
+                  {summary.changes.map((change,index) => <p key={index} className="text-sm">{change}</p>)}
+                  {summary.reason && <p className="text-sm"><span className="font-medium">Reason:</span> {summary.reason}</p>}
                 </div>
               );
             })}
@@ -109,3 +80,4 @@ export function AuditHistoryModal({ open, onClose, employeeId, entryDate, employ
     </Dialog>
   );
 }
+

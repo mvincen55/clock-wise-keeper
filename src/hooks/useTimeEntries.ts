@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { getToday } from '@/lib/time-utils';
+import { getPunchLocation } from '@/lib/punch-location';
 
 export type PunchRow = {
   id: string;
@@ -42,6 +43,7 @@ export type TimeEntryRow = {
   created_at: string;
   updated_at: string;
   is_remote: boolean;
+  location_status?: 'unknown' | 'onsite' | 'remote';
   entry_comment: string | null;
   /** Non-voided punches — safe for totals, status, and display. */
   punches: PunchRow[];
@@ -153,7 +155,11 @@ export function useClockAction() {
       // Server-authoritative punching: the RPC resolves the employee from
       // the JWT, stamps server time, assigns seq, and writes the audit row
       // in the same transaction. The client sends nothing but the action.
-      const { data, error } = await supabase.rpc('record_punch', { p_action: action });
+      const location = await getPunchLocation();
+      const { data, error } = await (supabase as any).rpc('record_punch_with_location', {
+        p_action: action, p_lat: location?.lat ?? null,
+        p_lng: location?.lng ?? null, p_accuracy: location?.accuracy ?? null,
+      });
       if (error) throw error;
       return data;
     },
@@ -214,3 +220,4 @@ export function useUpdateEntry() {
     },
   });
 }
+
