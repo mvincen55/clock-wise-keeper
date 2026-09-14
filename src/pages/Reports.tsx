@@ -8,7 +8,7 @@ import { useAttendanceDayStatus } from '@/hooks/useAttendanceDayStatus';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { useOrgEmployees } from '@/hooks/useEmployees';
 import { useOwnerUserIds } from '@/hooks/useOrgAttendanceSnapshot';
-import { minutesToHHMM, formatTime, formatDate, getToday } from '@/lib/time-utils';
+import { minutesToHHMM, formatTime, formatClock, formatDate, getToday } from '@/lib/time-utils';
 import {
   computeWeeklyTotals, detectDayIssue, formatHoursMinutes, formatOtFlag,
   weekStartOf, type TimeStatus, type WeeklyTotalRow,

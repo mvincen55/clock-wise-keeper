@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft, Clock, CalendarDays, Plus, ShieldAlert } from 'lucide-react';
-import { formatDate, formatTime, minutesToHHMM } from '@/lib/time-utils';
+import { formatDate, formatTime, formatClock, minutesToHHMM } from '@/lib/time-utils';
 import EditEmployeeDialog from '@/components/team/EditEmployeeDialog';
 import { formatEmployeeName } from '@/lib/employee-name';
 import EmployeeSetupCard from '@/components/team/EmployeeSetupCard';

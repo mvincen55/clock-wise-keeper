@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CalendarDays, Loader2, Plus, Trash2, Users } from 'lucide-react';
 import { toast } from 'sonner';
-import { getToday } from '@/lib/time-utils';
+import { getToday, formatClock } from '@/lib/time-utils';
 import {
   shortDate,
   useDeleteOfficeEvent,

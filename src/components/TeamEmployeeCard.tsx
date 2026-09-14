@@ -21,7 +21,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { formatDate } from '@/lib/time-utils';
+import { formatDate, formatClock, formatClockRange } from '@/lib/time-utils';
 import { ChevronDown, ChevronUp, Clock, Calendar, AlertTriangle, CalendarOff, Loader2, Pencil, Plus, Trash2, Archive } from 'lucide-react';
 import { useTeamOnboardingStatus } from '@/hooks/useOnboarding';
 import { employeeTeamStatus } from '@/lib/team-status';

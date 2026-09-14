@@ -11,7 +11,7 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import PersonalCalendar from '@/components/PersonalCalendar';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { useAuth } from '@/hooks/useAuth';
-import { formatDate, formatTime } from '@/lib/time-utils';
+import { formatDate, formatTime, formatClock, formatClockRange } from '@/lib/time-utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
