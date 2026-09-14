@@ -11,7 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { useEmployeeAttendance } from '@/hooks/useEmployees';
+import { useResolvedEmployeeAttendance, useDerivedEmployeeAttendance } from '@/hooks/useAttendanceFallback';
+import { derivedTardies } from '@/lib/attendance-derive';
 import { useEmployeeScheduleAssignments, useEmployeeTardies, useEmployeeDaysOff } from '@/hooks/useEmployeeSchedules';
 import { WEEKDAY_NAMES, DEFAULT_WEEKDAYS, summarizeWeekdays } from '@/hooks/useScheduleVersions';
 import type { ScheduleWeekdayRow } from '@/hooks/useScheduleVersions';
@@ -857,12 +858,21 @@ function WeekdayEditor({ weekdays, onChange }: { weekdays: WeekdayDraft[]; onCha
 
 /* ─── Tardies Tab ─── */
 function TardiesTab({ employeeId, range }: { employeeId: string; range: { start: string; end: string } }) {
-  const { data: tardies, isLoading } = useEmployeeTardies(employeeId, range.start, range.end);
-  if (isLoading) return <LoadingSpinner />;
+  const { data: storedTardies, isLoading } = useEmployeeTardies(employeeId, range.start, range.end);
+  // Pending members have no tardy rows (those are written by the user-scoped
+  // engine), so late arrivals are derived from their schedule and first punch.
+  const { data: derivedRows, isLoading: derivedLoading } = useDerivedEmployeeAttendance(
+    employeeId,
+    range,
+    !isLoading && !storedTardies?.length,
+  );
+  const tardies = storedTardies?.length ? storedTardies : derivedTardies(derivedRows || []);
+  if (isLoading || derivedLoading) return <LoadingSpinner />;
   if (!tardies?.length) return <EmptyState text="No tardies in last 30 days. 🎉" />;
 
   const approvalBadge: Record<string, { label: string; className: string }> = {
     unreviewed: { label: 'Unreviewed', className: 'bg-muted text-muted-foreground' },
+    pending: { label: 'Unreviewed', className: 'bg-muted text-muted-foreground' },
     approved: { label: 'Approved', className: 'bg-success/20 text-success' },
     unapproved: { label: 'Unapproved', className: 'bg-destructive/20 text-destructive' },
   };
