@@ -22,6 +22,7 @@ import { suggestDailyColumns, type ScheduleProvider } from './provider-mapping';
 import type { LayoutColumn } from './types';
 import { applyProviderHours } from './provider-hours';
 import { applyCompletedEvidence } from './completed-evidence';
+import { isEmptyBlueGridColumn } from './appointment-regions';
 import { buildKnownNames, checkPrivacy, groupWordsIntoLines } from './privacy-detector';
 import { detectTimeRail, matchLayout, wordsInColumn, type TimeRail } from './layout-detector';
 import { classifyNote } from './note-classifier';
@@ -161,7 +162,8 @@ export async function processScheduleFrame(
 
     let match = matchLayout(words, frame.width, frame.height, options.profile);
     if (options.reviewColumns) {
-      const suggested = suggestDailyColumns(words, options.profile.signature.columns, frame.width, frame.height, options.providers ?? [], regions);
+      const pixels=frame.canvas.getContext('2d')?.getImageData?.(0,0,frame.width,frame.height);
+      const suggested = suggestDailyColumns(words, options.profile.signature.columns, frame.width, frame.height, options.providers ?? [], regions).filter(c=>!pixels || !isEmptyBlueGridColumn(pixels,c));
       const columns = await options.reviewColumns(suggested);
       if (!columns) throw new ScheduleReaderError('PROCESSING_CANCELLED');
       if (!columns.some(c => c.kind !== 'non_clinical') || columns.some(c => c.kind !== 'non_clinical' && !c.providerId)) {
