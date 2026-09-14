@@ -15,6 +15,7 @@ import PendingInvitesCard from '@/components/PendingInvitesCard';
 import ChecklistBypassesSection from '@/components/ChecklistBypassesSection';
 import { useConsumedSearchParam } from '@/hooks/useDeepLink';
 import { Users, Plus, Loader2, CalendarDays } from 'lucide-react';
+import { filterAndSortEmployees } from '@/lib/employee-name';
 
 function getDefaultRange() {
   const now = new Date();
@@ -57,13 +58,7 @@ export default function Team() {
   }, [attendance, employees]);
 
   const filteredEmployees = useMemo(() => {
-    if (!employees) return [];
-    if (!search.trim()) return employees;
-    const q = search.toLowerCase();
-    return employees.filter(e =>
-      e.display_name.toLowerCase().includes(q) ||
-      (e.email && e.email.toLowerCase().includes(q))
-    );
+    return filterAndSortEmployees(employees ?? [], search);
   }, [employees, search]);
 
   const handleAdd = async () => {
