@@ -1,3 +1,5 @@
+import HandbookSectionLink from '@/components/handbook/HandbookSectionLink';
+import { handbookNumberedHeading } from '@/lib/handbook-section-links';
 /**
  * DocumentLibraryReader — the shared reader behind the Office Handbook and
  * the Insurance Desk (and future SOP/training libraries).
@@ -26,6 +28,7 @@
  * All staff read; management lives in Ask AI → Documents. The office purple
  * (design-token `primary`) marks active navigation, focus, and progress.
  */
+import HandbookHeader from '@/components/handbook/HandbookHeader';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -101,6 +104,8 @@ export interface LibraryQuickLink {
 export interface DocumentLibraryReaderProps {
   title: string;
   subtitle: string;
+  /** Opt-in styling keeps other document libraries unchanged. */
+  appearance?: 'handbook';
   icon: LucideIcon;
   /** Which library areas/collections this surface shows and searches. */
   scope: LibraryScope;
@@ -124,7 +129,7 @@ interface SearchHit {
 }
 
 /** Render text with every occurrence of the query marked. */
-function highlighted(text: string, query: string) {
+function highlightMatch(text: string, query: string) {
   const q = query.trim();
   if (!q) return text;
   const parts = text.split(new RegExp(`(${escapeRegExp(q)})`, 'ig'));
@@ -140,6 +145,14 @@ function highlighted(text: string, query: string) {
   );
 }
 
+/** Source-authored HTTP links only; raw HTML and script URLs stay inert text. */
+function highlighted(text: string, query: string) {
+  return text.split(/(\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g).map((part, index) => {
+    const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+    return link ? <a key={index} href={link[2]} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">{highlightMatch(link[1], query)}</a> : <span key={index}>{highlightMatch(part, query)}</span>;
+  });
+}
+
 function BlockView({ block, id, query }: { block: DocBlock; id: string; query: string }) {
   // Anchor offset: below the sticky bars when the window scrolls (mobile),
   // just inside the pane when the pane scrolls (desktop).
@@ -149,16 +162,24 @@ function BlockView({ block, id, query }: { block: DocBlock; id: string; query: s
       return block.level <= 2 ? (
         <h2
           id={id}
+          tabIndex={-1}
           className={`${anchor} mb-3 mt-10 flex items-center gap-2.5 border-b border-border/70 pb-2 text-xl font-bold tracking-tight text-foreground first:mt-0`}
         >
           <span aria-hidden className="h-4 w-1 shrink-0 rounded-full bg-primary/60" />
           <span className="min-w-0">{highlighted(block.text, query)}</span>
         </h2>
       ) : (
-        <h3 id={id} className={`${anchor} mb-2 mt-6 text-base font-semibold text-foreground first:mt-0`}>
+        <h3 id={id} tabIndex={-1} className={`${anchor} mb-2 mt-6 text-base font-semibold text-foreground first:mt-0`}>
           {highlighted(block.text, query)}
         </h3>
       );
+    case 'table':
+      return <div id={id} className={`${anchor} handbook-table-wrap`} role="region" aria-label="Reference table" tabIndex={0}>
+        <table className="handbook-reference-table">
+          <thead><tr>{block.rows[0].map((cell, column) => <th scope="col" key={column}>{highlighted(cell, query)}</th>)}</tr></thead>
+          <tbody>{block.rows.slice(1).map((row, index) => <tr key={index}>{row.map((cell, column) => column === 0 ? <th scope="row" key={column}>{highlighted(cell, query)}</th> : <td key={column}>{highlighted(cell, query)}</td>)}</tr>)}</tbody>
+        </table>
+      </div>;
     case 'bullets':
       return (
         <ul id={id} className={`${anchor} mb-4 list-disc space-y-1.5 pl-5 text-[15px] leading-7 marker:text-primary/50`}>
@@ -192,17 +213,28 @@ function BlockView({ block, id, query }: { block: DocBlock; id: string; query: s
 const ReaderBody = memo(function ReaderBody({
   blocks,
   highlight,
+  handbook = false,
 }: {
   blocks: DocBlock[];
   highlight: string;
+  handbook?: boolean;
 }) {
-  return (
-    <div className="max-w-[46rem]">
-      {blocks.map((block, i) => (
-        <BlockView key={i} id={sectionAnchorId(i)} block={block} query={highlight} />
-      ))}
-    </div>
-  );
+  const rendered = [];
+  const renderBlock = (i: number, text?: string) => <BlockView key={i} id={sectionAnchorId(i)} block={text === undefined ? blocks[i] : { type: 'para', text }} query={highlight} />;
+  for (let i = 0; i < blocks.length; i++) {
+    const numbered = handbook ? handbookNumberedHeading(blocks, i) : null;
+    if (numbered) {
+      rendered.push(<h3 key={`numbered-${i}`} id={sectionAnchorId(i)} tabIndex={-1} className="handbook-numbered-heading"><span>{numbered.number}</span> <span id={sectionAnchorId(i + 1)}>{highlighted(numbered.title, highlight)}</span></h3>);
+      rendered.push(<HandbookSectionLink key={`link-${i}`} title={numbered.title} />);
+      i++;
+      continue;
+    }
+    rendered.push(renderBlock(i));
+    const block = blocks[i];
+    if (handbook && block.type === 'heading') rendered.push(<HandbookSectionLink key={`link-${i}`} title={block.text} />);
+
+  }
+  return <div className="max-w-[46rem]">{rendered}</div>;
 });
 
 function tocLabelClass(active: boolean): string {
@@ -249,6 +281,7 @@ function TocRow({
         )}
         <button
           type="button"
+          aria-current={item.id === activeId ? 'location' : undefined}
           data-toc-id={item.id}
           onClick={() => onJump(item)}
           className={tocLabelClass(item.id === activeId)}
@@ -342,7 +375,7 @@ function TableOfContents({
   }, [activeId, expanded]);
 
   if (outline.length === 0) {
-    return <p className="px-2 py-1 text-xs text-muted-foreground">No sections detected.</p>;
+    return <p className="px-2 py-1 text-xs text-muted-foreground">This document has no section headings. Read the full text alongside.</p>;
   }
 
   return (
@@ -352,10 +385,12 @@ function TableOfContents({
         <Input
           value={filter}
           onChange={e => setFilter(e.target.value)}
-          placeholder="Filter sections…"
-          className="h-8 rounded-lg pl-8 text-xs focus-visible:ring-primary"
+          aria-label="Filter table of contents"
+          placeholder="Find a section…"
+          className="h-8 rounded-lg pl-8 pr-12 text-xs focus-visible:ring-primary"
         />
       </div>
+      {filter && <button type="button" className="self-start text-xs text-primary underline" onClick={() => setFilter('')}>Clear section filter</button>}
       <div
         ref={listRef}
         className="min-h-0 flex-1 space-y-0.5 overscroll-contain pr-1 lg:overflow-y-auto"
@@ -368,6 +403,7 @@ function TableOfContents({
               <button
                 key={item.id}
                 type="button"
+                aria-current={item.id === activeId ? 'location' : undefined}
                 data-toc-id={item.id}
                 onClick={() => jump(item)}
                 className={`block w-full ${tocLabelClass(item.id === activeId)}`}
@@ -392,6 +428,7 @@ function TableOfContents({
             <button
               key={item.id}
               type="button"
+              aria-current={item.id === activeId ? 'location' : undefined}
               data-toc-id={item.id}
               onClick={() => onJump(item)}
               className={`block w-full ${tocLabelClass(item.id === activeId)}`}
@@ -575,6 +612,7 @@ export default function DocumentLibraryReader({
   quickLinks,
   emptyState,
   documentsLabel = 'Documents',
+  appearance,
 }: DocumentLibraryReaderProps) {
   const { data: allDocs, isLoading } = useOfficeDocs();
   const { data: ctx } = useOrgContext();
@@ -701,8 +739,11 @@ export default function DocumentLibraryReader({
 
   const jumpToSection = (item: OutlineItem) => {
     setActiveSectionId(item.id);
-    const scroll = () =>
-      document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const scroll = () => {
+      const heading = document.getElementById(item.id);
+      heading?.focus({ preventScroll: true });
+      heading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
     if (sheetOpen) {
       // Wait out the sheet's exit animation — the body scroll lock releases
       // only once it unmounts, and a scroll during the lock is swallowed.
@@ -811,9 +852,9 @@ export default function DocumentLibraryReader({
   );
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 p-4 md:p-6 lg:flex lg:h-[calc(100vh-3.75rem)] lg:flex-col lg:overflow-hidden">
+    <div className={`${appearance === 'handbook' ? 'handbook handbook-uploaded' : ''} mx-auto max-w-6xl space-y-4 p-4 md:p-6 lg:flex lg:h-[calc(100vh-3.75rem)] lg:flex-col lg:overflow-hidden`}>
       {/* Compact header */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
+      {appearance === 'handbook' ? <HandbookHeader title={title} subtitle={subtitle} /> : <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/15">
             <Icon className="h-5 w-5 text-primary" />
@@ -829,13 +870,14 @@ export default function DocumentLibraryReader({
             {askAiLabel}
           </Link>
         </Button>
-      </div>
+      </div>}
 
       {/* Search across this library */}
-      <div className="relative shrink-0">
+      <div className={`${appearance === 'handbook' ? 'handbook-search' : ''} relative shrink-0`}>
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           className="h-11 rounded-xl border-border bg-card pl-9 pr-9 shadow-sm focus-visible:ring-primary"
+          aria-label={appearance === 'handbook' ? 'Search handbook text' : `Search ${title}`}
           placeholder={searchPlaceholder}
           value={query}
           onChange={e => setQuery(e.target.value)}
@@ -854,7 +896,7 @@ export default function DocumentLibraryReader({
 
       {/* Quick access — a handful of real searches, nothing more */}
       {!searching && docs.length > 0 && quickLinks.length > 0 && (
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+        <div className={`${appearance === 'handbook' ? 'handbook-quick-links' : ''} flex shrink-0 flex-wrap items-center gap-1.5`}>
           <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             Quick access
           </span>
@@ -867,7 +909,7 @@ export default function DocumentLibraryReader({
                 onClick={() => setQuery(link.query)}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:text-primary"
               >
-                {LinkIcon && <LinkIcon className="h-3.5 w-3.5 text-primary/70" />}
+                {LinkIcon && appearance !== 'handbook' && <LinkIcon className="h-3.5 w-3.5 text-primary/70" />}
                 {link.label}
               </button>
             );
@@ -904,8 +946,7 @@ export default function DocumentLibraryReader({
           ) : scopedHits.length === 0 && titleHits.length === 0 ? (
             <Card>
               <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                Nothing here matches “{debounced}”. Try different words, or ask the AI — it
-                searches with synonyms.
+                Nothing matches “{debounced}”. Try a shorter phrase or clear your search to browse the contents.
               </CardContent>
             </Card>
           ) : (
@@ -971,6 +1012,9 @@ export default function DocumentLibraryReader({
             </div>
             <p className="mt-3 font-medium">{emptyState.title}</p>
             <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{emptyState.body}</p>
+            {appearance === 'handbook' && (ctx?.role === 'owner' || ctx?.role === 'manager') && (
+              <Button asChild variant="outline" className="mt-4"><Link to="/management/knowledge">Manage Policies &amp; Procedures</Link></Button>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -988,7 +1032,7 @@ export default function DocumentLibraryReader({
                   Sections
                 </Button>
               </SheetTrigger>
-              <SheetContent side="bottom" className="flex max-h-[80vh] flex-col rounded-t-2xl">
+              <SheetContent side="bottom" className={`${appearance === 'handbook' ? 'handbook handbook-sheet' : ''} flex max-h-[80vh] flex-col rounded-t-2xl`}>
                 <SheetHeader className="text-left">
                   <SheetTitle className="text-base">{activeDoc?.title}</SheetTitle>
                 </SheetHeader>
@@ -1001,11 +1045,11 @@ export default function DocumentLibraryReader({
               scrolls; the sections column holds its place and the document
               scrolls inside the reading pane. */}
           <div className="grid items-start gap-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-stretch">
-            <aside className="hidden lg:block lg:h-full lg:min-h-0">{sidebar}</aside>
+            <aside aria-label="Table of contents" className={`${appearance === 'handbook' ? 'handbook-toc' : ''} hidden lg:block lg:h-full lg:min-h-0`}>{sidebar}</aside>
 
             <main
               ref={paneRef}
-              className="min-w-0 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:shadow-sm"
+              className={`${appearance === 'handbook' ? 'handbook-reading-pane' : ''} min-w-0 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:shadow-sm`}
             >
               {/* Reading progress — a quiet purple line along the pane's top */}
               <div className="pointer-events-none sticky top-0 z-10 hidden lg:block">
@@ -1018,7 +1062,7 @@ export default function DocumentLibraryReader({
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
                   </div>
                 ) : activeDoc ? (
-                  <article>
+                  <article className={appearance === 'handbook' ? 'handbook-article' : undefined}>
                     <header className="mb-7">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-start gap-3">
@@ -1073,10 +1117,10 @@ export default function DocumentLibraryReader({
 
                     {blocks.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
-                        This document has no readable text.
+                        The text of this document is not available. Ask your manager for a copy or help uploading it again.
                       </p>
                     ) : (
-                      <ReaderBody blocks={blocks} highlight={readerHighlight} />
+                      <ReaderBody blocks={blocks} highlight={readerHighlight} handbook={appearance === 'handbook'} />
                     )}
 
                     {/* Previous / next section */}

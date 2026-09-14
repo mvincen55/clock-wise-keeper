@@ -27,7 +27,7 @@ function ProceduresEmptyState() {
           </p>
           {isAdmin && (
             <Button asChild className="mt-5">
-              <Link to="/management/knowledge">Open Knowledge Workspace</Link>
+              <Link to="/management/knowledge">Open Manage Policies & Procedures</Link>
             </Button>
           )}
         </CardContent>

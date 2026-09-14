@@ -345,7 +345,7 @@ export type AiScope = 'handbook' | 'insurance';
 
 export const AI_SCOPES: Record<AiScope, { label: string; scope: LibraryScope }> = {
   handbook: {
-    label: 'Office Handbook',
+    label: 'Employee Handbook',
     scope: { areas: ['workplace'], collections: ['handbook', 'hr'] },
   },
   insurance: {
