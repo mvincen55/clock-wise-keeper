@@ -10,6 +10,7 @@
 export type DocBlock =
   | { type: 'heading'; level: number; text: string }
   | { type: 'para'; text: string }
+  | { type: 'table'; rows: string[][]; text: string }
   | { type: 'bullets'; items: string[] }
   | { type: 'numbered'; items: string[] };
 
@@ -20,6 +21,9 @@ const BULLET_START = /^[•·▪◦]\s+|^[-*]\s+/;
 const NUMBER_START = /^\d{1,2}[.)]\s+/;
 const SHORT = 60;
 const HEADING_MIN = 3;
+
+export const parseDocTableRow = (line: string): string[] => line.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(/(?<!\\)\|/).map(cell => cell.trim().replace(/\\\|/g, '|').replace(/<br\s*\/?\s*>/gi, '\n'));
+const isTableRow = (line: string) => /^\|.*\|$/.test(line.trim());
 
 const isBlank = (line: string) => line.trim() === '';
 
@@ -109,6 +113,29 @@ export function parseDocBlocks(content: string): DocBlock[] {
       // a non-list block starts.
       flushPara();
       continue;
+    }
+    // A separator row proves the author intended a table. Never guess columns
+    // from whitespace: codes, descriptions, and fees can all contain spaces.
+    if (isTableRow(line) && isTableRow(lines[i + 1] ?? '')) {
+      const header = parseDocTableRow(line);
+      const separator = parseDocTableRow(lines[i + 1]);
+      if (header.length > 1 && separator.length === header.length && separator.every(cell => /^:?-{3,}:?$/.test(cell))) {
+        const rows = [header];
+        let end = i + 2;
+        while (end < lines.length) {
+          if (isBlank(lines[end]) && isTableRow(lines[end + 1] ?? '')) { end++; continue; }
+          if (!isTableRow(lines[end])) break;
+          const cells = parseDocTableRow(lines[end]);
+          if (cells.length !== header.length) break;
+          rows.push(cells);
+          end++;
+        }
+        flushAll();
+        pendingBullet = false;
+        blocks.push({ type: 'table', rows, text: rows.map(row => '| ' + row.map(cell => cell.replace(/\|/g, '\\|').replace(/\n/g, '<br>')).join(' | ') + ' |').join('\n') });
+        i = end - 1;
+        continue;
+      }
     }
     if (PAGE_NUMBER.test(line)) continue;
     if (LONE_BULLET.test(line)) {
