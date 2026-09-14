@@ -1,5 +1,22 @@
 import type { OcrBox, OcrWord, LayoutColumn } from './types';
 
+/** A uniform blue grid contains neither text nor appointment blocks. Unfamiliar pixels stay for review. */
+export function isEmptyBlueGridColumn(image: {width:number;height:number;data:ArrayLike<number>}, col: Pick<LayoutColumn,'xStart'|'xEnd'>, yStart=0, yEnd=1): boolean {
+  const left=Math.max(0,Math.ceil(col.xStart*image.width)+3), right=Math.min(image.width,Math.floor(col.xEnd*image.width)-3);
+  const top=Math.max(0,Math.ceil(yStart*image.height)), bottom=Math.min(image.height,Math.floor(yEnd*image.height));
+  if(right-left<10 || bottom-top<20) return false;
+  let blue=0,total=0;
+  for(let y=top;y<bottom;y++)for(let x=left;x<right;x++) {
+    const i=(y*image.width+x)*4,r=image.data[i],g=image.data[i+1],b=image.data[i+2];
+    const background=b-r>=20 && b-g>=8 && g-r>=8 && r>=65;
+    // Bright neutral grid lines are harmless; dark text or gray/green blocks are not.
+    const gridLine=r>=220 && g>=220 && b>=220;
+    if(!background && !gridLine) return false;
+    blue+=Number(background); total++;
+  }
+  return total>0 && blue/total>.7;
+}
+
 /** Neutral appointment backgrounds in blue-grid schedules. Other themes fall back to layout OCR. */
 export function detectAppointmentRegions(image: { width: number; height: number; data: ArrayLike<number> }): OcrBox[] {
   const { width, height, data } = image;
