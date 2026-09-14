@@ -43,44 +43,47 @@ type InviteInitial = {
  */
 export default function InviteEmployeeModal({
   initial,
+  defaults,
   open: controlledOpen,
   onOpenChange,
 }: {
   initial?: InviteInitial;
+  defaults?: InviteInitial;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 } = {}) {
   const { data: ctx } = useOrgContext();
   const { toast } = useToast();
   const updateMode = !!initial;
+  const values = initial ?? defaults;
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
   const setOpen = onOpenChange ?? setUncontrolledOpen;
   const seedSchedule = (): ScheduleDay[] => {
-    if (!initial?.weekly_schedule?.length) return DEFAULT_SCHEDULE;
+    if (!values?.weekly_schedule?.length) return defaults ? DEFAULT_SCHEDULE.map(d => ({ ...d, enabled: false })) : DEFAULT_SCHEDULE;
     return DAY_NAMES.map((_, weekday) => {
-      const saved = initial.weekly_schedule.find(d => d.weekday === weekday);
+      const saved = values.weekly_schedule.find(d => d.weekday === weekday);
       return saved ?? { weekday, enabled: false, start_time: '08:00', end_time: '17:00' };
     });
   };
-  const [name, setName] = useState(initial?.invited_name ?? '');
-  const [email, setEmail] = useState(initial?.email ?? '');
-  const [role, setRole] = useState<'employee' | 'manager'>(initial?.role ?? 'employee');
+  const [name, setName] = useState(values?.invited_name ?? '');
+  const [email, setEmail] = useState(values?.email ?? '');
+  const [role, setRole] = useState<'employee' | 'manager'>(values?.role ?? 'employee');
   const [operationalRole, setOperationalRole] = useState<OperationalRole | ''>(
-    (initial?.operational_role as OperationalRole | null) ?? ''
+    (values?.operational_role as OperationalRole | null) ?? ''
   );
   const [secondaryRoles, setSecondaryRoles] = useState<OperationalRole[]>(
-    (initial?.secondary_roles as OperationalRole[] | undefined) ?? []
+    (values?.secondary_roles as OperationalRole[] | undefined) ?? []
   );
   const [submitting, setSubmitting] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
   const [emailed, setEmailed] = useState(false);
   const [warning, setWarning] = useState('');
-  const [startDate, setStartDate] = useState(initial?.start_date ?? '');
+  const [startDate, setStartDate] = useState(values?.start_date ?? '');
   const [ptoHours, setPtoHours] = useState(
-    initial?.initial_pto_hours === null || initial?.initial_pto_hours === undefined
+    values?.initial_pto_hours === null || values?.initial_pto_hours === undefined
       ? ''
-      : String(initial.initial_pto_hours)
+      : String(values.initial_pto_hours)
   );
   const [schedule, setSchedule] = useState<ScheduleDay[]>(seedSchedule);
   const { refetch: refetchInvites } = usePendingInvites();
@@ -166,8 +169,8 @@ export default function InviteEmployeeModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v && !updateMode) reset(); }}>
-      {!updateMode && (
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v && !updateMode && !defaults) reset(); }}>
+      {!updateMode && controlledOpen === undefined && (
         <DialogTrigger asChild>
           <Button variant="outline"><Mail className="mr-2 h-4 w-4" />Invite</Button>
         </DialogTrigger>
@@ -198,7 +201,7 @@ export default function InviteEmployeeModal({
               </div>
             </div>
             <p className="text-xs text-muted-foreground">The invite expires in 7 days.</p>
-            {updateMode ? (
+            {updateMode || defaults ? (
               <Button variant="outline" onClick={() => { setInviteLink(''); setOpen(false); }} className="w-full">
                 Done
               </Button>
@@ -219,12 +222,13 @@ export default function InviteEmployeeModal({
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="jane@company.com"
-                readOnly={updateMode}
+                readOnly={updateMode || !!defaults}
                 className={updateMode ? 'bg-muted' : undefined}
               />
               <p className="text-xs text-muted-foreground">
                 {updateMode
                   ? 'The invite stays tied to this address. For a different email, revoke this invite and send a new one.'
+                  : defaults ? 'This invite uses their saved email. Change it in Edit details first if needed.'
                   : "They'll sign in with this address."}
               </p>
             </div>
@@ -279,7 +283,7 @@ export default function InviteEmployeeModal({
                 </div>
               </div>
             )}
-            <div className="space-y-4 rounded-lg border bg-muted/20 p-3">
+            {!defaults && <div className="space-y-4 rounded-lg border bg-muted/20 p-3">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Onboarding details (optional)
               </p>
@@ -334,6 +338,7 @@ export default function InviteEmployeeModal({
                 </p>
               </div>
             </div>
+            }
             <Button
               onClick={handleInvite}
               disabled={submitting || !email.trim() || !name.trim() || !operationalRole}
