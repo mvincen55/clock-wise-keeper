@@ -247,8 +247,8 @@ export default function KnowledgeEditorDialog({ open, onOpenChange, categories, 
                 <Select value={input.kind} onValueChange={value => setKind(value as KnowledgeKind)} disabled={!!item}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="policy">Policy Handbook</SelectItem>
-                    <SelectItem value="procedure">Practice Playbook</SelectItem>
+                    <SelectItem value="policy">Employee Handbook</SelectItem>
+                    <SelectItem value="procedure">Office Procedures</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">

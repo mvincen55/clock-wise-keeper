@@ -1,28 +1,18 @@
+import HandbookHeader from '@/components/handbook/HandbookHeader';
+import { escapeRegExp, snippetAround } from '@/lib/doc-library';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  BookOpenCheck,
   CheckCircle2,
-  ChevronRight,
   FileText,
   Loader2,
   Search,
   ShieldCheck,
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { usePublishedKnowledge, type PublishedKnowledgeEntry } from '@/hooks/usePublishedKnowledge';
-import { knowledgeAreaLabel, type KnowledgeArea } from '@/lib/knowledge';
-import { cn } from '@/lib/utils';
+import { type KnowledgeArea } from '@/lib/knowledge';
 
 type Props = {
   area: KnowledgeArea;
@@ -51,7 +41,7 @@ function tableRows(text: string): string[][] {
 
 function formatDate(value: string | null): string {
   if (!value) return 'Not listed';
-  return new Date(value).toLocaleDateString(undefined, {
+  return new Date(value.length === 10 ? `${value}T12:00:00` : value).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -69,17 +59,24 @@ function searchText(entry: PublishedKnowledgeEntry): string {
     .toLowerCase();
 }
 
-function KnowledgeBlock({ block }: { block: PublishedKnowledgeEntry['blocks'][number] }) {
+function highlight(text: string, query: string) {
+  if (!query.trim()) return text;
+  return text.split(new RegExp(`(${escapeRegExp(query.trim())})`, 'ig')).map((part, index) =>
+    part.toLowerCase() === query.trim().toLowerCase() ? <mark key={index}>{part}</mark> : part,
+  );
+}
+
+function KnowledgeBlock({ block, query = '' }: { block: PublishedKnowledgeEntry['blocks'][number]; query?: string }) {
   const contentLines = lines(block.plain_text);
 
   if (block.block_type === 'divider') return <hr className="my-7 border-border" />;
   if (block.block_type === 'heading') {
-    return <h2 className="mt-8 scroll-mt-24 text-xl font-semibold tracking-tight first:mt-0">{block.plain_text}</h2>;
+    return <h3 id={`policy-section-${block.id}`} tabIndex={-1} className="mt-8 scroll-mt-24 text-xl font-semibold tracking-tight first:mt-0">{highlight(block.plain_text, query)}</h3>;
   }
   if (block.block_type === 'bullet_list') {
     return (
       <ul className="my-4 list-disc space-y-2 pl-6 text-[15px] leading-7 text-foreground/90">
-        {contentLines.map((line, index) => <li key={`${block.id}-${index}`}>{line.replace(/^[-•]\s*/, '')}</li>)}
+        {contentLines.map((line, index) => <li key={`${block.id}-${index}`}>{highlight(line.replace(/^[-•]\s*/, ''), query)}</li>)}
       </ul>
     );
   }
@@ -89,7 +86,7 @@ function KnowledgeBlock({ block }: { block: PublishedKnowledgeEntry['blocks'][nu
         {contentLines.map((line, index) => (
           <li key={`${block.id}-${index}`} className="flex gap-3 [counter-increment:step]">
             <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary before:content-[counter(step)]" />
-            <span>{line.replace(/^\d+[.)]\s*/, '')}</span>
+            <span>{highlight(line.replace(/^\d+[.)]\s*/, ''), query)}</span>
           </li>
         ))}
       </ol>
@@ -101,7 +98,7 @@ function KnowledgeBlock({ block }: { block: PublishedKnowledgeEntry['blocks'][nu
         {contentLines.map((line, index) => (
           <div key={`${block.id}-${index}`} className="flex items-start gap-2.5 rounded-lg border bg-muted/20 px-3 py-2.5 text-sm">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            <span>{line.replace(/^[-•☐✓]\s*/, '')}</span>
+            <span>{highlight(line.replace(/^[-•☐✓]\s*/, ''), query)}</span>
           </div>
         ))}
       </div>
@@ -112,7 +109,7 @@ function KnowledgeBlock({ block }: { block: PublishedKnowledgeEntry['blocks'][nu
       <Alert className="my-5 border-primary/25 bg-primary/5">
         <ShieldCheck className="h-4 w-4 text-primary" />
         <AlertTitle>Important</AlertTitle>
-        <AlertDescription className="whitespace-pre-wrap leading-6">{block.plain_text}</AlertDescription>
+        <AlertDescription className="whitespace-pre-wrap leading-6">{highlight(block.plain_text, query)}</AlertDescription>
       </Alert>
     );
   }
@@ -120,7 +117,7 @@ function KnowledgeBlock({ block }: { block: PublishedKnowledgeEntry['blocks'][nu
     return (
       <div className="my-5 rounded-xl border-l-4 border-primary bg-muted/35 px-5 py-4">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-primary">Suggested wording</p>
-        <p className="whitespace-pre-wrap text-[15px] italic leading-7 text-foreground/90">“{block.plain_text}”</p>
+        <p className="whitespace-pre-wrap text-[15px] italic leading-7 text-foreground/90">“{highlight(block.plain_text, query)}”</p>
       </div>
     );
   }
@@ -132,12 +129,12 @@ function KnowledgeBlock({ block }: { block: PublishedKnowledgeEntry['blocks'][nu
       <div className="my-5 overflow-x-auto rounded-lg border">
         <table className="w-full min-w-[480px] border-collapse text-left text-sm">
           <thead className="bg-muted/60">
-            <tr>{head.map((cell, index) => <th key={index} className="border-b px-3 py-2.5 font-semibold">{cell}</th>)}</tr>
+            <tr>{head.map((cell, index) => <th key={index} className="border-b px-3 py-2.5 font-semibold">{highlight(cell, query)}</th>)}</tr>
           </thead>
           <tbody>
             {body.map((row, rowIndex) => (
               <tr key={rowIndex} className="border-b last:border-0">
-                {head.map((_, cellIndex) => <td key={cellIndex} className="px-3 py-2.5 align-top">{row[cellIndex] ?? ''}</td>)}
+                {head.map((_, cellIndex) => <td key={cellIndex} className="px-3 py-2.5 align-top">{highlight(row[cellIndex] ?? '', query)}</td>)}
               </tr>
             ))}
           </tbody>
@@ -149,18 +146,19 @@ function KnowledgeBlock({ block }: { block: PublishedKnowledgeEntry['blocks'][nu
     return (
       <div className="my-5 flex items-start gap-3 rounded-xl border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
         <FileText className="mt-0.5 h-5 w-5 shrink-0" />
-        <p className="whitespace-pre-wrap leading-6">{block.plain_text}</p>
+        <p className="whitespace-pre-wrap leading-6">{highlight(block.plain_text, query)}</p>
       </div>
     );
   }
 
-  return <p className="my-4 whitespace-pre-wrap text-[15px] leading-7 text-foreground/90">{block.plain_text}</p>;
+  return <p className="my-4 whitespace-pre-wrap text-[15px] leading-7 text-foreground/90">{highlight(block.plain_text, query)}</p>;
 }
 
 export default function PublishedKnowledgeReader({ area, title, subtitle, fallback }: Props) {
   const { data, isLoading, error } = usePublishedKnowledge(area);
   const [query, setQuery] = useState('');
   const [activeId, setActiveId] = useState('');
+  const [contentsOpen, setContentsOpen] = useState(false);
 
   const entries = data?.entries ?? EMPTY_ENTRIES;
   const normalizedQuery = query.trim().toLowerCase();
@@ -204,145 +202,87 @@ export default function PublishedKnowledgeReader({ area, title, subtitle, fallba
 
   const choose = (entryId: string) => {
     setActiveId(entryId);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setContentsOpen(false);
+    requestAnimationFrame(() => {
+      const heading = document.getElementById('policy-title');
+      heading?.focus({ preventScroll: true });
+      heading?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
+  };
+  const entryLink = (entry: PublishedKnowledgeEntry) => {
+    const match = [entry.version.summary, ...entry.blocks.map(block => block.plain_text)]
+      .find(text => text?.toLowerCase().includes(normalizedQuery));
+    return (
+      <button key={entry.item.id} type="button" onClick={() => choose(entry.item.id)}
+        aria-current={activeEntry?.item.id === entry.item.id ? 'page' : undefined}
+        className="policy-toc-link">
+        <span>{highlight(entry.version.title, query)}</span>
+        {normalizedQuery && match && <small>{highlight(snippetAround(match, query, 130), query)}</small>}
+      </button>
+    );
   };
 
   return (
-    <div className="mx-auto max-w-7xl p-4 md:p-8">
-      <header className="mb-6">
-        <div className="flex flex-wrap items-center gap-2">
-          <BookOpenCheck className="h-7 w-7 text-primary" />
-          <h1 className="text-2xl font-bold md:text-3xl">{title}</h1>
-          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-800">
-            Published office copy
-          </Badge>
-        </div>
-        <p className="mt-1 text-muted-foreground">{subtitle}</p>
-      </header>
-
-      <div className="mb-4 lg:hidden">
-        <Select value={activeEntry?.item.id ?? ''} onValueChange={choose}>
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder={`Choose from the ${knowledgeAreaLabel(area)}`} />
-          </SelectTrigger>
-          <SelectContent>
-            {filteredEntries.map(entry => (
-              <SelectItem key={entry.item.id} value={entry.item.id}>{entry.version.title}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="grid items-start gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="hidden space-y-4 lg:sticky lg:top-20 lg:block">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={event => setQuery(event.target.value)}
-              placeholder="Search this library…"
-              className="pl-9"
-            />
+    <div className={`${area === 'handbook' ? 'handbook' : ''} published-reader mx-auto max-w-7xl p-4 md:p-8`}>
+      {area === 'handbook' ? <HandbookHeader title={title} subtitle={subtitle} /> : (
+        <header className="mb-6"><h1 className="text-3xl font-bold">{title}</h1><p>{subtitle}</p></header>
+      )}
+      <div className="policy-layout">
+        <aside className="policy-sidebar handbook-toc">
+          <div className="policy-search">
+            <label htmlFor="policy-search" className="handbook-eyebrow">Search {area === 'handbook' ? 'the handbook' : 'procedures'}</label>
+            <div className="relative mt-2">
+              <Search aria-hidden="true" className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input id="policy-search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Find a policy or phrase…" className="pl-9 pr-14" />
+              {query && <button type="button" className="policy-search-clear" onClick={() => setQuery('')}>Clear</button>}
+            </div>
+            <p className="policy-search-count" role="status">{normalizedQuery ? `${filteredEntries.length} matching ${filteredEntries.length === 1 ? 'result' : 'results'}` : `${entries.length} ${area === 'handbook' ? 'policies' : 'procedures'}`}</p>
           </div>
-          <nav className="space-y-5" aria-label={`${title} contents`}>
+          {!normalizedQuery && <button type="button" className="policy-mobile-toggle" aria-expanded={contentsOpen} aria-controls="policy-contents" onClick={() => setContentsOpen(!contentsOpen)}>
+            {contentsOpen ? 'Hide contents' : 'Browse contents'} <span aria-hidden="true">{contentsOpen ? '−' : '+'}</span>
+          </button>}
+          <nav id="policy-contents" className={`policy-contents ${contentsOpen || normalizedQuery ? 'is-open' : ''}`} aria-label={`${title} contents`}>
             {grouped.map(group => (
               <section key={group.category.id}>
-                <h2 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {group.category.name}
-                </h2>
-                <div className="space-y-1">
-                  {group.entries.map(entry => (
-                    <button
-                      type="button"
-                      key={entry.item.id}
-                      onClick={() => choose(entry.item.id)}
-                      className={cn(
-                        'flex w-full items-start justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors',
-                        activeEntry?.item.id === entry.item.id
-                          ? 'bg-primary text-primary-foreground'
-                          : 'hover:bg-muted',
-                      )}
-                    >
-                      <span>{entry.version.title}</span>
-                      <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 opacity-70" />
-                    </button>
-                  ))}
-                </div>
+                <h2 className="handbook-eyebrow">{group.category.name}</h2>
+                {group.entries.map(entryLink)}
               </section>
             ))}
-            {uncategorized.length > 0 && (
-              <section>
-                <h2 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Other</h2>
-                <div className="space-y-1">
-                  {uncategorized.map(entry => (
-                    <button
-                      type="button"
-                      key={entry.item.id}
-                      onClick={() => choose(entry.item.id)}
-                      className={cn(
-                        'flex w-full items-start justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors',
-                        activeEntry?.item.id === entry.item.id
-                          ? 'bg-primary text-primary-foreground'
-                          : 'hover:bg-muted',
-                      )}
-                    >
-                      <span>{entry.version.title}</span>
-                      <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 opacity-70" />
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
+            {/* No invented category: policies without one are listed directly. */}
+            {uncategorized.map(entryLink)}
           </nav>
         </aside>
-
         <main className="min-w-0">
-          <div className="relative mb-4 lg:hidden">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={event => setQuery(event.target.value)}
-              placeholder="Search this library…"
-              className="pl-9"
-            />
-          </div>
-
           {!activeEntry ? (
-            <Card>
-              <CardContent className="py-16 text-center">
-                <Search className="mx-auto h-9 w-9 text-muted-foreground/50" />
-                <p className="mt-3 font-medium">No published item matches that search</p>
-                <Button className="mt-3" variant="outline" onClick={() => setQuery('')}>Clear search</Button>
-              </CardContent>
-            </Card>
+            <div className="policy-empty">
+              <h2>No {area === 'handbook' ? 'policies' : 'procedures'} match “{query}”</h2>
+              <p>Try a shorter phrase, or browse all the contents.</p>
+              <Button className="mt-4" variant="outline" onClick={() => setQuery('')}>Clear search</Button>
+            </div>
           ) : (
-            <article className="rounded-2xl border bg-card shadow-sm">
-              <div className="border-b px-5 py-5 md:px-8 md:py-7">
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span>{activeEntry.category?.name ?? 'Office reference'}</span>
-                  <span aria-hidden="true">•</span>
+            <article className="policy-article handbook-article">
+              <header className="policy-article-header">
+                <p className="handbook-eyebrow">{activeEntry.category?.name || (area === 'handbook' ? 'Employee Handbook' : 'Office Procedures')}</p>
+                <h2 id="policy-title" tabIndex={-1}>{highlight(activeEntry.version.title, query)}</h2>
+                {activeEntry.version.summary && <p className="policy-summary">{highlight(activeEntry.version.summary, query)}</p>}
+                <div className="policy-metadata">
                   <span>Version {activeEntry.version.version_number}</span>
-                  <span aria-hidden="true">•</span>
                   <span>Published {formatDate(activeEntry.version.published_at)}</span>
+                  {activeEntry.version.effective_on && <span>Effective {formatDate(activeEntry.version.effective_on)}</span>}
+                  {activeEntry.version.review_due_on && <span>Review by {formatDate(activeEntry.version.review_due_on)}</span>}
                 </div>
-                <h2 className="mt-2 text-2xl font-bold tracking-tight md:text-3xl">{activeEntry.version.title}</h2>
-                {activeEntry.version.summary && (
-                  <p className="mt-3 max-w-3xl text-base leading-7 text-muted-foreground">
-                    {activeEntry.version.summary}
-                  </p>
-                )}
-                {(activeEntry.version.effective_on || activeEntry.version.review_due_on) && (
-                  <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                    {activeEntry.version.effective_on && <Badge variant="secondary">Effective {formatDate(activeEntry.version.effective_on)}</Badge>}
-                    {activeEntry.version.review_due_on && <Badge variant="outline">Review by {formatDate(activeEntry.version.review_due_on)}</Badge>}
-                  </div>
-                )}
-              </div>
-              <div className="px-5 py-6 md:px-8 md:py-8">
-                {activeEntry.blocks.length > 0 ? (
-                  activeEntry.blocks.map(block => <KnowledgeBlock key={block.id} block={block} />)
-                ) : (
-                  <p className="text-sm text-muted-foreground">This published item has no readable content blocks.</p>
+              </header>
+              {activeEntry.blocks.some(block => block.block_type === 'heading') && (
+                <nav className="policy-on-page" aria-label="In this policy">
+                  <span className="handbook-eyebrow">In this {area === 'handbook' ? 'policy' : 'procedure'}</span>
+                  {activeEntry.blocks.filter(block => block.block_type === 'heading').map(block => (
+                    <a key={block.id} href={`#policy-section-${block.id}`}>{block.plain_text}</a>
+                  ))}
+                </nav>
+              )}
+              <div className="policy-body">
+                {activeEntry.blocks.length > 0 ? activeEntry.blocks.map(block => <KnowledgeBlock key={block.id} block={block} query={query} />) : (
+                  <p>The text of this policy is not available. Ask your manager for a copy.</p>
                 )}
               </div>
             </article>

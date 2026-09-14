@@ -197,7 +197,7 @@ export default function PracticeSetup() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button asChild variant="outline"><Link to="/management/knowledge">Knowledge Workspace</Link></Button>
+          <Button asChild variant="outline"><Link to="/management/knowledge">Manage Policies & Procedures</Link></Button>
           <Button onClick={scan} disabled={initialize.isPending}>
             {initialize.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
             Rescan sources
