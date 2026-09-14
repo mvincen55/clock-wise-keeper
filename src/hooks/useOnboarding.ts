@@ -256,12 +256,18 @@ export function useSaveBasics() {
       if (input.team !== undefined) patch.team = input.team;
       if (input.tag !== undefined) patch.tag = input.tag.toUpperCase().trim() || null;
 
-      const { error } = await supabase.from('employees').update(patch as never).eq('id', id);
+      const { data, error } = await (supabase as any).rpc('save_employee_basics', {
+        p_employee_id: id,
+        p_patch: patch,
+      });
       if (error) {
         if (error.code === '23505' || /already retired/i.test(error.message)) {
           throw new Error('That tag is already taken by someone in this office — pick another.');
         }
         throw error;
+      }
+      if (!data || data.id !== id || (input.tag !== undefined && data.tag !== patch.tag)) {
+        throw new Error('The employee changes were not saved. Please try again.');
       }
       if (input.markStep) await completeStep.mutateAsync('basics');
     },
@@ -269,6 +275,7 @@ export function useSaveBasics() {
       qc.invalidateQueries({ queryKey: ['onboarding'] });
       qc.invalidateQueries({ queryKey: ['org-employees'] });
       qc.invalidateQueries({ queryKey: ['employee-tags'] });
+      qc.invalidateQueries({ queryKey: ['org-staff'] });
     },
   });
 
@@ -315,3 +322,4 @@ export function useTeamOnboardingStatus() {
     },
   });
 }
+
