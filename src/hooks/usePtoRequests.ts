@@ -250,10 +250,6 @@ export function useReviewPtoRequest() {
       if (error) throw error;
 
       if (input.status === 'approved') {
-        // Create days_off entries for the approved range
-        const startDate = new Date(request.start_date + 'T00:00:00');
-        const endDate = new Date(request.end_date + 'T00:00:00');
-
         // Get the employee's user_id for days_off
         const { data: emp } = await supabase
           .from('employees')
