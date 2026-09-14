@@ -22,7 +22,7 @@ import type { ScheduleWeekdayRow } from '@/hooks/useScheduleVersions';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { formatDate, formatClock, formatClockRange } from '@/lib/time-utils';
 import { ChevronDown, ChevronUp, Clock, Calendar, AlertTriangle, CalendarOff, Loader2, Pencil, Plus, Trash2, Archive } from 'lucide-react';
@@ -224,16 +224,42 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
 }
 
 /* ─── Attendance Tab ─── */
-function AttendanceTab({ employeeId, range }: { employeeId: string; range: { start: string; end: string } }) {
+export function AttendanceTab({ employeeId, range }: { employeeId: string; range: { start: string; end: string } }) {
   // Employee identity is the key: members without a login still have punch,
   // schedule, and time-off history, so attendance is derived when the
   // user-scoped status table has nothing for them.
   const { rows: attendance, isLoading } = useResolvedEmployeeAttendance(employeeId, range);
-  if (isLoading) return <LoadingSpinner />;
-  if (!attendance?.length) return <EmptyState text="No attendance data for last 30 days." />;
+  const {data:ctx}=useOrgContext();
+  const {data:adjustments=[],isLoading:adjustmentsLoading,error:adjustmentsError}=useQuery({
+    queryKey:['worked-adjustments',employeeId,ctx?.org_id,range.start,range.end],
+    enabled:!!ctx,refetchInterval:30_000,
+    queryFn:async()=>{
+      const r=await supabase.from('worked_hour_adjustments').select('*')
+        .eq('org_id',ctx!.org_id).eq('employee_id',employeeId)
+        .gte('entry_date',range.start).lte('entry_date',range.end).order('entry_date',{ascending:false});
+      if(r.error)throw r.error;return r.data;
+    },
+  });
+  if (isLoading || adjustmentsLoading) return <LoadingSpinner />;
+  if (adjustmentsError) return <p role="alert">Attendance adjustments could not be loaded.</p>;
+  const history=[...(attendance??[]).map(row=>({kind:'attendance' as const,row})),
+    ...adjustments.map(row=>({kind:'adjustment' as const,row}))]
+    .sort((a,b)=>b.row.entry_date.localeCompare(a.row.entry_date));
+  if (!history.length) return <EmptyState text="No attendance data for this date range." />;
   return (
     <div className="divide-y rounded-lg border max-h-80 overflow-y-auto">
-      {attendance.map((row: any) => {
+      {history.map(item => {
+        const row=item.row;
+        if(item.kind==='adjustment')return (
+          <div key={`adjustment-${row.id}`} className="px-3 py-2 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="font-medium w-20 text-xs">{formatDate(row.entry_date)}</span>
+              <span className="text-xs px-1.5 py-0.5 rounded bg-muted">Hours adjustment</span>
+              <span className="font-medium">{Number(item.row.hours_delta)>0?'+':''}{Number(item.row.hours_delta).toFixed(2)}h</span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">{item.row.reason}</p>
+          </div>
+        );
         const sb = statusBadge[row.status_code] || statusBadge.ok;
         return (
           <div key={row.id} className="flex items-center justify-between px-3 py-2 text-sm">
@@ -609,7 +635,6 @@ function ScheduleTab({ employee }: { employee: Employee }) {
                       {w.enabled ? (
                         <>
                           <span className="font-mono">{formatClockRange(w.start_time, w.end_time)}</span>
-                          {w.grace_minutes > 0 && <span className="text-muted-foreground">({w.grace_minutes}m grace)</span>}
                         </>
                       ) : (
                         <span className="text-muted-foreground">Off</span>
@@ -655,10 +680,6 @@ function ScheduleTab({ employee }: { employee: Employee }) {
                 </AlertDescription>
               </Alert>
             )}
-            <div className="flex items-center gap-3">
-              <Switch checked={formRemote} onCheckedChange={setFormRemote} />
-              <Label className="text-sm">Apply to remote days</Label>
-            </div>
             <div className="space-y-1">
               <Label className="text-sm font-medium">Weekday Rules</Label>
               <WeekdayEditor weekdays={formWeekdays} onChange={setFormWeekdays} />
@@ -774,10 +795,6 @@ function WeekdayEditor({ weekdays, onChange }: { weekdays: WeekdayDraft[]; onCha
             <span className="text-xs text-muted-foreground">–</span>
             <Input type="time" value={w.end_time?.slice(0, 5)} onChange={e => update(idx, { end_time: e.target.value })} disabled={!w.enabled} className="w-[6.5rem] text-xs h-7" />
           </div>
-          <div className="flex items-center gap-1">
-            <Label className="text-[10px] text-muted-foreground" title="Minutes allowed after the scheduled start; late from the next minute.">Grace (min)</Label>
-            <Input type="number" min={0} value={w.grace_minutes} onChange={e => update(idx, { grace_minutes: parseInt(e.target.value) || 0 })} disabled={!w.enabled} className="w-14 text-xs h-7" />
-          </div>
         </div>
       ))}
     </div>
@@ -858,3 +875,4 @@ function LoadingSpinner() {
 function EmptyState({ text }: { text: string }) {
   return <p className="text-center text-muted-foreground text-sm py-6">{text}</p>;
 }
+

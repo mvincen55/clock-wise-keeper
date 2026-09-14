@@ -43,10 +43,6 @@ function WeekdayEditor({ weekdays, onChange }: { weekdays: WeekdayDraft[]; onCha
               <Label className="text-xs text-muted-foreground">End</Label>
               <Input type="time" value={w.end_time?.slice(0, 5)} onChange={e => update(idx, { end_time: e.target.value })} disabled={!w.enabled} className="w-[7rem] text-sm h-8" />
             </div>
-            <div className="flex items-center gap-1.5">
-              <Label className="text-xs text-muted-foreground" title="Minutes allowed after the scheduled start; late from the next minute.">Grace (min)</Label>
-              <Input type="number" min={0} value={w.grace_minutes} onChange={e => update(idx, { grace_minutes: parseInt(e.target.value) || 0 })} disabled={!w.enabled} className="w-16 text-sm h-8" />
-            </div>
           </div>
         ))}
     </div>
@@ -379,9 +375,6 @@ export default function ScheduleManager() {
                     {w.enabled ? (
                       <>
                         <span className="time-display">{formatClockRange(w.start_time, w.end_time)}</span>
-                        {w.grace_minutes > 0 && (
-                          <span className="text-xs text-muted-foreground">({w.grace_minutes}m grace)</span>
-                        )}
                       </>
                     ) : (
                       <span className="text-muted-foreground">Off</span>
@@ -517,10 +510,6 @@ export default function ScheduleManager() {
               </Alert>
             )}
 
-            <div className="flex items-center gap-3">
-              <Switch checked={formRemote} onCheckedChange={setFormRemote} />
-              <Label className="text-sm">Apply to remote days</Label>
-            </div>
 
             {!editingVersion && (
               <div className="flex items-center gap-3">
@@ -627,3 +616,4 @@ export default function ScheduleManager() {
     </div>
   );
 }
+

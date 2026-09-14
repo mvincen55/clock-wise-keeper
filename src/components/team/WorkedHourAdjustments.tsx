@@ -18,7 +18,7 @@ export default function WorkedHourAdjustments({employeeId}:{employeeId:string}) 
  const [open,setOpen]=useState(false);const [date,setDate]=useState('');const [hours,setHours]=useState('');const [reason,setReason]=useState('');
  const [requestId,setRequestId]=useState(()=>crypto.randomUUID());const [busy,setBusy]=useState(false);const [error,setError]=useState('');
  const allowed=ctx?.role==='owner'||ctx?.role==='manager';const week=adjustmentWeek(date);
- const {data:history=[],error:historyError}=useQuery({queryKey:['worked-adjustments',employeeId,ctx?.org_id],enabled:!!ctx,refetchInterval:30_000,queryFn:async()=>{
+ const {data:history=[],error:historyError}=useQuery({queryKey:['worked-adjustments',employeeId,ctx?.org_id],enabled:!!ctx&&open,refetchInterval:30_000,queryFn:async()=>{
   const r=await supabase.from('worked_hour_adjustments').select('*').eq('org_id',ctx!.org_id).eq('employee_id',employeeId).order('entry_date',{ascending:false});if(r.error)throw r.error;return r.data;
  }});
  const {data:totals,error:totalError}=useQuery({queryKey:['worked-reconciliation',employeeId,ctx?.org_id,week?.start],enabled:!!ctx&&!!week,refetchInterval:30_000,queryFn:async()=>{
@@ -38,9 +38,10 @@ export default function WorkedHourAdjustments({employeeId}:{employeeId:string}) 
    setHours('');setReason('');setRequestId(crypto.randomUUID());setOpen(false);await qc.invalidateQueries();
   }catch(e){setError(e instanceof Error?e.message:(e as {message?:string})?.message||'Could not save the adjustment.');}finally{setBusy(false);}
  }
- return <section className="space-y-3 mb-4 rounded-lg border p-3">
-  <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Worked-hour adjustments</h3>{allowed&&<Button size="sm" onClick={()=>{setOpen(!open);setError('');}}>Offset hours</Button>}</div>
-  <p className="text-xs text-muted-foreground">Adjustments count toward worked hours and PTO in the week paid. Original time entries stay in place. Correct an adjustment with an opposite entry and a reason.</p>
+ if(!allowed)return null;
+ return <section className={open?"space-y-3 mb-4 rounded-lg border p-3":"mb-3 flex justify-end"}>
+  <div className="flex flex-wrap items-center justify-between gap-2">{allowed&&<Button size="sm" onClick={()=>{setOpen(!open);setError('');}}>Offset hours</Button>}</div>
+  {open&&<p className="text-xs text-muted-foreground">Adjustments count toward worked hours and PTO in the week paid. Original time entries stay in place. Correct an adjustment with an opposite entry and a reason.</p>}
   {open&&allowed&&<div className="space-y-3">
    <div><Label htmlFor={`offset-date-${employeeId}`}>Date of adjustment</Label><Input id={`offset-date-${employeeId}`} type="date" value={date} disabled={busy} onChange={e=>setDate(e.target.value)}/></div>
    {totals&&week&&<div className="text-sm space-y-1"><p>{formatDate(week.start)} – {formatDate(week.end)}</p><p>Recorded: {totals.recorded.toFixed(2)}h · Adjustments: {offset.toFixed(2)}h · Adjusted: {adjusted?.toFixed(2)}h</p><p>Pay-stub worked hours: {totals.payroll==null?'Not available':totals.payroll.toFixed(2)+'h'}</p>{totals.payroll!=null&&<p>Difference (adjusted minus pay stub): {(adjusted!-totals.payroll).toFixed(2)}h</p>}</div>}
@@ -50,7 +51,7 @@ export default function WorkedHourAdjustments({employeeId}:{employeeId:string}) 
    <Button disabled={busy} onClick={save}>{busy?'Saving…':'Save adjustment'}</Button>
   </div>}
   {error&&<p role="alert" className="text-sm text-destructive">{error}</p>}
-  {historyError&&<p role="alert">Adjustment history could not be loaded.</p>}
-  {history.map(r=><div className="border-t pt-2 text-sm" key={r.id}><p>{formatDate(r.entry_date)} · {Number(r.hours_delta)>0?'+':''}{Number(r.hours_delta).toFixed(2)}h</p><p>{r.reason}</p><p className="text-xs text-muted-foreground">Saved {formatDate(r.created_at.slice(0,10))}</p></div>)}
+  {open&&historyError&&<p role="alert">Adjustment history could not be loaded.</p>}
  </section>;
 }
+

@@ -191,7 +191,6 @@ export default function PTO() {
                       <div className="flex items-center gap-3">
                         <span className="text-xs text-success">+{w.accrual_credited.toFixed(2)}h</span>
                         {w.pto_taken_hours > 0 && <span className="text-xs text-destructive">-{w.pto_taken_hours.toFixed(2)}h</span>}
-                        {w.confirmed_balance != null && <span className="text-xs text-muted-foreground" title={w.reconciliation_note ?? undefined}>Balance reconciled</span>}
                         <span className={`text-sm font-semibold ${w.running_balance < 0 ? 'text-destructive' : ''}`}>
                           {w.running_balance.toFixed(2)}h
                         </span>
