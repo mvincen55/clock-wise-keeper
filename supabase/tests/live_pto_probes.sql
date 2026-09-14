@@ -12,6 +12,7 @@ CREATE TABLE time_entries(employee_id uuid,org_id uuid,entry_date date,total_min
 CREATE TABLE days_off(employee_id uuid,org_id uuid,date_start date,hours numeric,type text);
 CREATE TABLE pto_ledger_weeks(id uuid,user_id uuid,employee_id uuid,org_id uuid,period_start date,period_end date,worked_hours_raw numeric,worked_hours_capped numeric,pto_taken_hours numeric,tier_rate numeric,calculated_accrual numeric,weekly_cap numeric,accrual_credited numeric,running_balance numeric);
 \ir ../migrations/20260914150000_live_pto_ledger.sql
+\ir ../migrations/20260914170000_pto_join_date_anchor.sql
 INSERT INTO employees VALUES ('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000010',NULL,current_date,'2022-12-23','America/New_York');
 INSERT INTO pto_settings SELECT id,org_id,hire_date,40,100,timezone FROM employees;
 INSERT INTO pto_snapshots SELECT id,org_id,current_date-extract(dow FROM current_date)::int-7,10 FROM employees;
@@ -54,6 +55,15 @@ DO $$ DECLARE e uuid='00000000-0000-0000-0000-000000000001'; r record; BEGIN
  ASSERT (SELECT count(*)=0 FROM pto_ledger_weeks),'reads never rewrite legacy ledger';
 END $$;
 -- Invoker RLS must deny another employee rather than expose source data.
+DO $$ DECLARE e uuid='00000000-0000-0000-0000-000000000001'; BEGIN
+ UPDATE employees SET hire_date=current_date-21;
+ INSERT INTO pto_snapshots SELECT id,org_id,hire_date,4.61 FROM employees;
+ INSERT INTO pto_snapshots SELECT id,org_id,current_date-7,99 FROM employees;
+ ASSERT (SELECT running_balance=4.61 FROM get_live_pto_ledger(e) ORDER BY period_start DESC LIMIT 1),'join-date balance wins over later duplicate';
+ UPDATE employees SET hire_date=current_date-28;
+ INSERT INTO pto_snapshots SELECT id,org_id,hire_date,0 FROM employees;
+ ASSERT (SELECT running_balance=0 FROM get_live_pto_ledger(e) ORDER BY period_start DESC LIMIT 1),'updated join date and explicit zero survive reload';
+END $$;
 ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
 CREATE POLICY own_employee ON employees USING (user_id::text=current_setting('test.actor',true));
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO authenticated;
