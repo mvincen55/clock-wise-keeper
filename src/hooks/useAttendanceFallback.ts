@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import { useEmployeeAttendance } from '@/hooks/useEmployees';
 import { easternWallMinutes, getToday } from '@/lib/time-utils';
 import {
   deriveAttendanceRows,
@@ -100,4 +101,28 @@ export function useDerivedOrgAttendance(employeeIds: string[], range: Range) {
     enabled: !!ctx?.org_id && employeeIds.length > 0,
     queryFn: () => fetchDerived(ctx!.org_id, employeeIds, range),
   });
+}
+
+/**
+ * Stored attendance first; derived rows fill any date the table does not
+ * cover. Logged-in employees keep exactly the rows they have today.
+ */
+export function useResolvedEmployeeAttendance(employeeId: string | undefined, range: Range) {
+  const stored = useEmployeeAttendance(employeeId, range);
+  const storedRows = (stored.data || []) as any[];
+  const derived = useDerivedEmployeeAttendance(
+    employeeId,
+    range,
+    !stored.isLoading && storedRows.length === 0
+  );
+
+  const rows = storedRows.length
+    ? storedRows
+    : (derived.data || []);
+
+  return {
+    rows: rows as (DerivedAttendanceRow | any)[],
+    isLoading: stored.isLoading || derived.isLoading,
+    isDerived: storedRows.length === 0 && (derived.data?.length ?? 0) > 0,
+  };
 }
