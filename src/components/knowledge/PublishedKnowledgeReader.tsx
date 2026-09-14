@@ -1,3 +1,4 @@
+import { parseDocTableRow } from '@/lib/doc-format';
 import HandbookSectionLink from '@/components/handbook/HandbookSectionLink';
 import HandbookHeader from '@/components/handbook/HandbookHeader';
 import { escapeRegExp, snippetAround } from '@/lib/doc-library';
@@ -32,12 +33,7 @@ function lines(text: string): string[] {
 }
 
 function tableRows(text: string): string[][] {
-  return lines(text).map(line =>
-    line
-      .split('|')
-      .map(cell => cell.trim())
-      .filter((cell, index, cells) => cell || (index > 0 && index < cells.length - 1)),
-  );
+  return lines(text).map(parseDocTableRow);
 }
 
 function formatDate(value: string | null): string {
@@ -135,7 +131,7 @@ function KnowledgeBlock({ block, query = '' }: { block: PublishedKnowledgeEntry[
           <tbody>
             {body.map((row, rowIndex) => (
               <tr key={rowIndex} className="border-b last:border-0">
-                {head.map((_, cellIndex) => <td key={cellIndex} className="px-3 py-2.5 align-top">{highlight(row[cellIndex] ?? '', query)}</td>)}
+                {head.map((_, cellIndex) => <td key={cellIndex} className="whitespace-pre-line px-3 py-2.5 align-top">{highlight(row[cellIndex] ?? '', query)}</td>)}
               </tr>
             ))}
           </tbody>

@@ -11,7 +11,6 @@ export default function HandbookHeader({ title, subtitle }: { title: string; sub
         <h1>{title}</h1>
         <p className="handbook-description">{subtitle}</p>
       </div>
-      <img className="handbook-illustration" src="/images/handbook/shared-table.jpg" width="150" height="100" alt="" />
       <div className="handbook-utilities">
         <Link to="/assistant?scope=handbook">Ask about this handbook <span aria-hidden="true">↗</span></Link>
         <p>Answers help you find information.<br />The handbook remains the official text.</p>

@@ -68,7 +68,9 @@ export function structureFromLegacyText(content: string): LegacyStructured {
       page: null,
       pageEnd: null,
     };
-    if (block.type === 'bullets' || block.type === 'numbered') {
+    if (block.type === 'table') {
+      chunks.push({ ...base, chunkType: 'table', content: block.text, meta: { rows: block.rows, headerRow: true } });
+    } else if (block.type === 'bullets' || block.type === 'numbered') {
       chunks.push({
         ...base,
         chunkType: block.type === 'bullets' ? 'bullet_list' : 'numbered_list',

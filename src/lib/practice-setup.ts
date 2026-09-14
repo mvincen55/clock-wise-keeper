@@ -83,6 +83,9 @@ function mapDocBlock(block: DocBlock, kind: KnowledgeKind): KnowledgeBlockDraft[
   if (block.type === 'heading') {
     return [createKnowledgeBlock('heading', block.text)];
   }
+  if (block.type === 'table') {
+    return [createKnowledgeBlock('table', block.text)];
+  }
   if (block.type === 'bullets') {
     return [createKnowledgeBlock('bullet_list', block.items.join('\n'))];
   }

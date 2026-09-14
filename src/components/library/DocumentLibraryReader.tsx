@@ -28,8 +28,6 @@ import { handbookNumberedHeading } from '@/lib/handbook-section-links';
  * All staff read; management lives in Ask AI → Documents. The office purple
  * (design-token `primary`) marks active navigation, focus, and progress.
  */
-import HandbookFormReference from '@/components/handbook/HandbookFormReference';
-import { handbookFormReference } from '@/lib/handbook-form-reference';
 import HandbookHeader from '@/components/handbook/HandbookHeader';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -131,7 +129,7 @@ interface SearchHit {
 }
 
 /** Render text with every occurrence of the query marked. */
-function highlighted(text: string, query: string) {
+function highlightMatch(text: string, query: string) {
   const q = query.trim();
   if (!q) return text;
   const parts = text.split(new RegExp(`(${escapeRegExp(q)})`, 'ig'));
@@ -145,6 +143,14 @@ function highlighted(text: string, query: string) {
       part
     )
   );
+}
+
+/** Source-authored HTTP links only; raw HTML and script URLs stay inert text. */
+function highlighted(text: string, query: string) {
+  return text.split(/(\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g).map((part, index) => {
+    const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+    return link ? <a key={index} href={link[2]} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">{highlightMatch(link[1], query)}</a> : <span key={index}>{highlightMatch(part, query)}</span>;
+  });
 }
 
 function BlockView({ block, id, query }: { block: DocBlock; id: string; query: string }) {
@@ -167,6 +173,13 @@ function BlockView({ block, id, query }: { block: DocBlock; id: string; query: s
           {highlighted(block.text, query)}
         </h3>
       );
+    case 'table':
+      return <div id={id} className={`${anchor} handbook-table-wrap`} role="region" aria-label="Reference table" tabIndex={0}>
+        <table className="handbook-reference-table">
+          <thead><tr>{block.rows[0].map((cell, column) => <th scope="col" key={column}>{highlighted(cell, query)}</th>)}</tr></thead>
+          <tbody>{block.rows.slice(1).map((row, index) => <tr key={index}>{row.map((cell, column) => column === 0 ? <th scope="row" key={column}>{highlighted(cell, query)}</th> : <td key={column}>{highlighted(cell, query)}</td>)}</tr>)}</tbody>
+        </table>
+      </div>;
     case 'bullets':
       return (
         <ul id={id} className={`${anchor} mb-4 list-disc space-y-1.5 pl-5 text-[15px] leading-7 marker:text-primary/50`}>
@@ -219,11 +232,7 @@ const ReaderBody = memo(function ReaderBody({
     rendered.push(renderBlock(i));
     const block = blocks[i];
     if (handbook && block.type === 'heading') rendered.push(<HandbookSectionLink key={`link-${i}`} title={block.text} />);
-    const form = handbook ? handbookFormReference(blocks, i) : null;
-    if (form) {
-      rendered.push(<HandbookFormReference key={`form-${i}`} form={form} renderSource={renderBlock} query={highlight} />);
-      i = form.end - 1;
-    }
+
   }
   return <div className="max-w-[46rem]">{rendered}</div>;
 });
