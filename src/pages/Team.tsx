@@ -4,6 +4,7 @@ import EmployeeNameInputs from '@/components/team/EmployeeNameInputs';
 import { useState, useMemo } from 'react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useOrgEmployees, useEmployeeAttendanceSummary } from '@/hooks/useEmployees';
+import { useDerivedOrgAttendance } from '@/hooks/useAttendanceFallback';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -46,13 +47,23 @@ export default function Team() {
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
+  // Employees with no stored attendance rows (typically pending members with
+  // no login) still have punch history keyed by employee_id — derive theirs so
+  // the roster counts are complete.
+  const missingAttendanceIds = useMemo(() => {
+    if (!attendance || !employees) return [] as string[];
+    const covered = new Set(attendance.map(r => r.employee_id));
+    return employees.filter(e => !covered.has(e.id)).map(e => e.id);
+  }, [attendance, employees]);
+  const { data: derivedAttendance } = useDerivedOrgAttendance(missingAttendanceIds, dateRange);
+
   const employeeStats = useMemo(() => {
     if (!attendance || !employees) return {};
     const stats: Record<string, { late: number; absent: number; present: number }> = {};
     for (const emp of employees) {
       stats[emp.id] = { late: 0, absent: 0, present: 0 };
     }
-    for (const row of attendance) {
+    for (const row of [...attendance, ...(derivedAttendance || [])]) {
       const s = stats[row.employee_id];
       if (!s) continue;
       if (row.is_absent) s.absent++;
@@ -60,7 +71,7 @@ export default function Team() {
       else if (row.has_punches) s.present++;
     }
     return stats;
-  }, [attendance, employees]);
+  }, [attendance, derivedAttendance, employees]);
 
   const filteredEmployees = useMemo(() => {
     return filterAndSortEmployees(employees ?? [], search);

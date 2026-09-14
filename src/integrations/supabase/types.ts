@@ -1689,7 +1689,7 @@ export type Database = {
           source?: string | null
           type?: Database["public"]["Enums"]["day_off_type"]
           updated_at?: string
-          user_id: string | null
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -2204,33 +2204,33 @@ export type Database = {
       }
       employees: {
         Row: {
-          created_at: string
-          display_name: string
-          first_name: string | null
-          middle_initial: string | null
-          last_name: string | null
-          name_aliases: string[]
-          emergency_contact_name: string | null
-          emergency_contact_relationship: string | null
-          emergency_contact_phone: string | null
-          emergency_contact_alternate_phone: string | null
-          phone: string | null
-          alternate_phone: string | null
           address_line1: string | null
           address_line2: string | null
+          alternate_phone: string | null
           city: string | null
-          state_region: string | null
-          postal_code: string | null
           country: string | null
+          created_at: string
+          display_name: string
           email: string | null
+          emergency_contact_alternate_phone: string | null
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
+          emergency_contact_relationship: string | null
           employment_status: Database["public"]["Enums"]["employment_status"]
           favorites: Json
+          first_name: string | null
           hire_date: string | null
           id: string
+          last_name: string | null
           learning_style: string | null
+          middle_initial: string | null
+          name_aliases: string[]
           org_id: string
+          phone: string | null
+          postal_code: string | null
           preferred_name: string | null
           real_hire_date: string | null
+          state_region: string | null
           tag: string | null
           team: string | null
           timezone: string | null
@@ -2238,33 +2238,33 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
-          created_at?: string
-          display_name: string
-          first_name?: string | null
-          middle_initial?: string | null
-          last_name?: string | null
-          name_aliases?: string[]
-          emergency_contact_name?: string | null
-          emergency_contact_relationship?: string | null
-          emergency_contact_phone?: string | null
-          emergency_contact_alternate_phone?: string | null
-          phone?: string | null
-          alternate_phone?: string | null
           address_line1?: string | null
           address_line2?: string | null
+          alternate_phone?: string | null
           city?: string | null
-          state_region?: string | null
-          postal_code?: string | null
           country?: string | null
+          created_at?: string
+          display_name: string
           email?: string | null
+          emergency_contact_alternate_phone?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          emergency_contact_relationship?: string | null
           employment_status?: Database["public"]["Enums"]["employment_status"]
           favorites?: Json
+          first_name?: string | null
           hire_date?: string | null
           id?: string
+          last_name?: string | null
           learning_style?: string | null
+          middle_initial?: string | null
+          name_aliases?: string[]
           org_id: string
+          phone?: string | null
+          postal_code?: string | null
           preferred_name?: string | null
           real_hire_date?: string | null
+          state_region?: string | null
           tag?: string | null
           team?: string | null
           timezone?: string | null
@@ -2272,33 +2272,33 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
-          created_at?: string
-          display_name?: string
-          first_name?: string | null
-          middle_initial?: string | null
-          last_name?: string | null
-          name_aliases?: string[]
-          emergency_contact_name?: string | null
-          emergency_contact_relationship?: string | null
-          emergency_contact_phone?: string | null
-          emergency_contact_alternate_phone?: string | null
-          phone?: string | null
-          alternate_phone?: string | null
           address_line1?: string | null
           address_line2?: string | null
+          alternate_phone?: string | null
           city?: string | null
-          state_region?: string | null
-          postal_code?: string | null
           country?: string | null
+          created_at?: string
+          display_name?: string
           email?: string | null
+          emergency_contact_alternate_phone?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          emergency_contact_relationship?: string | null
           employment_status?: Database["public"]["Enums"]["employment_status"]
           favorites?: Json
+          first_name?: string | null
           hire_date?: string | null
           id?: string
+          last_name?: string | null
           learning_style?: string | null
+          middle_initial?: string | null
+          name_aliases?: string[]
           org_id?: string
+          phone?: string | null
+          postal_code?: string | null
           preferred_name?: string | null
           real_hire_date?: string | null
+          state_region?: string | null
           tag?: string | null
           team?: string | null
           timezone?: string | null
@@ -5517,8 +5517,8 @@ export type Database = {
           employee_id: string | null
           id: string
           org_id: string
-          schedule_code: string | null
           provider_type: string
+          schedule_code: string | null
           sort_order: number
           updated_at: string
         }
@@ -5529,8 +5529,8 @@ export type Database = {
           employee_id?: string | null
           id?: string
           org_id: string
-          schedule_code?: string | null
           provider_type?: string
+          schedule_code?: string | null
           sort_order?: number
           updated_at?: string
         }
@@ -5541,8 +5541,8 @@ export type Database = {
           employee_id?: string | null
           id?: string
           org_id?: string
-          schedule_code?: string | null
           provider_type?: string
+          schedule_code?: string | null
           sort_order?: number
           updated_at?: string
         }
@@ -7711,7 +7711,7 @@ export type Database = {
           source?: Database["public"]["Enums"]["source_type"]
           total_minutes?: number | null
           updated_at?: string
-          user_id: string | null
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -8323,14 +8323,6 @@ export type Database = {
       }
     }
     Functions: {
-      save_employee_onboarding_preferences: {
-        Args: { p_employee_id: string; p_learning_style: string | null; p_favorites: Json | null }
-        Returns: string
-      }
-      save_team_member_contact: {
-        Args: { p_org_id: string; p_employee_id: string | null; p_first_name: string; p_middle_initial: string | null; p_last_name: string; p_email: string | null; p_contact?: Json }
-        Returns: string
-      }
       _recompute_attendance_range_internal: {
         Args: { p_end_date: string; p_start_date: string; p_user_id: string }
         Returns: number
@@ -9223,6 +9215,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      save_employee_onboarding_preferences: {
+        Args: {
+          p_employee_id: string
+          p_favorites: Json
+          p_learning_style: string
+        }
+        Returns: string
+      }
       save_knowledge_acknowledgment_escalation_settings: {
         Args: {
           p_email_after_workdays: number
@@ -9359,6 +9359,18 @@ export type Database = {
           p_reason: string
         }
         Returns: Json
+      }
+      save_team_member_contact: {
+        Args: {
+          p_contact?: Json
+          p_email: string
+          p_employee_id: string
+          p_first_name: string
+          p_last_name: string
+          p_middle_initial: string
+          p_org_id: string
+        }
+        Returns: string
       }
       search_office_doc_chunks: {
         Args: {
@@ -9773,4 +9785,3 @@ export const Constants = {
     },
   },
 } as const
-

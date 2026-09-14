@@ -11,7 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { useEmployeeAttendance } from '@/hooks/useEmployees';
+import { useResolvedEmployeeAttendance, useDerivedEmployeeAttendance } from '@/hooks/useAttendanceFallback';
+import { derivedTardies } from '@/lib/attendance-derive';
 import { useEmployeeScheduleAssignments, useEmployeeTardies, useEmployeeDaysOff } from '@/hooks/useEmployeeSchedules';
 import { WEEKDAY_NAMES, DEFAULT_WEEKDAYS, summarizeWeekdays } from '@/hooks/useScheduleVersions';
 import type { ScheduleWeekdayRow } from '@/hooks/useScheduleVersions';
@@ -219,12 +220,15 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
 
 /* ─── Attendance Tab ─── */
 function AttendanceTab({ employeeId, range }: { employeeId: string; range: { start: string; end: string } }) {
-  const { data: attendance, isLoading } = useEmployeeAttendance(employeeId, range);
+  // Employee identity is the key: members without a login still have punch,
+  // schedule, and time-off history, so attendance is derived when the
+  // user-scoped status table has nothing for them.
+  const { rows: attendance, isLoading } = useResolvedEmployeeAttendance(employeeId, range);
   if (isLoading) return <LoadingSpinner />;
   if (!attendance?.length) return <EmptyState text="No attendance data for last 30 days." />;
   return (
     <div className="divide-y rounded-lg border max-h-80 overflow-y-auto">
-      {attendance.map(row => {
+      {attendance.map((row: any) => {
         const sb = statusBadge[row.status_code] || statusBadge.ok;
         return (
           <div key={row.id} className="flex items-center justify-between px-3 py-2 text-sm">
@@ -854,12 +858,21 @@ function WeekdayEditor({ weekdays, onChange }: { weekdays: WeekdayDraft[]; onCha
 
 /* ─── Tardies Tab ─── */
 function TardiesTab({ employeeId, range }: { employeeId: string; range: { start: string; end: string } }) {
-  const { data: tardies, isLoading } = useEmployeeTardies(employeeId, range.start, range.end);
-  if (isLoading) return <LoadingSpinner />;
+  const { data: storedTardies, isLoading } = useEmployeeTardies(employeeId, range.start, range.end);
+  // Pending members have no tardy rows (those are written by the user-scoped
+  // engine), so late arrivals are derived from their schedule and first punch.
+  const { data: derivedRows, isLoading: derivedLoading } = useDerivedEmployeeAttendance(
+    employeeId,
+    range,
+    !isLoading && !storedTardies?.length,
+  );
+  const tardies = storedTardies?.length ? storedTardies : derivedTardies(derivedRows || []);
+  if (isLoading || derivedLoading) return <LoadingSpinner />;
   if (!tardies?.length) return <EmptyState text="No tardies in last 30 days. 🎉" />;
 
   const approvalBadge: Record<string, { label: string; className: string }> = {
     unreviewed: { label: 'Unreviewed', className: 'bg-muted text-muted-foreground' },
+    pending: { label: 'Unreviewed', className: 'bg-muted text-muted-foreground' },
     approved: { label: 'Approved', className: 'bg-success/20 text-success' },
     unapproved: { label: 'Unapproved', className: 'bg-destructive/20 text-destructive' },
   };
