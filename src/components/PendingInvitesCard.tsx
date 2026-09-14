@@ -20,7 +20,7 @@ function scheduleSummary(invite: PendingInvite) {
   return days
     .slice()
     .sort((a, b) => a.weekday - b.weekday)
-    .map(d => `${DAY_ABBR[d.weekday] ?? '?'} ${d.start_time}–${d.end_time}`)
+    .map(d => `${DAY_ABBR[d.weekday] ?? '?'} ${formatClockRange(d.start_time, d.end_time)}`)
     .join(' · ');
 }
 
