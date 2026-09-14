@@ -57,8 +57,8 @@ const statusBadge: Record<string, { label: string; className: string }> = {
 };
 
 const DAY_OFF_LABELS: Record<string, string> = {
-  scheduled_with_notice: 'Scheduled',
-  unscheduled: 'Unscheduled',
+  scheduled_with_notice: 'Time off',
+  unscheduled: 'Callout',
   office_closed: 'Office Closed',
   medical_leave: 'Medical',
   other: 'Other',

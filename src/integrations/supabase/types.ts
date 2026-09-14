@@ -1673,7 +1673,7 @@ export type Database = {
           source: string | null
           type: Database["public"]["Enums"]["day_off_type"]
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -1689,7 +1689,7 @@ export type Database = {
           source?: string | null
           type?: Database["public"]["Enums"]["day_off_type"]
           updated_at?: string
-          user_id: string
+          user_id: string | null
         }
         Update: {
           created_at?: string
@@ -1705,7 +1705,7 @@ export type Database = {
           source?: string | null
           type?: Database["public"]["Enums"]["day_off_type"]
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -7692,7 +7692,7 @@ export type Database = {
           source: Database["public"]["Enums"]["source_type"]
           total_minutes: number | null
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -7711,7 +7711,7 @@ export type Database = {
           source?: Database["public"]["Enums"]["source_type"]
           total_minutes?: number | null
           updated_at?: string
-          user_id: string
+          user_id: string | null
         }
         Update: {
           created_at?: string
@@ -7730,7 +7730,7 @@ export type Database = {
           source?: Database["public"]["Enums"]["source_type"]
           total_minutes?: number | null
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {

@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
     const invitedName = typeof invite.invited_name === "string" ? invite.invited_name.trim() : "";
 
     // Link employee record if one exists with matching email
-    const { data: empRecord } = await supabaseAdmin
+    const { data: empRecord, error: employeeMatchError } = await supabaseAdmin
       .from("employees")
       .select("id, user_id")
       .eq("org_id", invite.org_id)
@@ -189,13 +189,15 @@ Deno.serve(async (req) => {
       .is("user_id", null)
       .maybeSingle();
 
+    if (employeeMatchError) throw new Error("Employee match needs review before linking this login");
+
     let employeeId: string | null = null;
     if (empRecord) {
       employeeId = empRecord.id;
       // Accepting an invite means joining the team: a pre-existing loginless
       // record (e.g. archived or roster-imported) must come back active, or
       // the person accepts successfully yet never appears on the Team page.
-      await supabaseAdmin
+      const { error: employeeLinkError } = await supabaseAdmin
         .from("employees")
         .update({
           user_id: user.id,
@@ -203,9 +205,10 @@ Deno.serve(async (req) => {
           ...(invitedName ? { display_name: invitedName } : {}),
         })
         .eq("id", empRecord.id);
+      if (employeeLinkError) throw employeeLinkError;
     } else {
       // Create a new employee record, named by the inviter.
-      const { data: created } = await supabaseAdmin
+      const { data: created, error: employeeCreateError } = await supabaseAdmin
         .from("employees")
         .insert({
           org_id: invite.org_id,
@@ -217,6 +220,7 @@ Deno.serve(async (req) => {
         })
         .select("id")
         .single();
+      if (employeeCreateError) throw employeeCreateError;
       employeeId = created?.id ?? null;
     }
 

@@ -201,7 +201,7 @@ serve(async (req) => {
         const { data: newEntry, error: entryError } = await supabase
           .from("time_entries")
           .insert({
-            user_id: targetUserId || user.id,
+            user_id: targetUserId,
             org_id: orgId,
             employee_id: targetEmployeeId,
             entry_date: row.entry_date,

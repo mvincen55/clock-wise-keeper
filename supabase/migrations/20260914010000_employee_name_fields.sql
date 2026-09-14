@@ -102,6 +102,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+DROP TRIGGER IF EXISTS employees_preserve_name_alias ON public.employees;
 CREATE TRIGGER employees_preserve_name_alias BEFORE UPDATE OF display_name ON public.employees
 FOR EACH ROW EXECUTE FUNCTION public.preserve_employee_name_alias();
 

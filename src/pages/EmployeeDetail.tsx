@@ -127,7 +127,7 @@ export default function EmployeeDetail() {
           {daysOffError ? <p role="alert" className="text-sm text-destructive">Could not load days off. Please try again.</p> : daysOffLoading ? <p className="text-sm text-muted-foreground">Loading days off…</p> : daysOff?.length ? <div className="divide-y">
             {daysOff.map(day => <div key={day.id} className="py-3">
               <p className="text-sm font-medium">{formatDate(day.date_start)}{day.date_end !== day.date_start ? ` – ${formatDate(day.date_end)}` : ''}</p>
-              <p className="text-sm text-muted-foreground">{({ scheduled_with_notice: 'Scheduled day off', unscheduled: 'Callout', office_closed: 'Office closed', medical_leave: 'Medical leave', other: 'Other' })[day.type]}{day.hours != null ? ` · ${day.hours} hours` : ''}</p>
+              <p className="text-sm text-muted-foreground">{({ scheduled_with_notice: 'Time off', unscheduled: 'Callout', office_closed: 'Office closed', medical_leave: 'Medical leave', other: 'Other' })[day.type]}{day.hours != null ? ` · ${day.hours} hours` : ''}</p>
               {day.notes && <p className="text-sm mt-1">{day.notes}</p>}
             </div>)}
           </div> : <p className="text-sm text-muted-foreground">No days off in this date range.</p>}
