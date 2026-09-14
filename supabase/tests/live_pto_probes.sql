@@ -111,6 +111,31 @@ DO $$ BEGIN
  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 RESET ROLE;
+CREATE TABLE public.checklist_bypasses(employee_id uuid,org_id uuid);
+\ir ../migrations/20260914210000_employee_checklist_requirement.sql
+SET test.actor='00000000-0000-0000-0000-000000000088';
+DO $$ DECLARE e uuid='00000000-0000-0000-0000-000000000001'; o uuid='00000000-0000-0000-0000-000000000010'; BEGIN
+ INSERT INTO checklist_bypasses VALUES(e,o);
+ PERFORM set_employee_checklist_requirement(e,false);
+ BEGIN
+ INSERT INTO checklist_bypasses VALUES(e,o); RAISE EXCEPTION 'exempt bypass accepted';
+ EXCEPTION WHEN check_violation THEN NULL; END;
+ ASSERT (SELECT count(*)=1 FROM checklist_bypasses),'existing history retained; exempt new bypass blocked';
+ PERFORM set_employee_checklist_requirement(e,true);
+ INSERT INTO checklist_bypasses VALUES(e,o);
+ ASSERT (SELECT count(*)=2 FROM checklist_bypasses),'re-enabling restores bypass recording';
+END $$;
+SET test.actor='00000000-0000-0000-0000-000000000099';
+SET ROLE authenticated;
+DO $$ BEGIN
+ BEGIN
+ PERFORM set_employee_checklist_requirement('00000000-0000-0000-0000-000000000001',false); RAISE EXCEPTION 'employee exemption accepted';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN
+ UPDATE employee_checklist_settings SET bypass_required=false; RAISE EXCEPTION 'direct exemption accepted';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+RESET ROLE;
 ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
 CREATE POLICY own_employee ON employees USING (user_id::text=current_setting('test.actor',true));
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO authenticated;

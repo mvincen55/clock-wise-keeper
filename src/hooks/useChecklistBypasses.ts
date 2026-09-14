@@ -1,3 +1,4 @@
+import { useEmployeeChecklistRequirement } from '@/hooks/useEmployeeChecklistRequirement';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -8,11 +9,13 @@ export type ChecklistBypass = Tables<'checklist_bypasses'>;
 /** The member's own bypasses that still need a reason. Never blocks anything. */
 export function useUnresolvedBypasses() {
   const { user } = useAuth();
+  const requirement = useEmployeeChecklistRequirement();
 
   return useQuery({
-    queryKey: ['checklist-bypasses', 'unresolved', user?.id],
-    enabled: !!user,
+    queryKey: ['checklist-bypasses', 'unresolved', user?.id, requirement.data],
+    enabled: !!user && requirement.isSuccess,
     queryFn: async (): Promise<ChecklistBypass[]> => {
+      if (requirement.data === false) return [];
       const { data, error } = await supabase
         .from('checklist_bypasses')
         .select('*')

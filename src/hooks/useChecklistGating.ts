@@ -1,3 +1,4 @@
+import { useEmployeeChecklistRequirement } from '@/hooks/useEmployeeChecklistRequirement';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -25,14 +26,15 @@ export function useChecklistGating() {
   // Doctors don't carry assigned checklists unless the office opts them in.
   const clocksIn = useClocksIn();
   const today = getToday();
+  const requirement = useEmployeeChecklistRequirement();
 
   return useQuery({
-    queryKey: ['checklist-gating', ctx?.org_id, user?.id, today, clocksIn],
-    enabled: !!user && !!ctx,
+    queryKey: ['checklist-gating', ctx?.org_id, user?.id, today, clocksIn, requirement.data],
+    enabled: !!user && !!ctx && requirement.isSuccess,
     staleTime: 30_000,
     queryFn: async (): Promise<ChecklistGating> => {
       const empty: ChecklistGating = { ...EMPTY_GATING };
-      if (!ctx || !user || !clocksIn) return empty;
+      if (!ctx || !user || !clocksIn || requirement.data === false) return empty;
 
       const { data: lists } = await supabase
         .from('checklists')
