@@ -23,3 +23,16 @@ it('separates a gray completed appointment, gray lunch, and an ambiguous gray no
  expect(refereeMetrics({providers:[metrics],blocks,rollup:computeRollup([metrics])}).ok).toBe(true);
  expect(applyCompletedEvidence(['completed'],[rows[0]],[],words,col,[])).toEqual([null]);
 });
+
+
+import { postedColumnStatuses } from '@/lib/schedule-reader/posted-statuses';
+it('reads a posted gray day without a color legend and leaves ambiguous or colored blocks for review', () => {
+ const width=100,height=100,data=new Uint8ClampedArray(width*height*4);
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++)data.set(y<60?[128,128,128,255]:y<80?[135,172,205,255]:[240,130,20,255],(y*width+x)*4);
+ const col:LayoutColumn & {pxStart:number;pxEnd:number}={xStart:0,xEnd:1,pxStart:0,pxEnd:100,kind:'provider',providerCode:'DR02',providerLabel:'Dr. Scott',providerRole:'dentist',department:'doctor',employeeId:null};
+ const rows=Array.from({length:5},(_,i)=>({yTop:i*20,yBottom:(i+1)*20}));
+ const regions=rows.slice(0,3).map(r=>({x0:0,x1:100,y0:r.yTop,y1:r.yBottom}));
+ const words:OcrWord[]=['DR02','Lunch','???'].map((text,i)=>({text,confidence:99,bbox:{x0:5,x1:40,y0:i*20+2,y1:i*20+10}}));
+ expect(postedColumnStatuses({width,height,data},col,rows,regions,words,[])).toEqual(['completed','blocked',null,'open',null]);
+ expect(postedColumnStatuses({width,height,data},col,[rows[0]],[],words,[])).toEqual([null]);
+});
