@@ -125,6 +125,8 @@ export interface TimeGridConfig {
  * appointment descriptions.
  */
 export interface LayoutSignature {
+  /** Posted captures use block evidence without a status-color legend. */
+  captureMode?: 'posted';
   columns: LayoutColumn[];
   timeGrid: TimeGridConfig;
   /** Whether cancelled appointments remain visible on the grid in this PMS. */

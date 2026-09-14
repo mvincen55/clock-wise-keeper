@@ -21,6 +21,7 @@ import { suggestDailyColumns, type ScheduleProvider } from './provider-mapping';
 
 import type { LayoutColumn } from './types';
 import { applyProviderHours } from './provider-hours';
+import { postedColumnStatuses } from './posted-statuses';
 import { applyCompletedEvidence } from './completed-evidence';
 import { isEmptyBlueGridColumn } from './appointment-regions';
 import { buildKnownNames, checkPrivacy, groupWordsIntoLines } from './privacy-detector';
@@ -188,6 +189,7 @@ export async function processScheduleFrame(
     const ctx = frame.canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) throw new ScheduleReaderError('OCR_FAILED', { reason: 'no_canvas_context' });
 
+    const postedImage = options.profile.signature.captureMode === 'posted' ? ctx.getImageData(0, 0, frame.width, frame.height) : null;
     const headerBottomPx = rows[0].yTop;
     const providerColumns = match.frameColumns.filter(c => c.kind !== 'non_clinical');
 
@@ -205,7 +207,7 @@ export async function processScheduleFrame(
     const providerRows: Record<string, Array<ReturnType<typeof reduceRow>>> = {};
     const providers = [...byProvider.entries()].map(([label, cols]) => {
       const perColumnStatuses = cols.map(col =>
-        applyCompletedEvidence(sampleColumnStatuses(ctx, col, rows, options.profile.statusLegend), rows, regions, words, col, options.phraseRules)
+        postedImage ? postedColumnStatuses(postedImage, col, rows, regions, words, options.phraseRules) : applyCompletedEvidence(sampleColumnStatuses(ctx, col, rows, options.profile.statusLegend), rows, regions, words, col, options.phraseRules)
       );
       const availability = applyProviderHours(
         rows.map((_, i) => reduceRow(perColumnStatuses.map(s => s[i]))),
