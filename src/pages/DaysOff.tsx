@@ -63,9 +63,9 @@ function DebugDrawer({ row, open, onClose }: { row: AttendanceDayStatusRow | nul
             <span className="text-muted-foreground">Scheduled:</span>
             <span className="font-mono">{row.is_scheduled_day ? 'Yes' : 'No'}</span>
             <span className="text-muted-foreground">Expected Start:</span>
-            <span className="font-mono">{row.schedule_expected_start?.slice(0, 5) || '—'}</span>
+            <span className="font-mono">{formatClock(row.schedule_expected_start)}</span>
             <span className="text-muted-foreground">Expected End:</span>
-            <span className="font-mono">{row.schedule_expected_end?.slice(0, 5) || '—'}</span>
+            <span className="font-mono">{formatClock(row.schedule_expected_end)}</span>
           </div>
           <div className="border-t pt-2 grid grid-cols-2 gap-1">
             <span className="text-muted-foreground">Office Closed:</span>
@@ -583,7 +583,7 @@ export default function DaysOff() {
                             {row.office_closed && <span className="text-xs px-2 py-0.5 rounded bg-success/20 text-success font-medium">Closed</span>}
                             {row.has_day_off && <span className="text-xs px-2 py-0.5 rounded bg-primary/20 text-primary font-medium">Day Off</span>}
                             {!row.is_absent && !row.is_incomplete && !row.is_late && !row.office_closed && !row.has_day_off && row.has_punches && (
-                              <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">OK</span>
+                              <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">Arrived</span>
                             )}
                             {!row.is_scheduled_day && !row.office_closed && !row.has_day_off && !row.has_punches && (
                               <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">Not scheduled</span>
@@ -591,7 +591,7 @@ export default function DaysOff() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">
-                          {row.is_scheduled_day ? `${row.schedule_expected_start?.slice(0, 5)} – ${row.schedule_expected_end?.slice(0, 5)}` : '—'}
+                          {row.is_scheduled_day ? formatClockRange(row.schedule_expected_start, row.schedule_expected_end) : '—'}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`text-xs px-2 py-0.5 rounded ${row.is_remote ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
@@ -723,7 +723,7 @@ export default function DaysOff() {
                             <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning font-medium" title="This punch time looks off. Edit the punches (managers) or submit a correction request.">⚠ Time Looks Off</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 time-display text-sm">{t.expected_start_time?.slice(0, 5)}</td>
+                        <td className="px-4 py-3 time-display text-sm">{formatClock(t.expected_start_time)}</td>
                         <td className="px-4 py-3 time-display text-sm">
                           {t.timezone_suspect ? (
                             <span className="text-warning italic">—</span>
@@ -804,7 +804,7 @@ export default function DaysOff() {
                         <tr key={row.id} className="border-l-4 border-l-destructive hover:bg-muted/50">
                           <td className="px-4 py-3 font-medium">{formatDate(row.entry_date)}</td>
                           <td className="px-4 py-3 text-xs text-muted-foreground">
-                            {row.schedule_expected_start?.slice(0, 5)} – {row.schedule_expected_end?.slice(0, 5)}
+                            {formatClockRange(row.schedule_expected_start, row.schedule_expected_end)}
                           </td>
                           <td className="px-4 py-3">
                             {hasUnscheduled ? (

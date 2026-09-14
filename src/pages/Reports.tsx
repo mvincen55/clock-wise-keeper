@@ -461,7 +461,7 @@ export default function Reports() {
       const header = ['Date', 'Expected Start', 'Actual Start', 'Minutes Late', 'Reason', 'Status'];
       const rows = activeTardies.map(t => [
         formatDate(t.entry_date),
-        t.expected_start_time?.slice(0, 5) || '',
+        formatClock(t.expected_start_time, ''),
         formatTime(t.actual_start_time),
         String(t.minutes_late),
         t.reason_text || '',
@@ -854,7 +854,7 @@ export default function Reports() {
                     {activeTardies.map(t => (
                       <div key={t.id} className="grid grid-cols-[1.2fr_80px_100px_60px_1fr_80px] items-center gap-2 px-4 py-3 text-sm hover:bg-muted/30">
                         <span className="font-medium">{formatDate(t.entry_date)}</span>
-                        <span className="font-mono text-muted-foreground">{t.expected_start_time?.slice(0, 5)}</span>
+                        <span className="font-mono text-muted-foreground">{formatClock(t.expected_start_time)}</span>
                         <span className="font-mono">{formatTime(t.actual_start_time)}</span>
                         <span className="font-bold text-destructive">{t.minutes_late}m</span>
                         <span className="text-xs text-muted-foreground truncate">{t.reason_text || '—'}</span>

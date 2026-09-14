@@ -89,7 +89,7 @@ export default function TeamMeetingsCard({ isManager }: { isManager: boolean }) 
                   <p className="truncate text-sm font-medium">{m.title}</p>
                   <p className="text-xs text-muted-foreground">
                     {shortDate(m.event_date)}
-                    {m.start_time ? ` · ${m.start_time.slice(0, 5)}` : ''}
+                    {m.start_time ? ` · ${formatClock(m.start_time)}` : ''}
                     {m.notes ? ` · ${m.notes}` : ''}
                   </p>
                 </div>

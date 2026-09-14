@@ -382,7 +382,7 @@ export default function ScheduleManager() {
                     <span className="w-12 font-medium">{WEEKDAY_NAMES[w.weekday]?.slice(0, 3)}</span>
                     {w.enabled ? (
                       <>
-                        <span className="time-display">{w.start_time?.slice(0, 5)} – {w.end_time?.slice(0, 5)}</span>
+                        <span className="time-display">{formatClockRange(w.start_time, w.end_time)}</span>
                         {w.grace_minutes > 0 && (
                           <span className="text-xs text-muted-foreground">({w.grace_minutes}m grace)</span>
                         )}
@@ -467,7 +467,7 @@ export default function ScheduleManager() {
                               <div key={w.weekday} className={`flex items-center gap-3 px-3 py-1.5 text-xs ${!w.enabled ? 'opacity-40' : ''}`}>
                                 <span className="w-10 font-medium">{WEEKDAY_NAMES[w.weekday]?.slice(0, 3)}</span>
                                 {w.enabled ? (
-                                  <span>{w.start_time?.slice(0, 5)} – {w.end_time?.slice(0, 5)}</span>
+                                  <span>{formatClockRange(w.start_time, w.end_time)}</span>
                                 ) : (
                                   <span className="text-muted-foreground">Off</span>
                                 )}

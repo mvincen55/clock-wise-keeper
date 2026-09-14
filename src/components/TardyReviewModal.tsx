@@ -63,7 +63,7 @@ export function TardyReviewModal({ open, tardy, onSubmit, onClose }: Props) {
             Review Tardy — {formatDate(tardy.entry_date)}
           </DialogTitle>
           <DialogDescription>
-            {tardy.minutes_late} minutes late (Expected: {tardy.expected_start_time?.slice(0, 5)}, Actual: {actualLocal})
+            {tardy.minutes_late} minutes late (Expected: {formatClock(tardy.expected_start_time)}, Actual: {actualLocal})
           </DialogDescription>
         </DialogHeader>
 

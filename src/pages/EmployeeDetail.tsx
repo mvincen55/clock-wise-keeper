@@ -43,7 +43,7 @@ function getLast14Days() {
 }
 
 const statusBadge: Record<string, { label: string; className: string }> = {
-  ok: { label: 'OK', className: 'bg-success/20 text-success' },
+  ok: { label: 'Arrived', className: 'bg-success/20 text-success' },
   remote_ok: { label: 'Remote', className: 'bg-accent/20 text-accent' },
   late: { label: 'Late', className: 'bg-warning/20 text-warning' },
   absent: { label: 'Absent', className: 'bg-destructive/20 text-destructive' },
@@ -273,7 +273,7 @@ export default function EmployeeDetail() {
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       {row.schedule_expected_start && (
-                        <span>Sched: {row.schedule_expected_start?.toString().slice(0, 5)}</span>
+                        <span>Sched: {formatClock(row.schedule_expected_start?.toString())}</span>
                       )}
                       {row.minutes_late != null && row.minutes_late > 0 && (
                         <span className="text-warning font-semibold">+{row.minutes_late}min</span>
