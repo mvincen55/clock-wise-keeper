@@ -32,18 +32,20 @@ export default function DailyColumnReview({ initial, providers, frame, date, onC
   const update = (i: number, col: LayoutColumn) => setColumns(prev => prev.map((c, n) => n === i ? col : c));
   return <div className="space-y-4">
     <h3 ref={heading} tabIndex={-1} className="font-semibold">Review columns for {date}</h3>
-    <p className="text-sm text-muted-foreground">These assignments apply only to this capture. Check today’s provider names and notes-only columns. A provider can use more than one column; tomorrow’s assignments are read again.</p>
+    <p className="text-sm text-muted-foreground">These assignments apply only to this capture. Keep early-arrival and hold columns that reserve provider time. Assign a related hold to the same provider as the appointment. A hold without a readable provider code needs your confirmation. A provider can use more than one column; tomorrow’s assignments are read again.</p>
     <canvas ref={preview} className="w-full rounded border" aria-label="Current schedule with numbered column boundaries" />
-    {columns.map((col, i) => <div key={i} className="space-y-1 rounded border p-3">
+    {columns.map((col, i) => col.kind !== 'non_clinical' && <div key={i} className="space-y-1 rounded border p-3">
       <Label htmlFor={`daily-column-${i}`}>Column {i + 1}{col.providerCode ? ` · ${col.providerCode}` : ''}</Label>
-      <Select value={col.kind === 'non_clinical' ? 'notes' : col.providerId ?? ''} onValueChange={id => {
+      <Select value={col.providerId ?? ''} onValueChange={id => {
         const provider = providers.find(p => p.id === id);
         update(i, id === 'notes' ? { ...col, kind: 'non_clinical', providerId: undefined, providerLabel: null, providerRole: null, department: null, employeeId: null, workingHours: undefined } : provider ? { ...col, kind: 'provider', ...providerColumn(provider), workingHours: initial.find(c => c.providerId === id)?.workingHours } : col);
       }}>
         <SelectTrigger id={`daily-column-${i}`}><SelectValue placeholder="Select today’s provider or notes only" /></SelectTrigger>
         <SelectContent><SelectItem value="notes">Notes only / non-clinical</SelectItem>{providers.map(p => <SelectItem key={p.id} value={p.id}>{p.displayName}</SelectItem>)}</SelectContent>
       </Select>
+      <Button type="button" variant="ghost" size="sm" aria-label={`Exclude column ${i+1}`} onClick={()=>{ update(i,{...col,kind:'non_clinical'}); heading.current?.focus(); }}>Exclude column — no appointments</Button>
     </div>)}
+    {columns.some(c=>c.kind==='non_clinical') && <details className="text-sm text-muted-foreground"><summary className="cursor-pointer">{columns.filter(c=>c.kind==='non_clinical').length} excluded columns (empty or notes only)</summary><div className="flex flex-wrap gap-2 pt-2">{columns.map((col,i)=>col.kind==='non_clinical' && <Button key={i} variant="outline" size="sm" onClick={()=>update(i,{...col,kind:'provider'})}>Restore column {i+1}</Button>)}</div></details>}
     <div className="flex flex-wrap gap-2">
       <Button onClick={() => onConfirm(columns)} disabled={!columns.some(c => c.kind !== 'non_clinical') || columns.some(c => c.kind !== 'non_clinical' && !c.providerId)}>Use these assignments</Button>
       <Button variant="outline" onClick={onCancel}>Cancel capture</Button>

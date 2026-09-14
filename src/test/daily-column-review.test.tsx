@@ -30,3 +30,21 @@ it('requires a daily choice, confirms notes only, and clears its preview', () =>
   const canvas = screen.getByLabelText('Current schedule with numbered column boundaries') as HTMLCanvasElement;
   unmount(); expect(canvas.width).toBe(0);
 });
+
+it('lets a closer exclude and restore an extra lane without assigning a fake provider',()=>{
+ vi.spyOn(HTMLCanvasElement.prototype,'getContext').mockReturnValue({drawImage:vi.fn(),strokeRect:vi.fn(),fillRect:vi.fn(),fillText:vi.fn()} as unknown as CanvasRenderingContext2D);
+ const known:LayoutColumn={xStart:0,xEnd:.4,kind:'provider',providerId:'p',providerLabel:'Dr. Example',providerRole:'dentist',department:'doctor',employeeId:null};
+ const extra:LayoutColumn={...known,xStart:.5,xEnd:.9,providerId:undefined,providerLabel:null};
+ const onConfirm=vi.fn();
+ render(<DailyColumnReview initial={[known,extra]} providers={[{id:'p',displayName:'Dr. Example',providerType:'doctor',employeeId:null,active:true,orgId:'o',sortOrder:0}]} frame={{width:100,height:100,canvas:document.createElement('canvas')} as CaptureFrame} date="2026-09-14" onConfirm={onConfirm} onCancel={()=>{}}/>);
+ const confirm=screen.getByRole('button',{name:'Use these assignments'});
+ expect(confirm).toBeDisabled();
+ fireEvent.click(screen.getByRole('button',{name:'Exclude column 2'}));
+ expect(confirm).toBeEnabled();
+ expect(screen.queryByRole('button',{name:'Exclude column 2'})).not.toBeInTheDocument();
+ fireEvent.click(confirm);
+ expect(onConfirm).toHaveBeenCalledWith([expect.objectContaining({providerId:'p'}),expect.objectContaining({kind:'non_clinical',providerId:undefined})]);
+ fireEvent.click(screen.getByText('1 excluded columns (empty or notes only)'));
+ fireEvent.click(screen.getByRole('button',{name:'Restore column 2'}));
+ expect(confirm).toBeDisabled();
+});
