@@ -1,3 +1,5 @@
+import HandbookSectionLink from '@/components/handbook/HandbookSectionLink';
+import { handbookNumberedHeading } from '@/lib/handbook-section-links';
 /**
  * DocumentLibraryReader — the shared reader behind the Office Handbook and
  * the Insurance Desk (and future SOP/training libraries).
@@ -26,6 +28,8 @@
  * All staff read; management lives in Ask AI → Documents. The office purple
  * (design-token `primary`) marks active navigation, focus, and progress.
  */
+import HandbookFormReference from '@/components/handbook/HandbookFormReference';
+import { handbookFormReference } from '@/lib/handbook-form-reference';
 import HandbookHeader from '@/components/handbook/HandbookHeader';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -196,17 +200,32 @@ function BlockView({ block, id, query }: { block: DocBlock; id: string; query: s
 const ReaderBody = memo(function ReaderBody({
   blocks,
   highlight,
+  handbook = false,
 }: {
   blocks: DocBlock[];
   highlight: string;
+  handbook?: boolean;
 }) {
-  return (
-    <div className="max-w-[46rem]">
-      {blocks.map((block, i) => (
-        <BlockView key={i} id={sectionAnchorId(i)} block={block} query={highlight} />
-      ))}
-    </div>
-  );
+  const rendered = [];
+  const renderBlock = (i: number, text?: string) => <BlockView key={i} id={sectionAnchorId(i)} block={text === undefined ? blocks[i] : { type: 'para', text }} query={highlight} />;
+  for (let i = 0; i < blocks.length; i++) {
+    const numbered = handbook ? handbookNumberedHeading(blocks, i) : null;
+    if (numbered) {
+      rendered.push(<h3 key={`numbered-${i}`} id={sectionAnchorId(i)} tabIndex={-1} className="handbook-numbered-heading"><span>{numbered.number}</span> <span id={sectionAnchorId(i + 1)}>{highlighted(numbered.title, highlight)}</span></h3>);
+      rendered.push(<HandbookSectionLink key={`link-${i}`} title={numbered.title} />);
+      i++;
+      continue;
+    }
+    rendered.push(renderBlock(i));
+    const block = blocks[i];
+    if (handbook && block.type === 'heading') rendered.push(<HandbookSectionLink key={`link-${i}`} title={block.text} />);
+    const form = handbook ? handbookFormReference(blocks, i) : null;
+    if (form) {
+      rendered.push(<HandbookFormReference key={`form-${i}`} form={form} renderSource={renderBlock} query={highlight} />);
+      i = form.end - 1;
+    }
+  }
+  return <div className="max-w-[46rem]">{rendered}</div>;
 });
 
 function tocLabelClass(active: boolean): string {
@@ -1092,7 +1111,7 @@ export default function DocumentLibraryReader({
                         The text of this document is not available. Ask your manager for a copy or help uploading it again.
                       </p>
                     ) : (
-                      <ReaderBody blocks={blocks} highlight={readerHighlight} />
+                      <ReaderBody blocks={blocks} highlight={readerHighlight} handbook={appearance === 'handbook'} />
                     )}
 
                     {/* Previous / next section */}

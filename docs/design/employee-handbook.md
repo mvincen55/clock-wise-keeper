@@ -1,6 +1,6 @@
 # Employee handbook design
 
-The handbook uses an opt-in warm-paper reading surface, deep purple accents, serif document titles, fine dividers, and a compact practice header. The existing uploaded reader remains the fallback until published policies are available. Policy titles and category assignments are not rewritten.
+The handbook uses an opt-in warm-paper reading surface, deep purple accents, bold Archivo document titles, fine dividers, and a compact practice header. The existing uploaded reader remains the fallback until published policies are available. Policy titles and category assignments are not rewritten.
 
 The uploaded reader retains nested contents, scroll tracking, full-text search, highlighting, editing permission checks, and its contextual assistant route. The published reader adds excerpts, literal match highlighting, a clear-search action, mobile contents, accessible current-policy state, and heading links. Unassigned policies appear directly in the contents without an invented category.
 
@@ -25,3 +25,9 @@ Generation prompt: “Create an original compact editorial illustration for the 
 ## Management review
 
 The existing uploaded handbook combines employment policies, patient policies, and office/clinical procedures. Some original uploaded tables and numbered processes are flattened in the extracted text. Separating this material into Employee Handbook and Office Procedures, repairing source extraction, and reconciling potentially inconsistent wording require management review. This change deliberately preserves the existing text and does not add process diagrams that could reinterpret it.
+
+## Form readability follow-up
+
+The uploaded Time Off Request Form now separates submission instructions from a single-column list of form fields. The original extracted field text remains available in an expandable section and expands automatically for matching searches. Stored source text is unchanged. Recognition is limited to a matching form heading and validated field boundaries; ambiguous sections retain normal rendering. The handbook uses Purple Envelope’s Archivo headings and monospaced labels instead of serif titles.
+
+Recognized handbook section labels now link to existing PTO, Morning Huddle, Checklists, Incident Reports, and Broken Appointments routes. These navigation aids preserve the source submission requirements. No office-specific Google Drive URL is hardcoded into the shared reader. Standalone section numbers are visually joined to the following short colon-ended label while retaining both source anchors.

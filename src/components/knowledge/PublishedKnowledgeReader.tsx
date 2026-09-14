@@ -1,3 +1,4 @@
+import HandbookSectionLink from '@/components/handbook/HandbookSectionLink';
 import HandbookHeader from '@/components/handbook/HandbookHeader';
 import { escapeRegExp, snippetAround } from '@/lib/doc-library';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -264,6 +265,7 @@ export default function PublishedKnowledgeReader({ area, title, subtitle, fallba
               <header className="policy-article-header">
                 <p className="handbook-eyebrow">{activeEntry.category?.name || (area === 'handbook' ? 'Employee Handbook' : 'Office Procedures')}</p>
                 <h2 id="policy-title" tabIndex={-1}>{highlight(activeEntry.version.title, query)}</h2>
+                {area === 'handbook' && <HandbookSectionLink title={activeEntry.version.title} />}
                 {activeEntry.version.summary && <p className="policy-summary">{highlight(activeEntry.version.summary, query)}</p>}
                 <div className="policy-metadata">
                   <span>Version {activeEntry.version.version_number}</span>
