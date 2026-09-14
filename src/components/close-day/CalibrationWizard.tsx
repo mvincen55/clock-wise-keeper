@@ -41,7 +41,7 @@ import { useSaveLayoutProfile, useLayoutProfiles } from '@/hooks/useScheduleInte
 import { hhmmToMinutes } from '@/lib/time-utils';
 import ProviderWorkingSchedule from '@/components/close-day/ProviderWorkingSchedule';
 import { wipeOcrWords } from '@/lib/schedule-reader/destroy-capture';
-import { columnsFromRegions, isNotesOnlyColumn } from '@/lib/schedule-reader/appointment-regions';
+import { columnsFromRegions, isNotesOnlyColumn, isEmptyBlueGridColumn } from '@/lib/schedule-reader/appointment-regions';
 import { readProviderCodes } from '@/lib/schedule-reader/provider-codes';
 import { sufficientStatusLegend } from '@/lib/schedule-reader/completed-evidence';
 
@@ -160,10 +160,11 @@ export default function CalibrationWizard({ open, onClose }: Props) {
     const { words, regions = [] } = await recognizeFrame(frame.canvas);
     try {
     const detected = columnsFromRegions(regions, frame.width);
-    const drafts = regions.length >= 3 && detected.length >= 2 && readProviderCodes(words).length
+    const drafts = detected.length >= 1 && readProviderCodes(words).length
       ? detected : draftColumnsFromFrame(words, frame.width, frame.height);
+    const pixels=frame.canvas.getContext('2d')?.getImageData?.(0,0,frame.width,frame.height);
     setColumns(
-      drafts.map(d => {
+      drafts.filter(d => !pixels || !isEmptyBlueGridColumn(pixels,d)).map(d => {
         const previous = profiles.flatMap(p => (p.layout_signature as unknown as { columns?: LayoutColumn[] }).columns ?? []);
         const suggestion = suggestColumnProvider(words, d, frame.width, frame.height, providers, previous, true);
         return ({
@@ -378,12 +379,12 @@ export default function CalibrationWizard({ open, onClose }: Props) {
         {step === 1 && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Review the suggested providers and notes-only columns. These are starting examples, not permanent provider positions: each daily capture reads and confirms its own assignments. Type and department come from the office registry. The preview never leaves this device.
+              Review the suggested providers. Empty columns are omitted and notes-only columns are collapsed. Keep early-arrival and hold columns that reserve provider time; assign related columns to the correct provider. Each daily capture confirms its own assignments. The preview never leaves this device.
             </p>
             {providersPending ? <p role="status">Loading office providers…</p> : providersError ? <p role="alert">Could not load providers. Close and retry calibration.</p> : providers.length === 0 ? <p>Add providers in Settings → Office before mapping schedule columns.</p> : null}
             <canvas ref={previewRef} className="w-full rounded border" />
             <div className="space-y-3">
-              {columns.map((col, i) => (
+              {columns.map((col, i) => col.kind !== 'non_clinical' && (
                 <div key={i} className="grid gap-2 rounded-md border p-2 sm:grid-cols-4">
                   <div className="space-y-1">
                     <Label className="text-xs">Column {i + 1}</Label>
@@ -401,7 +402,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
                       </SelectContent>
                     </Select>
                   </div>
-                  {col.kind !== 'non_clinical' && (
+                  {(
                     <>
                       <div className="space-y-1">
                         <Label className="text-xs">Provider</Label>
@@ -429,10 +430,12 @@ export default function CalibrationWizard({ open, onClose }: Props) {
                       </div>
                     </>
                   )}
+                  <div className="sm:col-span-4"><Button type="button" variant="ghost" size="sm" aria-label={`Exclude column ${i+1}`} onClick={() => { setColumn(i,{kind:'non_clinical'}); requestAnimationFrame(()=>document.getElementById('calibration-column-actions')?.focus()); }}>Exclude column — no appointments</Button></div>
                 </div>
               ))}
             </div>
-            <div className="flex justify-end gap-2">
+            {columns.some(c=>c.kind==='non_clinical') && <details className="text-sm text-muted-foreground"><summary className="cursor-pointer">{columns.filter(c=>c.kind==='non_clinical').length} excluded columns (empty or notes only)</summary><div className="flex flex-wrap gap-2 pt-2">{columns.map((col,i)=>col.kind==='non_clinical' && <Button key={i} variant="outline" size="sm" onClick={()=>setColumn(i,{kind:'provider'})}>Restore column {i+1}</Button>)}</div></details>}
+            <div id="calibration-column-actions" tabIndex={-1} className="flex justify-end gap-2">
               <Button variant="ghost" onClick={onClose}>
                 Cancel
               </Button>
