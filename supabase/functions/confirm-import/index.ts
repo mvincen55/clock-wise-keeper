@@ -1,3 +1,4 @@
+import { employeeNameIndex, employeeNameKey } from './employee-matching.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -7,7 +8,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-import { validateConfirmImportInput, normalize, buildPunches, detectMispaired } from "./lib.ts";
+import { validateConfirmImportInput, buildPunches, detectMispaired } from "./lib.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -79,30 +80,22 @@ serve(async (req) => {
     }
 
     // Preload all employees in this org for matching.
-    // NOTE: employees has no employee_code column — matching is by display_name.
+    // NOTE: employees has no employee_code column — matching uses current and previous display names.
     // Selecting a nonexistent column here used to error out silently, leaving the
     // match maps empty so every row fell back to the importer's own record.
     const { data: orgEmployees, error: orgEmployeesError } = await supabase
       .from("employees")
-      .select("id, user_id, display_name")
+      .select("id, user_id, display_name, name_aliases")
       .eq("org_id", orgId);
     if (orgEmployeesError) throw orgEmployeesError;
 
-    const empByName = new Map<string, { id: string; user_id: string | null }[]>();
-    for (const e of orgEmployees || []) {
-      const k = normalize(e.display_name);
-      if (k) {
-        const list = empByName.get(k) || [];
-        list.push({ id: e.id, user_id: e.user_id });
-        empByName.set(k, list);
-      }
-    }
+    const empByName = employeeNameIndex(orgEmployees ?? []);
     // TS cannot carry the null-narrowing of `user` into this closure.
     const importerUserId = user.id;
 
     function resolveEmployee(row: any): { id: string; user_id: string | null } | { ambiguous: true } | null {
       if (row.employee_name) {
-        const hits = empByName.get(normalize(row.employee_name));
+        const hits = empByName.get(employeeNameKey(row.employee_name));
         if (hits && hits.length === 1) return hits[0];
         if (hits && hits.length > 1) return { ambiguous: true };
         // Named employee with no match: do NOT attribute to the importer.

@@ -177,20 +177,16 @@ export function useSaveWorkStyle() {
 
       // Learning style quietly informs how training is written — never surfaced.
       // With rankings, the top choice is the one that counts.
-      const employeePatch: Record<string, unknown> = {};
       const topLearning = (answers.learning ?? '').split(',').filter(Boolean)[0];
-      if (topLearning) employeePatch.learning_style = topLearning;
-      if (favorites) {
-        const cleaned = Object.fromEntries(
-          Object.entries(favorites)
-            .map(([k, v]) => [k, v.trim()])
-            .filter(([, v]) => v),
-        );
-        employeePatch.favorites = cleaned;
-      }
-      if (Object.keys(employeePatch).length) {
-        await supabase.from('employees').update(employeePatch as never).eq('id', ctx.employee_id);
-      }
+      const cleaned = favorites ? Object.fromEntries(Object.entries(favorites)
+        .map(([key, value]) => [key, value.trim()]).filter(([, value]) => value)) : null;
+      if (!ctx.employee_id) throw new Error('Your team member record is not linked yet. Ask your manager for help.');
+      const { error: preferencesError } = await supabase.rpc('save_employee_onboarding_preferences', {
+        p_employee_id: ctx.employee_id,
+        p_learning_style: topLearning || null,
+        p_favorites: cleaned,
+      });
+      if (preferencesError) throw preferencesError;
       await completeStep.mutateAsync('work_style');
     },
     onSuccess: () => {

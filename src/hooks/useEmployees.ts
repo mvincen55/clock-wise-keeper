@@ -1,3 +1,5 @@
+import type { EmployeeContactFields } from '@/lib/employee-contact';
+import { employeeNamePayload, type EmployeeNameFields } from '@/lib/employee-name-fields';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
@@ -65,20 +67,15 @@ export function useAddEmployee() {
   const qc = useQueryClient();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: async (input: { display_name: string; email?: string; timezone?: string }) => {
+    mutationFn: async (input: EmployeeNameFields & { email?: string; contact?: EmployeeContactFields }) => {
       if (!ctx) throw new Error('No org context');
-      const { data, error } = await supabase
-        .from('employees')
-        .insert({
-          org_id: ctx.org_id,
-          display_name: input.display_name,
-          email: input.email || null,
-          // NULL = inherit the office timezone; only an explicit choice
-          // becomes a per-person override (Phase 6).
-          timezone: input.timezone || null,
-        })
-        .select()
-        .single();
+      const name = employeeNamePayload(input);
+      const { data, error } = await supabase.rpc('save_team_member_contact', {
+        p_org_id: ctx.org_id, p_employee_id: null,
+        p_first_name: name.first_name, p_middle_initial: name.middle_initial,
+        p_last_name: name.last_name, p_email: input.email?.trim() || null,
+        ...(input.contact ? { p_contact: input.contact } : {}),
+      });
       if (error) throw error;
       return data;
     },
@@ -95,14 +92,15 @@ export function useUpdateEmployeeDetails() {
   const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { id: string; display_name: string; email: string | null }) => {
+    mutationFn: async (input: EmployeeNameFields & { id: string; email: string | null; contact: EmployeeContactFields }) => {
       if (!ctx || !['owner', 'manager'].includes(ctx.role)) throw new Error('Manager access required');
-      const name = input.display_name.trim();
-      if (!name) throw new Error('Name is required');
-      const { data, error } = await supabase.from('employees')
-        .update({ display_name: name, email: input.email?.trim() || null })
-        .eq('id', input.id).eq('org_id', ctx.org_id)
-        .select('id').single();
+      const name = employeeNamePayload(input);
+      const { data, error } = await supabase.rpc('save_team_member_contact', {
+        p_org_id: ctx.org_id, p_employee_id: input.id,
+        p_first_name: name.first_name, p_middle_initial: name.middle_initial,
+        p_last_name: name.last_name, p_email: input.email?.trim() || null,
+        p_contact: input.contact,
+      });
       if (error) throw error;
       return data;
     },
