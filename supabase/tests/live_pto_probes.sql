@@ -136,6 +136,34 @@ DO $$ BEGIN
  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 RESET ROLE;
+\ir ../migrations/20260914230000_pto_balance_reconciliation.sql
+DO $$ DECLARE e uuid='00000000-0000-0000-0000-000000000001'; o uuid='00000000-0000-0000-0000-000000000010'; sun date; old_count int; r record; BEGIN
+ sun:=current_date-extract(dow FROM current_date)::int;
+ SELECT count(*) INTO old_count FROM get_live_pto_ledger(e);
+ INSERT INTO pto_balance_reconciliations(org_id,employee_id,period_end,balance_hours,reason)
+ VALUES(o,e,sun-1,1.59,'Confirmed closing balance');
+ SELECT * INTO r FROM get_live_pto_ledger(e) WHERE period_end=sun-1;
+ ASSERT r.running_balance=1.59 AND r.confirmed_balance=1.59,'closing confirmation applied once';
+ ASSERT (SELECT count(*)=old_count FROM get_live_pto_ledger(e)),'historical weeks retained';
+ SELECT * INTO r FROM get_live_pto_ledger(e) WHERE period_start=sun;
+ ASSERT r.running_balance=round(1.59+r.accrual_credited-r.pto_taken_hours,2),'new accrual carries forward';
+ ASSERT r.reconciliation_hours IS NULL,'confirmation not repeated';
+ UPDATE time_entries SET total_minutes=total_minutes+60 WHERE entry_date<sun;
+ SELECT * INTO r FROM get_live_pto_ledger(e) WHERE period_end=sun-1;
+ ASSERT r.running_balance=1.59,'historical correction does not double-count settled balance';
+ INSERT INTO pto_balance_reconciliations(org_id,employee_id,period_end,balance_hours,reason)
+ VALUES(o,e,sun+13,99,'Future confirmation');
+ ASSERT NOT EXISTS(SELECT 1 FROM get_live_pto_ledger(e) WHERE confirmed_balance=99),'future confirmations not applied';
+END $$;
+SET ROLE authenticated;
+DO $$ BEGIN
+ BEGIN
+ INSERT INTO pto_balance_reconciliations(org_id,employee_id,period_end,balance_hours,reason)
+ VALUES('00000000-0000-0000-0000-000000000010','00000000-0000-0000-0000-000000000001',current_date,9,'Unauthorized');
+ RAISE EXCEPTION 'direct confirmation accepted';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+RESET ROLE;
 ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
 CREATE POLICY own_employee ON employees USING (user_id::text=current_setting('test.actor',true));
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO authenticated;
@@ -144,7 +172,9 @@ SET ROLE authenticated;
 SET test.actor='00000000-0000-0000-0000-000000000099';
 DO $$ BEGIN
  ASSERT (SELECT count(*)=0 FROM get_live_pto_ledger('00000000-0000-0000-0000-000000000001')),'RLS must hide inaccessible employee';
+ ASSERT (SELECT count(*)=0 FROM pto_balance_reconciliations),'confirmations must not expose another employee';
  ASSERT (SELECT count(*)=0 FROM payroll_pto_records),'payroll evidence must not expose another employee';
 END $$;
 RESET ROLE;
 ROLLBACK;
+

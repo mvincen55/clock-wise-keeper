@@ -191,6 +191,7 @@ export default function PTO() {
                       <div className="flex items-center gap-3">
                         <span className="text-xs text-success">+{w.accrual_credited.toFixed(2)}h</span>
                         {w.pto_taken_hours > 0 && <span className="text-xs text-destructive">-{w.pto_taken_hours.toFixed(2)}h</span>}
+                        {w.confirmed_balance != null && <span className="text-xs text-muted-foreground" title={w.reconciliation_note ?? undefined}>Balance reconciled</span>}
                         <span className={`text-sm font-semibold ${w.running_balance < 0 ? 'text-destructive' : ''}`}>
                           {w.running_balance.toFixed(2)}h
                         </span>
@@ -322,6 +323,7 @@ export default function PTO() {
                       <th className="px-3 py-2 text-right font-medium text-muted-foreground text-xs">Accrual</th>
                       <th className="px-3 py-2 text-center font-medium text-muted-foreground text-xs">Capped?</th>
                       <th className="px-3 py-2 text-right font-medium text-muted-foreground text-xs">Credited</th>
+                      <th className="px-3 py-2 text-right font-medium text-muted-foreground text-xs">Reconciliation</th>
                       <th className="px-3 py-2 text-right font-medium text-muted-foreground text-xs">Balance</th>
                     </tr>
                   </thead>
@@ -346,6 +348,9 @@ export default function PTO() {
                             ) : '—'}
                           </td>
                           <td className="px-3 py-2 text-right text-success font-medium">+{w.accrual_credited.toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right" title={w.reconciliation_note ?? undefined}>
+                            {w.confirmed_balance != null ? <><span>{(w.reconciliation_hours ?? 0) >= 0 ? '+' : ''}{(w.reconciliation_hours ?? 0).toFixed(2)}</span><span className="block text-xs text-muted-foreground">Confirmed balance</span></> : '—'}
+                          </td>
                           <td className={`px-3 py-2 text-right font-semibold ${w.running_balance < 0 ? 'text-destructive' : ''}`}>
                             {w.running_balance.toFixed(2)}
                           </td>
@@ -480,3 +485,4 @@ export function PtoUsageRow({ entry, onUpdateHours }: { entry: any; onUpdateHour
     </div>
   );
 }
+
