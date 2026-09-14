@@ -32,7 +32,6 @@ export default function PtoPolicySettingsCard() {
   const [workedCap, setWorkedCap] = useState(40);
   const [maxBalance, setMaxBalance] = useState(100);
   const [allowNegative, setAllowNegative] = useState(false);
-  const [snapDate, setSnapDate] = useState('');
   const [snapBalance, setSnapBalance] = useState(0);
 
   // Sync from DB
@@ -47,7 +46,6 @@ export default function PtoPolicySettingsCard() {
 
   useEffect(() => {
     if (snapshots?.length) {
-      setSnapDate(snapshots[0].snapshot_date);
       setSnapBalance(Number(snapshots[0].snapshot_balance_hours));
     }
   }, [snapshots]);
@@ -61,7 +59,6 @@ export default function PtoPolicySettingsCard() {
         allow_negative: allowNegative,
       });
       await upsertSnapshot.mutateAsync({
-        snapshot_date: snapDate,
         snapshot_balance_hours: snapBalance,
       });
       toast({ title: 'PTO settings saved' });
@@ -83,7 +80,7 @@ export default function PtoPolicySettingsCard() {
           PTO Policy Settings
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Your tier uses the real start date saved in Team → Dates / PTO, with the provisional date used only until confirmed. Balances update automatically after saved changes.
+          Your tier uses the real start date saved in Team → Dates / PTO, and your starting balance uses the Purple Envelope join date. Balances update automatically after saved changes.
         </p>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -123,19 +120,20 @@ export default function PtoPolicySettingsCard() {
         </div>
 
         <div className="border-t pt-4 space-y-3">
-          <h4 className="font-semibold text-sm">Balance Snapshot Anchor</h4>
+          <h4 className="font-semibold text-sm">Starting PTO Balance</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
-              <Label>Snapshot Date</Label>
-              <Input type="date" value={snapDate} onChange={e => setSnapDate(e.target.value)} className="w-48" />
+              <Label>Purple Envelope join date</Label>
+              <p className="text-sm">{settings?.join_date || 'Not recorded'}</p>
+              <p className="text-xs text-muted-foreground">Edit this date in Team → Dates / PTO.</p>
             </div>
             <div className="space-y-1">
-              <Label>Snapshot Balance (hours)</Label>
+              <Label>PTO balance on join date (hours)</Label>
               <Input type="number" step="0.01" value={snapBalance} onChange={e => setSnapBalance(parseFloat(e.target.value) || 0)} className="w-32" />
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            The engine recalculates forward from this snapshot. All weekly accruals and PTO usage after this date are computed.
+            The starting balance uses the same Purple Envelope join date saved in Team. Accrual and recorded PTO usage update automatically.
           </p>
         </div>
 

@@ -29,6 +29,7 @@ export type PtoSettings = {
   id: string;
   user_id: string;
   hire_date: string;
+  join_date?: string | null;
   worked_hours_cap_weekly: number;
   max_balance: number;
   allow_negative: boolean;
@@ -75,7 +76,7 @@ export function usePtoSettings() {
       const hireDate = employee.data.real_hire_date ?? employee.data.hire_date ?? policy.data?.hire_date;
       if (!hireDate) return null;
       return { worked_hours_cap_weekly: 40, max_balance: 100, allow_negative: false,
-        timezone: 'America/New_York', ...policy.data, hire_date: hireDate } as PtoSettings;
+        timezone: 'America/New_York', ...policy.data, hire_date: hireDate, join_date: employee.data.hire_date } as PtoSettings;
     },
   });
 }
@@ -105,6 +106,8 @@ export function usePtoSnapshots() {
     enabled: !!ctx,
     refetchInterval: 30_000,
     queryFn: async () => {
+      const employee = await supabase.from('employees').select('hire_date').eq('id', ctx!.employee_id).eq('org_id', ctx!.org_id).single();
+      if (employee.error) throw employee.error;
       const { data, error } = await supabase
         .from('pto_snapshots')
         .select('*')
@@ -113,7 +116,9 @@ export function usePtoSnapshots() {
         .eq('org_id', ctx!.org_id)
         .order('snapshot_date', { ascending: false });
       if (error) throw error;
-      return (data || []) as PtoSnapshot[];
+      return [...(data || [])].sort((a, b) =>
+        Number(b.snapshot_date === employee.data.hire_date) - Number(a.snapshot_date === employee.data.hire_date)
+        || b.snapshot_date.localeCompare(a.snapshot_date)) as PtoSnapshot[];
     },
   });
 }
@@ -123,12 +128,15 @@ export function useUpsertPtoSnapshot() {
   const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { snapshot_date: string; snapshot_balance_hours: number }) => {
+    mutationFn: async (input: { snapshot_balance_hours: number }) => {
       if (!user || !ctx) throw new Error('Not authenticated');
+      const employee = await supabase.from('employees').select('hire_date').eq('id', ctx.employee_id).eq('org_id', ctx.org_id).single();
+      if (employee.error) throw employee.error;
+      if (!employee.data.hire_date) throw new Error('Save a Purple Envelope join date in Team before entering the starting balance.');
       const { error } = await supabase
         .from('pto_snapshots')
         .upsert(
-          { user_id: user.id, org_id: ctx.org_id, employee_id: ctx.employee_id, ...input } as any,
+          { user_id: user.id, org_id: ctx.org_id, employee_id: ctx.employee_id, ...input, snapshot_date: employee.data.hire_date } as any,
           { onConflict: 'employee_id,snapshot_date' }
         );
       if (error) throw error;
