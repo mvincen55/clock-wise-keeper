@@ -15,7 +15,10 @@ export function suggestColumnProvider(words: OcrWord[], column: Pick<LayoutColum
   const header = words.filter(w => w.confidence >= 80 && w.bbox.y1 <= height * 0.16 &&
     (w.bbox.x0 + w.bbox.x1) / 2 >= column.xStart * width && (w.bbox.x0 + w.bbox.x1) / 2 <= column.xEnd * width);
   const codeWords = includeAppointmentCodes ? words.filter(w => (w.bbox.x0 + w.bbox.x1) / 2 >= column.xStart * width && (w.bbox.x0 + w.bbox.x1) / 2 < column.xEnd * width) : header;
-  const codes = readProviderCodes(codeWords);
+  // A hold can reserve time for an appointment in another lane. A room/header
+  // name does not establish ownership: require a code or explicit review.
+  const hasHold = includeAppointmentCodes && codeWords.some(w => w.confidence >= 40 && /\bhold\b/i.test(w.text));
+  const codes = readProviderCodes(hasHold ? codeWords.filter(w => w.bbox.y0 > height * 0.16) : codeWords);
   const providerCode = codes.length === 1 ? codes[0] : undefined;
   const registered = providers.filter(p => providerCode && p.scheduleCode === providerCode);
   const ids = new Set(previous.filter(c => providerCode && c.providerCode === providerCode && c.providerId).map(c => c.providerId));
@@ -27,13 +30,13 @@ export function suggestColumnProvider(words: OcrWord[], column: Pick<LayoutColum
     return p.active && (ids.has(p.id) || (headerName.length > 0 && normalize(p.displayName) === headerName) || (lastName.length >= 4 && tokens.has(lastName)));
   });
   const notesOnly = /\b(notes?|memo|reminders?)\b/i.test(header.map(w => w.text).join(' '));
-  return { providerCode, notesOnly, provider: !notesOnly && (registered.length === 1 ? (registered[0].active ? registered[0] : undefined) : registered.length > 1 ? undefined : candidates.length === 1 ? candidates[0] : undefined) };
+  return { providerCode, notesOnly, provider: !notesOnly && codes.length <= 1 && !(hasHold && !providerCode) && (registered.length === 1 ? (registered[0].active ? registered[0] : undefined) : registered.length > 1 ? undefined : candidates.length === 1 ? candidates[0] : undefined) };
 }
 
 /** Re-read each physical column every day. Never inherit yesterday's owner. */
 export function suggestDailyColumns(words: OcrWord[], columns: LayoutColumn[], width: number, height: number, providers: Provider[], regions: OcrBox[] = []) {
   const detected = columnsFromRegions(regions,width);
-  const bounds = regions.length >= 3 && detected.length >= 2 && readProviderCodes(words).length ? detected : columns;
+  const bounds = detected.length >= 1 && readProviderCodes(words).length ? detected : columns;
   return bounds.map(col => {
     const suggestion = suggestColumnProvider(words, col, width, height, providers, columns, true);
     const provider = suggestion.provider;
