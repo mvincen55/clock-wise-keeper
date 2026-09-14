@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,7 +7,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ImageUp, Loader2, MonitorUp, Pipette } from 'lucide-react';
+import { ImageUp, Loader2, MonitorUp } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   captureDisplayFrame,
@@ -30,8 +29,6 @@ import {
   type CaptureFrame,
   type ColumnKind,
   type LayoutColumn,
-  type ScheduleStatus,
-  type StatusLegendEntry,
 } from '@/lib/schedule-reader';
 import { recognizeFrame } from '@/lib/schedule-reader/ocr';
 import { ROLE_LABELS } from '@/hooks/useOperationalRoles';
@@ -43,7 +40,6 @@ import ProviderWorkingSchedule from '@/components/close-day/ProviderWorkingSched
 import { wipeOcrWords } from '@/lib/schedule-reader/destroy-capture';
 import { columnsFromRegions, isNotesOnlyColumn, isEmptyBlueGridColumn } from '@/lib/schedule-reader/appointment-regions';
 import { readProviderCodes } from '@/lib/schedule-reader/provider-codes';
-import { sufficientStatusLegend } from '@/lib/schedule-reader/completed-evidence';
 
 const PMS_OPTIONS = [
   'Dentrix',
@@ -53,16 +49,6 @@ const PMS_OPTIONS = [
   'Denticon',
   'Fuse',
   'Other',
-];
-
-const STATUSES: { status: ScheduleStatus; label: string }[] = [
-  { status: 'scheduled', label: 'Scheduled' },
-  { status: 'completed', label: 'Completed' },
-  { status: 'cancelled', label: 'Cancelled' },
-  { status: 'no_show', label: 'No-show' },
-  { status: 'moved', label: 'Moved' },
-  { status: 'blocked', label: 'Blocked' },
-  { status: 'open', label: 'Open' },
 ];
 
 type DraftColumn = LayoutColumn & { pxStart: number; pxEnd: number };
@@ -86,9 +72,9 @@ type Props = {
 /**
  * One-time PMS layout calibration.
  *
- * The office captures a privacy-view schedule, names each column, teaches the
- * status colors by clicking them, and confirms the working-day grid. Only the
- * sanitized layout profile (relative geometry + colors) is stored — the
+ * The office captures a privacy-view schedule, reviews each provider and
+ * confirms the working-day grid. Only the
+ * sanitized layout profile (relative geometry and posted capture mode) is stored — the
  * calibration screenshot itself is destroyed on save or cancel and is never
  * uploaded anywhere.
  */
@@ -106,12 +92,9 @@ export default function CalibrationWizard({ open, onClose }: Props) {
   const [pendingHours, setPendingHours] = useState<Record<string, boolean>>({});
   const onPendingHours = useCallback((id: string, pending: boolean) => setPendingHours(prev => prev[id] === pending ? prev : { ...prev, [id]: pending }), []);
   useEffect(() => { if (step !== 3) setPendingHours({}); }, [step]);
-  const [legend, setLegend] = useState<Partial<Record<ScheduleStatus, StatusLegendEntry>>>({});
-  const [sampling, setSampling] = useState<ScheduleStatus | null>(null);
   const [dayStart, setDayStart] = useState('08:00');
   const [dayEnd, setDayEnd] = useState('17:00');
   const [minutesPerRow, setMinutesPerRow] = useState('10');
-  const [cancelledVisible, setCancelledVisible] = useState(true);
   const [blockStyle, setBlockStyle] = useState<'solid' | 'labeled' | 'mixed'>('mixed');
 
   const frameRef = useRef<CaptureFrame | null>(null);
@@ -122,8 +105,6 @@ export default function CalibrationWizard({ open, onClose }: Props) {
     setStep(0);
     setConfirmed(false);
     setColumns([]);
-    setLegend({});
-    setSampling(null);
   };
 
   const teardown = async () => {
@@ -218,30 +199,8 @@ export default function CalibrationWizard({ open, onClose }: Props) {
     }
   };
 
-  const onPreviewClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const frame = frameRef.current;
-    const preview = previewRef.current;
-    if (!frame || !preview || !sampling) return;
-    const rect = preview.getBoundingClientRect();
-    const x = Math.round(((e.clientX - rect.left) / rect.width) * frame.width);
-    const y = Math.round(((e.clientY - rect.top) / rect.height) * frame.height);
-    const ctx = frame.canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return;
-    const [r, g, b] = ctx.getImageData(x, y, 1, 1).data;
-    setLegend(prev => ({
-      ...prev,
-      [sampling]: { status: sampling, r, g, b, tolerance: 40 },
-    }));
-    setSampling(null);
-  };
-
   const setColumn = (i: number, patch: Partial<DraftColumn>) =>
     setColumns(cols => cols.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
-
-  const legendComplete = useMemo(
-    () => sufficientStatusLegend(legend),
-    [legend]
-  );
 
   const finish = async () => {
     if (Object.values(pendingHours).some(Boolean)) return;
@@ -258,6 +217,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
     }
     try {
       await save.mutateAsync({
+        id: (profiles.find(p => p.is_default) ?? profiles[0])?.id,
         name: pms === 'Other' ? 'Office schedule' : pms,
         pmsName: pms,
         isDefault: true,
@@ -270,12 +230,11 @@ export default function CalibrationWizard({ open, onClose }: Props) {
             dayStartMinutes: startMin,
             dayEndMinutes: endMin,
           },
-          cancelledRemainVisible: cancelledVisible,
+          captureMode: 'posted',
+          cancelledRemainVisible: false,
           blockStyle,
         },
-        statusLegend: Object.values(legend).filter(
-          (l): l is StatusLegendEntry => !!l && (l.status !== 'cancelled' || cancelledVisible)
-        ),
+        statusLegend: [],
       });
       toast.success('Schedule layout saved — the screenshot was destroyed, not stored.');
       await teardown();
@@ -290,7 +249,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Calibrate Schedule Intelligence</DialogTitle>
-          <DialogDescription>Identify providers, review status colors, and confirm working hours for schedule capture.</DialogDescription>
+          <DialogDescription>Identify providers and confirm working hours for your posted end-of-day screenshot. No status-color setup is needed.</DialogDescription>
         </DialogHeader>
 
         {step === 0 && (
@@ -439,55 +398,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
               <Button variant="ghost" onClick={onClose}>
                 Cancel
               </Button>
-              <Button disabled={providersPending || providersError || !columns.some(c => c.kind !== 'non_clinical') || columns.some(c => c.kind !== 'non_clinical' && !c.providerId)} onClick={() => setStep(2)}>Next: status colors</Button>
-            </div>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              For an end-of-day posted screenshot, choose Completed and click a gray completed appointment. Then choose Open and click an unused time slot. Open plus either Completed or Scheduled is required. Gray lunch and note blocks are checked separately; gray alone does not prove a completed visit. Skip cancellation and no-show colors if posting has removed those distinctions.
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {STATUSES.map(({ status, label }) => {
-                const entry = legend[status];
-                return (
-                  <Button
-                    key={status}
-                    size="sm"
-                    variant={sampling === status ? 'default' : entry ? 'secondary' : 'outline'}
-                    onClick={() => setSampling(status)}
-                  >
-                    <Pipette className="mr-1.5 h-3 w-3" />
-                    {label}
-                    {entry && (
-                      <span
-                        className="ml-1.5 inline-block h-3 w-3 rounded-sm border"
-                        style={{ backgroundColor: `rgb(${entry.r},${entry.g},${entry.b})` }}
-                      />
-                    )}
-                  </Button>
-                );
-              })}
-            </div>
-            {sampling && (
-              <Badge variant="outline" className="text-xs">
-                Click a "{STATUSES.find(s => s.status === sampling)?.label}" block in the preview
-              </Badge>
-            )}
-            <canvas
-              ref={previewRef}
-              className="w-full cursor-crosshair rounded border"
-              onClick={onPreviewClick}
-            />
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setStep(1)}>
-                Back
-              </Button>
-              <Button disabled={!legendComplete} onClick={() => setStep(3)}>
-                Next: working day
-              </Button>
+              <Button disabled={providersPending || providersError || !columns.some(c => c.kind !== 'non_clinical') || columns.some(c => c.kind !== 'non_clinical' && !c.providerId)} onClick={() => setStep(3)}>Next: working day</Button>
             </div>
           </div>
         )}
@@ -542,24 +453,15 @@ export default function CalibrationWizard({ open, onClose }: Props) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="solid">Solid colored blocks</SelectItem>
+                  <SelectItem value="solid">Solid blocks</SelectItem>
                   <SelectItem value="labeled">Text labels (e.g. "Lunch")</SelectItem>
                   <SelectItem value="mixed">Both</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-start gap-2">
-              <Checkbox
-                id="cal-cancelled"
-                checked={cancelledVisible}
-                onCheckedChange={v => setCancelledVisible(v === true)}
-              />
-              <Label htmlFor="cal-cancelled" className="text-sm font-normal">
-                Cancelled appointments stay visible on the schedule
-              </Label>
-            </div>
+            <p className="text-sm text-muted-foreground">Posted screenshots no longer show the original appointment statuses. The reader checks appointment blocks and provider codes; unclear blocks need review. Cancellation and no-show answers stay as entered in Close the Day.</p>
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setStep(2)}>
+              <Button variant="ghost" onClick={() => setStep(1)}>
                 Back
               </Button>
               <Button onClick={finish} disabled={save.isPending || Object.values(pendingHours).some(Boolean)}>
@@ -568,7 +470,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Only the column map, status colors, and time grid are saved. The calibration
+              Only the column map, posted capture mode, and time grid are saved. The calibration
               screenshot is destroyed and never stored.
             </p>
           </div>
