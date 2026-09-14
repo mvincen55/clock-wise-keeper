@@ -39,11 +39,12 @@ export function useGuardedClockAction() {
   const bypassAndClockOut = async (reason: string) => {
     setBypassing(true);
     let escalationLevel = 1;
+    let recorded = false;
     try {
       const { data } = await supabase.functions.invoke('checklist-bypass', {
         body: { reason: reason?.trim() || null },
       });
-      if (data?.recorded) escalationLevel = data.escalation_level ?? 1;
+      if (data?.recorded) { recorded = true; escalationLevel = data.escalation_level ?? 1; }
     } catch (e) {
       // Recording the bypass must never block the punch.
       console.error('checklist-bypass call failed', e);
@@ -54,6 +55,7 @@ export function useGuardedClockAction() {
     clockAction.mutate('clock_out');
     qc.invalidateQueries({ queryKey: ['checklist-bypasses'] });
 
+    if (!recorded) return;
     if (escalationLevel > 1) {
       toast.warning(
         `This is your ${ordinal(escalationLevel)} clock-out with an unanswered checklist bypass. Your manager and ${doctorLabel} have been notified again — this needs an answer.`,

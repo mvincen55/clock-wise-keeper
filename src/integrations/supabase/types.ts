@@ -14,6 +14,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      employee_checklist_settings: {
+        Row: { employee_id: string; org_id: string; bypass_required: boolean; updated_by: string; updated_at: string }
+        Insert: { employee_id: string; org_id: string; bypass_required?: boolean; updated_by: string }
+        Update: never
+        Relationships: []
+      }
       worked_hour_adjustments: {
         Row: { id: string; org_id: string; employee_id: string; entry_date: string; hours_delta: number; reason: string; entered_by: string; created_at: string }
         Insert: { id: string; org_id: string; employee_id: string; entry_date: string; hours_delta: number; reason: string; entered_by: string }
@@ -8335,6 +8341,7 @@ export type Database = {
       }
     }
     Functions: {
+      set_employee_checklist_requirement: { Args: { p_employee_id: string; p_required: boolean }; Returns: undefined }
       add_worked_hour_adjustment: { Args: { p_id: string; p_employee_id: string; p_entry_date: string; p_hours_delta: number; p_reason: string }; Returns: string }
       get_live_pto_ledger: {
         Args: { p_employee_id: string }

@@ -1,3 +1,4 @@
+import EmployeeChecklistSetting from '@/components/team/EmployeeChecklistSetting';
 import WorkedHourAdjustments from '@/components/team/WorkedHourAdjustments';
 import EmployeeInviteAction from '@/components/team/EmployeeInviteAction';
 import { useState } from 'react';
@@ -155,6 +156,7 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
       {expanded && (
         <CardContent className="border-t pt-3 pb-4 px-4">
           <MemberProfileRow employee={employee as never} />
+          <EmployeeChecklistSetting employeeId={employee.id}/>
 
           {/* Per-employee stats */}
           <div className="flex items-center gap-3 mb-3">
