@@ -14,6 +14,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      worked_hour_adjustments: {
+        Row: { id: string; org_id: string; employee_id: string; entry_date: string; hours_delta: number; reason: string; entered_by: string; created_at: string }
+        Insert: { id: string; org_id: string; employee_id: string; entry_date: string; hours_delta: number; reason: string; entered_by: string }
+        Update: never
+        Relationships: []
+      }
       payroll_pto_records: {
         Row: { id: string; org_id: string; employee_id: string | null; payroll_employee_id: string; payroll_employee_name: string; period_start: string; period_end: string; check_date: string; check_number: string; pto_hours: number; pto_ytd_hours: number | null; worked_hours: number | null; source_file: string; source_sha256: string; source_page: number; earnings: Json; review_note: string | null; entered_by_label: string | null; created_at: string }
         Insert: { org_id: string; employee_id?: string | null; payroll_employee_id: string; payroll_employee_name: string; period_start: string; period_end: string; check_date: string; check_number: string; pto_hours: number; pto_ytd_hours?: number | null; worked_hours?: number | null; source_file: string; source_sha256: string; source_page: number; earnings?: Json; review_note?: string | null; entered_by_label?: string | null }
@@ -8329,6 +8335,7 @@ export type Database = {
       }
     }
     Functions: {
+      add_worked_hour_adjustment: { Args: { p_id: string; p_employee_id: string; p_entry_date: string; p_hours_delta: number; p_reason: string }; Returns: string }
       get_live_pto_ledger: {
         Args: { p_employee_id: string }
         Returns: Database["public"]["Tables"]["pto_ledger_weeks"]["Row"][]

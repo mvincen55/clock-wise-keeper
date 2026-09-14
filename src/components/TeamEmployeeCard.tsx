@@ -1,3 +1,4 @@
+import WorkedHourAdjustments from '@/components/team/WorkedHourAdjustments';
 import EmployeeInviteAction from '@/components/team/EmployeeInviteAction';
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -171,7 +172,7 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
               <TabsTrigger value="callouts" className="text-xs"><CalendarOff className="h-3 w-3 mr-1" />Callouts</TabsTrigger>
             </TabsList>
             <TabsContent value="setup"><EmployeeSetupCard employeeId={employee.id}/></TabsContent>
-            <TabsContent value="attendance"><AttendanceTab employeeId={employee.id} range={dateRange} /></TabsContent>
+            <TabsContent value="attendance"><WorkedHourAdjustments employeeId={employee.id}/><AttendanceTab employeeId={employee.id} range={dateRange} /></TabsContent>
             <TabsContent value="schedule"><ScheduleTab employee={employee} /></TabsContent>
             <TabsContent value="tardies"><TardiesTab employeeId={employee.id} range={dateRange} /></TabsContent>
             <TabsContent value="callouts"><CalloutsTab employeeId={employee.id} range={dateRange} /></TabsContent>
