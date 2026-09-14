@@ -219,12 +219,15 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
 
 /* ─── Attendance Tab ─── */
 function AttendanceTab({ employeeId, range }: { employeeId: string; range: { start: string; end: string } }) {
-  const { data: attendance, isLoading } = useEmployeeAttendance(employeeId, range);
+  // Employee identity is the key: members without a login still have punch,
+  // schedule, and time-off history, so attendance is derived when the
+  // user-scoped status table has nothing for them.
+  const { rows: attendance, isLoading } = useResolvedEmployeeAttendance(employeeId, range);
   if (isLoading) return <LoadingSpinner />;
   if (!attendance?.length) return <EmptyState text="No attendance data for last 30 days." />;
   return (
     <div className="divide-y rounded-lg border max-h-80 overflow-y-auto">
-      {attendance.map(row => {
+      {attendance.map((row: any) => {
         const sb = statusBadge[row.status_code] || statusBadge.ok;
         return (
           <div key={row.id} className="flex items-center justify-between px-3 py-2 text-sm">
