@@ -85,6 +85,29 @@ export function hhmmToMinutes(hhmm: string): number {
   return h * 60 + (m || 0);
 }
 
+/**
+ * Display a wall-clock time string ("HH:MM" or "HH:MM:SS") as 12-hour AM/PM.
+ * Presentation only — never use for storage, inputs, or comparisons.
+ * Returns the fallback when the value is missing or unparseable.
+ */
+export function formatClock(value: string | null | undefined, fallback = '—'): string {
+  if (!value) return fallback;
+  const m = String(value).trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return fallback;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return fallback;
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(min).padStart(2, '0')} ${suffix}`;
+}
+
+/** A "start – end" wall-clock range in 12-hour AM/PM. */
+export function formatClockRange(start: string | null | undefined, end: string | null | undefined, fallback = '—'): string {
+  if (!start && !end) return fallback;
+  return `${formatClock(start, fallback)} – ${formatClock(end, fallback)}`;
+}
+
 /** Format an ISO/Date as HH:MM AM/PM in America/New_York. */
 export function formatTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
