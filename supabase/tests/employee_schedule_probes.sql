@@ -96,4 +96,32 @@ DO $$ DECLARE v uuid; BEGIN
  RAISE EXCEPTION 'ordinary employee authorized'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 RESET ROLE;
+
+CREATE TABLE orgs(id uuid PRIMARY KEY);
+INSERT INTO orgs SELECT DISTINCT org_id FROM employees;
+CREATE SCHEMA auth;
+CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT '00000000-0000-0000-0000-000000000099'::uuid $$;
+DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='service_role') THEN CREATE ROLE service_role; END IF; END $$;
+ALTER TABLE work_schedule ADD COLUMN user_id uuid;
+CREATE TABLE time_entries(employee_id uuid,org_id uuid,entry_date date);
+CREATE FUNCTION _recompute_attendance_range_internal(uuid,date,date) RETURNS void LANGUAGE sql AS $$ SELECT $$;
+\ir ../migrations/20260915000000_office_attendance_grace.sql
+SET test.admin='true';
+DO $$ DECLARE o uuid='00000000-0000-0000-0000-000000000010'; BEGIN
+ PERFORM set_office_attendance_grace(o,5);
+ ASSERT (SELECT bool_and(w.grace_minutes=5 AND w.threshold_minutes=1) FROM schedule_weekdays w JOIN schedule_versions v ON v.id=w.schedule_version_id WHERE v.org_id=o),'all existing weekday grace values use office policy';
+ UPDATE schedule_weekdays SET grace_minutes=0,threshold_minutes=8;
+ ASSERT (SELECT bool_and(w.grace_minutes=5 AND w.threshold_minutes=1) FROM schedule_weekdays w JOIN schedule_versions v ON v.id=w.schedule_version_id WHERE v.org_id=o),'per-day overrides cannot bypass shared grace';
+ PERFORM set_office_attendance_grace(o,7);
+ ASSERT (SELECT bool_and(w.grace_minutes=7) FROM schedule_weekdays w JOIN schedule_versions v ON v.id=w.schedule_version_id WHERE v.org_id=o),'changing office setting propagates';
+ BEGIN
+ PERFORM set_office_attendance_grace('00000000-0000-0000-0000-000000000020',5);
+ RAISE EXCEPTION 'cross-office setting accepted'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ PERFORM set_config('test.admin','false',true);
+ BEGIN
+ PERFORM set_office_attendance_grace(o,0);
+ RAISE EXCEPTION 'employee setting accepted'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+
 ROLLBACK;
+

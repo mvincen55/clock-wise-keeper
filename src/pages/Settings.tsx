@@ -21,6 +21,7 @@ import MySignatureCard from '@/components/letterhead/MySignatureCard';
 import PayrollSettingsCard from '@/components/settings/PayrollSettingsCard';
 import OfficeClosuresCard from '@/components/settings/OfficeClosuresCard';
 import SecurityPrivacyCard from '@/components/settings/SecurityPrivacyCard';
+import AttendanceGraceSettingsCard from '@/components/settings/AttendanceGraceSettingsCard';
 import PtoPolicySettingsCard from '@/components/settings/PtoPolicySettingsCard';
 
 /**
@@ -152,6 +153,7 @@ export default function Settings() {
             {/* Acknowledgment chasing: quiet hours, ladder, snoozes — moved
                 here from the Management page so policies live with policies. */}
             <AcknowledgmentEscalationSettingsCard />
+            <AttendanceGraceSettingsCard />
             <PtoPolicySettingsCard />
             <MessagingSettingsCard />
           </TabsContent>
@@ -202,3 +204,4 @@ export default function Settings() {
     </div>
   );
 }
+
