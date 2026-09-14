@@ -26,6 +26,8 @@ import { useTeamOnboardingStatus } from '@/hooks/useOnboarding';
 import { employeeTeamStatus } from '@/lib/team-status';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Link } from 'react-router-dom';
+import EditEmployeeDialog from '@/components/team/EditEmployeeDialog';
+import { formatEmployeeName } from '@/lib/employee-name';
 
 type Employee = {
   id: string;
@@ -55,8 +57,8 @@ const statusBadge: Record<string, { label: string; className: string }> = {
 };
 
 const DAY_OFF_LABELS: Record<string, string> = {
-  scheduled_with_notice: 'Scheduled',
-  unscheduled: 'Unscheduled',
+  scheduled_with_notice: 'Time off',
+  unscheduled: 'Callout',
   office_closed: 'Office Closed',
   medical_leave: 'Medical',
   other: 'Other',
@@ -65,6 +67,7 @@ const DAY_OFF_LABELS: Record<string, string> = {
 
 
 export default function TeamEmployeeCard({ employee, stats, dateRange }: { employee: Employee; stats: WeekStats; dateRange: { start: string; end: string } }) {
+  const displayName = formatEmployeeName(employee.display_name);
   const [expanded, setExpanded] = useState(false);
   const [tab, setTab] = useState('attendance');
   const [confirmArchive, setConfirmArchive] = useState(false);
@@ -101,7 +104,7 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
       toast({ title: 'Archive failed', description: error.message, variant: 'destructive' });
       return;
     }
-    toast({ title: 'Archived', description: `${employee.display_name} has been archived.` });
+    toast({ title: 'Archived', description: `${displayName} has been archived.` });
     setConfirmArchive(false);
     qc.invalidateQueries({ queryKey: ['employees'] });
   };
@@ -114,11 +117,11 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
       >
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
-            {employee.display_name.charAt(0).toUpperCase()}
+            {displayName.charAt(0).toUpperCase()}
           </div>
           <div>
             <p className="text-sm font-semibold">
-              {employee.display_name}
+              {displayName}
               {employee.tag && (
                 <span className="ml-2 font-mono text-[10px] tracking-widest text-muted-foreground">{employee.tag}</span>
               )}
@@ -172,6 +175,7 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
             <TabsContent value="callouts"><CalloutsTab employeeId={employee.id} range={dateRange} /></TabsContent>
           </Tabs>
           <div className="mt-3 flex justify-end gap-2">
+            {canArchive && <EditEmployeeDialog employee={employee} />}
             {canArchive && (
               <Button
                 variant="outline"
@@ -192,7 +196,7 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
       <AlertDialog open={confirmArchive} onOpenChange={setConfirmArchive}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Archive {employee.display_name}?</AlertDialogTitle>
+            <AlertDialogTitle>Archive {displayName}?</AlertDialogTitle>
             <AlertDialogDescription>
               They'll be hidden from the team list. All history (punches, schedules, tardies) is preserved.
             </AlertDialogDescription>

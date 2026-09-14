@@ -26,8 +26,8 @@ import { CalendarDays, Plus, Trash2, Loader2, AlertTriangle, Clock, Building2, B
 import { useToast } from '@/hooks/use-toast';
 
 const typeLabels: Record<string, string> = {
-  scheduled_with_notice: 'Scheduled w/ Notice',
-  unscheduled: 'Unscheduled',
+  scheduled_with_notice: 'Time off',
+  unscheduled: 'Callout',
   office_closed: 'Office Closed',
   medical_leave: 'Medical Leave',
   other: 'Other',
@@ -808,7 +808,7 @@ export default function DaysOff() {
                           </td>
                           <td className="px-4 py-3">
                             {hasUnscheduled ? (
-                              <span className="text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive font-medium">Unscheduled Day Off</span>
+                              <span className="text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive font-medium">Callout</span>
                             ) : (
                               <span className="text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive font-medium">No coverage</span>
                             )}

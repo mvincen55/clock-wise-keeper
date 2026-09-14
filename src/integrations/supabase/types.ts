@@ -1673,7 +1673,7 @@ export type Database = {
           source: string | null
           type: Database["public"]["Enums"]["day_off_type"]
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -1689,7 +1689,7 @@ export type Database = {
           source?: string | null
           type?: Database["public"]["Enums"]["day_off_type"]
           updated_at?: string
-          user_id: string
+          user_id: string | null
         }
         Update: {
           created_at?: string
@@ -1705,7 +1705,7 @@ export type Database = {
           source?: string | null
           type?: Database["public"]["Enums"]["day_off_type"]
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -2206,6 +2206,22 @@ export type Database = {
         Row: {
           created_at: string
           display_name: string
+          first_name: string | null
+          middle_initial: string | null
+          last_name: string | null
+          name_aliases: string[]
+          emergency_contact_name: string | null
+          emergency_contact_relationship: string | null
+          emergency_contact_phone: string | null
+          emergency_contact_alternate_phone: string | null
+          phone: string | null
+          alternate_phone: string | null
+          address_line1: string | null
+          address_line2: string | null
+          city: string | null
+          state_region: string | null
+          postal_code: string | null
+          country: string | null
           email: string | null
           employment_status: Database["public"]["Enums"]["employment_status"]
           favorites: Json
@@ -2224,6 +2240,22 @@ export type Database = {
         Insert: {
           created_at?: string
           display_name: string
+          first_name?: string | null
+          middle_initial?: string | null
+          last_name?: string | null
+          name_aliases?: string[]
+          emergency_contact_name?: string | null
+          emergency_contact_relationship?: string | null
+          emergency_contact_phone?: string | null
+          emergency_contact_alternate_phone?: string | null
+          phone?: string | null
+          alternate_phone?: string | null
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string | null
+          state_region?: string | null
+          postal_code?: string | null
+          country?: string | null
           email?: string | null
           employment_status?: Database["public"]["Enums"]["employment_status"]
           favorites?: Json
@@ -2242,6 +2274,22 @@ export type Database = {
         Update: {
           created_at?: string
           display_name?: string
+          first_name?: string | null
+          middle_initial?: string | null
+          last_name?: string | null
+          name_aliases?: string[]
+          emergency_contact_name?: string | null
+          emergency_contact_relationship?: string | null
+          emergency_contact_phone?: string | null
+          emergency_contact_alternate_phone?: string | null
+          phone?: string | null
+          alternate_phone?: string | null
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string | null
+          state_region?: string | null
+          postal_code?: string | null
+          country?: string | null
           email?: string | null
           employment_status?: Database["public"]["Enums"]["employment_status"]
           favorites?: Json
@@ -7644,7 +7692,7 @@ export type Database = {
           source: Database["public"]["Enums"]["source_type"]
           total_minutes: number | null
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -7663,7 +7711,7 @@ export type Database = {
           source?: Database["public"]["Enums"]["source_type"]
           total_minutes?: number | null
           updated_at?: string
-          user_id: string
+          user_id: string | null
         }
         Update: {
           created_at?: string
@@ -7682,7 +7730,7 @@ export type Database = {
           source?: Database["public"]["Enums"]["source_type"]
           total_minutes?: number | null
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -8275,6 +8323,14 @@ export type Database = {
       }
     }
     Functions: {
+      save_employee_onboarding_preferences: {
+        Args: { p_employee_id: string; p_learning_style: string | null; p_favorites: Json | null }
+        Returns: string
+      }
+      save_team_member_contact: {
+        Args: { p_org_id: string; p_employee_id: string | null; p_first_name: string; p_middle_initial: string | null; p_last_name: string; p_email: string | null; p_contact?: Json }
+        Returns: string
+      }
       _recompute_attendance_range_internal: {
         Args: { p_end_date: string; p_start_date: string; p_user_id: string }
         Returns: number

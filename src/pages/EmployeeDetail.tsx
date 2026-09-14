@@ -1,4 +1,9 @@
-import { useMemo, useState } from 'react';
+import EmployeeContactCard from '@/components/team/EmployeeContactCard';
+import EmployeeFavoritesCard from '@/components/team/EmployeeFavoritesCard';
+import { useEmployeeDaysOff } from '@/hooks/useEmployeeSchedules';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useEmployeeDetail, useEmployeeAttendance, useEmployeeTimeEntries } from '@/hooks/useEmployees';
 import { useOrgContext } from '@/hooks/useOrgContext';
@@ -7,6 +12,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft, Clock, CalendarDays, Plus, ShieldAlert } from 'lucide-react';
 import { formatDate, formatTime, minutesToHHMM } from '@/lib/time-utils';
+import EditEmployeeDialog from '@/components/team/EditEmployeeDialog';
+import { formatEmployeeName } from '@/lib/employee-name';
 import EmployeeSetupCard from '@/components/team/EmployeeSetupCard';
 import AccountabilityHistory from '@/components/accountability/AccountabilityHistory';
 import IncidentReportModal from '@/components/IncidentReportModal';
@@ -50,7 +57,8 @@ export default function EmployeeDetail() {
   const { employeeId } = useParams<{ employeeId: string }>();
   const { data: ctx } = useOrgContext();
   const { data: employee, isLoading: empLoading } = useEmployeeDetail(employeeId);
-  const range = useMemo(() => getLast14Days(), []);
+  const [range, setRange] = useState(() => getLast14Days());
+  const { data: daysOff, isLoading: daysOffLoading, error: daysOffError } = useEmployeeDaysOff(employeeId, range.start, range.end);
   const { data: attendance, isLoading: attLoading } = useEmployeeAttendance(employeeId, range);
   const { data: entries } = useEmployeeTimeEntries(employeeId, range);
   const { data: incidents } = useEmployeeIncidentReports(employeeId);
@@ -97,12 +105,34 @@ export default function EmployeeDetail() {
           <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
         </Link>
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">{employee.display_name}</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">{formatEmployeeName(employee.display_name)}</h1>
           <p className="text-muted-foreground">{employee.email || 'No email'} · Eastern (ET)</p>
         </div>
+        <EditEmployeeDialog employee={employee} />
       </div>
 
       <Card><CardHeader><CardTitle>Employment dates and PTO policy</CardTitle></CardHeader><CardContent><EmployeeSetupCard employeeId={employee.id}/></CardContent></Card>
+
+      <EmployeeContactCard employee={employee} />
+      <EmployeeFavoritesCard favorites={employee.favorites} />
+
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1"><Label htmlFor="history-start">History from</Label><Input id="history-start" type="date" value={range.start} max={range.end} onChange={e => { if (e.target.value && e.target.value <= range.end) setRange({ ...range, start: e.target.value }); }} /></div>
+        <div className="space-y-1"><Label htmlFor="history-end">Through</Label><Input id="history-end" type="date" value={range.end} min={range.start} onChange={e => { if (e.target.value && e.target.value >= range.start) setRange({ ...range, end: e.target.value }); }} /></div>
+      </div>
+
+      <Card>
+        <CardHeader><CardTitle>Days off and callouts</CardTitle></CardHeader>
+        <CardContent>
+          {daysOffError ? <p role="alert" className="text-sm text-destructive">Could not load days off. Please try again.</p> : daysOffLoading ? <p className="text-sm text-muted-foreground">Loading days off…</p> : daysOff?.length ? <div className="divide-y">
+            {daysOff.map(day => <div key={day.id} className="py-3">
+              <p className="text-sm font-medium">{formatDate(day.date_start)}{day.date_end !== day.date_start ? ` – ${formatDate(day.date_end)}` : ''}</p>
+              <p className="text-sm text-muted-foreground">{({ scheduled_with_notice: 'Time off', unscheduled: 'Callout', office_closed: 'Office closed', medical_leave: 'Medical leave', other: 'Other' })[day.type]}{day.hours != null ? ` · ${day.hours} hours` : ''}</p>
+              {day.notes && <p className="text-sm mt-1">{day.notes}</p>}
+            </div>)}
+          </div> : <p className="text-sm text-muted-foreground">No days off in this date range.</p>}
+        </CardContent>
+      </Card>
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3">
@@ -225,7 +255,7 @@ export default function EmployeeDetail() {
       {/* Attendance Timeline */}
       <Card className="card-elevated">
         <CardHeader className="border-b">
-          <CardTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5" />Last 14 Days</CardTitle>
+          <CardTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5" />Attendance</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {!attendance?.length ? (
@@ -259,7 +289,7 @@ export default function EmployeeDetail() {
       {/* Recent Time Entries */}
       <Card className="card-elevated">
         <CardHeader className="border-b">
-          <CardTitle className="flex items-center gap-2"><Clock className="h-5 w-5" />Recent Time Entries</CardTitle>
+          <CardTitle className="flex items-center gap-2"><Clock className="h-5 w-5" />Clock-ins and clock-outs</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {!entries?.length ? (
@@ -274,7 +304,7 @@ export default function EmployeeDetail() {
                   </div>
                   {entry.punches && entry.punches.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
-                      {(entry.punches as any[]).sort((a: any, b: any) => a.seq - b.seq).map((p: any) => (
+                      {[...entry.punches].filter(p => !p.voided_at).sort((a, b) => a.seq - b.seq).map(p => (
                         <span key={p.id} className={`text-xs px-1.5 py-0.5 rounded ${p.punch_type === 'in' ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'}`}>
                           {p.punch_type} {formatTime(p.punch_time)}
                         </span>

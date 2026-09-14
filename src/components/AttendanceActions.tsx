@@ -207,8 +207,8 @@ export function AttendanceActions({ row, alwaysShow = false }: AttendanceActions
   };
 
   const dayOffTypeLabel: Record<string, string> = {
-    scheduled_with_notice: 'Scheduled w/ Notice',
-    unscheduled: 'Unscheduled',
+    scheduled_with_notice: 'Time off',
+    unscheduled: 'Callout',
     medical_leave: 'Medical Leave',
     other: 'Other',
   };
@@ -229,7 +229,7 @@ export function AttendanceActions({ row, alwaysShow = false }: AttendanceActions
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => openDayOffWithType('unscheduled')}>
             <CalendarMinus className="h-3.5 w-3.5 mr-2" />
-            Add Unscheduled Day Off
+            Add Callout
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => openDayOffWithType('medical_leave')}>
             <Stethoscope className="h-3.5 w-3.5 mr-2" />
@@ -286,8 +286,8 @@ export function AttendanceActions({ row, alwaysShow = false }: AttendanceActions
               <Select value={dayOffForm.type} onValueChange={v => setDayOffForm({ ...dayOffForm, type: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="scheduled_with_notice">Scheduled w/ Notice</SelectItem>
-                  <SelectItem value="unscheduled">Unscheduled</SelectItem>
+                  <SelectItem value="scheduled_with_notice">Time off</SelectItem>
+                  <SelectItem value="unscheduled">Callout</SelectItem>
                   <SelectItem value="medical_leave">Medical Leave</SelectItem>
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>

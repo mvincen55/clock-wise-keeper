@@ -1,10 +1,13 @@
+import EmployeeContactInputs from '@/components/team/EmployeeContactInputs';
+import { employeeContactFields } from '@/lib/employee-contact';
+import EmployeeNameInputs from '@/components/team/EmployeeNameInputs';
 import { useState, useMemo } from 'react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useOrgEmployees, useEmployeeAttendanceSummary } from '@/hooks/useEmployees';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { useAddEmployee } from '@/hooks/useEmployees';
 import InviteEmployeeModal from '@/components/InviteEmployeeModal';
 import StaffCodeAttentionCard from '@/components/team/StaffCodeAttentionCard';
@@ -15,6 +18,7 @@ import PendingInvitesCard from '@/components/PendingInvitesCard';
 import ChecklistBypassesSection from '@/components/ChecklistBypassesSection';
 import { useConsumedSearchParam } from '@/hooks/useDeepLink';
 import { Users, Plus, Loader2, CalendarDays } from 'lucide-react';
+import { filterAndSortEmployees } from '@/lib/employee-name';
 
 function getDefaultRange() {
   const now = new Date();
@@ -33,8 +37,10 @@ export default function Team() {
   const { data: attendance } = useEmployeeAttendanceSummary(dateRange);
   const addEmployee = useAddEmployee();
   const [addOpen, setAddOpen] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '' });
+  const [form, setForm] = useState({ first_name: '', middle_initial: '', last_name: '', email: '' });
   const [search, setSearch] = useState('');
+  const [addError, setAddError] = useState('');
+  const [contact, setContact] = useState(() => employeeContactFields({}));
   // A bypass notification lands on the exact bypass row below the roster.
   const linkedBypassId = useConsumedSearchParam('bypass');
 
@@ -57,20 +63,22 @@ export default function Team() {
   }, [attendance, employees]);
 
   const filteredEmployees = useMemo(() => {
-    if (!employees) return [];
-    if (!search.trim()) return employees;
-    const q = search.toLowerCase();
-    return employees.filter(e =>
-      e.display_name.toLowerCase().includes(q) ||
-      (e.email && e.email.toLowerCase().includes(q))
-    );
+    return filterAndSortEmployees(employees ?? [], search);
   }, [employees, search]);
 
-  const handleAdd = async () => {
-    if (!form.name.trim()) return;
-    await addEmployee.mutateAsync({ display_name: form.name, email: form.email || undefined });
-    setAddOpen(false);
-    setForm({ name: '', email: '' });
+  const handleAdd = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!form.first_name.trim() || !form.last_name.trim() || addEmployee.isPending) return;
+    setAddError('');
+    try {
+      await addEmployee.mutateAsync({ first_name: form.first_name, middle_initial: form.middle_initial, last_name: form.last_name, contact, email: form.email.trim() || undefined });
+      setAddOpen(false);
+      setForm({ first_name: '', middle_initial: '', last_name: '', email: '' });
+      setContact(employeeContactFields({}));
+    } catch (error) {
+      setAddError(error && typeof error === 'object' && 'message' in error
+        ? String(error.message) : 'Could not add team member. Please try again.');
+    }
   };
 
   if (ctxLoading || empLoading) {
@@ -98,26 +106,28 @@ export default function Team() {
           <p className="text-muted-foreground">{ctx?.org_name} — {employees?.length || 0} employees</p>
         </div>
         <div className="flex items-center gap-2">
-          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+          <Dialog open={addOpen} onOpenChange={open => { setAddOpen(open); setAddError(''); }}>
             <DialogTrigger asChild>
               <Button size="sm"><Plus className="mr-1 h-4 w-4" />Add</Button>
             </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Add Employee</DialogTitle></DialogHeader>
-              <div className="space-y-4">
+            <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
+              <DialogHeader><DialogTitle>Add team member</DialogTitle><DialogDescription>Add their name now and email when available. Adding a team member does not send an invitation.</DialogDescription></DialogHeader>
+              <form onSubmit={handleAdd} className="space-y-4">
+                <EmployeeNameInputs value={form} onChange={names => setForm({ ...form, ...names })} disabled={addEmployee.isPending} />
                 <div className="space-y-1">
-                  <Label>Name *</Label>
-                  <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Jane Smith" />
+                  <Label htmlFor="add-employee-email">Email (optional)</Label>
+                  <Input id="add-employee-email" autoComplete="email" disabled={addEmployee.isPending} type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="jane@example.com" />
                 </div>
-                <div className="space-y-1">
-                  <Label>Email</Label>
-                  <Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="jane@example.com" />
-                </div>
-                <Button onClick={handleAdd} disabled={addEmployee.isPending || !form.name.trim()} className="w-full">
+                <details className="rounded-lg border p-3">
+                  <summary className="cursor-pointer text-sm font-medium">Address, phone, and emergency contact (optional)</summary>
+                  <div className="pt-4"><EmployeeContactInputs value={contact} onChange={setContact} disabled={addEmployee.isPending} /></div>
+                </details>
+                {addError && <p role="alert" className="text-sm text-destructive">{addError}</p>}
+                <Button type="submit" disabled={addEmployee.isPending || !form.first_name.trim() || !form.last_name.trim()} className="w-full">
                   {addEmployee.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Add Employee
+                  Add team member
                 </Button>
-              </div>
+              </form>
             </DialogContent>
           </Dialog>
           <InviteEmployeeModal />

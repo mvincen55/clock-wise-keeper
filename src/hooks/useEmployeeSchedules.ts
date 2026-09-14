@@ -49,10 +49,9 @@ export function useEmployeeDaysOff(employeeId: string | undefined, startDate?: s
         .select('*')
         .eq('employee_id', employeeId!)
         .order('date_start', { ascending: false });
-      if (startDate) q = q.gte('date_start', startDate);
+      if (startDate) q = q.gte('date_end', startDate);
       if (endDate) q = q.lte('date_start', endDate);
       if (typeFilter) q = q.eq('type', typeFilter as any);
-      q = q.limit(50);
       const { data, error } = await q;
       if (error) throw error;
       return data || [];

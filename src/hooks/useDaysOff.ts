@@ -5,7 +5,7 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 
 export type DayOffRow = {
   id: string;
-  user_id: string;
+  user_id: string | null;
   date_start: string;
   date_end: string;
   type: 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'medical_leave' | 'other';
@@ -16,15 +16,17 @@ export type DayOffRow = {
 
 export function useDaysOff(year?: number) {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   return useQuery({
-    queryKey: ['days-off', year],
-    enabled: !!user,
+    queryKey: ['days-off', ctx?.org_id, ctx?.employee_id, year],
+    enabled: !!user && !!ctx?.employee_id,
     queryFn: async () => {
-      let q = supabase.from('days_off').select('*').order('date_start', { ascending: false });
+      let q = supabase.from('days_off').select('*').eq('org_id', ctx!.org_id).eq('employee_id', ctx!.employee_id).order('date_start', { ascending: false });
       if (year) {
-        q = q.gte('date_start', `${year}-01-01`).lte('date_start', `${year}-12-31`);
+        q = q.gte('date_end', `${year}-01-01`).lte('date_start', `${year}-12-31`);
       }
-      const { data } = await q;
+      const { data, error } = await q;
+      if (error) throw error;
       return (data || []) as DayOffRow[];
     },
   });
@@ -41,7 +43,7 @@ export function useAddDayOff() {
       type: 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'medical_leave' | 'other';
       hours?: number; notes?: string;
       /** Whose day off this is (admin flows). Defaults to the caller's own record. */
-      target?: { user_id: string; employee_id: string };
+      target?: { user_id: string | null; employee_id: string };
     }) => {
       if (!user) throw new Error('Not authenticated — please log in');
       if (!ctx) throw new Error('Organization not found — make sure you have an org set up');
@@ -55,7 +57,12 @@ export function useAddDayOff() {
       });
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['days-off'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['days-off'] });
+      qc.invalidateQueries({ queryKey: ['employee-days-off'] });
+      qc.invalidateQueries({ queryKey: ['employee-attendance'] });
+      qc.invalidateQueries({ queryKey: ['org-attendance-summary'] });
+    },
   });
 
   return { ...mutation, isReady: !!user && !!ctx && !ctxLoading };
@@ -68,7 +75,12 @@ export function useUpdateDayOffHours() {
       const { error } = await supabase.from('days_off').update({ hours }).eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['days-off'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['days-off'] });
+      qc.invalidateQueries({ queryKey: ['employee-days-off'] });
+      qc.invalidateQueries({ queryKey: ['employee-attendance'] });
+      qc.invalidateQueries({ queryKey: ['org-attendance-summary'] });
+    },
   });
 }
 
@@ -79,6 +91,11 @@ export function useDeleteDayOff() {
       const { error } = await supabase.from('days_off').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['days-off'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['days-off'] });
+      qc.invalidateQueries({ queryKey: ['employee-days-off'] });
+      qc.invalidateQueries({ queryKey: ['employee-attendance'] });
+      qc.invalidateQueries({ queryKey: ['org-attendance-summary'] });
+    },
   });
 }
