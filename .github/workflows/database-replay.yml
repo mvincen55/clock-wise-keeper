@@ -72,6 +72,11 @@ jobs:
           psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' -v ON_ERROR_STOP=1 -c 'CREATE DATABASE pto_probes'
           psql 'postgresql://postgres:postgres@127.0.0.1:54322/pto_probes' -v ON_ERROR_STOP=1 -f supabase/tests/live_pto_probes.sql
 
+      - name: Verify manager schedule authorization in a disposable database
+        run: |
+          psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' -v ON_ERROR_STOP=1 -c 'CREATE DATABASE schedule_probes'
+          psql 'postgresql://postgres:postgres@127.0.0.1:54322/schedule_probes' -v ON_ERROR_STOP=1 -f supabase/tests/employee_schedule_probes.sql
+
       - name: Verify generated insurance database types
         run: |
           supabase gen types typescript --local --schema public > /tmp/insurance-database-types.ts

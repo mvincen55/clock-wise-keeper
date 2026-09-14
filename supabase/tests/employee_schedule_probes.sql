@@ -1,7 +1,7 @@
 -- Disposable empty PostgreSQL database only; also exercised with PGlite.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS btree_gist;
-CREATE ROLE anon; CREATE ROLE authenticated;
+DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon; END IF; IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated; END IF; END $$;
 CREATE TABLE public.employees(id uuid PRIMARY KEY,org_id uuid,user_id uuid,timezone text);
 CREATE FUNCTION public.is_org_admin(o uuid) RETURNS boolean LANGUAGE sql AS $$
   SELECT o::text = current_setting('test.org',true) AND current_setting('test.admin',true)='true'
@@ -63,4 +63,37 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN NULL; END;
   RAISE NOTICE 'All employee schedule probes passed';
 END $$;
+-- Reproduce the live manager/creator RLS mismatch before applying the fix.
+SET test.admin='true';
+ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
+CREATE POLICY manager_read ON employees FOR SELECT TO authenticated USING(is_org_admin(org_id));
+GRANT SELECT,UPDATE ON employees TO authenticated;
+GRANT SELECT,INSERT,UPDATE,DELETE ON schedule_versions,schedule_weekdays,schedule_assignments TO authenticated;
+ALTER TABLE schedule_assignments ENABLE ROW LEVEL SECURITY;
+SET ROLE authenticated;
+DO $$ BEGIN
+ ASSERT (SELECT count(*)=2 FROM employees),'manager can read office employees';
+ ASSERT (SELECT count(*)=0 FROM (SELECT id FROM employees FOR UPDATE) e),'manager has no general employee update policy';
+ BEGIN
+ PERFORM create_employee_schedule('00000000-0000-0000-0000-000000000001','2026-10-01',NULL,'Before fix',false,'[{"weekday":1,"enabled":true,"start_time":"08:00","end_time":"17:00"}]');
+ RAISE EXCEPTION 'expected old manager restriction'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+RESET ROLE;
+\ir ../migrations/20260914220000_manager_schedule_authorization.sql
+SET ROLE authenticated;
+DO $$ DECLARE v uuid; BEGIN
+ v:=create_employee_schedule('00000000-0000-0000-0000-000000000001','2026-10-01',NULL,'Manager version',false,'[{"weekday":1,"enabled":true,"start_time":"08:00","end_time":"17:00"}]');
+ ASSERT (SELECT count(*)=1 FROM schedule_assignments WHERE schedule_version_id=v),'non-creator manager can create and assign';
+ UPDATE schedule_assignments SET effective_end='2026-10-31' WHERE schedule_version_id=v;
+ ASSERT (SELECT effective_end='2026-10-31' FROM schedule_assignments WHERE schedule_version_id=v),'manager can correct an assignment in place';
+ ASSERT (SELECT count(*)=0 FROM (SELECT id FROM employees FOR UPDATE) e),'fix does not widen general employee update permission';
+ BEGIN
+ UPDATE schedule_assignments SET employee_id='00000000-0000-0000-0000-000000000003' WHERE schedule_version_id=v;
+ RAISE EXCEPTION 'cross-office assignment accepted'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ PERFORM set_config('test.admin','false',true);
+ BEGIN
+ PERFORM create_employee_schedule('00000000-0000-0000-0000-000000000001','2026-11-01',NULL,'Employee attempt',false,'[{"weekday":1,"enabled":true,"start_time":"08:00","end_time":"17:00"}]');
+ RAISE EXCEPTION 'ordinary employee authorized'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+RESET ROLE;
 ROLLBACK;
