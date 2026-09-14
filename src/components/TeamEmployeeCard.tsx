@@ -1,3 +1,4 @@
+import EmployeeInviteAction from '@/components/team/EmployeeInviteAction';
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -175,7 +176,8 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
             <TabsContent value="tardies"><TardiesTab employeeId={employee.id} range={dateRange} /></TabsContent>
             <TabsContent value="callouts"><CalloutsTab employeeId={employee.id} range={dateRange} /></TabsContent>
           </Tabs>
-          <div className="mt-3 flex justify-end gap-2">
+          <div className="mt-3 flex flex-wrap justify-end gap-2">
+            {canArchive && <EmployeeInviteAction employee={employee} />}
             {canArchive && <EditEmployeeDialog employee={employee} />}
             {canArchive && (
               <Button
@@ -272,12 +274,6 @@ function ScheduleTab({ employee }: { employee: Employee }) {
   const [formRemote, setFormRemote] = useState(false);
   const [formWeekdays, setFormWeekdays] = useState<WeekdayDraft[]>([...DEFAULT_WEEKDAYS]);
 
-  const dayBefore = (date: string) => {
-    const d = new Date(`${date}T00:00:00`);
-    d.setDate(d.getDate() - 1);
-    return d.toISOString().split('T')[0];
-  };
-
   const hasOverlap = (startA: string, endA: string | null, startB: string, endB: string | null) => {
     const safeEndA = endA ?? '9999-12-31';
     const safeEndB = endB ?? '9999-12-31';
@@ -372,81 +368,14 @@ function ScheduleTab({ employee }: { employee: Employee }) {
   // by "Schedule is changing" branch of the choice dialog).
   const createNewVersionAndAssignment = async (startDate: string, endDate: string | null) => {
     if (!user || !ctx) throw new Error('Not authenticated');
-    const newEndStr = dayBefore(startDate);
-
-    const [{ data: existingAssignments, error: existingAssignmentsError }, { data: existingVersions, error: existingVersionsError }] = await Promise.all([
-      supabase
-        .from('schedule_assignments')
-        .select('id, effective_start, effective_end, schedule_version_id')
-        .eq('org_id', ctx.org_id)
-        .eq('employee_id', employee.id),
-      supabase
-        .from('schedule_versions')
-        .select('id, effective_start_date, effective_end_date')
-        .eq('org_id', ctx.org_id)
-        .eq('employee_id', employee.id),
-    ]);
-    ensureNoError(existingAssignmentsError);
-    ensureNoError(existingVersionsError);
-
-    const overlappingAssignments = (existingAssignments || []).filter((assignment: any) =>
-      hasOverlap(assignment.effective_start, assignment.effective_end, startDate, endDate)
-    );
-    const overlappingVersions = (existingVersions || []).filter((version: any) =>
-      hasOverlap(version.effective_start_date, version.effective_end_date, startDate, endDate)
-    );
-
-    const futureConflict = overlappingAssignments.find((assignment: any) => assignment.effective_start >= startDate)
-      || overlappingVersions.find((version: any) => version.effective_start_date >= startDate);
-
-    if (futureConflict) {
-      throw new Error('This date range overlaps existing schedule history. Edit or remove the overlapping future schedule first.');
-    }
-
-    for (const assignment of overlappingAssignments) {
-      const { error: closeAssignmentError } = await supabase
-        .from('schedule_assignments')
-        .update({ effective_end: newEndStr })
-        .eq('id', assignment.id);
-      ensureNoError(closeAssignmentError);
-    }
-    for (const version of overlappingVersions) {
-      const { error: closeVersionError } = await supabase
-        .from('schedule_versions')
-        .update({ effective_end_date: newEndStr })
-        .eq('id', version.id);
-      ensureNoError(closeVersionError);
-    }
-
-    const { data: version, error: vErr } = await supabase.from('schedule_versions').insert({
-      user_id: employee.user_id || user.id,
-      org_id: ctx.org_id,
-      employee_id: employee.id,
-      name: formName || null,
-      effective_start_date: startDate,
-      effective_end_date: endDate,
-      apply_to_remote: formRemote,
-      timezone: employee.timezone || 'America/New_York',
-      week_start_day: 1,
-    }).select('id').single();
-    if (vErr) throw vErr;
-
-    const wdRows = formWeekdays.map(w => ({
-      schedule_version_id: version.id, weekday: w.weekday, enabled: w.enabled,
-      start_time: w.start_time, end_time: w.end_time,
-      grace_minutes: w.grace_minutes, threshold_minutes: w.threshold_minutes,
-    }));
-    const { error: wErr } = await supabase.from('schedule_weekdays').insert(wdRows);
-    if (wErr) throw wErr;
-
-    const { error: aErr } = await supabase.from('schedule_assignments').insert({
-      org_id: ctx.org_id,
-      employee_id: employee.id,
-      schedule_version_id: version.id,
-      effective_start: startDate,
-      effective_end: endDate,
+    const { error } = await supabase.rpc('create_employee_schedule', {
+      p_employee_id: employee.id, p_start: startDate, p_end: endDate,
+      p_name: formName || null, p_apply_to_remote: formRemote,
+      p_weekdays: formWeekdays,
     });
-    if (aErr) throw aErr;
+    if (error) throw new Error(error.code === '23P01'
+      ? 'This date range overlaps an existing schedule for this employee. Edit that schedule first.'
+      : error.message);
   };
 
   // In-place edit of existing version + assignment (the legacy path),
@@ -843,12 +772,8 @@ function WeekdayEditor({ weekdays, onChange }: { weekdays: WeekdayDraft[]; onCha
             <Input type="time" value={w.end_time?.slice(0, 5)} onChange={e => update(idx, { end_time: e.target.value })} disabled={!w.enabled} className="w-[6.5rem] text-xs h-7" />
           </div>
           <div className="flex items-center gap-1">
-            <Label className="text-[10px] text-muted-foreground">Grace</Label>
+            <Label className="text-[10px] text-muted-foreground" title="Minutes allowed after the scheduled start; late from the next minute.">Grace (min)</Label>
             <Input type="number" min={0} value={w.grace_minutes} onChange={e => update(idx, { grace_minutes: parseInt(e.target.value) || 0 })} disabled={!w.enabled} className="w-14 text-xs h-7" />
-          </div>
-          <div className="flex items-center gap-1">
-            <Label className="text-[10px] text-muted-foreground">Thresh</Label>
-            <Input type="number" min={1} value={w.threshold_minutes} onChange={e => update(idx, { threshold_minutes: parseInt(e.target.value) || 1 })} disabled={!w.enabled} className="w-14 text-xs h-7" />
           </div>
         </div>
       ))}

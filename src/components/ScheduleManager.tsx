@@ -44,12 +44,8 @@ function WeekdayEditor({ weekdays, onChange }: { weekdays: WeekdayDraft[]; onCha
               <Input type="time" value={w.end_time?.slice(0, 5)} onChange={e => update(idx, { end_time: e.target.value })} disabled={!w.enabled} className="w-[7rem] text-sm h-8" />
             </div>
             <div className="flex items-center gap-1.5">
-              <Label className="text-xs text-muted-foreground">Grace</Label>
+              <Label className="text-xs text-muted-foreground" title="Minutes allowed after the scheduled start; late from the next minute.">Grace (min)</Label>
               <Input type="number" min={0} value={w.grace_minutes} onChange={e => update(idx, { grace_minutes: parseInt(e.target.value) || 0 })} disabled={!w.enabled} className="w-16 text-sm h-8" />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Label className="text-xs text-muted-foreground">Threshold</Label>
-              <Input type="number" min={1} value={w.threshold_minutes} onChange={e => update(idx, { threshold_minutes: parseInt(e.target.value) || 1 })} disabled={!w.enabled} className="w-16 text-sm h-8" />
             </div>
           </div>
         ))}

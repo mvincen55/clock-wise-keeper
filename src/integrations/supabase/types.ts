@@ -7107,7 +7107,7 @@ export type Database = {
           org_id: string
           timezone: string
           updated_at: string
-          user_id: string
+          user_id: string | null
           week_start_day: number
         }
         Insert: {
@@ -7121,7 +7121,7 @@ export type Database = {
           org_id: string
           timezone?: string
           updated_at?: string
-          user_id: string
+          user_id: string | null
           week_start_day?: number
         }
         Update: {
@@ -7135,7 +7135,7 @@ export type Database = {
           org_id?: string
           timezone?: string
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
           week_start_day?: number
         }
         Relationships: [
@@ -8323,6 +8323,10 @@ export type Database = {
       }
     }
     Functions: {
+      create_employee_schedule: {
+        Args: { p_employee_id: string; p_start: string; p_end: string | null; p_name: string | null; p_apply_to_remote: boolean; p_weekdays: Json }
+        Returns: string
+      }
       _recompute_attendance_range_internal: {
         Args: { p_end_date: string; p_start_date: string; p_user_id: string }
         Returns: number
