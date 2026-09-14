@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import {
   usePtoSettings, useUpsertPtoSettings,
   usePtoSnapshots, useUpsertPtoSnapshot,
-  useRecalculatePto,
   PTO_TIERS, getTierForDate,
 } from '@/hooks/usePtoEngine';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, RefreshCw, Settings as SettingsIcon } from 'lucide-react';
+import { Settings as SettingsIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 /**
@@ -28,7 +27,6 @@ export default function PtoPolicySettingsCard() {
   const { data: snapshots } = usePtoSnapshots();
   const upsertSettings = useUpsertPtoSettings();
   const upsertSnapshot = useUpsertPtoSnapshot();
-  const recalc = useRecalculatePto();
 
   const [hireDate, setHireDate] = useState('');
   const [workedCap, setWorkedCap] = useState(40);
@@ -72,14 +70,6 @@ export default function PtoPolicySettingsCard() {
     }
   };
 
-  const handleRecalc = async () => {
-    try {
-      const result = await recalc.mutateAsync();
-      toast({ title: `PTO recalculated: ${result.weeks} weeks, balance = ${result.balance.toFixed(2)}h` });
-    } catch (err) {
-      toast({ title: 'Error', description: (err as Error).message, variant: 'destructive' });
-    }
-  };
 
   const currentTier = settings
     ? getTierForDate(settings.hire_date, new Date().toISOString().split('T')[0])
@@ -93,15 +83,14 @@ export default function PtoPolicySettingsCard() {
           PTO Policy Settings
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Accrual tiers are office-wide; the hire date and snapshot below anchor your own
-          accrual record, which the engine recalculates from.
+          Your tier uses the real start date saved in Team → Dates / PTO, with the provisional date used only until confirmed. Balances update automatically after saved changes.
         </p>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1">
-            <Label>Hire Date</Label>
-            <Input type="date" value={hireDate} onChange={e => setHireDate(e.target.value)} className="w-48" />
+            <Label>Employment Start Date</Label>
+            <Input type="date" value={hireDate} readOnly className="w-48" />
             <p className="text-xs text-muted-foreground">
               Current tier: {currentTier.label} → {(currentTier.rate * 100).toFixed(2)}% (cap {currentTier.weeklyCap}h/wk)
             </p>
@@ -153,10 +142,6 @@ export default function PtoPolicySettingsCard() {
         <div className="flex gap-2">
           <Button onClick={handleSaveSettings} disabled={upsertSettings.isPending}>
             {upsertSettings.isPending ? 'Saving...' : 'Save Settings'}
-          </Button>
-          <Button variant="secondary" onClick={handleRecalc} disabled={recalc.isPending}>
-            {recalc.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-            Recalculate Now
           </Button>
         </div>
 

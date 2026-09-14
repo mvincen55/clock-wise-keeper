@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   usePtoSettings,
   usePtoSnapshots,
-  usePtoLedger, useRecalculatePto,
+  usePtoLedger,
   useCurrentPtoBalance, PTO_TIERS, getTierForDate,
   PtoLedgerWeek,
 } from '@/hooks/usePtoEngine';
@@ -19,7 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, TrendingUp, Clock, Printer, RefreshCw, AlertTriangle, Loader2, Plus, XCircle, Pencil, Check, X } from 'lucide-react';
+import { CalendarDays, TrendingUp, Clock, Printer, AlertTriangle, Plus, XCircle, Pencil, Check, X } from 'lucide-react';
 import { formatDate } from '@/lib/time-utils';
 import { useToast } from '@/hooks/use-toast';
 import { useConsumedSearchParam, useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
@@ -54,20 +54,11 @@ export default function PTO() {
 
   const { data: settings } = usePtoSettings();
   const { data: snapshots } = usePtoSnapshots();
-  const { data: ledger } = usePtoLedger();
+  const { data: ledger, error: ledgerError, isLoading: ledgerLoading } = usePtoLedger();
   const { data: daysOff } = useDaysOff();
   const updateHours = useUpdateDayOffHours();
-  const recalc = useRecalculatePto();
   const ptoState = useCurrentPtoBalance();
 
-  const handleRecalc = async () => {
-    try {
-      const result = await recalc.mutateAsync();
-      toast({ title: `PTO recalculated: ${result.weeks} weeks, balance = ${result.balance.toFixed(2)}h` });
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    }
-  };
 
   const currentTier = settings
     ? getTierForDate(settings.hire_date, new Date().toISOString().split('T')[0])
@@ -89,15 +80,13 @@ export default function PTO() {
             {branding?.displayName ? `${branding.displayName} — Combined PTO Bank` : 'Combined PTO Bank'}
           </p>
         </div>
-        <Button onClick={handleRecalc} disabled={recalc.isPending} variant="secondary" size="sm">
-          {recalc.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-          Recalculate
-        </Button>
         <Button onClick={() => setRequestModalOpen(true)} size="sm">
           <Plus className="mr-2 h-4 w-4" /> Request PTO
         </Button>
       </div>
 
+      <p className="text-xs text-muted-foreground">PTO updates automatically from saved dates, hours, time off, and policy changes.</p>
+      {ledgerError && <p role="alert" className="text-sm text-destructive">PTO could not be updated. The displayed balance may be out of date.</p>}
       {/* Negative balance warning */}
       {ptoState.balance < 0 && (
         <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 flex items-center gap-2">
@@ -163,7 +152,7 @@ export default function PTO() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 rounded-lg bg-muted/50">
-                  <p className="text-xs text-muted-foreground">Hire Date</p>
+                  <p className="text-xs text-muted-foreground">Employment Start Date</p>
                   <p className="font-semibold">{settings ? formatDate(settings.hire_date) : '—'}</p>
                 </div>
                 <div className="p-3 rounded-lg bg-muted/50">
@@ -319,7 +308,7 @@ export default function PTO() {
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
               {!ledger?.length ? (
-                <p className="text-center text-muted-foreground py-12">No ledger data. Click "Recalculate" to generate.</p>
+                <p className="text-center text-muted-foreground py-12">{ledgerLoading ? 'Updating PTO…' : ledgerError ? 'PTO could not be updated. Please try again shortly.' : 'No accrual weeks yet. A confirmed starting balance and date are required.'}</p>
               ) : (
                 <table className="w-full text-sm min-w-[700px]">
                   <thead>
@@ -432,9 +421,9 @@ export default function PTO() {
 }
 
 /* ── Inline-editable PTO usage row ── */
-function PtoUsageRow({ entry, onUpdateHours }: { entry: any; onUpdateHours: (id: string, hours: number) => void }) {
+export function PtoUsageRow({ entry, onUpdateHours }: { entry: any; onUpdateHours: (id: string, hours: number) => void }) {
   const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(String(entry.hours ?? 8));
+  const [value, setValue] = useState(entry.hours == null ? '' : String(entry.hours));
 
   const save = () => {
     const h = parseFloat(value);
@@ -479,9 +468,9 @@ function PtoUsageRow({ entry, onUpdateHours }: { entry: any; onUpdateHours: (id:
         ) : (
           <button
             className="flex items-center gap-1 text-sm font-semibold hover:text-primary transition-colors group"
-            onClick={() => { setValue(String(entry.hours ?? 8)); setEditing(true); }}
+            onClick={() => { setValue(entry.hours == null ? '' : String(entry.hours)); setEditing(true); }}
           >
-            {entry.hours ?? 8}h
+            {entry.hours == null ? 'Hours not recorded' : `${entry.hours}h`}
             <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 text-muted-foreground transition-opacity" />
           </button>
         )}

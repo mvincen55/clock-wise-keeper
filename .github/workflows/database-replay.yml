@@ -67,6 +67,11 @@ jobs:
       - name: Verify release permissions and scheduled jobs
         run: psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' -v ON_ERROR_STOP=1 -f scripts/verify-release-db.sql
 
+      - name: Verify live PTO calculations in a disposable database
+        run: |
+          psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' -v ON_ERROR_STOP=1 -c 'CREATE DATABASE pto_probes'
+          psql 'postgresql://postgres:postgres@127.0.0.1:54322/pto_probes' -v ON_ERROR_STOP=1 -f supabase/tests/live_pto_probes.sql
+
       - name: Verify generated insurance database types
         run: |
           supabase gen types typescript --local --schema public > /tmp/insurance-database-types.ts

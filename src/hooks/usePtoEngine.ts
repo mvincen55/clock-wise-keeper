@@ -2,9 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { getToday } from '@/lib/time-utils';
-import { accrualBasisWorkedHours } from '@/lib/payroll-utils';
 
 /* ───────── Office PTO Policy ─────────
    Accrual tiers are still hardcoded office policy; they move to
@@ -19,10 +18,9 @@ export const PTO_TIERS = [
 ];
 
 export function getTierForDate(hireDate: string, checkDate: string) {
-  const hire = new Date(hireDate + 'T00:00:00');
-  const check = new Date(checkDate + 'T00:00:00');
-  const years = (check.getTime() - hire.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
-  return PTO_TIERS.find(t => years >= t.minYears && years < t.maxYears) || PTO_TIERS[0];
+  const years = Number(checkDate.slice(0, 4)) - Number(hireDate.slice(0, 4))
+    - (checkDate.slice(5) < hireDate.slice(5) ? 1 : 0);
+  return [...PTO_TIERS].reverse().find(t => years >= t.minYears) || PTO_TIERS[0];
 }
 
 /* ───────── Types ───────── */
@@ -62,17 +60,22 @@ export type PtoLedgerWeek = {
 /* ───────── Hooks: Settings ───────── */
 
 export function usePtoSettings() {
-  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   return useQuery({
-    queryKey: ['pto-settings', user?.id],
-    enabled: !!user,
+    queryKey: ['pto-settings', ctx?.org_id, ctx?.employee_id],
+    enabled: !!ctx,
+    refetchInterval: 30_000,
     queryFn: async () => {
-      const { data } = await supabase
-        .from('pto_settings')
-        .select('*')
-        .eq('user_id', user!.id)
-        .maybeSingle();
-      return data as PtoSettings | null;
+      const [policy, employee] = await Promise.all([
+        supabase.from('pto_settings').select('*').eq('employee_id', ctx!.employee_id).eq('org_id', ctx!.org_id).maybeSingle(),
+        supabase.from('employees').select('real_hire_date, hire_date').eq('id', ctx!.employee_id).eq('org_id', ctx!.org_id).single(),
+      ]);
+      if (policy.error) throw policy.error;
+      if (employee.error) throw employee.error;
+      const hireDate = employee.data.real_hire_date ?? employee.data.hire_date ?? policy.data?.hire_date;
+      if (!hireDate) return null;
+      return { worked_hours_cap_weekly: 40, max_balance: 100, allow_negative: false,
+        timezone: 'America/New_York', ...policy.data, hire_date: hireDate } as PtoSettings;
     },
   });
 }
@@ -96,16 +99,20 @@ export function useUpsertPtoSettings() {
 /* ───────── Hooks: Snapshots ───────── */
 
 export function usePtoSnapshots() {
-  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   return useQuery({
-    queryKey: ['pto-snapshots', user?.id],
-    enabled: !!user,
+    queryKey: ['pto-snapshots', ctx?.org_id, ctx?.employee_id],
+    enabled: !!ctx,
+    refetchInterval: 30_000,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('pto_snapshots')
         .select('*')
-        .eq('user_id', user!.id)
+        .lte('snapshot_date', getToday())
+        .eq('employee_id', ctx!.employee_id)
+        .eq('org_id', ctx!.org_id)
         .order('snapshot_date', { ascending: false });
+      if (error) throw error;
       return (data || []) as PtoSnapshot[];
     },
   });
@@ -122,7 +129,7 @@ export function useUpsertPtoSnapshot() {
         .from('pto_snapshots')
         .upsert(
           { user_id: user.id, org_id: ctx.org_id, employee_id: ctx.employee_id, ...input } as any,
-          { onConflict: 'user_id,snapshot_date' }
+          { onConflict: 'employee_id,snapshot_date' }
         );
       if (error) throw error;
     },
@@ -133,205 +140,25 @@ export function useUpsertPtoSnapshot() {
 /* ───────── Hooks: Ledger ───────── */
 
 export function usePtoLedger() {
-  const { user } = useAuth();
-  return useQuery({
-    queryKey: ['pto-ledger', user?.id],
-    enabled: !!user,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('pto_ledger_weeks')
-        .select('*')
-        .eq('user_id', user!.id)
-        .order('period_start', { ascending: true });
-      return (data || []) as PtoLedgerWeek[];
-    },
-  });
-}
-
-/* ───────── Recalculate Engine ───────── */
-
-export function useRecalculatePto() {
-  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
-
-  return useMutation({
-    mutationFn: async () => {
-      if (!user) throw new Error('Not authenticated');
-
-      // Resolve org context
-      const { data: membership } = await supabase
-        .from('org_members')
-        .select('org_id')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .limit(1)
-        .maybeSingle();
-      if (!membership) throw new Error('No org membership found');
-      const orgId = membership.org_id;
-
-      const { data: empRecord } = await supabase
-        .from('employees')
-        .select('id, hire_date')
-        .eq('org_id', orgId)
-        .eq('user_id', user.id)
-        .limit(1)
-        .maybeSingle();
-      if (!empRecord) throw new Error('No employee record found');
-      const employeeId = empRecord.id;
-
-      // 1. Load or auto-create settings
-      let { data: settings } = await supabase
-        .from('pto_settings')
-        .select('*')
-        .eq('user_id', user!.id)
-        .maybeSingle();
-
-      if (!settings) {
-        const defaults = {
-          user_id: user.id,
-          org_id: orgId,
-          employee_id: employeeId,
-          hire_date: empRecord.hire_date ?? getToday(),
-          worked_hours_cap_weekly: 40,
-          max_balance: 100,
-          allow_negative: false,
-          timezone: 'America/New_York',
-        };
-        const { error } = await supabase.from('pto_settings').upsert(defaults as any, { onConflict: 'employee_id' });
-        if (error) throw error;
-        const { data: reloaded } = await supabase.from('pto_settings').select('*').eq('employee_id', employeeId).maybeSingle();
-        settings = reloaded;
-      }
-      if (!settings) throw new Error('Failed to create PTO settings');
-      const s = settings as PtoSettings;
-
-      // 2. Require a confirmed starting snapshot
-      let { data: snapshots } = await supabase
-        .from('pto_snapshots')
-        .select('*')
-        .eq('user_id', user!.id)
-        .order('snapshot_date', { ascending: false })
-        .limit(1);
-
-      if (!snapshots?.length) throw new Error('Enter a confirmed PTO starting balance and date before recalculating.');
-      const snap = snapshots[0] as PtoSnapshot;
-
-      // 3. Load time entries from snapshot_date forward
-      const { data: entries } = await supabase
-        .from('time_entries')
-        .select('entry_date, total_minutes')
-        .eq('employee_id', employeeId)
-        .gte('entry_date', snap.snapshot_date)
-        .order('entry_date');
-
-      // 4. Load days_off from snapshot_date forward
-      const { data: daysOff } = await supabase
-        .from('days_off')
-        .select('date_start, date_end, hours, type')
-        .eq('employee_id', employeeId)
-        .gte('date_start', snap.snapshot_date)
-        .order('date_start');
-
-      // 5. Build weekly periods from snapshot date (Sun-Sat).
-      // NOTE: these accrual weeks are Sunday-fixed, while the payroll
-      // report's weeks follow payroll_settings.week_start_day. Aligning
-      // the engine would shift every historical ledger week boundary and
-      // silently rewrite past accrual rows, so the discrepancy stands
-      // and is documented in the PTO policy settings card instead. The
-      // existing snapshot/ledger recompute pattern governs any future
-      // realignment.
-      const snapDate = new Date(snap.snapshot_date + 'T00:00:00');
-      // Align to next Sunday (week start = 0 for Sunday)
-      const firstSunday = new Date(snapDate);
-      while (firstSunday.getDay() !== 0) firstSunday.setDate(firstSunday.getDate() + 1);
-
-      const today = new Date();
-      today.setHours(23, 59, 59, 999);
-
-      const weeks: { start: string; end: string }[] = [];
-      const cur = new Date(firstSunday);
-      while (cur <= today) {
-        const end = new Date(cur);
-        end.setDate(end.getDate() + 6);
-        weeks.push({
-          start: cur.toISOString().split('T')[0],
-          end: end.toISOString().split('T')[0],
-        });
-        cur.setDate(cur.getDate() + 7);
-      }
-
-      // 6. For each week, compute worked hours and PTO taken
-      let runningBalance = Number(snap.snapshot_balance_hours);
-      const ledgerRows: any[] = [];
-
-      for (const week of weeks) {
-        // Worked hours from time_entries in this week. Overtime never
-        // accrues PTO: the basis is capped at min(raw, office cap, 40)
-        // — hours over 40/week stay out regardless of the cap setting.
-        const workedMinutes = (entries || [])
-          .filter(e => e.entry_date >= week.start && e.entry_date <= week.end)
-          .reduce((sum, e) => sum + (e.total_minutes || 0), 0);
-        const workedHoursRaw = workedMinutes / 60;
-        const workedHoursCapped = accrualBasisWorkedHours(workedHoursRaw, Number(s.worked_hours_cap_weekly));
-
-        // PTO taken from days_off in this week
-        const ptoTaken = (daysOff || [])
-          .filter(d => d.date_start >= week.start && d.date_start <= week.end && d.type !== 'office_closed')
-          .reduce((sum, d) => sum + (d.hours != null ? Number(d.hours) : 8), 0);
-
-        // Determine tier for this week
-        const tier = getTierForDate(s.hire_date, week.start);
-
-        // Calculate accrual: rate * (capped worked + PTO taken)
-        const basisHours = workedHoursCapped + ptoTaken;
-        const calculatedAccrual = parseFloat((tier.rate * basisHours).toFixed(4));
-        const cappedAccrual = Math.min(calculatedAccrual, tier.weeklyCap);
-
-        // Check max balance cap
-        let accrualCredited = cappedAccrual;
-        if (runningBalance + accrualCredited > Number(s.max_balance)) {
-          accrualCredited = Math.max(0, Number(s.max_balance) - runningBalance);
-        }
-        accrualCredited = parseFloat(accrualCredited.toFixed(2));
-
-        runningBalance = parseFloat((runningBalance + accrualCredited - ptoTaken).toFixed(2));
-
-        ledgerRows.push({
-          user_id: user.id,
-          org_id: orgId,
-          employee_id: employeeId,
-          period_start: week.start,
-          period_end: week.end,
-          worked_hours_raw: parseFloat(workedHoursRaw.toFixed(2)),
-          worked_hours_capped: parseFloat(workedHoursCapped.toFixed(2)),
-          pto_taken_hours: parseFloat(ptoTaken.toFixed(2)),
-          tier_rate: tier.rate,
-          calculated_accrual: parseFloat(calculatedAccrual.toFixed(2)),
-          weekly_cap: tier.weeklyCap,
-          accrual_credited: accrualCredited,
-          running_balance: runningBalance,
-        });
-      }
-
-      // 7. Clear old ledger and insert new
-      await supabase
-        .from('pto_ledger_weeks')
-        .delete()
-        .eq('user_id', user.id);
-
-      if (ledgerRows.length > 0) {
-        // Insert in batches of 50
-        for (let i = 0; i < ledgerRows.length; i += 50) {
-          const batch = ledgerRows.slice(i, i + 50);
-          const { error } = await supabase.from('pto_ledger_weeks').insert(batch);
-          if (error) throw error;
-        }
-      }
-
-      return { balance: runningBalance, weeks: ledgerRows.length };
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['pto-ledger'] });
+  // Every successful in-app save can affect PTO. Refresh immediately after it;
+  // polling/focus also catches other users' edits and new calendar days.
+  useEffect(() => qc.getMutationCache().subscribe(event => {
+    if (event.type === 'updated' && event.action.type === 'success') {
+      void qc.invalidateQueries({ queryKey: ['pto-ledger'] });
+      void qc.invalidateQueries({ queryKey: ['pto-settings'] });
+      void qc.invalidateQueries({ queryKey: ['pto-snapshots'] });
+    }
+  }), [qc]);
+  return useQuery({
+    queryKey: ['pto-ledger', ctx?.org_id, ctx?.employee_id],
+    enabled: !!ctx,
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_live_pto_ledger', { p_employee_id: ctx!.employee_id });
+      if (error) throw error;
+      return (data || []) as PtoLedgerWeek[];
     },
   });
 }
@@ -347,7 +174,7 @@ export function useCurrentPtoBalance() {
     if (!ledger?.length && snapshots?.length) {
       return {
         balance: Number(snapshots[0].snapshot_balance_hours),
-        tier: settings ? getTierForDate(settings.hire_date, new Date().toISOString().split('T')[0]) : PTO_TIERS[0],
+        tier: settings ? getTierForDate(settings.hire_date, getToday()) : PTO_TIERS[0],
         lastWeek: null,
         currentWeek: null,
       };
@@ -358,7 +185,7 @@ export function useCurrentPtoBalance() {
     const last = ledger[ledger.length - 1];
     const prev = ledger.length > 1 ? ledger[ledger.length - 2] : null;
     const tier = settings
-      ? getTierForDate(settings.hire_date, new Date().toISOString().split('T')[0])
+      ? getTierForDate(settings.hire_date, getToday())
       : PTO_TIERS[0];
     return {
       balance: last.running_balance,

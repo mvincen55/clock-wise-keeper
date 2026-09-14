@@ -85,7 +85,7 @@ export function useSubmitPtoRequest() {
           created_by: user.id,
           start_date: input.start_date,
           end_date: input.end_date,
-          hours_requested: input.hours_requested || null,
+          hours_requested: input.hours_requested ?? null,
           pto_type: input.pto_type,
           note: input.note,
         })
@@ -264,9 +264,9 @@ export function useReviewPtoRequest() {
         if (emp?.user_id) {
           const dayOffType = request.pto_type === 'sick' ? 'medical_leave' : 'scheduled_with_notice';
 
-          // Calculate total hours (default 8 per day if not specified)
-          const dayCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-          const totalHours = request.hours_requested || dayCount * 8;
+          // A day off does not imply eight paid PTO hours. Preserve unknown and
+          // explicit zero separately; unpaid leave never deducts the PTO bank.
+          const totalHours = request.pto_type === 'unpaid' ? 0 : request.hours_requested;
 
           await supabase.from('days_off').insert({
             org_id: ctx.org_id,
@@ -283,7 +283,7 @@ export function useReviewPtoRequest() {
           });
 
           // Create PTO transaction (deduction)
-          await supabase.from('pto_transactions').insert({
+          if (totalHours != null && totalHours > 0) await supabase.from('pto_transactions').insert({
             org_id: ctx.org_id,
             employee_id: request.employee_id,
             transaction_date: request.start_date,

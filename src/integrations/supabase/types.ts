@@ -8323,6 +8323,10 @@ export type Database = {
       }
     }
     Functions: {
+      get_live_pto_ledger: {
+        Args: { p_employee_id: string }
+        Returns: Database["public"]["Tables"]["pto_ledger_weeks"]["Row"][]
+      }
       create_employee_schedule: {
         Args: { p_employee_id: string; p_start: string; p_end: string | null; p_name: string | null; p_apply_to_remote: boolean; p_weekdays: Json }
         Returns: string
