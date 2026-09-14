@@ -21,7 +21,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { formatDate } from '@/lib/time-utils';
+import { formatDate, formatClock, formatClockRange } from '@/lib/time-utils';
 import { ChevronDown, ChevronUp, Clock, Calendar, AlertTriangle, CalendarOff, Loader2, Pencil, Plus, Trash2, Archive } from 'lucide-react';
 import { useTeamOnboardingStatus } from '@/hooks/useOnboarding';
 import { employeeTeamStatus } from '@/lib/team-status';
@@ -46,7 +46,7 @@ type WeekStats = { present: number; late: number; absent: number };
 type WeekdayDraft = Omit<ScheduleWeekdayRow, 'id' | 'schedule_version_id'>;
 
 const statusBadge: Record<string, { label: string; className: string }> = {
-  ok: { label: 'OK', className: 'bg-success/20 text-success' },
+  ok: { label: 'Arrived', className: 'bg-success/20 text-success' },
   remote_ok: { label: 'Remote', className: 'bg-accent/20 text-accent' },
   late: { label: 'Late', className: 'bg-warning/20 text-warning' },
   absent: { label: 'Absent', className: 'bg-destructive/20 text-destructive' },
@@ -237,7 +237,7 @@ function AttendanceTab({ employeeId, range }: { employeeId: string; range: { sta
               <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${sb.className}`}>{sb.label}</span>
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {row.schedule_expected_start && <span>Sched: {row.schedule_expected_start?.toString().slice(0, 5)}</span>}
+              {row.schedule_expected_start && <span>Sched: {formatClock(row.schedule_expected_start?.toString())}</span>}
               {row.minutes_late != null && row.minutes_late > 0 && <span className="text-warning font-semibold">+{row.minutes_late}min</span>}
             </div>
           </div>
@@ -676,7 +676,7 @@ function ScheduleTab({ employee }: { employee: Employee }) {
                       <span className="w-10 font-medium">{WEEKDAY_NAMES[w.weekday]?.slice(0, 3)}</span>
                       {w.enabled ? (
                         <>
-                          <span className="font-mono">{w.start_time?.slice(0, 5)} – {w.end_time?.slice(0, 5)}</span>
+                          <span className="font-mono">{formatClockRange(w.start_time, w.end_time)}</span>
                           {w.grace_minutes > 0 && <span className="text-muted-foreground">({w.grace_minutes}m grace)</span>}
                         </>
                       ) : (

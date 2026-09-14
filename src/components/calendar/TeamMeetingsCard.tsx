@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CalendarDays, Loader2, Plus, Trash2, Users } from 'lucide-react';
 import { toast } from 'sonner';
-import { getToday } from '@/lib/time-utils';
+import { getToday, formatClock } from '@/lib/time-utils';
 import {
   shortDate,
   useDeleteOfficeEvent,
@@ -89,7 +89,7 @@ export default function TeamMeetingsCard({ isManager }: { isManager: boolean }) 
                   <p className="truncate text-sm font-medium">{m.title}</p>
                   <p className="text-xs text-muted-foreground">
                     {shortDate(m.event_date)}
-                    {m.start_time ? ` · ${m.start_time.slice(0, 5)}` : ''}
+                    {m.start_time ? ` · ${formatClock(m.start_time)}` : ''}
                     {m.notes ? ` · ${m.notes}` : ''}
                   </p>
                 </div>

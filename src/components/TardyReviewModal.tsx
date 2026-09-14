@@ -5,7 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertTriangle, Loader2 } from 'lucide-react';
-import { formatDate } from '@/lib/time-utils';
+import { formatDate, formatClock } from '@/lib/time-utils';
 
 type Props = {
   open: boolean;
@@ -63,7 +63,7 @@ export function TardyReviewModal({ open, tardy, onSubmit, onClose }: Props) {
             Review Tardy — {formatDate(tardy.entry_date)}
           </DialogTitle>
           <DialogDescription>
-            {tardy.minutes_late} minutes late (Expected: {tardy.expected_start_time?.slice(0, 5)}, Actual: {actualLocal})
+            {tardy.minutes_late} minutes late (Expected: {formatClock(tardy.expected_start_time)}, Actual: {actualLocal})
           </DialogDescription>
         </DialogHeader>
 

@@ -10,6 +10,7 @@ import { MailCheck, Copy, Trash2, Loader2, Send, Pencil } from 'lucide-react';
 import { ROLE_LABELS } from '@/hooks/useOperationalRoles';
 import { MEMBER_ROLE_LABELS } from '@/lib/roles';
 import { inviteTeamStatus } from '@/lib/team-status';
+import { formatClockRange } from '@/lib/time-utils';
 import InviteEmployeeModal from '@/components/InviteEmployeeModal';
 
 const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -20,7 +21,7 @@ function scheduleSummary(invite: PendingInvite) {
   return days
     .slice()
     .sort((a, b) => a.weekday - b.weekday)
-    .map(d => `${DAY_ABBR[d.weekday] ?? '?'} ${d.start_time}–${d.end_time}`)
+    .map(d => `${DAY_ABBR[d.weekday] ?? '?'} ${formatClockRange(d.start_time, d.end_time)}`)
     .join(' · ');
 }
 

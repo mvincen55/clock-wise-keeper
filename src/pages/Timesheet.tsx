@@ -263,7 +263,7 @@ async function exportToExcel(
       const totalHHMM = entry.total_minutes != null ? minutesToHHMM(entry.total_minutes) : '';
       const totalHrs = entry.total_minutes != null ? Number((entry.total_minutes / 60).toFixed(2)) : '';
       const location = entry.is_remote ? 'Remote' : 'On-site';
-      const status = isAbsent ? 'Absent' : isIncomplete ? 'Incomplete' : isLate ? 'Late' : 'OK';
+      const status = isAbsent ? 'Absent' : isIncomplete ? 'Incomplete' : isLate ? 'Late' : 'Arrived';
       const tardy = tardyMap.get(entry.entry_date);
       const tardyStatus = tardy ? tardy.approval_status : '';
       const comment = entry.entry_comment || '';
