@@ -14,6 +14,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      payroll_pto_records: {
+        Row: { id: string; org_id: string; employee_id: string | null; payroll_employee_id: string; payroll_employee_name: string; period_start: string; period_end: string; check_date: string; check_number: string; pto_hours: number; pto_ytd_hours: number | null; worked_hours: number | null; source_file: string; source_sha256: string; source_page: number; earnings: Json; review_note: string | null; created_at: string }
+        Insert: { org_id: string; employee_id?: string | null; payroll_employee_id: string; payroll_employee_name: string; period_start: string; period_end: string; check_date: string; check_number: string; pto_hours: number; pto_ytd_hours?: number | null; worked_hours?: number | null; source_file: string; source_sha256: string; source_page: number; earnings?: Json; review_note?: string | null }
+        Update: { employee_id?: string | null; review_note?: string | null }
+        Relationships: []
+      }
       _backup_audit_events_20260707: {
         Row: {
           action_type: string | null

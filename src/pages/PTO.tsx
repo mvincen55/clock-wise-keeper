@@ -1,3 +1,4 @@
+import PayrollPtoHistory from '@/components/team/PayrollPtoHistory';
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -360,6 +361,7 @@ export default function PTO() {
 
         {/* PTO Usage */}
         <TabsContent value="usage">
+          {ctx?.employee_id && <div className="mb-4"><PayrollPtoHistory employeeId={ctx.employee_id}/></div>}
           <Card className="card-elevated">
             <CardHeader>
               <div className="flex items-center justify-between">
