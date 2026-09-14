@@ -45,8 +45,8 @@ type Filter = 'all' | 'needs_action' | 'published' | KnowledgeArea;
 const FILTERS: Array<{ value: Filter; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'needs_action', label: 'Needs action' },
-  { value: 'handbook', label: 'Handbook' },
-  { value: 'playbook', label: 'Playbook' },
+  { value: 'handbook', label: 'Employee Handbook' },
+  { value: 'playbook', label: 'Office Procedures' },
   { value: 'published', label: 'Published' },
 ];
 
@@ -172,7 +172,7 @@ export default function KnowledgeWorkspace() {
   const initializeCategories = async () => {
     try {
       await ensureCategories.mutateAsync();
-      toast.success('Dental handbook and playbook categories are ready');
+      toast.success('Handbook and procedure categories are ready');
     } catch (setupError) {
       toast.error(setupError instanceof Error ? setupError.message : 'Could not set up categories');
     }
@@ -184,10 +184,10 @@ export default function KnowledgeWorkspace() {
         <div>
           <div className="flex items-center gap-2">
             <LibraryBig className="h-6 w-6 text-primary" />
-            <h1 className="text-2xl font-bold md:text-3xl">Knowledge Workspace</h1>
+            <h1 className="text-2xl font-bold md:text-3xl">Manage Policies & Procedures</h1>
           </div>
           <p className="mt-1 max-w-3xl text-muted-foreground">
-            Build, review, and publish the office Policy Handbook and Practice Playbook without editing the live version in place.
+            Draft, review, and publish your Employee Handbook and Office Procedures. Published versions stay available while you prepare revisions.
           </p>
         </div>
         <Button onClick={startNew} disabled={!data || data.categories.length === 0}>
@@ -198,9 +198,9 @@ export default function KnowledgeWorkspace() {
       {error ? (
         <Alert variant="destructive">
           <ShieldCheck className="h-4 w-4" />
-          <AlertTitle>The governed knowledge workspace is not available yet</AlertTitle>
+          <AlertTitle>Policies and procedures could not be loaded</AlertTitle>
           <AlertDescription className="space-y-2">
-            <p>{error instanceof Error ? error.message : 'The knowledge tables could not be loaded.'}</p>
+            <p>{error instanceof Error ? error.message : 'Please refresh and try again.'}</p>
             <p>No existing handbook, playbook, forms, or insurance manuals were changed.</p>
           </AlertDescription>
         </Alert>
@@ -214,7 +214,7 @@ export default function KnowledgeWorkspace() {
             <Card className="border-primary/25 bg-primary/5">
               <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="font-semibold">Set up the dental knowledge structure</p>
+                  <p className="font-semibold">Organize your policies and procedures</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Start with practical dental categories for the employee handbook and office procedures. They remain fully editable later.
                   </p>
@@ -253,7 +253,7 @@ export default function KnowledgeWorkspace() {
             <Card>
               <CardContent className="p-4">
                 <p className="text-2xl font-bold">{data.categories.length}</p>
-                <p className="text-xs text-muted-foreground">Dental categories</p>
+                <p className="text-xs text-muted-foreground">Categories</p>
               </CardContent>
             </Card>
           </section>
@@ -288,11 +288,11 @@ export default function KnowledgeWorkspace() {
                 <CardContent className="py-14 text-center">
                   <BookOpenCheck className="mx-auto h-10 w-10 text-muted-foreground/50" />
                   <p className="mt-3 font-medium">
-                    {items.length === 0 ? 'No governed policies or procedures yet' : 'Nothing matches this view'}
+                    {items.length === 0 ? 'No policies or procedures yet' : 'Nothing matches this view'}
                   </p>
                   <p className="mx-auto mt-1 max-w-lg text-sm text-muted-foreground">
                     {items.length === 0
-                      ? 'Uploaded documents remain source evidence. Create the first canonical policy or procedure when the category structure is ready.'
+                      ? 'Start from your existing office documents. Set up categories, then create a draft for management review.'
                       : 'Try another filter or search phrase.'}
                   </p>
                   {items.length === 0 && data.categories.length > 0 && (

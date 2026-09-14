@@ -260,7 +260,7 @@ export default function KnowledgeAcknowledgments() {
               <article className="rounded-2xl border bg-card shadow-sm">
                 <div className="border-b px-5 py-5 md:px-8 md:py-7">
                   <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span>{document.item.kind === 'policy' ? 'Office Handbook' : 'Practice Playbook'}</span>
+                    <span>{document.item.kind === 'policy' ? 'Employee Handbook' : 'Office Procedures'}</span>
                     <span aria-hidden="true">•</span>
                     <span>Version {document.version.version_number}</span>
                     <span aria-hidden="true">•</span>

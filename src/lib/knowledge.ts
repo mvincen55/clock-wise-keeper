@@ -88,7 +88,7 @@ export function knowledgeKindLabel(kind: KnowledgeKind): string {
 }
 
 export function knowledgeAreaLabel(area: KnowledgeArea): string {
-  return area === 'handbook' ? 'Policy Handbook' : 'Practice Playbook';
+  return area === 'handbook' ? 'Employee Handbook' : 'Office Procedures';
 }
 
 export function knowledgeAudienceLabel(role: KnowledgeAudienceRole): string {

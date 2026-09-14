@@ -6,7 +6,7 @@
  * reader remains available so migration never strands the team.
  */
 import {
-  AlarmClock, Banknote, BookOpen, CalendarOff, ClipboardCheck, HeartPulse, Siren,
+  AlarmClock, Banknote, BookOpen, CalendarOff, Siren,
 } from 'lucide-react';
 import DocumentLibraryReader, { type LibraryQuickLink } from '@/components/library/DocumentLibraryReader';
 import PublishedKnowledgeReader from '@/components/knowledge/PublishedKnowledgeReader';
@@ -15,28 +15,27 @@ import type { LibraryScope } from '@/lib/doc-library';
 const SCOPE: LibraryScope = { areas: ['workplace'], collections: ['handbook', 'hr'] };
 
 const QUICK_LINKS: LibraryQuickLink[] = [
-  { label: 'Late arrivals & no-shows', query: 'late arrival', icon: AlarmClock },
-  { label: 'PTO & time off', query: 'time off', icon: CalendarOff },
-  { label: 'Attendance', query: 'attendance', icon: ClipboardCheck },
-  { label: 'Payroll & punches', query: 'payroll', icon: Banknote },
-  { label: 'Benefits', query: 'benefits', icon: HeartPulse },
+  { label: 'Absences & Late Arrivals', query: 'attendance policy', icon: AlarmClock },
+  { label: 'Time Off', query: 'time off', icon: CalendarOff },
+  { label: 'Pay & Timekeeping', query: 'payroll', icon: Banknote },
   { label: 'Emergencies', query: 'emergency', icon: Siren },
 ];
 
 function LegacyHandbookReader() {
   return (
     <DocumentLibraryReader
-      title="Office Handbook"
+      title="Employee Handbook"
       subtitle="Policies, benefits, expectations, and information for working here."
+      appearance="handbook"
       icon={BookOpen}
       scope={SCOPE}
       aiScope="handbook"
-      askAiLabel="Ask AI"
-      searchPlaceholder="Search the handbook — “late arrival”, “PTO accrual”, “dress code”…"
+      askAiLabel="Ask about this handbook"
+      searchPlaceholder="Search handbook text…"
       quickLinks={QUICK_LINKS}
       emptyState={{
         title: 'The handbook is not here yet',
-        body: 'A manager can add source documents in Ask AI → Documents, then turn them into reviewed office policies in Management → Knowledge Workspace.',
+        body: 'Ask your manager for the current handbook. Managers can add documents in the assistant’s Documents tab or prepare policies in Manage Policies & Procedures.',
       }}
       documentsLabel="Source documents"
     />
@@ -47,7 +46,7 @@ export default function OfficeHandbook() {
   return (
     <PublishedKnowledgeReader
       area="handbook"
-      title="Office Handbook"
+      title="Employee Handbook"
       subtitle="Policies, benefits, expectations, and information for working here."
       fallback={<LegacyHandbookReader />}
     />

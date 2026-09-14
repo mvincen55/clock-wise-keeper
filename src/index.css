@@ -3595,3 +3595,177 @@
   .fof-policy-sheet .fof-options, .fof-policy-sheet .fof-option, .fof-policy-sheet .fof-agreement { break-inside: auto; page-break-inside: auto; }
   .fof-policy-sheet .fof-row, .fof-policy-sheet .fof-cell { break-inside: avoid; }
 }
+
+/* Employee handbook: opt-in editorial reading surface, shared by both paths.
+   Library readers outside .handbook retain their existing visual treatment. */
+.handbook {
+  --background: 40 33% 98%;
+  --foreground: 270 8% 19%;
+  --card: 40 33% 99%;
+  --card-foreground: 270 8% 19%;
+  --muted: 36 20% 94%;
+  --muted-foreground: 270 6% 40%;
+  --primary: 265 26% 34%;
+  --primary-foreground: 0 0% 100%;
+  --border: 36 13% 82%;
+  --input: 36 13% 82%;
+  --ring: 265 26% 34%;
+  background: #faf8f4;
+  color: #302d33;
+  max-width: 1280px;
+  padding: 24px 32px;
+  font-family: Inter, sans-serif;
+  overflow-wrap: anywhere;
+}
+.handbook-header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-shrink: 0;
+  border-top: 3px solid #53406e;
+  border-bottom: 1px solid #d8d2c8;
+  padding: 16px 0 18px;
+}
+.handbook-heading { flex: 1; min-width: 0; }
+.handbook-eyebrow { font-size: 10px; line-height: 1.6; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; color: #68616e; }
+.handbook-eyebrow span { padding: 0 7px; color: #aaa0af; }
+.handbook-header h1 { margin: 5px 0; font-family: Archivo, 'Helvetica Neue', sans-serif; font-size: clamp(26px, 3vw, 36px); font-weight: 800; letter-spacing: -.045em; line-height: 1.15; }
+.handbook-description { font-size: 13px; line-height: 1.6; color: #68616e; max-width: 560px; }
+.handbook-illustration { width: 132px; height: 88px; object-fit: contain; mix-blend-mode: multiply; }
+.handbook-utilities { width: 200px; flex-shrink: 0; border-left: 1px solid #d8d2c8; padding-left: 20px; }
+.handbook-utilities a { color: #53406e; font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 4px; }
+.handbook-utilities p { font-size: 10px; line-height: 1.6; margin-top: 9px; color: #68616e; }
+.handbook :is(button, input, [role='alert'], [class*='rounded']) { border-radius: 2px; box-shadow: none; }
+.handbook :is(button, a, input):focus-visible { outline: 2px solid #53406e; outline-offset: 3px; }
+.handbook mark { background: #eee0b5; color: #302d33; padding: 0 .08em; }
+.handbook-search input { height: 42px; font-size: 13px; }
+.handbook-quick-links { padding-bottom: 6px; border-bottom: 1px solid #d8d2c8; }
+.handbook-quick-links button { background: transparent; border: 0; border-right: 1px solid #d8d2c8; padding: 6px 12px; color: #53406e; }
+.handbook-quick-links button:last-child { border: 0; }
+.handbook-quick-links button:hover { text-decoration: underline; text-underline-offset: 3px; }
+.handbook-toc { padding-right: 12px; }
+.handbook-toc [aria-current], .handbook-toc button[aria-current] { border-left: 2px solid #53406e; background: #eee9f0; color: #53406e; }
+.handbook-reading-pane { background: #fffefa; border: 1px solid #d8d2c8; border-radius: 0; box-shadow: none; }
+.handbook-article { max-width: 820px; margin: 0 auto; }
+.handbook-article > header h2 { font-family: Archivo, 'Helvetica Neue', sans-serif; font-weight: 700; font-size: 30px; line-height: 1.25; }
+.handbook-uploaded .handbook-article > header { border-bottom: 1px solid #d8d2c8; padding-bottom: 22px; }
+.handbook-uploaded .handbook-article > header > .h-1,
+.handbook-uploaded .handbook-article > header .shrink-0 > svg,
+.handbook-uploaded .handbook-article > header span:has(> svg),
+.handbook-uploaded .handbook-article h2 > span[aria-hidden] { display: none; }
+/* Keep metadata text visible while removing decorative icons. */
+.handbook-uploaded .handbook-article > header p span:has(> svg) { display: inline-flex; }
+.handbook-uploaded .handbook-article > header p svg { display: none; }
+.handbook-article p, .handbook-article li { font-size: 15px; line-height: 1.85; }
+.handbook-article h3 { font-size: 18px; line-height: 1.5; scroll-margin-top: 100px; }
+.handbook-article h2, .handbook-article h3 { color: #302d33; }
+.handbook-article [role='alert'] { border: 0; border-left: 3px solid #53406e; background: #f0ecf2; padding: 20px; }
+.handbook-article [role='alert'] > svg { display: none; }
+.handbook-article [role='alert'] > div { padding-left: 0; }
+.published-reader .policy-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 32px; margin-top: 24px; align-items: start; }
+.policy-sidebar { position: sticky; top: 80px; max-height: calc(100dvh - 100px); display: flex; flex-direction: column; }
+.policy-search-count { margin: 10px 0 20px; font-size: 11px; color: #68616e; }
+.policy-search-clear { position: absolute; right: 10px; top: 10px; font-size: 12px; color: #53406e; }
+.policy-contents { overflow-y: auto; padding: 3px; }
+.policy-contents section { margin-bottom: 24px; }
+.policy-contents h2 { margin: 0 0 8px 10px; }
+.policy-toc-link { display: block; width: 100%; text-align: left; padding: 9px 10px; border-left: 2px solid transparent; font-size: 13px; line-height: 1.6; }
+.policy-toc-link:hover { background: #f0ecf2; }
+.policy-toc-link[aria-current] { border-left-color: #53406e; color: #53406e; background: #eee9f0; font-weight: 600; }
+.policy-toc-link small { display: block; font-size: 11px; font-weight: 400; line-height: 1.6; margin-top: 5px; color: #68616e; }
+.policy-mobile-toggle { display: none; }
+.policy-article { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); }
+.policy-article-header { padding: 28px 40px 24px; border-bottom: 1px solid hsl(var(--border)); }
+.policy-article-header h2 { margin-top: 10px; scroll-margin-top: 90px; }
+.policy-summary { margin-top: 14px; color: hsl(var(--muted-foreground)); }
+.policy-metadata { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 20px; font-size: 11px; line-height: 1.6; color: hsl(var(--muted-foreground)); }
+.policy-on-page { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 18px 40px; border-bottom: 1px solid hsl(var(--border)); align-items: baseline; }
+.policy-on-page a { color: #53406e; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+.policy-body { padding: 16px 40px 40px; }
+.policy-empty { padding: 40px; border: 1px solid hsl(var(--border)); }
+.policy-empty h2 { font-size: 20px; margin-bottom: 12px; }
+@media (max-width: 1023px) {
+  .handbook { padding: 16px 20px; }
+  .handbook-header { gap: 16px; flex-wrap: wrap; }
+  .handbook-heading { flex-basis: calc(100% - 100px); }
+  .handbook-illustration { width: 80px; height: 54px; }
+  .handbook-utilities { width: 100%; border-left: 0; border-top: 1px solid #d8d2c8; padding: 12px 0 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
+  .handbook-utilities p { margin: 0; }
+  .handbook-utilities br { display: none; }
+  .handbook-quick-links { display: none; }
+  .handbook-reading-pane { padding: 24px; }
+  .published-reader .policy-layout { grid-template-columns: minmax(0,1fr); gap: 18px; margin-top: 18px; }
+  .policy-sidebar { position: static; max-height: none; padding: 0; }
+  .policy-search-count { margin-bottom: 10px; }
+  .policy-mobile-toggle { display: flex; width: 100%; justify-content: space-between; padding: 12px 0; border-top: 1px solid #d8d2c8; border-bottom: 1px solid #d8d2c8; font-size: 13px; }
+  .policy-contents { display: none; max-height: 40vh; }
+  .policy-contents.is-open { display: block; padding-top: 18px; }
+  .policy-article-header { padding: 24px; }
+  .policy-on-page { padding: 16px 24px; }
+  .policy-body { padding: 12px 24px 28px; }
+  .handbook-article > header h2 { font-size: 27px; }
+}
+@media (max-width: 480px) {
+  .handbook { padding: 12px 16px; }
+  .handbook-header { gap: 12px; }
+  .handbook-reading-pane { padding: 20px 16px; }
+  .policy-article-header, .policy-on-page { padding: 20px 16px; }
+  .policy-body { padding: 12px 16px 24px; }
+  .handbook-eyebrow { font-size: 9px; }
+}
+@media print {
+  /* Hide app chrome without hiding the ancestors that contain the reader. */
+  body:has(.handbook) *:not(:has(.handbook)):not(.handbook):not(.handbook *) { display: none !important; }
+  body:has(.handbook) *:has(.handbook) { display: block !important; height: auto !important; min-height: 0 !important; overflow: visible !important; margin: 0 !important; padding: 0 !important; }
+  .handbook, .handbook * { box-shadow: none !important; text-shadow: none !important; background: white !important; color: black !important; }
+  .handbook { display: block !important; max-width: none; padding: 0 !important; height: auto !important; overflow: visible !important; }
+  .handbook :is(aside, nav, button, input, .handbook-utilities, .handbook-illustration, .handbook-search, .handbook-quick-links, .sticky, .policy-search, .policy-sidebar) { display: none !important; }
+  .handbook .grid, .handbook .policy-layout { display: block !important; }
+  .handbook main, .handbook-reading-pane { height: auto !important; overflow: visible !important; border: 0 !important; padding: 0 !important; }
+  .handbook article { max-width: none; border: 0; }
+  .handbook-header { margin-bottom: 20pt; border-top: 0; }
+  .handbook .policy-body, .handbook .policy-article-header { padding: 12pt 0; }
+  .handbook p, .handbook li { font-size: 11pt; line-height: 1.5; orphans: 3; widows: 3; }
+  .handbook h2, .handbook h3 { break-after: avoid; }
+  .handbook tr, .handbook [role='alert'] { break-inside: avoid; }
+  .handbook [class*='overflow-x'] { overflow: visible; }
+  .handbook table { min-width: 0; width: 100%; }
+}
+@media (max-width: 1023px) {
+  .handbook .policy-toc-link, .handbook-sheet [data-toc-id] { min-height: 44px; }
+}
+@media print { .handbook-sheet { display: none !important; } }
+.handbook-article > header .handbook-eyebrow { font-size: 10px; line-height: 1.6; }
+.handbook-uploaded .handbook-article > header p { font-size: 11px; line-height: 1.6; }
+
+/* Purple Envelope’s own typography and document language. */
+.handbook-header { border-top-width: 5px; }
+.handbook-header h1 { color: #53406e; }
+.handbook-eyebrow { font-family: 'JetBrains Mono', monospace; letter-spacing: .13em; }
+.handbook-article h2, .handbook-article h3 { font-family: Archivo, sans-serif; font-weight: 700; }
+.handbook-toc [aria-current], .handbook-toc button[aria-current] { background: #53406e; color: white; }
+.handbook-reading-pane, .handbook .policy-article { border-top: 3px solid #53406e; }
+.handbook-illustration { width: 100px; height: 67px; }
+.handbook-form-reference { margin: 20px 0 36px; }
+.handbook-form-instructions { padding: 20px 24px 8px; background: #efebf3; border-left: 3px solid #53406e; }
+.handbook-form-reference .handbook-eyebrow { font-size: 10px; line-height: 1.6; margin-bottom: 14px; color: #53406e; }
+.handbook-form-fields { padding: 24px 0 16px; }
+.handbook-form-fields ul { display: grid; grid-template-columns: 1fr 1fr; list-style: none; padding: 0; margin: 0; column-gap: 24px; }
+.handbook-form-fields li { border-top: 1px solid #d8d2c8; padding: 10px 0; font-size: 13px; }
+.handbook-form-fields .handbook-form-help { font-size: 13px; color: #68616e; margin-top: 18px; }
+.handbook-form-source { border-top: 1px solid #d8d2c8; border-bottom: 1px solid #d8d2c8; padding: 12px 0; }
+.handbook-form-source summary { color: #53406e; cursor: pointer; font-size: 12px; font-weight: 600; }
+.handbook-form-source summary:focus-visible { outline: 2px solid #53406e; outline-offset: 4px; }
+.handbook-form-source[open] summary { margin-bottom: 20px; }
+@media (max-width: 1023px) { .handbook-illustration { width: 64px; height: 43px; } }
+@media (max-width: 480px) { .handbook-form-instructions { padding: 16px 16px 4px; } .handbook-form-fields ul { grid-template-columns: 1fr; } }
+@media print { .handbook-form-reference { break-inside: auto; } .handbook-form-source { display: none; } }
+.handbook-form-fields ul { grid-template-columns: 1fr; }
+.handbook-uploaded .handbook-article h3 { scroll-margin-top: 128px; }
+@media (min-width: 1024px) { .handbook-uploaded .handbook-article h3 { scroll-margin-top: 24px; } }
+
+.handbook-section-link { margin: .75rem 0 1.25rem; font-size: .875rem; font-weight: 700; }
+.handbook-section-link a { color: #53406e; text-decoration: underline; text-underline-offset: 4px; }
+.handbook-section-link a:focus-visible { outline: 2px solid #53406e; outline-offset: 5px; }
+.handbook-numbered-heading { display: flex; gap: .6rem; margin: 1.5rem 0 .5rem; font-weight: 700; }
+@media print { .handbook-section-link { display: none !important; } .handbook-form-source { display: block !important; } .handbook-form-source > * { display: block !important; } }

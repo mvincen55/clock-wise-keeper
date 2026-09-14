@@ -13,7 +13,7 @@ import AccountabilityReviewQueue from '@/components/accountability/Accountabilit
 
 const ADMIN_LINKS = [
   { to: '/approvals', icon: CheckSquare, label: 'Approvals', description: 'Review pending requests' },
-  { to: '/management/knowledge', icon: BookOpenCheck, label: 'Knowledge Workspace', description: 'Draft, review, and publish the office handbook and playbook' },
+  { to: '/management/knowledge', icon: BookOpenCheck, label: 'Manage Policies & Procedures', description: 'Draft, review, and publish the office handbook and playbook' },
   { to: '/practice-setup', icon: FolderCog, label: 'Practice Setup', description: 'Sort existing documents and create human-confirmed office drafts' },
   { to: '/acknowledgments', icon: UserCheck, label: 'Office Acknowledgments', description: 'See who has opened, signed, paused, or missed a required office version' },
   { to: '/team', icon: Users, label: 'Team', description: 'Roster, schedules, and details' },
