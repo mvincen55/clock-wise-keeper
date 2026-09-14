@@ -66,14 +66,17 @@ export { DEFAULT_WEEKDAYS };
 /** Fetch all schedule versions with their weekday rules */
 export function useScheduleVersions() {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
 
   return useQuery({
-    queryKey: ['schedule-versions'],
-    enabled: !!user,
+    queryKey: ['schedule-versions',ctx?.org_id,ctx?.employee_id],
+    enabled: !!user && !!ctx?.employee_id,
     queryFn: async () => {
       const { data: versions } = await supabase
         .from('schedule_versions')
         .select('*')
+        .eq('org_id',ctx!.org_id)
+        .eq('employee_id',ctx!.employee_id)
         .order('effective_start_date', { ascending: false });
 
       if (!versions?.length) return [] as ScheduleVersionWithDays[];
@@ -281,3 +284,4 @@ export function summarizeWeekdays(weekdays: ScheduleWeekdayRow[]): string {
     })
     .join(', ');
 }
+

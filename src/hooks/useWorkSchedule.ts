@@ -34,12 +34,13 @@ export function useWorkSchedule() {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['work-schedule'],
+    queryKey: ['work-schedule',user?.id],
     enabled: !!user,
     queryFn: async () => {
       const { data } = await supabase
         .from('work_schedule')
         .select('*')
+        .eq('user_id',user!.id)
         .order('weekday');
       return (data || []) as WorkScheduleRow[];
     },
@@ -78,3 +79,4 @@ export function getScheduleForWeekday(schedule: WorkScheduleRow[], date: string)
   const weekday = d.getDay();
   return schedule.find(s => s.weekday === weekday) || null;
 }
+
