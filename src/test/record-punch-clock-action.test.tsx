@@ -92,7 +92,7 @@ beforeEach(() => {
 });
 
 describe('useClockAction (server-authoritative)', () => {
-  it('clocks in via the record_punch RPC and sends only the action', async () => {
+  it('clocks in with optional location while keeping time and identity server-owned', async () => {
     rpcResult = {
       data: { entry_id: 'e1', punch_id: 'p1', seq: 0, punch_time: '2026-08-14T14:00:00+00:00' },
       error: null,
@@ -101,10 +101,10 @@ describe('useClockAction (server-authoritative)', () => {
 
     await waitFor(() => expect(outcomes).toEqual(['ok']));
     expect(rpcCalls).toHaveLength(1);
-    expect(rpcCalls[0].fn).toBe('record_punch');
+    expect(rpcCalls[0].fn).toBe('record_punch_with_location');
     // The client contributes no timestamp, no seq, no entry id — the
     // server owns time. p_action must be the ONLY argument.
-    expect(Object.keys(rpcCalls[0].args)).toEqual(['p_action']);
+    expect(Object.keys(rpcCalls[0].args)).toEqual(['p_action','p_lat','p_lng','p_accuracy']);
     expect(rpcCalls[0].args.p_action).toBe('clock_in');
     expect(fromCalls).toEqual([]);
     expect(toastError).not.toHaveBeenCalled();
@@ -164,3 +164,4 @@ describe('friendlyPunchError', () => {
     expect(friendlyPunchError('')).toBeNull();
   });
 });
+
