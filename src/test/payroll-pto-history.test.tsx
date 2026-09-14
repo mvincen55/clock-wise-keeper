@@ -8,7 +8,7 @@ vi.mock('@/integrations/supabase/client',()=>({supabase:{from:()=>{
 }}}));
 afterEach(cleanup);
 describe('Payroll PTO documentation',()=>{
- it('shows usage and entry attribution without source references',async()=>{
+ it('shows entry attribution without source references',async()=>{
  const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
  render(<QueryClientProvider client={client}><PayrollPtoHistory employeeId="gina"/></QueryClientProvider>);
  await waitFor(()=>expect(screen.getByText('8.00h PTO used')).toBeTruthy());

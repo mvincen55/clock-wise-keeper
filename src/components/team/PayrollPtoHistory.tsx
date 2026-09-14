@@ -17,7 +17,7 @@ export default function PayrollPtoHistory({employeeId}:{employeeId:string}) {
   <div className="space-y-3">{data.map(r=><div key={r.id} className="rounded border p-3 text-sm">
    <div className="flex flex-wrap justify-between gap-2"><span>{formatDate(r.period_start)} – {formatDate(r.period_end)}</span><strong>{Number(r.pto_hours).toFixed(2)}h PTO used</strong></div>
    <p className="text-xs text-muted-foreground">Worked: {r.worked_hours==null?'Not reported':`${Number(r.worked_hours).toFixed(2)}h`} · PTO year to date: {r.pto_ytd_hours==null?'Not reported':`${Number(r.pto_ytd_hours).toFixed(2)}h`}</p>
-   <p className="text-xs text-muted-foreground">Paychex check {formatDate(r.check_date)} · {r.source_file}, page {r.source_page}</p>
+   {r.entered_by_label&&<p className="text-xs text-muted-foreground">Entered by {r.entered_by_label}</p>}
    
   </div>)}</div>
  </section>;
