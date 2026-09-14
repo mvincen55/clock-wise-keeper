@@ -19,7 +19,7 @@ export type EditablePunch = {
 };
 
 export type PunchEditOp =
-  | { op: 'update'; id: string; punch_time: string; punch_type: 'in' | 'out'; source?: string }
+  | { op: 'update'; id: string; punch_time: string; punch_type: 'in' | 'out' }
   | { op: 'void'; id: string }
   | { op: 'insert'; punch_time: string; punch_type: 'in' | 'out' };
 
@@ -51,15 +51,13 @@ export function buildPunchEditOps(original: EditablePunch[], edited: EditablePun
     if (!orig || orig.voided_at) continue;
     const changed =
       orig.punch_time !== ep.punch_time ||
-      orig.punch_type !== ep.punch_type ||
-      orig.source !== ep.source;
+      orig.punch_type !== ep.punch_type;
     if (changed) {
       ops.push({
         op: 'update',
         id: ep.id,
         punch_time: ep.punch_time,
         punch_type: ep.punch_type,
-        ...(orig.source !== ep.source ? { source: ep.source } : {}),
       });
     }
   }
@@ -128,3 +126,4 @@ export function useSavePunchEdits() {
     },
   });
 }
+

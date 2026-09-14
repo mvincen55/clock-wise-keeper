@@ -290,13 +290,19 @@ export function useMarkCorrectionApplied() {
 
 /** Fetch audit history for a specific record */
 export function useAuditHistory(targetTable?: string, targetId?: string) {
+  const {data:ctx} = useOrgContext();
   return useQuery({
-    queryKey: ['audit-history', targetTable, targetId],
-    enabled: !!targetTable && !!targetId,
+    queryKey: ['audit-history', ctx?.org_id, targetTable, targetId],
+    enabled: !!ctx?.org_id && !!targetTable && !!targetId,
     queryFn: async () => {
+      const {data:settings,error:settingsError} = await (supabase as any).from('office_attendance_settings')
+        .select('timekeeping_history_start_at').eq('org_id',ctx!.org_id).maybeSingle();
+      if (settingsError) throw settingsError;
       const { data, error } = await supabase
         .from('audit_events')
         .select('*')
+        .eq('org_id',ctx!.org_id)
+        .gte('created_at',settings?.timekeeping_history_start_at || '1970-01-01T00:00:00Z')
         .eq('target_table', targetTable!)
         .eq('target_id', targetId!)
         .order('created_at', { ascending: false });
@@ -308,13 +314,19 @@ export function useAuditHistory(targetTable?: string, targetId?: string) {
 
 /** Fetch audit history for a date + employee */
 export function useAuditHistoryByDate(employeeId?: string, entryDate?: string) {
+  const {data:ctx} = useOrgContext();
   return useQuery({
-    queryKey: ['audit-history', 'date', employeeId, entryDate],
-    enabled: !!employeeId && !!entryDate,
+    queryKey: ['audit-history', ctx?.org_id, 'date', employeeId, entryDate],
+    enabled: !!ctx?.org_id && !!employeeId && !!entryDate,
     queryFn: async () => {
+      const {data:settings,error:settingsError} = await (supabase as any).from('office_attendance_settings')
+        .select('timekeeping_history_start_at').eq('org_id',ctx!.org_id).maybeSingle();
+      if (settingsError) throw settingsError;
       const { data, error } = await supabase
         .from('audit_events')
         .select('*')
+        .eq('org_id',ctx!.org_id)
+        .gte('created_at',settings?.timekeeping_history_start_at || '1970-01-01T00:00:00Z')
         .eq('employee_id', employeeId!)
         .eq('related_date', entryDate!)
         .order('created_at', { ascending: false });
@@ -364,3 +376,4 @@ export function useWriteManagerEditAudit() {
     },
   });
 }
+

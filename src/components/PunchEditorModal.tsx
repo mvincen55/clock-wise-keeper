@@ -170,18 +170,6 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, e
     });
   };
 
-  const convertAllGpsToManual = () => {
-    setEditedPunches(prev => prev.map(p => {
-      if (p.source === 'auto_location' && !p.is_deleted && !p.voided_at) {
-        return { ...p, source: 'manual', is_edited: !p.is_new ? true : p.is_edited };
-      }
-      return p;
-    }));
-    setQuickFixUsed(true);
-  };
-
-  const hasGpsPunches = editedPunches.some(p => p.source === 'auto_location' && !p.is_deleted && !p.voided_at);
-
   // Quick fixes
   const setClockOutToScheduledEnd = () => {
     const sched = schedule ? getScheduleForWeekday(schedule, entryDate) : null;
@@ -346,25 +334,7 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, e
                 {/* Source selector + GPS indicator row */}
                 <div className="flex items-center gap-2 pl-1">
                   <Label className="text-[10px] text-muted-foreground">Source:</Label>
-                  <Select
-                    value={p.source}
-                    onValueChange={v => updatePunch(i, 'source', v)}
-                  >
-                    <SelectTrigger className="w-24 h-6 text-[10px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="manual">Manual</SelectItem>
-                      <SelectItem value="auto_location">GPS</SelectItem>
-                      <SelectItem value="import">Import</SelectItem>
-                      <SelectItem value="system_adjustment">System</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {sourceChanged && (
-                    <span className="text-[10px] text-muted-foreground">
-                      was {SOURCE_LABELS[orig!.source] || orig!.source}
-                    </span>
-                  )}
+                  <span className="text-xs">{SOURCE_LABELS[p.source] || p.source}</span>
                   {hasGps && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary flex items-center gap-0.5 ml-auto">
                       <MapPin className="h-2.5 w-2.5" /> GPS recorded
@@ -387,11 +357,7 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, e
           <Button variant="outline" size="sm" onClick={autoSort}>
             <ArrowDownUp className="h-3.5 w-3.5 mr-1" /> Auto Sort
           </Button>
-          {hasGpsPunches && (
-            <Button variant="outline" size="sm" onClick={convertAllGpsToManual}>
-              <RefreshCw className="h-3.5 w-3.5 mr-1" /> Convert All GPS → Manual
-            </Button>
-          )}
+
         </div>
 
         {/* Quick Fix section */}
@@ -455,3 +421,4 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, e
     </Dialog>
   );
 }
+

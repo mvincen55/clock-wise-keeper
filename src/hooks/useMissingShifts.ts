@@ -35,6 +35,8 @@ export function useMissingShifts(startDate?: string, endDate?: string) {
     // Members outside the clock flow (owners) can't punch, so no day of
     // theirs is ever "missing".
     if (!clocksIn) return [];
+    // Never warn while any part of the attendance picture is still loading.
+    if (!versions || !legacySchedule || !entries || !daysOff || !closures || !exceptions) return [];
     const hasVersions = versions && versions.length > 0;
     const hasLegacy = legacySchedule && legacySchedule.length > 0;
     if (!hasVersions && !hasLegacy) return [];
@@ -54,8 +56,8 @@ export function useMissingShifts(startDate?: string, endDate?: string) {
 
     const dayOffDates = new Set<string>();
     (daysOff || []).forEach(d => {
-      // Unscheduled days off are absences — they should NOT exclude the day from missing shifts
-      if (d.type === 'unscheduled') return;
+      // A recorded absence already explains the missing work. Its attendance
+      // status stays absent, but it does not also need a missing-punch response.
       const s = new Date(d.date_start + 'T00:00:00');
       const e = new Date(d.date_end + 'T00:00:00');
       for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
@@ -80,7 +82,7 @@ export function useMissingShifts(startDate?: string, endDate?: string) {
         }
       }
 
-      if (!sched && hasLegacy) {
+      if (!hasVersions && hasLegacy) {
         const legacy = getScheduleForWeekday(legacySchedule, dateStr);
         if (legacy) sched = legacy;
       }
@@ -112,3 +114,4 @@ export function useMissingShifts(startDate?: string, endDate?: string) {
     return missing;
   }, [clocksIn, versions, legacySchedule, entries, daysOff, closures, exceptions, startDate, endDate, bufferMinutes]);
 }
+

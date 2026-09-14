@@ -19,10 +19,10 @@ export type AttendanceExceptionRow = {
 export function useAttendanceExceptions(startDate?: string, endDate?: string) {
   const { user } = useAuth();
   return useQuery({
-    queryKey: ['attendance-exceptions', startDate, endDate],
+    queryKey: ['attendance-exceptions', user?.id, startDate, endDate],
     enabled: !!user,
     queryFn: async () => {
-      let q = supabase.from('attendance_exceptions').select('*').order('exception_date', { ascending: false });
+      let q = supabase.from('attendance_exceptions').select('*').eq('user_id',user!.id).order('exception_date', { ascending: false });
       if (startDate) q = q.gte('exception_date', startDate);
       if (endDate) q = q.lte('exception_date', endDate);
       const { data } = await q;
@@ -77,3 +77,4 @@ export function useResolveException() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['attendance-exceptions'] }),
   });
 }
+

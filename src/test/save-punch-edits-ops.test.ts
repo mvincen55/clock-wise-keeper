@@ -47,7 +47,7 @@ describe('buildPunchEditOps', () => {
     expect(buildPunchEditOps(orig, [ep({ id: 'a' })])).toEqual([]);
   });
 
-  it('time and type changes become one update op; source rides along only when changed', () => {
+  it('time and type changes become one update op; source is not user-selectable', () => {
     const orig = [ep({ id: 'a' })];
     const edited = [ep({ id: 'a', punch_time: '2026-08-14T13:30:00.000Z', punch_type: 'out' })];
     expect(buildPunchEditOps(orig, edited)).toEqual([
@@ -55,9 +55,7 @@ describe('buildPunchEditOps', () => {
     ]);
 
     const sourceChanged = [ep({ id: 'a', source: 'auto_location' })];
-    expect(buildPunchEditOps(orig, sourceChanged)).toEqual([
-      { op: 'update', id: 'a', punch_time: orig[0].punch_time, punch_type: 'in', source: 'auto_location' },
-    ]);
+    expect(buildPunchEditOps(orig, sourceChanged)).toEqual([]);
   });
 
   it('edits to a voided punch are dropped', () => {
@@ -102,3 +100,4 @@ describe('friendlyEditError', () => {
     expect(friendlyEditError('connection reset')).toBeNull();
   });
 });
+
