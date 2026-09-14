@@ -10,6 +10,7 @@ import { MailCheck, Copy, Trash2, Loader2, Send, Pencil } from 'lucide-react';
 import { ROLE_LABELS } from '@/hooks/useOperationalRoles';
 import { MEMBER_ROLE_LABELS } from '@/lib/roles';
 import { inviteTeamStatus } from '@/lib/team-status';
+import { formatClockRange } from '@/lib/time-utils';
 import InviteEmployeeModal from '@/components/InviteEmployeeModal';
 
 const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
