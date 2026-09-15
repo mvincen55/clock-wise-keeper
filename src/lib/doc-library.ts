@@ -236,14 +236,25 @@ export function outlineFromBlocks(blocks: DocBlock[]): OutlineItem[] {
     }));
 }
 
+const OWN_NUMBER = /^(?:(\d+(?:\.\d+)*)[.)]?|([IVXLC]+)\.)\s+/;
+
 /** Headings that carry their own number ("1. Work Schedule", "2.3 Fees", "IV. Investigation") keep it. */
-export const isSelfNumbered = (text: string): boolean => /^(\d+(\.\d+)*[.)]?|[IVXLC]+\.)\s/.test(text.trim());
+export const isSelfNumbered = (text: string): boolean => OWN_NUMBER.test(text.trim());
+
+/** The number a self-numbered heading carries ("2.3 Fees" → "2.3", "IV. Investigation" → "IV"), else null. */
+export function ownHeadingNumber(text: string): string | null {
+  const match = OWN_NUMBER.exec(text.trim());
+  return match ? match[1] ?? match[2] : null;
+}
+
+/** Heading text without the number it carries, for surfaces that show the number separately. */
+export const headingTitle = (text: string): string => text.trim().replace(OWN_NUMBER, '');
 
 /**
  * Policy-book numbering for an outline: parts 1, 2, 3; sections 1.1, 1.2;
  * sub-sections 1.1.1, relative to the shallowest heading level. Every
- * heading counts toward its siblings, but a heading that already carries a
- * number in its text is left out of the map so it is never numbered twice.
+ * heading counts toward its siblings; a heading that already carries a
+ * number in its text keeps that number, so it is never numbered twice.
  */
 export function outlineNumbers(outline: OutlineItem[]): Map<string, string> {
   const numbers = new Map<string, string>();
@@ -257,7 +268,7 @@ export function outlineNumbers(outline: OutlineItem[]): Map<string, string> {
     counters.length = depth + 1;
     counters[depth] = (counters[depth] ?? 0) + 1;
     previousDepth = depth;
-    if (!isSelfNumbered(item.text)) numbers.set(item.id, counters.join('.'));
+    numbers.set(item.id, ownHeadingNumber(item.text) ?? counters.join('.'));
   }
   return numbers;
 }

@@ -12,7 +12,7 @@ import HandbookReferenceTable from '@/components/handbook/HandbookReferenceTable
 import HandbookSectionLink from '@/components/handbook/HandbookSectionLink';
 import { highlighted } from '@/components/library/highlight';
 import type { DocBlock } from '@/lib/doc-format';
-import { sectionAnchorId } from '@/lib/doc-library';
+import { headingTitle, sectionAnchorId } from '@/lib/doc-library';
 
 // Anchor offset: below the sticky bars when the window scrolls (mobile),
 // just inside the pane when the pane scrolls (desktop).
@@ -29,7 +29,8 @@ export function BlockView({ block, id, query, number }: { block: DocBlock; id: s
   const render = (text: string) => highlighted(text, query);
   const numbered = number ? <span className="handbook-section-number" aria-hidden="true">{number}</span> : null;
   switch (block.type) {
-    case 'heading':
+    case 'heading': {
+      const title = number ? headingTitle(block.text) : block.text;
       if (block.level <= 2) {
         return (
           <h2
@@ -38,22 +39,23 @@ export function BlockView({ block, id, query, number }: { block: DocBlock; id: s
             className={`${ANCHOR} mb-3 mt-10 flex items-center gap-2.5 border-b border-border/70 pb-2 text-xl font-bold tracking-tight text-foreground first:mt-0`}
           >
             {numbered ?? <span aria-hidden className="h-4 w-1 shrink-0 rounded-full bg-primary/60" />}
-            <span className="min-w-0">{render(block.text)}</span>
+            <span className="min-w-0">{render(title)}</span>
           </h2>
         );
       }
       if (block.level === 3) {
         return (
           <h3 id={id} tabIndex={-1} className={`${ANCHOR} mb-2 mt-6 text-base font-semibold text-foreground first:mt-0`}>
-            {numbered}{render(block.text)}
+            {numbered}{render(title)}
           </h3>
         );
       }
       return (
         <h4 id={id} tabIndex={-1} className={`${ANCHOR} handbook-subheading mb-1.5 mt-5 text-[15px] font-semibold text-foreground first:mt-0`}>
-          {numbered}{render(block.text)}
+          {numbered}{render(title)}
         </h4>
       );
+    }
     case 'table':
       return <HandbookReferenceTable id={id} className={ANCHOR} rows={block.rows} hasHeader={block.hasHeader !== false} renderText={render} />;
     case 'code':

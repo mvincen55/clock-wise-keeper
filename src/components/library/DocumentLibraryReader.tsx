@@ -95,6 +95,7 @@ import {
   locateQueryBlock,
   outlineAncestors,
   outlineFromBlocks,
+  headingTitle,
   outlineNumbers,
   outlineTree,
   readerDocsFor,
@@ -220,7 +221,7 @@ function TocLabel({ item, numbers }: { item: OutlineItem; numbers?: Map<string, 
   return (
     <>
       {number && <span className="handbook-toc-number" aria-hidden="true">{number}</span>}
-      {item.text}
+      {number ? headingTitle(item.text) : item.text}
     </>
   );
 }

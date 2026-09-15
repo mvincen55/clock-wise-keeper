@@ -10,6 +10,7 @@
  * from its own title, then its part, then its content. Nothing here is
  * office-specific: the vocabulary is generic dental-office language.
  */
+import { headingTitle } from '@/lib/doc-library';
 import type { DocBlock } from '@/lib/doc-format';
 import { blockText } from '@/lib/doc-library';
 import { stripLiveFields } from '@/lib/handbook-live-fields';
@@ -124,14 +125,14 @@ export function sourceSections(doc: SourceDoc, blocks: DocBlock[]): SourceSectio
     if (block.type === 'heading' && block.level < level) {
       // A part with its own text (a mission statement, say) is also a section.
       close();
-      part = block.text;
+      part = headingTitle(block.text);
       const next = blocks[index + 1];
-      if (next && next.type !== 'heading') open = { title: block.text, part: null, blockIndex: index, blocks: [] };
+      if (next && next.type !== 'heading') open = { title: headingTitle(block.text), part: null, blockIndex: index, blocks: [] };
       return;
     }
     if (block.type === 'heading' && block.level === level) {
       close();
-      open = { title: block.text, part, blockIndex: index, blocks: [] };
+      open = { title: headingTitle(block.text), part, blockIndex: index, blocks: [] };
       return;
     }
     if (!open) {
