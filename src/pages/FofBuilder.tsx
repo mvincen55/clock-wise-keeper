@@ -1311,13 +1311,79 @@ export default function FofBuilder() {
     else toast.success(summary);
   };
 
-  // OCR and its review image stay in this browser. Only confirmed rows enter
-  // the form; no cloud AI or upload fallback exists.
+  // Screenshot import: staff crop out patient identifiers first; the image
+  // is parsed in memory (never stored) and only procedure rows come back.
+  // Every ESTIMATE (allowable, ins pays, portion) is recomputed from our own
+  // schedules — never taken from the screenshot. Large screenshots (retina
+  // captures are often multi-MB PNGs) get downscaled/re-encoded in memory
+  // so they fit the function's payload cap; nothing ever touches disk.
+  const shrinkForUpload = (dataUrl: string): Promise<string> =>
+    new Promise(resolve => {
+      if (dataUrl.length < 4_000_000) return resolve(dataUrl);
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 2200 / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(dataUrl);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.9));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  const readTreatmentWithAi = async (file: File): Promise<{ rows: LocalTreatmentRow[]; warnings: string[] }> => {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error('Could not read the image'));
+      reader.readAsDataURL(file);
+    });
+    const image = await shrinkForUpload(dataUrl);
+    const { data, error } = await supabase.functions.invoke('parse-treatment', { body: { image } });
+    if (error) {
+      // invoke() wraps non-2xx responses in a generic message; the
+      // function's JSON body has the actual reason.
+      let message = error.message;
+      try {
+        const body = (await (error as { context?: { json?: () => Promise<unknown> } }).context?.json?.()) as { error?: string } | undefined;
+        if (body?.error) message = body.error;
+      } catch { /* keep the generic message */ }
+      throw new Error(message);
+    }
+    if (data?.status !== 'complete' || !Array.isArray(data.rows)) {
+      throw new Error(data?.error || 'The extraction was not confirmed complete. Nothing was imported.');
+    }
+    return { rows: data.rows as LocalTreatmentRow[], warnings: [] };
+  };
+
+  // The AI reader is the primary path (it reads real PMS screenshots
+  // reliably); the in-browser OCR is the fallback when it is unavailable.
+  // Either way staff review every row before anything enters the form.
   const importScreenshot = async (file: File) => {
     const scope = ++importScope.current;
     setImporting(true);
     try {
-      const result = await readLocalTreatment(file, Object.fromEntries([...officeByCode].map(([code,item]) => [code,item.description])));
+      let result: { rows: LocalTreatmentRow[]; warnings: string[] };
+      let aiMessage = '';
+      try {
+        result = await readTreatmentWithAi(file);
+      } catch (aiError) {
+        aiMessage = aiError instanceof Error ? aiError.message : '';
+        if (scope !== importScope.current) return;
+        try {
+          result = await readLocalTreatment(file, Object.fromEntries([...officeByCode].map(([code,item]) => [code,item.description])));
+        } catch (localError) {
+          // Prefer the AI reader's specific reason (e.g. "more than 40 procedures")
+          // over the OCR's generic one, unless the AI simply could not be reached.
+          const specific = aiMessage && !/non-2xx|Failed to send|fetch|not confirmed complete/i.test(aiMessage);
+          throw new Error(specific ? aiMessage : localError instanceof Error ? localError.message : 'Screenshot import failed. Nothing was imported.');
+        }
+      }
       if (scope !== importScope.current) return;
       if (!result.rows.length) throw new Error('No procedures were read. Nothing was imported.');
       setConfirmState({

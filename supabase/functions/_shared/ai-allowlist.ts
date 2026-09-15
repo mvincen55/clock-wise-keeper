@@ -103,6 +103,11 @@ export const AI_GATEWAY_ALLOWLIST: Record<string, GatewayEntry> = {
     handler: "consented",
     reason: "Owner deliberately uploads office policy documents to the corpus.",
   },
+  "parse-treatment": {
+    handler: "consented",
+    reason:
+      "Staff crop patient identifiers, then upload a treatment-plan screenshot and ask for its procedure rows to be read. The image is processed in memory and only code/tooth/fee/visit rows come back.",
+  },
   "name-visits": {
     handler: "consented",
     reason:

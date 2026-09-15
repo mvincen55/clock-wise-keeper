@@ -96,5 +96,21 @@ it('an incomplete extraction cannot enter the successful UI import path; retry c
   fireEvent.change(input, { target: { files: [file] } });
   fireEvent.click(await screen.findByRole('button',{name:'Import reviewed rows'}));
   await waitFor(() => expect(screen.getByPlaceholderText('D2740 / crown')).toHaveValue('D2740'));
-  expect(mocks.invoke).not.toHaveBeenCalled();
+  // The AI reader was tried first each time; the browser OCR only ran because it did not confirm a complete read.
+  expect(mocks.invoke.mock.calls.filter(call => call[0] === 'parse-treatment')).toHaveLength(2);
+  expect(mocks.readLocal).toHaveBeenCalledTimes(2);
+});
+
+it('a complete AI read goes straight to review without the browser OCR', async () => {
+  mount();
+  const input = document.querySelector<HTMLInputElement>('input[type=file]')!;
+  const file = new File(['synthetic-image'], 'synthetic.png', { type: 'image/png' });
+  mocks.invoke.mockImplementation(async (name: string) => name === 'parse-treatment'
+    ? { data: { status: 'complete', rows: [{ code: 'D2740', tooth: '3', description: 'Crown', fee: 100, officeFee: null, entryDate: '', visit: 5 }] } }
+    : { data: {} });
+  fireEvent.change(input, { target: { files: [file] } });
+  fireEvent.click(await screen.findByRole('button',{name:'Import reviewed rows'}));
+  await waitFor(() => expect(screen.getByPlaceholderText('D2740 / crown')).toHaveValue('D2740'));
+  expect(mocks.readLocal).not.toHaveBeenCalled();
+  expect(mocks.error).not.toHaveBeenCalled();
 });

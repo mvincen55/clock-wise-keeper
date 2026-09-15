@@ -63,12 +63,15 @@ with no model request, chat persistence or live carrier eligibility lookup. Unsu
 questions say what can be answered. General Office knowledge uses the remote model,
 with separate history; only that channel supports explicitly enabled Training.
 
-Screenshot OCR now uses same-origin Tesseract assets in the browser, with no remote
-fallback. Staff compare the extracted rows with the local screenshot before import.
-Ambiguous codes, teeth or money stop the whole import. Fee and Office columns remain
-distinct; the existing office-fee precedence still applies. Names/form changes and
-reset invalidate pending imports. The retired parse-treatment endpoint returns 410
-without reading or forwarding an image.
+Screenshot import reads the cropped image with the `parse-treatment` vision endpoint
+again (in memory, never stored; only code/tooth/fee/visit rows come back), because the
+in-browser Tesseract read rejected ordinary-resolution PMS screenshots whenever any
+cell fell under its confidence floor. The browser OCR remains the fallback when the
+endpoint is unavailable. Staff still compare the extracted rows with the local
+screenshot before import, the no-patient-information reminder still precedes every
+upload, Fee and Office columns remain distinct, the existing office-fee precedence
+still applies, and names/form changes and reset invalidate pending imports. Deploy
+`parse-treatment` with the frontend.
 
 Validation: application TypeScript, production build, changed Deno endpoint check,
 FOF grouping/layout/browser-privacy tests, and actual endpoint tests for role,
