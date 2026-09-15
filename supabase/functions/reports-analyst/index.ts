@@ -14,7 +14,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
 import { guardAiInput, JAILBREAK_REFUSAL } from "../_shared/jailbreak-guard.ts";
 
-import { loadEvidence, evidenceChunks, validDate, type Source } from "../_shared/analyst-evidence.ts";
+import { loadEvidence, evidenceChunks, validDate, type EvidenceDb, type Source } from "../_shared/analyst-evidence.ts";
 import { scrubMessages } from "../_shared/ai-safe.ts";
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 // The record book deserves the strongest reasoning model we have.
@@ -219,7 +219,10 @@ Deno.serve(async (req) => {
       return json({ answer: JAILBREAK_REFUSAL });
     }
 
-    const evidence = await loadEvidence(asUser, orgId, {from,to,source,kind,employeeId});
+    // The loader only needs the query-builder surface. Comparing the fully
+    // generic supabase-js client against that structural type makes Deno's
+    // checker fail with TS2589 (excessively deep), so narrow it explicitly.
+    const evidence = await loadEvidence(asUser as unknown as EvidenceDb, orgId, {from,to,source,kind,employeeId});
     const {records: rows, ...coverage} = evidence;
     if (action === 'preview') return json(coverage);
     if (!rows.length) return json({...coverage, answer: evidence.warnings.length
