@@ -31,7 +31,7 @@ function setup(failure: string, endpoint: string) {
   return { ...edge, gateway, client, eq };
 }
 
-describe.each(['parse-treatment', 'consent-ai', 'commitment-listen'])('%s paid authorization', endpoint => {
+describe.each(['consent-ai', 'commitment-listen'])('%s paid authorization', endpoint => {
   it.each(['missing','invalid','token-throws','nonmember','revoked','inactive','removed','allowlist-error','allowlist-throws','membership-error','membership-throws'])('rejects %s before calling the gateway', async failure => {
     const { handle, gateway, eq } = setup(failure, endpoint);
     const res = await handle(new Request('https://example.test', { method: 'POST', headers: failure === 'missing' ? {} : { Authorization: 'Bearer synthetic' }, body: JSON.stringify({ image: 'data:image/png;base64,AAAA', action: 'draft', message: 'Synthetic office task' }) }));
@@ -42,15 +42,6 @@ describe.each(['parse-treatment', 'consent-ai', 'commitment-listen'])('%s paid a
       expect(eq).toHaveBeenCalledWith('status', 'active');
     }
   });
-});
-
-it('the retired screenshot endpoint never forwards an image, even for an approved member', async () => {
-  const { handle, gateway, client } = setup('allowed', 'parse-treatment');
-  const res = await handle(new Request('https://example.test', { method: 'POST', headers: { Authorization: 'Bearer synthetic' }, body: JSON.stringify({ image: 'data:image/png;base64,AAAA' }) }));
-  expect(res.status).toBe(410);
-  expect((await res.json()).error).toContain('privately in your browser');
-  expect(client.rpc).toHaveBeenCalledWith('is_allowed_user');
-  expect(gateway).not.toHaveBeenCalled();
 });
 
 it.each(['consent-ai', 'commitment-listen'])('an approved active member can reach %s', async endpoint => {

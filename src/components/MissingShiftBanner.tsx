@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { MissingShiftDay } from '@/hooks/useMissingShifts';
 import { useCreateException, useResolveException } from '@/hooks/useAttendanceExceptions';
 import { useAddDayOff } from '@/hooks/useDaysOff';
+import { useSubmitPtoRequest } from '@/hooks/usePtoRequests';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,8 +29,10 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
   const createException = useCreateException();
   const resolveException = useResolveException();
   const addDayOff = useAddDayOff();
+  const submitPto = useSubmitPtoRequest();
   const { user } = useAuth();
   const { data: org } = useOrgContext();
+  const isManager = org?.role === 'owner' || org?.role === 'manager';
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -47,19 +50,30 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
 
     try {
       if (action === 'pto') {
-        await addDayOff.mutateAsync({
-          date_start: actionDay.date,
-          date_end: actionDay.date,
-          type: 'scheduled_with_notice',
-          notes: reason || 'Added from missing shift prompt',
-        });
+        // Owners and managers record the day directly; everyone else files a
+        // PTO request so the day goes through approval like any other.
+        if (isManager) {
+          await addDayOff.mutateAsync({
+            date_start: actionDay.date,
+            date_end: actionDay.date,
+            type: 'scheduled_with_notice',
+            notes: reason || 'Added from missing shift prompt',
+          });
+        } else {
+          await submitPto.mutateAsync({
+            start_date: actionDay.date,
+            end_date: actionDay.date,
+            pto_type: 'pto',
+            note: reason || 'Missing shift: requesting time off for this day',
+          });
+        }
         const { data: exc } = await supabase.from('attendance_exceptions')
           .select('id').eq('user_id', user.id).eq('exception_date', actionDay.date).maybeSingle();
         if (exc) {
           await resolveException.mutateAsync({
             id: exc.id,
-            reason_text: reason || 'PTO entry added',
-            resolution_action: 'pto_added',
+            reason_text: reason || (isManager ? 'PTO entry added' : 'PTO requested'),
+            resolution_action: isManager ? 'pto_added' : 'pto_requested',
           });
         }
       } else if (action === 'excused' || action === 'ignore') {
@@ -88,7 +102,7 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
         });
       }
 
-      toast({ title: 'Missing shift resolved' });
+      toast({ title: action === 'pto' && !isManager ? 'PTO request sent for approval' : 'Missing shift resolved' });
       qc.invalidateQueries({ queryKey: ['attendance-exceptions'] });
       qc.invalidateQueries({ queryKey: ['time-entries'] });
       qc.invalidateQueries({ queryKey: ['days-off'] });
@@ -135,7 +149,7 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
           {!action && (
             <div className="grid grid-cols-1 gap-2">
               <Button variant="outline" className="justify-start" onClick={() => setAction('pto')}>
-                <CalendarDays className="mr-2 h-4 w-4" /> Add PTO Entry
+                <CalendarDays className="mr-2 h-4 w-4" /> {isManager ? 'Add PTO Entry' : 'Request PTO for this day'}
               </Button>
               <Button variant="outline" className="justify-start" onClick={() => setAction('excused')}>
                 Mark as Excused (requires comment)

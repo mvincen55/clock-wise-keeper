@@ -5,8 +5,6 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = false
   [functions.assistant-auditor]
     verify_jwt = true
-  [functions.ask-docs]
-    verify_jwt = false
   [functions.ingest-doc]
     verify_jwt = false
   [functions.edit-doc]
@@ -15,10 +13,6 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = false
   [functions.checklist-bypass]
     verify_jwt = true
-  [functions.confirm-import]
-    verify_jwt = false
-  [functions.export-report]
-    verify_jwt = false
   [functions.mcp]
     verify_jwt = false
   [functions.goal-assistant]
@@ -27,8 +21,6 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = true
   [functions.name-visits]
     verify_jwt = true
-  [functions.parse-pdf]
-    verify_jwt = false
   [functions.process-email-queue]
     verify_jwt = true
   [functions.process-location-event]
@@ -51,8 +43,6 @@ project_id = "lfiplzmxpmybtbzhmnkp"
     verify_jwt = false
   [functions.office-pulse]
     verify_jwt = false
-  [functions.parse-treatment]
-    verify_jwt = true
   [functions.reports-analyst]
     verify_jwt = true
   [functions.sprint-verify]

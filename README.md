@@ -111,7 +111,7 @@ Navigation is a compact destination list; every feature below keeps its own rout
 |---|---|---|
 | `/timesheet` | Timesheet | Clock in/out, punch history, manager punch editing (`PunchEditorModal`), tardy reasons (`TardyReasonModal`, `TardyReviewModal`) |
 | `/work-zones` | WorkZones | Geofenced zones for location-verified clock-in (`useGeoTracking`, `LocationStatusPanel`, `process-location-event`) |
-| `/reports` | Reports | Payroll/attendance reporting; export via `export-report` |
+| `/reports` | Reports | Payroll/attendance reporting and exports (built in the browser) |
 
 ### Time off
 | Route | Page | What it does |
@@ -246,11 +246,11 @@ Migration `20260723200000_checklists.sql`:
 - **Contradiction guard:** a new "fact" that contradicts existing knowledge is saved `pending` (kept out of every prompt) and the assistant states both versions and asks an owner/manager which is right. Every write is re-checked by a separate cheap model — a model that was just persuaded of something is a poor judge of contradiction. The checker **fails open** so a checker outage can never block teaching.
 - **`assistant-auditor`** (second AI, never talks to staff): verifies consistency and filing — contradicting standing facts, code notes in the wrong home, code knowledge stuck as chat memory. Findings are **fingerprinted** so re-runs never re-report open/dismissed items, and it **proposes** fixes rather than applying them. Surfaced on Assistant → Memory & Audit tab.
 - **Code notes** (`save_code_note` tool): two homes (office schedule vs carrier schedule — see HIPAA boundary). The tool **refuses to create a missing fee row** — an invented fee could reach a patient's form.
-- **Docs Q&A:** `ingest-doc` indexes uploads into `office_doc_chunks` (Postgres full-text search, no embeddings); `kimi-agent`'s `search_office_docs` tool queries them. `ask-docs` is still deployed but nothing in the UI calls it.
+- **Docs Q&A:** `ingest-doc` indexes uploads into `office_doc_chunks` (Postgres full-text search, no embeddings); `kimi-agent`'s `search_office_docs` tool queries them.
 
 ## FOF (fee forms) domain
 
-- Fee schedules: office schedule + per-carrier schedules (`useFeeSchedules`); imports via `parse-pdf` / `confirm-import`. CDT codes are canonical — the Altus incident (migration `20260729190000`) is the cautionary tale: a numeric spreadsheet column stripped the `D` prefix from 693 codes, silently breaking carrier matching *and* creating false collisions with custom numeric office codes. The importer now zero-pads and offers to restore the `D` (default on).
+- Fee schedules: office schedule + per-carrier schedules (`useFeeSchedules`); imports are parsed in the browser (`FeeImportDialog`). CDT codes are canonical — the Altus incident (migration `20260729190000`) is the cautionary tale: a numeric spreadsheet column stripped the `D` prefix from 693 codes, silently breaking carrier matching *and* creating false collisions with custom numeric office codes. The importer now zero-pads and offers to restore the `D` (default on).
 - `fof_code_names`: per-CODE patient-facing name overrides (staff free text — printed but never sent to AI; see HIPAA boundary). Members read everything, edit nothing; the code dialog opens read-only ("View only") for employees.
 - Printed FOF, Deposit Log, and Incident Report sheets share letterhead/branding via `BrandPrintStyle` + `ScaledPrintPreview`.
 
@@ -268,14 +268,14 @@ Migration `20260723200000_checklists.sql`:
 
 ## Edge functions (JWT gating per `supabase/config.toml`)
 
-`supabase/config.toml` is the source of truth for which functions the gateway JWT-checks; every function directory has a block there. `verify_jwt = false` does **not** mean unauthenticated — each such function does its own verification: webhook signature (`auth-email-hook`), service-role bearer equality (cron functions: `office-pulse`, `integrity-digest`, `training-reminders`, `goal-step-reminders`, `acknowledgment-escalation`), invite-token-as-secret (`accept-invite`), Supabase OAuth (`mcp`), a public rate-limited form (`submit-lead`), or a user JWT checked in code (`ask-docs`, `ingest-doc`, `confirm-import`, `export-report`, `parse-pdf`, `process-location-event`, `accountability-engine`, which cron and admins share).
+`supabase/config.toml` is the source of truth for which functions the gateway JWT-checks; every function directory has a block there. `verify_jwt = false` does **not** mean unauthenticated — each such function does its own verification: webhook signature (`auth-email-hook`), service-role bearer equality (cron functions: `office-pulse`, `integrity-digest`, `training-reminders`, `goal-step-reminders`, `acknowledgment-escalation`), invite-token-as-secret (`accept-invite`), Supabase OAuth (`mcp`), a public rate-limited form (`submit-lead`), or a user JWT checked in code (`ingest-doc`, `process-location-event`, `accountability-engine`, which cron and admins share). Functions nothing calls are removed rather than left deployed.
 Org identity in every function comes from `org_members` for the verified caller; where a function takes an id from the client (ticket, sprint, conversation, org), it is validated against that membership before the service role touches anything.
 **Adding a function? Add its `[functions.<name>]` block to `config.toml` in the same commit, or the gateway default may not match the function's own auth model.**
 
 ## Known issues & landmines
 
 1. **`allowed_users` RLS infinite recursion (42P17).** Fixed in migration `20260731000708` (the policy now goes through `is_allowed_user()`). Runbook §6 remains as history.
-1b. **Objects that exist live but not in migrations:** RPCs `ensure_dm`, `ensure_ai_conversation`, `mark_conversation_read` and the `office_nudges` table are used by the app but were created outside the repo. A fresh replay will not have them; capture them in a migration before the next new environment.
+1b. **Live-only objects:** fixed. `office_nudges` and the messaging RPCs are recorded in migration `20260915140000`. If Lovable creates something outside the repo again, capture it the same way before relying on it.
 2. **Rebrand incomplete.** Auth page, `index.html`, and email sender say Purple Envelope; nav labels, PWA manifest, printed-form footers, and email template internals may still say TimeVault/TimeKeeper. Sweep pending.
 3. **`SAMPLE_PROJECT_URL` in `auth-email-hook` still points at `clock-wise-keeper.lovable.app`** — preview-mode sample data only, harmless, but looks wrong.
 4. **Dashboard-only state** (signup toggle, Site URL, cron, DNS) drifts silently — re-verify after any auth/email incident. See `docs/runbook.md`.

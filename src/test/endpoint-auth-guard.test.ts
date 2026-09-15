@@ -31,16 +31,12 @@ const CRON_ONLY = [
  */
 const USER_ONLY: Array<{ name: string; body: unknown; notDeployedOk?: boolean }> = [
   { name: 'commitment-listen', body: { message: 'probe' } },
-  { name: 'parse-treatment', body: { image: 'data:image/png;base64,AAAA' } },
   { name: 'sprint-verify', body: { goal_id: '00000000-0000-0000-0000-000000000000' } },
   { name: 'sprint-architect', body: { action: 'ideas', scope: 'team' } },
   { name: 'goal-assistant', body: { mode: 'chat', messages: [] } },
   { name: 'reports-analyst', body: { action: 'analyze' } },
   { name: 'training-builder', body: { topic: 'probe' } },
   { name: 'checklist-bypass', body: { action: 'list' } },
-  { name: 'export-report', body: {} },
-  { name: 'confirm-import', body: { import_id: '00000000-0000-0000-0000-000000000000' } },
-  { name: 'ask-docs', body: { question: 'probe' } },
   { name: 'assistant-auditor', body: {} },
   { name: 'training-roleplay', body: { mode: 'start', module_id: '00000000-0000-0000-0000-000000000000' } },
 ];
