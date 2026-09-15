@@ -33,7 +33,7 @@ import { CheckSquare, ChevronLeft, ChevronRight, Loader2, Pencil, Plus, Trash2 }
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { getToday } from '@/lib/time-utils';
-import type { ChecklistCadence } from '@/lib/checklist-defaults';
+import { checklistNamed, type ChecklistCadence } from '@/lib/checklist-defaults';
 import {
   CADENCE_LABELS,
   CADENCES,
@@ -165,6 +165,8 @@ export default function Checklists() {
   // A goal-step reminder names one item; open its list with the row in view.
   const linkedItemId = useConsumedSearchParam('item');
   const linkedItem = linkedItemId ? (data?.items ?? []).find(i => i.id === linkedItemId) : undefined;
+  // The handbook names a sheet (?list=manager); open that tab.
+  const linkedListName = useConsumedSearchParam('list');
   const linkedRef = useScrollIntoView<HTMLDivElement>(linkedItem ? linkedItem.id : false);
 
   const completionsByItem = useMemo(() => {
@@ -185,6 +187,7 @@ export default function Checklists() {
 
   const checklists = data?.checklists ?? [];
   const items = data?.items ?? [];
+  const openList = linkedItem ? checklists.find(l => l.id === linkedItem.checklist_id) : checklistNamed(checklists, linkedListName);
 
   const openNew = (checklistId: string) => {
     setDialogChecklistId(checklistId);
@@ -236,7 +239,7 @@ export default function Checklists() {
           </CardContent>
         </Card>
       ) : (
-        <Tabs key={linkedItem?.checklist_id ?? 'default'} defaultValue={linkedItem?.checklist_id ?? checklists[0].id}>
+        <Tabs key={openList?.id ?? 'default'} defaultValue={openList?.id ?? checklists[0].id}>
           <TabsList className="flex-wrap h-auto">
             {checklists.map(list => (
               <TabsTrigger key={list.id} value={list.id}>{list.name}</TabsTrigger>
