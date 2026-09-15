@@ -78,16 +78,30 @@ export interface PopUpInput {
   /** Today's dateline, e.g. "8/3/2026". */
   todayMDY: string;
   initials: string;
+  /**
+   * Whether a card is on file. The card is only ever charged after a prior
+   * Pop-Up promised it: Rung 3 charges when a card exists, Rung 4 charges
+   * unless there is none (null = not asked; Rung 4 assumes a card).
+   */
+  cardOnFile?: boolean | null;
 }
 
 /**
  * The Dentrix Pop-Up block for rungs 2–4. Rung 1 has no Pop-Up and
  * Rung 5 only updates the existing one (stop screen) — both return null.
  */
-export function buildPopUp({ rung, todayType, settings, todayMDY, initials }: PopUpInput): string | null {
+export function buildPopUp({
+  rung,
+  todayType,
+  settings,
+  todayMDY,
+  initials,
+  cardOnFile = null,
+}: PopUpInput): string | null {
   if (rung === 1 || rung === 5) return null;
   const fee = formatMoney(settings.feeAmount);
-  const feeAction = rung === 4 ? `${fee} charged to card` : `${fee} posted`;
+  const charged = rung === 4 ? cardOnFile !== false : rung === 3 && cardOnFile === true;
+  const feeAction = charged ? `${fee} charged to card` : `${fee} posted`;
   let body =
     `Rung ${rung} / ${WHAT_HAPPENED[todayType]}. ${feeAction}. ` +
     `DO NOT reschedule until: (1) balance paid in full, (2) card on file. ` +
@@ -135,13 +149,15 @@ export function buildApptNote({
   return `${todayMDY} - "${event}. ${verdict}. ${followUp}." - ${initials}`;
 }
 
-/** The ledger checklist for the rung (per the behavior table). */
+/** The ledger checklist for the rung (per the escalation table). */
 export function buildLedgerChecklist(
   rung: Rung,
   todayType: BrokenApptType,
   settings: Pick<BaSettings, 'feeAmount'>,
-  /** The letter actually printed (Rung 3 uses 0002 for LC when seeded). */
-  letterCode?: string
+  /** The letter actually printed (Rung 2 uses 0002 for a transition late cancel). */
+  letterCode?: string,
+  /** Whether a card is on file (null = not asked). Drives the Rung 3–4 charge step. */
+  cardOnFile: boolean | null = null
 ): string[] {
   const fee = formatMoney(settings.feeAmount);
   switch (rung) {
@@ -149,16 +165,28 @@ export function buildLedgerChecklist(
       return [
         `Post 9101 + ${fee} fee`,
         'Apply courtesy credit (net $0)',
-        'Post 9101A (letter sent)',
+        `Post ${letterCode ?? '0001'} (letter sent)`,
       ];
     case 2:
-      return ['Post 9100 (auto-fee)', 'Post 9100A (letter sent)'];
+      return [postEventStep(todayType, fee), `Post ${letterCode ?? '0003'} (letter sent)`];
     case 3:
-      return [postEventStep(todayType, fee), `Post ${letterCode ?? '9106'} (letter sent)`];
+      return [
+        postEventStep(todayType, fee),
+        cardOnFile === true
+          ? `Charge ${fee} to the card on file`
+          : cardOnFile === false
+            ? 'Collect a card on file now (fee stays an outstanding balance)'
+            : `Charge ${fee} to the card on file (no card: collect one now)`,
+        `Post ${letterCode ?? '0004'} (letter sent)`,
+      ];
     case 4:
       return [
         postEventStep(todayType, fee),
-        'Post 9107 (letter sent)',
+        cardOnFile === false
+          ? 'No card: fee stays an outstanding balance — flag the Office Manager'
+          : `Charge ${fee} to the card on file`,
+        `Post ${letterCode ?? '0005'} (letter sent)`,
+        'Cancel all future appointments',
         'Create unscheduled hygiene appointment',
       ];
     case 5:

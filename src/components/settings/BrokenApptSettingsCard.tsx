@@ -122,6 +122,22 @@ export function BrokenApptSettingsCard() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
+                <Label className="text-xs" htmlFor="ba-policy-start">Policy Start Date</Label>
+                <Input
+                  id="ba-policy-start"
+                  type="date"
+                  value={settings?.policyEffectiveDate ?? ''}
+                  onChange={e => update({ policyEffectiveDate: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Broken appointments before this date never count toward the ladder, but a
+                  patient with any skips Rung 1. Blank = every break counts.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
                 <Label className="text-xs">Module Name in Navigation</Label>
                 <Input
                   value={settings?.moduleNavLabel ?? ''}

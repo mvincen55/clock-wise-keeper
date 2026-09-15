@@ -24,6 +24,7 @@ function mapRow(row: SettingsRow): BaSettings {
     noticeBusinessHours: row.notice_business_hours,
     historyWindowYears: row.history_window_years,
     vipPrepayFloor: Number(row.vip_prepay_floor),
+    policyEffectiveDate: row.policy_effective_date ?? '',
     officePhone: row.office_phone,
     officeClosedDates: toClosedDates(row.office_closed_dates),
     moduleNavLabel: row.module_nav_label,
@@ -86,6 +87,9 @@ export function useUpsertBrokenApptSettings() {
             history_window_years: patch.historyWindowYears,
           }),
           ...(patch.vipPrepayFloor !== undefined && { vip_prepay_floor: patch.vipPrepayFloor }),
+          ...(patch.policyEffectiveDate !== undefined && {
+            policy_effective_date: patch.policyEffectiveDate || null,
+          }),
           ...(patch.officePhone !== undefined && { office_phone: patch.officePhone }),
           ...(patch.officeClosedDates !== undefined && {
             office_closed_dates: patch.officeClosedDates,

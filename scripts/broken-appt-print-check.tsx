@@ -3,12 +3,12 @@
  * test data exactly as the page's print portal does (real index.css),
  * prints them through real Chromium, and FAILS unless:
  *
- *   - 9101A / 0002 / 9100A / 9106 / 9107-with-3-rows are each exactly ONE page,
- *   - 9107 with 12 canceled appointments is exactly TWO pages (letter +
+ *   - 0001 / 0002 / 0003 / 0004 / 0005-with-3-rows are each exactly ONE page,
+ *   - 0005 with 12 canceled appointments is exactly TWO pages (letter +
  *     "Attached Appointment List" page) with the inline table replaced by
  *     the attachment note,
  *   - the OFFICE COPY documentation page prints LAST on its own page
- *     (letter + office copy = 2 pages; 9107-12-rows + office copy = 3),
+ *     (letter + office copy = 2 pages; 0005-12-rows + office copy = 3),
  *     carries DO NOT GIVE TO PATIENT, and keeps incomplete actions visible,
  *   - Address Line 2 prints when present and leaves no gap when absent,
  *   - long names/addresses and a long checklist still fit their pages,
@@ -111,7 +111,7 @@ const RUNG3_CHECKLIST = ['Post 9101 + $75 fee', 'Post 0002 (letter sent)'];
 const LONG_CHECKLIST = [
   'Post 9104b (late arrival)',
   'Post 9100 (auto-fee)',
-  'Post 9107 (letter sent)',
+  'Post 0005 (letter sent)',
   'Create unscheduled hygiene appointment',
   'Cancel remaining hygiene appointments',
   'Cancel remaining doctor appointments',
@@ -184,17 +184,17 @@ const letterVariant = (
 
 const VARIANTS: Variant[] = [
   // The five shipped letters, letter-only — the original single-page gates.
-  { ...letterVariant('9101a', '9101A'), expectedPages: 1, expectAttachment: false },
+  { ...letterVariant('0001', '0001'), expectedPages: 1, expectAttachment: false },
   { ...letterVariant('0002', '0002'), expectedPages: 1, expectAttachment: false },
-  { ...letterVariant('9100a', '9100A'), expectedPages: 1, expectAttachment: false },
-  { ...letterVariant('9106', '9106'), expectedPages: 1, expectAttachment: false },
+  { ...letterVariant('0003', '0003'), expectedPages: 1, expectAttachment: false },
+  { ...letterVariant('0004', '0004'), expectedPages: 1, expectAttachment: false },
   {
-    ...letterVariant('9107-3rows', '9107', { canceledAppts: rows(3) }),
+    ...letterVariant('0005-3rows', '0005', { canceledAppts: rows(3) }),
     expectedPages: 1,
     expectAttachment: false,
   },
   {
-    ...letterVariant('9107-12rows', '9107', { canceledAppts: rows(12) }),
+    ...letterVariant('0005-12rows', '0005', { canceledAppts: rows(12) }),
     expectedPages: 2,
     expectAttachment: true,
   },
@@ -216,7 +216,7 @@ const VARIANTS: Variant[] = [
     ],
   },
   {
-    ...letterVariant('package-9107-office-copy', '9107', {
+    ...letterVariant('package-0005-office-copy', '0005', {
       canceledAppts: rows(12),
       officeCopyRows: checklistRows(RUNG3_CHECKLIST, 2),
     }),
@@ -228,7 +228,7 @@ const VARIANTS: Variant[] = [
 
   // Address Line 2 prints; long values wrap instead of overflowing.
   {
-    ...letterVariant('addr-line2', '9100A', {
+    ...letterVariant('addr-line2', '0003', {
       patient: { ...PATIENT, addressLine2: 'Apt 3B' },
     }),
     expectedPages: 1,
@@ -236,7 +236,7 @@ const VARIANTS: Variant[] = [
     expectTexts: ['Apt 3B'],
   },
   {
-    ...letterVariant('long-everything', '9106', {
+    ...letterVariant('long-everything', '0004', {
       patient: LONG_PATIENT,
       officeCopyRows: checklistRows(RUNG3_CHECKLIST, 0),
     }),
@@ -247,7 +247,7 @@ const VARIANTS: Variant[] = [
 
   // Shared-signature ink must not add a phantom page (letter-ink rule).
   {
-    ...letterVariant('signer-ink', '9101A', { signer: SIGNER_INK }),
+    ...letterVariant('signer-ink', '0001', { signer: SIGNER_INK }),
     expectedPages: 1,
     expectAttachment: false,
   },
@@ -271,7 +271,7 @@ const VARIANTS: Variant[] = [
   // A long checklist keeps the office page intact (may spill to a 2nd
   // documentation page, never onto the letter).
   {
-    ...letterVariant('long-checklist', '9107', {
+    ...letterVariant('long-checklist', '0005', {
       canceledAppts: rows(3),
       officeCopyRows: checklistRows(LONG_CHECKLIST, 5),
     }),

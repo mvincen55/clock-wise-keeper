@@ -14,6 +14,7 @@ export const DEFAULT_BA_SETTINGS: BaSettings = {
   noticeBusinessHours: 48,
   historyWindowYears: 5,
   vipPrepayFloor: 150,
+  policyEffectiveDate: '',
   officePhone: '',
   officeClosedDates: [],
   moduleNavLabel: 'Broken Appointments',
@@ -26,12 +27,42 @@ export function todayEventCode(todayType: BrokenApptType): string {
   return todayType === 'LC' ? '9101' : '9100';
 }
 
+/**
+ * Letter codes under the signed policy: numbered so a higher code is further
+ * up the ladder, and the highest letter code on the ledger determines the
+ * current rung. Offices seeded before the numbering settled still hold the
+ * draft codes on their rows; these aliases keep those rows resolving.
+ */
+export const LEGACY_LETTER_CODES: Record<string, string> = {
+  '9101A': '0001',
+  '9100A': '0003',
+  '9106': '0004',
+  '9107': '0005',
+};
+
+/** The policy's code for a template code (a draft code maps onto it). */
+export function canonicalLetterCode(code: string): string {
+  return LEGACY_LETTER_CODES[code] ?? code;
+}
+
+/** The letter template for a policy code, whichever code the org's row carries. */
+export function findLetterTemplate<T extends { kind: string; code: string }>(
+  templates: T[] | undefined,
+  code: string
+): T | undefined {
+  return templates?.find(t => t.kind === 'letter' && canonicalLetterCode(t.code) === code);
+}
+
 export interface RungBehavior {
   /** How the fee moves on the ledger, shown on the outputs screen. */
   transactionLine: string;
   /** Letter template code, or null (Rung 5 sends no letter). */
   letterCode: string | null;
-  /** Letter used instead when today's event is a late cancel, if seeded. */
+  /**
+   * Letter used instead when today's event is a late cancel. Only Rung 2
+   * has one: a first break by a patient with pre-policy history that is a
+   * late cancellation gets 0002 rather than the no-show letter.
+   */
   letterCodeLC?: string;
   /** Scheduling guidance shown to staff. */
   schedulingStatus: string;
@@ -40,7 +71,7 @@ export interface RungBehavior {
   popUp: 'none' | 'standard' | 'vip' | 'update';
   /**
    * True when this rung's outcome ACTS on the patient's future appointments
-   * (Rung 4 cancels them all and lists them in the 9107 letter). The UI
+   * (Rung 4 cancels them all and lists them in the 0005 letter). The UI
    * shows a Future Appointments section — and its capture shortcut — only
    * when this is set; the policy engine, not the screen, decides.
    */
@@ -55,7 +86,7 @@ export interface RungBehavior {
 export const RUNG_BEHAVIOR: Record<Rung, RungBehavior> = {
   1: {
     transactionLine: '{{fee}} posted by staff, courtesy credit applied — net $0',
-    letterCode: '9101A',
+    letterCode: '0001',
     schedulingStatus: 'May schedule normally.',
     replyCode: 'rung1',
     popUp: 'none',
@@ -63,18 +94,19 @@ export const RUNG_BEHAVIOR: Record<Rung, RungBehavior> = {
   },
   2: {
     transactionLine: '{{fee}} auto-posted as outstanding balance',
-    letterCode: '9100A',
+    letterCode: '0003',
+    // A first break by a patient with pre-policy history that is a late
+    // cancellation: letter 0002 (transition — no courtesy credit).
+    letterCodeLC: '0002',
     schedulingStatus: 'BLOCKED until balance paid + card on file.',
     replyCode: null,
     popUp: 'standard',
     futureAppts: false,
   },
   3: {
-    transactionLine: '{{fee}} posted as outstanding balance',
-    letterCode: '9106',
-    // A late cancel with prior history gets its own letter (0002) when the
-    // org has it; offices seeded before it shipped fall back to 9106.
-    letterCodeLC: '0002',
+    transactionLine:
+      'Card on file: {{fee}} charged to it (the prior Pop-Up promised it). No card: {{fee}} posted as outstanding balance — collect the card now. Failed charge: posted + card-failure procedure',
+    letterCode: '0004',
     schedulingStatus:
       'BLOCKED until balance paid + card on file (collect card now if missing).',
     replyCode: 'rung3',
@@ -82,8 +114,9 @@ export const RUNG_BEHAVIOR: Record<Rung, RungBehavior> = {
     futureAppts: false,
   },
   4: {
-    transactionLine: '{{fee}} charged to card on file; if no card, post as outstanding + flag OM',
-    letterCode: '9107',
+    transactionLine:
+      '{{fee}} charged to card on file. No card, or the charge failed: posted as outstanding + card-failure procedure + flag OM',
+    letterCode: '0005',
     schedulingStatus:
       'VIP only: cancel ALL future appts; hygiene = VIP text list; doctor = prepay greater of {{prepay_floor}} or est. patient portion, forfeited if broken.',
     replyCode: 'rung4',
@@ -110,15 +143,16 @@ const POLICY_PARAGRAPH =
   "Like most dental offices, we ask for at least {{notice_hours}} business hours' notice to cancel or reschedule, so we can offer your reserved time to another patient. Business hours don't include weekends — so for a Monday morning appointment, we'd need to hear from you by Thursday morning the week before.";
 
 /**
- * The five patient letters — under the office's canonical numbering:
- * 0001 First Late Cancellation (9101A), 0002 Late Cancellation with Prior
- * History, 0003 First No-Show (9100A), 0004 Additional Broken Appointment
- * (9106), 0005 VIP Scheduling (9107). Bold runs use **double asterisks**.
+ * The five patient letters, numbered as the signed policy numbers them:
+ * 0001 First Late Cancellation, 0002 Late Cancellation with Prior History,
+ * 0003 First No-Show, 0004 Additional Broken Appointment, 0005 VIP
+ * Scheduling (draft rows carried 9101A / 9100A / 9106 / 9107, see
+ * LEGACY_LETTER_CODES). Bold runs use **double asterisks**.
  */
 const LETTER_SEEDS: BaTemplateSeed[] = [
   {
     kind: 'letter',
-    code: '9101A',
+    code: '0001',
     title: 'Rung 1 — first late cancellation (fee credited)',
     sortOrder: 0,
     body: [
@@ -131,9 +165,9 @@ const LETTER_SEEDS: BaTemplateSeed[] = [
   },
   {
     kind: 'letter',
-    code: '9100A',
+    code: '0003',
     title: 'Rung 2 — first no-show (fee outstanding)',
-    sortOrder: 1,
+    sortOrder: 2,
     body: [
       'We missed you at your appointment on {{appt_date}} — we hope everything is okay.',
       "Because we weren't able to offer that time to other patients, **a {{fee_amount}} scheduling fee has been posted to your account as an outstanding balance.** The enclosed statement reflects this charge.",
@@ -145,8 +179,8 @@ const LETTER_SEEDS: BaTemplateSeed[] = [
   {
     kind: 'letter',
     code: '0002',
-    title: 'Late Cancellation with Prior History',
-    sortOrder: 2,
+    title: 'Rung 2 — late cancellation with prior history',
+    sortOrder: 1,
     body: [
       "We're writing about your appointment on {{appt_date}}, which was canceled without the required notice. Because your account shows a prior broken appointment, **a {{fee_amount}} scheduling fee has been posted to your account as an outstanding balance.** The enclosed statement reflects this charge.",
       POLICY_PARAGRAPH,
@@ -157,7 +191,7 @@ const LETTER_SEEDS: BaTemplateSeed[] = [
   },
   {
     kind: 'letter',
-    code: '9106',
+    code: '0004',
     title: 'Rung 3 — additional broken appointment',
     sortOrder: 3,
     body: [
@@ -169,8 +203,8 @@ const LETTER_SEEDS: BaTemplateSeed[] = [
   },
   {
     kind: 'letter',
-    code: '9107',
-    title: 'Rung 4 — third broken appointment (VIP scheduling)',
+    code: '0005',
+    title: 'Rung 4 — VIP scheduling',
     sortOrder: 4,
     body: [
       "We're writing regarding your appointment scheduled for {{appt_date}}. Per our broken-appointment policy, **a {{fee_amount}} scheduling fee has been charged to the card we have on file.** The enclosed statement reflects this charge.",
@@ -236,14 +270,17 @@ const REPLY_SEEDS: BaTemplateSeed[] = [
 export const DEFAULT_BA_TEMPLATES: BaTemplateSeed[] = [...LETTER_SEEDS, ...REPLY_SEEDS];
 
 /**
- * Factory seeds an org's rows are missing (matched by kind + code). Powers
- * the additive top-up for orgs seeded before a template shipped (e.g.
- * letter 0002): missing rows are inserted, existing rows — edited or not —
- * are never touched.
+ * Factory seeds an org's rows are missing (matched by kind + code, with a
+ * draft letter code counting as its policy code). Powers the additive
+ * top-up for orgs seeded before a template shipped (e.g. letter 0002):
+ * missing rows are inserted, existing rows — edited or not — are never
+ * touched.
  */
 export function missingTemplateSeeds(
   existing: Pick<BaTemplate, 'kind' | 'code'>[]
 ): BaTemplateSeed[] {
-  const have = new Set(existing.map(t => `${t.kind}:${t.code}`));
+  const have = new Set(
+    existing.map(t => `${t.kind}:${t.kind === 'letter' ? canonicalLetterCode(t.code) : t.code}`)
+  );
   return DEFAULT_BA_TEMPLATES.filter(t => !have.has(`${t.kind}:${t.code}`));
 }

@@ -42,7 +42,7 @@ import { useSignerOptions } from '@/hooks/useSignerOptions';
 import { useSignatureImage } from '@/hooks/useStaffSignature';
 import { businessHoursCutoff, isOnTime } from '@/lib/broken-appts/business-hours';
 import { computeRung } from '@/lib/broken-appts/engine';
-import { DEFAULT_BA_SETTINGS, RUNG_BEHAVIOR, todayEventCode } from '@/lib/broken-appts/defaults';
+import { DEFAULT_BA_SETTINGS, RUNG_BEHAVIOR, findLetterTemplate, todayEventCode } from '@/lib/broken-appts/defaults';
 import {
   buildApptNote, buildLedgerChecklist, buildPopUp, formatDateMDY,
   formatDateTimeMDY, formatLedgerChecklist, formatMoney, mergeFields, resolveBehaviorText,
@@ -161,7 +161,7 @@ export default function BrokenAppointments() {
   // Attribution is the canonical office-assigned staff code — never typed
   // initials, never an email (src/lib/staff-code.ts).
   const { code: myStaffCode } = useMyStaffCode();
-  // Doctor options for the 9107 rows come from the FOF builder's list
+  // Doctor options for the 0005 rows come from the FOF builder's list
   // (fof_settings.doctor_names) — org config, not patient data, so reading
   // it stays inside the HIPAA boundary above.
   const { data: fofPractice } = useFofSettings();
@@ -190,6 +190,10 @@ export default function BrokenAppointments() {
   const [priorLCInput, setPriorLCInput] = useState('0');
   const [priorNSInput, setPriorNSInput] = useState('0');
   const [onVip, setOnVip] = useState(false);
+  // Breaks before the policy's start date (Governing Rule 5) and, for
+  // Rungs 3–4, whether a card is on file — both drive the outputs.
+  const [prePolicyInput, setPrePolicyInput] = useState('0');
+  const [cardOnFile, setCardOnFile] = useState<boolean | null>(null);
 
   // Patient info + Rung 4 canceled-appointment rows.
   const [patient, setPatient] = useState<BaPatientFields>(EMPTY_PATIENT);
@@ -225,6 +229,8 @@ export default function BrokenAppointments() {
     setPriorLCInput('0');
     setPriorNSInput('0');
     setOnVip(false);
+    setPrePolicyInput('0');
+    setCardOnFile(null);
     setPatient(EMPTY_PATIENT);
     setCanceledAppts([{ ...EMPTY_APPT_ROW }]);
     setWantLetter(true);
@@ -255,23 +261,21 @@ export default function BrokenAppointments() {
 
   const priorLC = Math.max(0, parseInt(priorLCInput, 10) || 0);
   const priorNS = Math.max(0, parseInt(priorNSInput, 10) || 0);
-  const rung: Rung = computeRung({ todayType, priorLC, priorNS, onVip });
+  const prePolicyBreaks = Math.max(0, parseInt(prePolicyInput, 10) || 0);
+  const rung: Rung = computeRung({ todayType, priorLC, priorNS, prePolicyBreaks, onVip });
   const behavior = RUNG_BEHAVIOR[rung];
 
   const todayMDY = formatDateMDY(isoDateOf(today));
   const apptDateMDY = apptDateISO ? formatDateMDY(apptDateISO) : '—';
   const stampCode = myStaffCode ?? '';
 
-  // Rung 3's late cancel gets its own letter (0002) when the org has it.
+  // A Rung 2 late cancel is the transition case (pre-policy history) and
+  // gets letter 0002 when the org has it. Draft-coded rows still resolve.
   const letterCode =
-    todayType === 'LC' &&
-    behavior.letterCodeLC &&
-    templates?.some(t => t.kind === 'letter' && t.code === behavior.letterCodeLC)
+    todayType === 'LC' && behavior.letterCodeLC && findLetterTemplate(templates, behavior.letterCodeLC)
       ? behavior.letterCodeLC
       : behavior.letterCode;
-  const letterTemplate = letterCode
-    ? templates?.find(t => t.kind === 'letter' && t.code === letterCode)
-    : undefined;
+  const letterTemplate = letterCode ? findLetterTemplate(templates, letterCode) : undefined;
 
   const replyFields = {
     first_name: patient.firstName.trim() || 'there',
@@ -315,17 +319,18 @@ export default function BrokenAppointments() {
     settings: s,
     todayMDY,
     initials: stampCode,
+    cardOnFile,
   });
 
   const ledgerSteps = useMemo(() => {
-    const steps = buildLedgerChecklist(rung, todayType, s, letterCode ?? undefined);
+    const steps = buildLedgerChecklist(rung, todayType, s, letterCode ?? undefined, cardOnFile);
     // Late arrival the provider couldn't seat: 9104b posts alongside the
     // no-show code (the "dual-post" reminder).
     if (mode === 'A' && happened === 'LATE') {
       return ['Post 9104b (late arrival)', ...steps];
     }
     return steps;
-  }, [rung, todayType, s, mode, happened, letterCode]);
+  }, [rung, todayType, s, mode, happened, letterCode, cardOnFile]);
 
   // A rung change mid-workflow drops completions for actions that no longer
   // apply — the OFFICE COPY documents only the applicable checklist.
@@ -475,11 +480,16 @@ export default function BrokenAppointments() {
             <p>
               <strong>4.</strong> Confirmation never waives the policy.
             </p>
+            <p>
+              <strong>5.</strong> Transition: breaks before the policy start date never count
+              toward the ladder, but a patient with any skips Rung 1. The highest letter
+              code on the ledger is the current rung; 0005 is terminal.
+            </p>
             <div className="pt-1 text-xs text-muted-foreground space-y-1">
-              <p>Rung 1 — first late cancel: {formatMoney(s.feeAmount)} posted + courtesy credit (net $0), letter 9101A.</p>
-              <p>Rung 2 — first no-show: {formatMoney(s.feeAmount)} outstanding, letter 9100A, Pop-Up, scheduling blocked.</p>
-              <p>Rung 3 — second break: {formatMoney(s.feeAmount)} outstanding, letter 9106, card on file required.</p>
-              <p>Rung 4 — third break (or repeat no-show): card charged, letter 9107, VIP-only scheduling.</p>
+              <p>Rung 1 — first late cancel: {formatMoney(s.feeAmount)} posted + courtesy credit (net $0), letter 0001. No Pop-Up.</p>
+              <p>Rung 2 — first no-show, or a first break with pre-policy history: {formatMoney(s.feeAmount)} auto-posted as an outstanding balance, letter 0003 (0002 for a late cancel with prior history), Pop-Up, scheduling blocked.</p>
+              <p>Rung 3 — second break, any mix: {formatMoney(s.feeAmount)} charged to the card on file, or posted and the card collected now; letter 0004.</p>
+              <p>Rung 4 — second no-show or third break: card charged, letter 0005, future appointments canceled, VIP-only scheduling.</p>
               <p>
                 Rung 5 — 0005 on the ledger (now or ever): hard stop, Office Manager
                 handles, no letter. Terminal — a return to regular scheduling never
@@ -761,6 +771,9 @@ export default function BrokenAppointments() {
             <p className="text-sm text-muted-foreground">
               Broken appointments (late cancels and no-shows) in the last{' '}
               {s.historyWindowYears} years — check the Office Journal and family file.
+              {s.policyEffectiveDate
+                ? ` Count only breaks on or after ${formatDateMDY(s.policyEffectiveDate)}, when the policy took effect; earlier ones go in the box below.`
+                : ''}
             </p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -784,6 +797,25 @@ export default function BrokenAppointments() {
                 />
               </div>
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ba-prior-prepolicy">
+                Broken appointments before the policy started
+                {s.policyEffectiveDate ? ` (${formatDateMDY(s.policyEffectiveDate)})` : ''}
+              </Label>
+              <Input
+                id="ba-prior-prepolicy"
+                type="number"
+                min={0}
+                value={prePolicyInput}
+                onChange={e => setPrePolicyInput(e.target.value)}
+                className="w-32"
+              />
+              <p className="text-xs text-muted-foreground">
+                These never count toward the ladder, but any at all skips Rung 1: a first
+                break under the policy starts at Rung 2 with no courtesy credit (letter 0003
+                for a no-show, 0002 for a late cancellation).
+              </p>
+            </div>
             <div className="flex items-center gap-3 rounded-lg border p-3">
               <Switch id="ba-vip" checked={onVip} onCheckedChange={setOnVip} />
               <Label htmlFor="ba-vip" className="font-normal cursor-pointer">
@@ -797,6 +829,34 @@ export default function BrokenAppointments() {
                 </span>
               </Label>
             </div>
+            {(rung === 3 || rung === 4) && (
+              <div className="space-y-2 rounded-lg border p-3">
+                <Label className="font-medium">Is a credit card on file?</Label>
+                <RadioGroup
+                  value={cardOnFile === null ? '' : cardOnFile ? 'yes' : 'no'}
+                  onValueChange={v => setCardOnFile(v === 'yes')}
+                  className="flex flex-wrap gap-4"
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="yes" id="ba-card-yes" />
+                    <Label htmlFor="ba-card-yes" className="font-normal cursor-pointer">
+                      Yes, a card is on file
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="no" id="ba-card-no" />
+                    <Label htmlFor="ba-card-no" className="font-normal cursor-pointer">
+                      No card on file
+                    </Label>
+                  </div>
+                </RadioGroup>
+                <p className="text-xs text-muted-foreground">
+                  The card is only ever charged after a prior Pop-Up promised it. With a card
+                  the fee is charged; without one it stays an outstanding balance and the
+                  card is collected now.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </CardContent>
@@ -872,6 +932,13 @@ export default function BrokenAppointments() {
             <span className="font-medium">Scheduling: </span>
             {resolveBehaviorText(behavior.schedulingStatus, s)}
           </p>
+          {(rung === 3 || rung === 4) && (
+            <p className="text-xs text-muted-foreground">
+              If the charge fails, treat it as no card on file: call the patient, allow 7
+              business days for a working card, add a dateline note, and update the Pop-Up.
+              Do not reschedule until a working card is on file and the balance is paid.
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>

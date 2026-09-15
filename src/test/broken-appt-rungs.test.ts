@@ -3,7 +3,7 @@ import { computeRung } from '@/lib/broken-appts/engine';
 
 // Rule 1: breaks count cumulatively within the rolling history window and
 // the highest applicable rung wins. The LC→NS precedence case is the one
-// staff historically miscount — it must land on Rung 3 (letter 9106), not
+// staff historically miscount — it must land on Rung 3 (letter 0004), not
 // Rung 2.
 
 describe('computeRung', () => {
@@ -15,7 +15,7 @@ describe('computeRung', () => {
     expect(computeRung({ todayType: 'NS', priorLC: 0, priorNS: 0, onVip: false })).toBe(2);
   });
 
-  it('LC then NS → Rung 3 (the 9106 precedence case, never Rung 2)', () => {
+  it('LC then NS → Rung 3 (the 0004 precedence case, never Rung 2)', () => {
     expect(computeRung({ todayType: 'NS', priorLC: 1, priorNS: 0, onVip: false })).toBe(3);
   });
 
@@ -34,6 +34,18 @@ describe('computeRung', () => {
   it('LC, LC, then anything → Rung 4', () => {
     expect(computeRung({ todayType: 'LC', priorLC: 2, priorNS: 0, onVip: false })).toBe(4);
     expect(computeRung({ todayType: 'NS', priorLC: 2, priorNS: 0, onVip: false })).toBe(4);
+  });
+
+  it('pre-policy history skips Rung 1: a first late cancel lands on Rung 2 (letter 0002)', () => {
+    // Governing Rule 5: breaks before the effective date never count toward
+    // the ladder, but any at all means no courtesy credit — Rung 2 for
+    // either event type, then the normal progression.
+    expect(computeRung({ todayType: 'LC', priorLC: 0, priorNS: 0, prePolicyBreaks: 1, onVip: false })).toBe(2);
+    expect(computeRung({ todayType: 'NS', priorLC: 0, priorNS: 0, prePolicyBreaks: 2, onVip: false })).toBe(2);
+    expect(computeRung({ todayType: 'LC', priorLC: 1, priorNS: 0, prePolicyBreaks: 3, onVip: false })).toBe(3);
+    expect(computeRung({ todayType: 'NS', priorLC: 0, priorNS: 1, prePolicyBreaks: 3, onVip: false })).toBe(4);
+    // Without pre-policy history the first late cancel is still Rung 1.
+    expect(computeRung({ todayType: 'LC', priorLC: 0, priorNS: 0, prePolicyBreaks: 0, onVip: false })).toBe(1);
   });
 
   it('0005 on the ledger → Rung 5 always, both event types, regardless of history', () => {

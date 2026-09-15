@@ -148,7 +148,7 @@ describe('decision-first workspace', () => {
     expect(screen.getByText('Appointment note (Dentrix)')).toBeInTheDocument();
     expect(screen.getByText(/Pop-Up \(Dentrix\)/i)).toBeInTheDocument();
     expect(screen.getByText(/Ledger \/ action checklist/i)).toBeInTheDocument();
-    expect(screen.getByText(/Letter 9100A/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Letter 0003/i })).toBeInTheDocument();
     cleanup();
   });
 
@@ -162,13 +162,13 @@ describe('decision-first workspace', () => {
     cleanup();
   });
 
-  it('LC then NS lands on Rung 3 (letter 9106) — precedence preserved', () => {
+  it('LC then NS lands on Rung 3 (letter 0004) — precedence preserved', () => {
     render(<MemoryRouter><BrokenAppointments /></MemoryRouter>);
     pickNoShow();
     answerNotice('No');
     setValue('Prior late cancellations', '1');
     expect(screen.getByText('Rung 3', { selector: 'span' })).toBeInTheDocument();
-    expect(screen.getByText(/Letter 9106/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Letter 0004/i })).toBeInTheDocument();
     cleanup();
   });
 
