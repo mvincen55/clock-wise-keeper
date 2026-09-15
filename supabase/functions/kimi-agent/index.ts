@@ -31,6 +31,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { guardAiInput, JAILBREAK_REFUSAL } from "../_shared/jailbreak-guard.ts";
 import { formatCodeNote, loadCodeNotes, type CodeNote } from "../_shared/procedure-notes.ts";
 import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
+import { loadOfficeProfile, OFFICE_PROFILE_PREAMBLE } from "../_shared/office-knowledge.ts";
 
 import { scrubMessages } from "../_shared/ai-safe.ts";
 import { scrubFreeText } from "../_shared/phi-scrub.ts";
@@ -730,6 +731,8 @@ interface PromptContext {
   visits: string;
   treatment: string;
   docCount: number;
+  /** The office's configuration, rendered by loadOfficeProfile. */
+  officeProfile?: string;
   policySummary?: string;
   /** When set, document search is limited to this surface's content. */
   searchScopeLabel?: string;
@@ -801,6 +804,9 @@ function buildSystemPrompt(ctx: PromptContext): string {
   }
 
   // --- standing knowledge --------------------------------------------------
+  if (ctx.officeProfile) {
+    parts.push(`${OFFICE_PROFILE_PREAMBLE}\n${ctx.officeProfile}`);
+  }
   if (ctx.memories.length > 0) {
     const office = ctx.memories.filter((m) => m.kind === "office");
     const site = ctx.memories.filter((m) => m.kind === "site");
@@ -1108,7 +1114,7 @@ Deno.serve(async (req) => {
     const treatment = FOF_PATIENT_CONTEXT_ENABLED ? bounded(body.context?.treatment, MAX_TREATMENT_CHARS) : '';
 
     // Standing knowledge, all under the caller's JWT so RLS scopes the org.
-    const [memoriesRes, guidanceRes, docsRes, codeNotes, schedulesRes, fofSettingsRes, fofDiscountsRes, fofCodesRes] = await Promise.all([
+    const [memoriesRes, guidanceRes, docsRes, codeNotes, schedulesRes, fofSettingsRes, fofDiscountsRes, fofCodesRes, officeProfile] = await Promise.all([
       supabase
         .from("assistant_memories")
         .select("id, kind, content")
@@ -1150,6 +1156,10 @@ Deno.serve(async (req) => {
             .select("code, kind")
             .eq("org_id", membership.org_id)
         : Promise.resolve({ data: [] }),
+      // The office's own settings, so an answer about notice windows, signers,
+      // closures, or who covers what comes from configuration, not a guess.
+      // FOF mode already carries its payment policy in policySummary.
+      loadOfficeProfile(supabase, membership.org_id, { includePaymentPolicy: mode !== "fof" }),
     ]);
     const memories = ((memoriesRes.data ?? []) as { id: string; kind: string; content: string }[]).map(
       (m) => ({ id: m.id, kind: m.kind, content: bounded(m.content, MAX_MEMORY_CHARS) })
@@ -1186,6 +1196,7 @@ Deno.serve(async (req) => {
       visits,
       treatment,
       docCount: docsRes.data?.length ?? 0,
+      officeProfile,
       policySummary,
       searchScopeLabel: searchScope?.label,
       scopeDocLabel,
