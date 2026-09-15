@@ -35,7 +35,7 @@ const STEP_COLUMN: Record<OnboardingStep, keyof OnboardingProgress> = {
 /** Where the current member is in onboarding, and whether they still need to sign. */
 export function useOnboardingStatus() {
   const { user } = useAuth();
-  const { data: ctx, isLoading: ctxLoading } = useOrgContext();
+  const { data: ctx, isLoading: ctxLoading, isSuccess: ctxResolved } = useOrgContext();
 
   const query = useQuery({
     queryKey: ['onboarding', ctx?.org_id, user?.id],
@@ -75,6 +75,9 @@ export function useOnboardingStatus() {
     // Never gate on a loading state — a slow query must not lock anyone out.
     isReady: !ctxLoading && !query.isLoading,
     hasOrg: !!ctx,
+    // True only when the membership lookup SUCCEEDED and found nothing — a
+    // failed lookup must never send an existing member to create an office.
+    needsOrg: ctxResolved && ctx === null,
   };
 }
 

@@ -38,6 +38,7 @@ export function useDepositLog(date: string) {
       const { data, error } = await supabase
         .from('deposit_logs')
         .select('*')
+        .eq('org_id', ctx!.org_id)
         .eq('deposit_date', date)
         .maybeSingle();
       if (error) throw error;

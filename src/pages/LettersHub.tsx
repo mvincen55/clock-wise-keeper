@@ -6,9 +6,11 @@ import HubLinkGrid, { HubSection } from '@/components/HubLinkGrid';
 // (OfficeLetterheadSheet) behind every entry — letters, school/work notes,
 // and the reusable letter library. Blank wording and de-identified
 // configuration only; completed patient letters are printed, never stored.
+// One flat grid (same shape as the Forms & Consents home): the three things
+// people do, then the two things they set up.
 const SECTIONS: HubSection[] = [
   {
-    title: 'Write & Print',
+    title: 'Letters & Notes',
     links: [
       {
         to: '/letters/write',
@@ -22,22 +24,12 @@ const SECTIONS: HubSection[] = [
         label: 'School / Work Note',
         description: 'A fast excuse note for school or work. Temporary details, printed output, then cleared.',
       },
-    ],
-  },
-  {
-    title: 'Office Library',
-    links: [
       {
         to: '/letters/library',
         icon: Library,
         label: 'Saved Letters',
         description: 'Reusable office letters with safe placeholders — insurance appeals, employer letters, referral covers.',
       },
-    ],
-  },
-  {
-    title: 'Setup',
-    links: [
       {
         to: '/letters/signature',
         icon: PenLine,
@@ -47,7 +39,7 @@ const SECTIONS: HubSection[] = [
       {
         to: '/letters/settings',
         icon: Settings2,
-        label: 'Letterhead & Correspondence Settings',
+        label: 'Office Settings',
         description: 'Default closing, office signer, note wording, and team permissions.',
         managerOnly: true,
       },

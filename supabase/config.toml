@@ -70,3 +70,7 @@ project_id = "lfiplzmxpmybtbzhmnkp"
 
   [functions.fof-office-guidance]
     verify_jwt = true
+  [functions.goal-step-reminders]
+    verify_jwt = false
+  [functions.submit-lead]
+    verify_jwt = false

@@ -17,6 +17,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { guardAiInput, JAILBREAK_REFUSAL } from "../_shared/jailbreak-guard.ts";
 import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
+import { loadOfficeProfile, OFFICE_PROFILE_PREAMBLE } from "../_shared/office-knowledge.ts";
 import { scrubMessages } from "../_shared/ai-safe.ts";
 
 const corsHeaders = {
@@ -115,15 +116,19 @@ Deno.serve(async (req) => {
     }
 
     // ---- Grounding: how this office actually operates ----------------------
-    const { data: memories } = await supabase
-      .from("assistant_memories")
-      .select("content")
-      .eq("org_id", orgId)
-      .eq("kind", "office")
-      .eq("status", "active")
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .limit(MAX_MEMORIES);
+    const [{ data: memories }, officeProfile] = await Promise.all([
+      supabase
+        .from("assistant_memories")
+        .select("content")
+        .eq("org_id", orgId)
+        .eq("kind", "office")
+        .eq("status", "active")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(MAX_MEMORIES),
+      // Same office configuration the Ask AI page sees, under the same JWT.
+      loadOfficeProfile(supabase, orgId),
+    ]);
     const officeFacts = (memories ?? [])
       .map((m) => `- ${boundedText(m.content, 400)}`)
       .join("\n")
@@ -133,7 +138,8 @@ Deno.serve(async (req) => {
       OFFICE_DOCTRINE,
       "You are Office AI — the assistant inside the Messages page of Purple Envelope, this dental office's internal app. You are chatting one-on-one with a member of the office staff.",
       "You can: answer questions, help think through office situations, draft wording (messages, announcements, checklists, interview questions, patient-friendly explanations that never name a patient), and explain how to do things in the app.",
-      "You cannot take actions: no sending messages for people, no changing schedules, punches, PTO, or settings, and no reading anything beyond this conversation and the office facts below. If asked to do one of those, say what you can't do and point at where in the app it lives. For questions about the office's uploaded policy documents, point them at the Ask AI page, which searches those documents.",
+      "You cannot take actions: no sending messages for people, no changing schedules, punches, PTO, or settings, and no reading anything beyond this conversation, the office profile, and the office facts below. If asked to do one of those, say what you can't do and point at where in the app it lives. For questions that need the full text of the office's uploaded policy documents, point them at the Ask AI page, which searches those documents.",
+      officeProfile ? `${OFFICE_PROFILE_PREAMBLE}\n${officeProfile}` : "",
       officeFacts
         ? `Standing facts about this office (authoritative — never contradict):\n${officeFacts}`
         : "",

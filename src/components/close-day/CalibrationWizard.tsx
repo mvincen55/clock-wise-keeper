@@ -23,6 +23,7 @@ import {
   captureDisplayFrame,
   captureSupported,
   destroyCapture,
+  detectTimeRail,
   draftColumnsFromFrame,
   frameFromFile,
   ScheduleReaderError,
@@ -30,9 +31,14 @@ import {
   type ColumnKind,
   type LayoutColumn,
 } from '@/lib/schedule-reader';
+import type { LayoutSignature } from '@/lib/schedule-reader/types';
 import { recognizeFrame } from '@/lib/schedule-reader/ocr';
 import { ROLE_LABELS } from '@/hooks/useOperationalRoles';
 import { useProviders } from '@/hooks/useProviders';
+import { usePracticeSettings } from '@/hooks/usePracticeSettings';
+import { useProviderWorkingHours } from '@/hooks/useProviderWorkingHours';
+import { PMS_LABELS } from '@/lib/pms';
+import { workingScheduleText, workingTime, type WorkingPeriod } from '@/lib/provider-working-schedule';
 import { providerColumn, suggestColumnProvider } from '@/lib/schedule-provider-mapping';
 import { useSaveLayoutProfile, useLayoutProfiles } from '@/hooks/useScheduleIntelligence';
 import { hhmmToMinutes } from '@/lib/time-utils';
@@ -77,12 +83,42 @@ type Props = {
  * sanitized layout profile (relative geometry and posted capture mode) is stored — the
  * calibration screenshot itself is destroyed on save or cancel and is never
  * uploaded anywhere.
+ *
+ * Nothing the office has already told the app is asked for twice: the
+ * practice-management system comes from Practice settings, the grid and block
+ * style from the last calibration (or the screenshot's own time rail), and
+ * each provider's weekly hours from the work schedule saved in Team for the
+ * team member they are linked to. Every prefilled value stays editable.
  */
 export default function CalibrationWizard({ open, onClose }: Props) {
   const save = useSaveLayoutProfile();
   const { data: registry = [], isPending: providersPending, isError: providersError } = useProviders();
   const providers = registry.filter(p => p.active);
-  const { data: profiles = [] } = useLayoutProfiles();
+  const { data: profiles = [], isPending: profilesPending } = useLayoutProfiles();
+  const { data: practice } = usePracticeSettings();
+  const { data: teamHours = {} } = useProviderWorkingHours(providers);
+  const defaultProfile = profiles.find(p => p.is_default) ?? profiles[0];
+  const previousColumns = profiles.flatMap(p => (p.layout_signature as unknown as { columns?: LayoutColumn[] }).columns ?? []);
+  const configuredPms =
+    practice?.pms_system && practice.pms_system !== 'not_configured' && PMS_OPTIONS.includes(PMS_LABELS[practice.pms_system])
+      ? PMS_LABELS[practice.pms_system]
+      : null;
+
+  /** Hours the office already has for a provider: the last calibration first, then the team member's saved work schedule. */
+  const knownHours = (providerId: string): WorkingPeriod[] | undefined =>
+    previousColumns.find(c => c.providerId === providerId && c.workingHours)?.workingHours
+    ?? teamHours[providerId]?.periods;
+
+  /** Where a provider's current hours came from, when they match a known source. */
+  const hoursSource = (col: LayoutColumn): string | undefined => {
+    if (!col.workingHours || !col.providerId) return undefined;
+    const text = workingScheduleText(col.workingHours);
+    const team = teamHours[col.providerId];
+    if (team && workingScheduleText(team.periods) === text) return `Filled from ${team.source}. Adjust only if the clinic schedule differs.`;
+    const prior = previousColumns.find(c => c.providerId === col.providerId && c.workingHours);
+    if (prior?.workingHours && workingScheduleText(prior.workingHours) === text) return 'Kept from the last calibration.';
+    return undefined;
+  };
 
   const [step, setStep] = useState(0);
   const [pms, setPms] = useState<string>('Other');
@@ -96,6 +132,38 @@ export default function CalibrationWizard({ open, onClose }: Props) {
   const [dayEnd, setDayEnd] = useState('17:00');
   const [minutesPerRow, setMinutesPerRow] = useState('10');
   const [blockStyle, setBlockStyle] = useState<'solid' | 'labeled' | 'mixed'>('mixed');
+  const [gridSource, setGridSource] = useState<string | null>(null);
+  const [pmsTouched, setPmsTouched] = useState(false);
+  const prefilled = useRef(false);
+
+  // Start from the last calibration: its grid, block style, and PMS name.
+  // Once per opening — a background refetch of the profiles (every window
+  // focus, i.e. every trip to the practice software) must never overwrite
+  // what the closer has already edited.
+  useEffect(() => {
+    if (!open) {
+      prefilled.current = false;
+      return;
+    }
+    if (prefilled.current || profilesPending) return;
+    prefilled.current = true;
+    const signature = defaultProfile?.layout_signature as unknown as Partial<LayoutSignature> | undefined;
+    const remembered = defaultProfile?.pms_name && PMS_OPTIONS.includes(defaultProfile.pms_name) ? defaultProfile.pms_name : null;
+    if (remembered && !pmsTouched) setPms(remembered);
+    if (signature?.timeGrid) {
+      setDayStart(workingTime(signature.timeGrid.dayStartMinutes));
+      setDayEnd(workingTime(signature.timeGrid.dayEndMinutes));
+      setMinutesPerRow(String(signature.timeGrid.minutesPerRow));
+      setGridSource('kept from the last calibration');
+    }
+    if (signature?.blockStyle) setBlockStyle(signature.blockStyle);
+  }, [open, defaultProfile, profilesPending, pmsTouched]);
+
+  // The PMS is canonical in Practice settings; it wins over a remembered
+  // profile name until the closer picks something else here.
+  useEffect(() => {
+    if (open && configuredPms && !pmsTouched) setPms(configuredPms);
+  }, [open, configuredPms, pmsTouched]);
 
   const frameRef = useRef<CaptureFrame | null>(null);
   const previewRef = useRef<HTMLCanvasElement | null>(null);
@@ -105,6 +173,8 @@ export default function CalibrationWizard({ open, onClose }: Props) {
     setStep(0);
     setConfirmed(false);
     setColumns([]);
+    setGridSource(null);
+    setPmsTouched(false);
   };
 
   const teardown = async () => {
@@ -140,14 +210,25 @@ export default function CalibrationWizard({ open, onClose }: Props) {
     frameRef.current = frame;
     const { words, regions = [] } = await recognizeFrame(frame.canvas);
     try {
+    // The screenshot's own time rail (the labels down its left edge) says
+    // when the visible day starts and ends — read it rather than asking.
+    const rail = detectTimeRail(words, frame.width, hhmmToMinutes(dayStart));
+    if (rail) {
+      const top = Math.round(rail.minutesAt(rail.yTop) / 5) * 5;
+      const bottom = Math.round(rail.minutesAt(rail.yBottom) / 5) * 5;
+      if (top >= 0 && bottom <= 24 * 60 && bottom > top) {
+        setDayStart(workingTime(top));
+        setDayEnd(workingTime(bottom));
+        setGridSource('read from the time labels in this screenshot');
+      }
+    }
     const detected = columnsFromRegions(regions, frame.width);
     const drafts = detected.length >= 1 && readProviderCodes(words).length
       ? detected : draftColumnsFromFrame(words, frame.width, frame.height);
     const pixels=frame.canvas.getContext('2d')?.getImageData?.(0,0,frame.width,frame.height);
     setColumns(
       drafts.filter(d => !pixels || !isEmptyBlueGridColumn(pixels,d)).map(d => {
-        const previous = profiles.flatMap(p => (p.layout_signature as unknown as { columns?: LayoutColumn[] }).columns ?? []);
-        const suggestion = suggestColumnProvider(words, d, frame.width, frame.height, providers, previous, true);
+        const suggestion = suggestColumnProvider(words, d, frame.width, frame.height, providers, previousColumns, true);
         return ({
         xStart: d.xStart,
         xEnd: d.xEnd,
@@ -161,7 +242,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
         providerCode: suggestion.providerCode,
         ...(suggestion.provider ? {
           ...providerColumn(suggestion.provider),
-          workingHours: previous.find(c => c.providerId === suggestion.provider?.id && c.workingHours)?.workingHours,
+          workingHours: knownHours(suggestion.provider.id),
         } : {}),
       }); })
     );
@@ -249,14 +330,14 @@ export default function CalibrationWizard({ open, onClose }: Props) {
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Calibrate Schedule Intelligence</DialogTitle>
-          <DialogDescription>Identify providers and confirm working hours for your posted end-of-day screenshot. No status-color setup is needed.</DialogDescription>
+          <DialogDescription>Confirm the providers and working day for your posted end-of-day screenshot. What the office has already set up — its practice software, provider list, and team schedules — is filled in for you. No status-color setup is needed.</DialogDescription>
         </DialogHeader>
 
         {step === 0 && (
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Practice management system</Label>
-              <Select value={pms} onValueChange={setPms}>
+              <Select value={pms} onValueChange={v => { setPmsTouched(true); setPms(v); }}>
                 <SelectTrigger className="w-56">
                   <SelectValue />
                 </SelectTrigger>
@@ -268,6 +349,11 @@ export default function CalibrationWizard({ open, onClose }: Props) {
                   ))}
                 </SelectContent>
               </Select>
+              {configuredPms && (
+                <p className="text-xs text-muted-foreground">
+                  From Practice settings (Settings → Office). Change it there to keep every capture assistant in sync.
+                </p>
+              )}
             </div>
             <p className="text-sm text-muted-foreground">
               Turn on your practice software's privacy view before capturing. Purple Envelope
@@ -369,8 +455,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
                           const provider = providers.find(p => p.id === id);
                           if (provider) {
                             const existing = columns.find(c => c.providerId === id && c.workingHours);
-                            const previous = profiles.flatMap(p => (p.layout_signature as unknown as { columns?: LayoutColumn[] }).columns ?? []).find(c => c.providerId === id && c.workingHours);
-                            setColumn(i, { ...providerColumn(provider), workingHours: existing?.workingHours ?? previous?.workingHours });
+                            setColumn(i, { ...providerColumn(provider), workingHours: existing?.workingHours ?? knownHours(id) });
                           }
                         }}>
                           <SelectTrigger className="h-8 text-xs" aria-label={`Provider for column ${i + 1}`}><SelectValue placeholder="Select provider" /></SelectTrigger>
@@ -398,14 +483,28 @@ export default function CalibrationWizard({ open, onClose }: Props) {
               <Button variant="ghost" onClick={onClose}>
                 Cancel
               </Button>
-              <Button disabled={providersPending || providersError || !columns.some(c => c.kind !== 'non_clinical') || columns.some(c => c.kind !== 'non_clinical' && !c.providerId)} onClick={() => setStep(3)}>Next: working day</Button>
+              <Button disabled={providersPending || providersError || !columns.some(c => c.kind !== 'non_clinical') || columns.some(c => c.kind !== 'non_clinical' && !c.providerId)} onClick={() => {
+                // Fill any provider whose hours the office already knows, then
+                // let those hours suggest the grid when nothing else has.
+                const filled = columns.map(c => c.workingHours || !c.providerId ? c : { ...c, workingHours: knownHours(c.providerId) });
+                setColumns(filled);
+                if (!gridSource) {
+                  const periods = filled.flatMap(c => c.workingHours ?? []).filter(p => p.endMinutes > p.startMinutes);
+                  if (periods.length) {
+                    setDayStart(workingTime(Math.min(...periods.map(p => p.startMinutes))));
+                    setDayEnd(workingTime(Math.max(...periods.map(p => p.endMinutes))));
+                    setGridSource("taken from the earliest start and latest end of the providers' hours");
+                  }
+                }
+                setStep(3);
+              }}>Next: working day</Button>
             </div>
           </div>
         )}
 
         {step === 3 && (
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">The time grid describes the visible screenshot. Attach each provider’s weekly hours below so off-duty time is not treated as an opening.</p>
+            <p className="text-sm text-muted-foreground">The time grid describes the visible screenshot. Each provider’s weekly hours come from the work schedule saved in Team when the provider is linked to a team member; adjust them or attach a file only if the clinic schedule differs. Off-duty time is never counted as an opening.</p>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1.5">
                 <Label htmlFor="cal-start">Day starts</Label>
@@ -441,8 +540,13 @@ export default function CalibrationWizard({ open, onClose }: Props) {
                 </Select>
               </div>
             </div>
+            {gridSource && (
+              <p className="text-xs text-muted-foreground">Day start and end {gridSource}. Adjust them if the screenshot shows more of the day.</p>
+            )}
             {[...new Map(columns.filter(c => c.kind !== 'non_clinical' && c.providerId).map(c => [c.providerId!, c])).values()].map(col => (
               <ProviderWorkingSchedule key={col.providerId} providerId={col.providerId!} name={col.providerLabel!} value={col.workingHours}
+                sourceNote={hoursSource(col)}
+                emptyHint={teamHours[col.providerId!] ? undefined : `No saved schedule for ${col.providerLabel} yet — link them to a team member with a work schedule (Settings → Office → Providers) and these hours fill in automatically next time.`}
                 onPendingChange={onPendingHours}
                 onChange={workingHours => setColumns(previous => previous.map(c => c.providerId === col.providerId ? { ...c, workingHours } : c))} />
             ))}

@@ -7,9 +7,13 @@ import { recognizeFrame } from '@/lib/schedule-reader/ocr';
 import { groupWordsIntoLines } from '@/lib/schedule-reader/privacy-detector';
 import { parseWorkingSchedule, workingScheduleText, type WorkingPeriod } from '@/lib/provider-working-schedule';
 
-export default function ProviderWorkingSchedule({ providerId, name, value, onChange, onPendingChange }: {
+export default function ProviderWorkingSchedule({ providerId, name, value, onChange, onPendingChange, sourceNote, emptyHint }: {
   providerId: string; name: string; value?: WorkingPeriod[]; onChange: (periods: WorkingPeriod[] | undefined) => void;
   onPendingChange: (providerId: string, pending: boolean) => void;
+  /** Where prefilled hours came from (shown instead of the attach prompt while they stand). */
+  sourceNote?: string;
+  /** What to do so hours fill in automatically next time (shown when nothing is known). */
+  emptyHint?: string;
 }) {
   const [draft, setDraft] = useState(value ? workingScheduleText(value) : '');
   const [busy, setBusy] = useState(false);
@@ -37,7 +41,11 @@ export default function ProviderWorkingSchedule({ providerId, name, value, onCha
   };
   return <div className="rounded-md border p-3 space-y-2">
     <p className="font-medium text-sm">{name}</p>
-    <p className="text-xs text-muted-foreground">Attach a weekly working schedule (CSV, text, or image). It is read on this device. Only reviewed weekdays and hours are saved with the provider’s layout; the file is not stored.</p>
+    {value && sourceNote ? (
+      <p className="text-xs text-muted-foreground">{sourceNote}</p>
+    ) : (
+      <p className="text-xs text-muted-foreground">{!value && emptyHint ? `${emptyHint} ` : ''}Attach a weekly working schedule (CSV, text, or image). It is read on this device. Only reviewed weekdays and hours are saved with the provider’s layout; the file is not stored.</p>
+    )}
     <Button type="button" variant="outline" disabled={busy} onClick={() => fileInput.current?.click()}>{busy ? 'Reading schedule…' : 'Attach working schedule'}</Button>
     <input ref={fileInput} type="file" accept=".csv,.txt,image/*" className="hidden" aria-label={`Working schedule file for ${name}`} onChange={e => void read(e.target.files?.[0])} />
     <Label htmlFor={`working-${providerId}`}>Review weekly hours</Label>

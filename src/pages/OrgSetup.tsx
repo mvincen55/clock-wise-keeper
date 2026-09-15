@@ -39,16 +39,16 @@ export default function OrgSetup() {
           <div className="mx-auto h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
             <Building2 className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle className="text-xl">Create Your Organization</CardTitle>
-          <p className="text-sm text-muted-foreground">Set up your company to start managing employees and time tracking.</p>
+          <CardTitle className="text-xl">Create Your Office</CardTitle>
+          <p className="text-sm text-muted-foreground">Name your practice to set up its team, schedules, and office tools.</p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1">
-            <Label>Organization Name</Label>
+            <Label>Practice Name</Label>
             <Input
               value={orgName}
               onChange={e => setOrgName(e.target.value)}
-              placeholder="Acme Corp"
+              placeholder="Your practice name"
               onKeyDown={e => e.key === 'Enter' && orgName.trim() && createOrg.mutate({ name: orgName.trim(), timezone })}
             />
           </div>
@@ -74,7 +74,7 @@ export default function OrgSetup() {
             disabled={createOrg.isPending || !orgName.trim()}
           >
             {createOrg.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Create Organization
+            Create Office
           </Button>
         </CardContent>
       </Card>
