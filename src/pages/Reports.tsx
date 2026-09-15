@@ -25,6 +25,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import AccountabilityHistory from '@/components/accountability/AccountabilityHistory';
+import { eventTypeLabel, formatAuditValue, buildAuditCsv } from '@/lib/audit-export';
+import { auditFieldChanges, auditReason, effectiveEventType, hasBeforeAndAfter, isNoOpUpdate } from '@/lib/audit-summary';
 
 type ReportType = 'weekly' | 'pay_period' | 'monthly' | 'pto' | 'tardy' | 'attendance_exceptions';
 
@@ -89,75 +91,21 @@ function PunchSourceList({ punches }: { punches: PunchRow[] }) {
   );
 }
 
-/** Try to format a value as a human-readable time if it looks like an ISO timestamp */
-function formatAuditValue(val: unknown): string {
-  if (val == null) return '—';
-  if (typeof val === 'string') {
-    // ISO timestamp
-    if (/^\d{4}-\d{2}-\d{2}T/.test(val)) {
-      return formatTime(val);
-    }
-    // HH:MM:SS time
-    if (/^\d{2}:\d{2}(:\d{2})?$/.test(val)) {
-      const [h, m] = val.split(':').map(Number);
-      const ampm = h >= 12 ? 'PM' : 'AM';
-      const h12 = h % 12 || 12;
-      return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
-    }
-    return val;
-  }
-  if (typeof val === 'object') {
-    // For JSON objects, extract meaningful fields
-    const obj = val as Record<string, unknown>;
-    if (obj.punch_time) return formatTime(String(obj.punch_time));
-    // Show a compact summary of changed fields
-    const keys = Object.keys(obj);
-    if (keys.length <= 3) {
-      return keys.map(k => `${k}: ${formatAuditValue(obj[k])}`).join(', ');
-    }
-    return keys.length + ' fields changed';
-  }
-  return String(val);
-}
-
-/** Human-readable event type labels */
-function eventTypeLabel(type: string): string {
-  const labels: Record<string, string> = {
-    clock_in: 'Clock In',
-    clock_out: 'Clock Out',
-    break_start: 'Break Start',
-    break_end: 'Break End',
-    manual_edit: 'Manual Edit',
-    punch_edit: 'Punch Edit',
-    punch_added: 'Punch Added',
-    punch_added_manually: 'Punch Added Manually',
-    punch_deleted: 'Punch Deleted',
-    punch_voided: 'Punch Voided',
-    punch_created: 'Punch Recorded',
-    time_fix: 'Time Fix',
-    system_adjustment: 'System Adjustment',
-    day_off_added: 'Day Off Added',
-    day_off_removed: 'Day Off Removed',
-    comment_edit: 'Comment Edit',
-    remote_toggle: 'Remote Toggle',
-    request_create: 'Request Created',
-    request_approved: 'Request Approved',
-    request_denied: 'Request Denied',
-  };
-  return labels[type] || type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-}
-
 function AuditTrailRow({ event, actorName }: { event: AuditEvent; actorName?: string }) {
   const details = event.event_details || {};
   const ts = new Date(event.created_at);
   const timeStr = ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/New_York' });
   const dateStr = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
+  // Field-level diff of the before/after snapshots (a void shows as
+  // "Removed: None → Yes", a no-op write as "No fields changed").
+  const changes = hasBeforeAndAfter(event) || details.field_changed ? auditFieldChanges(event) : [];
+  const noOp = !changes.length && isNoOpUpdate(event);
   const oldVal = details.old_value ?? event.before_json;
   const newVal = details.new_value ?? event.after_json;
-  const hasChange = oldVal != null || newVal != null;
-  const reason = event.reason || details.reason_comment;
-  const fieldLabel = details.field_changed
+  const hasRaw = !changes.length && !noOp && (oldVal != null || newVal != null);
+  const reason = auditReason(event);
+  const fieldLabel = !changes.length && details.field_changed
     ? String(details.field_changed).replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
     : null;
 
@@ -173,14 +121,27 @@ function AuditTrailRow({ event, actorName }: { event: AuditEvent; actorName?: st
       <div className="flex-1 space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-semibold">
-            {eventTypeLabel(event.event_type)}
+            {eventTypeLabel(effectiveEventType(event))}
           </Badge>
           {fieldLabel && (
             <span className="text-muted-foreground font-medium">{fieldLabel}</span>
           )}
         </div>
 
-        {hasChange && (
+        {changes.map(c => (
+          <div key={c.key} className="flex items-center gap-2 text-[12px] mt-0.5">
+            <span className="text-muted-foreground font-medium">{c.field}</span>
+            <span className="bg-destructive/10 text-destructive px-1.5 py-0.5 rounded line-through">{c.before}</span>
+            <span className="text-muted-foreground">→</span>
+            <span className="bg-accent/10 text-accent-foreground px-1.5 py-0.5 rounded font-medium">{c.after}</span>
+          </div>
+        ))}
+
+        {noOp && (
+          <div className="text-[12px] text-muted-foreground mt-0.5">No fields changed</div>
+        )}
+
+        {hasRaw && (
           <div className="flex items-center gap-2 text-[12px] mt-0.5">
             {oldVal != null && (
               <span className="bg-destructive/10 text-destructive px-1.5 py-0.5 rounded line-through">
@@ -390,22 +351,8 @@ export default function Reports() {
     const isAudit = overrideType === 'audit';
 
     if (isAudit) {
-      // Audit trail CSV — built from already-loaded auditEvents
-      const header = ['Date', 'Time', 'Event', 'Field', 'Before', 'After', 'Actor', 'Reason'];
-      const rows = auditEvents.map(a => {
-        const ts = new Date(a.created_at);
-        const dateStr = ts.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
-        const timeStr = ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/New_York' });
-        const details = a.event_details || {};
-        const fieldLabel = details.field_changed ? String(details.field_changed).replace(/_/g, ' ') : '';
-        const oldVal = formatAuditValue(details.old_value ?? a.before_json);
-        const newVal = formatAuditValue(details.new_value ?? a.after_json);
-        const actor = actorNames.get(a.actor_id || '') || 'System';
-        const reason = a.reason || details.reason_comment || '';
-        return [dateStr, timeStr, eventTypeLabel(a.event_type), fieldLabel, oldVal, newVal, actor, reason].map(escapeCsv).join(',');
-      });
-      const csv = [header.join(','), ...rows].join('\n');
-      downloadCsvBlob(csv, `audit_${startDate}_${endDate}.csv`);
+      // Audit trail CSV — built from already-loaded auditEvents, one row per changed field
+      downloadCsvBlob(buildAuditCsv(auditEvents, actorNames), `audit_${startDate}_${endDate}.csv`);
       return;
     }
 

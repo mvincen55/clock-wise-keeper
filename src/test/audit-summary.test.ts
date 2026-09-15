@@ -7,3 +7,17 @@ it('shows changed times without raw record identifiers',()=>{
 });
 it('formats a legacy field edit',()=>expect(auditSummary({event_details:{field_changed:'entry_comment',old_value:'',new_value:'Training'}}).changes).toEqual(['Comment: None → Training']));
 
+it('reports a trigger-logged void as a removal with its void reason',()=>{
+ const punch={id:'p1',punch_time:'2026-09-09T13:40:00Z',punch_type:'in',voided_at:null,void_reason:null};
+ const result=auditSummary({event_type:'punch_edit',action_type:'update',before_json:punch,after_json:{...punch,voided_at:'2026-09-14T22:08:00Z',void_reason:'Superseded by re-import (overwrite)'}});
+ expect(result.title).toBe('Time removed');
+ expect(result.changes).toEqual(['Removed: None → Yes']);
+ expect(result.reason).toBe('Superseded by re-import (overwrite)');
+});
+it('shows no changes for an update that changed nothing audited',()=>{
+ const punch={id:'p1',punch_time:'2026-09-09T13:40:00Z',punch_type:'in',voided_at:null};
+ expect(auditSummary({event_type:'punch_edit',before_json:punch,after_json:{...punch}}).changes).toEqual([]);
+});
+it('does not report untouched null fields on a recorded punch',()=>{
+ expect(auditSummary({event_type:'punch_created',after_json:{punch_time:'2026-09-09T13:40:00Z',punch_type:'in',source:'manual',voided_at:null}}).changes).toEqual(['Time: None → 09:40 AM','Punch: None → Clock in','Source: None → Manual']);
+});
