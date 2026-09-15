@@ -9,6 +9,7 @@ import { useAttendanceExceptions, AttendanceExceptionRow } from '@/hooks/useAtte
 import { useAttendanceDayStatus, useRecomputeAttendance, AttendanceDayStatusRow } from '@/hooks/useAttendanceDayStatus';
 import { useOfficeClosures, useAddClosure } from '@/hooks/useOfficeClosures';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import { useOrgEmployeeNames, buildEmployeeNameLookup, employeeNameForRow, attendanceSubjectKey, isOwnAttendanceRow, AttendanceSubject } from '@/hooks/useEmployeeNames';
 import PersonalCalendar from '@/components/PersonalCalendar';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { useAuth } from '@/hooks/useAuth';
@@ -51,7 +52,7 @@ const exceptionStatusColors: Record<string, string> = {
 type AttendanceFilter = 'all' | 'absent' | 'late' | 'incomplete' | 'days_off' | 'closures' | 'remote' | 'onsite';
 type DaysOffFilter = 'all' | 'scheduled_with_notice' | 'unscheduled' | 'medical_leave' | 'other';
 
-function DebugDrawer({ row, open, onClose }: { row: AttendanceDayStatusRow | null; open: boolean; onClose: () => void }) {
+function DebugDrawer({ row, employeeName, open, onClose }: { row: AttendanceDayStatusRow | null; employeeName?: string | null; open: boolean; onClose: () => void }) {
   if (!row) return null;
   return (
     <Sheet open={open} onOpenChange={v => !v && onClose()}>
@@ -61,6 +62,12 @@ function DebugDrawer({ row, open, onClose }: { row: AttendanceDayStatusRow | nul
         </SheetHeader>
         <div className="mt-4 space-y-3 text-sm">
           <div className="grid grid-cols-2 gap-1">
+            {employeeName && (
+              <>
+                <span className="text-muted-foreground">Employee:</span>
+                <span>{employeeName}</span>
+              </>
+            )}
             <span className="text-muted-foreground">Scheduled:</span>
             <span className="font-mono">{row.is_scheduled_day ? 'Yes' : 'No'}</span>
             <span className="text-muted-foreground">Expected Start:</span>
@@ -133,6 +140,7 @@ export default function DaysOff() {
   const { data: exceptions } = useAttendanceExceptions(startDate, endDate);
   const { data: closures } = useOfficeClosures(new Date().getFullYear());
   const { data: statusRows, isLoading: statusLoading } = useAttendanceDayStatus(startDate, endDate);
+  const { data: employeeNames } = useOrgEmployeeNames();
   const recompute = useRecomputeAttendance();
   const addDayOff = useAddDayOff();
   const deleteDayOff = useDeleteDayOff();
@@ -148,6 +156,7 @@ export default function DaysOff() {
   const [showOnlyTracked, setShowOnlyTracked] = useState(false);
   const [debugRow, setDebugRow] = useState<AttendanceDayStatusRow | null>(null);
   const [reviewTardy, setReviewTardy] = useState<TardyRow | null>(null);
+  const [employeeFilter, setEmployeeFilter] = useState('all');
 
   const requiresNotes = (type: string) => type === 'medical_leave';
 
@@ -240,9 +249,44 @@ export default function DaysOff() {
     return set;
   }, [closures]);
 
+  // Whose row is it? Managers read the whole office's attendance rows (RLS),
+  // so every table on this page names the person and the picker in the date
+  // card narrows the page to one of them. Employees only ever read their own.
+  const nameLookup = useMemo(() => buildEmployeeNameLookup(employeeNames), [employeeNames]);
+  const self = useMemo(() => ({ employee_id: ctx?.employee_id, user_id: user?.id }), [ctx?.employee_id, user?.id]);
+  const employeeLabel = (row: AttendanceSubject) => employeeNameForRow(nameLookup, row) ?? 'Unknown employee';
+
+  const employeeOptions = useMemo(() => {
+    const seen = new Map<string, { key: string; name: string; isSelf: boolean }>();
+    [...(statusRows || []), ...(tardies || [])].forEach(r => {
+      const key = attendanceSubjectKey(r);
+      if (!seen.has(key)) {
+        seen.set(key, { key, name: employeeNameForRow(nameLookup, r) ?? 'Unknown employee', isSelf: isOwnAttendanceRow(r, self) });
+      }
+    });
+    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [statusRows, tardies, nameLookup, self]);
+
+  // A person with no rows in the range (or before the rows load) falls back to
+  // everyone, so the picker never shows a selection the tables don't reflect.
+  const activeEmployeeFilter = employeeOptions.some(o => o.key === employeeFilter) ? employeeFilter : 'all';
+
+  const scopedStatusRows = useMemo(() => {
+    const rows = statusRows || [];
+    return activeEmployeeFilter === 'all' ? rows : rows.filter(r => attendanceSubjectKey(r) === activeEmployeeFilter);
+  }, [statusRows, activeEmployeeFilter]);
+
+  const scopedTardies = useMemo(() => {
+    const rows = tardies || [];
+    return activeEmployeeFilter === 'all' ? rows : rows.filter(t => attendanceSubjectKey(t) === activeEmployeeFilter);
+  }, [tardies, activeEmployeeFilter]);
+
+  // "My Calendar" is personal even for managers.
+  const ownStatusRows = useMemo(() => (statusRows || []).filter(r => isOwnAttendanceRow(r, self)), [statusRows, self]);
+
   // Summary counters - properly categorized
   const summary = useMemo(() => {
-    const rows = statusRows || [];
+    const rows = scopedStatusRows;
 
     // Absent: is_absent AND (no day_off covering OR day_off type=unscheduled)
     const absentCount = rows.filter(r => {
@@ -274,7 +318,7 @@ export default function DaysOff() {
       closures: closuresCount,
       remote: rows.filter(r => r.is_remote).length,
       edited: rows.filter(r => r.has_edits).length,
-      unreviewedTardies: (tardies || []).filter(t => t.approval_status === 'unreviewed' && !t.resolved).length,
+      unreviewedTardies: scopedTardies.filter(t => t.approval_status === 'unreviewed' && !t.resolved).length,
       needsTimeFix: rows.filter(r => r.timezone_suspect).length,
       missingShifts: rows.filter(r => {
         if (!r.is_absent) return false;
@@ -285,11 +329,11 @@ export default function DaysOff() {
         return true;
       }).length,
     };
-  }, [statusRows, tardies, daysOffByDate]);
+  }, [scopedStatusRows, scopedTardies, daysOffByDate]);
 
   // Filtered + sorted status rows
   const filteredStatus = useMemo(() => {
-    let list = statusRows || [];
+    let list = scopedStatusRows;
     if (attendanceFilter === 'all') {
       list = list.filter(r => r.is_scheduled_day || r.has_punches || r.office_closed || r.has_day_off);
     }
@@ -315,7 +359,7 @@ export default function DaysOff() {
       if (pa !== pb) return pa - pb;
       return b.entry_date.localeCompare(a.entry_date);
     });
-  }, [statusRows, attendanceFilter]);
+  }, [scopedStatusRows, attendanceFilter]);
 
   // Days Off tab: exclude office_closed, apply filter
   const filteredDaysOff = useMemo(() => {
@@ -328,16 +372,16 @@ export default function DaysOff() {
 
   // Missing Shifts: truly absent, not closures, not covered by scheduled/medical/other day off
   const missingShiftRows = useMemo(() => {
-    return (statusRows || []).filter(r => {
+    return scopedStatusRows.filter(r => {
       if (!r.is_absent) return false;
       if (r.office_closed) return false;
       const dayOffs = daysOffByDate.get(r.entry_date) || [];
       if (dayOffs.some(d => ['scheduled_with_notice', 'medical_leave', 'other'].includes(d.type))) return false;
       return true;
     }).sort((a, b) => b.entry_date.localeCompare(a.entry_date));
-  }, [statusRows, daysOffByDate]);
+  }, [scopedStatusRows, daysOffByDate]);
 
-  const activeTardies = (tardies || []).filter(t => !t.resolved);
+  const activeTardies = scopedTardies.filter(t => !t.resolved);
 
   const filteredTardies = useMemo(() => {
     let list = activeTardies;
@@ -362,6 +406,13 @@ export default function DaysOff() {
     }));
     return [...fromClosures, ...fromDaysOff].sort((a, b) => b.date.localeCompare(a.date));
   }, [closures, daysOff]);
+
+  const renderEmployeeCell = (row: AttendanceSubject) => (
+    <td className="px-4 py-3 whitespace-nowrap">
+      {employeeLabel(row)}
+      {isOwnAttendanceRow(row, self) && <span className="ml-1 text-xs text-muted-foreground">(you)</span>}
+    </td>
+  );
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
@@ -439,6 +490,20 @@ export default function DaysOff() {
               <Label className="text-xs">End Date</Label>
               <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-40" />
             </div>
+            {isManager && (
+              <div className="space-y-1">
+                <Label className="text-xs">Employee</Label>
+                <Select value={activeEmployeeFilter} onValueChange={setEmployeeFilter}>
+                  <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All employees</SelectItem>
+                    {employeeOptions.map(o => (
+                      <SelectItem key={o.key} value={o.key}>{o.isSelf ? `${o.name} (you)` : o.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -565,6 +630,7 @@ export default function DaysOff() {
                 <thead>
                   <tr className="border-b bg-muted/50">
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
+                    {isManager && <th className="px-4 py-3 text-left font-medium text-muted-foreground">Employee</th>}
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Schedule</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Location</th>
@@ -574,13 +640,14 @@ export default function DaysOff() {
                 </thead>
                 <tbody className="divide-y">
                   {statusLoading ? (
-                    <tr><td colSpan={6} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></td></tr>
+                    <tr><td colSpan={isManager ? 7 : 6} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></td></tr>
                   ) : !filteredStatus.length ? (
-                    <tr><td colSpan={6} className="py-12 text-center text-muted-foreground">No attendance data for this range</td></tr>
+                    <tr><td colSpan={isManager ? 7 : 6} className="py-12 text-center text-muted-foreground">No attendance data for this range</td></tr>
                   ) : (
                     filteredStatus.map(row => (
                       <tr key={row.id} className={`hover:bg-muted/50 ${row.is_absent ? 'border-l-4 border-l-destructive' : row.is_late ? 'border-l-4 border-l-warning' : ''}`}>
                         <td className="px-4 py-3 font-medium">{formatDate(row.entry_date)}</td>
+                        {isManager && renderEmployeeCell(row)}
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {row.is_absent && <span className="text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive font-medium">Absent</span>}
@@ -709,6 +776,7 @@ export default function DaysOff() {
                 <thead>
                   <tr className="border-b bg-muted/50">
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
+                    {isManager && <th className="px-4 py-3 text-left font-medium text-muted-foreground">Employee</th>}
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Expected</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Actual</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Minutes Late</th>
@@ -719,9 +787,9 @@ export default function DaysOff() {
                 </thead>
                 <tbody className="divide-y">
                   {tardiesLoading ? (
-                    <tr><td colSpan={7} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></td></tr>
+                    <tr><td colSpan={isManager ? 8 : 7} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></td></tr>
                   ) : !filteredTardies.length ? (
-                    <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">No tardies recorded</td></tr>
+                    <tr><td colSpan={isManager ? 8 : 7} className="py-12 text-center text-muted-foreground">No tardies recorded</td></tr>
                   ) : (
                     filteredTardies.map(t => (
                       <tr key={t.id} className={t.timezone_suspect ? 'bg-warning/5' : ''}>
@@ -731,6 +799,7 @@ export default function DaysOff() {
                             <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning font-medium" title="This punch time looks off. Edit the punches (managers) or submit a correction request.">⚠ Time Looks Off</span>
                           )}
                         </td>
+                        {isManager && renderEmployeeCell(t)}
                         <td className="px-4 py-3 time-display text-sm">{formatClock(t.expected_start_time)}</td>
                         <td className="px-4 py-3 time-display text-sm">
                           {t.timezone_suspect ? (
@@ -768,7 +837,7 @@ export default function DaysOff() {
                 {filteredTardies.length > 0 && (
                   <tfoot>
                     <tr className="border-t-2 font-bold">
-                      <td colSpan={3} className="px-4 py-3 text-right">Totals:</td>
+                      <td colSpan={isManager ? 4 : 3} className="px-4 py-3 text-right">Totals:</td>
                       <td className="px-4 py-3 text-destructive">{filteredTardies.filter(t => !t.timezone_suspect).reduce((s, t) => s + t.minutes_late, 0)} min</td>
                       <td colSpan={3}></td>
                     </tr>
@@ -794,6 +863,7 @@ export default function DaysOff() {
                 <thead>
                   <tr className="border-b bg-muted/50">
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
+                    {isManager && <th className="px-4 py-3 text-left font-medium text-muted-foreground">Employee</th>}
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Schedule</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Coverage</th>
                     <th className="px-4 py-3 w-10"></th>
@@ -801,9 +871,9 @@ export default function DaysOff() {
                 </thead>
                 <tbody className="divide-y">
                   {statusLoading ? (
-                    <tr><td colSpan={4} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></td></tr>
+                    <tr><td colSpan={isManager ? 5 : 4} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></td></tr>
                   ) : !missingShiftRows.length ? (
-                    <tr><td colSpan={4} className="py-12 text-center text-muted-foreground">No missing shifts — all clear!</td></tr>
+                    <tr><td colSpan={isManager ? 5 : 4} className="py-12 text-center text-muted-foreground">No missing shifts — all clear!</td></tr>
                   ) : (
                     missingShiftRows.map(row => {
                       const dayOffs = daysOffByDate.get(row.entry_date) || [];
@@ -811,6 +881,7 @@ export default function DaysOff() {
                       return (
                         <tr key={row.id} className="border-l-4 border-l-destructive hover:bg-muted/50">
                           <td className="px-4 py-3 font-medium">{formatDate(row.entry_date)}</td>
+                          {isManager && renderEmployeeCell(row)}
                           <td className="px-4 py-3 text-xs text-muted-foreground">
                             {formatClockRange(row.schedule_expected_start, row.schedule_expected_end)}
                           </td>
@@ -868,12 +939,12 @@ export default function DaysOff() {
           <PersonalCalendar
             daysOff={daysOff || []}
             closures={closures || []}
-            statusRows={statusRows || []}
+            statusRows={ownStatusRows}
           />
         </TabsContent>
       </Tabs>
 
-      <DebugDrawer row={debugRow} open={!!debugRow} onClose={() => setDebugRow(null)} />
+      <DebugDrawer row={debugRow} employeeName={debugRow ? employeeLabel(debugRow) : null} open={!!debugRow} onClose={() => setDebugRow(null)} />
     </div>
   );
 }
