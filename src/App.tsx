@@ -115,9 +115,14 @@ function RootRoute() {
  * Fails open: if the check can't run, the app opens normally.
  */
 function OnboardingGate({ children }: { children: React.ReactNode }) {
-  const { data: status, isReady, hasOrg } = useOnboardingStatus();
+  const { data: status, isReady, hasOrg, needsOrg } = useOnboardingStatus();
+  const location = useLocation();
   if (isReady && hasOrg && status && !status.complete) {
     return <Navigate to="/onboarding" replace />;
+  }
+  // Allow-listed but in no office yet: the only useful place is org setup.
+  if (needsOrg && location.pathname !== '/org-setup') {
+    return <Navigate to="/org-setup" replace />;
   }
   return <AppLayout>{children}</AppLayout>;
 }

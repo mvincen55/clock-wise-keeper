@@ -54,7 +54,7 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
           notes: reason || 'Added from missing shift prompt',
         });
         const { data: exc } = await supabase.from('attendance_exceptions')
-          .select('id').eq('exception_date', actionDay.date).maybeSingle();
+          .select('id').eq('user_id', user.id).eq('exception_date', actionDay.date).maybeSingle();
         if (exc) {
           await resolveException.mutateAsync({
             id: exc.id,
@@ -68,7 +68,7 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
           return;
         }
         const { data: exc } = await supabase.from('attendance_exceptions')
-          .select('id').eq('exception_date', actionDay.date).maybeSingle();
+          .select('id').eq('user_id', user.id).eq('exception_date', actionDay.date).maybeSingle();
         if (exc) {
           await resolveException.mutateAsync({
             id: exc.id,

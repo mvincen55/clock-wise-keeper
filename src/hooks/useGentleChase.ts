@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { getToday } from '@/lib/time-utils';
 import { chaseMessage } from '@/lib/copilot';
 import { useMyItems } from '@/hooks/useCopilot';
+import { useAuth } from '@/hooks/useAuth';
 
 /**
  * THE GENTLE CHASE.
@@ -14,17 +15,19 @@ import { useMyItems } from '@/hooks/useCopilot';
 
 const KEY = 'copilot_chase';
 
-function alreadyChased(phase: string, today: string): boolean {
+// Flags are per person: a shared front-desk PC must not let one teammate's
+// morning reminder silence the next teammate's.
+function alreadyChased(userId: string, phase: string, today: string): boolean {
   try {
-    return localStorage.getItem(`${KEY}:${phase}`) === today;
+    return localStorage.getItem(`${KEY}:${userId}:${phase}`) === today;
   } catch {
     return true;
   }
 }
 
-function markChased(phase: string, today: string) {
+function markChased(userId: string, phase: string, today: string) {
   try {
-    localStorage.setItem(`${KEY}:${phase}`, today);
+    localStorage.setItem(`${KEY}:${userId}:${phase}`, today);
   } catch {
     /* fails open */
   }
@@ -32,29 +35,32 @@ function markChased(phase: string, today: string) {
 
 /** Call once when the member clocks in. */
 export function useClockInChase() {
+  const { user } = useAuth();
   const { data: items } = useMyItems();
   const fired = useRef(false);
 
   return () => {
+    if (!user) return;
     const today = getToday();
-    if (fired.current || alreadyChased('clock_in', today)) return;
+    if (fired.current || alreadyChased(user.id, 'clock_in', today)) return;
     const open = (items ?? []).filter(i => !i.done && (!i.due_date || i.due_date <= today));
     const message = chaseMessage(open.length, 'clock_in');
     if (!message) return;
     fired.current = true;
-    markChased('clock_in', today);
+    markChased(user.id, 'clock_in', today);
     toast(message, { description: open[0]?.first_step ?? undefined });
   };
 }
 
 /** Mid-day check-in, only if nothing has been ticked off yet. */
 export function useMiddayChase() {
+  const { user } = useAuth();
   const { data: items } = useMyItems();
 
   useEffect(() => {
-    if (!items) return;
+    if (!items || !user) return;
     const today = getToday();
-    if (alreadyChased('midday', today)) return;
+    if (alreadyChased(user.id, 'midday', today)) return;
     const hour = Number(
       new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/New_York' }).format(
         new Date()
@@ -66,7 +72,7 @@ export function useMiddayChase() {
     if (!open.length || mine.some(i => i.done)) return; // some progress: stay quiet
     const message = chaseMessage(open.length, 'midday');
     if (!message) return;
-    markChased('midday', today);
+    markChased(user.id, 'midday', today);
     toast(message, { description: open[0]?.first_step ?? undefined });
-  }, [items]);
+  }, [items, user]);
 }

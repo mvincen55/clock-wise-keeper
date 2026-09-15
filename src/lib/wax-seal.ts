@@ -60,10 +60,18 @@ export function recordSeal(
 
 const STORAGE_KEY = 'pe.wax-seal.ledger.v1';
 
+/** One ledger per person on a shared device: the key carries who it belongs to. */
+export function ledgerKey(ownerId?: string | null): string {
+  return ownerId ? `${STORAGE_KEY}:${ownerId}` : STORAGE_KEY;
+}
+
 /** The ledger is per-person and private — it never leaves the device. */
-export function loadLedger(storage: Pick<Storage, 'getItem'> = localStorage): SealLedger {
+export function loadLedger(
+  storage: Pick<Storage, 'getItem'> = localStorage,
+  ownerId?: string | null,
+): SealLedger {
   try {
-    const raw = storage.getItem(STORAGE_KEY);
+    const raw = storage.getItem(ledgerKey(ownerId));
     if (!raw) return EMPTY_LEDGER;
     const parsed = JSON.parse(raw) as Partial<SealLedger>;
     return {
@@ -78,9 +86,10 @@ export function loadLedger(storage: Pick<Storage, 'getItem'> = localStorage): Se
 export function saveLedger(
   ledger: SealLedger,
   storage: Pick<Storage, 'setItem'> = localStorage,
+  ownerId?: string | null,
 ): void {
   try {
-    storage.setItem(STORAGE_KEY, JSON.stringify(ledger));
+    storage.setItem(ledgerKey(ownerId), JSON.stringify(ledger));
   } catch {
     // A full or blocked storage must never break a celebration.
   }

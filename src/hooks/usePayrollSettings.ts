@@ -16,11 +16,20 @@ export type PayrollSettingsRow = {
 
 export function usePayrollSettings() {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   return useQuery({
-    queryKey: ['payroll-settings', user?.id],
-    enabled: !!user,
+    queryKey: ['payroll-settings', ctx?.org_id, user?.id],
+    enabled: !!user && !!ctx,
     queryFn: async () => {
-      const { data } = await supabase.from('payroll_settings').select('*').maybeSingle();
+      // Rows are keyed by the admin who saved them, so an office with two
+      // managers can hold two rows: take this office's most recent one.
+      const { data } = await supabase
+        .from('payroll_settings')
+        .select('*')
+        .eq('org_id', ctx!.org_id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
       return data as PayrollSettingsRow | null;
     },
   });
