@@ -12,6 +12,10 @@ vi.mock('@/hooks/useProviders', () => ({ useProviders: () => ({ data: [
   { id: 'doctor', displayName: 'Dr. Test', providerType: 'doctor', employeeId: 'e1', active: true },
   { id: 'hygiene', displayName: 'Hygienist Test', providerType: 'hygienist', employeeId: 'e2', active: true },
 ] }) }));
+vi.mock('@/hooks/usePracticeSettings', () => ({ usePracticeSettings: () => ({ data: { pms_system: 'dentrix' } }) }));
+vi.mock('@/hooks/useProviderWorkingHours', () => ({ useProviderWorkingHours: () => ({ data: {
+  hygiene: { periods: [{ weekday: 1, startMinutes: 450, endMinutes: 990 }], source: "Hygienist Test's work schedule in Team" },
+} }) }));
 const saveProfile = vi.hoisted(() => vi.fn());
 vi.mock('@/hooks/useScheduleIntelligence', () => ({ useSaveLayoutProfile: () => ({ mutateAsync: saveProfile }), useLayoutProfiles: () => ({ data: [{ id: 'existing-profile', is_default: true, layout_signature: { columns: [] } }] }) }));
 vi.mock('@/lib/schedule-reader/ocr', () => ({ terminateOcr: async () => {}, recognizeFrame: async () => ({ words: [{ text: 'DR02', confidence: 99, bbox: { x0: 20, x1: 40, y0: 1, y1: 5 } }] }) }));
@@ -38,9 +42,26 @@ it('selects office providers and derives their type and department', async () =>
   expect(screen.getByText('Hygiene')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Next: working day' }));
   expect(screen.queryByRole('button', { name: 'Completed' })).not.toBeInTheDocument();
-  expect(screen.getByLabelText('Day starts')).toBeInTheDocument();
+  // What the office already knows is filled in: the hygienist's saved work
+  // schedule, and a working day taken from it — nothing asked for twice.
+  expect(screen.getByLabelText('Review weekly hours')).toHaveValue('Monday,07:30,16:30');
+  expect(screen.getByText(/Filled from Hygienist Test's work schedule in Team/)).toBeInTheDocument();
+  expect(screen.getByLabelText('Day starts')).toHaveValue('07:30');
+  expect(screen.getByLabelText('Day ends')).toHaveValue('16:30');
+  expect(screen.getByRole('button', { name: 'Save layout profile' })).toBeEnabled();
   fireEvent.click(screen.getByRole('button', { name: 'Save layout profile' }));
-  await waitFor(() => expect(saveProfile).toHaveBeenCalledWith(expect.objectContaining({ id: 'existing-profile', signature: expect.objectContaining({ captureMode: 'posted', cancelledRemainVisible: false }), statusLegend: [] })));
+  await waitFor(() => expect(saveProfile).toHaveBeenCalledWith(expect.objectContaining({
+    id: 'existing-profile',
+    name: 'Dentrix',
+    pmsName: 'Dentrix',
+    signature: expect.objectContaining({
+      captureMode: 'posted',
+      cancelledRemainVisible: false,
+      timeGrid: expect.objectContaining({ dayStartMinutes: 450, dayEndMinutes: 990 }),
+      columns: [expect.objectContaining({ providerId: 'hygiene', workingHours: [{ weekday: 1, startMinutes: 450, endMinutes: 990 }] })],
+    }),
+    statusLegend: [],
+  })));
 
 });
 
