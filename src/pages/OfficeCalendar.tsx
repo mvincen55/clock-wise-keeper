@@ -10,6 +10,8 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { ChevronLeft, ChevronRight, Plus, Trash2, Printer, FileText, Loader2, ShieldCheck, Pencil } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useOrgEmployees } from '@/hooks/useEmployees';
+import { useOrgStaff } from '@/hooks/useStaffCodes';
+import { staffCodeLabel } from '@/lib/staff-code';
 import { useOfficeClosures, useAddClosure } from '@/hooks/useOfficeClosures';
 import { useOfficeEvents } from '@/hooks/useOfficeEvents';
 import TeamMeetingsCard from '@/components/calendar/TeamMeetingsCard';
@@ -336,32 +338,19 @@ export default function OfficeCalendar() {
     },
   });
 
-  const actorIds = useMemo(() => {
-    const ids = new Set<string>();
-    (auditLog || []).forEach((e: any) => ids.add(e.user_id));
-    return Array.from(ids);
-  }, [auditLog]);
-
-  const { data: profiles } = useQuery({
-    queryKey: ['profiles-for-audit', actorIds],
-    enabled: actorIds.length > 0,
-    queryFn: async () => {
-      const { data } = await supabase.from('profiles').select('id, full_name, email').in('id', actorIds);
-      return (data || []) as { id: string; full_name: string | null; email: string | null }[];
-    },
-  });
-
+  // Attribution by canonical staff code only, never by name or email.
+  const { data: orgStaff } = useOrgStaff();
   const profileMap = useMemo(() => {
     const map = new Map<string, string>();
-    (profiles || []).forEach(p => map.set(p.id, p.full_name || p.email || p.id));
+    (orgStaff || []).forEach(m => { if (m.userId) map.set(m.userId, staffCodeLabel(m.code)); });
     return map;
-  }, [profiles]);
+  }, [orgStaff]);
 
   const employeeMap = useMemo(() => {
     const map = new Map<string, string>();
-    (employees || []).forEach(e => map.set(e.id, e.display_name));
+    (orgStaff || []).forEach(m => map.set(m.employeeId, staffCodeLabel(m.code)));
     return map;
-  }, [employees]);
+  }, [orgStaff]);
 
   const openSaturdays = useMemo(() => ctx ? getOpenSaturdays(ctx.org_id) : [], [ctx, saturdayDialogOpen]);
 
@@ -1274,7 +1263,7 @@ export default function OfficeCalendar() {
                           </span>
                         </td>
                         <td style={{ border: '1px solid #ddd', padding: '6px 10px' }}>
-                          {profileMap.get(entry.user_id) || 'Unknown'}
+                          {profileMap.get(entry.user_id) || 'Unassigned'}
                         </td>
                         <td style={{ border: '1px solid #ddd', padding: '6px 10px', fontSize: '12px' }}>
                           {detailParts.join(' • ') || '—'}

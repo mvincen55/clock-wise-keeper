@@ -156,6 +156,7 @@ export function useDocLibrarySettings() {
       const { data, error } = await supabase
         .from('doc_library_settings')
         .select('managers_can_edit')
+        .eq('org_id', ctx!.org_id)
         .maybeSingle();
       if (error) throw error;
       return data ?? { managers_can_edit: false };

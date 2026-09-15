@@ -3735,7 +3735,6 @@
 .handbook-section-link { margin: .75rem 0 1.25rem; font-size: .875rem; font-weight: 700; }
 .handbook-section-link a { color: #53406e; text-decoration: underline; text-underline-offset: 4px; }
 .handbook-section-link a:focus-visible { outline: 2px solid #53406e; outline-offset: 5px; }
-.handbook-numbered-heading { display: flex; gap: .6rem; margin: 1.5rem 0 .5rem; font-weight: 700; }
 @media print { .handbook-section-link { display: none !important; } }
 
 .handbook-table-wrap { overflow-x: auto; margin: 1rem 0 2rem; border: 1px solid #d6d0dc; }
@@ -3753,3 +3752,41 @@
 .handbook-uploaded .handbook-article h3 { scroll-margin-top: 112px; }
 @media(min-width: 1024px) { .handbook-uploaded .handbook-article h3 { scroll-margin-top: 24px; } }
 @media print { .handbook-reference-table:has(thead th:nth-child(3)) { min-width: 0; } }
+
+/* Handbook nesting, sub-headings, live fees, and readers built from uploaded documents. */
+.handbook-logo { height: 52px; width: auto; max-width: 160px; object-fit: contain; flex-shrink: 0; }
+.handbook-article h4, .handbook-subheading { font-size: 15px; line-height: 1.5; font-weight: 700; color: hsl(var(--foreground)); scroll-margin-top: 100px; }
+.handbook-article ul ul, .handbook-article ol ol, .handbook-article ul ol, .handbook-article ol ul { margin-bottom: 0; }
+.handbook-live-fee { font-weight: 700; color: hsl(var(--primary)); white-space: nowrap; }
+.handbook-printed-fee { display: block; margin-top: 2px; font-size: 11px; line-height: 1.5; font-weight: 400; color: hsl(var(--muted-foreground)); white-space: nowrap; }
+.handbook-table-note { margin: -1.25rem 0 2rem; max-width: 46rem; font-size: 12px; line-height: 1.6; color: hsl(var(--muted-foreground)); }
+.handbook-table-note a { color: hsl(var(--primary)); text-decoration: underline; text-underline-offset: 3px; }
+.source-reader .policy-article { border-top: 3px solid hsl(var(--primary)); }
+.source-reader-link { color: hsl(var(--primary)); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.source-reader-body .handbook-table-wrap { border-color: hsl(var(--border)); }
+.source-reader-note { margin: 0 40px 32px; padding: 14px 16px; border-left: 3px solid hsl(var(--primary)); background: hsl(var(--muted) / .5); font-size: 13px; line-height: 1.6; color: hsl(var(--muted-foreground)); }
+.source-reader-note a { color: hsl(var(--primary)); text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 1023px) { .source-reader-note { margin: 0 24px 24px; } .handbook-logo { height: 40px; } }
+@media (max-width: 480px) { .source-reader-note { margin: 0 16px 20px; } }
+@media print { .handbook-table-note, .source-reader-note, .source-reader-link { display: none !important; } .handbook-live-fee { color: black !important; } }
+
+/* Policy-book numbering, callouts, and quoted scripts in the handbook reader. */
+.handbook-section-number { display: inline-block; min-width: 2.4em; margin-right: .4em; font-family: 'JetBrains Mono', monospace; font-size: .74em; font-weight: 600; letter-spacing: .02em; color: hsl(var(--primary)); }
+.handbook-article h2 .handbook-section-number { min-width: 1.4em; font-size: .8em; }
+.handbook-toc-number { display: inline-block; min-width: 2.3em; margin-right: .35em; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: hsl(var(--muted-foreground)); }
+.handbook-toc [aria-current] .handbook-toc-number { color: inherit; opacity: .85; }
+.handbook-callout { margin: 1rem 0 1.25rem; padding: .85rem 1rem .85rem 1.1rem; border-left: 3px solid hsl(var(--primary)); background: hsl(var(--muted) / .5); border-radius: 0 var(--radius) var(--radius) 0; }
+.handbook-callout-label { display: block; margin-bottom: .2rem; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: hsl(var(--primary)); }
+.handbook-callout p { margin: 0; }
+.handbook-script { margin: 1rem 0 1.25rem; padding: .9rem 1.1rem; border: 1px solid hsl(var(--border)); border-left: 3px solid hsl(var(--primary) / .6); border-radius: var(--radius); background: hsl(var(--card)); }
+.handbook-script-label { display: block; margin-bottom: .3rem; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: hsl(var(--muted-foreground)); }
+.handbook-script p { margin: 0; font-style: italic; }
+.handbook-article h2 { margin-top: 2.75rem; }
+.handbook-article h2:first-child { margin-top: 0; }
+.handbook-cover .handbook-eyebrow { margin-bottom: 6px; }
+.handbook-uploaded .handbook-cover h2 { font-size: 34px; letter-spacing: -.03em; }
+@media (max-width: 1023px) { .handbook-uploaded .handbook-cover h2 { font-size: 28px; } }
+@media print {
+  .handbook-callout, .handbook-script { break-inside: avoid; border-color: black !important; }
+  .handbook-section-number, .handbook-toc-number, .handbook-callout-label { color: black !important; }
+}

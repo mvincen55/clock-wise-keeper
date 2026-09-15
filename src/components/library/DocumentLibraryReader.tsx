@@ -1,5 +1,3 @@
-import HandbookSectionLink from '@/components/handbook/HandbookSectionLink';
-import { handbookNumberedHeading } from '@/lib/handbook-section-links';
 /**
  * DocumentLibraryReader — the shared reader behind the Office Handbook and
  * the Insurance Desk (and future SOP/training libraries).
@@ -29,8 +27,10 @@ import { handbookNumberedHeading } from '@/lib/handbook-section-links';
  * (design-token `primary`) marks active navigation, focus, and progress.
  */
 import HandbookHeader from '@/components/handbook/HandbookHeader';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { ReaderBody } from '@/components/library/DocBlockView';
+import { highlighted } from '@/components/library/highlight';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
@@ -60,6 +60,7 @@ import {
   ListTree,
   Loader2,
   Pencil,
+  Printer,
   Search,
   Settings2,
   Sparkles,
@@ -73,8 +74,8 @@ import {
   useUpdateDocLibrarySettings,
   type OfficeDoc,
 } from '@/hooks/useOfficeDocs';
+import { useLibraryContents } from '@/hooks/useLibraryContents';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import { parseDocBlocks, type DocBlock } from '@/lib/doc-format';
 import {
   DOC_COLLECTION_LABELS,
   canEditLibraryDocs,
@@ -82,13 +83,13 @@ import {
   locateQueryBlock,
   outlineAncestors,
   outlineFromBlocks,
+  outlineNumbers,
   outlineTree,
   readerDocsFor,
   resolveDocPlacement,
   sectionAnchorId,
   sectionHeadingForBlock,
   snippetAround,
-  stitchChunks,
   type AiScope,
   type LibraryScope,
   type OutlineItem,
@@ -128,115 +129,6 @@ interface SearchHit {
   rank: number;
 }
 
-/** Render text with every occurrence of the query marked. */
-function highlightMatch(text: string, query: string) {
-  const q = query.trim();
-  if (!q) return text;
-  const parts = text.split(new RegExp(`(${escapeRegExp(q)})`, 'ig'));
-  if (parts.length === 1) return text;
-  return parts.map((part, i) =>
-    part.toLowerCase() === q.toLowerCase() ? (
-      <mark key={i} className="rounded-sm bg-primary/20 px-0.5 text-foreground">
-        {part}
-      </mark>
-    ) : (
-      part
-    )
-  );
-}
-
-/** Source-authored HTTP links only; raw HTML and script URLs stay inert text. */
-function highlighted(text: string, query: string) {
-  return text.split(/(\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g).map((part, index) => {
-    const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
-    return link ? <a key={index} href={link[2]} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">{highlightMatch(link[1], query)}</a> : <span key={index}>{highlightMatch(part, query)}</span>;
-  });
-}
-
-function BlockView({ block, id, query }: { block: DocBlock; id: string; query: string }) {
-  // Anchor offset: below the sticky bars when the window scrolls (mobile),
-  // just inside the pane when the pane scrolls (desktop).
-  const anchor = 'scroll-mt-28 lg:scroll-mt-6';
-  switch (block.type) {
-    case 'heading':
-      return block.level <= 2 ? (
-        <h2
-          id={id}
-          tabIndex={-1}
-          className={`${anchor} mb-3 mt-10 flex items-center gap-2.5 border-b border-border/70 pb-2 text-xl font-bold tracking-tight text-foreground first:mt-0`}
-        >
-          <span aria-hidden className="h-4 w-1 shrink-0 rounded-full bg-primary/60" />
-          <span className="min-w-0">{highlighted(block.text, query)}</span>
-        </h2>
-      ) : (
-        <h3 id={id} tabIndex={-1} className={`${anchor} mb-2 mt-6 text-base font-semibold text-foreground first:mt-0`}>
-          {highlighted(block.text, query)}
-        </h3>
-      );
-    case 'table':
-      return <div id={id} className={`${anchor} handbook-table-wrap`} role="region" aria-label="Reference table" tabIndex={0}>
-        <table className="handbook-reference-table">
-          <thead><tr>{block.rows[0].map((cell, column) => <th scope="col" key={column}>{highlighted(cell, query)}</th>)}</tr></thead>
-          <tbody>{block.rows.slice(1).map((row, index) => <tr key={index}>{row.map((cell, column) => column === 0 ? <th scope="row" key={column}>{highlighted(cell, query)}</th> : <td key={column}>{highlighted(cell, query)}</td>)}</tr>)}</tbody>
-        </table>
-      </div>;
-    case 'bullets':
-      return (
-        <ul id={id} className={`${anchor} mb-4 list-disc space-y-1.5 pl-5 text-[15px] leading-7 marker:text-primary/50`}>
-          {block.items.map((item, j) => (
-            <li key={j}>{highlighted(item, query)}</li>
-          ))}
-        </ul>
-      );
-    case 'numbered':
-      return (
-        <ol id={id} className={`${anchor} mb-4 list-decimal space-y-1.5 pl-5 text-[15px] leading-7 marker:font-medium marker:text-primary/70`}>
-          {block.items.map((item, j) => (
-            <li key={j}>{highlighted(item, query)}</li>
-          ))}
-        </ol>
-      );
-    default:
-      return (
-        <p id={id} className={`${anchor} mb-4 text-[15px] leading-7 text-foreground/90`}>
-          {highlighted(block.text, query)}
-        </p>
-      );
-  }
-}
-
-/**
- * The document body, memoized hard: scrollspy state changes many times per
- * scroll, and re-rendering a 67-section handbook on every tick is exactly
- * the jank this avoids.
- */
-const ReaderBody = memo(function ReaderBody({
-  blocks,
-  highlight,
-  handbook = false,
-}: {
-  blocks: DocBlock[];
-  highlight: string;
-  handbook?: boolean;
-}) {
-  const rendered = [];
-  const renderBlock = (i: number, text?: string) => <BlockView key={i} id={sectionAnchorId(i)} block={text === undefined ? blocks[i] : { type: 'para', text }} query={highlight} />;
-  for (let i = 0; i < blocks.length; i++) {
-    const numbered = handbook ? handbookNumberedHeading(blocks, i) : null;
-    if (numbered) {
-      rendered.push(<h3 key={`numbered-${i}`} id={sectionAnchorId(i)} tabIndex={-1} className="handbook-numbered-heading"><span>{numbered.number}</span> <span id={sectionAnchorId(i + 1)}>{highlighted(numbered.title, highlight)}</span></h3>);
-      rendered.push(<HandbookSectionLink key={`link-${i}`} title={numbered.title} />);
-      i++;
-      continue;
-    }
-    rendered.push(renderBlock(i));
-    const block = blocks[i];
-    if (handbook && block.type === 'heading') rendered.push(<HandbookSectionLink key={`link-${i}`} title={block.text} />);
-
-  }
-  return <div className="max-w-[46rem]">{rendered}</div>;
-});
-
 function tocLabelClass(active: boolean): string {
   return `min-w-0 flex-1 rounded-md px-2 py-1.5 text-left text-[13px] leading-snug transition-colors ${
     active
@@ -252,12 +144,14 @@ function TocRow({
   expanded,
   onToggle,
   onJump,
+  numbers,
 }: {
   node: OutlineTreeNode;
   activeId: string;
   expanded: Set<string>;
   onToggle: (id: string) => void;
   onJump: (item: OutlineItem) => void;
+  numbers?: Map<string, string>;
 }) {
   const { item, children } = node;
   const isOpen = expanded.has(item.id);
@@ -286,7 +180,7 @@ function TocRow({
           onClick={() => onJump(item)}
           className={tocLabelClass(item.id === activeId)}
         >
-          {item.text}
+          <TocLabel item={item} numbers={numbers} />
         </button>
       </div>
       {children.length > 0 && isOpen && (
@@ -299,11 +193,23 @@ function TocRow({
               expanded={expanded}
               onToggle={onToggle}
               onJump={onJump}
+              numbers={numbers}
             />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+/** A contents entry with its policy-book number when the surface numbers sections. */
+function TocLabel({ item, numbers }: { item: OutlineItem; numbers?: Map<string, string> }) {
+  const number = numbers?.get(item.id);
+  return (
+    <>
+      {number && <span className="handbook-toc-number" aria-hidden="true">{number}</span>}
+      {item.text}
+    </>
   );
 }
 
@@ -316,10 +222,12 @@ function TableOfContents({
   outline,
   activeId,
   onJump,
+  numbers,
 }: {
   outline: OutlineItem[];
   activeId: string;
   onJump: (item: OutlineItem) => void;
+  numbers?: Map<string, string>;
 }) {
   const [filter, setFilter] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -408,7 +316,7 @@ function TableOfContents({
                 onClick={() => jump(item)}
                 className={`block w-full ${tocLabelClass(item.id === activeId)}`}
               >
-                {item.text}
+                <TocLabel item={item} numbers={numbers} />
               </button>
             ))
           )
@@ -421,6 +329,7 @@ function TableOfContents({
               expanded={expanded}
               onToggle={toggle}
               onJump={jump}
+              numbers={numbers}
             />
           ))
         ) : (
@@ -433,7 +342,7 @@ function TableOfContents({
               onClick={() => onJump(item)}
               className={`block w-full ${tocLabelClass(item.id === activeId)}`}
             >
-              {item.text}
+              <TocLabel item={item} numbers={numbers} />
             </button>
           ))
         )}
@@ -619,7 +528,8 @@ export default function DocumentLibraryReader({
   const { data: librarySettings } = useDocLibrarySettings();
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const [selectedId, setSelectedId] = useState<string | null>(params.get('doc'));
   const [readerHighlight, setReaderHighlight] = useState('');
   const [pendingJump, setPendingJump] = useState<{ docId: string; blockIndex: number } | null>(null);
   const [activeSectionId, setActiveSectionId] = useState('');
@@ -642,51 +552,37 @@ export default function DocumentLibraryReader({
   }, [query]);
   const searching = debounced.length >= 3;
 
-  // One fetch of every chunk in scope: feeds the reader, the outlines, and
-  // search-result section resolution. Refreshes only when the library changes.
-  // Re-parsed documents keep multiple parse versions side by side and type
-  // their furniture (headers/footers/TOC rows) — read only the current
-  // version's actual content.
-  const versionByDoc = useMemo(
-    () => new Map(docs.map(d => [d.id, d.current_parse_version ?? 1])),
-    [docs]
-  );
-  const { data: contents, isLoading: contentsLoading } = useQuery({
-    queryKey: ['library-doc-contents', docIds.join(','), [...versionByDoc.values()].join(',')],
-    enabled: docIds.length > 0,
-    staleTime: 10 * 60 * 1000,
-    queryFn: async (): Promise<Map<string, string>> => {
-      const { data, error } = await supabase
-        .from('office_doc_chunks')
-        .select('doc_id, chunk_index, content, chunk_type, parse_version')
-        .in('doc_id', docIds)
-        .not('chunk_type', 'in', '("header","footer","table_of_contents")')
-        .order('doc_id')
-        .order('chunk_index');
-      if (error) throw error;
-      const parts = new Map<string, string[]>();
-      for (const chunk of data ?? []) {
-        if (chunk.parse_version !== (versionByDoc.get(chunk.doc_id) ?? 1)) continue;
-        parts.set(chunk.doc_id, [...(parts.get(chunk.doc_id) ?? []), chunk.content]);
-      }
-      // Stitch, don't join: chunks overlap by design for retrieval, and a
-      // naive join repeats every overlap in the reading pane.
-      return new Map([...parts.entries()].map(([id, list]) => [id, stitchChunks(list)]));
-    },
-  });
+  const { contents, blocksByDoc, isLoading: contentsLoading } = useLibraryContents(docs);
 
-  const blocksByDoc = useMemo(() => {
-    const map = new Map<string, DocBlock[]>();
-    if (!contents) return map;
-    for (const id of docIds) map.set(id, parseDocBlocks(contents.get(id) ?? ''));
-    return map;
-  }, [contents, docIds]);
+  // Deep links from the procedures catalog and elsewhere in the app:
+  // /handbook?doc=<id>&section=<block index> opens that document at that block.
+  useEffect(() => {
+    const docId = params.get('doc');
+    if (!docId || !docs.some(d => d.id === docId)) return;
+    setSelectedId(docId);
+    const section = Number(params.get('section'));
+    if (params.has('section') && Number.isInteger(section) && section >= 0) {
+      setPendingJump({ docId, blockIndex: section });
+    }
+  }, [params, docs]);
 
   const blocks = useMemo(
     () => (activeDoc ? blocksByDoc.get(activeDoc.id) ?? [] : []),
     [activeDoc, blocksByDoc]
   );
   const outline = useMemo(() => outlineFromBlocks(blocks), [blocks]);
+  // Policy-book numbering (1, 1.1, 1.1.1) for the handbook: the same map
+  // drives the contents list (by anchor id) and the headings (by block index).
+  const numbering = useMemo(() => {
+    if (appearance !== 'handbook') return { byId: undefined, byBlock: undefined };
+    const byId = outlineNumbers(outline);
+    const byBlock = new Map<number, string>();
+    for (const item of outline) {
+      const number = byId.get(item.id);
+      if (number) byBlock.set(item.blockIndex, number);
+    }
+    return { byId, byBlock };
+  }, [appearance, outline]);
 
   // Scoped full-text search — the same index Ask AI uses, filtered to this
   // surface's areas/collections (plus a client-side guard on scope doc ids).
@@ -784,11 +680,12 @@ export default function DocumentLibraryReader({
     setActiveSectionId(
       enclosing.length > 0 ? enclosing[enclosing.length - 1].id : sectionAnchorId(blockIndex)
     );
+    const target = blocks[blockIndex];
     setTimeout(
       () =>
         document
           .getElementById(sectionAnchorId(blockIndex))
-          ?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+          ?.scrollIntoView({ behavior: 'smooth', block: target?.type === 'heading' ? 'start' : 'center' }),
       120
     );
   }, [pendingJump, activeDoc, blocks, outline]);
@@ -846,7 +743,7 @@ export default function DocumentLibraryReader({
         <p className="shrink-0 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Contents
         </p>
-        <TableOfContents outline={outline} activeId={activeSectionId} onJump={jumpToSection} />
+        <TableOfContents outline={outline} activeId={activeSectionId} onJump={jumpToSection} numbers={numbering.byId} />
       </div>
     </div>
   );
@@ -1063,13 +960,14 @@ export default function DocumentLibraryReader({
                   </div>
                 ) : activeDoc ? (
                   <article className={appearance === 'handbook' ? 'handbook-article' : undefined}>
-                    <header className="mb-7">
+                    <header className={appearance === 'handbook' ? 'handbook-cover mb-7' : 'mb-7'}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-start gap-3">
                           <span className="mt-1 hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:flex">
                             <Icon className="h-4 w-4 text-primary" />
                           </span>
                           <div className="min-w-0">
+                            {appearance === 'handbook' && <p className="handbook-eyebrow">Current version</p>}
                             <h2 className="text-2xl font-bold tracking-tight">{activeDoc.title}</h2>
                             <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                               {updatedAt && (
@@ -1103,6 +1001,12 @@ export default function DocumentLibraryReader({
                           </div>
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
+                          {appearance === 'handbook' && (
+                            <Button variant="outline" size="sm" onClick={() => window.print()} className="print:hidden">
+                              <Printer className="mr-1.5 h-3.5 w-3.5" />
+                              Print
+                            </Button>
+                          )}
                           {canEdit && (
                             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
                               <Pencil className="mr-1.5 h-3.5 w-3.5" />
@@ -1120,7 +1024,7 @@ export default function DocumentLibraryReader({
                         The text of this document is not available. Ask your manager for a copy or help uploading it again.
                       </p>
                     ) : (
-                      <ReaderBody blocks={blocks} highlight={readerHighlight} handbook={appearance === 'handbook'} />
+                      <ReaderBody blocks={blocks} highlight={readerHighlight} handbook={appearance === 'handbook'} numbers={numbering.byBlock} />
                     )}
 
                     {/* Previous / next section */}

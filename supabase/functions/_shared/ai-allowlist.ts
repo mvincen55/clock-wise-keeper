@@ -52,10 +52,6 @@ export const AI_GATEWAY_ALLOWLIST: Record<string, GatewayEntry> = {
     handler: "scrub",
     reason: "Persona chat and rubric scoring over trainee-authored replies.",
   },
-  "ask-docs": {
-    handler: "scrub",
-    reason: "Answers questions over the office corpus using staff questions.",
-  },
   "assistant-auditor": {
     handler: "scrub",
     reason: "Second-pass audit over another model's output.",
@@ -95,10 +91,6 @@ export const AI_GATEWAY_ALLOWLIST: Record<string, GatewayEntry> = {
   },
 
   // ---- consented: the person-level content is the request ---------------
-  "parse-pdf": {
-    handler: "consented",
-    reason: "User uploads a payroll/timesheet PDF and asks for it to be read.",
-  },
   "ingest-doc": {
     handler: "consented",
     reason: "Owner deliberately uploads office policy documents to the corpus.",

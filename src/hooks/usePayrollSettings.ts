@@ -16,11 +16,17 @@ export type PayrollSettingsRow = {
 
 export function usePayrollSettings() {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
   return useQuery({
-    queryKey: ['payroll-settings', user?.id],
-    enabled: !!user,
+    queryKey: ['payroll-settings', ctx?.org_id, user?.id],
+    enabled: !!user && !!ctx,
     queryFn: async () => {
-      const { data } = await supabase.from('payroll_settings').select('*').maybeSingle();
+      // One row per office (unique on org_id); readable by every member.
+      const { data } = await supabase
+        .from('payroll_settings')
+        .select('*')
+        .eq('org_id', ctx!.org_id)
+        .maybeSingle();
       return data as PayrollSettingsRow | null;
     },
   });
@@ -36,7 +42,7 @@ export function useUpsertPayrollSettings() {
       if (!user || !ctx) throw new Error('Not authenticated');
       const { error } = await supabase.from('payroll_settings').upsert(
         { user_id: user.id, org_id: ctx.org_id, ...updates },
-        { onConflict: 'user_id' }
+        { onConflict: 'org_id' }
       );
       if (error) throw error;
     },

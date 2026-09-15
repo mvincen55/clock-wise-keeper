@@ -1,6 +1,8 @@
 import { CheckCircle2, FileText, ShieldCheck } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import HandbookReferenceTable from '@/components/handbook/HandbookReferenceTable';
 import type { KnowledgeBlockRow } from '@/integrations/supabase/knowledge-client';
+import { parseDocTableRow } from '@/lib/doc-format';
 
 type Props = {
   blocks: KnowledgeBlockRow[];
@@ -13,13 +15,9 @@ function lines(text: string): string[] {
     .filter(Boolean);
 }
 
+/** Rows of an authored table; a markdown separator line is layout, not data. */
 function tableRows(text: string): string[][] {
-  return lines(text).map(line =>
-    line
-      .split('|')
-      .map(cell => cell.trim())
-      .filter((cell, index, cells) => cell || (index > 0 && index < cells.length - 1)),
-  );
+  return lines(text).map(parseDocTableRow).filter(row => !row.every(cell => /^:?-+:?$/.test(cell)));
 }
 
 function KnowledgeBlock({ block }: { block: KnowledgeBlockRow }) {
@@ -79,24 +77,8 @@ function KnowledgeBlock({ block }: { block: KnowledgeBlockRow }) {
   }
   if (block.block_type === 'table') {
     const rows = tableRows(block.plain_text);
-    const [head, ...body] = rows;
-    if (!head) return null;
-    return (
-      <div className="my-5 overflow-x-auto rounded-lg border">
-        <table className="w-full min-w-[480px] border-collapse text-left text-sm">
-          <thead className="bg-muted/60">
-            <tr>{head.map((cell, index) => <th key={index} className="border-b px-3 py-2.5 font-semibold">{cell}</th>)}</tr>
-          </thead>
-          <tbody>
-            {body.map((row, rowIndex) => (
-              <tr key={rowIndex} className="border-b last:border-0">
-                {head.map((_, cellIndex) => <td key={cellIndex} className="px-3 py-2.5 align-top">{row[cellIndex] ?? ''}</td>)}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
+    if (rows.length === 0) return null;
+    return <HandbookReferenceTable rows={rows} hasHeader={rows[0].some(Boolean)} />;
   }
   if (block.block_type === 'image') {
     return (

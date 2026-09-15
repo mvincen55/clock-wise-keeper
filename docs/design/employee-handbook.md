@@ -1,12 +1,18 @@
 # Employee handbook reader
 
-Both handbook paths use Purple Envelope's Archivo headings, purple accents, and the app's shared background/card tokens. The header has no decorative image. Uploaded documents remain the fallback when no published policy library is available.
+Both handbook paths use Purple Envelope's Archivo headings, purple accents, and the app's shared background/card tokens. The header carries the practice's own uploaded logo when branding has one and no other image. Uploaded documents remain the fallback when no published policy library is available.
 
-The reader supports searchable content, nested contents, mobile navigation, accessible focus and current-section state, source-authored HTTP links, and semantic Markdown tables. Table headers repeat in print; rows keep their cells together. Ordinary prose is not interpreted as a table without an explicit Markdown separator. Tables retain column relationships when converted into policy drafts or legacy structured manuals.
+The reader supports searchable content, nested contents, mobile navigation, accessible focus and current-section state, source-authored HTTP links, nested lists, and semantic Markdown tables. Deep links of the form `/handbook?doc=<id>&section=<block index>` open a document at a section. Table headers repeat in print; rows keep their cells together. Ordinary prose is not interpreted as a table without an explicit Markdown separator. Tables retain column relationships when converted into policy drafts or legacy structured manuals.
 
-Corrected source text appears once. There is no duplicate raw-text disclosure or hardcoded office-specific content in the application. Actual office source corrections belong in the office's document data, using its original Google Doc for table cells and numbered lists. Source links and historical fee dates stay with that office's content. Clinical photo examples remain in the source document.
+Corrected source text appears once. There is no duplicate raw-text disclosure or hardcoded office-specific content in the application. Actual office source corrections belong in the office's document data, using its original Google Doc for table cells and numbered lists.
 
-Recognized section labels link to existing PTO, Morning Huddle, Checklists, Incident Reports, and Broken Appointments routes. These are navigation aids; they do not change office submission instructions. Standalone section numbers join short colon-ended headings while retaining their source anchors.
+The block parser (`src/lib/doc-format.ts`) repairs the two extraction shapes offices actually upload. PDF text that separates list marks from their text (a run of lone bullets above blank-separated items, a list number on its own line above its label) reassembles into lists and nested sub-headings; a numbered label that introduces bullets becomes a sub-heading instead of a list restarting at 1. Google Docs Markdown exports (escaped punctuation, bold headings and labels, indented nesting, `:-:` separators, empty header rows above bold headers, one-column task tables) parse into the same blocks, so an office can paste that export into the reader's editor.
+
+Reference tables that quote fees by procedure code show the current office fee schedule figure in place of the printed one, with the printed figure kept beside it only where it differs (`HandbookReferenceTable`, `src/lib/handbook-fees.ts`). Fee edits invalidate the lookup so the handbook never drifts from the schedule.
+
+Until an office publishes governed items, its uploaded handbook and procedure documents are split into sections and classified as policies, procedures, or reference by title, part, and content (`src/lib/source-knowledge.ts`). Office Procedures reads the procedure sections with the same two-pane layout as the published reader, and Manage Policies & Procedures lists every section as a starting point for a draft. This is read-only: publication rules are unchanged. Source links and historical fee dates stay with that office's content. Clinical photo examples remain in the source document.
+
+Recognized section labels link to existing PTO, Morning Huddle, Checklists, Incident Reports, and Broken Appointments routes. These are navigation aids; they do not change office submission instructions.
 
 ## Validation
 

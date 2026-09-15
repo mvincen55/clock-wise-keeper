@@ -236,6 +236,32 @@ export function outlineFromBlocks(blocks: DocBlock[]): OutlineItem[] {
     }));
 }
 
+/** Headings that carry their own number ("1. Work Schedule", "2.3 Fees", "IV. Investigation") keep it. */
+export const isSelfNumbered = (text: string): boolean => /^(\d+(\.\d+)*[.)]?|[IVXLC]+\.)\s/.test(text.trim());
+
+/**
+ * Policy-book numbering for an outline: parts 1, 2, 3; sections 1.1, 1.2;
+ * sub-sections 1.1.1, relative to the shallowest heading level. Every
+ * heading counts toward its siblings, but a heading that already carries a
+ * number in its text is left out of the map so it is never numbered twice.
+ */
+export function outlineNumbers(outline: OutlineItem[]): Map<string, string> {
+  const numbers = new Map<string, string>();
+  if (outline.length === 0) return numbers;
+  const top = Math.min(...outline.map(item => item.level));
+  const counters: number[] = [];
+  let previousDepth = -1;
+  for (const item of outline) {
+    // Skipped levels (## straight to ####) nest one step, never "1.0.1".
+    const depth = Math.min(Math.max(item.level - top, 0), previousDepth + 1);
+    counters.length = depth + 1;
+    counters[depth] = (counters[depth] ?? 0) + 1;
+    previousDepth = depth;
+    if (!isSelfNumbered(item.text)) numbers.set(item.id, counters.join('.'));
+  }
+  return numbers;
+}
+
 export interface OutlineTreeNode {
   item: OutlineItem;
   children: OutlineTreeNode[];

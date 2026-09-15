@@ -70,7 +70,7 @@ The FOF (fee form) prints patient-facing documents, and AI features read office 
 - **Frontend:** React 18 + Vite + TypeScript + Tailwind + shadcn/ui, TanStack Query, React Router (`BrowserRouter` in `App.tsx` — do not add a second router).
 - **Backend:** Supabase (Postgres, Auth, RLS, Edge Functions on Deno, pgmq queues). ~60 tables, 200+ RLS policies as of 2026-07.
 - **Email:** Lovable email infra — React Email templates → `enqueue_email` RPC → pgmq queues → `process-email-queue` dispatcher. See Email system.
-- **AI:** `fof-assistant` / `kimi-agent` edge functions (Kimi K3 office agent) + `assistant-auditor` second-model verification.
+- **AI:** `kimi-agent` (Kimi K3 office agent behind Ask AI, the FOF assistant, and Ask-this-manual) + `assistant-auditor` second-model verification; `office-ai-chat` for the Messages-page assistant. Every chat prompt starts with the office's own configuration via `_shared/office-knowledge.ts` (see AI features).
 - **Mobile:** Capacitor + `vite-plugin-pwa`.
 - **Tests:** vitest (248+ as of 2026-07), including print-invariant snapshot tests.
 
@@ -101,6 +101,7 @@ Navigation is a compact destination list; every feature below keeps its own rout
 | `/` | Dashboard (Home) | Role-personalized launchpad: attention items, spotlight, restrained progress summary |
 | `/workplace` | Workplace | Hub: time, attendance, PTO, calendar, policies, goals, training, team |
 | `/playbook` | Playbook | Hub: huddle, checklists, close the day, incidents, FOF, Ask AI |
+| `/playbook/procedures` | PracticeProcedures | Published procedures; until any exist, the procedure sections of the uploaded handbook/SOP documents (`SourceKnowledgeReader`, `src/lib/source-knowledge.ts`) |
 | `/inbox/:tab` | InboxPage | Unified Inbox: Messages, Doctor Requests, Nudges (legacy `/messages`, `/requests`, `/nudges` redirect here) |
 | `/management` | Management | Manager/owner command center: approvals, snapshots, vitals, admin links |
 | `/help` | Help | Help & support surface |
@@ -110,7 +111,7 @@ Navigation is a compact destination list; every feature below keeps its own rout
 |---|---|---|
 | `/timesheet` | Timesheet | Clock in/out, punch history, manager punch editing (`PunchEditorModal`), tardy reasons (`TardyReasonModal`, `TardyReviewModal`) |
 | `/work-zones` | WorkZones | Geofenced zones for location-verified clock-in (`useGeoTracking`, `LocationStatusPanel`, `process-location-event`) |
-| `/reports` | Reports | Payroll/attendance reporting; export via `export-report` |
+| `/reports` | Reports | Payroll/attendance reporting and exports (built in the browser) |
 
 ### Time off
 | Route | Page | What it does |
@@ -136,7 +137,7 @@ Navigation is a compact destination list; every feature below keeps its own rout
 | `/deposit-log` | DepositLog | **Close the Day**: the deposit log + branded print sheet, grown into the five-step closeout (money, vitals, local-only Privacy View Capture, staffing reality, seal) — see `docs/close-the-day-spec.md` |
 | `/incident-reports` | IncidentReports | Incident reports with signature/review workflow + print sheet |
 | `/important-numbers` | ImportantNumbers | Office contact directory with tabs |
-| `/handbook` | OfficeHandbook | Office Handbook reader (Workplace policies + HR) over the shared `DocumentLibraryReader`; `/policy-manual` redirects here |
+| `/handbook` | OfficeHandbook | Office Handbook reader (Workplace policies + HR) over the shared `DocumentLibraryReader`; `/policy-manual` redirects here. Deep links `?doc=<id>&section=<block>`; code tables quote the live office fee schedule |
 | `/insurance-desk` | InsuranceDesk | Insurance Desk reader (carrier manuals, Practice Playbook) over the same `DocumentLibraryReader` (`ingest-doc` indexes uploads) |
 | `/morning-huddle` | MorningHuddle | Early stub — intended home for daily team huddle |
 
@@ -240,15 +241,16 @@ Migration `20260723200000_checklists.sql`:
 
 ## AI features
 
-- **FOF Assistant** (`/assistant` + `fof-assistant`, `kimi-agent`, `mcp` functions): chat that staff teach office knowledge to. Memory in `assistant_memories`.
+- **Office profile** (`supabase/functions/_shared/office-knowledge.ts`): one shared loader renders the office's settings — practice identity, providers, team and operational roles, attendance/payroll policy, accountability policies, payment policy, broken-appointment policy, correspondence defaults, checklists, published handbook/playbook entries, upcoming closures and events, the Important Numbers directory by label only — into a bounded block that `kimi-agent` and `office-ai-chat` put at the top of every prompt. Reads run under the caller's JWT and are filtered by `org_id`; staff free text passes through the PHI scrubber; Important Numbers values and bank/deposit settings are never read. Add a setting there when you want the AI to know it.
+- **Ask AI / FOF Assistant** (`/assistant`, `FofAssistantWidget`, `AskManualPanel` → `kimi-agent`): chat that staff teach office knowledge to. Memory in `assistant_memories`. (`fof-assistant` was the old name; the function no longer exists. `mcp` is the external MCP server for personal time/PTO tools, not part of this.)
 - **Contradiction guard:** a new "fact" that contradicts existing knowledge is saved `pending` (kept out of every prompt) and the assistant states both versions and asks an owner/manager which is right. Every write is re-checked by a separate cheap model — a model that was just persuaded of something is a poor judge of contradiction. The checker **fails open** so a checker outage can never block teaching.
 - **`assistant-auditor`** (second AI, never talks to staff): verifies consistency and filing — contradicting standing facts, code notes in the wrong home, code knowledge stuck as chat memory. Findings are **fingerprinted** so re-runs never re-report open/dismissed items, and it **proposes** fixes rather than applying them. Surfaced on Assistant → Memory & Audit tab.
 - **Code notes** (`save_code_note` tool): two homes (office schedule vs carrier schedule — see HIPAA boundary). The tool **refuses to create a missing fee row** — an invented fee could reach a patient's form.
-- **Docs Q&A:** `ingest-doc` / `ask-docs` for policy manual / office documents.
+- **Docs Q&A:** `ingest-doc` indexes uploads into `office_doc_chunks` (Postgres full-text search, no embeddings); `kimi-agent`'s `search_office_docs` tool queries them.
 
 ## FOF (fee forms) domain
 
-- Fee schedules: office schedule + per-carrier schedules (`useFeeSchedules`); imports via `parse-pdf` / `confirm-import`. CDT codes are canonical — the Altus incident (migration `20260729190000`) is the cautionary tale: a numeric spreadsheet column stripped the `D` prefix from 693 codes, silently breaking carrier matching *and* creating false collisions with custom numeric office codes. The importer now zero-pads and offers to restore the `D` (default on).
+- Fee schedules: office schedule + per-carrier schedules (`useFeeSchedules`); imports are parsed in the browser (`FeeImportDialog`). CDT codes are canonical — the Altus incident (migration `20260729190000`) is the cautionary tale: a numeric spreadsheet column stripped the `D` prefix from 693 codes, silently breaking carrier matching *and* creating false collisions with custom numeric office codes. The importer now zero-pads and offers to restore the `D` (default on).
 - `fof_code_names`: per-CODE patient-facing name overrides (staff free text — printed but never sent to AI; see HIPAA boundary). Members read everything, edit nothing; the code dialog opens read-only ("View only") for employees.
 - Printed FOF, Deposit Log, and Incident Report sheets share letterhead/branding via `BrandPrintStyle` + `ScaledPrintPreview`.
 
@@ -266,13 +268,14 @@ Migration `20260723200000_checklists.sql`:
 
 ## Edge functions (JWT gating per `supabase/config.toml`)
 
-`verify_jwt = true` means the gateway requires a valid user JWT: `send-org-invite`, `process-email-queue`, `fof-assistant`, `kimi-agent`, `assistant-auditor`, `name-visits`, `consent-ai`.
-`verify_jwt = false` does **not** mean unauthenticated — each does its own verification (webhook signature, service-role bearer, invite-token-as-secret): `accept-invite`, `auth-email-hook`, `ask-docs`, `ingest-doc`, `confirm-import`, `export-report`, `mcp`, `parse-pdf`, `process-location-event`, `parse-treatment`.
+`supabase/config.toml` is the source of truth for which functions the gateway JWT-checks; every function directory has a block there. `verify_jwt = false` does **not** mean unauthenticated — each such function does its own verification: webhook signature (`auth-email-hook`), service-role bearer equality (cron functions: `office-pulse`, `integrity-digest`, `training-reminders`, `goal-step-reminders`, `acknowledgment-escalation`), invite-token-as-secret (`accept-invite`), Supabase OAuth (`mcp`), a public rate-limited form (`submit-lead`), or a user JWT checked in code (`ingest-doc`, `process-location-event`, `accountability-engine`, which cron and admins share). Functions nothing calls are removed rather than left deployed.
+Org identity in every function comes from `org_members` for the verified caller; where a function takes an id from the client (ticket, sprint, conversation, org), it is validated against that membership before the service role touches anything.
 **Adding a function? Add its `[functions.<name>]` block to `config.toml` in the same commit, or the gateway default may not match the function's own auth model.**
 
 ## Known issues & landmines
 
-1. **`allowed_users` RLS infinite recursion (42P17).** A policy on `allowed_users` queries `allowed_users`. The app works because access goes through the SECURITY DEFINER `is_allowed_user()` bypass, but any *direct* table access (dashboard query with user role, future policy joining it) can 500. Fix: rewrite the policy to use a SECURITY DEFINER helper. Identified 2026-07, not yet fixed.
+1. **`allowed_users` RLS infinite recursion (42P17).** Fixed in migration `20260731000708` (the policy now goes through `is_allowed_user()`). Runbook §6 remains as history.
+1b. **Live-only objects:** fixed. `office_nudges` and the messaging RPCs are recorded in migration `20260915140000`. If Lovable creates something outside the repo again, capture it the same way before relying on it.
 2. **Rebrand incomplete.** Auth page, `index.html`, and email sender say Purple Envelope; nav labels, PWA manifest, printed-form footers, and email template internals may still say TimeVault/TimeKeeper. Sweep pending.
 3. **`SAMPLE_PROJECT_URL` in `auth-email-hook` still points at `clock-wise-keeper.lovable.app`** — preview-mode sample data only, harmless, but looks wrong.
 4. **Dashboard-only state** (signup toggle, Site URL, cron, DNS) drifts silently — re-verify after any auth/email incident. See `docs/runbook.md`.

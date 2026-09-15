@@ -154,6 +154,8 @@ export function useCreateScheduleVersion() {
         const { data: existing } = await supabase
           .from('schedule_versions')
           .select('id, effective_start_date, effective_end_date')
+          .eq('org_id', ctx.org_id)
+          .eq('employee_id', ctx.employee_id)
           .order('effective_start_date', { ascending: false });
 
         if (existing?.length) {

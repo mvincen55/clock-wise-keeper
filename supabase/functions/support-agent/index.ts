@@ -209,11 +209,15 @@ Deno.serve(async (req) => {
 
     if (!ticket) return json({ error: "That report no longer exists." }, 404);
 
+    // Membership is checked in the TICKET's office, so an admin of one office
+    // can never open another office's report by guessing its id.
     const { data: member } = await db
       .from("org_members")
       .select("org_id, role")
       .eq("user_id", user.id)
+      .eq("org_id", ticket.org_id)
       .eq("status", "active")
+      .limit(1)
       .maybeSingle();
 
     const isAdmin = member && ["owner", "manager"].includes(String(member.role));
