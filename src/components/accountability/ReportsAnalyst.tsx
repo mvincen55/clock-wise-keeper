@@ -1,4 +1,8 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useOrgContext } from '@/hooks/useOrgContext';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +36,8 @@ import { buildAnalystPdf } from '@/lib/analyst-pdf';
 
 export interface AnalystCitation {
   id: string;
+  source_id?: string;
+  source_table?: string;
   who: string;
   kind: string;
   kind_label: string;
@@ -72,13 +78,23 @@ type Turn = {
   citations?: AnalystCitation[];
   concerns?: AnalystConcern[];
   audit?: AnalystAudit;
+  coverage?: Coverage;
 };
 
 
-const CITE = /\[rec:([0-9a-fA-F-]{6,})\]/g;
+type Coverage = {
+  evidence_version: number;
+  record_count: number;
+  counts: {key: string; label: string; count: number}[];
+  warnings: string[];
+};
+const SOURCES = {all: 'All records', attendance: 'Attendance', checklists: 'Checklists', accountability: 'Accountability reports'};
+const CITE = /\[rec:([a-z_]+:[a-p]{6,}|[0-9a-fA-F-]{6,})\]/g;
 
 /** One-tap follow-ups — the questions managers actually ask of the record book. */
 const QUICK_ASKS: { label: string; icon: typeof Search; question: string }[] = [
+  {label: 'Attendance patterns', icon: CalendarClock, question: 'What attendance patterns are supported by these records? Consider late arrivals, recorded call-outs, planned time off, work duration, and repeated incomplete punches. Compare each person to their own recorded history. Do not count unscheduled days or office closures as absences. Cite the records.'},
+  {label: 'Checklist patterns', icon: ListChecks, question: 'Read checklist completion timing and recorded bypasses. Distinguish shared team tasks from per-person tasks, resolved reasons from unanswered bypasses, and daily versus longer periods. If the history is too thin for a pattern, say so. Missing checkmarks alone do not prove missed work. Cite the records.'},
   {
     label: 'Spot anomalies',
     icon: Search,
@@ -86,10 +102,10 @@ const QUICK_ASKS: { label: string; icon: typeof Search; question: string }[] = [
       'Spot anomalies in these records for this date range — anything that stands out from the normal pattern, like sudden clusters, one person spiking, or an unusual day of the week. Cite the records. If nothing stands out, say so plainly.',
   },
   {
-    label: 'Find policy violations',
+    label: 'Review exceptions',
     icon: Scale,
     question:
-      'Based only on these records and the office policies you can see, point out anything that looks like a policy violation for this date range. Be careful and neutral — if something is ambiguous, say it is ambiguous rather than calling it a violation. Cite the records.',
+      'Review attendance and checklist exceptions in this date range. Distinguish planned time off, call-outs, corrections, and resolved bypasses. Only call something a policy violation if an actual office rule is provided. Cite the records.',
   },
   {
     label: 'Summarize exceptions',
@@ -361,33 +377,60 @@ export default function ReportsAnalyst({
   from,
   to,
   kind,
-  recordCount,
+  employeeId,
 }: {
   from: string;
   to: string;
   kind: string;
-  recordCount: number;
+  employeeId?: string;
 }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<AnalystCitation | null>(null);
+  const {data: ctx} = useOrgContext();
+  const qc = useQueryClient();
+  const [source, setSource] = useState<keyof typeof SOURCES>('all');
+  const scopeRevision = useRef(0);
+  const payload = {from,to,kind,source,employee_id:employeeId};
+  const coverageKey = ['analyst-coverage',ctx?.org_id,employeeId,from,to,kind,source];
+  const coverage = useQuery({
+    queryKey: coverageKey,
+    enabled: !!ctx?.org_id,
+    staleTime: 30000,
+    queryFn: async (): Promise<Coverage> => {
+      const {data,error} = await supabase.functions.invoke('reports-analyst',{body:{...payload,action:'preview'}});
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.evidence_version !== 2) throw new Error('The expanded analyst is updating. Please try again shortly.');
+      return data;
+    },
+  });
+  const recordCount = coverage.data?.record_count ?? 0;
+  const unavailable = coverage.isPending || coverage.isError || !recordCount;
+  const changeSource = (value: keyof typeof SOURCES) => {
+    scopeRevision.current++;
+    setSource(value); setTurns([]); setQuestion(''); setOpen(null); setBusy(false);
+  };
+
 
   const call = async (action: 'analyze' | 'ask', q?: string) => {
+    if (unavailable) return;
+    const revision = scopeRevision.current;
     setBusy(true);
     try {
       const { data, error } = await supabase.functions.invoke('reports-analyst', {
         body: {
+          ...payload,
           action,
-          from,
-          to,
-          kind,
           question: q,
           history: turns.slice(-8).map(t => ({ role: t.role, content: t.content })),
         },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+      if (revision !== scopeRevision.current) return;
+      if (data.evidence_version === 2) qc.setQueryData(coverageKey, data as Coverage);
       setTurns(prev => [
         ...prev,
         {
@@ -396,13 +439,14 @@ export default function ReportsAnalyst({
           citations: (data.citations ?? []) as AnalystCitation[],
           concerns: (data.concerns ?? []) as AnalystConcern[],
           audit: (data.audit ?? undefined) as AnalystAudit | undefined,
+          coverage: data.evidence_version === 2 ? data as Coverage : undefined,
         },
 
       ]);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'The analyst could not answer.');
     } finally {
-      setBusy(false);
+      if (revision === scopeRevision.current) setBusy(false);
     }
   };
 
@@ -414,8 +458,9 @@ export default function ReportsAnalyst({
       const doc = buildAnalystPdf({
         from,
         to,
-        kindLabel: kind && kind !== 'all' ? kind.replace(/_/g, ' ') : 'All categories',
-        recordCount,
+        kindLabel: SOURCES[source] + (kind && kind !== 'all' ? ` · report kind: ${kind.replace(/_/g, ' ')}` : ''),
+        recordCount: lastAnswer.coverage?.record_count ?? recordCount,
+        warnings: lastAnswer.coverage?.warnings,
         answer: lastAnswer.content,
         citations: lastAnswer.citations ?? [],
         concerns: lastAnswer.concerns ?? [],
@@ -429,14 +474,14 @@ export default function ReportsAnalyst({
   };
 
   const send = (q: string) => {
-    if (!q || busy) return;
+    if (!q || busy || unavailable) return;
     setTurns(prev => [...prev, { role: 'user', content: q }]);
     call('ask', q);
   };
 
   const ask = () => {
     const q = question.trim();
-    if (!q || busy) return;
+    if (!q || busy || unavailable) return;
     setQuestion('');
     send(q);
   };
@@ -450,22 +495,36 @@ export default function ReportsAnalyst({
             Record analyst
           </CardTitle>
           <p className="text-xs text-muted-foreground">
-            Reads the records in the range above — patterns, anything worth a look, and what's
-            ordinary. Anything it flags comes with a confidence level and the evidence on both
-            sides. Every claim cites a real record you can open; citations that don't match a
-            real record are stripped before you ever see them. A second, independent AI then
-            audits the answer against the same records and flags anything that doesn't hold up.
+            Reads attendance, days off, checklist completions and bypasses, and accountability
+            reports for the dates above. Findings cite the records behind them and receive
+            a second AI review.
           </p>
 
         </CardHeader>
         <CardContent className="space-y-3 p-4">
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => call('analyze')}>
+          <div className="space-y-2">
+            <Label htmlFor="analyst-source">Records to read</Label>
+            <Select value={source} onValueChange={v => changeSource(v as keyof typeof SOURCES)}>
+              <SelectTrigger id="analyst-source" className="w-full sm:w-64"><SelectValue /></SelectTrigger>
+              <SelectContent>{Object.entries(SOURCES).map(([value,label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">{from ? formatDate(from) : 'All earlier dates'} to {to ? formatDate(to) : 'latest record'}{employeeId ? ' · this employee' : ' · this office'}. Report kind filters accountability reports only.</p>
+            {coverage.isPending && <p role="status" className="text-sm text-muted-foreground">Loading records…</p>}
+            {coverage.isError && <div role="alert" className="text-sm text-destructive">Could not load the records. <Button variant="link" onClick={() => coverage.refetch()}>Retry</Button></div>}
+            {coverage.data && <>
+              <div className="flex flex-wrap gap-2" aria-label="Record counts">{coverage.data.counts.filter(c => source === 'all' || (source === 'attendance' ? ['attendance','days_off','attendance_exceptions'].includes(c.key) : source === 'checklists' ? c.key.startsWith('checklist_') : c.key === 'accountability')).map(c => <Badge key={c.key} variant="secondary">{c.label}: {c.count}</Badge>)}</div>
+              {coverage.data.warnings.map(w => <p key={w} role="status" className="text-xs text-warning">{w}</p>)}
+              {!recordCount && <p className="text-sm text-muted-foreground">No matching records. Try a wider date range or another source.</p>}
+              <p className="text-xs text-muted-foreground">Counts are records, not separate incidents. Limited history is shown above when a full read isn't available.</p>
+            </>}
+          </div>
+          <Button size="sm" variant="outline" disabled={busy || unavailable} onClick={() => call('analyze')}>
             {busy && turns.length === 0 ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <Sparkles className="mr-2 h-4 w-4" />
             )}
-            Analyze {recordCount} record{recordCount === 1 ? '' : 's'}
+            {coverage.isPending ? 'Loading records…' : coverage.isError ? 'Records unavailable' : `Analyze ${recordCount} record${recordCount === 1 ? '' : 's'}`}
           </Button>
           {lastAnswer && (
             <Button size="sm" variant="ghost" className="ml-2" onClick={downloadPdf}>
@@ -483,6 +542,7 @@ export default function ReportsAnalyst({
                   </p>
                 ) : (
                   <div key={i} className="space-y-2">
+                    {t.coverage?.warnings.map(w => <p key={w} className="text-xs text-warning">{w}</p>)}
                     <AnswerText
                       text={t.content}
                       citations={t.citations ?? []}
@@ -547,7 +607,7 @@ export default function ReportsAnalyst({
                 size="sm"
                 variant="secondary"
                 className="h-7 rounded-full px-3 text-xs"
-                disabled={busy}
+                disabled={busy || unavailable}
                 onClick={() => send(qa.question)}
               >
                 <qa.icon className="mr-1.5 h-3 w-3" />
@@ -567,9 +627,9 @@ export default function ReportsAnalyst({
                 }
               }}
               placeholder="Ask about these records — e.g. who has repeats, or which reviews stalled"
-              disabled={busy}
+              disabled={busy || unavailable}
             />
-            <Button size="icon" onClick={ask} disabled={busy || !question.trim()}>
+            <Button size="icon" onClick={ask} disabled={busy || unavailable || !question.trim()}>
               <Send className="h-4 w-4" />
             </Button>
           </div>
@@ -612,7 +672,7 @@ export default function ReportsAnalyst({
                 </div>
               )}
               <p className="pt-1 font-mono text-[10px] text-muted-foreground">
-                Record {open.id}
+                Source: {open.source_table?.replace(/_/g, ' ') || 'accountability report'} · Record {open.source_id || open.id}
               </p>
             </div>
           )}
