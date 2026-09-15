@@ -217,6 +217,7 @@ UPDATE public.work_zones z
    );
 
 DROP POLICY IF EXISTS "Own work_zones" ON public.work_zones;
+DROP POLICY IF EXISTS "Members read office work_zones" ON public.work_zones;
 CREATE POLICY "Members read office work_zones" ON public.work_zones
   FOR SELECT TO authenticated
   USING (auth.uid() = user_id OR (org_id IS NOT NULL AND public.is_org_member(org_id)));
