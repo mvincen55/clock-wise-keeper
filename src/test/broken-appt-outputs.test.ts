@@ -10,8 +10,10 @@ import {
   mergeFields,
 } from '@/lib/broken-appts/outputs';
 import {
+  canonicalLetterCode,
   DEFAULT_BA_SETTINGS,
   DEFAULT_BA_TEMPLATES,
+  findLetterTemplate,
   missingTemplateSeeds,
   RUNG_BEHAVIOR,
 } from '@/lib/broken-appts/defaults';
@@ -57,6 +59,18 @@ describe('buildPopUp', () => {
     ).toBe(
       '8/3/2026 - "Rung 2 / No-show. $75 posted. DO NOT reschedule until: (1) balance paid in full, (2) card on file. Card will be charged $75 for future broken appointments." - MV'
     );
+  });
+
+  it('Rung 3 posts by default and charges only when a card is on file', () => {
+    expect(
+      buildPopUp({ rung: 3, todayType: 'LC', settings, todayMDY: '8/3/2026', initials: 'MV' })
+    ).toContain('$75 posted');
+    expect(
+      buildPopUp({ rung: 3, todayType: 'LC', settings, todayMDY: '8/3/2026', initials: 'MV', cardOnFile: true })
+    ).toContain('$75 charged to card');
+    expect(
+      buildPopUp({ rung: 4, todayType: 'NS', settings, todayMDY: '8/3/2026', initials: 'MV', cardOnFile: false })
+    ).toContain('$75 posted');
   });
 
   it('Rung 4 appends the VIP variant and charges the card', () => {
@@ -142,7 +156,7 @@ describe('buildLedgerChecklist', () => {
     expect(buildLedgerChecklist(1, 'LC', settings)).toEqual([
       'Post 9101 + $75 fee',
       'Apply courtesy credit (net $0)',
-      'Post 9101A (letter sent)',
+      'Post 0001 (letter sent)',
     ]);
   });
 
@@ -151,19 +165,45 @@ describe('buildLedgerChecklist', () => {
     expect(buildLedgerChecklist(3, 'NS', settings)[0]).toBe('Post 9100 (auto-fee)');
   });
 
-  it('Rung 3 letters the code actually printed (0002 for LC when seeded)', () => {
-    expect(buildLedgerChecklist(3, 'LC', settings, '0002')[1]).toBe('Post 0002 (letter sent)');
-    expect(buildLedgerChecklist(3, 'NS', settings)[1]).toBe('Post 9106 (letter sent)');
+  it('Rung 2 letters the code actually printed (0002 for a transition late cancel)', () => {
+    expect(buildLedgerChecklist(2, 'LC', settings, '0002')).toEqual([
+      'Post 9101 + $75 fee',
+      'Post 0002 (letter sent)',
+    ]);
+    expect(buildLedgerChecklist(2, 'NS', settings)).toEqual([
+      'Post 9100 (auto-fee)',
+      'Post 0003 (letter sent)',
+    ]);
+  });
+
+  it('Rung 3 charges the card when one is on file, otherwise collects it', () => {
+    expect(buildLedgerChecklist(3, 'NS', settings, undefined, true)).toEqual([
+      'Post 9100 (auto-fee)',
+      'Charge $75 to the card on file',
+      'Post 0004 (letter sent)',
+    ]);
+    expect(buildLedgerChecklist(3, 'LC', settings, undefined, false)[1]).toBe(
+      'Collect a card on file now (fee stays an outstanding balance)'
+    );
+    expect(buildLedgerChecklist(3, 'NS', settings)[2]).toBe('Post 0004 (letter sent)');
   });
 
   it('the copy-paste checklist is stamped with the staff initials', () => {
-    const text = formatLedgerChecklist(['Post 9100 (auto-fee)', 'Post 9100A (letter sent)'], 'MV');
-    expect(text).toBe('☐ Post 9100 (auto-fee)\n☐ Post 9100A (letter sent)\n— MV');
+    const text = formatLedgerChecklist(['Post 9100 (auto-fee)', 'Post 0003 (letter sent)'], 'MV');
+    expect(text).toBe('☐ Post 9100 (auto-fee)\n☐ Post 0003 (letter sent)\n— MV');
   });
 
-  it('Rung 4 creates the unscheduled hygiene appointment', () => {
-    expect(buildLedgerChecklist(4, 'NS', settings)).toContain(
-      'Create unscheduled hygiene appointment'
+  it('Rung 4 charges the card, cancels future appointments, and creates the hygiene hold', () => {
+    const steps = buildLedgerChecklist(4, 'NS', settings);
+    expect(steps).toEqual([
+      'Post 9100 (auto-fee)',
+      'Charge $75 to the card on file',
+      'Post 0005 (letter sent)',
+      'Cancel all future appointments',
+      'Create unscheduled hygiene appointment',
+    ]);
+    expect(buildLedgerChecklist(4, 'LC', settings, undefined, false)[1]).toBe(
+      'No card: fee stays an outstanding balance — flag the Office Manager'
     );
   });
 
@@ -177,16 +217,27 @@ describe('buildLedgerChecklist', () => {
 describe('template seed — the five letters', () => {
   const letters = DEFAULT_BA_TEMPLATES.filter(t => t.kind === 'letter');
 
-  it('seeds all five letters of the canonical set', () => {
-    // 0001 First Late Cancellation (9101A), 0002 Late Cancellation with
-    // Prior History, 0003 First No-Show (9100A), 0004 Additional Broken
-    // Appointment (9106), 0005 VIP Scheduling (9107).
-    expect(letters.map(l => l.code).sort()).toEqual(
-      ['0002', '9100A', '9101A', '9106', '9107'].sort()
-    );
+  it('seeds all five letters under the policy numbering', () => {
+    // 0001 First Late Cancellation, 0002 Late Cancellation with Prior
+    // History, 0003 First No-Show, 0004 Additional Broken Appointment,
+    // 0005 VIP Scheduling — a higher number is further up the ladder.
+    expect(letters.map(l => l.code).sort()).toEqual(['0001', '0002', '0003', '0004', '0005']);
     expect(letters.find(l => l.code === '0002')!.title).toBe(
-      'Late Cancellation with Prior History'
+      'Rung 2 — late cancellation with prior history'
     );
+    expect(letters.map(l => l.sortOrder)).toEqual([0, 2, 1, 3, 4]);
+  });
+
+  it('draft-coded rows count as their policy letters (no duplicate top-up)', () => {
+    const draftOrg = DEFAULT_BA_TEMPLATES.map(t =>
+      t.kind === 'letter'
+        ? { ...t, code: { '0001': '9101A', '0003': '9100A', '0004': '9106', '0005': '9107' }[t.code] ?? t.code }
+        : t
+    );
+    expect(missingTemplateSeeds(draftOrg)).toEqual([]);
+    expect(canonicalLetterCode('9107')).toBe('0005');
+    expect(canonicalLetterCode('0002')).toBe('0002');
+    expect(findLetterTemplate(draftOrg, '0003')?.code).toBe('9100A');
   });
 
   it('the top-up inserts only what an org is missing — never touching existing rows', () => {
@@ -200,9 +251,13 @@ describe('template seed — the five letters', () => {
     expect(missingTemplateSeeds(DEFAULT_BA_TEMPLATES)).toEqual([]);
   });
 
-  it('Rung 3 routes a late cancel to 0002 and keeps 9106 for the rest', () => {
-    expect(RUNG_BEHAVIOR[3].letterCodeLC).toBe('0002');
-    expect(RUNG_BEHAVIOR[3].letterCode).toBe('9106');
+  it('Rung 2 routes a transition late cancel to 0002; Rung 3 is always 0004', () => {
+    expect(RUNG_BEHAVIOR[2].letterCode).toBe('0003');
+    expect(RUNG_BEHAVIOR[2].letterCodeLC).toBe('0002');
+    expect(RUNG_BEHAVIOR[3].letterCode).toBe('0004');
+    expect(RUNG_BEHAVIOR[3].letterCodeLC).toBeUndefined();
+    expect(RUNG_BEHAVIOR[1].letterCode).toBe('0001');
+    expect(RUNG_BEHAVIOR[4].letterCode).toBe('0005');
   });
 });
 

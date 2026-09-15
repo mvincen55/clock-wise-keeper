@@ -58,8 +58,8 @@ const APPT_ROWS = (n: number): BaCanceledAppt[] =>
   }));
 
 describe('BaLetterSheet — the five shipped letters', () => {
-  it.each(['9101A', '0002', '9100A', '9106', '9107'])('%s resolves every merge field', code => {
-    const html = render(code, code === '9107' ? APPT_ROWS(3) : []);
+  it.each(['0001', '0002', '0003', '0004', '0005'])('%s resolves every merge field', code => {
+    const html = render(code, code === '0005' ? APPT_ROWS(3) : []);
     expect(html).not.toContain('{{');
     expect(html).toContain('Dear Ann,');
     expect(html).toContain('8/10/2026'); // appt_date (body wording unchanged)
@@ -67,10 +67,10 @@ describe('BaLetterSheet — the five shipped letters', () => {
     expect(html).toContain('(555) 010-0142'); // office_phone fallback from branding
   });
 
-  it.each(['9101A', '0002', '9100A', '9106', '9107'])(
+  it.each(['0001', '0002', '0003', '0004', '0005'])(
     '%s renders on the shared office letterhead',
     code => {
-      const html = render(code, code === '9107' ? APPT_ROWS(3) : []);
+      const html = render(code, code === '0005' ? APPT_ROWS(3) : []);
       // The one canonical letter component, not a BA-specific layout.
       expect(html).toContain('class="letter-sheet"');
       // Long-form dateline owned by the letterhead.
@@ -82,10 +82,10 @@ describe('BaLetterSheet — the five shipped letters', () => {
     }
   );
 
-  it.each(['9101A', '0002', '9100A', '9106', '9107'])(
+  it.each(['0001', '0002', '0003', '0004', '0005'])(
     '%s carries the automatic-letter line and the enclosure footer',
     code => {
-      const html = render(code, code === '9107' ? APPT_ROWS(3) : []);
+      const html = render(code, code === '0005' ? APPT_ROWS(3) : []);
       expect(html).toContain(
         'This letter is generated automatically by our scheduling system as part of our standard record-keeping for every patient.'
       );
@@ -95,23 +95,23 @@ describe('BaLetterSheet — the five shipped letters', () => {
     }
   );
 
-  it.each(['9101A', '0002', '9100A', '9106', '9107'])('%s renders bold runs, not ** markers', code => {
-    const html = render(code, code === '9107' ? APPT_ROWS(3) : []);
+  it.each(['0001', '0002', '0003', '0004', '0005'])('%s renders bold runs, not ** markers', code => {
+    const html = render(code, code === '0005' ? APPT_ROWS(3) : []);
     expect(html).toContain('<strong>');
     expect(html).not.toContain('**');
   });
 
-  it('9107 with a few rows prints the table inline', () => {
-    const html = render('9107', APPT_ROWS(3));
+  it('0005 with a few rows prints the table inline', () => {
+    const html = render('0005', APPT_ROWS(3));
     expect(html).toContain('ba-appt-table');
     expect(html).not.toContain('A full appointment list is attached');
     expect(html).not.toContain('letter-attach-page');
   });
 
-  it('9107 with 12 rows moves the table to the attachment page', () => {
+  it('0005 with 12 rows moves the table to the attachment page', () => {
     const rows = APPT_ROWS(12);
     expect(rows.length).toBeGreaterThan(INLINE_APPT_ROWS_MAX);
-    const html = render('9107', rows);
+    const html = render('0005', rows);
     expect(html).toContain('A full appointment list is attached');
     expect(html).toContain('letter-attach-page');
     expect(html).toContain('Attached Appointment List');
@@ -119,8 +119,8 @@ describe('BaLetterSheet — the five shipped letters', () => {
     for (let i = 1; i <= 12; i++) expect(html).toContain(`9/${i}/2026`);
   });
 
-  it('the prepay floor merges into 9107 from settings', () => {
-    const html = render('9107', APPT_ROWS(2));
+  it('the prepay floor merges into 0005 from settings', () => {
+    const html = render('0005', APPT_ROWS(2));
     expect(html).toContain('$150 or your estimated patient portion');
   });
 
@@ -152,7 +152,7 @@ describe('BaLetterSheet — the five shipped letters', () => {
   });
 
   it('a blank Address Line 2 vanishes — no empty line in the block', () => {
-    const html = render('9101A');
+    const html = render('0001');
     expect(html).not.toContain('Apt 3B');
     // The recipient block holds exactly name, street, city line.
     const block = html.match(/letter-recipient"><div>(.*?)<\/div><\/div>/);

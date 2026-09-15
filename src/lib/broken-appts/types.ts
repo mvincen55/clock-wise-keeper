@@ -21,6 +21,12 @@ export interface BaSettings {
   noticeBusinessHours: number;
   historyWindowYears: number;
   vipPrepayFloor: number;
+  /**
+   * ISO date the signed policy took effect ('' = no transition rule). Breaks
+   * before it never count toward the ladder, but a patient with any skips
+   * Rung 1 (Governing Rule 5).
+   */
+  policyEffectiveDate: string;
   /** Blank = fall back to org_branding.phone. */
   officePhone: string;
   /** ISO dates excluded from business-hour math, in addition to weekends. */
@@ -36,7 +42,7 @@ export interface BaSettings {
 export interface BaTemplate {
   id: string;
   kind: 'letter' | 'reply';
-  /** letter: 9101A / 9100A / 9106 / 9107 · reply: on_time, rung1, rung3, rung4, rung5, ns_outreach */
+  /** letter: 0001 / 0002 / 0003 / 0004 / 0005 (draft codes 9101A / 9100A / 9106 / 9107 still resolve) · reply: on_time, rung1, rung3, rung4, rung5, ns_outreach */
   code: string;
   title: string;
   body: string;
