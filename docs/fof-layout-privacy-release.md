@@ -36,6 +36,20 @@ knowledge-write tools enforce that permission at execution, including forced too
 calls. Detected patient-specific rules are rejected. Dynamic system text is scrubbed
 and gateway error bodies are not logged. General policy/code questions still work.
 
+The plain-language treatment summary and payment-name suggestions are written by
+the `name-visits` endpoint again. Its request is de-identified by construction:
+CDT codes, code-derived procedure names, strictly validated tooth numbers, visit
+order and the configured doctor name only (`src/lib/fof/ai.ts`); typed descriptions,
+patient fields, staff-edited labels and amounts never leave the browser. Until the
+wording arrives, and whenever the endpoint is unavailable, the form prints the
+code-bank sentence or the procedure list instead. Deploy `name-visits` with the
+frontend; a GitHub push alone does not deploy it.
+
+Payment groups see the same appointment number the Office Copy prints: the typed
+Visit #, otherwise the stage suggested from the code. Feeding the payment editor
+only the typed text left every untyped line in its own group, which split a
+seven-code implant case into seven phases across two pages.
+
 Office-wide AI guidance now reads the selected practice's active office code-bank
 notes and standing wording rules. Requests accept only the office ID, never the
 current plan or a patient-selected subset of codes. Drafts cite real code-bank rows;
@@ -54,7 +68,7 @@ fallback. Staff compare the extracted rows with the local screenshot before impo
 Ambiguous codes, teeth or money stop the whole import. Fee and Office columns remain
 distinct; the existing office-fee precedence still applies. Names/form changes and
 reset invalidate pending imports. The retired parse-treatment endpoint returns 410
-without reading or forwarding an image, and name-visits rejects legacy patient plans.
+without reading or forwarding an image.
 
 Validation: application TypeScript, production build, changed Deno endpoint check,
 FOF grouping/layout/browser-privacy tests, and actual endpoint tests for role,

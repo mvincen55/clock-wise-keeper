@@ -103,6 +103,11 @@ export const AI_GATEWAY_ALLOWLIST: Record<string, GatewayEntry> = {
     handler: "consented",
     reason: "Owner deliberately uploads office policy documents to the corpus.",
   },
+  "name-visits": {
+    handler: "consented",
+    reason:
+      "Sees CDT codes, code-derived procedure names, validated tooth numbers, visit order and the configured doctor name only — the client builds the payload from codes, never from typed text or person fields (src/lib/fof/ai.ts).",
+  },
 };
 
 /** Every function name permitted to reach the gateway. */
