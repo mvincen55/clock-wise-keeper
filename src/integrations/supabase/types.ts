@@ -14,24 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      employee_checklist_settings: {
-        Row: { employee_id: string; org_id: string; bypass_required: boolean; updated_by: string; updated_at: string }
-        Insert: { employee_id: string; org_id: string; bypass_required?: boolean; updated_by: string }
-        Update: never
-        Relationships: []
-      }
-      worked_hour_adjustments: {
-        Row: { id: string; org_id: string; employee_id: string; entry_date: string; hours_delta: number; reason: string; entered_by: string; created_at: string }
-        Insert: { id: string; org_id: string; employee_id: string; entry_date: string; hours_delta: number; reason: string; entered_by: string }
-        Update: never
-        Relationships: []
-      }
-      payroll_pto_records: {
-        Row: { id: string; org_id: string; employee_id: string | null; payroll_employee_id: string; payroll_employee_name: string; period_start: string; period_end: string; check_date: string; check_number: string; pto_hours: number; pto_ytd_hours: number | null; worked_hours: number | null; source_file: string; source_sha256: string; source_page: number; earnings: Json; review_note: string | null; entered_by_label: string | null; created_at: string }
-        Insert: { org_id: string; employee_id?: string | null; payroll_employee_id: string; payroll_employee_name: string; period_start: string; period_end: string; check_date: string; check_number: string; pto_hours: number; pto_ytd_hours?: number | null; worked_hours?: number | null; source_file: string; source_sha256: string; source_page: number; earnings?: Json; review_note?: string | null; entered_by_label?: string | null }
-        Update: { employee_id?: string | null; review_note?: string | null; entered_by_label?: string | null }
-        Relationships: []
-      }
       _backup_audit_events_20260707: {
         Row: {
           action_type: string | null
@@ -2079,6 +2061,45 @@ export type Database = {
           },
           {
             foreignKeyName: "employee_anniversary_reminders_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_checklist_settings: {
+        Row: {
+          bypass_required: boolean
+          employee_id: string
+          org_id: string
+          updated_at: string
+          updated_by: string
+        }
+        Insert: {
+          bypass_required?: boolean
+          employee_id: string
+          org_id: string
+          updated_at?: string
+          updated_by: string
+        }
+        Update: {
+          bypass_required?: boolean
+          employee_id?: string
+          org_id?: string
+          updated_at?: string
+          updated_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_checklist_settings_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_checklist_settings_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
@@ -4701,6 +4722,38 @@ export type Database = {
           },
         ]
       }
+      office_attendance_settings: {
+        Row: {
+          grace_minutes: number
+          org_id: string
+          timekeeping_history_start_at: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          grace_minutes?: number
+          org_id: string
+          timekeeping_history_start_at?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          grace_minutes?: number
+          org_id?: string
+          timekeeping_history_start_at?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "office_attendance_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       office_closures: {
         Row: {
           closure_date: string
@@ -5640,6 +5693,87 @@ export type Database = {
           },
         ]
       }
+      payroll_pto_records: {
+        Row: {
+          check_date: string
+          check_number: string
+          created_at: string
+          earnings: Json
+          employee_id: string | null
+          entered_by_label: string | null
+          id: string
+          org_id: string
+          payroll_employee_id: string
+          payroll_employee_name: string
+          period_end: string
+          period_start: string
+          pto_hours: number
+          pto_ytd_hours: number | null
+          review_note: string | null
+          source_file: string
+          source_page: number
+          source_sha256: string
+          worked_hours: number | null
+        }
+        Insert: {
+          check_date: string
+          check_number: string
+          created_at?: string
+          earnings?: Json
+          employee_id?: string | null
+          entered_by_label?: string | null
+          id?: string
+          org_id: string
+          payroll_employee_id: string
+          payroll_employee_name: string
+          period_end: string
+          period_start: string
+          pto_hours: number
+          pto_ytd_hours?: number | null
+          review_note?: string | null
+          source_file: string
+          source_page: number
+          source_sha256: string
+          worked_hours?: number | null
+        }
+        Update: {
+          check_date?: string
+          check_number?: string
+          created_at?: string
+          earnings?: Json
+          employee_id?: string | null
+          entered_by_label?: string | null
+          id?: string
+          org_id?: string
+          payroll_employee_id?: string
+          payroll_employee_name?: string
+          period_end?: string
+          period_start?: string
+          pto_hours?: number
+          pto_ytd_hours?: number | null
+          review_note?: string | null
+          source_file?: string
+          source_page?: number
+          source_sha256?: string
+          worked_hours?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_pto_records_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_pto_records_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payroll_settings: {
         Row: {
           created_at: string
@@ -6345,10 +6479,65 @@ export type Database = {
           },
         ]
       }
+      pto_balance_reconciliations: {
+        Row: {
+          balance_hours: number
+          created_at: string
+          employee_id: string
+          entered_by: string | null
+          entered_by_label: string | null
+          evidence: Json
+          id: string
+          org_id: string
+          period_end: string
+          reason: string
+        }
+        Insert: {
+          balance_hours: number
+          created_at?: string
+          employee_id: string
+          entered_by?: string | null
+          entered_by_label?: string | null
+          evidence?: Json
+          id?: string
+          org_id: string
+          period_end: string
+          reason: string
+        }
+        Update: {
+          balance_hours?: number
+          created_at?: string
+          employee_id?: string
+          entered_by?: string | null
+          entered_by_label?: string | null
+          evidence?: Json
+          id?: string
+          org_id?: string
+          period_end?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pto_balance_reconciliations_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pto_balance_reconciliations_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pto_ledger_weeks: {
         Row: {
           accrual_credited: number
           calculated_accrual: number
+          confirmed_balance: number | null
           created_at: string
           employee_id: string
           id: string
@@ -6356,6 +6545,8 @@ export type Database = {
           period_end: string
           period_start: string
           pto_taken_hours: number
+          reconciliation_hours: number | null
+          reconciliation_note: string | null
           running_balance: number
           tier_rate: number
           user_id: string
@@ -6366,6 +6557,7 @@ export type Database = {
         Insert: {
           accrual_credited?: number
           calculated_accrual?: number
+          confirmed_balance?: number | null
           created_at?: string
           employee_id: string
           id?: string
@@ -6373,6 +6565,8 @@ export type Database = {
           period_end: string
           period_start: string
           pto_taken_hours?: number
+          reconciliation_hours?: number | null
+          reconciliation_note?: string | null
           running_balance?: number
           tier_rate?: number
           user_id: string
@@ -6383,6 +6577,7 @@ export type Database = {
         Update: {
           accrual_credited?: number
           calculated_accrual?: number
+          confirmed_balance?: number | null
           created_at?: string
           employee_id?: string
           id?: string
@@ -6390,6 +6585,8 @@ export type Database = {
           period_end?: string
           period_start?: string
           pto_taken_hours?: number
+          reconciliation_hours?: number | null
+          reconciliation_note?: string | null
           running_balance?: number
           tier_rate?: number
           user_id?: string
@@ -7139,7 +7336,7 @@ export type Database = {
           org_id: string
           timezone?: string
           updated_at?: string
-          user_id: string | null
+          user_id?: string | null
           week_start_day?: number
         }
         Update: {
@@ -7703,6 +7900,7 @@ export type Database = {
           entry_date: string
           id: string
           is_remote: boolean
+          location_status: string
           notes: string | null
           org_id: string
           raw_text: string | null
@@ -7722,6 +7920,7 @@ export type Database = {
           entry_date: string
           id?: string
           is_remote?: boolean
+          location_status?: string
           notes?: string | null
           org_id: string
           raw_text?: string | null
@@ -7741,6 +7940,7 @@ export type Database = {
           entry_date?: string
           id?: string
           is_remote?: boolean
+          location_status?: string
           notes?: string | null
           org_id?: string
           raw_text?: string | null
@@ -8164,6 +8364,54 @@ export type Database = {
           },
         ]
       }
+      worked_hour_adjustments: {
+        Row: {
+          created_at: string
+          employee_id: string
+          entered_by: string
+          entry_date: string
+          hours_delta: number
+          id: string
+          org_id: string
+          reason: string
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          entered_by: string
+          entry_date: string
+          hours_delta: number
+          id: string
+          org_id: string
+          reason: string
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          entered_by?: string
+          entry_date?: string
+          hours_delta?: number
+          id?: string
+          org_id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "worked_hour_adjustments_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "worked_hour_adjustments_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       training_attempt_summary: {
@@ -8341,16 +8589,6 @@ export type Database = {
       }
     }
     Functions: {
-      set_employee_checklist_requirement: { Args: { p_employee_id: string; p_required: boolean }; Returns: undefined }
-      add_worked_hour_adjustment: { Args: { p_id: string; p_employee_id: string; p_entry_date: string; p_hours_delta: number; p_reason: string }; Returns: string }
-      get_live_pto_ledger: {
-        Args: { p_employee_id: string }
-        Returns: Database["public"]["Tables"]["pto_ledger_weeks"]["Row"][]
-      }
-      create_employee_schedule: {
-        Args: { p_employee_id: string; p_start: string; p_end: string | null; p_name: string | null; p_apply_to_remote: boolean; p_weekdays: Json }
-        Returns: string
-      }
       _recompute_attendance_range_internal: {
         Args: { p_end_date: string; p_start_date: string; p_user_id: string }
         Returns: number
@@ -8461,6 +8699,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      add_worked_hour_adjustment: {
+        Args: {
+          p_employee_id: string
+          p_entry_date: string
+          p_hours_delta: number
+          p_id: string
+          p_reason: string
+        }
+        Returns: string
       }
       ask_knowledge_acknowledgment_question: {
         Args: { p_assignment_id: string; p_question: string }
@@ -8628,6 +8876,15 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      classify_clock_location: {
+        Args: {
+          p_accuracy: number
+          p_lat: number
+          p_lng: number
+          p_org: string
+        }
+        Returns: string
+      }
       cleanup_team_moments: { Args: never; Returns: number }
       configure_knowledge_acknowledgment: {
         Args: {
@@ -8768,6 +9025,17 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_employee_schedule: {
+        Args: {
+          p_apply_to_remote: boolean
+          p_employee_id: string
+          p_end: string
+          p_name: string
+          p_start: string
+          p_weekdays: Json
+        }
+        Returns: string
+      }
       create_knowledge_acknowledgment_assignments: {
         Args: { p_only_user_id?: string; p_version_id: string }
         Returns: number
@@ -8840,6 +9108,35 @@ export type Database = {
       get_employee_timezone: {
         Args: { p_employee_id: string }
         Returns: string
+      }
+      get_live_pto_ledger: {
+        Args: { p_employee_id: string }
+        Returns: {
+          accrual_credited: number
+          calculated_accrual: number
+          confirmed_balance: number | null
+          created_at: string
+          employee_id: string
+          id: string
+          org_id: string
+          period_end: string
+          period_start: string
+          pto_taken_hours: number
+          reconciliation_hours: number | null
+          reconciliation_note: string | null
+          running_balance: number
+          tier_rate: number
+          user_id: string
+          weekly_cap: number
+          worked_hours_capped: number
+          worked_hours_raw: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "pto_ledger_weeks"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_local_punch_time: {
         Args: { p_punch_time: string; p_user_id: string }
@@ -9123,6 +9420,15 @@ export type Database = {
         Returns: number
       }
       record_punch: { Args: { p_action: string }; Returns: Json }
+      record_punch_with_location: {
+        Args: {
+          p_accuracy?: number
+          p_action: string
+          p_lat?: number
+          p_lng?: number
+        }
+        Returns: Json
+      }
       reorder_user_notes: {
         Args: { _expected_rev: number; _ordered_ids: string[] }
         Returns: {
@@ -9242,6 +9548,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      save_employee_basics: {
+        Args: { p_employee_id: string; p_patch: Json }
+        Returns: Json
       }
       save_employee_onboarding_preferences: {
         Args: {
@@ -9425,6 +9735,14 @@ export type Database = {
         }[]
       }
       send_employee_anniversary_reminders: { Args: never; Returns: number }
+      set_employee_checklist_requirement: {
+        Args: { p_employee_id: string; p_required: boolean }
+        Returns: undefined
+      }
+      set_office_attendance_grace: {
+        Args: { p_minutes: number; p_org_id: string }
+        Returns: undefined
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       sign_accountability_report: {
