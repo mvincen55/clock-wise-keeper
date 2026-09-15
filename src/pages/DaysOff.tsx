@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDaysOff, useAddDayOff, useDeleteDayOff, DayOffRow } from '@/hooks/useDaysOff';
+import { PtoRequestModal } from '@/components/PtoRequestModal';
 import { useTardies, useUpdateTardy, TardyRow } from '@/hooks/useTardies';
 import { TardyReviewModal } from '@/components/TardyReviewModal';
 import { AttendanceActions } from '@/components/AttendanceActions';
@@ -139,6 +140,7 @@ export default function DaysOff() {
   const updateTardy = useUpdateTardy();
 
   const [open, setOpen] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
   const [tab, setTab] = useState('status');
   const [attendanceFilter, setAttendanceFilter] = useState<AttendanceFilter>('all');
   const [daysOffFilter, setDaysOffFilter] = useState<DaysOffFilter>('all');
@@ -373,7 +375,13 @@ export default function DaysOff() {
             {recompute.isPending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1 h-3.5 w-3.5" />}
             Recompute
           </Button>
-          <Dialog open={open} onOpenChange={setOpen}>
+          {/* Time off is recorded by owners and managers; everyone else asks
+              for it through a PTO request so it goes through approval. */}
+          {!isManager && (
+            <Button onClick={() => setRequestOpen(true)}><Plus className="mr-2 h-4 w-4" />Request Time Off</Button>
+          )}
+          <PtoRequestModal open={requestOpen} onClose={() => setRequestOpen(false)} />
+          {isManager && <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button><Plus className="mr-2 h-4 w-4" />Add Day Off</Button>
             </DialogTrigger>
@@ -415,7 +423,7 @@ export default function DaysOff() {
                 </Button>
               </div>
             </DialogContent>
-          </Dialog>
+          </Dialog>}
         </div>
       </div>
 
