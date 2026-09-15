@@ -66,3 +66,56 @@ export function auditSummary(event:AuditLike):{title:string;changes:string[];rea
  if(!changes.length&&typeof detail.punch_time==='string')changes.push(`${value('punch_type',detail.punch_type)} at ${value('punch_time',detail.punch_time)}`);
  return {title,changes,reason:auditReason(event)};
 }
+
+/** Who is named in a sentence: canonical staff codes only, never a name. */
+export type AuditNames={employee:string;actor:string|null};
+const punchWord=(v:unknown)=>v==='out'?'clock-out':'clock-in';
+const fieldWord:Record<string,string>={is_remote:'work location',entry_comment:'day comment',total_minutes:'worked time',status:'status',reason_text:'reason',source:'source',punch_type:'punch type',punch_time:'time'};
+/**
+ * One plain-English sentence for an audit row, e.g.
+ * "DA14 removed the clock-out at 1:34 PM." — reason is returned separately.
+ */
+export function describeAuditEvent(event:AuditLike&{actor_id?:string|null;user_id?:string|null},names:AuditNames):string {
+ const {detail,before,after}=snapshots(event);
+ const type=effectiveEventType(event);
+ const actor=names.actor||'The system';
+ const selfActed=!!event.actor_id&&event.actor_id===event.user_id;
+ const row=Object.keys(after).length?after:before;
+ const punch=punchWord(row.punch_type??detail.punch_type);
+ const at=row.punch_time??detail.punch_time;
+ const time=typeof at==='string'?formatTime(at):null;
+ const changes=auditFieldChanges(event);
+ switch(type){
+  case 'punch_voided':return `${actor} removed the ${punch} at ${time}.`;
+  case 'punch_deleted':case 'delete':return `${actor} deleted the ${punch} at ${time}.`;
+  case 'punch_edit':case 'punch_edited':case 'update':{
+   if(!changes.length)return time?`${actor} re-saved the ${punch} at ${time} without changing it.`:`${actor} re-saved the record without changing it.`;
+   const parts=changes.map(c=>{
+    if(c.key==='punch_time')return `moved the ${punch} from ${c.before} to ${c.after}`;
+    if(c.key==='punch_type')return `changed it from a ${punchWord(before.punch_type)} to a ${punchWord(after.punch_type)}`;
+    if(c.key==='voided_at')return `restored the ${punch} at ${time}`;
+    return `changed the ${fieldWord[c.key]||c.field.toLowerCase()} from ${c.before} to ${c.after}`;
+   });
+   return `${actor} ${parts.join(' and ')}.`;
+  }
+  case 'punch_created':case 'clock_in':case 'clock_out':case 'punch_added':case 'punch_added_manually':case 'insert':{
+   const source=String(row.source??detail.source??'');
+   if(source==='import')return `${actor} added a ${punch} at ${time} for ${names.employee} from an imported timesheet.`;
+   if(selfActed||!names.actor)return `${names.employee} clocked ${row.punch_type==='out'?'out':'in'} at ${time}.`;
+   return `${actor} added a ${punch} at ${time} for ${names.employee}.`;
+  }
+  case 'manual_edit':case 'manager_edit':{
+   if(changes.length)return `${actor} ${changes.map(c=>`changed the ${fieldWord[c.key]||c.field.toLowerCase()} from ${c.before} to ${c.after}`).join(' and ')} for ${names.employee}.`;
+   return `${actor} edited the day for ${names.employee}.`;
+  }
+  case 'request_create':return `${names.employee} asked for a correction.`;
+  case 'request_approve':case 'request_approved':return `${actor} approved a correction request from ${names.employee}.`;
+  case 'request_deny':case 'request_denied':return `${actor} declined a correction request from ${names.employee}.`;
+  case 'day_off_added':return `${actor} added a day off for ${names.employee}.`;
+  case 'day_off_removed':return `${actor} removed a day off for ${names.employee}.`;
+  default:{
+   const what=type.replace(/_/g,' ');
+   return changes.length?`${actor} ${what}: ${changes.map(c=>`${c.field} ${c.before} → ${c.after}`).join('; ')}.`:`${actor} ${what} for ${names.employee}.`;
+  }
+ }
+}

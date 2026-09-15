@@ -5,6 +5,8 @@ import { Loader2, History, User, FileText } from 'lucide-react';
 import { formatDate } from '@/lib/time-utils';
 import {auditSummary} from '@/lib/audit-summary';
 import {useOrgStaff} from '@/hooks/useStaffCodes';
+import {staffCodeLabel} from '@/lib/staff-code';
+import {describeAuditEvent} from '@/lib/audit-summary';
 
 interface AuditHistoryModalProps {
   open: boolean;
@@ -57,6 +59,8 @@ export function AuditHistoryModal({ open, onClose, employeeId, entryDate, employ
             {events.map((evt: any) => {
               const summary = auditSummary(evt);
               const actor = staff?.find(person => person.userId === (evt.actor_id || evt.user_id));
+              const subject = staff?.find(person => person.employeeId === (evt.employee_id || employeeId));
+              const names = {employee: staffCodeLabel(subject?.code), actor: evt.actor_id || evt.user_id ? staffCodeLabel(actor?.code) : null};
               return (
                 <div key={evt.id} className="border rounded-lg p-3 space-y-2">
                   <div className="flex items-center justify-between">
@@ -68,8 +72,8 @@ export function AuditHistoryModal({ open, onClose, employeeId, entryDate, employ
                     </span>
                   </div>
 
-                  <p className="text-sm text-muted-foreground">By {actor?.displayName || (evt.actor_id || evt.user_id ? 'Team member' : 'System')}</p>
-                  {summary.changes.map((change,index) => <p key={index} className="text-sm">{change}</p>)}
+                  <p className="text-sm">{describeAuditEvent(evt, names)}</p>
+                  <p className="text-sm text-muted-foreground">By {names.actor || 'System'}</p>
                   {summary.reason && <p className="text-sm"><span className="font-medium">Reason:</span> {summary.reason}</p>}
                 </div>
               );

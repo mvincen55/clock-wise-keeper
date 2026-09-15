@@ -21,3 +21,7 @@ it('shows no changes for an update that changed nothing audited',()=>{
 it('does not report untouched null fields on a recorded punch',()=>{
  expect(auditSummary({event_type:'punch_created',after_json:{punch_time:'2026-09-09T13:40:00Z',punch_type:'in',source:'manual',voided_at:null}}).changes).toEqual(['Time: None → 09:40 AM','Punch: None → Clock in','Source: None → Manual']);
 });
+import {describeAuditEvent} from '@/lib/audit-summary';
+it('describes a legacy day-comment edit in English',()=>{
+ expect(describeAuditEvent({event_type:'manual_edit',actor_id:'u2',user_id:'u1',event_details:{field_changed:'entry_comment',old_value:'',new_value:'Training'}},{employee:'AA14',actor:'DA14'})).toBe('DA14 changed the day comment from None to Training for AA14.');
+});

@@ -25,8 +25,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import AccountabilityHistory from '@/components/accountability/AccountabilityHistory';
-import { eventTypeLabel, formatAuditValue, buildAuditCsv } from '@/lib/audit-export';
-import { auditFieldChanges, auditReason, effectiveEventType, hasBeforeAndAfter, isNoOpUpdate } from '@/lib/audit-summary';
+import { eventTypeLabel, buildAuditCsv, auditCodes, type AuditCodeMaps } from '@/lib/audit-export';
+import { auditReason, describeAuditEvent, effectiveEventType } from '@/lib/audit-summary';
+import { useOrgStaff } from '@/hooks/useStaffCodes';
+import { staffCodeLabel } from '@/lib/staff-code';
 
 type ReportType = 'weekly' | 'pay_period' | 'monthly' | 'pto' | 'tardy' | 'attendance_exceptions';
 
@@ -45,6 +47,8 @@ type AuditEvent = {
   action_type: string | null;
   created_at: string;
   actor_id: string | null;
+  user_id: string | null;
+  employee_id: string | null;
   reason: string | null;
   before_json: any;
   after_json: any;
@@ -91,23 +95,12 @@ function PunchSourceList({ punches }: { punches: PunchRow[] }) {
   );
 }
 
-function AuditTrailRow({ event, actorName }: { event: AuditEvent; actorName?: string }) {
-  const details = event.event_details || {};
+function AuditTrailRow({ event, codes }: { event: AuditEvent; codes: AuditCodeMaps }) {
   const ts = new Date(event.created_at);
   const timeStr = ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/New_York' });
-  const dateStr = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-  // Field-level diff of the before/after snapshots (a void shows as
-  // "Removed: None → Yes", a no-op write as "No fields changed").
-  const changes = hasBeforeAndAfter(event) || details.field_changed ? auditFieldChanges(event) : [];
-  const noOp = !changes.length && isNoOpUpdate(event);
-  const oldVal = details.old_value ?? event.before_json;
-  const newVal = details.new_value ?? event.after_json;
-  const hasRaw = !changes.length && !noOp && (oldVal != null || newVal != null);
+  const dateStr = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
+  const names = auditCodes(event, codes);
   const reason = auditReason(event);
-  const fieldLabel = !changes.length && details.field_changed
-    ? String(details.field_changed).replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
-    : null;
 
   return (
     <div className="flex items-start gap-4 py-2.5 px-4 text-xs">
@@ -117,48 +110,15 @@ function AuditTrailRow({ event, actorName }: { event: AuditEvent; actorName?: st
         <div>{timeStr}</div>
       </div>
 
-      {/* Action */}
+      {/* What happened, in plain English, attributed by staff code */}
       <div className="flex-1 space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-semibold">
             {eventTypeLabel(effectiveEventType(event))}
           </Badge>
-          {fieldLabel && (
-            <span className="text-muted-foreground font-medium">{fieldLabel}</span>
-          )}
+          <span className="font-mono text-muted-foreground">{names.employee}</span>
         </div>
-
-        {changes.map(c => (
-          <div key={c.key} className="flex items-center gap-2 text-[12px] mt-0.5">
-            <span className="text-muted-foreground font-medium">{c.field}</span>
-            <span className="bg-destructive/10 text-destructive px-1.5 py-0.5 rounded line-through">{c.before}</span>
-            <span className="text-muted-foreground">→</span>
-            <span className="bg-accent/10 text-accent-foreground px-1.5 py-0.5 rounded font-medium">{c.after}</span>
-          </div>
-        ))}
-
-        {noOp && (
-          <div className="text-[12px] text-muted-foreground mt-0.5">No fields changed</div>
-        )}
-
-        {hasRaw && (
-          <div className="flex items-center gap-2 text-[12px] mt-0.5">
-            {oldVal != null && (
-              <span className="bg-destructive/10 text-destructive px-1.5 py-0.5 rounded line-through">
-                {formatAuditValue(oldVal)}
-              </span>
-            )}
-            {oldVal != null && newVal != null && (
-              <span className="text-muted-foreground">→</span>
-            )}
-            {newVal != null && (
-              <span className="bg-accent/10 text-accent-foreground px-1.5 py-0.5 rounded font-medium">
-                {formatAuditValue(newVal)}
-              </span>
-            )}
-          </div>
-        )}
-
+        <p className="text-[12px]">{describeAuditEvent(event, names)}</p>
         {reason && (
           <p className="text-muted-foreground mt-0.5">
             <span className="italic">"{reason}"</span>
@@ -168,7 +128,7 @@ function AuditTrailRow({ event, actorName }: { event: AuditEvent; actorName?: st
 
       {/* Actor */}
       <div className="shrink-0 text-right text-muted-foreground min-w-[80px]">
-        <span className="font-medium text-foreground/70">{actorName || 'System'}</span>
+        <span className="font-medium font-mono text-foreground/70">{names.actor || 'System'}</span>
       </div>
     </div>
   );
@@ -198,7 +158,6 @@ export default function Reports() {
   
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [expandedAudit, setExpandedAudit] = useState<Set<string>>(new Set());
-  const [actorNames, setActorNames] = useState<Map<string, string>>(new Map());
 
   // Reports is org-wide for admins (RLS still limits employees to their own).
   const { data: entries } = useTimeEntries(startDate || undefined, endDate || undefined, 'all');
@@ -208,6 +167,16 @@ export default function Reports() {
   const { data: dayStatus } = useAttendanceDayStatus(startDate || undefined, endDate || undefined);
   const { data: orgEmployees } = useOrgEmployees();
   const { data: ownerUserIds } = useOwnerUserIds();
+  // Canonical staff codes (employees.tag): everything printed here is
+  // attributed by code, never by a person's name.
+  const { data: orgStaff } = useOrgStaff();
+  const codeByEmployee = new Map<string, string>();
+  const codeByUser = new Map<string, string>();
+  (orgStaff || []).forEach(m => {
+    if (m.code) codeByEmployee.set(m.employeeId, m.code);
+    if (m.code && m.userId) codeByUser.set(m.userId, m.code);
+  });
+  const staffCodes: AuditCodeMaps = { byEmployee: codeByEmployee, byUser: codeByUser };
 
   const totalMinutes = entries?.reduce((sum, e) => sum + (e.total_minutes || 0), 0) || 0;
   const tardyMap = new Map<string, TardyRow>();
@@ -221,7 +190,7 @@ export default function Reports() {
 
   // ---- The payroll dimension: one week definition, per-employee ----
   const employeeName = (id: string | null | undefined) =>
-    (orgEmployees || []).find(e => e.id === id)?.display_name || 'Unassigned';
+    id ? staffCodeLabel(codeByEmployee.get(id)) : 'Unassigned';
   const today = getToday();
 
   // OT flags: per employee per payroll week from server-computed totals
@@ -288,22 +257,7 @@ export default function Reports() {
         .lte('related_date', endDate)
         .order('created_at', { ascending: false })
         .limit(500);
-      const events = (data as AuditEvent[]) || [];
-      setAuditEvents(events);
-
-      // Resolve actor names from profiles
-      const actorIds = [...new Set(events.map(e => e.actor_id).filter(Boolean))] as string[];
-      if (actorIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, full_name, email')
-          .in('id', actorIds);
-        const nameMap = new Map<string, string>();
-        (profiles || []).forEach((p: any) => {
-          nameMap.set(p.id, p.full_name || p.email || p.id.slice(0, 8));
-        });
-        setActorNames(nameMap);
-      }
+      setAuditEvents((data as AuditEvent[]) || []);
     })();
   }, [generated, showAuditTrail, startDate, endDate, user]);
 
@@ -352,7 +306,7 @@ export default function Reports() {
 
     if (isAudit) {
       // Audit trail CSV — built from already-loaded auditEvents, one row per changed field
-      downloadCsvBlob(buildAuditCsv(auditEvents, actorNames), `audit_${startDate}_${endDate}.csv`);
+      downloadCsvBlob(buildAuditCsv(auditEvents, staffCodes), `audit_${startDate}_${endDate}.csv`);
       return;
     }
 
@@ -553,7 +507,7 @@ export default function Reports() {
         {/* Expanded audit trail */}
         {showAuditTrail && isExpanded && entryAudit.length > 0 && (
           <div className="bg-muted/10 border-b space-y-1 py-2 px-2">
-            {entryAudit.map(a => <AuditTrailRow key={a.id} event={a} actorName={actorNames.get(a.actor_id || '')} />)}
+            {entryAudit.map(a => <AuditTrailRow key={a.id} event={a} codes={staffCodes} />)}
           </div>
         )}
       </div>
@@ -917,7 +871,7 @@ export default function Reports() {
                 <div className="divide-y">
                   {auditEvents.map(e => (
                     <div key={e.id}>
-                      <AuditTrailRow event={e} actorName={actorNames.get(e.actor_id || '')} />
+                      <AuditTrailRow event={e} codes={staffCodes} />
                     </div>
                   ))}
                 </div>

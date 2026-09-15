@@ -1,11 +1,17 @@
 import { formatTime, getAppTimezone } from '@/lib/time-utils';
-import { auditFieldChanges, auditReason, effectiveEventType, hasBeforeAndAfter, isNoOpUpdate, type AuditLike } from '@/lib/audit-summary';
+import { auditReason, describeAuditEvent, effectiveEventType, type AuditLike } from '@/lib/audit-summary';
+import { staffCodeLabel } from '@/lib/staff-code';
 
 export type AuditExportEvent = AuditLike & {
   event_type: string;
   created_at: string;
   actor_id: string | null;
+  user_id?: string | null;
+  employee_id?: string | null;
 };
+
+/** Staff codes by employee id and by login id; people are never named. */
+export type AuditCodeMaps = { byEmployee: ReadonlyMap<string, string>; byUser: ReadonlyMap<string, string> };
 
 /** Human-readable event type labels */
 export function eventTypeLabel(type: string): string {
@@ -19,7 +25,7 @@ export function eventTypeLabel(type: string): string {
     punch_added: 'Punch Added',
     punch_added_manually: 'Punch Added Manually',
     punch_deleted: 'Punch Deleted',
-    punch_voided: 'Punch Voided',
+    punch_voided: 'Punch Removed',
     punch_created: 'Punch Recorded',
     time_fix: 'Time Fix',
     system_adjustment: 'System Adjustment',
@@ -57,45 +63,38 @@ export function formatAuditValue(val: unknown): string {
   return String(val);
 }
 
+/** The staff code of the employee an audit row is about, and of whoever acted (null = the system). */
+export function auditCodes(a: AuditExportEvent, codes: AuditCodeMaps): { employee: string; actor: string | null } {
+  const employee = staffCodeLabel(
+    (a.employee_id && codes.byEmployee.get(a.employee_id)) || (a.user_id && codes.byUser.get(a.user_id)) || null);
+  const actor = a.actor_id ? staffCodeLabel(codes.byUser.get(a.actor_id)) : null;
+  return { employee, actor };
+}
+
 export type AuditCsvRow = {
-  date: string; time: string; event: string; field: string; before: string; after: string; actor: string; reason: string;
+  date: string; time: string; employee: string; event: string; what: string; by: string; reason: string;
 };
 
 /**
- * One CSV row per changed field. An update that changed nothing the audit
- * tracks is reported as "No change" rather than as a time "edited" to
- * itself; a void logged by the DB trigger as a punch_edit is reported as a
- * Punch Voided with its void reason.
+ * One row per audit event, described in plain English and attributed by
+ * staff code only. A void the DB trigger logged as a punch_edit is reported
+ * as a removal with its void reason; a write that changed nothing says so.
  */
-export function auditCsvRows(events: AuditExportEvent[], actorNames: Map<string, string>): AuditCsvRow[] {
+export function auditCsvRows(events: AuditExportEvent[], codes: AuditCodeMaps): AuditCsvRow[] {
   const tz = getAppTimezone();
-  const rows: AuditCsvRow[] = [];
-  for (const a of events) {
+  return events.map(a => {
     const ts = new Date(a.created_at);
-    const base = {
+    const names = auditCodes(a, codes);
+    return {
       date: ts.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric', timeZone: tz }),
       time: ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: tz }),
+      employee: names.employee,
       event: eventTypeLabel(effectiveEventType(a)),
-      actor: actorNames.get(a.actor_id || '') || 'System',
+      what: describeAuditEvent(a, names),
+      by: names.actor || 'System',
       reason: auditReason(a) || '',
     };
-    // Per-field rows only for updates; an insert or delete stays one row.
-    const details = (a.event_details && typeof a.event_details === 'object' ? a.event_details : {}) as Record<string, unknown>;
-    const changes = hasBeforeAndAfter(a) || details.field_changed ? auditFieldChanges(a) : [];
-    if (changes.length) {
-      for (const c of changes) rows.push({ ...base, field: c.field, before: c.before, after: c.after });
-    } else if (isNoOpUpdate(a)) {
-      rows.push({ ...base, field: 'No change', before: '—', after: '—' });
-    } else {
-      rows.push({
-        ...base,
-        field: details.field_changed ? String(details.field_changed).replace(/_/g, ' ') : '',
-        before: formatAuditValue(details.old_value ?? a.before_json),
-        after: formatAuditValue(details.new_value ?? a.after_json),
-      });
-    }
-  }
-  return rows;
+  });
 }
 
 function escapeCsv(val: unknown): string {
@@ -104,9 +103,9 @@ function escapeCsv(val: unknown): string {
   return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 }
 
-export function buildAuditCsv(events: AuditExportEvent[], actorNames: Map<string, string>): string {
-  const header = ['Date', 'Time', 'Event', 'Field', 'Before', 'After', 'Actor', 'Reason'];
-  const lines = auditCsvRows(events, actorNames).map(r =>
-    [r.date, r.time, r.event, r.field, r.before, r.after, r.actor, r.reason].map(escapeCsv).join(','));
+export function buildAuditCsv(events: AuditExportEvent[], codes: AuditCodeMaps): string {
+  const header = ['Date', 'Time', 'Employee', 'Event', 'What happened', 'By', 'Reason'];
+  const lines = auditCsvRows(events, codes).map(r =>
+    [r.date, r.time, r.employee, r.event, r.what, r.by, r.reason].map(escapeCsv).join(','));
   return [header.join(','), ...lines].join('\n');
 }
