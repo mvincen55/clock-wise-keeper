@@ -5,6 +5,7 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import type { Tables } from '@/integrations/supabase/types';
 import type { Cents } from '@/lib/fof/types';
 import type { FeeCategory, PlanRules } from '@/lib/fof/insurance';
+import { OFFICE_FEE_LOOKUP_KEY } from '@/hooks/useOfficeFeeLookup';
 
 // Fee schedules, items, and insurance plans — de-identified configuration
 // only. No patient data flows through these hooks.
@@ -174,7 +175,10 @@ export function useUpsertFeeSchedule() {
       });
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['fee-schedules'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fee-schedules'] });
+      qc.invalidateQueries({ queryKey: [OFFICE_FEE_LOOKUP_KEY] });
+    },
   });
 }
 
@@ -189,6 +193,7 @@ export function useDeleteFeeSchedule() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['fee-schedules'] });
       qc.invalidateQueries({ queryKey: ['insurance-plans'] });
+      qc.invalidateQueries({ queryKey: [OFFICE_FEE_LOOKUP_KEY] });
     },
   });
 }
@@ -229,7 +234,10 @@ export function useImportFeeScheduleItems() {
       }
       return { imported: rows.length };
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['fee-schedule-items'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fee-schedule-items'] });
+      qc.invalidateQueries({ queryKey: [OFFICE_FEE_LOOKUP_KEY] });
+    },
   });
 }
 
@@ -258,7 +266,10 @@ export function useUpsertFeeScheduleItem() {
       );
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['fee-schedule-items'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fee-schedule-items'] });
+      qc.invalidateQueries({ queryKey: [OFFICE_FEE_LOOKUP_KEY] });
+    },
   });
 }
 
@@ -270,7 +281,10 @@ export function useDeleteFeeScheduleItem() {
       const { error } = await supabase.from('fee_schedule_items').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['fee-schedule-items'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fee-schedule-items'] });
+      qc.invalidateQueries({ queryKey: [OFFICE_FEE_LOOKUP_KEY] });
+    },
   });
 }
 

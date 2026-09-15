@@ -4,7 +4,7 @@ import { loadEdge } from './helpers/edge-harness';
 const orgId='11111111-1111-4111-8111-111111111111';
 const source={id:'source-one',code:'D6058',description:'Implant crown',notes:'The implant crown and its abutment are one restorative course. Collect the balance at delivery.',schedule_id:'office-schedule'};
 const recipe={sourceId:source.id,title:'Implant Crown',summary:'Prepare and deliver an implant-supported crown.',classification:'restoration',grouping:'same_tooth'};
-function setup(options: {member?:boolean;notes?:string;recipes?:unknown[];finish?:string;legacy?:boolean}={}) {
+function setup(options: {member?:boolean;notes?:string;recipes?:unknown[];finish?:string;legacy?:boolean;content?:unknown}={}) {
   const filters=vi.fn(); const writes=vi.fn();
   const from=(table:string)=>{
     const result=()=>({data:table==='org_members'?(options.member===false?null:{org_id:orgId}):table==='fee_schedule_items'?[{...source,notes:options.notes??source.notes}]:[],error:null});
@@ -13,7 +13,7 @@ function setup(options: {member?:boolean;notes?:string;recipes?:unknown[];finish
     for(const method of ['insert','upsert','update','delete'])builder[method]=(...args:unknown[])=>{writes(...args);return builder;};
     return builder;
   };
-  const gateway=vi.fn().mockResolvedValue(new Response(JSON.stringify({choices:[{finish_reason:options.finish??'stop',message:{content:JSON.stringify({recipes:options.recipes??[recipe]})}}]})));
+  const gateway=vi.fn().mockResolvedValue(new Response(JSON.stringify({choices:[{finish_reason:options.finish??'stop',message:{content:JSON.stringify(options.content??{recipes:options.recipes??[recipe]})}}]})));
   const client={from,rpc:async()=>({data:true}),auth:{getUser:async()=>({data:{user:{id:'staff'}}})}};
   const edge=loadEdge(`supabase/functions/${options.legacy?'name-visits':'fof-office-guidance'}/index.ts`,{'https://esm.sh/@supabase/supabase-js@2':{createClient:()=>client}},gateway);
   const run=(body:unknown={orgId})=>edge.handle(new Request('https://example.test',{method:'POST',headers:{Authorization:'Bearer synthetic'},body:JSON.stringify(body)}));
@@ -47,9 +47,18 @@ describe('office-only AI guidance endpoint',()=>{
   ])('refuses invented, incomplete, or patient-specific suggestions',async options=>{
     const test=setup(options);expect((await test.run()).status).toBe(502);expect(test.writes).not.toHaveBeenCalled();
   });
-  it('closes the old visit-naming relay to patient plans',async()=>{
-    const test=setup({legacy:true});const response=await test.run({slots:['PRIVATE'],visits:[]});expect(response.status).toBe(410);expect(test.gateway).not.toHaveBeenCalled();
-    expect((await response.json()).error).toContain('No patient plan was read or sent to AI');
-    expect(test.filters.mock.calls.every(call=>call[0]==='org_members')).toBe(true);
+  it('the visit-naming endpoint words the plan from codes and visit order only, for active members',async()=>{
+    const test=setup({legacy:true,content:{names:['At the Records Visit','At Implant Surgery'],treatment:'Dr. Scott will place a dental implant on tooth #8.'}});
+    const response=await test.run({slots:['Payment 1','Payment 2'],visits:[{procedures:['CT Scan']},{procedures:['Dental Implant (tooth #8)']}],wantTreatment:true,doctorName:'Dr. Scott'});
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({names:['At the Records Visit','At Implant Surgery'],treatment:'Dr. Scott will place a dental implant on tooth #8.'});
+    expect(test.gateway).toHaveBeenCalledTimes(1);
+    const sent=JSON.parse(String(test.gateway.mock.calls[0][1].body));
+    expect(sent.messages.at(-1).content).toContain('Dental Implant (tooth #8)');
+    expect(test.writes).not.toHaveBeenCalled();
+  });
+  it('the visit-naming endpoint refuses nonmembers and malformed slot lists before using paid AI',async()=>{
+    const nonmember=setup({legacy:true,member:false});expect((await nonmember.run({slots:['Payment 1'],visits:[]})).status).toBe(403);expect(nonmember.gateway).not.toHaveBeenCalled();
+    const empty=setup({legacy:true});expect((await empty.run({slots:[],visits:[]})).status).toBe(400);expect(empty.gateway).not.toHaveBeenCalled();
   });
 });
