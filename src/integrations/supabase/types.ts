@@ -5812,7 +5812,7 @@ export type Database = {
           {
             foreignKeyName: "payroll_settings_org_id_fkey"
             columns: ["org_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
