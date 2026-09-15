@@ -91,10 +91,8 @@ async function draftSummary(
  * notified. Used for a signed-in admin's on-demand sweep so one office's
  * button never touches another office's records.
  */
-async function escalateWithinOrgs(
-  admin: ReturnType<typeof createClient>,
-  orgIds: string[],
-): Promise<number> {
+// deno-lint-ignore no-explicit-any
+async function escalateWithinOrgs(admin: any, orgIds: string[]): Promise<number> {
   if (orgIds.length === 0) return 0;
   const { data: waiting } = await admin
     .from("accountability_reports")
