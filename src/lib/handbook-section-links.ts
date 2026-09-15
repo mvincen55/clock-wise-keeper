@@ -5,6 +5,6 @@ export function handbookSectionLink(title: string): { to: string; label: string 
   if (/^huddle meeting & daily preparation$|^morning huddle$/.test(text)) return { to: '/morning-huddle', label: 'Open Morning Huddle' };
   if (/^(clerical logs\/checklists|checklists)$/.test(text)) return { to: '/checklists', label: 'Open Checklists' };
   if (/^incident reports?$/.test(text)) return { to: '/incident-reports', label: 'Open Incident Reports' };
-  if (/^broken appointments?$/.test(text)) return { to: '/broken-appointments', label: 'Open Broken Appointments' };
+  if (/broken appointment|late cancel|no-show|vip scheduling/.test(text)) return { to: '/broken-appointments', label: 'Open Broken Appointments' };
   return null;
 }
