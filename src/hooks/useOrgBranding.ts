@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import type { Tables } from '@/integrations/supabase/types';
+import { handbookImagePath } from '@/lib/handbook-images';
 
 /**
  * Org branding — the practice's identity as rows (genericization Phase 1).
@@ -211,6 +212,24 @@ export async function uploadOrgLogo(orgId: string, file: File): Promise<string> 
   const { error } = await supabase.storage.from('org-branding').upload(path, file, {
     cacheControl: '3600',
     upsert: false,
+  });
+  if (error) throw error;
+  const { data } = supabase.storage.from('org-branding').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+/**
+ * Upload a handbook picture to the office's image library (same bucket, its
+ * own folder). The path comes from the file name, so uploading a file with
+ * the same name replaces the picture everywhere a document shows it.
+ * Admins only, by the bucket's policies. Office pictures only — never patients.
+ */
+export async function uploadHandbookImage(orgId: string, file: File): Promise<string> {
+  const path = handbookImagePath(orgId, file.name);
+  const { error } = await supabase.storage.from('org-branding').upload(path, file, {
+    cacheControl: '3600',
+    contentType: file.type,
+    upsert: true,
   });
   if (error) throw error;
   const { data } = supabase.storage.from('org-branding').getPublicUrl(path);

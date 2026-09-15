@@ -12,16 +12,18 @@
 /** Uppercase CDT code → fee in cents, from the active office schedule. */
 export type FeeByCode = Map<string, number>;
 
-const CODE = /\bD\d{4}[a-z]?\b/gi;
+// CDT codes (D0120), CDT codes with an office suffix (D9944p, D0140m), and
+// the office's own numeric codes (4002, 9100) or short letter codes (D002).
+const CODE = /\b(?:D\d{3,4}[a-z]?|\d{4})\b/gi;
 const CODE_RANGE = /\b(D\d{4})[a-z]?\s*[-–—]\s*(D\d{4})[a-z]?\b/i;
 const FEE_HEADER = /\b(fee|fees|price|prices|cost|charge|rate)\b/i;
 const CODE_HEADER = /\bcodes?\b/i;
 const MAX_RANGE = 12;
 
 /**
- * Codes named in a cell. "D2391 - D2394" expands to the whole range,
- * "D4341 / D4342" lists both, and an office suffix ("D9944p") resolves to
- * the schedule's base code.
+ * Codes named in a cell, uppercased. "D2391 - D2394" expands to the whole
+ * range, "D4341 / D4342" lists both, and an office suffix ("D9944p") is kept
+ * so the schedule's own suffixed entry matches first (see feeFor).
  */
 export function codesInCell(text: string): string[] {
   const codes: string[] = [];
@@ -36,8 +38,16 @@ export function codesInCell(text: string): string[] {
       for (let n = from; n <= to; n++) add(`D${String(n).padStart(4, '0')}`);
     }
   }
-  for (const match of text.matchAll(CODE)) add(match[0].slice(0, 5).toUpperCase());
+  for (const match of text.matchAll(CODE)) add(match[0].toUpperCase());
   return codes;
+}
+
+/** The schedule's fee for a code: the exact entry, else the base CDT code behind an office suffix. */
+export function feeFor(code: string, byCode: FeeByCode): number | undefined {
+  const exact = byCode.get(code);
+  if (typeof exact === 'number') return exact;
+  const base = code.match(/^(D\d{4})[A-Z]$/);
+  return base ? byCode.get(base[1]) : undefined;
 }
 
 export const feeColumnIndex = (header: string[]): number => header.findIndex(cell => FEE_HEADER.test(cell));
@@ -71,7 +81,7 @@ export function formatFee(cents: number): string {
  * dash for one the schedule lacks.
  */
 export function liveFeeLabel(codes: string[], byCode: FeeByCode): string | null {
-  const fees = codes.map(code => byCode.get(code));
+  const fees = codes.map(code => feeFor(code, byCode));
   const known = fees.filter((fee): fee is number => typeof fee === 'number');
   if (known.length === 0) return null;
   if (codes.length === 1 || (known.length === codes.length && new Set(known).size === 1)) return formatFee(known[0]);

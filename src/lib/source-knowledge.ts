@@ -12,6 +12,7 @@
  */
 import type { DocBlock } from '@/lib/doc-format';
 import { blockText } from '@/lib/doc-library';
+import { stripLiveFields } from '@/lib/handbook-live-fields';
 
 export type SourceSectionKind = 'policy' | 'procedure' | 'reference';
 
@@ -104,7 +105,7 @@ export function sourceSections(doc: SourceDoc, blocks: DocBlock[]): SourceSectio
   const close = () => {
     if (!open) return;
     const kind = classifySection(open.title, open.part, open.blocks, doc.defaultKind);
-    const text = open.blocks.map(blockText).join(' ');
+    const text = stripLiveFields(open.blocks.map(blockText).join(' '));
     sections.push({
       id: `${doc.id}:${open.blockIndex}`,
       docId: doc.id,

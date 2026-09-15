@@ -20,7 +20,11 @@ export type DocBlock =
   | { type: 'para'; text: string }
   | { type: 'table'; rows: string[][]; text: string; hasHeader?: boolean }
   | { type: 'bullets'; items: string[]; depths?: number[] }
-  | { type: 'numbered'; items: string[]; depths?: number[] };
+  | { type: 'numbered'; items: string[]; depths?: number[] }
+  /** A fenced block kept verbatim: a template the reader copies as-is. */
+  | { type: 'code'; text: string }
+  /** `![caption](url)` on its own line; `text` is the caption. */
+  | { type: 'image'; text: string; src: string };
 
 const PAGE_NUMBER = /^\d{1,3}$/;
 const LONE_BULLET = /^[•·▪◦o*\-✅✓✔☐]$/;
@@ -33,6 +37,8 @@ const HTML_COMMENT = /<!--[\s\S]*?-->/g;
 const MD_ESCAPE = /\\([\\*_#!+\-.()[\]{}>~`])/g;
 const TABLE_SEPARATOR = /^:?-+:?$/;
 const HORIZONTAL_RULE = /^([-*_])(\s*\1){2,}$/;
+const FENCE = /^(```|~~~)\s*\w*\s*$/;
+const IMAGE_LINE = /^!\[([^\]]*)\]\((https?:\/\/[^\s)]+|data:image\/[^\s)]+)\)$/;
 const SHORT = 60;
 const LABEL_MAX = 80;
 const HEADING_MIN = 3;
@@ -50,8 +56,45 @@ export function cleanInlineText(text: string): string {
     .replace(/&#1[03];/g, ' ');
 }
 
-const splitTableRow = (line: string): string[] =>
-  line.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(/(?<!\\)\|/);
+/**
+ * Split a table row on its pipes, leaving alone an escaped pipe (`\|`) and
+ * the bar inside a live field (`{{fee D0120 | $65}}`), which is a fallback
+ * separator, not a column break.
+ */
+const splitTableRow = (line: string): string[] => {
+  let s = line.trim();
+  if (s.startsWith('|')) s = s.slice(1);
+  if (s.endsWith('|') && !s.endsWith('\\|')) s = s.slice(0, -1);
+  const cells: string[] = [];
+  let cell = '';
+  let depth = 0;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '\\' && s[i + 1] === '|') {
+      cell += '\\|';
+      i++;
+    } else if (ch === '{' && s[i + 1] === '{') {
+      depth++;
+      cell += '{{';
+      i++;
+    } else if (ch === '}' && s[i + 1] === '}' && depth > 0) {
+      depth--;
+      cell += '}}';
+      i++;
+    } else if (ch === '|' && depth === 0) {
+      cells.push(cell);
+      cell = '';
+    } else {
+      cell += ch;
+    }
+  }
+  cells.push(cell);
+  return cells;
+};
+
+/** Escape a cell's pipes for markdown, except the bar inside a live field. */
+const escapeCellPipes = (cell: string): string =>
+  cell.replace(/\{\{[^{}]*\}\}|\|/g, match => (match === '|' ? '\\|' : match));
 
 export const parseDocTableRow = (line: string): string[] =>
   splitTableRow(line).map(cell =>
@@ -254,7 +297,7 @@ export function parseDocBlocks(content: string): DocBlock[] {
   };
   const pushTable = (rows: string[][], hasHeader: boolean) => {
     const text = rows
-      .map(row => '| ' + row.map(cell => cell.replace(/\|/g, '\\|').replace(/\n/g, '<br>')).join(' | ') + ' |')
+      .map(row => '| ' + row.map(cell => escapeCellPipes(cell).replace(/\n/g, '<br>')).join(' | ') + ' |')
       .join('\n');
     blocks.push(hasHeader ? { type: 'table', rows, text } : { type: 'table', rows, text, hasHeader: false });
   };
@@ -263,6 +306,31 @@ export function parseDocBlocks(content: string): DocBlock[] {
     const rawTrimmed = rawLines[i].trim();
     const line = lines[i].trim();
     const indent = lines[i].length - lines[i].trimStart().length;
+
+    // A fenced block is verbatim: nothing inside it is a heading, a list,
+    // or a rule, and its line breaks are content.
+    if (FENCE.test(rawTrimmed)) {
+      flushAll();
+      pendingNumber = null;
+      const body: string[] = [];
+      let end = i + 1;
+      while (end < rawLines.length && !FENCE.test(rawLines[end].trim())) {
+        body.push(rawLines[end].replace(/\s+$/, ''));
+        end++;
+      }
+      const text = body.join('\n').replace(/^\n+|\n+$/g, '');
+      if (text) blocks.push({ type: 'code', text });
+      i = end;
+      continue;
+    }
+
+    const image = rawTrimmed.match(IMAGE_LINE);
+    if (image) {
+      flushAll();
+      pendingNumber = null;
+      blocks.push({ type: 'image', text: cleanInlineText(image[1]).trim(), src: image[2] });
+      continue;
+    }
 
     if (line === '') {
       // Blank lines end paragraphs. Lists stay open across them (the

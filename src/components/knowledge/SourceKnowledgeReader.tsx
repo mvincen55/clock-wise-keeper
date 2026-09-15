@@ -9,6 +9,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Loader2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { HandbookLiveProvider } from '@/components/handbook/HandbookLiveContext';
 import { BlockView } from '@/components/library/DocBlockView';
 import { highlighted } from '@/components/library/highlight';
 import { useOrgContext } from '@/hooks/useOrgContext';
@@ -150,9 +151,11 @@ export default function SourceKnowledgeReader({ kind, title, subtitle, empty }: 
                 </div>
               </header>
               <div className="policy-body source-reader-body">
-                {active.blocks.map((block, index) => (
-                  <BlockView key={active.blockIndex + 1 + index} block={block} id={sectionAnchorId(active.blockIndex + 1 + index)} query={query} />
-                ))}
+                <HandbookLiveProvider>
+                  {active.blocks.map((block, index) => (
+                    <BlockView key={active.blockIndex + 1 + index} block={block} id={sectionAnchorId(active.blockIndex + 1 + index)} query={query} />
+                  ))}
+                </HandbookLiveProvider>
                 {active.blocks.length === 0 && <p className="text-sm text-muted-foreground">This section has no text of its own.</p>}
               </div>
               {isManager && (

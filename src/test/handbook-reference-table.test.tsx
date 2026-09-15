@@ -17,9 +17,8 @@ describe('HandbookReferenceTable', () => {
     render(<MemoryRouter><HandbookReferenceTable rows={rows} /></MemoryRouter>);
     expect(screen.getByRole('columnheader', { name: 'Office Fee (as of last year)' })).toBeInTheDocument();
     expect(screen.getByText('$814')).toHaveClass('handbook-live-fee');
-    expect(screen.getByText(/Handbook:/)).toHaveTextContent('Handbook: $598');
+    expect(screen.queryByText('$598')).not.toBeInTheDocument();
     expect(screen.getByText('$65')).toHaveClass('handbook-live-fee');
-    expect(screen.queryByText('Handbook: $65')).not.toBeInTheDocument();
     expect(screen.getByText('$10')).toBeInTheDocument();
     expect(screen.getByText(/Fees come from the office fee schedule \(Office Fee Schedule\)/)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Open the fee schedule' })).not.toBeInTheDocument();
