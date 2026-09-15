@@ -32,6 +32,7 @@ const BOLD_LINE = /^\*\*(.+?)\*\*:?$/;
 const HTML_COMMENT = /<!--[\s\S]*?-->/g;
 const MD_ESCAPE = /\\([\\*_#!+\-.()[\]{}>~`])/g;
 const TABLE_SEPARATOR = /^:?-+:?$/;
+const HORIZONTAL_RULE = /^([-*_])(\s*\1){2,}$/;
 const SHORT = 60;
 const LABEL_MAX = 80;
 const HEADING_MIN = 3;
@@ -313,6 +314,11 @@ export function parseDocBlocks(content: string): DocBlock[] {
     }
 
     if (PAGE_NUMBER.test(line)) continue;
+    // A horizontal rule is layout, not content.
+    if (HORIZONTAL_RULE.test(line)) {
+      flushPara();
+      continue;
+    }
 
     if (LONE_BULLET.test(line)) {
       // The extraction put the bullet mark on its own line; the item's

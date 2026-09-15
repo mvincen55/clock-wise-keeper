@@ -60,6 +60,7 @@ import {
   ListTree,
   Loader2,
   Pencil,
+  Printer,
   Search,
   Settings2,
   Sparkles,
@@ -82,6 +83,7 @@ import {
   locateQueryBlock,
   outlineAncestors,
   outlineFromBlocks,
+  outlineNumbers,
   outlineTree,
   readerDocsFor,
   resolveDocPlacement,
@@ -142,12 +144,14 @@ function TocRow({
   expanded,
   onToggle,
   onJump,
+  numbers,
 }: {
   node: OutlineTreeNode;
   activeId: string;
   expanded: Set<string>;
   onToggle: (id: string) => void;
   onJump: (item: OutlineItem) => void;
+  numbers?: Map<string, string>;
 }) {
   const { item, children } = node;
   const isOpen = expanded.has(item.id);
@@ -176,7 +180,7 @@ function TocRow({
           onClick={() => onJump(item)}
           className={tocLabelClass(item.id === activeId)}
         >
-          {item.text}
+          <TocLabel item={item} numbers={numbers} />
         </button>
       </div>
       {children.length > 0 && isOpen && (
@@ -189,11 +193,23 @@ function TocRow({
               expanded={expanded}
               onToggle={onToggle}
               onJump={onJump}
+              numbers={numbers}
             />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+/** A contents entry with its policy-book number when the surface numbers sections. */
+function TocLabel({ item, numbers }: { item: OutlineItem; numbers?: Map<string, string> }) {
+  const number = numbers?.get(item.id);
+  return (
+    <>
+      {number && <span className="handbook-toc-number" aria-hidden="true">{number}</span>}
+      {item.text}
+    </>
   );
 }
 
@@ -206,10 +222,12 @@ function TableOfContents({
   outline,
   activeId,
   onJump,
+  numbers,
 }: {
   outline: OutlineItem[];
   activeId: string;
   onJump: (item: OutlineItem) => void;
+  numbers?: Map<string, string>;
 }) {
   const [filter, setFilter] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -298,7 +316,7 @@ function TableOfContents({
                 onClick={() => jump(item)}
                 className={`block w-full ${tocLabelClass(item.id === activeId)}`}
               >
-                {item.text}
+                <TocLabel item={item} numbers={numbers} />
               </button>
             ))
           )
@@ -311,6 +329,7 @@ function TableOfContents({
               expanded={expanded}
               onToggle={toggle}
               onJump={jump}
+              numbers={numbers}
             />
           ))
         ) : (
@@ -323,7 +342,7 @@ function TableOfContents({
               onClick={() => onJump(item)}
               className={`block w-full ${tocLabelClass(item.id === activeId)}`}
             >
-              {item.text}
+              <TocLabel item={item} numbers={numbers} />
             </button>
           ))
         )}
@@ -552,6 +571,18 @@ export default function DocumentLibraryReader({
     [activeDoc, blocksByDoc]
   );
   const outline = useMemo(() => outlineFromBlocks(blocks), [blocks]);
+  // Policy-book numbering (1, 1.1, 1.1.1) for the handbook: the same map
+  // drives the contents list (by anchor id) and the headings (by block index).
+  const numbering = useMemo(() => {
+    if (appearance !== 'handbook') return { byId: undefined, byBlock: undefined };
+    const byId = outlineNumbers(outline);
+    const byBlock = new Map<number, string>();
+    for (const item of outline) {
+      const number = byId.get(item.id);
+      if (number) byBlock.set(item.blockIndex, number);
+    }
+    return { byId, byBlock };
+  }, [appearance, outline]);
 
   // Scoped full-text search — the same index Ask AI uses, filtered to this
   // surface's areas/collections (plus a client-side guard on scope doc ids).
@@ -712,7 +743,7 @@ export default function DocumentLibraryReader({
         <p className="shrink-0 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Contents
         </p>
-        <TableOfContents outline={outline} activeId={activeSectionId} onJump={jumpToSection} />
+        <TableOfContents outline={outline} activeId={activeSectionId} onJump={jumpToSection} numbers={numbering.byId} />
       </div>
     </div>
   );
@@ -929,13 +960,14 @@ export default function DocumentLibraryReader({
                   </div>
                 ) : activeDoc ? (
                   <article className={appearance === 'handbook' ? 'handbook-article' : undefined}>
-                    <header className="mb-7">
+                    <header className={appearance === 'handbook' ? 'handbook-cover mb-7' : 'mb-7'}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-start gap-3">
                           <span className="mt-1 hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:flex">
                             <Icon className="h-4 w-4 text-primary" />
                           </span>
                           <div className="min-w-0">
+                            {appearance === 'handbook' && <p className="handbook-eyebrow">Current version</p>}
                             <h2 className="text-2xl font-bold tracking-tight">{activeDoc.title}</h2>
                             <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                               {updatedAt && (
@@ -969,6 +1001,12 @@ export default function DocumentLibraryReader({
                           </div>
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
+                          {appearance === 'handbook' && (
+                            <Button variant="outline" size="sm" onClick={() => window.print()} className="print:hidden">
+                              <Printer className="mr-1.5 h-3.5 w-3.5" />
+                              Print
+                            </Button>
+                          )}
                           {canEdit && (
                             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
                               <Pencil className="mr-1.5 h-3.5 w-3.5" />
@@ -986,7 +1024,7 @@ export default function DocumentLibraryReader({
                         The text of this document is not available. Ask your manager for a copy or help uploading it again.
                       </p>
                     ) : (
-                      <ReaderBody blocks={blocks} highlight={readerHighlight} handbook={appearance === 'handbook'} />
+                      <ReaderBody blocks={blocks} highlight={readerHighlight} handbook={appearance === 'handbook'} numbers={numbering.byBlock} />
                     )}
 
                     {/* Previous / next section */}
