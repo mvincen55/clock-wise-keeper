@@ -13,6 +13,7 @@ state.docs = [{ id: 'doc-1', title: 'Policy Handbook', category: 'policy', libra
 vi.mock('@/hooks/useSourceKnowledge', () => ({ useSourceKnowledge: () => state }));
 vi.mock('@/hooks/useOrgContext', () => ({ useOrgContext: () => ({ data: { role: state.role } }) }));
 vi.mock('@/hooks/useOfficeFeeLookup', () => ({ useOfficeFeeLookup: () => ({ data: null }) }));
+vi.mock('@/hooks/useBrokenApptSettings', () => ({ useBrokenApptSettings: () => ({ data: undefined }) }));
 
 function show(initial = '/playbook/procedures') {
   return render(<MemoryRouter initialEntries={[initial]}><SourceKnowledgeReader kind="procedure" title="Office Procedures" subtitle="How we work" empty={<p>Nothing published</p>} /></MemoryRouter>);

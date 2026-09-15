@@ -1,4 +1,6 @@
+import LiveField from '@/components/handbook/LiveField';
 import { escapeRegExp } from '@/lib/doc-library';
+import { parseLiveField } from '@/lib/handbook-live-fields';
 
 /** Render text with every occurrence of the query marked. */
 export function highlightMatch(text: string, query: string) {
@@ -17,10 +19,16 @@ export function highlightMatch(text: string, query: string) {
   );
 }
 
-/** Source-authored HTTP links only; raw HTML and script URLs stay inert text. */
+/**
+ * Source-authored HTTP links become anchors and live fields ({{fee D0120 | $65}})
+ * become current values; raw HTML and script URLs stay inert text.
+ */
 export function highlighted(text: string, query: string) {
-  return text.split(/(\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g).map((part, index) => {
+  return text.split(/(\[[^\]]+\]\(https?:\/\/[^\s)]+\)|\{\{[^{}]+\}\})/g).map((part, index) => {
     const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
-    return link ? <a key={index} href={link[2]} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">{highlightMatch(link[1], query)}</a> : <span key={index}>{highlightMatch(part, query)}</span>;
+    if (link) return <a key={index} href={link[2]} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">{highlightMatch(link[1], query)}</a>;
+    const field = part.startsWith('{{') ? parseLiveField(part) : null;
+    if (field) return <LiveField key={index} field={field} />;
+    return <span key={index}>{highlightMatch(part, query)}</span>;
   });
 }

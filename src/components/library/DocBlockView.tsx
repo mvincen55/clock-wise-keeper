@@ -5,7 +5,9 @@
  * Handbook, the Insurance Desk, and the handbook-derived procedures reader.
  */
 import { memo } from 'react';
+import HandbookFigure from '@/components/handbook/HandbookFigure';
 import HandbookList from '@/components/handbook/HandbookList';
+import HandbookTemplate from '@/components/handbook/HandbookTemplate';
 import HandbookReferenceTable from '@/components/handbook/HandbookReferenceTable';
 import HandbookSectionLink from '@/components/handbook/HandbookSectionLink';
 import { highlighted } from '@/components/library/highlight';
@@ -54,6 +56,18 @@ export function BlockView({ block, id, query, number }: { block: DocBlock; id: s
       );
     case 'table':
       return <HandbookReferenceTable id={id} className={ANCHOR} rows={block.rows} hasHeader={block.hasHeader !== false} renderText={render} />;
+    case 'code':
+      return <HandbookTemplate id={id} className={ANCHOR} text={block.text} />;
+    case 'image':
+      return (
+        <HandbookFigure
+          id={id}
+          className={ANCHOR}
+          src={block.src}
+          alt={block.text}
+          caption={block.text ? render(block.text) : null}
+        />
+      );
     case 'bullets':
     case 'numbered':
       return <HandbookList id={id} className={ANCHOR} items={block.items} depths={block.depths} ordered={block.type === 'numbered'} renderText={render} />;
@@ -106,13 +120,22 @@ export const ReaderBody = memo(function ReaderBody({
   /** Policy-book section numbers by document block index (see outlineNumbers). */
   numbers?: Map<number, string>;
 }) {
-  return (
-    <div className="max-w-[46rem]">
-      {blocks.map((block, i) => (
-        <BlockViewWithLink key={offset + i} block={block} id={sectionAnchorId(offset + i)} query={highlight} handbook={handbook} number={numbers?.get(offset + i)} />
-      ))}
-    </div>
-  );
+  // Runs of images sit in a grid, like a photo guide, instead of stacking.
+  const rendered = [];
+  for (let i = 0; i < blocks.length; i++) {
+    if (blocks[i].type === 'image') {
+      let end = i;
+      while (end < blocks.length && blocks[end].type === 'image') end++;
+      const run = blocks.slice(i, end).map((block, j) => (
+        <BlockView key={offset + i + j} block={block} id={sectionAnchorId(offset + i + j)} query={highlight} />
+      ));
+      rendered.push(end - i > 1 ? <div key={`grid-${offset + i}`} className="handbook-figure-grid">{run}</div> : run);
+      i = end - 1;
+      continue;
+    }
+    rendered.push(<BlockViewWithLink key={offset + i} block={blocks[i]} id={sectionAnchorId(offset + i)} query={highlight} handbook={handbook} number={numbers?.get(offset + i)} />);
+  }
+  return <div className="max-w-[46rem]">{rendered}</div>;
 });
 
 function BlockViewWithLink({ block, id, query, handbook, number }: { block: DocBlock; id: string; query: string; handbook: boolean; number?: string }) {
