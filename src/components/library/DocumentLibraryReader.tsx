@@ -27,9 +27,10 @@
  * (design-token `primary`) marks active navigation, focus, and progress.
  */
 import HandbookHeader from '@/components/handbook/HandbookHeader';
+import { HandbookLiveProvider } from '@/components/handbook/HandbookLiveContext';
 import { ReaderBody } from '@/components/library/DocBlockView';
 import { highlighted } from '@/components/library/highlight';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -56,6 +57,7 @@ import {
   CalendarDays,
   ChevronRight,
   FileText,
+  Image as ImageIcon,
   List,
   ListTree,
   Loader2,
@@ -64,6 +66,7 @@ import {
   Search,
   Settings2,
   Sparkles,
+  Upload,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -75,7 +78,16 @@ import {
   type OfficeDoc,
 } from '@/hooks/useOfficeDocs';
 import { useLibraryContents } from '@/hooks/useLibraryContents';
+import { uploadHandbookImage } from '@/hooks/useOrgBranding';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import {
+  HANDBOOK_IMAGE_TYPES,
+  captionFromFileName,
+  handbookImageProblem,
+  headingLines,
+  placeImageLine,
+  type ImagePlacement,
+} from '@/lib/handbook-images';
 import {
   DOC_COLLECTION_LABELS,
   canEditLibraryDocs,
@@ -356,16 +368,75 @@ function EditDocDialog({
   doc,
   content,
   open,
+  orgId,
   onClose,
 }: {
   doc: OfficeDoc | null;
   content: string;
   open: boolean;
+  /** Pictures upload into this office's image library; without it the picture control stays off. */
+  orgId?: string;
   onClose: () => void;
 }) {
   const edit = useEditOfficeDocContent();
   const [text, setText] = useState('');
   const [seededFor, setSeededFor] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  // 'cursor', 'end', or 'h<line>' for "right after this heading".
+  const [placement, setPlacement] = useState('cursor');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const caretRef = useRef<number | null>(null);
+  const headings = useMemo(() => headingLines(text), [text]);
+
+  useEffect(() => {
+    if (!open) {
+      caretRef.current = null;
+      setPlacement('cursor');
+    }
+  }, [open]);
+
+  const onPickImage = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !orgId) return;
+    const problem = handbookImageProblem(file);
+    if (problem) {
+      toast.error(problem);
+      return;
+    }
+    setUploading(true);
+    try {
+      const url = await uploadHandbookImage(orgId, file);
+      const where: ImagePlacement =
+        placement === 'end'
+          ? { kind: 'end' }
+          : placement.startsWith('h')
+            ? { kind: 'after-heading', line: Number(placement.slice(1)) }
+            : caretRef.current === null
+              ? { kind: 'end' }
+              : { kind: 'cursor', at: caretRef.current };
+      const placed = placeImageLine(text, { caption: captionFromFileName(file.name), url }, where);
+      setText(placed.text);
+      if (placed.alreadyPlaced) {
+        toast.success('Picture replaced — this document already shows it.');
+      } else if (where.kind === 'end' && placement === 'cursor') {
+        toast.success('Picture added at the end. Move its line if you want it elsewhere, then Save Changes.');
+      } else {
+        toast.success('Picture added. Save Changes to publish it.');
+      }
+      window.requestAnimationFrame(() => {
+        const area = textareaRef.current;
+        if (!area) return;
+        area.focus();
+        area.setSelectionRange(placed.caret, placed.caret);
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'The picture could not be uploaded.');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   // Seed the editor from the current document each time it opens.
   if (open && doc && seededFor !== doc.id) {
@@ -401,14 +472,63 @@ function EditDocDialog({
           <code className="rounded bg-muted px-1">## category</code>,{' '}
           <code className="rounded bg-muted px-1">### policy</code> — deeper headings fold under
           their category. Use <code className="rounded bg-muted px-1">-</code> for bullets and{' '}
-          <code className="rounded bg-muted px-1">1.</code> for steps. Internal business documents
-          only — never patient information.
+          <code className="rounded bg-muted px-1">1.</code> for steps. A price written as{' '}
+          <code className="rounded bg-muted px-1">{'{{fee D0120 | $65}}'}</code> always shows the current
+          office fee (the text after the bar is the fallback); <code className="rounded bg-muted px-1">{'{{setting broken_appointments.fee | $75}}'}</code>{' '}
+          follows the Broken Appointments settings. Wrap a template to copy in <code className="rounded bg-muted px-1">```</code> fences.
+          A picture is a line like <code className="rounded bg-muted px-1">![caption](url)</code>; the control below uploads one and writes that line for you.
+          Internal business documents only — never patient information.
         </p>
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-border px-2 py-1.5 text-xs text-muted-foreground">
+          <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
+          <label htmlFor="handbook-image-placement">Add a picture</label>
+          <select
+            id="handbook-image-placement"
+            value={placement}
+            onChange={e => setPlacement(e.target.value)}
+            className="h-7 max-w-[14rem] rounded-md border border-input bg-background px-1.5 text-xs text-foreground"
+            aria-label="Where the picture goes"
+          >
+            <option value="cursor">At the cursor</option>
+            <option value="end">At the end</option>
+            {headings.map(h => (
+              <option key={h.line} value={`h${h.line}`}>
+                {`${'  '.repeat(Math.max(0, h.level - 1))}After: ${h.title}`}
+              </option>
+            ))}
+          </select>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading || !orgId}
+          >
+            {uploading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Upload className="mr-1.5 h-3.5 w-3.5" />}
+            Choose picture
+          </Button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept={HANDBOOK_IMAGE_TYPES.join(',')}
+            className="hidden"
+            onChange={onPickImage}
+            aria-label="Picture file"
+          />
+          <span className="basis-full">
+            Uploading a file with the same name replaces that picture everywhere it is shown. Office pictures only — never patients.
+          </span>
+        </div>
         <Textarea
+          ref={textareaRef}
           value={text}
           onChange={e => setText(e.target.value)}
+          onSelect={e => {
+            caretRef.current = e.currentTarget.selectionStart;
+          }}
           spellCheck={false}
-          className="min-h-[55vh] font-mono text-[13px] leading-relaxed focus-visible:ring-primary"
+          className="min-h-[50vh] font-mono text-[13px] leading-relaxed focus-visible:ring-primary"
         />
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={edit.isPending}>
@@ -1024,7 +1144,9 @@ export default function DocumentLibraryReader({
                         The text of this document is not available. Ask your manager for a copy or help uploading it again.
                       </p>
                     ) : (
-                      <ReaderBody blocks={blocks} highlight={readerHighlight} handbook={appearance === 'handbook'} numbers={numbering.byBlock} />
+                      <HandbookLiveProvider>
+                        <ReaderBody blocks={blocks} highlight={readerHighlight} handbook={appearance === 'handbook'} numbers={numbering.byBlock} />
+                      </HandbookLiveProvider>
                     )}
 
                     {/* Previous / next section */}
@@ -1076,6 +1198,7 @@ export default function DocumentLibraryReader({
             doc={activeDoc}
             content={activeDoc ? contents?.get(activeDoc.id) ?? '' : ''}
             open={editOpen}
+            orgId={ctx?.org_id}
             onClose={() => setEditOpen(false)}
           />
         </>

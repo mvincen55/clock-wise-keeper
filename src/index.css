@@ -3790,3 +3790,23 @@
   .handbook-callout, .handbook-script { break-inside: avoid; border-color: black !important; }
   .handbook-section-number, .handbook-toc-number, .handbook-callout-label { color: black !important; }
 }
+
+/* Live values, copyable templates, and photo figures in the handbook reader. */
+.handbook-live-value { border-bottom: 1px dotted hsl(var(--primary) / .6); font-weight: 600; color: hsl(var(--primary)); cursor: help; }
+.handbook-template { margin: 1rem 0 1.5rem; border: 1px solid hsl(var(--border)); border-radius: var(--radius); background: hsl(var(--card)); overflow: hidden; }
+.handbook-template-bar { display: flex; align-items: center; justify-content: space-between; padding: .4rem .5rem .4rem .9rem; border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--muted) / .5); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: hsl(var(--muted-foreground)); }
+.handbook-template-bar button { display: inline-flex; align-items: center; gap: .35rem; padding: .25rem .6rem; border-radius: calc(var(--radius) - 2px); font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; color: hsl(var(--primary)); }
+.handbook-template-bar button:hover { background: hsl(var(--primary) / .1); }
+.handbook-template pre { margin: 0; padding: .9rem 1rem; overflow-x: auto; font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 1.6; white-space: pre; color: hsl(var(--foreground)); }
+.handbook-figure { margin: 1rem 0 1.5rem; }
+.handbook-figure img { display: block; width: 100%; height: auto; border: 1px solid hsl(var(--border)); border-radius: var(--radius); background: hsl(var(--muted) / .3); }
+.handbook-figure figcaption { margin-top: .4rem; font-size: 12px; line-height: 1.5; color: hsl(var(--muted-foreground)); }
+.handbook-figure-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 1rem; margin: 1rem 0 1.5rem; }
+.handbook-figure-grid .handbook-figure { margin: 0; }
+.handbook-figure-grid img { aspect-ratio: 4 / 3; object-fit: cover; }
+@media print {
+  .handbook-live-value { color: black !important; border-bottom: 0; }
+  .handbook-template { break-inside: avoid; }
+  .handbook-template-bar button { display: none !important; }
+  .handbook-figure { break-inside: avoid; }
+}

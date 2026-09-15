@@ -8,7 +8,6 @@ import {
   feeColumnIndex,
   isFeeTable,
   liveFeeLabel,
-  printedFeeMatches,
 } from '@/lib/handbook-fees';
 
 interface Props {
@@ -23,8 +22,9 @@ interface Props {
 /**
  * Reference table shared by the uploaded-document and published-policy
  * readers. When a table quotes fees by procedure code, each fee cell shows
- * the current office fee schedule figure so the handbook never drifts from
- * the schedule; the printed figure stays visible only where it differs.
+ * the current office fee schedule figure in place of the printed one, so the
+ * handbook never drifts from the schedule; codes the schedule lacks keep
+ * their printed text.
  */
 export default function HandbookReferenceTable({ rows, hasHeader = true, renderText = text => text, id, className = '' }: Props) {
   const feeTable = hasHeader && isFeeTable(rows);
@@ -43,14 +43,7 @@ export default function HandbookReferenceTable({ rows, hasHeader = true, renderT
     const live = liveFeeLabel(codesInCell(row[codeColumn] ?? ''), byCode);
     if (!live) return renderText(printed);
     liveCells++;
-    return (
-      <>
-        <span className="handbook-live-fee">{live}</span>
-        {printed && !printedFeeMatches(printed, live) && (
-          <span className="handbook-printed-fee">Handbook: {renderText(printed)}</span>
-        )}
-      </>
-    );
+    return <span className="handbook-live-fee" title={`Current office fee for ${codesInCell(row[codeColumn] ?? '').join(', ')}`}>{live}</span>;
   };
 
   const bodyRows = body.map((row, rowIndex) => (
@@ -80,7 +73,7 @@ export default function HandbookReferenceTable({ rows, hasHeader = true, renderT
       </div>
       {lookup && liveCells > 0 && (
         <p className="handbook-table-note">
-          Fees come from the office fee schedule ({lookup.scheduleName}) and update whenever it changes. Where the handbook printed a different figure, that figure stays visible for reference.
+          Fees come from the office fee schedule ({lookup.scheduleName}) and update whenever it changes.
           {isManager && <> <Link to="/fof/fees">Open the fee schedule</Link></>}
         </p>
       )}
