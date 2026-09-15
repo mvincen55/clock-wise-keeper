@@ -128,12 +128,16 @@ serve(async (req) => {
     // entry_date is derived inside _record_punch_internal from the punch
     // instant and get_user_timezone — no client-side date math here.
 
-    // Get active work zones for user (RLS enforces ownership)
-    const { data: zones } = await supabase
+    // The fence is the office's, not its creator's: read every active zone
+    // for the caller's own office, the same set classify_clock_location uses
+    // to label a clock-in. The office comes from the employee record above,
+    // never from the client, so this service-role read cannot cross offices.
+    const { data: zones, error: zonesError } = await admin
       .from("work_zones")
       .select("*")
-      .eq("user_id", userId)
+      .eq("org_id", orgId)
       .eq("is_active", true);
+    if (zonesError) throw zonesError;
 
     if (!zones?.length) {
       return new Response(JSON.stringify({
