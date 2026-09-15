@@ -101,6 +101,7 @@ Navigation is a compact destination list; every feature below keeps its own rout
 | `/` | Dashboard (Home) | Role-personalized launchpad: attention items, spotlight, restrained progress summary |
 | `/workplace` | Workplace | Hub: time, attendance, PTO, calendar, policies, goals, training, team |
 | `/playbook` | Playbook | Hub: huddle, checklists, close the day, incidents, FOF, Ask AI |
+| `/playbook/procedures` | PracticeProcedures | Published procedures; until any exist, the procedure sections of the uploaded handbook/SOP documents (`SourceKnowledgeReader`, `src/lib/source-knowledge.ts`) |
 | `/inbox/:tab` | InboxPage | Unified Inbox: Messages, Doctor Requests, Nudges (legacy `/messages`, `/requests`, `/nudges` redirect here) |
 | `/management` | Management | Manager/owner command center: approvals, snapshots, vitals, admin links |
 | `/help` | Help | Help & support surface |
@@ -136,7 +137,7 @@ Navigation is a compact destination list; every feature below keeps its own rout
 | `/deposit-log` | DepositLog | **Close the Day**: the deposit log + branded print sheet, grown into the five-step closeout (money, vitals, local-only Privacy View Capture, staffing reality, seal) — see `docs/close-the-day-spec.md` |
 | `/incident-reports` | IncidentReports | Incident reports with signature/review workflow + print sheet |
 | `/important-numbers` | ImportantNumbers | Office contact directory with tabs |
-| `/handbook` | OfficeHandbook | Office Handbook reader (Workplace policies + HR) over the shared `DocumentLibraryReader`; `/policy-manual` redirects here |
+| `/handbook` | OfficeHandbook | Office Handbook reader (Workplace policies + HR) over the shared `DocumentLibraryReader`; `/policy-manual` redirects here. Deep links `?doc=<id>&section=<block>`; code tables quote the live office fee schedule |
 | `/insurance-desk` | InsuranceDesk | Insurance Desk reader (carrier manuals, Practice Playbook) over the same `DocumentLibraryReader` (`ingest-doc` indexes uploads) |
 | `/morning-huddle` | MorningHuddle | Early stub — intended home for daily team huddle |
 

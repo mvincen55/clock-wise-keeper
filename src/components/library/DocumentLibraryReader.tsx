@@ -1,5 +1,3 @@
-import HandbookSectionLink from '@/components/handbook/HandbookSectionLink';
-import { handbookNumberedHeading } from '@/lib/handbook-section-links';
 /**
  * DocumentLibraryReader — the shared reader behind the Office Handbook and
  * the Insurance Desk (and future SOP/training libraries).
@@ -29,8 +27,10 @@ import { handbookNumberedHeading } from '@/lib/handbook-section-links';
  * (design-token `primary`) marks active navigation, focus, and progress.
  */
 import HandbookHeader from '@/components/handbook/HandbookHeader';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { ReaderBody } from '@/components/library/DocBlockView';
+import { highlighted } from '@/components/library/highlight';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
@@ -73,8 +73,8 @@ import {
   useUpdateDocLibrarySettings,
   type OfficeDoc,
 } from '@/hooks/useOfficeDocs';
+import { useLibraryContents } from '@/hooks/useLibraryContents';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import { parseDocBlocks, type DocBlock } from '@/lib/doc-format';
 import {
   DOC_COLLECTION_LABELS,
   canEditLibraryDocs,
@@ -88,7 +88,6 @@ import {
   sectionAnchorId,
   sectionHeadingForBlock,
   snippetAround,
-  stitchChunks,
   type AiScope,
   type LibraryScope,
   type OutlineItem,
@@ -127,115 +126,6 @@ interface SearchHit {
   content: string;
   rank: number;
 }
-
-/** Render text with every occurrence of the query marked. */
-function highlightMatch(text: string, query: string) {
-  const q = query.trim();
-  if (!q) return text;
-  const parts = text.split(new RegExp(`(${escapeRegExp(q)})`, 'ig'));
-  if (parts.length === 1) return text;
-  return parts.map((part, i) =>
-    part.toLowerCase() === q.toLowerCase() ? (
-      <mark key={i} className="rounded-sm bg-primary/20 px-0.5 text-foreground">
-        {part}
-      </mark>
-    ) : (
-      part
-    )
-  );
-}
-
-/** Source-authored HTTP links only; raw HTML and script URLs stay inert text. */
-function highlighted(text: string, query: string) {
-  return text.split(/(\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g).map((part, index) => {
-    const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
-    return link ? <a key={index} href={link[2]} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">{highlightMatch(link[1], query)}</a> : <span key={index}>{highlightMatch(part, query)}</span>;
-  });
-}
-
-function BlockView({ block, id, query }: { block: DocBlock; id: string; query: string }) {
-  // Anchor offset: below the sticky bars when the window scrolls (mobile),
-  // just inside the pane when the pane scrolls (desktop).
-  const anchor = 'scroll-mt-28 lg:scroll-mt-6';
-  switch (block.type) {
-    case 'heading':
-      return block.level <= 2 ? (
-        <h2
-          id={id}
-          tabIndex={-1}
-          className={`${anchor} mb-3 mt-10 flex items-center gap-2.5 border-b border-border/70 pb-2 text-xl font-bold tracking-tight text-foreground first:mt-0`}
-        >
-          <span aria-hidden className="h-4 w-1 shrink-0 rounded-full bg-primary/60" />
-          <span className="min-w-0">{highlighted(block.text, query)}</span>
-        </h2>
-      ) : (
-        <h3 id={id} tabIndex={-1} className={`${anchor} mb-2 mt-6 text-base font-semibold text-foreground first:mt-0`}>
-          {highlighted(block.text, query)}
-        </h3>
-      );
-    case 'table':
-      return <div id={id} className={`${anchor} handbook-table-wrap`} role="region" aria-label="Reference table" tabIndex={0}>
-        <table className="handbook-reference-table">
-          <thead><tr>{block.rows[0].map((cell, column) => <th scope="col" key={column}>{highlighted(cell, query)}</th>)}</tr></thead>
-          <tbody>{block.rows.slice(1).map((row, index) => <tr key={index}>{row.map((cell, column) => column === 0 ? <th scope="row" key={column}>{highlighted(cell, query)}</th> : <td key={column}>{highlighted(cell, query)}</td>)}</tr>)}</tbody>
-        </table>
-      </div>;
-    case 'bullets':
-      return (
-        <ul id={id} className={`${anchor} mb-4 list-disc space-y-1.5 pl-5 text-[15px] leading-7 marker:text-primary/50`}>
-          {block.items.map((item, j) => (
-            <li key={j}>{highlighted(item, query)}</li>
-          ))}
-        </ul>
-      );
-    case 'numbered':
-      return (
-        <ol id={id} className={`${anchor} mb-4 list-decimal space-y-1.5 pl-5 text-[15px] leading-7 marker:font-medium marker:text-primary/70`}>
-          {block.items.map((item, j) => (
-            <li key={j}>{highlighted(item, query)}</li>
-          ))}
-        </ol>
-      );
-    default:
-      return (
-        <p id={id} className={`${anchor} mb-4 text-[15px] leading-7 text-foreground/90`}>
-          {highlighted(block.text, query)}
-        </p>
-      );
-  }
-}
-
-/**
- * The document body, memoized hard: scrollspy state changes many times per
- * scroll, and re-rendering a 67-section handbook on every tick is exactly
- * the jank this avoids.
- */
-const ReaderBody = memo(function ReaderBody({
-  blocks,
-  highlight,
-  handbook = false,
-}: {
-  blocks: DocBlock[];
-  highlight: string;
-  handbook?: boolean;
-}) {
-  const rendered = [];
-  const renderBlock = (i: number, text?: string) => <BlockView key={i} id={sectionAnchorId(i)} block={text === undefined ? blocks[i] : { type: 'para', text }} query={highlight} />;
-  for (let i = 0; i < blocks.length; i++) {
-    const numbered = handbook ? handbookNumberedHeading(blocks, i) : null;
-    if (numbered) {
-      rendered.push(<h3 key={`numbered-${i}`} id={sectionAnchorId(i)} tabIndex={-1} className="handbook-numbered-heading"><span>{numbered.number}</span> <span id={sectionAnchorId(i + 1)}>{highlighted(numbered.title, highlight)}</span></h3>);
-      rendered.push(<HandbookSectionLink key={`link-${i}`} title={numbered.title} />);
-      i++;
-      continue;
-    }
-    rendered.push(renderBlock(i));
-    const block = blocks[i];
-    if (handbook && block.type === 'heading') rendered.push(<HandbookSectionLink key={`link-${i}`} title={block.text} />);
-
-  }
-  return <div className="max-w-[46rem]">{rendered}</div>;
-});
 
 function tocLabelClass(active: boolean): string {
   return `min-w-0 flex-1 rounded-md px-2 py-1.5 text-left text-[13px] leading-snug transition-colors ${
@@ -619,7 +509,8 @@ export default function DocumentLibraryReader({
   const { data: librarySettings } = useDocLibrarySettings();
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const [selectedId, setSelectedId] = useState<string | null>(params.get('doc'));
   const [readerHighlight, setReaderHighlight] = useState('');
   const [pendingJump, setPendingJump] = useState<{ docId: string; blockIndex: number } | null>(null);
   const [activeSectionId, setActiveSectionId] = useState('');
@@ -642,45 +533,19 @@ export default function DocumentLibraryReader({
   }, [query]);
   const searching = debounced.length >= 3;
 
-  // One fetch of every chunk in scope: feeds the reader, the outlines, and
-  // search-result section resolution. Refreshes only when the library changes.
-  // Re-parsed documents keep multiple parse versions side by side and type
-  // their furniture (headers/footers/TOC rows) — read only the current
-  // version's actual content.
-  const versionByDoc = useMemo(
-    () => new Map(docs.map(d => [d.id, d.current_parse_version ?? 1])),
-    [docs]
-  );
-  const { data: contents, isLoading: contentsLoading } = useQuery({
-    queryKey: ['library-doc-contents', docIds.join(','), [...versionByDoc.values()].join(',')],
-    enabled: docIds.length > 0,
-    staleTime: 10 * 60 * 1000,
-    queryFn: async (): Promise<Map<string, string>> => {
-      const { data, error } = await supabase
-        .from('office_doc_chunks')
-        .select('doc_id, chunk_index, content, chunk_type, parse_version')
-        .in('doc_id', docIds)
-        .not('chunk_type', 'in', '("header","footer","table_of_contents")')
-        .order('doc_id')
-        .order('chunk_index');
-      if (error) throw error;
-      const parts = new Map<string, string[]>();
-      for (const chunk of data ?? []) {
-        if (chunk.parse_version !== (versionByDoc.get(chunk.doc_id) ?? 1)) continue;
-        parts.set(chunk.doc_id, [...(parts.get(chunk.doc_id) ?? []), chunk.content]);
-      }
-      // Stitch, don't join: chunks overlap by design for retrieval, and a
-      // naive join repeats every overlap in the reading pane.
-      return new Map([...parts.entries()].map(([id, list]) => [id, stitchChunks(list)]));
-    },
-  });
+  const { contents, blocksByDoc, isLoading: contentsLoading } = useLibraryContents(docs);
 
-  const blocksByDoc = useMemo(() => {
-    const map = new Map<string, DocBlock[]>();
-    if (!contents) return map;
-    for (const id of docIds) map.set(id, parseDocBlocks(contents.get(id) ?? ''));
-    return map;
-  }, [contents, docIds]);
+  // Deep links from the procedures catalog and elsewhere in the app:
+  // /handbook?doc=<id>&section=<block index> opens that document at that block.
+  useEffect(() => {
+    const docId = params.get('doc');
+    if (!docId || !docs.some(d => d.id === docId)) return;
+    setSelectedId(docId);
+    const section = Number(params.get('section'));
+    if (params.has('section') && Number.isInteger(section) && section >= 0) {
+      setPendingJump({ docId, blockIndex: section });
+    }
+  }, [params, docs]);
 
   const blocks = useMemo(
     () => (activeDoc ? blocksByDoc.get(activeDoc.id) ?? [] : []),
@@ -784,11 +649,12 @@ export default function DocumentLibraryReader({
     setActiveSectionId(
       enclosing.length > 0 ? enclosing[enclosing.length - 1].id : sectionAnchorId(blockIndex)
     );
+    const target = blocks[blockIndex];
     setTimeout(
       () =>
         document
           .getElementById(sectionAnchorId(blockIndex))
-          ?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+          ?.scrollIntoView({ behavior: 'smooth', block: target?.type === 'heading' ? 'start' : 'center' }),
       120
     );
   }, [pendingJump, activeDoc, blocks, outline]);

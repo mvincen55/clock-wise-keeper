@@ -1,4 +1,5 @@
 import { parseDocTableRow } from '@/lib/doc-format';
+import HandbookReferenceTable from '@/components/handbook/HandbookReferenceTable';
 import HandbookSectionLink from '@/components/handbook/HandbookSectionLink';
 import HandbookHeader from '@/components/handbook/HandbookHeader';
 import { escapeRegExp, snippetAround } from '@/lib/doc-library';
@@ -32,8 +33,9 @@ function lines(text: string): string[] {
     .filter(Boolean);
 }
 
+/** Rows of an authored table; a markdown separator line is layout, not data. */
 function tableRows(text: string): string[][] {
-  return lines(text).map(parseDocTableRow);
+  return lines(text).map(parseDocTableRow).filter(row => !row.every(cell => /^:?-+:?$/.test(cell)));
 }
 
 function formatDate(value: string | null): string {
@@ -120,24 +122,8 @@ function KnowledgeBlock({ block, query = '' }: { block: PublishedKnowledgeEntry[
   }
   if (block.block_type === 'table') {
     const rows = tableRows(block.plain_text);
-    const [head, ...body] = rows;
-    if (!head) return null;
-    return (
-      <div className="my-5 overflow-x-auto rounded-lg border">
-        <table className="w-full min-w-[480px] border-collapse text-left text-sm">
-          <thead className="bg-muted/60">
-            <tr>{head.map((cell, index) => <th key={index} className="border-b px-3 py-2.5 font-semibold">{highlight(cell, query)}</th>)}</tr>
-          </thead>
-          <tbody>
-            {body.map((row, rowIndex) => (
-              <tr key={rowIndex} className="border-b last:border-0">
-                {head.map((_, cellIndex) => <td key={cellIndex} className="whitespace-pre-line px-3 py-2.5 align-top">{highlight(row[cellIndex] ?? '', query)}</td>)}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
+    if (rows.length === 0) return null;
+    return <HandbookReferenceTable rows={rows} hasHeader={rows[0].some(Boolean)} renderText={text => highlight(text, query)} />;
   }
   if (block.block_type === 'image') {
     return (
