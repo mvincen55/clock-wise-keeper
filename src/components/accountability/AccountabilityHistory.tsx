@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/table';
 import { ScrollText, Download, FileSpreadsheet, Eye } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatDate, formatTime } from '@/lib/time-utils';
+import { formatDate, formatTime, getToday } from '@/lib/time-utils';
 import { useOrgEmployees } from '@/hooks/useEmployees';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import {
@@ -83,8 +83,12 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
   const { data: ctx } = useOrgContext();
   const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
 
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [from, setFrom] = useState(() => {
+    const day = new Date(getToday() + 'T12:00:00Z');
+    day.setUTCDate(day.getUTCDate() - 29);
+    return day.toISOString().slice(0, 10);
+  });
+  const [to, setTo] = useState(getToday);
   const [kind, setKind] = useState<'all' | PolicyKind>('all');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [pendingFormat, setPendingFormat] = useState<'csv' | 'xlsx' | null>(null);
@@ -238,7 +242,7 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
               />
             </div>
             <div>
-              <Label className="text-xs">Kind</Label>
+              <Label className="text-xs">Report kind</Label>
               <Select value={kind} onValueChange={v => setKind(v as 'all' | PolicyKind)}>
                 <SelectTrigger className="h-9 w-[190px]">
                   <SelectValue />
@@ -299,7 +303,7 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
     </Card>
 
       {isAdmin && (
-        <ReportsAnalyst from={from} to={to} kind={kind} recordCount={closed.length} />
+        <ReportsAnalyst key={`${ctx?.org_id}:${employeeId || 'office'}:${from}:${to}:${kind}`} from={from} to={to} kind={kind} employeeId={employeeId} />
       )}
 
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
@@ -360,4 +364,3 @@ export default function AccountabilityHistory({ employeeId }: { employeeId?: str
     </>
   );
 }
-
