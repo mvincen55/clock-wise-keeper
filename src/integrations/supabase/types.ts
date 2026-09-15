@@ -8962,6 +8962,7 @@ export type Database = {
         Returns: boolean
       }
       conv_created_by: { Args: { _conv: string }; Returns: string }
+      conv_org_id: { Args: { _conv: string }; Returns: string }
       conv_type: { Args: { _conv: string }; Returns: string }
       convert_practice_setup_source: {
         Args: {
@@ -9076,6 +9077,10 @@ export type Database = {
         Returns: boolean
       }
       email_queue_dispatch: { Args: never; Returns: undefined }
+      employee_in_org: {
+        Args: { _employee_id: string; _org_id: string; _user_id?: string }
+        Returns: boolean
+      }
       enqueue_email: {
         Args: { payload: Json; queue_name: string }
         Returns: number
@@ -9935,6 +9940,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      user_in_org: {
+        Args: { _org_id: string; _user_id: string }
+        Returns: boolean
       }
       user_owns_import: { Args: { _import_id: string }; Returns: boolean }
       user_owns_schedule_version: {
