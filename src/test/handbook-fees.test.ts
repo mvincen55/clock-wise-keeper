@@ -49,6 +49,7 @@ describe('fee tables', () => {
     expect(liveFeeLabel(['D9944'], byCode)).toBe('$814');
     expect(liveFeeLabel(['D9944P'], byCode)).toBe('$814');
     expect(liveFeeLabel(['D0140M'], new Map([['D0140', 11900], ['D0140M', 5800]]))).toBe('$58');
+    expect(liveFeeLabel(['1207'], new Map([['1207', 0]]))).toBe('No charge');
     expect(liveFeeLabel(['D4341', 'D4342'], byCode)).toBe('$338 / $264');
     expect(liveFeeLabel(['D4341', 'D0999'], byCode)).toBe('$338 / —');
     expect(liveFeeLabel(codesInCell('D2391 - D2394'), byCode)).toBe('$231 – $449');
