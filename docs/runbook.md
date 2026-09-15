@@ -138,6 +138,21 @@ Exact model in README §Checklist data model and migration
 
 ## 10. AI features misbehaving
 
+- **Record analyst shows zero:** its `preview` action on `reports-analyst` returns
+  evidence version 2, included counts by source, and coverage warnings without
+  making an AI call. The analyst reads attendance days (time rows enriched with
+  attendance status), days off, attendance exceptions, office checklist
+  completions/bypasses, and formal accountability reports. A zero formal-report
+  count does not imply zero attendance. Check the date/source filters. The
+  default range is the last 30 calendar days; clear or widen it for older data.
+  Employee detail retains the selected employee boundary. Personal checklist
+  items/lists are excluded. Source errors must surface as errors, never as zero.
+  Deploy both `reports-analyst` and its `_shared/analyst-evidence.ts` dependency
+  before publishing the frontend; no database migration is needed.
+  `analyst-evidence.test.ts`, `reports-analyst-edge.test.ts`, and
+  `reports-analyst.test.tsx` cover authorization, source scoping,
+  day-off context, period overlap, citation preservation, and loading/error states.
+
 - Assistant taught something wrong → it should be held `pending` by the
   contradiction guard and surfaced on Assistant → Memory & Audit. If a contradicting
   "fact" went live, that guard failed — check `assistant_memories` statuses.

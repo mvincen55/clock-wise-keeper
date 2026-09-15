@@ -2,7 +2,7 @@ import jsPDF from 'jspdf';
 import { formatDate } from '@/lib/time-utils';
 import type { AnalystAudit, AnalystCitation, AnalystConcern } from '@/components/accountability/ReportsAnalyst';
 
-const CITE = /\[rec:([0-9a-fA-F-]{6,})\]/g;
+const CITE = /\[rec:([a-z_]+:[a-p]{6,}|[0-9a-fA-F-]{6,})\]/g;
 
 const CONF_LABEL: Record<AnalystConcern['confidence'], string> = {
   high: 'High confidence',
@@ -27,6 +27,7 @@ export interface AnalystPdfInput {
   citations: AnalystCitation[];
   concerns: AnalystConcern[];
   audit?: AnalystAudit;
+  warnings?: string[];
 }
 
 export function buildAnalystPdf(input: AnalystPdfInput): jsPDF {
@@ -77,7 +78,7 @@ export function buildAnalystPdf(input: AnalystPdfInput): jsPDF {
   y = M;
   text('Record Analyst Summary', { size: 18, bold: true, color: [83, 64, 110], gap: 2 });
   text(
-    `${formatDate(input.from)} - ${formatDate(input.to)}  ·  ${input.kindLabel}  ·  ${input.recordCount} record${input.recordCount === 1 ? '' : 's'}`,
+    `${input.from ? formatDate(input.from) : 'Beginning'} - ${input.to ? formatDate(input.to) : 'Latest record'}  ·  ${input.kindLabel}  ·  ${input.recordCount} record${input.recordCount === 1 ? '' : 's'}`,
     { size: 10, color: [110, 108, 118], gap: 2 },
   );
   text(`Generated ${formatDate(new Date().toISOString().slice(0, 10))} · Purple Envelope`, {
@@ -86,6 +87,8 @@ export function buildAnalystPdf(input: AnalystPdfInput): jsPDF {
   });
   rule();
 
+  for (const warning of input.warnings ?? []) text(warning, { color: [130, 85, 25] });
+
   // Totals
   const byPerson = new Map<string, number>();
   const byKind = new Map<string, number>();
@@ -93,24 +96,24 @@ export function buildAnalystPdf(input: AnalystPdfInput): jsPDF {
     byPerson.set(c.who, (byPerson.get(c.who) ?? 0) + 1);
     byKind.set(c.kind_label, (byKind.get(c.kind_label) ?? 0) + 1);
   }
-  const openCount = input.citations.filter(c => c.status !== 'closed').length;
+  const openCount = input.citations.filter(c => ['awaiting_member','awaiting_manager','awaiting_owner'].includes(c.status)).length;
 
   text('Totals', { size: 13, bold: true, color: [83, 64, 110], gap: 2 });
-  text(`Records in range: ${input.recordCount}`, { indent: 10, gap: 0 });
+  text(`Records included in this analysis: ${input.recordCount}`, { indent: 10, gap: 0 });
   text(`Records cited by the analyst: ${input.citations.length}`, { indent: 10, gap: 0 });
-  text(`Still open / not closed: ${openCount}`, { indent: 10, gap: 0 });
+  text(`Cited reports awaiting review: ${openCount}`, { indent: 10, gap: 0 });
   text(`Concerns flagged: ${input.concerns.length}`, { indent: 10 });
 
   if (byKind.size) {
-    text('By category', { size: 11, bold: true, gap: 2 });
-    for (const [k, n] of [...byKind].sort((a, b) => b[1] - a[1])) {
+    text('Cited records by category', { size: 11, bold: true, gap: 2 });
+    for (const [k, n] of [...byKind].sort((a, b) => a[0].localeCompare(b[0]))) {
       text(`• ${k}: ${n}`, { indent: 10, gap: 0 });
     }
     y += 4;
   }
   if (byPerson.size) {
-    text('By person', { size: 11, bold: true, gap: 2 });
-    for (const [p, n] of [...byPerson].sort((a, b) => b[1] - a[1])) {
+    text('Cited records by person', { size: 11, bold: true, gap: 2 });
+    for (const [p, n] of [...byPerson].sort((a, b) => a[0].localeCompare(b[0]))) {
       text(`• ${p}: ${n}`, { indent: 10, gap: 0 });
     }
     y += 4;
@@ -197,7 +200,7 @@ export function buildAnalystPdf(input: AnalystPdfInput): jsPDF {
         gap: 1,
       });
       text(c.summary, { size: 9, color: [110, 108, 118], indent: 10, gap: 1 });
-      text(`Record ${c.id} · ${c.status.replace(/_/g, ' ')}`, {
+      text(`${c.source_table?.replace(/_/g, ' ') || 'accountability report'} · Record ${c.source_id || c.id} · ${c.status.replace(/_/g, ' ')}`, {
         size: 7.5,
         color: [150, 148, 158],
         indent: 10,
