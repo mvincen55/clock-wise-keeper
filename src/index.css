@@ -3769,3 +3769,24 @@
 @media (max-width: 1023px) { .source-reader-note { margin: 0 24px 24px; } .handbook-logo { height: 40px; } }
 @media (max-width: 480px) { .source-reader-note { margin: 0 16px 20px; } }
 @media print { .handbook-table-note, .source-reader-note, .source-reader-link { display: none !important; } .handbook-live-fee { color: black !important; } }
+
+/* Policy-book numbering, callouts, and quoted scripts in the handbook reader. */
+.handbook-section-number { display: inline-block; min-width: 2.4em; margin-right: .4em; font-family: 'JetBrains Mono', monospace; font-size: .74em; font-weight: 600; letter-spacing: .02em; color: hsl(var(--primary)); }
+.handbook-article h2 .handbook-section-number { min-width: 1.4em; font-size: .8em; }
+.handbook-toc-number { display: inline-block; min-width: 2.3em; margin-right: .35em; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: hsl(var(--muted-foreground)); }
+.handbook-toc [aria-current] .handbook-toc-number { color: inherit; opacity: .85; }
+.handbook-callout { margin: 1rem 0 1.25rem; padding: .85rem 1rem .85rem 1.1rem; border-left: 3px solid hsl(var(--primary)); background: hsl(var(--muted) / .5); border-radius: 0 var(--radius) var(--radius) 0; }
+.handbook-callout-label { display: block; margin-bottom: .2rem; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: hsl(var(--primary)); }
+.handbook-callout p { margin: 0; }
+.handbook-script { margin: 1rem 0 1.25rem; padding: .9rem 1.1rem; border: 1px solid hsl(var(--border)); border-left: 3px solid hsl(var(--primary) / .6); border-radius: var(--radius); background: hsl(var(--card)); }
+.handbook-script-label { display: block; margin-bottom: .3rem; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: hsl(var(--muted-foreground)); }
+.handbook-script p { margin: 0; font-style: italic; }
+.handbook-article h2 { margin-top: 2.75rem; }
+.handbook-article h2:first-child { margin-top: 0; }
+.handbook-cover .handbook-eyebrow { margin-bottom: 6px; }
+.handbook-uploaded .handbook-cover h2 { font-size: 34px; letter-spacing: -.03em; }
+@media (max-width: 1023px) { .handbook-uploaded .handbook-cover h2 { font-size: 28px; } }
+@media print {
+  .handbook-callout, .handbook-script { break-inside: avoid; border-color: black !important; }
+  .handbook-section-number, .handbook-toc-number, .handbook-callout-label { color: black !important; }
+}
