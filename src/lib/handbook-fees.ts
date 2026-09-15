@@ -67,6 +67,9 @@ export function isFeeTable(rows: string[][]): boolean {
   return rows.slice(1).some(row => codesInCell(row[codeColumn] ?? '').length > 0);
 }
 
+/** A zero fee in a reference table reads as the office writes it, not as "$0". */
+export const NO_CHARGE = 'No charge';
+
 /** "$1,569" for whole dollars, "$1,569.50" otherwise. */
 export function formatFee(cents: number): string {
   const dollars = cents / 100;
@@ -84,7 +87,9 @@ export function liveFeeLabel(codes: string[], byCode: FeeByCode): string | null 
   const fees = codes.map(code => feeFor(code, byCode));
   const known = fees.filter((fee): fee is number => typeof fee === 'number');
   if (known.length === 0) return null;
-  if (codes.length === 1 || (known.length === codes.length && new Set(known).size === 1)) return formatFee(known[0]);
+  if (codes.length === 1 || (known.length === codes.length && new Set(known).size === 1)) {
+    return known[0] === 0 ? NO_CHARGE : formatFee(known[0]);
+  }
   if (codes.length >= 3) return `${formatFee(Math.min(...known))} – ${formatFee(Math.max(...known))}`;
   return fees.map(fee => (typeof fee === 'number' ? formatFee(fee) : '—')).join(' / ');
 }
