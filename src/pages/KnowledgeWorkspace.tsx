@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import {
   BookOpenCheck,
   CheckCircle2,
@@ -29,6 +29,9 @@ import {
   type KnowledgeWorkspaceItem,
 } from '@/hooks/useKnowledge';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import { useSourceKnowledge } from '@/hooks/useSourceKnowledge';
+import { resolveDocPlacement } from '@/lib/doc-library';
+import { SOURCE_KIND_LABELS, sectionReadingLink } from '@/lib/source-knowledge';
 import {
   KNOWLEDGE_STATUS_LABELS,
   knowledgeAreaLabel,
@@ -81,8 +84,18 @@ export default function KnowledgeWorkspace() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<KnowledgeWorkspaceItem | null>(null);
 
+  const sources = useSourceKnowledge();
   const items = data?.items ?? [];
   const normalizedQuery = query.trim().toLowerCase();
+  // Sections already written into the uploaded documents: the team can read
+  // them today, and each is a natural starting point for a governed draft.
+  const sourceSections = sources.sections.filter(section =>
+    section.kind !== 'reference' &&
+    (filter === 'all' || (filter === 'handbook' && section.kind === 'policy') || (filter === 'playbook' && section.kind === 'procedure')) &&
+    (!normalizedQuery || section.searchText.includes(normalizedQuery)),
+  );
+  const sourcePolicies = sources.sections.filter(section => section.kind === 'policy').length;
+  const sourceProcedures = sources.sections.filter(section => section.kind === 'procedure').length;
   const filteredItems = items.filter(item => {
     const version = item.workingVersion;
     if (!version) return false;
@@ -370,6 +383,42 @@ export default function KnowledgeWorkspace() {
               </div>
             )}
           </section>
+
+          {sourceSections.length > 0 && (
+            <section className="space-y-3" aria-labelledby="source-sections-heading">
+              <div>
+                <h2 id="source-sections-heading" className="text-lg font-semibold">From your uploaded documents</h2>
+                <p className="text-sm text-muted-foreground">
+                  {sourcePolicies} {sourcePolicies === 1 ? 'policy' : 'policies'} and {sourceProcedures} {sourceProcedures === 1 ? 'procedure' : 'procedures'} are already written into the office documents. The team can read them now; publish a reviewed version here to make it official.
+                </p>
+              </div>
+              <Card>
+                <CardContent className="divide-y p-0">
+                  {sourceSections.map(section => {
+                    const doc = sources.docs.find(candidate => candidate.id === section.docId);
+                    const readingLink = doc ? sectionReadingLink(section, resolveDocPlacement(doc).libraryArea) : null;
+                    const to = section.kind === 'procedure' ? `/playbook/procedures?section=${encodeURIComponent(section.id)}` : readingLink;
+                    return (
+                      <div key={section.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3">
+                        <div className="min-w-0">
+                          <p className="font-medium">{section.title}</p>
+                          <p className="text-xs text-muted-foreground">{[section.part, section.docTitle].filter(Boolean).join(' · ')}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary">{SOURCE_KIND_LABELS[section.kind]}</Badge>
+                          {to && (
+                            <Button asChild size="sm" variant="ghost">
+                              <Link to={to}>Read</Link>
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            </section>
+          )}
         </>
       ) : null}
 

@@ -3,6 +3,7 @@ import { BookOpenCheck, LibraryBig } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import PublishedKnowledgeReader from '@/components/knowledge/PublishedKnowledgeReader';
+import SourceKnowledgeReader from '@/components/knowledge/SourceKnowledgeReader';
 import { useOrgContext } from '@/hooks/useOrgContext';
 
 function ProceduresEmptyState() {
@@ -36,13 +37,21 @@ function ProceduresEmptyState() {
   );
 }
 
+const TITLE = 'Office Procedures';
+const SUBTITLE = 'The repeatable steps for how this dental office performs excellent work.';
+
+/**
+ * Published procedures first. Until an office publishes any, the procedures
+ * already written into its uploaded handbook and procedure documents are
+ * readable here, section by section, instead of an empty page.
+ */
 export default function PracticeProcedures() {
   return (
     <PublishedKnowledgeReader
       area="playbook"
-      title="Office Procedures"
-      subtitle="The repeatable steps for how this dental office performs excellent work."
-      fallback={<ProceduresEmptyState />}
+      title={TITLE}
+      subtitle={SUBTITLE}
+      fallback={<SourceKnowledgeReader kind="procedure" title={TITLE} subtitle={SUBTITLE} empty={<ProceduresEmptyState />} />}
     />
   );
 }

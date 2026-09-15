@@ -7,6 +7,7 @@ import type { PublishedKnowledgeLibrary } from '@/hooks/usePublishedKnowledge';
 const state = vi.hoisted(() => ({ data: undefined as PublishedKnowledgeLibrary | undefined, error: null as Error | null }));
 vi.mock('@/hooks/usePublishedKnowledge', () => ({ usePublishedKnowledge: () => ({ ...state, isLoading: false }) }));
 vi.mock('@/hooks/useOrgContext', () => ({ useOrgContext: () => ({ data: { org_name: 'Example Dental', role: 'employee' } }) }));
+vi.mock('@/hooks/useOrgBranding', () => ({ useOrgBranding: () => ({ data: undefined }) }));
 
 function show() {
   return render(<MemoryRouter><PublishedKnowledgeReader area="handbook" title="Employee Handbook" subtitle="Office policies" fallback={<p>Uploaded handbook</p>} /></MemoryRouter>);
