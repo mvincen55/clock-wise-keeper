@@ -1,8 +1,7 @@
 import {
   Sunrise, ListChecks, Banknote, ShieldAlert, ReceiptText, FileStack,
   DollarSign, Sparkles, ShieldCheck, Phone, CalendarX, FileSignature,
-  Library, Layers, ClipboardList, BookOpenCheck, FileText, GraduationCap,
-  Mail, Wallet,
+  BookOpenCheck, Mail, Wallet,
 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useBrokenApptSettings } from '@/hooks/useBrokenApptSettings';
@@ -12,6 +11,8 @@ import HubLinkGrid, { HubSection } from '@/components/HubLinkGrid';
 // Practice Playbook: how the office performs excellent work (blueprint §2).
 // Blank templates and de-identified configuration only — never patient data.
 // The Broken Appointments entry is labeled per office (module_nav_label).
+// Each document family (letters, consents, FOF) gets ONE door here; its
+// sub-pages live behind that door so this hub never repeats a sub-hub's menu.
 const buildSections = (brokenApptLabel: string): HubSection[] => [
   {
     title: 'Daily Operations',
@@ -25,28 +26,13 @@ const buildSections = (brokenApptLabel: string): HubSection[] => [
     ],
   },
   {
-    title: 'Letters and Notes',
+    title: 'Letters, Forms & Patient Documents',
     links: [
-      { to: '/letters', icon: Mail, label: 'Letters & Notes', description: 'Office correspondence on one canonical letterhead: letters, notes, saved wording, signatures.' },
-      { to: '/letters/write', icon: FileText, label: 'Write on Letterhead', description: 'A one-off office letter — write, preview, print. Nothing patient-specific is stored.' },
-      { to: '/letters/school-work-note', icon: GraduationCap, label: 'School / Work Note', description: 'A fast excuse note for school or work. Temporary details, printed, then cleared.' },
-    ],
-  },
-  {
-    title: 'Forms and Consents',
-    links: [
-      { to: '/consents/complete', icon: ClipboardList, label: 'Complete Forms', description: 'Guided consent packet: select, fill, print, and clear.' },
-      { to: '/consents/library', icon: Library, label: 'Form Library', description: 'Every office consent and instruction form, versioned.' },
-      { to: '/consents/bundles', icon: Layers, label: 'Treatment Bundles', description: 'The forms each treatment needs, in print order.' },
-      { to: '/consents', icon: FileSignature, label: 'Forms & Consents Home', description: 'Dashboard, uploads, builder, and office settings.' },
-    ],
-  },
-  {
-    title: 'Patient Forms',
-    links: [
+      { to: '/letters', icon: Mail, label: 'Letters & Notes', description: 'Write on letterhead, print a school/work note, and reuse saved office letters.' },
+      { to: '/consents', icon: FileSignature, label: 'Forms & Consents', description: 'Consent library, treatment bundles, and the guided packet workflow.' },
       { to: '/fof', icon: ReceiptText, label: 'Financial Options Form', description: 'Prepare treatment financial options. Nothing patient-specific is stored.' },
       { to: '/account-balance', icon: Wallet, label: 'Account Balance Explainer', description: 'Turn a Dentrix ledger into a clear explanation of what the patient owes. Patient information stays on this device and is cleared after use.' },
-      { to: '/fof/templates', icon: FileStack, label: 'Form Templates', description: 'Blank templates and office document styling.', managerOnly: true },
+      { to: '/fof/templates', icon: FileStack, label: 'Form Templates', description: 'Blank FOF templates and office document styling.', managerOnly: true },
       { to: '/fof/fees', icon: DollarSign, label: 'Fee Schedule', description: 'Office fees, plans, and bundles.', managerOnly: true },
     ],
   },
