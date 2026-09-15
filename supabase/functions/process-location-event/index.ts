@@ -106,6 +106,20 @@ serve(async (req) => {
 
     const lowConfidence = accuracy != null && accuracy > 100;
 
+    // A reading the clock-in classifier would not trust (accuracy worse than
+    // 100 m; a desktop browser locating by IP reports 50 km) must not move
+    // anyone across the fence either: no zone decision, no punch, and no
+    // event row, so it cannot reset the enter/exit delay clock that a
+    // trusted reading from the same person's phone is counting on.
+    if (lowConfidence) {
+      return new Response(JSON.stringify({
+        action_taken: "none",
+        zone: null,
+        reason: "low_confidence",
+        confidence_flag: false,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // Resolve employee record for org_id and employee_id
     const { data: empData, error: empError } = await supabase
       .from("employees")
