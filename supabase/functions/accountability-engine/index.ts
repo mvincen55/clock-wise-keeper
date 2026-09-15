@@ -85,6 +85,73 @@ async function draftSummary(
   }
 }
 
+/**
+ * The org-scoped twin of the `sweep_accountability_escalations` database
+ * function: reviews that sat past due + grace move up to the owner, who is
+ * notified. Used for a signed-in admin's on-demand sweep so one office's
+ * button never touches another office's records.
+ */
+async function escalateWithinOrgs(
+  admin: ReturnType<typeof createClient>,
+  orgIds: string[],
+): Promise<number> {
+  if (orgIds.length === 0) return 0;
+  const { data: waiting } = await admin
+    .from("accountability_reports")
+    .select("id, org_id, subject_user_id, review_due_at, policy_id")
+    .eq("status", "awaiting_manager")
+    .in("org_id", orgIds)
+    .not("review_due_at", "is", null);
+  let escalated = 0;
+  for (const r of waiting ?? []) {
+    let afterDays = 2;
+    let target: string | null = "owner";
+    if (r.policy_id) {
+      const { data: policy } = await admin
+        .from("escalation_policies")
+        .select("escalate_after_days, escalate_to")
+        .eq("id", r.policy_id)
+        .maybeSingle();
+      if (policy) {
+        afterDays = Number(policy.escalate_after_days ?? 2);
+        target = (policy.escalate_to as string | null) ?? "owner";
+      }
+    }
+    if (!target) continue;
+    const due = new Date(r.review_due_at as string).getTime();
+    if (Date.now() < due + afterDays * 24 * 3600 * 1000) continue;
+
+    const { error: upErr } = await admin
+      .from("accountability_reports")
+      .update({ status: "awaiting_owner", escalated_at: new Date().toISOString() })
+      .eq("id", r.id)
+      .eq("status", "awaiting_manager");
+    if (upErr) throw upErr;
+
+    const { data: owners } = await admin
+      .from("org_members")
+      .select("user_id")
+      .eq("org_id", r.org_id)
+      .eq("role", "owner")
+      .eq("status", "active")
+      .neq("user_id", r.subject_user_id);
+    for (const o of owners ?? []) {
+      await admin.from("notifications").insert({
+        org_id: r.org_id,
+        recipient_user_id: o.user_id,
+        notification_type: "accountability_escalation",
+        title: "A review has been sitting",
+        message:
+          "This review has sat past its due date and needs a look. The record is waiting on a sign-off.",
+        related_table: "accountability_reports",
+        related_id: r.id,
+      });
+    }
+    escalated += 1;
+  }
+  return escalated;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -130,10 +197,13 @@ Deno.serve(async (req) => {
   try {
     if (action === "sweep") {
       // 1) Remind whoever holds the review, once per day, before it moves up.
-      const { data: pending } = await admin
+      //    Cron sweeps every office; a signed-in admin sweeps only theirs.
+      let pendingQuery = admin
         .from("accountability_reports")
         .select("id, org_id, review_due_at, subject_user_id")
         .eq("status", "awaiting_manager");
+      if (callerOrgIds) pendingQuery = pendingQuery.in("org_id", callerOrgIds);
+      const { data: pending } = await pendingQuery;
 
       let reminded = 0;
       for (const r of pending ?? []) {
@@ -174,15 +244,26 @@ Deno.serve(async (req) => {
         }
       }
 
-      // 2) Push idle reviews up the chain (owner-only visibility).
-      const { data: escalated, error } = await admin.rpc(
-        "sweep_accountability_escalations",
-      );
-      if (error) throw error;
+      // 2) Push idle reviews up the chain (owner-only visibility). The
+      //    database sweep is global, so only cron may run it; an admin's
+      //    on-demand sweep escalates the same way but inside their org only.
+      if (isCron) {
+        const { data: escalated, error } = await admin.rpc(
+          "sweep_accountability_escalations",
+        );
+        if (error) throw error;
+        return json({ ok: true, reminded, escalated });
+      }
+      const escalated = await escalateWithinOrgs(admin, callerOrgIds ?? []);
       return json({ ok: true, reminded, escalated });
     }
 
     // ---- scan ----
+    // A signed-in admin may only scan an office they administer. A requested
+    // org_id outside that set is refused rather than silently widened.
+    if (callerOrgIds && body.org_id && !callerOrgIds.includes(body.org_id)) {
+      return json({ error: "That office is not yours to scan" }, 403);
+    }
     let policyQuery = admin
       .from("escalation_policies")
       .select("*")
@@ -278,6 +359,6 @@ Deno.serve(async (req) => {
   } catch (e) {
     const msg = (e as Error).message;
     console.error("accountability-engine failed:", msg);
-    return json({ error: "Accountability engine failed", details: msg }, 500);
+    return json({ error: "Accountability engine failed" }, 500);
   }
 });

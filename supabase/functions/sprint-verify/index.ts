@@ -186,6 +186,11 @@ Deno.serve(async (req) => {
 
     // action === "document"
     if (!docPath) return json({ error: "Upload the report first." }, 400);
+    // Uploads live at <org>/<sprint>/<file>; a path outside this sprint's own
+    // folder is never opened or purged, whoever asks.
+    if (!docPath.startsWith(`${sprint.org_id}/${sprint.id}/`) || docPath.includes("..")) {
+      return json({ error: "That upload does not belong to this sprint." }, 403);
+    }
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!apiKey) return json({ error: "Document reading is not configured yet." }, 500);
 

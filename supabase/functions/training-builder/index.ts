@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
       await guardAiInput({
         orgId,
         actorUserId: user.id,
-        surface: "training-roleplay",
+        surface: "training-builder",
         input: [topic, ...audience].join(" \n "),
       })
     ) {
