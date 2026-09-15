@@ -26,7 +26,7 @@ describe('BlockView', () => {
     expect(document.querySelectorAll('.handbook-callout, .handbook-script')).toHaveLength(0);
     expect(document.querySelectorAll('p')).toHaveLength(2);
   });
-  it('numbers headings from the outline while leaving self-numbered ones alone', () => {
+  it('numbers headings from the outline and shows a self-numbered heading with its own number', () => {
     const blocks = parseDocBlocks(['## Employee Policies', '### Attendance Policy', 'Arrive on time.', '#### 1. Work Schedule', '- Be ready.'].join('\n'));
     const outline = outlineFromBlocks(blocks);
     const byId = outlineNumbers(outline);
@@ -34,7 +34,7 @@ describe('BlockView', () => {
     render(<MemoryRouter><ReaderBody blocks={blocks} highlight="" handbook numbers={numbers} /></MemoryRouter>);
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('1Employee Policies');
     expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('1.1Attendance Policy');
-    expect(screen.getByRole('heading', { level: 4 })).toHaveTextContent('1. Work Schedule');
-    expect(screen.getByRole('heading', { level: 4 }).querySelector('.handbook-section-number')).toBeNull();
+    expect(screen.getByRole('heading', { level: 4 })).toHaveTextContent('1Work Schedule');
+    expect(screen.getByRole('heading', { level: 4 }).querySelector('.handbook-section-number')).toHaveTextContent('1');
   });
 });

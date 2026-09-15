@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseDocBlocks } from '@/lib/doc-format';
-import { isSelfNumbered, outlineFromBlocks, outlineNumbers } from '@/lib/doc-library';
+import { headingTitle, isSelfNumbered, outlineFromBlocks, outlineNumbers, ownHeadingNumber } from '@/lib/doc-library';
 
 // Synthetic outline only.
 const outline = outlineFromBlocks(parseDocBlocks([
@@ -16,11 +16,22 @@ describe('outlineNumbers', () => {
     expect(byText).toEqual({
       Welcome: '1', Mission: '1.1', 'Team Agreement': '1.2',
       'Employee Policies': '2', 'Emergency Plan': '2.1', 'Bloodborne Pathogens': '2.1.1', 'Attendance Policy': '2.2',
-      '1. Work Schedule': null, '2. Huddle': null,
+      '1. Work Schedule': '1', '2. Huddle': '2',
       Reference: '3', Codes: '3.1',
     });
   });
-  it('leaves headings that already carry a number alone, roman numerals included', () => {
+  it('gives a heading that carries its own number that number, so it is never numbered twice', () => {
+    expect(ownHeadingNumber('2.11.3 Complaints of Sexual Harassment')).toBe('2.11.3');
+    expect(ownHeadingNumber('IV. Sexual Harassment Investigation')).toBe('IV');
+    expect(ownHeadingNumber('1) Work Schedule')).toBe('1');
+    expect(ownHeadingNumber('I agree to be present')).toBeNull();
+    expect(headingTitle('2.11.3 Complaints of Sexual Harassment')).toBe('Complaints of Sexual Harassment');
+    expect(headingTitle('IV. Sexual Harassment Investigation')).toBe('Sexual Harassment Investigation');
+    expect(headingTitle('X-rays and Imaging')).toBe('X-rays and Imaging');
+    const numbered = outlineFromBlocks(parseDocBlocks(['# Employee Policies', '## 2.10 Equal Employment Opportunity', '## 2.11 Sexual Harassment Policy', '### 2.11.1 Introduction', '### Acknowledgment'].join('\n')));
+    expect([...outlineNumbers(numbered).values()]).toEqual(['1', '2.10', '2.11', '2.11.1', '1.2.2']);
+  });
+  it('recognizes headings that already carry a number, roman numerals included', () => {
     expect(isSelfNumbered('IV. Sexual Harassment Investigation')).toBe(true);
     expect(isSelfNumbered('2.3 Fees')).toBe(true);
     expect(isSelfNumbered('Sequence A: Prophy')).toBe(false);
