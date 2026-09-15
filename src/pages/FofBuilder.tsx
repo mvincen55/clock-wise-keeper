@@ -77,6 +77,7 @@ import {
 } from '@/hooks/useFeeSchedules';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { computeFof } from '@/lib/fof/compute';
+import { suggestedPaymentLabels } from '@/lib/fof/payment-engine';
 import { useFofOfficeGuidance } from '@/hooks/useFofOfficeGuidance';
 import type { CurrentFofContext } from '@/lib/fof/current-form-assistant';
 import { readLocalTreatment, type LocalTreatmentRow } from '@/lib/fof/local-treatment-import';
@@ -93,7 +94,7 @@ import {
 import { categorizeCdtCode } from '@/lib/fof/cdt';
 import { resolvePatientName } from '@/lib/fof/cdt-names';
 import { computeFofDiscounts } from '@/lib/fof/discounts';
-import { safeProcedureLabel } from '@/lib/fof/ai';
+import { buildNameVisitsPayload, safeProcedureLabel } from '@/lib/fof/ai';
 import {
   buildVisitSchedule,
   DAY_OF_SERVICE_THRESHOLD_CENTS,
@@ -462,7 +463,7 @@ export default function FofBuilder() {
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
   const [bundleName, setBundleName] = useState('');
   const officeGuidance = useFofOfficeGuidance();
-  const aiNaming = officeGuidance.isFetching;
+  const [aiNaming, setAiNaming] = useState(false);
   const [doctorName, setDoctorName] = useState(FOF_NO_DOCTOR);
   useEffect(() => {
     const doctors = practice?.doctorNames ?? [];
@@ -1106,7 +1107,11 @@ export default function FofBuilder() {
     const builderLine = state.lines.find(l => l.key === entry.key)!;
     const recipe = officeGuidance.data?.recipes.find(recipe => recipe.code === entry.line.code.toUpperCase() && recipe.scheduleId === officeSchedule?.id);
     return {
-      id: entry.key, code: entry.line.code, visit: builderLine.visit,
+      // The payment groups must see the same appointment number the office
+      // copy prints: the typed Visit #, else the stage suggested from the
+      // code. Feeding only the typed text left every untyped line in its
+      // own group, which fragmented the schedule into one phase per code.
+      id: entry.key, code: entry.line.code, visit: String(entry.visit),
       groupingHint: recipe?.grouping, guidance: recipe ? { title: recipe.title, summary: recipe.summary, sourceId: recipe.sourceId, classification: recipe.classification } : undefined,
       tooth: builderLine.tooth, procedureLabel: builderLine.description.trim() || safeProcedureLabel(entry.line.code) || undefined,
       classification: classificationQuery.data?.[entry.line.code] ?? 'review' as const,
@@ -1120,12 +1125,126 @@ export default function FofBuilder() {
   const legacyOverrideReview = !!paymentPolicy && (state.installmentOverrides.some(Boolean) || state.installmentLabelOverrides.some(Boolean) || !!state.paymentCountOverride);
   const policyBlocked = policyQuery.isLoading || !!policyQuery.error || (!!paymentPolicy && (classificationQuery.isLoading || !!classificationQuery.error || legacyOverrideReview || !!paymentEditor.model?.schedule.issues.length));
 
-  // Refresh office-wide guidance only. No part of this form enters the request.
+  // AI pass over the payment names and treatment wording. HIPAA: the
+  // request is built ONLY from CDT codes, code-derived labels, and
+  // strictly-validated tooth numbers (src/lib/fof/ai.ts) — staff-typed
+  // descriptions, edited labels, patient fields, and dollar amounts never
+  // leave the browser. The doctor name comes from the org's fof_settings
+  // dropdown, never free text.
+  const aiCall = async (wantTreatment: boolean) => {
+    if (!computation) return null;
+    const byVisit = new Map<number, { code: string; tooth: string }[]>();
+    for (const l of state.lines) {
+      if (!l.code.trim()) continue;
+      byVisit.set(effectiveVisit(l), [
+        ...(byVisit.get(effectiveVisit(l)) ?? []),
+        { code: l.code, tooth: l.tooth },
+      ]);
+    }
+    const visitEntries = [...byVisit.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([, entries]) => entries);
+    // Display slot labels can embed typed descriptions (custom codes
+    // fall back to them), so the AI slots are REBUILT from the
+    // code-derived safeLabels — same schedule structure, safe wording.
+    const safeSchedule =
+      rawVisitPlan?.key === 'visitSchedule' && visitWork
+        ? buildVisitSchedule(
+            schedulePortion,
+            visitWork.map(v => ({
+              label: v.safeLabel,
+              feeCents: v.feeCents,
+              dueAtVisitCents: v.dueAtVisitCents,
+            }))
+          )
+        : null;
+    const autoSlots = paymentPolicy
+      ? computation.installmentLabels.map((_, i) => `Payment ${i + 1}`)
+      : safeSchedule?.labels ?? rawVisitPlan?.labels ?? computation.installmentLabels;
+    const { data, error } = await supabase.functions.invoke('name-visits', {
+      body: {
+        ...buildNameVisitsPayload(visitEntries, autoSlots),
+        wantTreatment,
+        // "No specific doctor" → empty name; the AI writes as "we".
+        doctorName: doctorName === FOF_NO_DOCTOR ? '' : doctorName,
+      },
+    });
+    if (error) throw new Error(error.message);
+    return { data, slotCount: autoSlots.length };
+  };
+
   const aiNamePayments = async () => {
+    const requestedSchedule = paymentEditor.model?.schedule;
+    setAiNaming(true);
+    try {
+      const result = await aiCall(false);
+      if (!result) return;
+      const names: string[] = result.data?.names ?? [];
+      if (names.length !== result.slotCount) {
+        throw new Error('AI returned an unexpected number of names');
+      }
+      if (paymentPolicy && requestedSchedule) {
+        paymentEditor.update(s => ({ ...s, overrides: suggestedPaymentLabels(requestedSchedule, s.overrides, names) }));
+        toast.success('Suggested names added; existing staff wording is preserved');
+        return;
+      }
+      names.forEach((name, i) =>
+        dispatch({ type: 'setInstallmentLabel', index: i, value: name })
+      );
+      toast.success('Payment names updated — edit any of them freely');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'AI naming failed');
+    } finally {
+      setAiNaming(false);
+    }
+  };
+
+  // Refresh office-wide code-bank guidance only. No part of this form
+  // enters that request.
+  const refreshGuidance = async () => {
     const result = await officeGuidance.refetch();
     if (result.error) toast.error('Code-bank guidance could not be refreshed. Existing rules remain in use.');
     else toast.success('Code-bank guidance refreshed. Staff corrections on this form are preserved.');
   };
+
+  // Auto-polish: once the treatment settles (2.5s of quiet), AI rewords
+  // the treatment summary like a human and names the payments — silently,
+  // and never overwriting anything staff already typed.
+  const aiSignature = useMemo(
+    () =>
+      JSON.stringify([
+        doctorName,
+        state.lines.map(l => [l.code, l.tooth, l.description, l.visit, l.feeInput]),
+      ]),
+    [state.lines, doctorName]
+  );
+  const [aiText, setAiText] = useState<{ signature: string; treatment: string } | null>(null);
+  const aiRanForRef = useRef<string>('');
+  useEffect(() => {
+    if (feeLines.length === 0 || importing || !computation) return;
+    if (aiRanForRef.current === aiSignature) return;
+    const timer = setTimeout(async () => {
+      aiRanForRef.current = aiSignature;
+      try {
+        const result = await aiCall(true);
+        if (!result) return;
+        if (typeof result.data?.treatment === 'string' && result.data.treatment.trim() !== '') {
+          setAiText({ signature: aiSignature, treatment: result.data.treatment.trim() });
+        }
+        const names: string[] = result.data?.names ?? [];
+        const noManualNames = state.installmentLabelOverrides.every(l => !l || l.trim() === '');
+        if (!paymentPolicy && names.length === result.slotCount && noManualNames) {
+          names.forEach((name, i) =>
+            dispatch({ type: 'setInstallmentLabel', index: i, value: name })
+          );
+        }
+      } catch {
+        // Silent — the auto wording is a bonus, never an error state.
+      }
+    }, 2500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiSignature, feeLines.length, importing]);
 
   // The reminder every import path goes through — no patient info in the
   // image, ever.
@@ -1280,9 +1399,10 @@ export default function FofBuilder() {
   // staff edits it, then their wording sticks.
   const noteEdited = state.noteEdited === 'yes';
   const guidedGroups = paymentEditor.model?.groups ?? [];
-  const aiTreatment = policyLines.some(line => line.guidance) && guidedGroups.length
+  const guidedTreatment = policyLines.some(line => line.guidance) && guidedGroups.length
     ? 'Your treatment includes ' + guidedGroups.map(group => group.label).join(', ') + '.'
     : '';
+  const aiTreatment = (aiText && aiText.signature === aiSignature ? aiText.treatment : '') || guidedTreatment;
   const printedTreatment = noteEdited ? state.note : aiTreatment || autoTreatment;
 
   // Current form facts never leave this component tree or enter AI requests.
@@ -2245,7 +2365,7 @@ export default function FofBuilder() {
                       />
                     </>
                   )}
-                  {paymentPolicy && <><p className="text-sm text-muted-foreground" role="status">{officeGuidance.isFetching ? 'Reading office code-bank guidance…' : officeGuidance.error ? 'Code-bank guidance is unavailable. Existing office payment rules remain in use; you can refresh and review again.' : officeGuidance.data?.recipes.length ? 'Treatment wording and grouping are drafted from office code-bank notes. Review the draft and correct this form as needed.' : 'No office code-bank guidance is available yet. The saved payment classifications and office payment rules are in use.'}</p>{officeGuidance.data?.warnings.map((warning, i) => <p key={i} className="text-sm text-amber-700">{warning}</p>)}<PaymentScheduleEditor editor={paymentEditor} /><Button variant="outline" disabled={aiNaming || feeLines.length === 0 || policyBlocked} onClick={aiNamePayments}>Refresh code-bank guidance</Button></>}
+                  {paymentPolicy && <><p className="text-sm text-muted-foreground" role="status">{officeGuidance.isFetching ? 'Reading office code-bank guidance…' : officeGuidance.error ? 'Code-bank guidance is unavailable. Existing office payment rules remain in use; you can refresh and review again.' : officeGuidance.data?.recipes.length ? 'Treatment wording and grouping are drafted from office code-bank notes. Review the draft and correct this form as needed.' : 'No office code-bank guidance is available yet. The saved payment classifications and office payment rules are in use.'}</p>{officeGuidance.data?.warnings.map((warning, i) => <p key={i} className="text-sm text-amber-700">{warning}</p>)}<PaymentScheduleEditor editor={paymentEditor} /><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={aiNaming || feeLines.length === 0 || policyBlocked} onClick={aiNamePayments}>Suggest payment names</Button><Button variant="outline" disabled={officeGuidance.isFetching || feeLines.length === 0} onClick={refreshGuidance}>Refresh code-bank guidance</Button></div></>}
                   {policyBlocked && <p role="alert" className="text-destructive">Payment policy review is required before printing. Check policy loading, classifications, adjustments, and saved overrides.</p>}
                   {(effectiveTemplate!.showInstallmentOption || legacyOverrideReview) && (
                     <>
@@ -2282,14 +2402,14 @@ export default function FofBuilder() {
                           size="sm"
                           disabled={aiNaming || feeLines.length === 0}
                           onClick={aiNamePayments}
-                          title="Refresh office-wide code-bank guidance; no form details are sent"
+                          title="Have AI suggest friendlier payment names — edit freely after"
                         >
                           {aiNaming ? (
                             <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                           ) : (
                             <Sparkles className="h-3.5 w-3.5 mr-1.5" />
                           )}
-                          Code-bank guidance
+                          AI names
                         </Button>
                       </div>
                       {computation.computed.installmentsCents.map((cents, i) => (
