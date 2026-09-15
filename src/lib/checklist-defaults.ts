@@ -149,3 +149,15 @@ export const DEFAULT_CHECKLISTS: ChecklistSeed[] = [
     ],
   },
 ];
+
+/**
+ * The checklist a deep link names (?list=manager): the first whose name
+ * starts with the word, else the first containing it, so "clinical" opens
+ * "Clinical — Assistant" and an office's own sheet names still match.
+ */
+export function checklistNamed<T extends { name: string }>(lists: T[], name: string | null | undefined): T | undefined {
+  const needle = (name ?? '').trim().toLowerCase();
+  if (!needle) return undefined;
+  const lower = (list: T) => list.name.trim().toLowerCase();
+  return lists.find(list => lower(list).startsWith(needle)) ?? lists.find(list => lower(list).includes(needle));
+}
