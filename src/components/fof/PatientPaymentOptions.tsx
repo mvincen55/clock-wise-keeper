@@ -30,10 +30,10 @@ export function PatientPaymentOptions({ schedule, computation, template, prepayM
       <div className="fof-prepay-price"><strong>{formatCents(effective.prepayTotalCents)}</strong><span>Total with prepay</span></div>
     </div>}
     {template.showInstallmentOption && <div className="fof-phase-schedule">
-      <div className="fof-payment-plan-head"><div className="fof-payment-kicker">{both ? 'Option 2 · ' : ''}Pay as treatment progresses</div><span>Payment schedule</span></div>
+      <div className="fof-payment-plan-head"><div className="fof-payment-kicker">{both ? 'Option 2 · ' : ''}Pay as treatment progresses</div><span>{schedule.rows.length === 1 ? '1 payment' : `${schedule.rows.length} payments`} · each due at the visit named</span></div>
       {sections.map((section, index) => <div className="fof-payment-phase" key={`${section.key}:${index}`}>
         <div className="fof-payment-phase-name">{section.title}</div>
-        <div className="fof-payment-milestones" style={{gridTemplateColumns:`repeat(${Math.min(section.rows.length,3)},minmax(0,1fr))`}}>{section.rows.map(row => <div className="fof-payment-milestone" key={row.id} data-payment-event={row.id}><span>{row.label}</span><strong>{formatCents(row.cents)}</strong></div>)}</div>
+        <div className="fof-payment-milestones">{section.rows.map(row => <div className="fof-payment-milestone" key={row.id} data-payment-event={row.id}><span>{row.label}</span><strong>{formatCents(row.cents)}</strong></div>)}</div>
       </div>)}
       <div className="fof-payment-plan-total"><span>Total on payment plan</span><strong>{formatCents(schedule.remainingCents)}</strong></div>
     </div>}

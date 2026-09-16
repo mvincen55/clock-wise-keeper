@@ -66,7 +66,10 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
     for (const group of groups.values()) {
       const members = source.filter(line => procedures.find(p => p.id === line.id)?.groupId === group.id && line.responsibilityCents > 0);
       const labels = [...new Set(members.map(line => line.guidance?.title || line.procedureLabel?.trim()).filter(Boolean))];
-      const teeth = [...new Set(members.flatMap(line => (line.tooth ?? '').trim().split(/[\s,;/]+/)).filter(Boolean).map(tooth => tooth.replace(/^#/, '').toUpperCase()))];
+      // Teeth read in mouth order (#5, #7, #9…), letters after numbers, however the rows were entered.
+      const toothOrder = (tooth: string) => /^\d+$/.test(tooth) ? Number(tooth) : 100 + tooth.charCodeAt(0);
+      const teeth = [...new Set(members.flatMap(line => (line.tooth ?? '').trim().split(/[\s,;/]+/)).filter(Boolean).map(tooth => tooth.replace(/^#/, '').toUpperCase()))]
+        .sort((a, b) => toothOrder(a) - toothOrder(b) || a.localeCompare(b));
       const treatment = labels.length > 0 && labels.length <= 2 ? labels.join(' + ') : patientClassTitle[group.classification];
       const numberedTeeth = teeth.map(tooth => `#${tooth}`);
       const toothLabel = numberedTeeth.length > 1 ? `${numberedTeeth.slice(0, -1).join(', ')} and ${numberedTeeth.at(-1)}` : numberedTeeth[0];
