@@ -10,7 +10,7 @@ export interface ScheduleSourceLine { id: string; code: string; visit: string; t
 type LineEdit = { classification?: PaymentClass | 'review'; group?: string; adjustment?: string; paid?: string; deliveryGroup?: string };
 type EditorState = { lines: Record<string, LineEdit>; groups: Record<string, Partial<PaymentGroup>>; events: Record<string, Partial<CollectionEvent>>; extraEvents: CollectionEvent[]; overrides: Record<string, PaymentOverride> };
 const empty = (): EditorState => ({ lines: {}, groups: {}, events: {}, extraEvents: [], overrides: {} });
-const classTitle: Record<PaymentClass | 'review', string> = { workup: 'Work-up', implant: 'Implant surgery', restoration: 'Crown / bridge / implant restoration', denture: 'Denture / partial', other: 'Treatment without delivery', review: 'Needs classification' };
+export const classTitle: Record<PaymentClass | 'review', string> = { workup: 'Work-up', implant: 'Implant surgery', restoration: 'Crown / bridge / implant restoration', denture: 'Denture / partial', other: 'Treatment without delivery', review: 'Needs classification' };
 const classOrder = { workup: 0, implant: 1, restoration: 2, denture: 2, other: 1, review: 3 };
 const patientClassTitle = { workup: 'Work-up', implant: 'Implant surgery', restoration: 'Restoration', denture: 'Denture / partial', other: 'Treatment', review: 'Treatment' };
 

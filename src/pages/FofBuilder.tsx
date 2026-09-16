@@ -82,7 +82,8 @@ import { useFofOfficeGuidance } from '@/hooks/useFofOfficeGuidance';
 import type { CurrentFofContext } from '@/lib/fof/current-form-assistant';
 import { readLocalTreatment, type LocalTreatmentRow } from '@/lib/fof/local-treatment-import';
 import { useFofPolicySettings, usePaymentClassifications } from '@/hooks/useFofPolicySettings';
-import { PaymentScheduleEditor, usePaymentScheduleEditor } from '@/components/fof/PaymentScheduleEditor';
+import { PaymentScheduleEditor, classTitle, usePaymentScheduleEditor } from '@/components/fof/PaymentScheduleEditor';
+import { suggestPaymentClass } from '@/lib/fof/suggest-class';
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
 import { resolveImportedFee } from '@/lib/fof/import-fee';
 import {
@@ -457,6 +458,11 @@ export default function FofBuilder() {
   });
   const toggleSection = (key: string) =>
     setCollapsed(c => ({ ...c, [key]: !c[key] }));
+  const amountsRef = useRef<HTMLDivElement>(null);
+  const openAmounts = () => {
+    setCollapsed(c => ({ ...c, amounts: false }));
+    setTimeout(() => amountsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+  };
   // Table-of-allowance plans: a second schedule holding the set dollar
   // amounts the plan pays per code (patient owes the difference).
   const [payScheduleId, setPayScheduleId] = useState<string>(NO_SCHEDULE);
@@ -1124,6 +1130,25 @@ export default function FofBuilder() {
   const computation = effectiveTemplate ? computeFof(effectiveTemplate, amounts, overrides, visitPlan, paymentEditor.model?.schedule) : null;
   const legacyOverrideReview = !!paymentPolicy && (state.installmentOverrides.some(Boolean) || state.installmentLabelOverrides.some(Boolean) || !!state.paymentCountOverride);
   const policyBlocked = policyQuery.isLoading || !!policyQuery.error || (!!paymentPolicy && (classificationQuery.isLoading || !!classificationQuery.error || legacyOverrideReview || !!paymentEditor.model?.schedule.issues.length));
+  // Why the preview is paused, in the preview itself — the detailed editor
+  // lives in a section that starts collapsed, so a silent blank preview
+  // used to be the only signal that a code needed a classification.
+  const reviewReasons: string[] = policyQuery.isLoading || (!!paymentPolicy && classificationQuery.isLoading)
+    ? ['Loading the office payment policy…']
+    : policyQuery.error || classificationQuery.error
+      ? ['The office payment policy could not be loaded. Reload the page or ask a manager to check FOF Settings.']
+      : [
+          ...(legacyOverrideReview ? ['Previous payment overrides are still on this form. Open Amounts & Payment Plan and use Reset all to clear them.'] : []),
+          ...new Set(paymentEditor.model?.schedule.issues ?? []),
+        ];
+  // Paid lines the office registry has not classified yet: offer the CDT-range
+  // suggestion as a one-click, form-only decision (staff can change it in the
+  // editor; a manager saves office-wide classifications in the registry).
+  const unclassifiedLines = paymentPolicy && !policyQuery.isLoading && !classificationQuery.isLoading
+    ? paymentEditor.source.filter(line => line.responsibilityCents > 0 && (paymentEditor.state.lines[line.id]?.classification ?? line.classification ?? 'review') === 'review')
+    : [];
+  const classifyForForm = (id: string, classification: ReturnType<typeof suggestPaymentClass>) =>
+    paymentEditor.update(s => ({ ...s, lines: { ...s.lines, [id]: { ...s.lines[id], classification } } }));
 
   // AI pass over the payment names and treatment wording. HIPAA: the
   // request is built ONLY from CDT codes, code-derived labels, and
@@ -2360,7 +2385,7 @@ export default function FofBuilder() {
             </Card>
 
             {computation && (
-              <Card>
+              <Card ref={amountsRef}>
                 <SectionHeader
                   title="Amounts & Payment Plan"
                   open={!collapsed.amounts}
@@ -2539,7 +2564,30 @@ export default function FofBuilder() {
               <CardTitle className="text-base">Print Preview</CardTitle>
             </CardHeader>
             <CardContent>
-              <ScaledPrintPreview>{sheet}</ScaledPrintPreview>
+              {policyBlocked && effectiveTemplate ? (
+                <div role="alert" className="space-y-3 rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
+                  <p className="font-semibold">Preview paused: the payment schedule needs a decision before this form can print.</p>
+                  <ul className="list-disc space-y-1 pl-5">
+                    {reviewReasons.map(reason => <li key={reason}>{reason}</li>)}
+                  </ul>
+                  {unclassifiedLines.map(line => {
+                    const suggested = suggestPaymentClass(line.code);
+                    return (
+                      <div key={line.id} className="flex flex-wrap items-center gap-2">
+                        <span>{line.code || 'This procedure'} has no saved payment classification (a manager can add one for the whole office in FOF Settings).</span>
+                        <Button type="button" size="sm" onClick={() => classifyForForm(line.id, suggested)}>
+                          Use {classTitle[suggested]} for this form
+                        </Button>
+                      </div>
+                    );
+                  })}
+                  <Button type="button" variant="outline" size="sm" onClick={openAmounts}>
+                    Open Amounts &amp; Payment Plan
+                  </Button>
+                </div>
+              ) : (
+                <ScaledPrintPreview>{sheet}</ScaledPrintPreview>
+              )}
             </CardContent>
           </Card>
         </div>
