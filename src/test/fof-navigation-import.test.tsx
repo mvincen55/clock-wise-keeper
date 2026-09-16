@@ -22,6 +22,7 @@ vi.mock('@/hooks/useFofTemplates', () => ({ useFofTemplates: () => ({ data: LIVE
 vi.mock('@/hooks/useOrgBranding', () => ({ useOrgBranding: () => ({ data: PRACTICE_DEFAULT_BRANDING }) }));
 vi.mock('@/hooks/useFeeSchedules', () => ({
   useFeeSchedules: () => ({ data: [] }), useCodeNames: () => ({ data: {} }), useFeeScheduleItems: () => ({ data: [] }),
+  useInsurancePlans: () => ({ data: [] }),
   useProcedureBundles: () => ({ data: [] }), useSaveProcedureBundle: () => ({}), useDeleteProcedureBundle: () => ({}),
 }));
 vi.mock('@/components/fof/FofAssistantWidget', () => ({ default: () => null }));

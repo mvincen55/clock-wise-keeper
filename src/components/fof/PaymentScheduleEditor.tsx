@@ -7,7 +7,14 @@ import { Button } from '@/components/ui/button';
 import { treatmentGroupIds } from '@/lib/fof/treatment-groups';
 
 export interface ScheduleSourceLine { id: string; code: string; visit: string; tooth?: string; procedureLabel?: string; responsibilityCents: number; classification?: PaymentClass | 'review'; groupingHint?: 'same_tooth' | 'same_visit' | 'separate'; guidance?: { title: string; summary: string; sourceId: string; classification: PaymentClass | 'review' } }
-type LineEdit = { classification?: PaymentClass | 'review'; group?: string; adjustment?: string; paid?: string; deliveryGroup?: string };
+/** Per-line staff decisions. `code` records which procedure the decision was
+ * made for: a row retyped to a different code drops its old decisions instead
+ * of carrying a classification (or adjustment) meant for another procedure. */
+type LineEdit = { code?: string; classification?: PaymentClass | 'review'; group?: string; adjustment?: string; paid?: string; deliveryGroup?: string };
+const editFor = (edits: Record<string, LineEdit>, line: { id: string; code: string }): LineEdit => {
+  const edit = edits[line.id];
+  return edit && (edit.code === undefined || edit.code === line.code) ? edit : {};
+};
 type EditorState = { lines: Record<string, LineEdit>; groups: Record<string, Partial<PaymentGroup>>; events: Record<string, Partial<CollectionEvent>>; extraEvents: CollectionEvent[]; overrides: Record<string, PaymentOverride> };
 const empty = (): EditorState => ({ lines: {}, groups: {}, events: {}, extraEvents: [], overrides: {} });
 export const classTitle: Record<PaymentClass | 'review', string> = { workup: 'Work-up', implant: 'Implant surgery', restoration: 'Crown / bridge / implant restoration', denture: 'Denture / partial', other: 'Treatment without delivery', review: 'Needs classification' };
@@ -31,12 +38,12 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
     const parse = (value?: string) => value?.trim() ? parseCurrencyInput(value) ?? NaN : 0;
     const groupIds = treatmentGroupIds(source.map(line => ({
       id: line.id, visit: line.visit, tooth: line.tooth,
-      classification: state.lines[line.id]?.classification ?? line.classification ?? 'review',
-      explicitGroup: state.lines[line.id]?.group,
+      classification: editFor(state.lines, line).classification ?? line.classification ?? 'review',
+      explicitGroup: editFor(state.lines, line).group,
       groupingHint: line.groupingHint,
     })));
     const procedures = source.map(line => {
-      const edit = state.lines[line.id] ?? {};
+      const edit = editFor(state.lines, line);
       const classification = edit.classification ?? line.classification ?? 'review';
       const groupId = groupIds.get(line.id)!;
       if (!groups.has(groupId)) {
@@ -71,7 +78,7 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
       }
     }
     for (const line of source) {
-      const targetId = state.lines[line.id]?.deliveryGroup;
+      const targetId = editFor(state.lines, line).deliveryGroup;
       const group = targetId ? groups.get(targetId) : undefined;
       if (line.responsibilityCents === 0 && group) {
         const id = `delivery-marker:${line.id}`;
@@ -84,15 +91,15 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
     const finalEvents = [...events.values()].map(e => ({ ...e, ...state.events[e.id], id: e.id }));
     const schedule = buildPaymentSchedule({ policy, procedures, groups: finalGroups, events: finalEvents, expectedObligationCents: expected, overrides: state.overrides });
     for (const line of source) {
-      if (line.guidance && !state.lines[line.id]?.classification && line.guidance.classification !== line.classification) {
+      if (line.guidance && !editFor(state.lines, line).classification && line.guidance.classification !== line.classification) {
         schedule.issues.push(`Review ${line.code}: code-bank guidance and the saved payment classification differ. Confirm the classification for this form.`);
       }
-      const target = state.lines[line.id]?.deliveryGroup;
+      const target = editFor(state.lines, line).deliveryGroup;
       if (target && (line.responsibilityCents !== 0 || !groups.has(target))) schedule.issues.push('Review a delivery marker whose fee or linked payment group changed.');
     }
     // Conflicting classifications cannot silently become the first line's class.
     for (const g of finalGroups) {
-      const classes = source.filter(l => procedures.find(p => p.id === l.id)?.groupId === g.id).map(l => state.lines[l.id]?.classification ?? l.classification ?? 'review');
+      const classes = source.filter(l => procedures.find(p => p.id === l.id)?.groupId === g.id).map(l => editFor(state.lines, l).classification ?? l.classification ?? 'review');
       if (new Set(classes).size > 1) schedule.issues.push('A group contains different payment classifications. Split it into groups and link their collection events.');
     }
     const activeGroups = new Set(schedule.rows.flatMap(row => row.allocations.filter(a => a.cents > 0).map(a => a.groupId)));
@@ -112,7 +119,11 @@ export function PaymentScheduleEditor({ editor }: { editor: ReturnType<typeof us
   const { model, state, update, source } = editor;
   if (!model) return null;
   const { schedule, groups, events } = model;
-  const editLine = (id: string, patch: LineEdit) => update(s => ({ ...s, lines: { ...s.lines, [id]: { ...s.lines[id], ...patch } } }));
+  const editLine = (id: string, patch: LineEdit) => update(s => {
+    const line = source.find(l => l.id === id);
+    const previous = line ? editFor(s.lines, line) : s.lines[id];
+    return { ...s, lines: { ...s.lines, [id]: { ...previous, ...patch, code: line?.code } } };
+  });
   const editGroup = (id: string, patch: Partial<PaymentGroup>) => update(s => ({ ...s, groups: { ...s.groups, [id]: { ...s.groups[id], ...patch } } }));
   const editEvent = (id: string, patch: Partial<CollectionEvent>) => update(s => ({ ...s, events: { ...s.events, [id]: { ...s.events[id], ...patch } } }));
   const editOverride = (id: string, patch: Partial<PaymentOverride>) => update(s => ({ ...s, overrides: { ...s.overrides, [id]: { ...s.overrides[id], basis: schedule.signature, ...patch } } }));
@@ -120,7 +131,7 @@ export function PaymentScheduleEditor({ editor }: { editor: ReturnType<typeof us
     <h3 className="font-semibold">Payment groups & collection events</h3>
     <p className="text-sm">Review the proposed groups and appointments. Give related procedures the same group name when prepared together. To combine different treatments, keep separate groups, enter the same arrangement name, and link their actual collection events below. Booking means when that phase is booked; no date is assumed.</p>
     {source.map(line => {
-      const edit = state.lines[line.id] ?? {};
+      const edit = editFor(state.lines, line);
       return <fieldset key={line.id} className="border p-2 space-y-2"><legend>{line.code || 'Procedure'} — OOP {formatCents(line.responsibilityCents)}</legend>
         <label className="block text-sm">Payment classification <select aria-label={`Classification ${line.id}`} value={edit.classification ?? line.classification ?? 'review'} onChange={e => editLine(line.id, { classification: e.target.value as PaymentClass })}>
           {['review', ...paymentClasses].map(c => <option key={c} value={c}>{classTitle[c]}</option>)}

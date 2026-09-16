@@ -76,6 +76,8 @@ import {
   useSaveProcedureBundle,
 } from '@/hooks/useFeeSchedules';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import { useInsurancePlans } from '@/hooks/useFeeSchedules';
+import { revertsToOfficeFeesOnMax } from '@/lib/fof/schedule-defaults';
 import { computeFof } from '@/lib/fof/compute';
 import { suggestedPaymentLabels } from '@/lib/fof/payment-engine';
 import { useFofOfficeGuidance } from '@/hooks/useFofOfficeGuidance';
@@ -443,6 +445,9 @@ export default function FofBuilder() {
   // Office wording for what patients see. Display and print only —
   // the AI payload stays code-derived (see safeProcedureLabel).
   const { data: codeNames } = useCodeNames();
+  // Saved plan configurations: a carrier schedule can carry plan-specific
+  // defaults (office fees after the annual max) onto the form.
+  const { data: insurancePlans } = useInsurancePlans();
 
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   // Includes uncommitted money inputs; automatic defaults do not mark a form dirty.
@@ -676,8 +681,11 @@ export default function FofBuilder() {
     setFeeScheduleId(nextId);
     setPayScheduleId(NO_SCHEDULE);
     // A different carrier means a different plan: plan-specific toggles
-    // start from their defaults (all off) rather than carrying over.
-    dispatch({ type: 'set', field: 'afterMaxState', value: '' });
+    // start from that carrier's defaults rather than carrying over. Altus
+    // (and any saved plan flagged for it) reverts to office fees once the
+    // annual maximum is used up, so that toggle switches on with it.
+    const picked = (schedules ?? []).find(s => s.id === nextId);
+    dispatch({ type: 'set', field: 'afterMaxState', value: nextId !== NO_SCHEDULE && revertsToOfficeFeesOnMax(nextId, picked?.name, insurancePlans) ? 'yes' : '' });
     dispatch({ type: 'set', field: 'prevExemptState', value: '' });
     dispatch({ type: 'set', field: 'spans2Years', value: '' });
     if (nextId !== NO_SCHEDULE) {
@@ -1150,10 +1158,16 @@ export default function FofBuilder() {
   // suggestion as a one-click, form-only decision (staff can change it in the
   // editor; a manager saves office-wide classifications in the registry).
   const unclassifiedLines = paymentPolicy && !policyQuery.isLoading && !classificationQuery.isLoading
-    ? paymentEditor.source.filter(line => line.responsibilityCents > 0 && (paymentEditor.state.lines[line.id]?.classification ?? line.classification ?? 'review') === 'review')
+    ? paymentEditor.source.filter(line => {
+        const edit = paymentEditor.state.lines[line.id];
+        const chosen = edit && (edit.code === undefined || edit.code === line.code) ? edit.classification : undefined;
+        return line.responsibilityCents > 0 && (chosen ?? line.classification ?? 'review') === 'review';
+      })
     : [];
-  const classifyForForm = (id: string, classification: ReturnType<typeof suggestPaymentClass>) =>
-    paymentEditor.update(s => ({ ...s, lines: { ...s.lines, [id]: { ...s.lines[id], classification } } }));
+  // A form-only decision is pinned to the code it was made for, so retyping
+  // the row as another procedure never carries it along.
+  const classifyForForm = (id: string, code: string, classification: ReturnType<typeof suggestPaymentClass>) =>
+    paymentEditor.update(s => ({ ...s, lines: { ...s.lines, [id]: { classification, code } } }));
 
   // AI pass over the payment names and treatment wording. HIPAA: the
   // request is built ONLY from CDT codes, code-derived labels, and
@@ -2580,7 +2594,7 @@ export default function FofBuilder() {
                     return (
                       <div key={line.id} className="flex flex-wrap items-center gap-2">
                         <span>{line.code || 'This procedure'} has no saved payment classification (a manager can add one for the whole office in FOF Settings).</span>
-                        <Button type="button" size="sm" onClick={() => classifyForForm(line.id, suggested)}>
+                        <Button type="button" size="sm" onClick={() => classifyForForm(line.id, line.code, suggested)}>
                           Use {classTitle[suggested]} for this form
                         </Button>
                       </div>

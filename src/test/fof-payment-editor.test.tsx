@@ -133,6 +133,17 @@ describe('payment editor and shared print result', () => {
     expect(result.current.model!.schedule.rows.map(r=>r.cents)).toEqual([46667,46667,46666]);
     rerender({source:[crown,{...crown,id:'b',visit:'2'}]});expect(result.current.model!.groups).toHaveLength(2);expect(result.current.model!.schedule.rows.map(r=>r.cents)).toEqual([35000,35000,35000,35000]);
   });
+  it('drops a per-line decision when the row is retyped as a different code', () => {
+    // Staff classify a D5750 row as denture, then overwrite that same row with an extraction.
+    const reline: ScheduleSourceLine = { id: 'row-1', code: 'D5750', visit: '2', responsibilityCents: 3400, classification: 'review' };
+    const {result,rerender}=renderHook(({source})=>usePaymentScheduleEditor('a',policy,source,3400),{initialProps:{source:[reline]}});
+    act(()=>result.current.update(s=>({...s,lines:{'row-1':{code:'D5750',classification:'denture'}}})));
+    expect(result.current.model!.schedule.rows.map(r=>r.label)).toEqual(['Denture Reline — At initial impressions','Denture Reline — At delivery'].map(l=>expect.stringContaining(l.split(' — ')[1])));
+    rerender({source:[{...reline,code:'D7140',tooth:'5',visit:'1',classification:'other'}]});
+    // The denture decision belonged to D5750; the extraction follows its own classification.
+    expect(result.current.model!.schedule.rows.map(r=>r.label)).toEqual([expect.stringContaining('At treatment')]);
+    expect(result.current.model!.schedule.issues).toEqual([]);
+  });
   it('preserves edits and highlights unallocated credits, then resolves after allocation', () => {
     const {result}=renderHook(()=>usePaymentScheduleEditor('a',policy,[crown],60000));
     expect(result.current.model!.schedule.issues.some(i=>i.includes('adjustments'))).toBe(true);
