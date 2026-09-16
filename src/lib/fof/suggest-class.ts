@@ -1,10 +1,10 @@
 import type { PaymentClass } from './payment-policy';
 
 /**
- * A starting payment classification for a code the office registry has not
- * classified yet, derived from the CDT code range only. It is a suggestion
- * staff confirm with one click on the form; it never applies silently, so
- * collection timing stays an explicit office decision.
+ * Payment classification for a code the office registry has not classified,
+ * derived from the CDT code range. Standard D codes use it automatically so a
+ * form never stalls on a routine code; custom office codes get it only as a
+ * one-click suggestion, and a saved office classification always wins.
  */
 export function suggestPaymentClass(code: string): PaymentClass {
   const match = /^D(\d{4})$/i.exec(code.trim());

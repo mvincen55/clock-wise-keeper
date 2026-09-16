@@ -1120,7 +1120,12 @@ export default function FofBuilder() {
       id: entry.key, code: entry.line.code, visit: String(entry.visit),
       groupingHint: recipe?.grouping, guidance: recipe ? { title: recipe.title, summary: recipe.summary, sourceId: recipe.sourceId, classification: recipe.classification } : undefined,
       tooth: builderLine.tooth, procedureLabel: builderLine.description.trim() || safeProcedureLabel(entry.line.code) || undefined,
-      classification: classificationQuery.data?.[entry.line.code] ?? 'review' as const,
+      // Saved office classification first; otherwise the code-bank guidance
+      // for the code; otherwise a standard D code classifies itself from its
+      // CDT range. Only custom office codes still wait for a staff decision.
+      classification: classificationQuery.data?.[entry.line.code]
+        ?? (recipe && recipe.classification !== 'review' ? recipe.classification : undefined)
+        ?? (/^D\d{4}$/i.test(entry.line.code) ? suggestPaymentClass(entry.line.code) : 'review' as const),
       responsibilityCents: builderLine.feeInput.trim() && parseCurrencyInput(builderLine.feeInput) === null ? NaN : freeUnderMembership(builderLine) ? 0 : entry.line.officeFeeCents -
         (effectiveTemplate?.showInsuranceEstimate ? estimateLine?.insurancePaysCents ?? 0 : 0) -
         (effectiveTemplate?.showWriteOff ? estimateLine?.writeOffCents ?? 0 : 0),

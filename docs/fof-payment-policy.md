@@ -47,7 +47,13 @@ halves at booking/surgery, and the confirmed restorative/denture/other strategie
 
 The form uses existing per-line insurance and write-off results. Classifications
 come from the office registry and can be adjusted in memory for the current form.
-Unknown paid procedures require classification before printing. Related procedures
+A standard D code with no saved classification classifies itself from its CDT range
+(diagnostic → work-up, crowns/bridges/implant restorations → restoration, dentures and
+relines → denture, implant placement → implant, everything else → treatment without
+delivery); code-bank guidance for the code takes precedence over the range, and a saved
+office classification over both. Custom office codes with no saved classification still
+require a staff decision before printing, offered as a one-click suggestion in the
+preview. Related procedures
 that share an appointment are grouped, using the same Visit # the Office Copy
 prints (typed, otherwise suggested from the code); staff can change their group names.
 Different classes keep separate groups and can share actual collection events.

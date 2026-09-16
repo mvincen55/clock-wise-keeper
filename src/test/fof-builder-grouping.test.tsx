@@ -65,19 +65,26 @@ describe('payment groups follow the appointment the office copy prints', () => {
     expect(payments).toEqual(['776.00', '1604.50', '1604.50', '1022.67', '1022.67', '1022.66']);
     expect(screen.queryByText(/Review required before printing/)).toBeNull();
   });
-  it('explains a paused preview and lets staff classify an unregistered code in one click', () => {
+  it('classifies an unregistered D code from its CDT range without pausing the preview', () => {
     mount();
     addProcedures([{ code: 'D5750', fee: '400' }]);
-    // D5750 has no saved classification, so the schedule cannot be built yet.
-    expect(screen.getByText(/Preview paused/)).toBeTruthy();
-    // The reason is named in the preview notice (the collapsed editor repeats it).
-    expect(screen.getAllByText(/Classify payment group/).length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: /^Print$/ })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Use Denture / partial for this form' }));
+    // No saved classification for D5750: the denture range applies on its own.
     expect(screen.queryByText(/Preview paused/)).toBeNull();
     expect(screen.getByRole('button', { name: /^Print$/ })).toBeEnabled();
     fireEvent.click(screen.getByText('Amounts & Payment Plan'));
     expect(screen.getAllByLabelText(/^Payment amount /).map(el => (el as HTMLInputElement).value)).toEqual(['200.00', '200.00']);
+  });
+  it('explains a paused preview and lets staff classify a custom office code in one click', () => {
+    mount();
+    addProcedures([{ code: '9434', fee: '150' }]);
+    // A custom office code has no CDT range to fall back on.
+    expect(screen.getByText(/Preview paused/)).toBeTruthy();
+    // The reason is named in the preview notice (the collapsed editor repeats it).
+    expect(screen.getAllByText(/Classify payment group/).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /^Print$/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Use Treatment without delivery for this form' }));
+    expect(screen.queryByText(/Preview paused/)).toBeNull();
+    expect(screen.getByRole('button', { name: /^Print$/ })).toBeEnabled();
   });
   it('still keeps a typed visit number authoritative', () => {
     mount();
