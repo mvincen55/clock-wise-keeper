@@ -146,13 +146,23 @@ export function useFeeScheduleItems(scheduleId: string | null) {
     queryKey: ['fee-schedule-items', scheduleId],
     enabled: !!user && !!scheduleId,
     queryFn: async (): Promise<FeeScheduleItem[]> => {
-      const { data, error } = await supabase
-        .from('fee_schedule_items')
-        .select('*')
-        .eq('schedule_id', scheduleId!)
-        .order('code');
-      if (error) throw error;
-      return (data ?? []).map(mapItem);
+      // A full office schedule runs past the 1,000-row response cap, which
+      // silently dropped every code after the cap in code order (D9xxx never
+      // reached the FOF builder). Page until a short page comes back.
+      const PAGE = 1000;
+      const rows: FeeScheduleItem[] = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from('fee_schedule_items')
+          .select('*')
+          .eq('schedule_id', scheduleId!)
+          .order('code')
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        for (const row of data ?? []) rows.push(mapItem(row));
+        if (!data || data.length < PAGE) break;
+      }
+      return rows;
     },
   });
 }

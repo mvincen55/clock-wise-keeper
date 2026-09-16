@@ -65,12 +65,27 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
     // These existing form fields stay local; they are never added to AI requests.
     for (const group of groups.values()) {
       const members = source.filter(line => procedures.find(p => p.id === line.id)?.groupId === group.id && line.responsibilityCents > 0);
-      const labels = [...new Set(members.map(line => line.guidance?.title || line.procedureLabel?.trim()).filter(Boolean))];
+      // Code-bank titles name the course when the office has them. Otherwise a
+      // single procedure keeps its own name, and several procedures read as the
+      // course they form ("Implant Surgery", "Implant Crown", "Work-Up") rather
+      // than their names glued together with plus signs.
+      const titles = [...new Set(members.map(line => line.guidance?.title?.trim()).filter(Boolean))] as string[];
+      const labels = [...new Set(members.map(line => line.procedureLabel?.trim()).filter(Boolean))] as string[];
+      const implantRestoration = members.some(line => /^D6(0[5-9]\d|1\d\d)$/i.test(line.code));
+      const courseTitle = (): string => {
+        switch (group.classification) {
+          case 'implant': return 'Implant Surgery';
+          case 'restoration': return labels.some(label => /implant crown/i.test(label)) ? 'Implant Crown' : implantRestoration ? 'Implant Restoration' : labels.length === 2 ? labels.join(' + ') : 'Restoration';
+          case 'workup': return 'Work-Up';
+          case 'denture': return labels.length === 2 ? labels.join(' + ') : 'Denture';
+          default: return labels.length === 2 ? labels.join(' + ') : patientClassTitle[group.classification];
+        }
+      };
       // Teeth read in mouth order (#5, #7, #9…), letters after numbers, however the rows were entered.
       const toothOrder = (tooth: string) => /^\d+$/.test(tooth) ? Number(tooth) : 100 + tooth.charCodeAt(0);
       const teeth = [...new Set(members.flatMap(line => (line.tooth ?? '').trim().split(/[\s,;/]+/)).filter(Boolean).map(tooth => tooth.replace(/^#/, '').toUpperCase()))]
         .sort((a, b) => toothOrder(a) - toothOrder(b) || a.localeCompare(b));
-      const treatment = labels.length > 0 && labels.length <= 2 ? labels.join(' + ') : patientClassTitle[group.classification];
+      const treatment = titles.length > 0 && titles.length <= 2 ? titles.join(' + ') : labels.length === 1 ? labels[0] : courseTitle();
       const numberedTeeth = teeth.map(tooth => `#${tooth}`);
       const toothLabel = numberedTeeth.length > 1 ? `${numberedTeeth.slice(0, -1).join(', ')} and ${numberedTeeth.at(-1)}` : numberedTeeth[0];
       const treatmentTitle = treatment.replace(/\b[a-z]/g, letter => letter.toUpperCase());

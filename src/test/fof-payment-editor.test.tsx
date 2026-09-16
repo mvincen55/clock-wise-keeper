@@ -144,6 +144,20 @@ describe('payment editor and shared print result', () => {
     expect(result.current.model!.schedule.rows.map(r=>r.label)).toEqual([expect.stringContaining('At treatment')]);
     expect(result.current.model!.schedule.issues).toEqual([]);
   });
+  it('names a multi-procedure group as its course, not its procedure names joined', () => {
+    const source: ScheduleSourceLine[] = [
+      { id: 'ct', code: 'D0367', visit: '1', responsibilityCents: 52000, classification: 'workup', procedureLabel: 'CT Scan' },
+      { id: 'models', code: 'D0470', visit: '1', responsibilityCents: 25600, classification: 'workup', procedureLabel: 'Diagnostic Models' },
+      { id: 'guide', code: 'D5982', visit: '1', responsibilityCents: 112000, classification: 'workup', procedureLabel: 'Surgical Guide' },
+      { id: 'implant', code: 'D6010', visit: '2', tooth: '8', responsibilityCents: 271700, classification: 'implant', procedureLabel: 'Dental Implant' },
+      { id: 'stage2', code: 'D6011', visit: '2', tooth: '8', responsibilityCents: 49200, classification: 'implant', procedureLabel: 'Implant Second-Stage Surgery' },
+      { id: 'abutment', code: 'D6057', visit: '3', tooth: '8', responsibilityCents: 114100, classification: 'restoration', procedureLabel: 'Implant Abutment (Custom)' },
+      { id: 'crown', code: 'D6059', visit: '3', tooth: '8', responsibilityCents: 192700, classification: 'restoration', procedureLabel: 'Implant Crown' },
+    ];
+    const {result}=renderHook(()=>usePaymentScheduleEditor('a',policy,source,817300));
+    expect(result.current.model!.groups.map(g=>g.label)).toEqual(['Work-Up','Implant Surgery #8','Implant Crown #8']);
+    expect(result.current.model!.schedule.issues).toEqual([]);
+  });
   it('preserves edits and highlights unallocated credits, then resolves after allocation', () => {
     const {result}=renderHook(()=>usePaymentScheduleEditor('a',policy,[crown],60000));
     expect(result.current.model!.schedule.issues.some(i=>i.includes('adjustments'))).toBe(true);
