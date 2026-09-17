@@ -9,10 +9,10 @@ import { useEmployeeDetail, useEmployeeTimeEntries } from '@/hooks/useEmployees'
 import { useResolvedEmployeeAttendance } from '@/hooks/useAttendanceFallback';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import EmployeeTimeHistory from '@/components/team/EmployeeTimeHistory';
 import { Button } from '@/components/ui/button';
-import { Loader2, ArrowLeft, Clock, CalendarDays, Plus, ShieldAlert } from 'lucide-react';
-import { formatDate, formatTime, formatClock, minutesToHHMM } from '@/lib/time-utils';
+import { Loader2, ArrowLeft, Plus, ShieldAlert } from 'lucide-react';
+import { formatDate, getToday, shiftDate } from '@/lib/time-utils';
 import EditEmployeeDialog from '@/components/team/EditEmployeeDialog';
 import { formatEmployeeName } from '@/lib/employee-name';
 import EmployeeSetupCard from '@/components/team/EmployeeSetupCard';
@@ -33,26 +33,9 @@ import {
 } from '@/lib/incidents';
 
 function getLast14Days() {
-  const end = new Date();
-  const start = new Date();
-  start.setDate(end.getDate() - 13);
-  return {
-    start: start.toISOString().split('T')[0],
-    end: end.toISOString().split('T')[0],
-  };
+  const end = getToday();
+  return { start: shiftDate(end, -13), end };
 }
-
-const statusBadge: Record<string, { label: string; className: string }> = {
-  ok: { label: 'Arrived', className: 'bg-success/20 text-success' },
-  remote_ok: { label: 'Remote', className: 'bg-accent/20 text-accent' },
-  late: { label: 'Late', className: 'bg-warning/20 text-warning' },
-  absent: { label: 'Absent', className: 'bg-destructive/20 text-destructive' },
-  incomplete: { label: 'Incomplete', className: 'bg-warning/20 text-warning' },
-  closure: { label: 'Closed', className: 'bg-muted text-muted-foreground' },
-  day_off: { label: 'Day Off', className: 'bg-primary/20 text-primary' },
-  unscheduled: { label: 'No Schedule', className: 'bg-muted text-muted-foreground' },
-  timezone_suspect: { label: 'TZ Issue', className: 'bg-destructive/20 text-destructive' },
-};
 
 export default function EmployeeDetail() {
   const { employeeId } = useParams<{ employeeId: string }>();
@@ -61,7 +44,7 @@ export default function EmployeeDetail() {
   const [range, setRange] = useState(() => getLast14Days());
   const { data: daysOff, isLoading: daysOffLoading, error: daysOffError } = useEmployeeDaysOff(employeeId, range.start, range.end);
   const { rows: attendance, isLoading: attLoading } = useResolvedEmployeeAttendance(employeeId, range);
-  const { data: entries } = useEmployeeTimeEntries(employeeId, range);
+  const { data: entries, isLoading: entriesLoading, isError: entriesError } = useEmployeeTimeEntries(employeeId, range);
   const { data: incidents } = useEmployeeIncidentReports(employeeId);
 
   const [incidentFormOpen, setIncidentFormOpen] = useState(false);
@@ -253,71 +236,15 @@ export default function EmployeeDetail() {
         }}
       />
 
-      {/* Attendance Timeline */}
-      <Card className="card-elevated">
-        <CardHeader className="border-b">
-          <CardTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5" />Attendance</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {!attendance?.length ? (
-            <p className="text-center text-muted-foreground py-8">No attendance data.</p>
-          ) : (
-            <div className="divide-y">
-              {attendance.map((row: any) => {
-                const sb = statusBadge[row.status_code] || statusBadge.ok;
-                return (
-                  <div key={row.id} className="flex items-center justify-between px-4 py-2.5">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium w-24">{formatDate(row.entry_date)}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${sb.className}`}>{sb.label}</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      {row.schedule_expected_start && (
-                        <span>Sched: {formatClock(row.schedule_expected_start?.toString())}</span>
-                      )}
-                      {row.minutes_late != null && row.minutes_late > 0 && (
-                        <span className="text-warning font-semibold">+{row.minutes_late}min</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Recent Time Entries */}
-      <Card className="card-elevated">
-        <CardHeader className="border-b">
-          <CardTitle className="flex items-center gap-2"><Clock className="h-5 w-5" />Clock-ins and clock-outs</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {!entries?.length ? (
-            <p className="text-center text-muted-foreground py-8">No time entries.</p>
-          ) : (
-            <div className="divide-y">
-              {entries.map(entry => (
-                <div key={entry.id} className="px-4 py-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium">{formatDate(entry.entry_date)}</span>
-                    <span className="time-display text-sm font-semibold">{minutesToHHMM(entry.total_minutes || 0)}</span>
-                  </div>
-                  {entry.punches && entry.punches.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {[...entry.punches].filter(p => !p.voided_at).sort((a, b) => a.seq - b.seq).map(p => (
-                        <span key={p.id} className={`text-xs px-1.5 py-0.5 rounded ${p.punch_type === 'in' ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'}`}>
-                          {p.punch_type} {formatTime(p.punch_time)}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <EmployeeTimeHistory
+        key={employee.id + ':' + range.start + ':' + range.end}
+        employeeId={employee.id}
+        employeeName={formatEmployeeName(employee.display_name)}
+        attendance={attendance || []}
+        entries={entries || []}
+        entriesLoading={entriesLoading}
+        entriesError={entriesError}
+      />
 
       <AccountabilityHistory employeeId={employeeId} />
     </div>

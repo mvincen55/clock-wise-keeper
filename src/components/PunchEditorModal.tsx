@@ -23,7 +23,7 @@ import { PunchRow } from '@/hooks/useTimeEntries';
 import { EditablePunch, SavePunchEditsResult, useSavePunchEdits } from '@/hooks/usePunchEditor';
 import { useWorkSchedule, getScheduleForWeekday } from '@/hooks/useWorkSchedule';
 import { useToast } from '@/hooks/use-toast';
-import { formatTime, nowEasternIso, easternTimeInputValue, easternWallToUtcIso } from '@/lib/time-utils';
+import { formatTime, getToday, nowEasternIso, easternTimeInputValue, easternWallToUtcIso } from '@/lib/time-utils';
 
 type Props = {
   open: boolean;
@@ -35,6 +35,8 @@ type Props = {
   /** The entry owner, required when entryId is null; purely informational otherwise. */
   employeeId?: string | null;
   employeeName?: string;
+  /** The legacy schedule hook is the signed-in user's schedule, not the target's. */
+  allowScheduleQuickFixes?: boolean;
   /** Fired after a successful save with the RPC result (audit event ids included). */
   onSaved?: (result: SavePunchEditsResult | null) => void;
 };
@@ -74,7 +76,7 @@ const SOURCE_LABELS: Record<string, string> = {
   system_adjustment: 'System',
 };
 
-export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, employeeId, employeeName, onSaved }: Props) {
+export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, employeeId, employeeName, onSaved, allowScheduleQuickFixes = true }: Props) {
   const originalPunches = useMemo(() => punches.map(punchToEditable), [punches]);
   const [editedPunches, setEditedPunches] = useState<EditablePunch[]>([]);
   const [reason, setReason] = useState('');
@@ -128,6 +130,7 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, e
   };
 
   const updatePunchTime = (index: number, timeStr: string) => {
+    if (!/^\d{2}:\d{2}$/.test(timeStr)) return;
     const newIso = fromLocalTimeInput(entryDate, timeStr);
     setEditedPunches(prev => prev.map((p, i) => {
       if (i !== index) return p;
@@ -158,7 +161,8 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, e
   });
 
   const addPunch = () => {
-    setEditedPunches(prev => [...prev, newEditable('in', nowEasternIso())]);
+    const time = fromLocalTimeInput(entryDate, easternTimeInputValue(nowEasternIso()));
+    setEditedPunches(prev => [...prev, newEditable('in', time)]);
   };
 
   const autoSort = () => {
@@ -226,7 +230,7 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, e
   };
 
   const handleSave = async () => {
-    if (!reason.trim()) return;
+    if (reason.trim().length < 3) return;
     try {
       const result = await saveMutation.mutateAsync({
         entryId,
@@ -306,6 +310,7 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, e
                     </SelectContent>
                   </Select>
                   <Input
+                    aria-label={`Punch ${i + 1} time`}
                     type="time"
                     value={toLocalTimeInput(p.punch_time)}
                     onChange={e => updatePunchTime(i, e.target.value)}
@@ -322,6 +327,7 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, e
                     </span>
                   )}
                   <Button
+                    aria-label={`Void punch ${i + 1}`}
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7 ml-auto text-muted-foreground hover:text-destructive"
@@ -361,25 +367,25 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, e
         </div>
 
         {/* Quick Fix section */}
-        <div className="space-y-2 border-t pt-3">
+        {(allowScheduleQuickFixes || entryDate === getToday()) && <div className="space-y-2 border-t pt-3">
           <p className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1">
             <Zap className="h-3.5 w-3.5" /> Quick Fix Corrections
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" size="sm" onClick={setClockOutToScheduledEnd}>
+            {allowScheduleQuickFixes && <Button variant="secondary" size="sm" onClick={setClockOutToScheduledEnd}>
               Set Out → Scheduled End
-            </Button>
-            <Button variant="secondary" size="sm" onClick={setClockOutToNow}>
+            </Button>}
+            {entryDate === getToday() && <Button variant="secondary" size="sm" onClick={setClockOutToNow}>
               Set Out → Now
-            </Button>
-            <Button variant="secondary" size="sm" onClick={fillMissingPunches}>
+            </Button>}
+            {allowScheduleQuickFixes && <Button variant="secondary" size="sm" onClick={fillMissingPunches}>
               Fill Missing Punches
-            </Button>
+            </Button>}
           </div>
           <p className="text-[10px] text-muted-foreground">
             Quick fixes populate fields but don't save. You must still press Save.
           </p>
-        </div>
+        </div>}
 
         {/* Warnings */}
         {warnings.length > 0 && (
@@ -395,16 +401,18 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, e
         {/* Reason */}
         {hasChanges && (
           <div className="space-y-1 border-t pt-3">
-            <Label className="text-xs font-semibold">
+            <Label htmlFor="punch-edit-reason" className="text-xs font-semibold">
               Edit Reason <span className="text-destructive">*</span>
             </Label>
             <Textarea
+              id="punch-edit-reason"
               value={reason}
               onChange={e => setReason(e.target.value)}
               placeholder="Explain why these changes are being made..."
               rows={2}
               className="text-sm"
             />
+            <p className="text-xs text-muted-foreground">Enter at least 3 characters. The reason is saved in the audit trail.</p>
           </div>
         )}
 
@@ -412,7 +420,7 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, e
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button
             onClick={handleSave}
-            disabled={!hasChanges || !reason.trim() || saveMutation.isPending}
+            disabled={!hasChanges || reason.trim().length < 3 || saveMutation.isPending}
           >
             {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
           </Button>
@@ -421,4 +429,3 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, e
     </Dialog>
   );
 }
-
