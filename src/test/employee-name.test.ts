@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterAndSortEmployees, formatEmployeeName } from '@/lib/employee-name';
+import { filterAndSortEmployees, formatEmployeeName, formatEmployeeNameLastFirst } from '@/lib/employee-name';
 
 describe('team name display', () => {
   it.each([
@@ -38,5 +38,30 @@ describe('team name display', () => {
   it('retains email search and handles no results', () => {
     expect(filterAndSortEmployees(employees, 'jane@example.com')).toEqual([employees[1]]);
     expect(filterAndSortEmployees(employees, 'missing')).toEqual([]);
+  });
+});
+
+describe('surname-first name display', () => {
+  it.each([
+    ['Holli Braga', 'Braga, Holli'],
+    ['Alize A Furtado', 'Furtado, Alize A'],
+    ['Barbosa, Jen L', 'Barbosa, Jen L'],
+    ['  Smith,  Jane   L  ', 'Smith, Jane L'],
+    ['Smith, John, Jr.', 'Smith, John, Jr.'],
+    ['John Smith Jr.', 'Smith, John Jr.'],
+    ['John Smith, Jr.', 'John Smith, Jr.'],
+    ["Jean O’Neil-Smith", "O’Neil-Smith, Jean"],
+    ['Smith Jr.', 'Smith Jr.'],
+    ['Test', 'Test'],
+    ['Smith,', 'Smith'],
+    ['', ''],
+  ])('formats %j as %j', (stored, displayed) => {
+    expect(formatEmployeeNameLastFirst(stored)).toBe(displayed);
+  });
+
+  it('orders a mixed-format roster by surname, first name', () => {
+    const roster = ['Holli Braga', 'Molly Perry', 'Test', 'Barbosa, Jen L', 'Alize A Furtado', 'Bizarro, Lucia'];
+    const labels = roster.map(formatEmployeeNameLastFirst).sort((a, b) => a.localeCompare(b));
+    expect(labels).toEqual(['Barbosa, Jen L', 'Bizarro, Lucia', 'Braga, Holli', 'Furtado, Alize A', 'Perry, Molly', 'Test']);
   });
 });
