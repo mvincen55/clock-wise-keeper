@@ -64,6 +64,7 @@ export type DerivedAttendanceRow = {
   is_late: boolean;
   minutes_late: number;
   tardy_approval_status: string;
+  tardy_reviewed: boolean;
   has_day_off: boolean;
   status_code: string;
   /** Marks a row computed in the client rather than read from the table. */
@@ -200,6 +201,7 @@ export function deriveAttendanceRows(input: DeriveInput): DerivedAttendanceRow[]
         is_late: isLate,
         minutes_late: minutesLate,
         tardy_approval_status: 'none',
+        tardy_reviewed: false,
         has_day_off: hasDayOff,
         status_code: statusCode,
         derived: true,

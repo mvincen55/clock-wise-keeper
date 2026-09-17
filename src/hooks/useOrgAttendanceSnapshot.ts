@@ -21,6 +21,8 @@ export type EmployeeSnapshot = {
   schedule_expected_start: string | null;
   schedule_expected_end: string | null;
   tardy_approval_status: string | null;
+  /** A manager has decided this tardy (approved or confirmed unexcused). */
+  tardy_reviewed: boolean;
 };
 
 /**
@@ -78,7 +80,7 @@ export function useOrgAttendanceSnapshot(date?: string) {
       // Today's attendance status for all org employees.
       const { data: statuses } = await supabase
         .from('attendance_day_status')
-        .select('employee_id, status_code, is_late, is_absent, is_incomplete, has_punches, is_remote, minutes_late, has_day_off, office_closed, is_scheduled_day, schedule_expected_start, schedule_expected_end, tardy_approval_status')
+        .select('employee_id, status_code, is_late, is_absent, is_incomplete, has_punches, is_remote, minutes_late, has_day_off, office_closed, is_scheduled_day, schedule_expected_start, schedule_expected_end, tardy_approval_status, tardy_reviewed')
         .eq('org_id', ctx!.org_id)
         .eq('entry_date', targetDate);
 
@@ -105,6 +107,7 @@ export function useOrgAttendanceSnapshot(date?: string) {
           schedule_expected_start: s?.schedule_expected_start ?? null,
           schedule_expected_end: s?.schedule_expected_end ?? null,
           tardy_approval_status: s?.tardy_approval_status ?? null,
+          tardy_reviewed: s?.tardy_reviewed ?? false,
         } as EmployeeSnapshot;
       });
     },

@@ -111,7 +111,8 @@ export function AttendanceActions({ row, alwaysShow = false }: AttendanceActions
   // Ignore form
   const [ignoreReason, setIgnoreReason] = useState('');
 
-  const hasIssue = row.is_absent || row.is_incomplete || (row.is_late && row.tardy_approval_status === 'unreviewed') || row.timezone_suspect;
+  // A late day needs a look until a manager has excused it or decided it stands.
+  const hasIssue = row.is_absent || row.is_incomplete || (row.is_late && row.tardy_approval_status !== 'approved' && !row.tardy_reviewed) || row.timezone_suspect;
   
   // If alwaysShow is false, only render when there's an issue
   if (!alwaysShow && !hasIssue) return null;

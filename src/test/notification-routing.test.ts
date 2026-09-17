@@ -54,6 +54,17 @@ describe('notification routing — every current type has a destination', () => 
       .toBe('/my-requests?request=ch-3');
   });
 
+  it('routes tardy approval requests to the queue for managers and My Requests for employees', () => {
+    expect(resolveNotificationDestination(n('tardy_request_new', 'tardy_approval_requests', 'tr-1'), asManager).to)
+      .toBe('/approvals?tab=tardies&request=tr-1');
+    expect(resolveNotificationDestination(n('tardy_request_new', 'tardy_approval_requests', 'tr-1'), asEmployee).to)
+      .toBe('/my-requests?tardy=tr-1');
+    expect(resolveNotificationDestination(n('tardy_request_approved', 'tardy_approval_requests', 'tr-2'), asEmployee).to)
+      .toBe('/my-requests?tardy=tr-2');
+    expect(resolveNotificationDestination(n('tardy_request_denied', 'tardy_approval_requests', 'tr-3'), asEmployee).to)
+      .toBe('/my-requests?tardy=tr-3');
+  });
+
   it('keeps the existing incident-report deep link working (regression)', () => {
     for (const type of [
       'incident_report_new',
@@ -219,6 +230,10 @@ describe('notification routing — producer inventory contract', () => {
     'knowledge_acknowledgment_question',
     'knowledge_acknowledgment_question_answered',
     'accountability_escalation',
+    // supabase/migrations — tardy approval RPCs
+    'tardy_request_new',
+    'tardy_request_approved',
+    'tardy_request_denied',
     // supabase/functions/office-pulse — notification_type is `ai_${kind}`
     'ai_goal_task_due',
     'ai_training_due',
@@ -308,6 +323,7 @@ describe('notification routing — producer inventory contract', () => {
       pto_request: 'pto_requests',
       correction: 'correction_requests',
       change_request: 'change_requests',
+      tardy_request: 'tardy_approval_requests',
       incident_report: 'incident_reports',
       training: 'training_assignments',
       ai_training: 'training_assignments',

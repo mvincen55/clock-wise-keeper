@@ -468,6 +468,7 @@ export type Database = {
           status_code: string
           status_reasons: Json
           tardy_approval_status: string | null
+          tardy_reviewed: boolean
           timezone_suspect: boolean
           user_id: string
         }
@@ -500,6 +501,7 @@ export type Database = {
           status_code?: string
           status_reasons?: Json
           tardy_approval_status?: string | null
+          tardy_reviewed?: boolean
           timezone_suspect?: boolean
           user_id: string
         }
@@ -532,6 +534,7 @@ export type Database = {
           status_code?: string
           status_reasons?: Json
           tardy_approval_status?: string | null
+          tardy_reviewed?: boolean
           timezone_suspect?: boolean
           user_id?: string
         }
@@ -7648,6 +7651,8 @@ export type Database = {
           org_id: string
           reason_text: string | null
           resolved: boolean
+          reviewed_at: string | null
+          reviewed_by: string | null
           time_entry_id: string | null
           timezone_suspect: boolean
           updated_at: string
@@ -7667,6 +7672,8 @@ export type Database = {
           org_id: string
           reason_text?: string | null
           resolved?: boolean
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           time_entry_id?: string | null
           timezone_suspect?: boolean
           updated_at?: string
@@ -7686,6 +7693,8 @@ export type Database = {
           org_id?: string
           reason_text?: string | null
           resolved?: boolean
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           time_entry_id?: string | null
           timezone_suspect?: boolean
           updated_at?: string
@@ -7711,6 +7720,76 @@ export type Database = {
             columns: ["time_entry_id"]
             isOneToOne: false
             referencedRelation: "time_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tardy_approval_requests: {
+        Row: {
+          created_at: string
+          employee_id: string
+          entry_date: string
+          id: string
+          org_id: string
+          reason: string
+          requested_by: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          tardy_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          entry_date: string
+          id?: string
+          org_id: string
+          reason: string
+          requested_by: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          tardy_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          entry_date?: string
+          id?: string
+          org_id?: string
+          reason?: string
+          requested_by?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          tardy_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tardy_approval_requests_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tardy_approval_requests_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tardy_approval_requests_tardy_id_fkey"
+            columns: ["tardy_id"]
+            isOneToOne: false
+            referencedRelation: "tardies"
             referencedColumns: ["id"]
           },
         ]
@@ -9447,6 +9526,18 @@ export type Database = {
       }
       report_message: {
         Args: { _message_id: string; _note?: string }
+        Returns: undefined
+      }
+      decide_tardy_approval_request: {
+        Args: { p_approve: boolean; p_note?: string; p_request_id: string }
+        Returns: undefined
+      }
+      request_tardy_approval: {
+        Args: { p_reason: string; p_tardy_id: string }
+        Returns: string
+      }
+      review_tardy: {
+        Args: { p_reason: string; p_status: string; p_tardy_id: string }
         Returns: undefined
       }
       request_attendance_recompute: {

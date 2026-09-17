@@ -11,8 +11,8 @@ function tardy(over: Partial<TardyRow>): TardyRow {
   return {
     id: 'row', user_id: 'login', org_id: 'office', employee_id: 'emp', time_entry_id: null,
     entry_date: '2026-09-14', expected_start_time: '09:00:00', actual_start_time: '2026-09-14T14:29:00.000Z',
-    minutes_late: 84, reason_text: null, approval_status: 'unreviewed', approved_by: null, approved_at: null,
-    resolved: false, timezone_suspect: false, created_at: '', updated_at: '',
+    minutes_late: 84, reason_text: null, approval_status: 'unapproved', approved_by: null, approved_at: null,
+    reviewed_by: null, reviewed_at: null, resolved: false, timezone_suspect: false, created_at: '', updated_at: '',
     ...over,
   };
 }
@@ -56,6 +56,36 @@ describe('TardiesTable', () => {
     expect(onReview).toHaveBeenCalledWith(rows[2]);
   });
 
+  it('lets an employee ask for approval on their own unapproved rows only', () => {
+    const onRequest = vi.fn();
+    const mine = [
+      rows[0],
+      tardy({ id: 'excused', entry_date: '2026-09-11', approval_status: 'approved', reason_text: 'Dentist', reviewed_at: '2026-09-11T20:00:00Z' }),
+      tardy({ id: 'theirs', entry_date: '2026-09-10', user_id: 'someone-else' }),
+    ];
+    render(<TardiesTable rows={mine} canReview={false} viewerUserId="login" onReview={() => {}} onRequestApproval={onRequest} />);
+    expect(screen.getAllByText('Unapproved')).toHaveLength(2);
+    expect(screen.getByText('Approved')).toBeTruthy();
+    const buttons = screen.getAllByRole('button', { name: 'Request approval' });
+    expect(buttons).toHaveLength(1);
+    fireEvent.click(buttons[0]);
+    expect(onRequest).toHaveBeenCalledWith(rows[0]);
+  });
+
+  it('shows a waiting request on the row, for the employee and the manager', () => {
+    const pending = { id: 'req', tardy_id: 'wed', reason: 'Bank run', status: 'pending' } as never;
+    const pendingFor = (t: TardyRow) => (t.id === 'wed' ? pending : undefined);
+    const { unmount } = render(
+      <TardiesTable rows={[rows[0]]} canReview={false} viewerUserId="login" onReview={() => {}} onRequestApproval={() => {}} pendingRequestFor={pendingFor} />,
+    );
+    expect(screen.getByText('Approval requested')).toBeTruthy();
+    expect(screen.getByText('Requested')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Request approval' })).toBeNull();
+    unmount();
+    render(<TardiesTable rows={[rows[0]]} canReview onReview={() => {}} pendingRequestFor={pendingFor} />);
+    expect(screen.getByRole('button', { name: 'Decide' })).toBeTruthy();
+  });
+
   it('leaves a punch whose time looks off out of the total', () => {
     const suspect = tardy({ id: 'odd', timezone_suspect: true, minutes_late: 90, entry_date: '2026-09-15' });
     render(<TardiesTable rows={[rows[2], suspect]} canReview={false} onReview={() => {}} />);
@@ -69,5 +99,20 @@ describe('TardyReviewModal', () => {
     render(<TardyReviewModal open tardy={rows[0]} employeeName="Sam Rivera" onSubmit={async () => {}} onClose={() => {}} />);
     expect(screen.getByText('Review Tardy — Sam Rivera · Wed, Sep 16, 2026')).toBeTruthy();
     expect(screen.getByText('488 minutes late (Expected: 9:45 AM, Actual: 5:58 PM)')).toBeTruthy();
+  });
+
+  it('shows the employee\'s waiting request and opens on Approve for an undecided tardy', () => {
+    render(
+      <TardyReviewModal
+        open
+        tardy={rows[1]}
+        request={{ reason: 'Ran the deposit to the bank first', created_at: '2026-09-14T15:00:00Z' }}
+        onSubmit={async () => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByText('Ran the deposit to the bank first')).toBeTruthy();
+    expect(screen.getByText(/Approval requested/)).toBeTruthy();
+    expect(screen.getByRole('combobox')).toHaveTextContent('Approved (excused)');
   });
 });

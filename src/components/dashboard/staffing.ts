@@ -221,7 +221,8 @@ export function attendanceReview(rows: EmployeeSnapshot[], now: Date): { count: 
     const end = parseClockMinutes(r.schedule_expected_end);
     const shiftEnded = end !== null && nowMin > end;
     if (!r.has_punches && shiftEnded) absences += 1;
-    if (r.is_late && r.tardy_approval_status === 'unreviewed') tardies += 1;
+    // Every tardy starts unapproved; it is "unreviewed" until a manager decides it.
+    if (r.is_late && r.tardy_approval_status !== 'approved' && !r.tardy_reviewed) tardies += 1;
     if (r.has_punches && r.is_incomplete && shiftEnded) missingOut += 1;
   }
   const parts: string[] = [];

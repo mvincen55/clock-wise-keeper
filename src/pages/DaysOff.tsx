@@ -2,8 +2,10 @@ import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDaysOff, useAddDayOff, useDeleteDayOff, DayOffRow } from '@/hooks/useDaysOff';
 import { PtoRequestModal } from '@/components/PtoRequestModal';
-import { useTardies, useUpdateTardy, TardyRow } from '@/hooks/useTardies';
+import { useTardies, TardyRow } from '@/hooks/useTardies';
+import { usePendingTardyRequests, useRequestTardyApproval, useReviewTardy } from '@/hooks/useTardyApprovalRequests';
 import { TardyReviewModal } from '@/components/TardyReviewModal';
+import { TardyApprovalRequestModal } from '@/components/TardyApprovalRequestModal';
 import { TardiesTable } from '@/components/TardiesTable';
 import { useOrgEmployees, useArchivedEmployees } from '@/hooks/useEmployees';
 import { formatEmployeeName } from '@/lib/employee-name';
@@ -140,7 +142,10 @@ export default function DaysOff() {
   const addDayOff = useAddDayOff();
   const deleteDayOff = useDeleteDayOff();
   const addClosure = useAddClosure();
-  const updateTardy = useUpdateTardy();
+  const reviewTardy = useReviewTardy();
+  const requestApproval = useRequestTardyApproval();
+  // Waiting approval requests: the viewer's own, or the office's for managers.
+  const { byTardy: pendingRequests } = usePendingTardyRequests();
 
   // Owners and managers read the whole office's tardies (RLS), so the
   // Tardies tab must say whose each row is. Former staff keep their name.
@@ -164,7 +169,8 @@ export default function DaysOff() {
   const [approvalFilter, setApprovalFilter] = useState('all');
   const [showOnlyTracked, setShowOnlyTracked] = useState(false);
   const [debugRow, setDebugRow] = useState<AttendanceDayStatusRow | null>(null);
-  const [reviewTardy, setReviewTardy] = useState<TardyRow | null>(null);
+  const [reviewTarget, setReviewTarget] = useState<TardyRow | null>(null);
+  const [requestTarget, setRequestTarget] = useState<TardyRow | null>(null);
 
   const requiresNotes = (type: string) => type === 'medical_leave';
 
@@ -208,18 +214,22 @@ export default function DaysOff() {
 
   const handleTardyReview = async (id: string, status: 'approved' | 'unapproved', reason: string) => {
     try {
-      await updateTardy.mutateAsync({
-        id,
-        updates: {
-          approval_status: status,
-          reason_text: reason,
-          approved_by: status === 'approved' ? user?.id : null,
-          approved_at: status === 'approved' ? new Date().toISOString() : null,
-        },
-      });
+      // The RPC stamps the decision and answers any waiting request with it.
+      await reviewTardy.mutateAsync({ tardyId: id, status, reason });
       toast({ title: `Tardy marked as ${status}` });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const handleRequestApproval = async (reason: string) => {
+    if (!requestTarget) return;
+    try {
+      await requestApproval.mutateAsync({ tardyId: requestTarget.id, reason });
+      toast({ title: 'Approval requested', description: 'Your manager has been notified.' });
+      setRequestTarget(null);
+    } catch (err) {
+      toast({ title: 'Could not send the request', description: (err as Error).message, variant: 'destructive' });
     }
   };
 
@@ -291,7 +301,7 @@ export default function DaysOff() {
       closures: closuresCount,
       remote: rows.filter(r => r.is_remote).length,
       edited: rows.filter(r => r.has_edits).length,
-      unreviewedTardies: (tardies || []).filter(t => t.approval_status === 'unreviewed' && !t.resolved).length,
+      tardyRequests: pendingRequests.size,
       needsTimeFix: rows.filter(r => r.timezone_suspect).length,
       missingShifts: rows.filter(r => {
         if (!r.is_absent) return false;
@@ -302,7 +312,7 @@ export default function DaysOff() {
         return true;
       }).length,
     };
-  }, [statusRows, tardies, daysOffByDate]);
+  }, [statusRows, pendingRequests, daysOffByDate]);
 
   // Filtered + sorted status rows
   const filteredStatus = useMemo(() => {
@@ -359,9 +369,10 @@ export default function DaysOff() {
   const filteredTardies = useMemo(() => {
     let list = activeTardies;
     if (showOnlyTracked) list = list.filter(t => t.approval_status !== 'approved');
-    if (approvalFilter !== 'all') list = list.filter(t => t.approval_status === approvalFilter);
+    if (approvalFilter === 'requested') list = list.filter(t => pendingRequests.has(t.id));
+    else if (approvalFilter !== 'all') list = list.filter(t => t.approval_status === approvalFilter);
     return list;
-  }, [activeTardies, showOnlyTracked, approvalFilter]);
+  }, [activeTardies, showOnlyTracked, approvalFilter, pendingRequests]);
 
   // Closures tab: office_closures + legacy days_off with type=office_closed
   const closuresList = useMemo(() => {
@@ -507,14 +518,14 @@ export default function DaysOff() {
       </div>
 
       {/* Unreviewed Queue */}
-      {(summary.unreviewedTardies > 0 || summary.missingShifts > 0 || summary.incomplete > 0 || summary.needsTimeFix > 0) && (
+      {(summary.tardyRequests > 0 || summary.missingShifts > 0 || summary.incomplete > 0 || summary.needsTimeFix > 0) && (
         <Card className="card-elevated border-warning/40">
           <CardContent className="p-3">
             <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Unreviewed Items</p>
             <div className="flex flex-wrap gap-2">
-              {summary.unreviewedTardies > 0 && (
-                <button onClick={() => { setTab('tardies'); setApprovalFilter('unreviewed'); }} className="text-xs px-3 py-1.5 rounded-full bg-destructive/10 text-destructive font-medium hover:bg-destructive/20 transition-colors">
-                  {summary.unreviewedTardies} Unreviewed Tardies
+              {summary.tardyRequests > 0 && (
+                <button onClick={() => { setTab('tardies'); setApprovalFilter('requested'); }} className="text-xs px-3 py-1.5 rounded-full bg-destructive/10 text-destructive font-medium hover:bg-destructive/20 transition-colors">
+                  {summary.tardyRequests} {isManager ? 'Tardy Approval Requests' : 'Approval Requests Waiting'}
                 </button>
               )}
               {summary.missingShifts > 0 && (
@@ -714,7 +725,7 @@ export default function DaysOff() {
               <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
-                <SelectItem value="unreviewed">Unreviewed</SelectItem>
+                <SelectItem value="requested">Requested</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>
                 <SelectItem value="unapproved">Unapproved</SelectItem>
               </SelectContent>
@@ -725,15 +736,26 @@ export default function DaysOff() {
             loading={tardiesLoading}
             employeeNameFor={isManager ? tardyEmployeeName : undefined}
             canReview={isManager}
-            onReview={setReviewTardy}
+            onReview={setReviewTarget}
+            viewerUserId={user?.id}
+            pendingRequestFor={t => pendingRequests.get(t.id)}
+            onRequestApproval={setRequestTarget}
           />
 
           <TardyReviewModal
-            open={!!reviewTardy}
-            tardy={reviewTardy}
-            employeeName={isManager && reviewTardy ? tardyEmployeeName(reviewTardy) : null}
+            open={!!reviewTarget}
+            tardy={reviewTarget}
+            employeeName={isManager && reviewTarget ? tardyEmployeeName(reviewTarget) : null}
+            request={reviewTarget ? pendingRequests.get(reviewTarget.id) ?? null : null}
             onSubmit={handleTardyReview}
-            onClose={() => setReviewTardy(null)}
+            onClose={() => setReviewTarget(null)}
+          />
+
+          <TardyApprovalRequestModal
+            open={!!requestTarget}
+            tardy={requestTarget}
+            onSubmit={handleRequestApproval}
+            onClose={() => setRequestTarget(null)}
           />
         </TabsContent>
 

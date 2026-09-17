@@ -41,6 +41,7 @@ function snap(overrides: Partial<EmployeeSnapshot> = {}): EmployeeSnapshot {
     schedule_expected_start: null,
     schedule_expected_end: null,
     tardy_approval_status: null,
+    tardy_reviewed: false,
     ...overrides,
   };
 }
@@ -233,5 +234,24 @@ describe('zero vs no-data in the trend readout', () => {
 
   it('a normal ratio still computes', () => {
     expect(readout(series([{ x: 'M', value: 3, of: 4 }]))).toBe('75%');
+  });
+});
+
+
+describe('attendanceReview — tardies under the unapproved-by-default policy', () => {
+  const late = snap({
+    is_scheduled_day: true, has_punches: true, is_late: true, minutes_late: 12,
+    schedule_expected_start: '08:30:00', schedule_expected_end: '17:00:00', tardy_approval_status: 'unapproved',
+  });
+
+  it('counts an unexcused late arrival nobody has decided', () => {
+    const { count, detail } = attendanceReview([late], at(10, 0));
+    expect(count).toBe(1);
+    expect(detail).toBe('1 unreviewed late arrival');
+  });
+
+  it('stops counting once a manager has decided it, excused or not', () => {
+    expect(attendanceReview([{ ...late, tardy_reviewed: true }], at(10, 0)).count).toBe(0);
+    expect(attendanceReview([{ ...late, tardy_approval_status: 'approved', tardy_reviewed: true }], at(10, 0)).count).toBe(0);
   });
 });

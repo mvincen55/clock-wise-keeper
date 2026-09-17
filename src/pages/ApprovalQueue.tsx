@@ -16,6 +16,7 @@ import { formatDate } from '@/lib/time-utils';
 import { Loader2, CheckCircle, XCircle, Clock, Inbox } from 'lucide-react';
 import { CorrectionQueuePanel } from '@/components/CorrectionQueuePanel';
 import { PtoRequestQueue } from '@/components/PtoRequestQueue';
+import { TardyApprovalQueue } from '@/components/TardyApprovalQueue';
 import { useApprovalCounts } from '@/hooks/useApprovalCounts';
 
 const statusBadge: Record<string, { label: string; className: string }> = {
@@ -75,7 +76,7 @@ function RequestCard({ request, onReview, highlighted }: { request: ChangeReques
   );
 }
 
-const TAB_VALUES = ['change-requests', 'pto-requests', 'corrections'] as const;
+const TAB_VALUES = ['change-requests', 'pto-requests', 'corrections', 'tardies'] as const;
 
 export default function ApprovalQueue() {
   const { data: ctx } = useOrgContext();
@@ -165,6 +166,14 @@ export default function ApprovalQueue() {
               </span>
             )}
           </TabsTrigger>
+          <TabsTrigger value="tardies" className="relative">
+            Tardies
+            {counts && counts.tardyRequests > 0 && (
+              <span className="ml-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">
+                {counts.tardyRequests}
+              </span>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="change-requests" className="mt-4 space-y-4">
@@ -213,6 +222,10 @@ export default function ApprovalQueue() {
 
         <TabsContent value="corrections" className="mt-4">
           <CorrectionQueuePanel highlightId={activeTab === 'corrections' ? linkedId : null} />
+        </TabsContent>
+
+        <TabsContent value="tardies" className="mt-4">
+          <TardyApprovalQueue highlightId={activeTab === 'tardies' ? linkedId : null} />
         </TabsContent>
       </Tabs>
 

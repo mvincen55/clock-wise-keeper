@@ -1,15 +1,15 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useTimeEntries, useUpdateEntry, TimeEntryRow } from '@/hooks/useTimeEntries';
 import { useNavigate } from 'react-router-dom';
-import { useWorkSchedule, getScheduleForWeekday } from '@/hooks/useWorkSchedule';
-import { useTardies, useUpsertTardy, useUpdateTardy, TardyRow } from '@/hooks/useTardies';
+import { useTardies, TardyRow } from '@/hooks/useTardies';
+import { usePendingTardyRequests, useRequestTardyApproval, type TardyApprovalRequestRow } from '@/hooks/useTardyApprovalRequests';
 import { useAuth } from '@/hooks/useAuth';
 import { useOfficeClosures } from '@/hooks/useOfficeClosures';
 import { useMissingShifts } from '@/hooks/useMissingShifts';
 import { useAttendanceDayStatus, useRecomputeAttendance } from '@/hooks/useAttendanceDayStatus';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { MissingShiftBanner } from '@/components/MissingShiftBanner';
-import { minutesToHHMM, formatTime, formatDate, easternWallMinutes } from '@/lib/time-utils';
+import { minutesToHHMM, formatTime, formatDate } from '@/lib/time-utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,40 +18,20 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table2, ChevronDown, ChevronRight, Loader2, MapPin, Save, AlertTriangle, Filter, Pencil, ArrowUpDown, Download } from 'lucide-react';
 import { EditAuditDialog } from '@/components/EditAuditDialog';
-import { TardyReasonModal } from '@/components/TardyReasonModal';
+import { TardyApprovalRequestModal } from '@/components/TardyApprovalRequestModal';
 import { PunchEditorModal } from '@/components/PunchEditorModal';
 import { AuditHistoryModal } from '@/components/AuditHistoryModal';
 import { CorrectionRequestModal } from '@/components/CorrectionRequestModal';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useToast } from '@/hooks/use-toast';
 
-function computeLateInfo(entry: TimeEntryRow, schedule: ReturnType<typeof useWorkSchedule>['data']) {
-  if (!schedule?.length) return null;
-  const sched = getScheduleForWeekday(schedule, entry.entry_date);
-  if (!sched || !sched.enabled) return null;
-  if (entry.is_remote && !sched.apply_to_remote) return null;
-
-  const punches = entry.punches || [];
-  const firstIn = punches.find(p => p.punch_type === 'in');
-  if (!firstIn) return null;
-
-  // Compare in Eastern wall-clock minutes-since-midnight.
-  const arrivalMin = easternWallMinutes(firstIn.punch_time);
-  const [sh, sm] = sched.start_time.split(':').map(Number);
-  const expectedMin = sh * 60 + sm + sched.grace_minutes;
-  const diffMin = arrivalMin - expectedMin;
-
-  if (diffMin >= sched.threshold_minutes) {
-    return { minutesLate: diffMin, expectedStart: sched.start_time, actualStart: firstIn.punch_time };
-  }
-  return null;
-}
-
-function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
+function EntryRow({ entry, tardy, pendingRequest, onRequestApproval }: {
   entry: TimeEntryRow;
-  schedule: ReturnType<typeof useWorkSchedule>['data'];
+  /** The attendance engine's tardy for this day, when it found one. */
   tardy?: TardyRow;
-  onTardyPrompt: (entry: TimeEntryRow, info: { minutesLate: number; expectedStart: string; actualStart: string }) => void;
+  /** The viewer's waiting approval request for that tardy. */
+  pendingRequest?: TardyApprovalRequestRow;
+  onRequestApproval: (tardy: TardyRow) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [punchEditorOpen, setPunchEditorOpen] = useState(false);
@@ -67,9 +47,11 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
   const [commentDirty, setCommentDirty] = useState(false);
 
   const punches = entry.punches || [];
-  const lateInfo = computeLateInfo(entry, schedule);
-  const isLate = !!lateInfo;
-  const needsReason = isLate && tardy && !tardy.reason_text && !tardy.resolved;
+  // Lateness is the attendance engine's call (the tardy row); the page never
+  // re-derives it from punches, so a re-clock-in can't read as an arrival.
+  const isLate = !!tardy && !tardy.timezone_suspect;
+  const minutesLate = tardy?.minutes_late ?? 0;
+  const awaitingApproval = isLate && tardy?.approval_status !== 'approved';
   const isIncomplete = punches.length > 0 && punches[punches.length - 1].punch_type === 'in';
   const isAbsent = punches.length === 0;
 
@@ -107,7 +89,7 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
             {isIncomplete && <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">Incomplete</span>}
             {isLate && (
               <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive font-medium">
-                <AlertTriangle className="h-3 w-3" />{lateInfo.minutesLate}m late
+                <AlertTriangle className="h-3 w-3" />{minutesLate}m late
               </span>
             )}
             {hasEditedPunches && (
@@ -126,10 +108,10 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
           <td colSpan={5} className="bg-muted/30 px-8 py-3">
             <div className="space-y-3">
               {/* Resolve in Attendance banner */}
-              {(isAbsent || isIncomplete || (isLate && needsReason)) && (
+              {(isAbsent || isIncomplete) && (
                 <div className="flex items-center justify-between p-2 rounded bg-warning/10 border border-warning/20">
                   <span className="text-xs text-warning font-medium">
-                    {isAbsent ? 'Missing punches' : isIncomplete ? 'Incomplete punches' : 'Unreviewed tardy'} — resolve in Attendance
+                    {isAbsent ? 'Missing punches' : 'Incomplete punches'} — resolve in Attendance
                   </span>
                   <Button size="sm" variant="outline" className="h-6 text-xs" onClick={e => { e.stopPropagation(); navigate(`/days-off?date=${entry.entry_date}`); }}>
                     Resolve in Attendance
@@ -163,16 +145,21 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
               })}
               {isLate && tardy && (
                 <div className="pt-2 border-t border-border space-y-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <AlertTriangle className="h-4 w-4 text-destructive" />
-                    <span className="text-sm font-medium text-destructive">{lateInfo!.minutesLate} minutes late</span>
-                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${tardy.approval_status === 'approved' ? 'bg-success/20 text-success' : tardy.approval_status === 'unapproved' ? 'bg-destructive/20 text-destructive' : 'bg-warning/20 text-warning'}`}>
-                      {tardy.approval_status}
+                    <span className="text-sm font-medium text-destructive">{minutesLate} minutes late</span>
+                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${tardy.approval_status === 'approved' ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'}`}>
+                      {tardy.approval_status === 'approved' ? 'Approved' : 'Unapproved'}
                     </span>
+                    {pendingRequest && (
+                      <span className="text-xs px-2 py-0.5 rounded font-medium bg-warning/20 text-warning">Approval requested</span>
+                    )}
                   </div>
                   {tardy.reason_text && <p className="text-sm text-muted-foreground italic">Reason: {tardy.reason_text}</p>}
-                  {needsReason && (
-                    <Button size="sm" variant="destructive" onClick={e => { e.stopPropagation(); onTardyPrompt(entry, lateInfo!); }}>Add Reason</Button>
+                  {/* A late arrival stays unapproved until a manager excuses it;
+                      the employee asks from here. */}
+                  {awaitingApproval && !pendingRequest && (
+                    <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); onRequestApproval(tardy); }}>Request approval</Button>
                   )}
                 </div>
               )}
@@ -293,57 +280,41 @@ export default function Timesheet() {
   const [remoteFilter, setRemoteFilter] = useState<RemoteFilter>('all');
 
   const { data: entries, isLoading } = useTimeEntries(startDate || undefined, endDate || undefined);
-  const { data: schedule } = useWorkSchedule();
   const { data: tardies } = useTardies(startDate || undefined, endDate || undefined);
   const currentYear = new Date().getFullYear();
   const { data: closures } = useOfficeClosures(currentYear);
   const closureDateSet = useMemo(() => new Set((closures || []).map(c => c.closure_date)), [closures]);
   const missingDays = useMissingShifts(startDate || undefined, endDate || undefined);
-  const upsertTardy = useUpsertTardy();
-  const updateTardy = useUpdateTardy();
+  const requestApproval = useRequestTardyApproval();
+  const { byTardy: pendingRequests } = usePendingTardyRequests();
   const { toast } = useToast();
 
-  const [tardyModal, setTardyModal] = useState<{ entry: TimeEntryRow; minutesLate: number; expectedStart: string; actualStart: string } | null>(null);
+  const [requestTarget, setRequestTarget] = useState<TardyRow | null>(null);
 
+  // Managers read the whole office's tardies; this page is the viewer's own.
+  const myTardies = useMemo(() => (tardies || []).filter(t => t.user_id === user?.id), [tardies, user?.id]);
   const tardyMap = useMemo(() => {
     const map = new Map<string, TardyRow>();
-    (tardies || []).forEach(t => map.set(t.entry_date, t));
+    myTardies.forEach(t => map.set(t.entry_date, t));
     return map;
-  }, [tardies]);
-
-  // Auto-detect tardies. Only INSERT when no tardy row exists yet — existing
-  // rows are owned by the server-side recompute (and employees cannot update
-  // them beyond reason_text, so an upsert here would throw for non-admins).
-  useEffect(() => {
-    if (!entries?.length || !schedule?.length || !user) return;
-    entries.forEach(entry => {
-      const info = computeLateInfo(entry, schedule);
-      if (info && !tardyMap.has(entry.entry_date)) {
-        upsertTardy.mutate({
-          time_entry_id: entry.id, entry_date: entry.entry_date,
-          expected_start_time: info.expectedStart, actual_start_time: info.actualStart, minutes_late: info.minutesLate,
-        });
-      }
-    });
-  }, [entries, schedule, tardyMap]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [myTardies]);
 
   // Compute status flags for each entry
   const entriesWithStatus = useMemo(() => {
     return (entries || []).map(entry => {
       const punches = entry.punches || [];
-      const lateInfo = computeLateInfo(entry, schedule);
       const tardy = tardyMap.get(entry.entry_date);
       return {
         entry,
         isAbsent: punches.length === 0,
         isIncomplete: punches.length > 0 && punches[punches.length - 1].punch_type === 'in',
-        isLate: !!lateInfo,
-        minutesLate: lateInfo?.minutesLate || 0,
+        isLate: !!tardy && !tardy.timezone_suspect,
+        minutesLate: tardy && !tardy.timezone_suspect ? tardy.minutes_late : 0,
         hasEdits: punches.some((p: any) => p.is_edited),
         tardyApproval: tardy?.approval_status || 'none',
       };
     });
-  }, [entries, schedule, tardyMap]);
+  }, [entries, tardyMap]);
 
   // Filter
   const filteredEntries = useMemo(() => {
@@ -357,7 +328,7 @@ export default function Timesheet() {
       case 'late': list = list.filter(e => e.isLate); break;
       case 'incomplete': list = list.filter(e => e.isIncomplete); break;
       case 'edited': list = list.filter(e => e.hasEdits); break;
-      case 'unapproved': list = list.filter(e => e.tardyApproval === 'unreviewed' || e.tardyApproval === 'unapproved'); break;
+      case 'unapproved': list = list.filter(e => e.tardyApproval === 'unapproved'); break;
     }
     if (approvalFilter !== 'all') {
       list = list.filter(e => e.tardyApproval === approvalFilter);
@@ -388,24 +359,19 @@ export default function Timesheet() {
 
   const totalMinutes = sortedEntries.reduce((sum, e) => sum + (e.entry.total_minutes || 0), 0);
 
-  const lateDays = (tardies || []).filter(t => !t.resolved).length;
-  const trackedTardies = (tardies || []).filter(t => t.approval_status !== 'approved' && !t.resolved).length;
-  const totalMinutesLate = (tardies || []).filter(t => !t.resolved).reduce((s, t) => s + t.minutes_late, 0);
+  const lateDays = myTardies.filter(t => !t.resolved).length;
+  const trackedTardies = myTardies.filter(t => t.approval_status !== 'approved' && !t.resolved).length;
+  const totalMinutesLate = myTardies.filter(t => !t.resolved).reduce((s, t) => s + t.minutes_late, 0);
 
-  const handleTardyReason = async (reason: string) => {
-    if (!tardyModal || !user) return;
-    const existing = tardyMap.get(tardyModal.entry.entry_date);
-    if (existing) {
-      await updateTardy.mutateAsync({ id: existing.id, updates: { reason_text: reason } });
-    } else {
-      await upsertTardy.mutateAsync({
-        time_entry_id: tardyModal.entry.id, entry_date: tardyModal.entry.entry_date,
-        expected_start_time: tardyModal.expectedStart, actual_start_time: tardyModal.actualStart,
-        minutes_late: tardyModal.minutesLate, reason_text: reason,
-      });
+  const handleRequestApproval = async (reason: string) => {
+    if (!requestTarget) return;
+    try {
+      await requestApproval.mutateAsync({ tardyId: requestTarget.id, reason });
+      toast({ title: 'Approval requested', description: 'Your manager has been notified.' });
+      setRequestTarget(null);
+    } catch (err) {
+      toast({ title: 'Could not send the request', description: (err as Error).message, variant: 'destructive' });
     }
-    toast({ title: 'Tardy reason saved' });
-    setTardyModal(null);
   };
 
   // Count badges for filters
@@ -423,7 +389,7 @@ export default function Timesheet() {
 
       {missingDays.length > 0 && <MissingShiftBanner missingDays={missingDays} />}
 
-      {(tardies?.length ?? 0) > 0 && (
+      {myTardies.length > 0 && (
         <div className="flex flex-wrap gap-3">
           <div className="px-4 py-2 bg-destructive/10 rounded-lg">
             <span className="text-xs text-muted-foreground">Late Days: </span>
@@ -482,7 +448,6 @@ export default function Timesheet() {
                 <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="unreviewed">Unreviewed</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="unapproved">Unapproved</SelectItem>
                 </SelectContent>
@@ -526,7 +491,13 @@ export default function Timesheet() {
                 <tr><td colSpan={5} className="py-12 text-center text-muted-foreground">No entries found</td></tr>
               ) : (
                 sortedEntries.map(({ entry }) => (
-                  <EntryRow key={entry.id} entry={entry} schedule={schedule} tardy={tardyMap.get(entry.entry_date)} onTardyPrompt={(e, info) => setTardyModal({ entry: e, ...info })} />
+                  <EntryRow
+                    key={entry.id}
+                    entry={entry}
+                    tardy={tardyMap.get(entry.entry_date)}
+                    pendingRequest={tardyMap.get(entry.entry_date) ? pendingRequests.get(tardyMap.get(entry.entry_date)!.id) : undefined}
+                    onRequestApproval={setRequestTarget}
+                  />
                 ))
               )}
             </tbody>
@@ -534,9 +505,12 @@ export default function Timesheet() {
         </div>
       </Card>
 
-      {tardyModal && (
-        <TardyReasonModal open minutesLate={tardyModal.minutesLate} entryDate={formatDate(tardyModal.entry.entry_date)} onSubmit={handleTardyReason} onDismiss={() => setTardyModal(null)} />
-      )}
+      <TardyApprovalRequestModal
+        open={!!requestTarget}
+        tardy={requestTarget}
+        onSubmit={handleRequestApproval}
+        onClose={() => setRequestTarget(null)}
+      />
     </div>
   );
 }

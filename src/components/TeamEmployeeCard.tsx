@@ -816,8 +816,9 @@ function TardiesTab({ employeeId, range }: { employeeId: string; range: { start:
   if (!tardies?.length) return <EmptyState text="No tardies in last 30 days. 🎉" />;
 
   const approvalBadge: Record<string, { label: string; className: string }> = {
-    unreviewed: { label: 'Unreviewed', className: 'bg-muted text-muted-foreground' },
-    pending: { label: 'Unreviewed', className: 'bg-muted text-muted-foreground' },
+    // Office policy: a late arrival is unapproved until a manager excuses it.
+    unreviewed: { label: 'Unapproved', className: 'bg-destructive/20 text-destructive' },
+    pending: { label: 'Unapproved', className: 'bg-destructive/20 text-destructive' },
     approved: { label: 'Approved', className: 'bg-success/20 text-success' },
     unapproved: { label: 'Unapproved', className: 'bg-destructive/20 text-destructive' },
   };
@@ -825,7 +826,7 @@ function TardiesTab({ employeeId, range }: { employeeId: string; range: { start:
   return (
     <div className="divide-y rounded-lg border max-h-80 overflow-y-auto">
       {tardies.map((t: any) => {
-        const ab = approvalBadge[t.approval_status] || approvalBadge.unreviewed;
+        const ab = approvalBadge[t.approval_status] || approvalBadge.unapproved;
         return (
           <div key={t.id} className="px-3 py-2 text-sm">
             <div className="flex items-center justify-between">

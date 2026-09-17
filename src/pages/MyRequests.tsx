@@ -1,12 +1,13 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { useMyChangeRequests, ChangeRequestRow } from '@/hooks/useChangeRequests';
 import { useMyCorrectionRequests } from '@/hooks/useCorrectionRequests';
+import { useTardyApprovalRequests } from '@/hooks/useTardyApprovalRequests';
 import { ChangeRequestModal } from '@/components/ChangeRequestModal';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/time-utils';
-import { Loader2, Plus, Inbox, History } from 'lucide-react';
+import { Loader2, Plus, Inbox, History, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useQueryClient } from '@tanstack/react-query';
@@ -39,12 +40,16 @@ function RequestCard({ highlighted, children }: { highlighted: boolean; children
 export default function MyRequests() {
   const { data: requests, isLoading } = useMyChangeRequests();
   const { data: corrections } = useMyCorrectionRequests();
+  const { data: tardyRequests } = useTardyApprovalRequests('all');
   const [modalOpen, setModalOpen] = useState(false);
   const { user } = useAuth();
+  // Managers read the whole office's tardy requests; this page is only theirs.
+  const myTardyRequests = (tardyRequests || []).filter(r => r.requested_by === user?.id);
   const qc = useQueryClient();
   // Decision notifications point at the exact request they decided.
   const linkedRequestId = useConsumedSearchParam('request');
   const linkedCorrectionId = useConsumedSearchParam('correction');
+  const linkedTardyId = useConsumedSearchParam('tardy');
 
   // Auto-mark request-related notifications as read when visiting this page
   useEffect(() => {
@@ -54,6 +59,7 @@ export default function MyRequests() {
         'change_request_approved', 'change_request_denied',
         'pto_request_approved', 'pto_request_denied',
         'correction_approved', 'correction_denied',
+        'tardy_request_approved', 'tardy_request_denied',
       ];
       const { data: unread } = await supabase
         .from('notifications')
@@ -151,6 +157,42 @@ export default function MyRequests() {
                   {c.resolution_note && (
                     <div className="pt-2 border-t text-xs text-muted-foreground">
                       <span className="font-medium">Resolution:</span> {c.resolution_note}
+                    </div>
+                  )}
+                </CardContent>
+              </RequestCard>
+            );
+          })}
+        </section>
+      )}
+
+      {/* Tardy approval requests — where "late arrival excused / not excused" notifications land. */}
+      {!!myTardyRequests.length && (
+        <section className="space-y-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-primary" />
+            <h2 className="text-lg font-semibold">My Tardy Approval Requests</h2>
+          </div>
+          {myTardyRequests.map(r => {
+            const badge = statusBadge[r.status] || statusBadge.pending;
+            return (
+              <RequestCard key={r.id} highlighted={r.id === linkedTardyId}>
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">Late arrival</Badge>
+                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${badge.className}`}>{badge.label}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{formatDate(r.created_at)}</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Date: <span className="font-medium text-foreground">{formatDate(r.entry_date)}</span>
+                    {r.tardy && <span> · {r.tardy.minutes_late} min late</span>}
+                  </p>
+                  <p className="text-sm">{r.reason}</p>
+                  {r.review_note && (
+                    <div className="pt-2 border-t text-xs text-muted-foreground">
+                      <span className="font-medium">Manager note:</span> {r.review_note}
                     </div>
                   )}
                 </CardContent>

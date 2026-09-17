@@ -133,8 +133,11 @@ Exact model in README §Checklist data model and migration
   from it).
 - Location-verified clock-in: `useGeoTracking` + `process-location-event` +
   `LocationStatusPanel`; zones are managed at `/work-zones`.
-- Tardiness has its own objects (`useTardies`, `TardyReasonModal`) — don't fold it
-  into punch editing.
+- Tardiness has its own objects (`useTardies`, `useTardyApprovalRequests`,
+  `TardyApprovalRequestModal`, `TardyReviewModal`) — don't fold it into punch
+  editing. The attendance engine owns tardy rows; the client never derives or
+  inserts them, and status changes go through the `review_tardy` /
+  `request_tardy_approval` / `decide_tardy_approval_request` RPCs.
 
 ## 10. AI features misbehaving
 

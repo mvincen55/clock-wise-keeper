@@ -109,14 +109,16 @@ Navigation is a compact destination list; every feature below keeps its own rout
 ### Time & attendance
 | Route | Page | What it does |
 |---|---|---|
-| `/timesheet` | Timesheet | Clock in/out, punch history, manager punch editing (`PunchEditorModal`), tardy reasons (`TardyReasonModal`, `TardyReviewModal`) |
+| `/timesheet` | Timesheet | Clock in/out, punch history, manager punch editing (`PunchEditorModal`), tardy approval requests (`TardyApprovalRequestModal`) |
 | `/work-zones` | WorkZones | Geofenced zones for location-verified clock-in (`useGeoTracking`, `LocationStatusPanel`, `process-location-event`) |
 | `/reports` | Reports | Payroll/attendance reporting and exports (built in the browser) |
 
 ### Time off
 | Route | Page | What it does |
 |---|---|---|
-| `/days-off` | DaysOff | Attendance: status by day, days off, tardies (`TardiesTable` names the employee for owners/managers, who review via `TardyReviewModal`), missing shifts, closures, personal calendar |
+| `/days-off` | DaysOff | Attendance: status by day, days off, tardies (`TardiesTable` names the employee for owners/managers, who decide via `TardyReviewModal`; employees ask via `TardyApprovalRequestModal`), missing shifts, closures, personal calendar |
+
+**Tardy policy (office rule):** a late arrival is `unapproved` until an owner/manager excuses it. The attendance engine (`_recompute_attendance_range_internal`) writes and re-syncs tardy rows and drops an undecided one when the day stops being late; the client never derives or inserts tardies. Employees ask to be excused with `request_tardy_approval` (table `tardy_approval_requests`, one waiting request per tardy); managers answer with `decide_tardy_approval_request` from Approvals → Tardies, or decide straight from the row with `review_tardy`. Decisions stamp `tardies.reviewed_at`, mirrored as `attendance_day_status.tardy_reviewed`.
 | `/pto` | PTO | PTO balances and accrual engine (`usePtoEngine`), requests (`PtoRequestModal`), corrections (`PtoCorrectionModal`) |
 | `/my-requests` | MyRequests | Employee's own request history |
 | `/approvals` | ApprovalQueue | Manager queue for PTO / corrections / change requests (`useApprovalCounts` badges nav) |

@@ -48,6 +48,7 @@ export default function Management() {
     { label: 'Change requests', count: counts?.changeRequests ?? 0 },
     { label: 'PTO requests', count: counts?.ptoRequests ?? 0 },
     { label: 'Correction requests', count: counts?.corrections ?? 0 },
+    { label: 'Tardy approval requests', count: counts?.tardyRequests ?? 0 },
   ];
 
   return (

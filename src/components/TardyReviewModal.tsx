@@ -18,21 +18,27 @@ type Props = {
     approval_status: string;
     reason_text: string | null;
     timezone_suspect?: boolean;
+    /** Null until a manager has decided; the dialog then opens on Approve. */
+    reviewed_at?: string | null;
   } | null;
   /** Whose tardy is under review — shown when a manager reads the office's rows. */
   employeeName?: string | null;
+  /** The employee's waiting request, when the review answers one. */
+  request?: { reason: string; created_at: string } | null;
   onSubmit: (id: string, status: 'approved' | 'unapproved', reason: string) => Promise<void>;
   onClose: () => void;
 };
 
-export function TardyReviewModal({ open, tardy, employeeName, onSubmit, onClose }: Props) {
+export function TardyReviewModal({ open, tardy, employeeName, request, onSubmit, onClose }: Props) {
   const [status, setStatus] = useState<'approved' | 'unapproved'>('approved');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (tardy) {
-      setStatus(tardy.approval_status === 'unapproved' ? 'unapproved' : 'approved');
+      // Every tardy starts unapproved; a manager opening it is most often
+      // here to excuse it, so an undecided one opens on Approve.
+      setStatus(tardy.reviewed_at && tardy.approval_status === 'unapproved' ? 'unapproved' : 'approved');
       setReason(tardy.reason_text || '');
     }
   }, [tardy]);
@@ -70,6 +76,13 @@ export function TardyReviewModal({ open, tardy, employeeName, onSubmit, onClose 
           <div className="rounded-md border border-warning/50 bg-warning/10 p-3 text-sm text-warning flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
             <span>Timestamp appears mis-zoned. Check punches before approving.</span>
+          </div>
+        )}
+
+        {request && (
+          <div className="rounded-md border bg-muted/40 p-3 text-sm">
+            <p className="text-xs font-medium text-muted-foreground">Approval requested {formatDate(request.created_at)}</p>
+            <p className="mt-1">{request.reason}</p>
           </div>
         )}
 

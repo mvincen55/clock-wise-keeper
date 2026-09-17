@@ -6,6 +6,7 @@ export interface ApprovalCounts {
   changeRequests: number;
   ptoRequests: number;
   corrections: number;
+  tardyRequests: number;
   total: number;
 }
 
@@ -19,7 +20,7 @@ export function useApprovalCounts() {
     enabled: !!orgId && isManager,
     refetchInterval: 30_000,
     queryFn: async () => {
-      const [cr, pto, corr] = await Promise.all([
+      const [cr, pto, corr, tardy] = await Promise.all([
         supabase
           .from('change_requests')
           .select('id', { count: 'exact', head: true })
@@ -35,17 +36,24 @@ export function useApprovalCounts() {
           .select('id', { count: 'exact', head: true })
           .eq('org_id', orgId!)
           .eq('status', 'pending'),
+        supabase
+          .from('tardy_approval_requests')
+          .select('id', { count: 'exact', head: true })
+          .eq('org_id', orgId!)
+          .eq('status', 'pending'),
       ]);
 
       const changeRequests = cr.count ?? 0;
       const ptoRequests = pto.count ?? 0;
       const corrections = corr.count ?? 0;
+      const tardyRequests = tardy.count ?? 0;
 
       return {
         changeRequests,
         ptoRequests,
         corrections,
-        total: changeRequests + ptoRequests + corrections,
+        tardyRequests,
+        total: changeRequests + ptoRequests + corrections + tardyRequests,
       };
     },
   });

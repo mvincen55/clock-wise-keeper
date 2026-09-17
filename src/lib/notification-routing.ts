@@ -59,7 +59,7 @@ type RouteBuilder = (n: NotificationLike, ctx: RoutingContext) => Omit<Notificat
 
 /** The approval queue, opened on the right tab with the right card highlighted. */
 const approvalsTab =
-  (tab: 'change-requests' | 'pto-requests' | 'corrections', tabLabel: string): RouteBuilder =>
+  (tab: 'change-requests' | 'pto-requests' | 'corrections' | 'tardies', tabLabel: string): RouteBuilder =>
   n => ({
     to: withParam('/approvals', 'request', n.related_id, `tab=${tab}`),
     label: `Approvals · ${tabLabel}`,
@@ -155,6 +155,22 @@ const NOTIFICATION_ROUTES: Record<string, RouteBuilder> = {
   change_request_denied: n => ({
     to: withParam('/my-requests', 'request', n.related_id),
     label: 'My Requests',
+    exact: !!n.related_id,
+  }),
+
+  // ── Tardy approval requests (created in SQL by the tardy RPCs) ──────
+  tardy_request_new: (n, ctx) =>
+    isAdmin(ctx.role)
+      ? approvalsTab('tardies', 'Tardies')(n, ctx)
+      : { to: withParam('/my-requests', 'tardy', n.related_id), label: 'My Requests', exact: !!n.related_id },
+  tardy_request_approved: n => ({
+    to: withParam('/my-requests', 'tardy', n.related_id),
+    label: 'My Requests · Tardies',
+    exact: !!n.related_id,
+  }),
+  tardy_request_denied: n => ({
+    to: withParam('/my-requests', 'tardy', n.related_id),
+    label: 'My Requests · Tardies',
     exact: !!n.related_id,
   }),
 
@@ -254,6 +270,10 @@ const TABLE_ROUTES: Record<string, RouteBuilder> = {
     isAdmin(ctx.role)
       ? approvalsTab('change-requests', 'Change Requests')(n, ctx)
       : { to: withParam('/my-requests', 'request', n.related_id), label: 'My Requests', exact: !!n.related_id },
+  tardy_approval_requests: (n, ctx) =>
+    isAdmin(ctx.role)
+      ? approvalsTab('tardies', 'Tardies')(n, ctx)
+      : { to: withParam('/my-requests', 'tardy', n.related_id), label: 'My Requests', exact: !!n.related_id },
   incident_reports: incidentReport,
   training_assignments: trainingAssignment,
   training_modules: n => ({

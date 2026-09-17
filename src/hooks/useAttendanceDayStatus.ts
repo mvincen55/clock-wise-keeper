@@ -18,6 +18,8 @@ export type AttendanceDayStatusRow = {
   is_late: boolean;
   minutes_late: number;
   tardy_approval_status: string;
+  /** True once a manager has decided the day's tardy. */
+  tardy_reviewed: boolean;
   has_edits: boolean;
   has_day_comment: boolean;
   has_day_off: boolean;
