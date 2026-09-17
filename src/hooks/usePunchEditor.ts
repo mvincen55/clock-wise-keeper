@@ -123,7 +123,12 @@ export function useSavePunchEdits() {
       qc.invalidateQueries({ queryKey: ['tardies'] });
       qc.invalidateQueries({ queryKey: ['attendance-day-status'] });
       qc.invalidateQueries({ queryKey: ['audit-history'] });
+      qc.invalidateQueries({ queryKey: ['employee-time-entries'] });
+      qc.invalidateQueries({ queryKey: ['employee-attendance'] });
+      qc.invalidateQueries({ queryKey: ['employee-tardies'] });
+      qc.invalidateQueries({ queryKey: ['org-attendance-summary'] });
+      qc.invalidateQueries({ queryKey: ['derived-attendance'] });
+      qc.invalidateQueries({ queryKey: ['derived-attendance-org'] });
     },
   });
 }
-
