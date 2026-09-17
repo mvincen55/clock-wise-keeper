@@ -1,9 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDaysOff, useAddDayOff, useDeleteDayOff, DayOffRow } from '@/hooks/useDaysOff';
 import { PtoRequestModal } from '@/components/PtoRequestModal';
 import { useTardies, useUpdateTardy, TardyRow } from '@/hooks/useTardies';
 import { TardyReviewModal } from '@/components/TardyReviewModal';
+import { TardiesTable } from '@/components/TardiesTable';
+import { useOrgEmployees, useArchivedEmployees } from '@/hooks/useEmployees';
+import { formatEmployeeName } from '@/lib/employee-name';
 import { AttendanceActions } from '@/components/AttendanceActions';
 import { useAttendanceExceptions, AttendanceExceptionRow } from '@/hooks/useAttendanceExceptions';
 import { useAttendanceDayStatus, useRecomputeAttendance, AttendanceDayStatusRow } from '@/hooks/useAttendanceDayStatus';
@@ -12,7 +15,7 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import PersonalCalendar from '@/components/PersonalCalendar';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { useAuth } from '@/hooks/useAuth';
-import { formatDate, formatTime, formatClock, formatClockRange } from '@/lib/time-utils';
+import { formatDate, formatClock, formatClockRange } from '@/lib/time-utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -138,6 +141,20 @@ export default function DaysOff() {
   const deleteDayOff = useDeleteDayOff();
   const addClosure = useAddClosure();
   const updateTardy = useUpdateTardy();
+
+  // Owners and managers read the whole office's tardies (RLS), so the
+  // Tardies tab must say whose each row is. Former staff keep their name.
+  const { data: orgEmployees } = useOrgEmployees();
+  const { data: archivedEmployees } = useArchivedEmployees();
+  const employeeNames = useMemo(() => {
+    const map = new Map<string, string>();
+    [...(orgEmployees || []), ...(archivedEmployees || [])].forEach(e => map.set(e.id, formatEmployeeName(e.display_name)));
+    return map;
+  }, [orgEmployees, archivedEmployees]);
+  const tardyEmployeeName = useCallback(
+    (t: TardyRow) => employeeNames.get(t.employee_id) ?? '—',
+    [employeeNames],
+  );
 
   const [open, setOpen] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
@@ -703,84 +720,18 @@ export default function DaysOff() {
               </SelectContent>
             </Select>
           </div>
-          <Card className="card-elevated overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Expected</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Actual</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Minutes Late</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Reason</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {tardiesLoading ? (
-                    <tr><td colSpan={7} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></td></tr>
-                  ) : !filteredTardies.length ? (
-                    <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">No tardies recorded</td></tr>
-                  ) : (
-                    filteredTardies.map(t => (
-                      <tr key={t.id} className={t.timezone_suspect ? 'bg-warning/5' : ''}>
-                        <td className="px-4 py-3 font-medium">
-                          {formatDate(t.entry_date)}
-                          {t.timezone_suspect && (
-                            <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning font-medium" title="This punch time looks off. Edit the punches (managers) or submit a correction request.">⚠ Time Looks Off</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 time-display text-sm">{formatClock(t.expected_start_time)}</td>
-                        <td className="px-4 py-3 time-display text-sm">
-                          {t.timezone_suspect ? (
-                            <span className="text-warning italic">—</span>
-                          ) : (
-                            formatTime(t.actual_start_time)
-                          )}
-                        </td>
-                        <td className="px-4 py-3 font-semibold text-destructive">
-                          {t.timezone_suspect ? '—' : t.minutes_late}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground max-w-[200px] truncate">{t.reason_text || '—'}</td>
-                        <td className="px-4 py-3">
-                          <span className={`text-xs px-2 py-0.5 rounded font-medium ${
-                            t.approval_status === 'approved' ? 'bg-success/20 text-success' :
-                            t.approval_status === 'unapproved' ? 'bg-destructive/20 text-destructive' :
-                            'bg-warning/20 text-warning'
-                          }`}>{t.approval_status}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          {/* Approving/editing tardies is manager-only; employees
-                              add their reason from the Timesheet prompt */}
-                          {isManager ? (
-                            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setReviewTardy(t)}>
-                              {t.approval_status === 'unreviewed' ? 'Review' : 'Edit'}
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-                {filteredTardies.length > 0 && (
-                  <tfoot>
-                    <tr className="border-t-2 font-bold">
-                      <td colSpan={3} className="px-4 py-3 text-right">Totals:</td>
-                      <td className="px-4 py-3 text-destructive">{filteredTardies.filter(t => !t.timezone_suspect).reduce((s, t) => s + t.minutes_late, 0)} min</td>
-                      <td colSpan={3}></td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
-            </div>
-          </Card>
+          <TardiesTable
+            rows={filteredTardies}
+            loading={tardiesLoading}
+            employeeNameFor={isManager ? tardyEmployeeName : undefined}
+            canReview={isManager}
+            onReview={setReviewTardy}
+          />
 
           <TardyReviewModal
             open={!!reviewTardy}
             tardy={reviewTardy}
+            employeeName={isManager && reviewTardy ? tardyEmployeeName(reviewTardy) : null}
             onSubmit={handleTardyReview}
             onClose={() => setReviewTardy(null)}
           />

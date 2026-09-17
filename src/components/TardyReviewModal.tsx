@@ -5,7 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertTriangle, Loader2 } from 'lucide-react';
-import { formatDate, formatClock } from '@/lib/time-utils';
+import { formatDate, formatClock, formatInstantClock } from '@/lib/time-utils';
 
 type Props = {
   open: boolean;
@@ -19,11 +19,13 @@ type Props = {
     reason_text: string | null;
     timezone_suspect?: boolean;
   } | null;
+  /** Whose tardy is under review — shown when a manager reads the office's rows. */
+  employeeName?: string | null;
   onSubmit: (id: string, status: 'approved' | 'unapproved', reason: string) => Promise<void>;
   onClose: () => void;
 };
 
-export function TardyReviewModal({ open, tardy, onSubmit, onClose }: Props) {
+export function TardyReviewModal({ open, tardy, employeeName, onSubmit, onClose }: Props) {
   const [status, setStatus] = useState<'approved' | 'unapproved'>('approved');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -50,20 +52,17 @@ export function TardyReviewModal({ open, tardy, onSubmit, onClose }: Props) {
 
   if (!tardy) return null;
 
-  const actualLocal = new Date(tardy.actual_start_time).toLocaleTimeString('en-US', {
-    hour: '2-digit', minute: '2-digit', hour12: true,
-  });
-
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
             <AlertTriangle className="h-5 w-5" />
-            Review Tardy — {formatDate(tardy.entry_date)}
+            Review Tardy — {employeeName ? `${employeeName} · ` : ''}{formatDate(tardy.entry_date)}
           </DialogTitle>
           <DialogDescription>
-            {tardy.minutes_late} minutes late (Expected: {formatClock(tardy.expected_start_time)}, Actual: {actualLocal})
+            {/* Both times in the office timezone, in the same style as the table. */}
+            {tardy.minutes_late} minutes late (Expected: {formatClock(tardy.expected_start_time)}, Actual: {formatInstantClock(tardy.actual_start_time)})
           </DialogDescription>
         </DialogHeader>
 

@@ -6,6 +6,9 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 export type TardyRow = {
   id: string;
   user_id: string;
+  org_id: string;
+  /** Whose tardy this is — admins read the whole office's rows. */
+  employee_id: string;
   time_entry_id: string | null;
   entry_date: string;
   expected_start_time: string;

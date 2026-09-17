@@ -116,7 +116,7 @@ Navigation is a compact destination list; every feature below keeps its own rout
 ### Time off
 | Route | Page | What it does |
 |---|---|---|
-| `/days-off` | DaysOff | Days-off requests and calendar |
+| `/days-off` | DaysOff | Attendance: status by day, days off, tardies (`TardiesTable` names the employee for owners/managers, who review via `TardyReviewModal`), missing shifts, closures, personal calendar |
 | `/pto` | PTO | PTO balances and accrual engine (`usePtoEngine`), requests (`PtoRequestModal`), corrections (`PtoCorrectionModal`) |
 | `/my-requests` | MyRequests | Employee's own request history |
 | `/approvals` | ApprovalQueue | Manager queue for PTO / corrections / change requests (`useApprovalCounts` badges nav) |

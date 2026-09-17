@@ -114,6 +114,20 @@ export function formatTime(date: Date | string): string {
   return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: APP_TZ });
 }
 
+/**
+ * The wall-clock of an instant in the app timezone, rendered like
+ * `formatClock` ("5:58 PM"). Use it wherever a punch instant sits next to a
+ * schedule time (tardy tables, reviews, exports) so the two columns read
+ * alike; `formatTime` keeps the zero-padded style used by punch lists.
+ * Returns the fallback when the value is missing or not a valid instant.
+ */
+export function formatInstantClock(value: Date | string | null | undefined, fallback = '—'): string {
+  if (!value) return fallback;
+  const d = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return fallback;
+  return formatClock(easternTimeInputValue(d), fallback);
+}
+
 export function formatDate(date: Date | string): string {
   if (typeof date === 'string') {
     // Date-only string (YYYY-MM-DD) → render as calendar date, no TZ shift.
