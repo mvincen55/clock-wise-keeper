@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { detectAppointmentRegions, columnsFromRegions, isNotesOnlyColumn } from '@/lib/schedule-reader/appointment-regions';
-import { readProviderCodes } from '@/lib/schedule-reader/provider-codes';
+import { readProviderCodeEvidence, readProviderCodes } from '@/lib/schedule-reader/provider-codes';
 import { suggestDailyColumns } from '@/lib/schedule-reader/provider-mapping';
 import type { OcrWord, LayoutColumn } from '@/lib/schedule-reader/types';
 const word = (text:string, y:number, confidence=50, x=101):OcrWord => ({text,confidence,bbox:{x0:x,x1:x+20,y0:y,y1:y+8}});
@@ -57,4 +57,22 @@ it('keeps a coded hold with the same doctor and does not use another doctor from
   expect(uncoded[1].providerId).toBeFalsy();
   const coded=suggestDailyColumns([...words,word('DR02',100,99,300)],columns,500,240,providers);
   expect(coded.map(c=>c.providerId)).toEqual(['scott','scott']);
+});
+
+it('folds half-width double bookings into their lane and rejoins split codes', () => {
+  // A full-width box and a side-by-side pair in the same operatory are one lane; the next operatory stays its own.
+  const regions=[{x0:100,x1:200,y0:10,y1:40},{x0:100,x1:150,y0:50,y1:80},{x0:150,x1:200,y0:50,y1:80},{x0:210,x1:310,y0:10,y1:40}];
+  expect(columnsFromRegions(regions,1000)).toEqual([{xStart:.1,xEnd:.2},{xStart:.21,xEnd:.31}]);
+  // "DR" and "02" read as two words on one line still count as one clean DR02.
+  expect(readProviderCodes([word('DR',20,90,100),{text:'02',confidence:90,bbox:{x0:122,x1:135,y0:20,y1:28}}])).toEqual(['DR02']);
+});
+
+it('matches the office vocabulary through OCR slips but never merges distinct clean codes', () => {
+  expect(readProviderCodes([word('HY1G',20,70),word('HY1G',80,70)],['HY16'])).toEqual(['HY16']);
+  expect(readProviderCodes([word('DR1',20,90),word('DR1',80,90)],['DR01'])).toEqual(['DR01']);
+  expect(readProviderCodes([word('HY1G',20,70)],['HY16'])).toEqual([]);
+  expect(readProviderCodes([word('DR03',20,99)],['DR02'])).toEqual(['DR03']);
+  expect(readProviderCodes([word('DRILL',20,99),word('DRILL',80,99)],['DR11'])).toEqual([]);
+  expect(readProviderCodes([word('HY1C',20,90),word('HY1C',80,90)],['HY16','HY10'])).toEqual([]);
+  expect(readProviderCodeEvidence([word('HY16',40,99),word('DR02',20,99),word('DR02',60,99)],['DR02','HY16'])).toEqual([{code:'DR02',count:2},{code:'HY16',count:1}]);
 });

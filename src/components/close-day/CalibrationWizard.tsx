@@ -34,18 +34,29 @@ import {
 import type { LayoutSignature } from '@/lib/schedule-reader/types';
 import { recognizeFrame } from '@/lib/schedule-reader/ocr';
 import { ROLE_LABELS } from '@/hooks/useOperationalRoles';
-import { useProviders } from '@/hooks/useProviders';
+import { useProviders, useUpdateProvider } from '@/hooks/useProviders';
 import { usePracticeSettings } from '@/hooks/usePracticeSettings';
 import { useProviderWorkingHours } from '@/hooks/useProviderWorkingHours';
 import { PMS_LABELS } from '@/lib/pms';
+import type { Provider } from '@/lib/providers';
 import { workingScheduleText, workingTime, type WorkingPeriod } from '@/lib/provider-working-schedule';
-import { providerColumn, suggestColumnProvider } from '@/lib/schedule-provider-mapping';
+import {
+  knownProviderCodes,
+  providerColumn,
+  suggestColumnProvider,
+  summarizeSuggestion,
+  unplacedProviders,
+  type ColumnSuggestionSummary,
+} from '@/lib/schedule-provider-mapping';
 import { useSaveLayoutProfile, useLayoutProfiles } from '@/hooks/useScheduleIntelligence';
 import { hhmmToMinutes } from '@/lib/time-utils';
 import ProviderWorkingSchedule from '@/components/close-day/ProviderWorkingSchedule';
+import ColumnPreview from '@/components/close-day/ColumnPreview';
+import { QuickPicks } from '@/components/close-day/column-suggestions';
+import { columnEvidence } from '@/lib/schedule-column-evidence';
 import { wipeOcrWords } from '@/lib/schedule-reader/destroy-capture';
 import { columnsFromRegions, isNotesOnlyColumn, isEmptyBlueGridColumn } from '@/lib/schedule-reader/appointment-regions';
-import { readProviderCodes } from '@/lib/schedule-reader/provider-codes';
+import { providerTypeForCode, readProviderCodes } from '@/lib/schedule-reader/provider-codes';
 
 const PMS_OPTIONS = [
   'Dentrix',
@@ -57,7 +68,23 @@ const PMS_OPTIONS = [
   'Other',
 ];
 
-type DraftColumn = LayoutColumn & { pxStart: number; pxEnd: number };
+/** Mirrors the org_providers.schedule_code check constraint — only codes the registry accepts are recorded there. */
+const REGISTRY_CODE = /^(DR|HYG|HY)[0-9]{1,4}$/;
+
+type DraftColumn = LayoutColumn & {
+  pxStart: number;
+  pxEnd: number;
+  /** Evidence behind the suggestion; shown to the closer, never saved. */
+  suggestion?: ColumnSuggestionSummary;
+  /** The provider the reader prefilled, so the card can say "suggested" until the closer changes it. */
+  suggestedProviderId?: string;
+};
+
+const toLayoutColumn = ({ pxStart: _s, pxEnd: _e, suggestion: _v, suggestedProviderId: _p, ...col }: DraftColumn): LayoutColumn => col;
+
+/** Share of the narrower lane two columns have in common, 0–1. */
+const laneOverlap = (a: Pick<LayoutColumn, 'xStart' | 'xEnd'>, b: Pick<LayoutColumn, 'xStart' | 'xEnd'>) =>
+  Math.max(0, Math.min(a.xEnd, b.xEnd) - Math.max(a.xStart, b.xStart)) / Math.max(1e-6, Math.min(a.xEnd - a.xStart, b.xEnd - b.xStart));
 
 const CAPTURE_ERROR_COPY: Record<string, string> = {
   CAPTURE_PERMISSION_DENIED:
@@ -89,9 +116,17 @@ type Props = {
  * style from the last calibration (or the screenshot's own time rail), and
  * each provider's weekly hours from the work schedule saved in Team for the
  * team member they are linked to. Every prefilled value stays editable.
+ *
+ * Column suggestions show their evidence — which provider code was read in
+ * the lane, how often, and why that points at a provider. A code the reader
+ * is sure of fills the column in for confirmation; anything less is offered
+ * as a one-click pick with its reason, never chosen for the closer. Codes the
+ * closer confirms for a provider are recorded on the provider registry, so
+ * the next capture knows them on sight.
  */
 export default function CalibrationWizard({ open, onClose }: Props) {
   const save = useSaveLayoutProfile();
+  const updateProvider = useUpdateProvider();
   const { data: registry = [], isPending: providersPending, isError: providersError } = useProviders();
   const providers = registry.filter(p => p.active);
   const { data: profiles = [], isPending: profilesPending } = useLayoutProfiles();
@@ -125,6 +160,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState<'window' | 'screenshot' | null>(null);
   const [columns, setColumns] = useState<DraftColumn[]>([]);
+  const [activeColumn, setActiveColumn] = useState<number | null>(null);
   const [pendingHours, setPendingHours] = useState<Record<string, boolean>>({});
   const onPendingHours = useCallback((id: string, pending: boolean) => setPendingHours(prev => prev[id] === pending ? prev : { ...prev, [id]: pending }), []);
   useEffect(() => { if (step !== 3) setPendingHours({}); }, [step]);
@@ -166,13 +202,13 @@ export default function CalibrationWizard({ open, onClose }: Props) {
   }, [open, configuredPms, pmsTouched]);
 
   const frameRef = useRef<CaptureFrame | null>(null);
-  const previewRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const reset = () => {
     setStep(0);
     setConfirmed(false);
     setColumns([]);
+    setActiveColumn(null);
     setGridSource(null);
     setPmsTouched(false);
   };
@@ -192,18 +228,6 @@ export default function CalibrationWizard({ open, onClose }: Props) {
     };
   }, [open]);
 
-  // Paint the in-memory frame into the preview whenever it should be visible.
-  useEffect(() => {
-    const frame = frameRef.current;
-    const preview = previewRef.current;
-    if (!frame || !preview || step < 1 || step > 2) return;
-    const scale = Math.min(1, 900 / frame.width);
-    preview.width = Math.round(frame.width * scale);
-    preview.height = Math.round(frame.height * scale);
-    const ctx = preview.getContext('2d');
-    if (ctx) ctx.drawImage(frame.canvas, 0, 0, preview.width, preview.height);
-  }, [step, columns.length]);
-
   /** Same pipeline whichever way the image arrived: OCR, draft columns, step 1. */
   const runCalibration = async (frame: CaptureFrame) => {
     await teardown(); // a retry never leaks the previous frame
@@ -222,13 +246,24 @@ export default function CalibrationWizard({ open, onClose }: Props) {
         setGridSource('read from the time labels in this screenshot');
       }
     }
+    // The office's own codes — from the registry and earlier calibrations —
+    // are the vocabulary the reader matches against, OCR slips included.
+    const known = knownProviderCodes(registry, previousColumns);
     const detected = columnsFromRegions(regions, frame.width);
-    const drafts = detected.length >= 1 && readProviderCodes(words).length
+    const drafts = detected.length >= 1 && readProviderCodes(words, known).length
       ? detected : draftColumnsFromFrame(words, frame.width, frame.height);
     const pixels=frame.canvas.getContext('2d')?.getImageData?.(0,0,frame.width,frame.height);
     setColumns(
       drafts.filter(d => !pixels || !isEmptyBlueGridColumn(pixels,d)).map(d => {
-        const suggestion = suggestColumnProvider(words, d, frame.width, frame.height, providers, previousColumns, true);
+        const suggestion = suggestColumnProvider(words, d, frame.width, frame.height, registry, previousColumns, true);
+        const summary = summarizeSuggestion(suggestion);
+        // Where a provider sat last time is a pick to offer, never a prefill:
+        // lanes change hands between days.
+        const remembered = previousColumns.find(c => c.kind !== 'non_clinical' && c.providerId && laneOverlap(c, d) >= 0.5);
+        const rememberedProvider = remembered ? providers.find(p => p.id === remembered.providerId) : undefined;
+        if (!suggestion.provider && rememberedProvider && !summary.candidates.some(c => c.providerId === rememberedProvider.id)) {
+          summary.candidates = [...summary.candidates, { providerId: rememberedProvider.id, strength: 'possible', reason: 'was in this position in the last calibration' }];
+        }
         return ({
         xStart: d.xStart,
         xEnd: d.xEnd,
@@ -240,6 +275,8 @@ export default function CalibrationWizard({ open, onClose }: Props) {
         department: null,
         employeeId: null,
         providerCode: suggestion.providerCode,
+        suggestion: summary,
+        suggestedProviderId: suggestion.provider?.id,
         ...(suggestion.provider ? {
           ...providerColumn(suggestion.provider),
           workingHours: knownHours(suggestion.provider.id),
@@ -283,6 +320,40 @@ export default function CalibrationWizard({ open, onClose }: Props) {
   const setColumn = (i: number, patch: Partial<DraftColumn>) =>
     setColumns(cols => cols.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
 
+  /** Give a column to a provider, carrying over hours the office already knows for them. */
+  const assign = (i: number, provider: Provider) => {
+    const existing = columns.find(c => c.providerId === provider.id && c.workingHours);
+    setColumn(i, { ...providerColumn(provider), workingHours: existing?.workingHours ?? knownHours(provider.id) });
+  };
+
+  const clinical = columns.filter(c => c.kind !== 'non_clinical');
+  const assignedCount = clinical.filter(c => c.providerId).length;
+  const unplaced = unplacedProviders(providers, columns);
+
+  // Codes the closer has just tied to a provider who has none on the registry
+  // yet. They are recorded on save so the daily capture knows them without a
+  // saved layout. A code claimed by two providers, or a provider read under
+  // two codes, is left for Settings to sort out.
+  const codeUpdates = (() => {
+    const byProvider = new Map<string, { provider: Provider; code: string } | null>();
+    const providersByCode = new Map<string, Set<string>>();
+    for (const c of clinical) {
+      if (!c.providerId || !c.providerCode || !REGISTRY_CODE.test(c.providerCode)) continue;
+      providersByCode.set(c.providerCode, new Set([...(providersByCode.get(c.providerCode) ?? []), c.providerId]));
+      const provider = registry.find(p => p.id === c.providerId);
+      if (!provider || provider.scheduleCode || registry.some(p => p.scheduleCode === c.providerCode)) continue;
+      const existing = byProvider.get(provider.id);
+      if (existing === undefined) byProvider.set(provider.id, { provider, code: c.providerCode });
+      else if (existing && existing.code !== c.providerCode) byProvider.set(provider.id, null);
+    }
+    return [...byProvider.values()].filter((u): u is { provider: Provider; code: string } => !!u && (providersByCode.get(u.code)?.size ?? 0) === 1);
+  })();
+  const codeUpdateText = (u: { provider: Provider; code: string }) => {
+    const implied = providerTypeForCode(u.code);
+    const caution = implied && implied !== u.provider.providerType ? ` (${u.code.replace(/\d+$/, '')} codes usually belong to a ${implied} — double-check this pick)` : '';
+    return `${u.code} as ${u.provider.displayName}'s schedule code${caution}`;
+  };
+
   const finish = async () => {
     if (Object.values(pendingHours).some(Boolean)) return;
     const startMin = hhmmToMinutes(dayStart);
@@ -303,7 +374,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
         pmsName: pms,
         isDefault: true,
         signature: {
-          columns: columns.map(({ pxStart: _s, pxEnd: _e, ...col }) => col),
+          columns: columns.map(toLayoutColumn),
           timeGrid: {
             minutesPerRow: Number(minutesPerRow),
             yStart: 0.12,
@@ -317,12 +388,24 @@ export default function CalibrationWizard({ open, onClose }: Props) {
         },
         statusLegend: [],
       });
-      toast.success('Schedule layout saved — the screenshot was destroyed, not stored.');
-      await teardown();
-      onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not save the layout');
+      return;
     }
+    const recorded: string[] = [];
+    for (const u of codeUpdates) {
+      try {
+        await updateProvider.mutateAsync({ id: u.provider.id, scheduleCode: u.code });
+        recorded.push(`${u.code} → ${u.provider.displayName}`);
+      } catch {
+        toast.error(`Layout saved, but ${u.code} could not be recorded as ${u.provider.displayName}'s schedule code. Add it in Settings → Office → Providers.`);
+      }
+    }
+    toast.success(recorded.length
+      ? `Schedule layout saved and ${recorded.join(', ')} recorded on the provider registry — the screenshot was destroyed, not stored.`
+      : 'Schedule layout saved — the screenshot was destroyed, not stored.');
+    await teardown();
+    onClose();
   };
 
   return (
@@ -424,20 +507,39 @@ export default function CalibrationWizard({ open, onClose }: Props) {
         {step === 1 && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Review the suggested providers. Empty columns are omitted and notes-only columns are collapsed. Keep early-arrival and hold columns that reserve provider time; assign related columns to the correct provider. Each daily capture confirms its own assignments. The preview never leaves this device.
+              Each numbered lane in the picture is a column below; hover a column to light up its lane. Suggestions come from the provider codes read inside the appointments, and each one says why. Empty lanes are omitted and notes-only lanes are collapsed; keep early-arrival and hold lanes that reserve provider time. Each daily capture confirms its own assignments. The preview never leaves this device.
             </p>
             {providersPending ? <p role="status">Loading office providers…</p> : providersError ? <p role="alert">Could not load providers. Close and retry calibration.</p> : providers.length === 0 ? <p>Add providers in Settings → Office before mapping schedule columns.</p> : null}
-            <canvas ref={previewRef} className="w-full rounded border" />
+            {frameRef.current && <ColumnPreview frame={frameRef.current} columns={columns} active={activeColumn} maxWidth={900} label="Calibration screenshot with numbered column boundaries" />}
+            <div className="rounded-md bg-muted/50 p-3 text-sm" aria-live="polite">
+              <p>
+                <strong>{assignedCount} of {clinical.length} columns</strong> {clinical.length === 1 ? 'has' : 'have'} a provider
+                {assignedCount < clinical.length ? ` · ${clinical.length - assignedCount} still need${clinical.length - assignedCount === 1 ? 's' : ''} your pick` : ''}.
+              </p>
+              {unplaced.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Not placed in any column yet: {unplaced.map(p => p.displayName + (p.scheduleCode ? ` (${p.scheduleCode})` : '')).join(', ')}. Anyone who was off on the captured day can stay unplaced.
+                </p>
+              )}
+            </div>
             <div className="space-y-3">
               {columns.map((col, i) => col.kind !== 'non_clinical' && (
-                <div key={i} className="grid gap-2 rounded-md border p-2 sm:grid-cols-4">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Column {i + 1}</Label>
+                <div key={i} className={`space-y-2 rounded-md border p-3 ${activeColumn === i ? 'border-primary/60 bg-primary/5' : ''}`}
+                  onMouseEnter={() => setActiveColumn(i)} onMouseLeave={() => setActiveColumn(current => current === i ? null : current)}
+                  onFocusCapture={() => setActiveColumn(i)} onBlurCapture={() => setActiveColumn(current => current === i ? null : current)}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span aria-hidden="true" className="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded bg-primary/10 px-1.5 text-xs font-semibold text-primary">{i + 1}</span>
+                      <Label className="text-sm font-medium">Column {i + 1}</Label>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] ${col.providerId ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'}`}>
+                        {col.providerId ? (col.suggestedProviderId === col.providerId ? 'Suggested — confirm' : 'Picked') : 'Needs a pick'}
+                      </span>
+                    </div>
                     <Select
                       value={col.kind}
                       onValueChange={v => setColumn(i, { kind: v as ColumnKind })}
                     >
-                      <SelectTrigger className="h-8 text-xs">
+                      <SelectTrigger className="h-8 w-44 text-xs" aria-label={`Kind of column ${i + 1}`}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -447,38 +549,39 @@ export default function CalibrationWizard({ open, onClose }: Props) {
                       </SelectContent>
                     </Select>
                   </div>
-                  {(
-                    <>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Provider</Label>
-                        <Select value={col.providerId ?? ''} onValueChange={id => {
-                          const provider = providers.find(p => p.id === id);
-                          if (provider) {
-                            const existing = columns.find(c => c.providerId === id && c.workingHours);
-                            setColumn(i, { ...providerColumn(provider), workingHours: existing?.workingHours ?? knownHours(id) });
-                          }
-                        }}>
-                          <SelectTrigger className="h-8 text-xs" aria-label={`Provider for column ${i + 1}`}><SelectValue placeholder="Select provider" /></SelectTrigger>
-                          <SelectContent>{providers.map(p => <SelectItem key={p.id} value={p.id}>{p.displayName}</SelectItem>)}</SelectContent>
-                        </Select>
-                        {col.providerCode && <p className="text-xs text-muted-foreground">Schedule ID: {col.providerCode}</p>}
-                        {col.providerCode && !col.providerId && <p className="text-xs text-muted-foreground">Code read from appointments. Select its provider once; saving the layout remembers this match.</p>}
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Provider type</Label>
-                        <p className="text-xs py-2">{col.providerRole ? ROLE_LABELS[col.providerRole] : 'Select provider'}</p>
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Department</Label>
-                        <p className="text-xs py-2">{col.department === 'doctor' ? 'Doctor' : col.department === 'hygiene' ? 'Hygiene' : col.department ? 'Other' : 'Select provider'}</p>
-                      </div>
-                    </>
-                  )}
-                  <div className="sm:col-span-4"><Button type="button" variant="ghost" size="sm" aria-label={`Exclude column ${i+1}`} onClick={() => { setColumn(i,{kind:'non_clinical'}); requestAnimationFrame(()=>document.getElementById('calibration-column-actions')?.focus()); }}>Exclude column — no appointments</Button></div>
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Provider</Label>
+                      <Select value={col.providerId ?? ''} onValueChange={id => {
+                        const provider = providers.find(p => p.id === id);
+                        if (provider) assign(i, provider);
+                      }}>
+                        <SelectTrigger className="h-8 text-xs" aria-label={`Provider for column ${i + 1}`}><SelectValue placeholder="Select provider" /></SelectTrigger>
+                        <SelectContent>{providers.map(p => <SelectItem key={p.id} value={p.id}>{p.displayName}{p.scheduleCode ? ` · ${p.scheduleCode}` : ''}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <p className="text-xs text-muted-foreground sm:pt-5">
+                      {col.providerRole && col.department ? (
+                        <>
+                          <span>{ROLE_LABELS[col.providerRole]}</span>
+                          {' · '}
+                          <span>{col.department === 'doctor' ? 'Doctor' : col.department === 'hygiene' ? 'Hygiene' : 'Other'}</span>
+                        </>
+                      ) : 'Type and department follow the provider'}
+                    </p>
+                  </div>
+                  {col.suggestion && <p className="text-xs text-muted-foreground">{columnEvidence(col, col.suggestedProviderId, { remembers: true })}</p>}
+                  {!col.providerId && <QuickPicks column={col} index={i} providers={providers} unplaced={unplaced} onPick={p => assign(i, p)} />}
+                  <div><Button type="button" variant="ghost" size="sm" aria-label={`Exclude column ${i+1}`} onClick={() => { setColumn(i,{kind:'non_clinical'}); requestAnimationFrame(()=>document.getElementById('calibration-column-actions')?.focus()); }}>Exclude column — no appointments</Button></div>
                 </div>
               ))}
             </div>
             {columns.some(c=>c.kind==='non_clinical') && <details className="text-sm text-muted-foreground"><summary className="cursor-pointer">{columns.filter(c=>c.kind==='non_clinical').length} excluded columns (empty or notes only)</summary><div className="flex flex-wrap gap-2 pt-2">{columns.map((col,i)=>col.kind==='non_clinical' && <Button key={i} variant="outline" size="sm" onClick={()=>setColumn(i,{kind:'provider'})}>Restore column {i+1}</Button>)}</div></details>}
+            {codeUpdates.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Saving also records {codeUpdates.map(codeUpdateText).join(' and ')} in Settings → Office → Providers, so every future capture knows the code on sight.
+              </p>
+            )}
             <div id="calibration-column-actions" tabIndex={-1} className="flex justify-end gap-2">
               <Button variant="ghost" onClick={onClose}>
                 Cancel
@@ -583,4 +686,3 @@ export default function CalibrationWizard({ open, onClose }: Props) {
     </Dialog>
   );
 }
-

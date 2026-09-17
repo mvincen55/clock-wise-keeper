@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { providerColumn, suggestColumnProvider } from '@/lib/schedule-provider-mapping';
+import { providerColumn, suggestColumnProvider, unplacedProviders } from '@/lib/schedule-provider-mapping';
 import { parseWorkingSchedule, workingScheduleText } from '@/lib/provider-working-schedule';
 import { applyProviderHours } from '@/lib/schedule-reader/provider-hours';
 import { buildProviderMetrics } from '@/lib/schedule-reader/metrics-builder';
@@ -16,8 +16,14 @@ describe('Provider mapping', () => {
     expect(providerColumn({ ...doctor, providerType: 'assistant' })).toMatchObject({ providerRole: 'dental_assistant', department: 'other' });
   });
   it('recognizes DR02 but only suggests a previously confirmed provider', () => {
-    expect(suggestColumnProvider([word('DR02')], col, 100, 100, [doctor], [])).toEqual({ providerCode: 'DR02', provider: undefined, notesOnly: false });
-    expect(suggestColumnProvider([word('DR02')], col, 100, 100, [doctor], [col]).provider).toEqual(doctor);
+    const fresh = suggestColumnProvider([word('DR02')], col, 100, 100, [doctor], []);
+    expect(fresh).toMatchObject({ providerCode: 'DR02', provider: undefined, notesOnly: false, codes: [{ code: 'DR02', count: 1 }] });
+    // An unowned code still narrows the choice: the only doctor without a
+    // schedule code is offered as a pick, with its reason — never filled in.
+    expect(fresh.candidates).toEqual([{ providerId: 'p1', strength: 'likely', reason: expect.stringContaining('the only doctor without a schedule code yet') }]);
+    const remembered = suggestColumnProvider([word('DR02')], col, 100, 100, [doctor], [col]);
+    expect(remembered.provider).toEqual(doctor);
+    expect(remembered.reason).toBe('DR02 was Dr. Test in the last calibration');
   });
   it('does not match ambiguous, inactive, low-confidence or body codes', () => {
     const other = { ...doctor, id: 'p2' };
@@ -25,6 +31,44 @@ describe('Provider mapping', () => {
     expect(suggestColumnProvider([word('DR02')], col, 100, 100, [{ ...doctor, active: false }], [col]).provider).toBeUndefined();
     expect(suggestColumnProvider([word('DR02', 60)], col, 100, 100, [doctor], [col]).provider).toBeUndefined();
     expect(suggestColumnProvider([word('DR02', 99, 80)], col, 100, 100, [doctor], [col]).provider).toBeUndefined();
+  });
+  it("reads the office's own codes through OCR slips and keeps distinct codes apart", () => {
+    const molly: Provider = { ...doctor, id: 'molly', displayName: 'Molly', providerType: 'hygienist', scheduleCode: 'HY16' };
+    // HY1G read twice is HY16 (G is how OCR misreads a 6) — Molly, with the reason spelled out.
+    const slipped = suggestColumnProvider([word('HY1G', 70, 20), word('HY1G', 70, 40)], col, 100, 100, [molly], [], true);
+    expect(slipped.provider).toEqual(molly);
+    expect(slipped.providerCode).toBe('HY16');
+    expect(slipped.reason).toBe("HY16 is Molly's schedule code");
+    // A clean DR03 beside a registered DR02 is a different provider, not a misread.
+    const scott: Provider = { ...doctor, id: 'scott', displayName: 'Dr. Scott', scheduleCode: 'DR02' };
+    const other = suggestColumnProvider([word('DR03', 99, 10)], col, 100, 100, [scott], [], true);
+    expect(other.providerCode).toBe('DR03');
+    expect(other.provider).toBeUndefined();
+    expect(other.candidates).toEqual([]);
+  });
+  it('offers the majority code of a mixed lane as a pick and never fills it in', () => {
+    const scott: Provider = { ...doctor, id: 'scott', displayName: 'Dr. Scott', scheduleCode: 'DR02' };
+    const molly: Provider = { ...doctor, id: 'molly', displayName: 'Molly', providerType: 'hygienist', scheduleCode: 'HY16' };
+    const words = [word('DR02', 99, 20), word('DR02', 99, 40), word('DR02', 99, 60), word('DR02', 99, 80), word('HY16', 99, 50)];
+    const mixed = suggestColumnProvider(words, col, 100, 100, [scott, molly], [], true);
+    expect(mixed.provider).toBeUndefined();
+    expect(mixed.providerCode).toBe('DR02');
+    expect(mixed.codes).toEqual([{ code: 'DR02', count: 4 }, { code: 'HY16', count: 1 }]);
+    expect(mixed.candidates).toEqual([
+      { providerId: 'scott', strength: 'likely', reason: expect.stringContaining('mostly DR02') },
+      { providerId: 'molly', strength: 'possible', reason: 'HY16 ×1 read here' },
+    ]);
+    // Without a clear majority nothing is preferred — both are equal picks.
+    const even = suggestColumnProvider([word('DR02', 99, 20), word('DR02', 99, 40), word('HY16', 99, 60), word('HY16', 99, 80)], col, 100, 100, [scott, molly], [], true);
+    expect(even.providerCode).toBeUndefined();
+    expect(even.provider).toBeUndefined();
+    expect(even.candidates.map(c => c.strength)).toEqual(['possible', 'possible']);
+  });
+  it('lists the active providers no column has claimed yet', () => {
+    const scott: Provider = { ...doctor, id: 'scott', displayName: 'Dr. Scott' };
+    const gone: Provider = { ...doctor, id: 'gone', displayName: 'Dr. Gone', active: false };
+    const columns = [{ kind: 'provider' as const, providerId: 'p1' }, { kind: 'non_clinical' as const, providerId: 'scott' }];
+    expect(unplacedProviders([doctor, scott, gone], columns).map(p => p.id)).toEqual(['scott']);
   });
 });
 describe('Reviewed weekly working schedules', () => {
@@ -49,4 +93,3 @@ describe('Reviewed weekly working schedules', () => {
     expect(applyProviderHours(rows, [{ weekday: 2, startMinutes: 0, endMinutes: 0 }], '2026-06-08', 480, 10).rows).toBe(rows);
   });
 });
-

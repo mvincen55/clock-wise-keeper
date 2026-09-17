@@ -4,6 +4,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import DailyColumnReview from '@/components/close-day/DailyColumnReview';
 import type { CaptureFrame, LayoutColumn } from '@/lib/schedule-reader';
 import type { Provider } from '@/lib/providers';
+import type { ReviewColumn } from '@/lib/schedule-provider-mapping';
 vi.mock('@/components/ui/select', () => ({
   Select: ({ value, onValueChange, children }: { value: string; onValueChange: (s: string) => void; children: React.ReactNode }) => <select value={value} onChange={e => onValueChange(e.target.value)}>{children}</select>,
   SelectTrigger: ({ children, ...props }: React.ComponentProps<'optgroup'>) => <optgroup {...props}>{children}</optgroup>,
@@ -47,4 +48,24 @@ it('lets a closer exclude and restore an extra lane without assigning a fake pro
  fireEvent.click(screen.getByText('1 excluded columns (empty or notes only)'));
  fireEvent.click(screen.getByRole('button',{name:'Restore column 2'}));
  expect(confirm).toBeDisabled();
+});
+
+it('offers evidence-backed picks with their reason and strips the evidence before confirming', () => {
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage: vi.fn(), strokeRect: vi.fn(), fillRect: vi.fn(), fillText: vi.fn() } as unknown as CanvasRenderingContext2D);
+  const scott: Provider = { id: 'scott', displayName: 'Dr. Scott', providerType: 'doctor', employeeId: null, active: true, orgId: 'o', sortOrder: 0 };
+  const col: ReviewColumn = {
+    xStart: 0, xEnd: .5, kind: 'provider', providerLabel: null, providerRole: null, department: null, employeeId: null, providerCode: 'DR02',
+    suggestion: { codes: [{ code: 'DR02', count: 3 }], candidates: [{ providerId: 'scott', strength: 'likely', reason: 'DR02 reads like a doctor code and Dr. Scott is the only doctor without a schedule code yet' }] },
+  };
+  const confirm = vi.fn();
+  render(<DailyColumnReview initial={[col]} providers={[scott]} frame={{ width: 100, height: 100, canvas: document.createElement('canvas') } as CaptureFrame} date="2026-09-17" onConfirm={confirm} onCancel={() => {}} />);
+  expect(screen.getByText('0 of 1 columns')).toBeInTheDocument();
+  expect(screen.getByText(/DR02 read in 3 appointments, but no provider has this code yet\. Pick who DR02 is for today\./)).toBeInTheDocument();
+  expect(screen.getByText(/Likely — DR02 reads like a doctor code/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Use Dr. Scott for column 1' }));
+  expect(screen.getByText('1 of 1 columns')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Use Dr. Scott for column 1' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Use these assignments' }));
+  expect(confirm).toHaveBeenCalledWith([expect.objectContaining({ providerId: 'scott', providerRole: 'dentist', providerCode: 'DR02' })]);
+  expect(confirm.mock.calls[0][0][0]).not.toHaveProperty('suggestion');
 });

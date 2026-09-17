@@ -30,6 +30,7 @@ import { useOrgEmployees } from '@/hooks/useEmployees';
 import { usePracticeSettings } from '@/hooks/usePracticeSettings';
 import { useProviders } from '@/hooks/useProviders';
 import DailyColumnReview from './DailyColumnReview';
+import type { ReviewColumn } from '@/lib/schedule-provider-mapping';
 import type { LayoutColumn } from '@/lib/schedule-reader';
 import {
   toClassifierRules,
@@ -113,7 +114,7 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
   const saveMetrics = useSaveScheduleMetrics();
   const { data: registry = [], isPending: providersPending, isError: providersError } = useProviders();
   const activeProviders = registry.filter(p => p.active);
-  const [dailyColumns, setDailyColumns] = useState<LayoutColumn[]>([]);
+  const [dailyColumns, setDailyColumns] = useState<ReviewColumn[]>([]);
   const columnReview = useRef<((columns: LayoutColumn[] | null) => void) | null>(null);
   const captureVersion = useRef(0);
 

@@ -47,11 +47,19 @@ export function detectAppointmentRegions(image: { width: number; height: number;
 
 /** Occupied column bounds come from appointment edges, not toolbar/header words. */
 export function columnsFromRegions(regions: OcrBox[], width: number): Array<Pick<LayoutColumn, 'xStart' | 'xEnd'>> {
-  const groups: OcrBox[] = [];
+  const groups: Array<{ x0: number; x1: number }> = [];
   for (const box of regions) {
-    if (!groups.some(g => Math.abs(g.x0 - box.x0) < width * .01 && Math.abs(g.x1 - box.x1) < width * .01)) groups.push(box);
+    if (!groups.some(g => Math.abs(g.x0 - box.x0) < width * .01 && Math.abs(g.x1 - box.x1) < width * .01)) groups.push({ x0: box.x0, x1: box.x1 });
   }
-  return groups.sort((a,b) => a.x0-b.x0).map(b => ({ xStart: b.x0/width, xEnd: b.x1/width }));
+  // Boxes that share most of a lane belong to it: a double-booked half-width
+  // pair sits inside its operatory, not beside it as two more columns.
+  const lanes: Array<{ x0: number; x1: number }> = [];
+  for (const g of groups.sort((a,b) => a.x0-b.x0)) {
+    const lane = lanes.find(l => Math.min(l.x1, g.x1) - Math.max(l.x0, g.x0) >= .5 * Math.min(l.x1 - l.x0, g.x1 - g.x0));
+    if (lane) { lane.x0 = Math.min(lane.x0, g.x0); lane.x1 = Math.max(lane.x1, g.x1); }
+    else lanes.push({ ...g });
+  }
+  return lanes.sort((a,b) => a.x0-b.x0).map(b => ({ xStart: b.x0/width, xEnd: b.x1/width }));
 }
 
 export function isNotesOnlyColumn(words: OcrWord[], regions: OcrBox[], column: Pick<LayoutColumn,'xStart'|'xEnd'>, width: number): boolean {

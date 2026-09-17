@@ -17,7 +17,7 @@
  * Nothing in this module performs network I/O.
  */
 import { recognizeFrame } from './ocr';
-import { suggestDailyColumns, type ScheduleProvider } from './provider-mapping';
+import { stripSuggestion, suggestDailyColumns, type ReviewColumn, type ScheduleProvider } from './provider-mapping';
 
 import type { LayoutColumn } from './types';
 import { applyProviderHours } from './provider-hours';
@@ -47,8 +47,8 @@ import {
 
 export interface ProcessOptions {
   providers?: ScheduleProvider[];
-  /** Explicit per-capture review; assignments never change the saved layout. */
-  reviewColumns?: (suggested: LayoutColumn[]) => Promise<LayoutColumn[] | null>;
+  /** Explicit per-capture review; assignments never change the saved layout. Suggestions arrive with their evidence (codes and candidate providers only). */
+  reviewColumns?: (suggested: ReviewColumn[]) => Promise<LayoutColumn[] | null>;
   profile: LayoutProfile;
   businessDate: string;
   /** Employee/provider names allowed on screen (needed for column mapping). */
@@ -171,7 +171,7 @@ export async function processScheduleFrame(
         throw new ScheduleReaderError('LAYOUT_NOT_RECOGNIZED');
       }
       match = { profile: options.profile, confidence: 1, needsColumnConfirmation: false,
-        frameColumns: columns.map(c => ({ ...c, pxStart: c.xStart * frame.width, pxEnd: c.xEnd * frame.width })) };
+        frameColumns: columns.map(c => ({ ...stripSuggestion(c as ReviewColumn), pxStart: c.xStart * frame.width, pxEnd: c.xEnd * frame.width })) };
     }
     if (match.confidence < 0.5) {
       throw new ScheduleReaderError('LAYOUT_NOT_RECOGNIZED', {
