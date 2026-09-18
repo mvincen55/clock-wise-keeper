@@ -350,7 +350,7 @@ describe('friendlyCdtName', () => {
   });
 
   it('returns null for unknown or custom codes', () => {
-    expect(friendlyCdtName('XX232')).toBeNull();
+    expect(friendlyCdtName('XX999')).toBeNull();
     expect(friendlyCdtName('9999')).toBeNull();
   });
 });

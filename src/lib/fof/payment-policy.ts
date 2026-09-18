@@ -9,6 +9,10 @@ const milestone = z.enum(milestoneKinds);
 const installment = z.object({ at: z.union([milestone, z.literal('firstImpressionsOrTryin')]), weight: z.number().int().positive().max(10000) }).strict();
 const strategy = z.array(installment).min(1).max(100);
 const tier = z.object({ below: strategy, above: strategy }).strict();
+/** A restoration course that starts with surgery on the same tooth (crown
+ * lengthening before a crown) collects at that surgery too. Optional so
+ * policies saved before it existed still validate; see restorationSurgeryTier. */
+const restorationTier = tier.extend({ withSurgery: tier.optional() }).strict();
 export const paymentPolicySchema = z.object({
   version: z.literal(1),
   thresholdCents: z.number().int().min(0).max(100000000),
@@ -16,10 +20,21 @@ export const paymentPolicySchema = z.object({
   rounding: z.enum(['nearestLast', 'floorLast']),
   mixedThreshold: z.enum(['explicitArrangement', 'separateGroups']),
   implantAdvance: z.boolean(),
-  strategies: z.object({ workup: tier, implant: tier, restoration: tier, denture: tier, other: tier }).strict(),
+  strategies: z.object({ workup: tier, implant: tier, restoration: restorationTier, denture: tier, other: tier }).strict(),
   labels: z.record(milestone, z.string().trim().min(1).max(160)).refine(labels => milestoneKinds.every(kind => !!labels[kind]), 'All milestone labels are required'),
 }).strict();
 export type PaymentPolicy = z.infer<typeof paymentPolicySchema>;
+export type PaymentTier = z.infer<typeof tier>;
+
+/** Equal parts at each appointment of a surgery-first restoration course:
+ * under the threshold, surgery / prep / delivery; at or over it, a scheduling
+ * payment first. A policy may override this with strategies.restoration.withSurgery. */
+export function restorationSurgeryTier(policy: PaymentPolicy): PaymentTier {
+  return policy.strategies.restoration.withSurgery ?? {
+    below: [{ at: 'surgery', weight: 1 }, { at: 'prep', weight: 1 }, { at: 'delivery', weight: 1 }],
+    above: [{ at: 'booking', weight: 1 }, { at: 'surgery', weight: 1 }, { at: 'prep', weight: 1 }, { at: 'delivery', weight: 1 }],
+  };
+}
 
 /** An explicit configuration template, NEVER a runtime fallback or a new-office default. */
 export function harelickPolicyTemplate(): PaymentPolicy {
@@ -32,6 +47,7 @@ export function harelickPolicyTemplate(): PaymentPolicy {
     strategies: {
       workup: { below: one('workup'), above: one('workup') },
       implant: { below: halves('booking', 'surgery'), above: halves('booking', 'surgery') },
+      // Surgery-first courses use restorationSurgeryTier's built-in parts unless a policy sets withSurgery.
       restoration: { below: halves('prep', 'delivery'), above: thirds('prep') },
       denture: { below: halves('impressions', 'delivery'), above: thirds('firstImpressionsOrTryin') },
       other: { below: one('treatment'), above: halves('booking', 'treatment') },

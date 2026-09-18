@@ -5,8 +5,12 @@ import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { treatmentGroupIds } from '@/lib/fof/treatment-groups';
+import { titleCase } from '@/lib/fof/cdt-names';
+import type { MilestoneKind } from '@/lib/fof/payment-policy';
 
-export interface ScheduleSourceLine { id: string; code: string; visit: string; tooth?: string; procedureLabel?: string; responsibilityCents: number; classification?: PaymentClass | 'review'; groupingHint?: 'same_tooth' | 'same_visit' | 'separate'; guidance?: { title: string; summary: string; sourceId: string; classification: PaymentClass | 'review' } }
+export interface ScheduleSourceLine { id: string; code: string; visit: string; tooth?: string; procedureLabel?: string; responsibilityCents: number; classification?: PaymentClass | 'review'; groupingHint?: 'same_tooth' | 'same_visit' | 'separate'; guidance?: { title: string; summary: string; sourceId: string; classification: PaymentClass | 'review' };
+  /** Surgery that prepares this tooth for its restoration (crown lengthening before a crown): one course, collected at the surgery too. */
+  surgical?: boolean }
 /** Per-line staff decisions. `code` records which procedure the decision was
  * made for: a row retyped to a different code drops its old decisions instead
  * of carrying a classification (or adjustment) meant for another procedure. */
@@ -53,11 +57,13 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
         for (const kind of milestoneKinds) {
           if (kind === 'tryin') continue; // No invented try-in appointment; staff can add it.
           const id = `${groupId}:${kind}`;
-          const offset = kind === 'booking' ? 0 : kind === 'delivery' ? 8 : 4;
+          // Appointment order within a course: scheduling, work-up, surgery, prep or
+          // impressions, try-in, treatment, delivery. Distinct so rows print in sequence.
+          const offset = ({ booking: 0, workup: 2, surgery: 3, prep: 4, impressions: 4, tryin: 5, treatment: 6, delivery: 8 } as Record<MilestoneKind, number>)[kind];
           events.set(id, { id, label: `${groupLabel} — ${policy.labels[kind] ?? kind}`, order: baseOrder + offset, appointmentId: kind === 'booking' ? undefined : id });
           links[kind] = id;
         }
-        groups.set(groupId, { id: groupId, label: groupLabel, classification, events: links });
+        groups.set(groupId, { id: groupId, label: groupLabel, classification, events: links, surgical: false });
       }
       return { id: line.id, code: line.code, groupId, responsibilityCents: line.responsibilityCents, adjustmentCents: parse(edit.adjustment), paidCents: parse(edit.paid) };
     });
@@ -72,10 +78,16 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
       const titles = [...new Set(members.map(line => line.guidance?.title?.trim()).filter(Boolean))] as string[];
       const labels = [...new Set(members.map(line => line.procedureLabel?.trim()).filter(Boolean))] as string[];
       const implantRestoration = members.some(line => /^D6(0[5-9]\d|1\d\d)$/i.test(line.code));
+      // A crown or bridge names its own course; the surgery and post that prepare
+      // the tooth for it are parts of that course, not co-equal headings.
+      // Crowns, inlays/onlays, veneers (D2510-D2799) and bridge units (D6200-D6799); not posts, buildups or repairs (D29xx).
+      const crownMember = members.find(line => /^D(2[5-7]\d\d|6[2-7]\d\d)$/i.test(line.code) && line.procedureLabel?.trim());
+      const surgicalMember = members.find(line => line.surgical);
+      group.surgical = group.classification === 'restoration' && !!surgicalMember;
       const courseTitle = (): string => {
         switch (group.classification) {
           case 'implant': return 'Implant Surgery';
-          case 'restoration': return labels.some(label => /implant crown/i.test(label)) ? 'Implant Crown' : implantRestoration ? 'Implant Restoration' : labels.length === 2 ? labels.join(' + ') : 'Restoration';
+          case 'restoration': return labels.some(label => /implant crown/i.test(label)) ? 'Implant Crown' : implantRestoration ? 'Implant Restoration' : crownMember ? crownMember.procedureLabel!.trim() : labels.length === 2 ? labels.join(' + ') : 'Restoration';
           case 'workup': return 'Work-Up';
           case 'denture': return labels.length === 2 ? labels.join(' + ') : 'Denture';
           default: return labels.length === 2 ? labels.join(' + ') : patientClassTitle[group.classification];
@@ -88,11 +100,14 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
       const treatment = titles.length > 0 && titles.length <= 2 ? titles.join(' + ') : labels.length === 1 ? labels[0] : courseTitle();
       const numberedTeeth = teeth.map(tooth => `#${tooth}`);
       const toothLabel = numberedTeeth.length > 1 ? `${numberedTeeth.slice(0, -1).join(', ')} and ${numberedTeeth.at(-1)}` : numberedTeeth[0];
-      const treatmentTitle = treatment.replace(/\b[a-z]/g, letter => letter.toUpperCase());
+      const treatmentTitle = titleCase(treatment);
       group.label = state.groups[group.id]?.label?.trim() || `${treatmentTitle}${toothLabel ? ` ${toothLabel}` : ''}`;
       for (const kind of milestoneKinds) {
         const event = events.get(group.events[kind] ?? '');
-        if (event) event.label = `${group.label} — ${policy.labels[kind] ?? kind}`;
+        if (!event) continue;
+        // A surgery-first restoration collects "at crown lengthening", not "at implant surgery".
+        const surgeryName = kind === 'surgery' && group.surgical && surgicalMember?.procedureLabel?.trim() ? `At ${surgicalMember.procedureLabel.trim().toLowerCase()}` : undefined;
+        event.label = `${group.label} — ${surgeryName ?? policy.labels[kind] ?? kind}`;
       }
     }
     for (const line of source) {

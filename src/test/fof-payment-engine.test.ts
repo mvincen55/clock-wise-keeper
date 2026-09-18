@@ -16,6 +16,31 @@ function plan(classification: PaymentClass, cents: number): PaymentInput {
 const values = (input: PaymentInput) => { const result = buildPaymentSchedule(input); expect(result.issues).toEqual([]); return result.rows.map(r => r.cents); };
 
 
+describe('surgery-first restoration course', () => {
+  const course = (cents: number): PaymentInput => {
+    const input = plan('restoration', cents);
+    input.groups[0] = { ...input.groups[0], surgical: true, events: { booking: 'b', surgery: 's', prep: 'p', delivery: 'd' } };
+    input.events = [{ id: 'b', label: 'Scheduling', order: 0 }, { id: 's', label: 'Crown lengthening', order: 1 }, { id: 'p', label: 'Prep', order: 2 }, { id: 'd', label: 'Delivery', order: 3 }];
+    return input;
+  };
+  it('collects four equal payments at or over the threshold and three under it', () => {
+    expect(values(course(320100))).toEqual([80025, 80025, 80025, 80025]);
+    expect(buildPaymentSchedule(course(320100)).rows.map(r => r.label)).toEqual(['Scheduling', 'Crown lengthening', 'Prep', 'Delivery']);
+    expect(values(course(90000))).toEqual([30000, 30000, 30000]);
+  });
+  it('is a plain restoration course when nothing surgical is in it', () => {
+    const input = course(320100); input.groups[0].surgical = false;
+    expect(values(input)).toEqual([106700, 106700, 106700]);
+  });
+  it('accepts a saved policy without the surgery tier and honors one that overrides it', () => {
+    const stored = JSON.parse(JSON.stringify(harelickPolicyTemplate())); delete stored.strategies.restoration.withSurgery;
+    const input = course(320100); input.policy = stored;
+    expect(values(input)).toEqual([80025, 80025, 80025, 80025]);
+    input.policy = { ...harelickPolicyTemplate(), strategies: { ...harelickPolicyTemplate().strategies, restoration: { ...harelickPolicyTemplate().strategies.restoration, withSurgery: { below: [{ at: 'surgery', weight: 1 }, { at: 'delivery', weight: 1 }], above: [{ at: 'surgery', weight: 1 }, { at: 'delivery', weight: 3 }] } } } };
+    expect(values(input)).toEqual([80025, 240075]);
+  });
+});
+
 describe('organization payment engine — confirmed policy', () => {
   it('AI suggestions only add labels and preserve manual amounts, labels, and stale bases', () => {
     const input=fullFixture(), original=buildPaymentSchedule(input), row=original.rows[0];
