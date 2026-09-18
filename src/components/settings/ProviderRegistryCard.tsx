@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useProviders, useAddProvider, useUpdateProvider } from '@/hooks/useProviders';
 import { useOrgStaff } from '@/hooks/useStaffCodes';
 import { PROVIDER_TYPES, PROVIDER_TYPE_LABELS, type Provider, type ProviderType } from '@/lib/providers';
+import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 
 /**
  * Manager-only provider registry — the single editable source of truth for
@@ -98,6 +99,15 @@ export default function ProviderRegistryCard() {
 
   const staffName = (employeeId: string | null) =>
     employeeId ? staff.find((s) => s.employeeId === employeeId)?.displayName ?? null : null;
+
+  // Team-member picker: surname-first labels in A→Z order, so a manager can scan
+  // the list the way the office roster reads. The stored name is untouched.
+  const linkableStaff = useMemo(
+    () => staff
+      .map((s) => ({ employeeId: s.employeeId, label: formatEmployeeNameLastFirst(s.displayName) }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+    [staff],
+  );
 
   return (
     <Card className="card-elevated">
@@ -228,8 +238,8 @@ export default function ProviderRegistryCard() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Not linked</SelectItem>
-                  {staff.map((s) => (
-                    <SelectItem key={s.employeeId} value={s.employeeId}>{s.displayName}</SelectItem>
+                  {linkableStaff.map((s) => (
+                    <SelectItem key={s.employeeId} value={s.employeeId}>{s.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
