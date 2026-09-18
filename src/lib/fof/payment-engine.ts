@@ -1,5 +1,5 @@
 /** Pure, memory-only payment allocation. Labels never determine grouping or timing. */
-import { paymentPolicySchema, type PaymentClass, type PaymentPolicy, type MilestoneKind } from './payment-policy';
+import { paymentPolicySchema, restorationSurgeryTier, type PaymentClass, type PaymentPolicy, type MilestoneKind } from './payment-policy';
 
 export interface PaymentProcedure { id: string; code?: string; groupId: string; responsibilityCents: number; adjustmentCents?: number; paidCents?: number }
 export interface CollectionEvent { id: string; label: string; order: number; appointmentId?: string }
@@ -7,6 +7,8 @@ export interface PaymentGroup {
   id: string; label: string; classification: PaymentClass | 'review';
   /** Explicit combined treatment arrangement; unrelated groups never share a threshold. */
   arrangementId?: string;
+  /** A restoration course that begins with surgery on the tooth (crown lengthening before a crown). */
+  surgical?: boolean;
   events: Partial<Record<MilestoneKind, string>>;
 }
 export interface PaymentAllocation { groupId: string; procedureId: string; milestone: MilestoneKind; cents: number }
@@ -107,7 +109,7 @@ export function buildPaymentSchedule(input: PaymentInput): PaymentSchedule {
       } else issues.push(`Review the shared booking and treatment event for “${group.label}”.`);
     }
     const high = policy.inclusive ? thresholdAmount >= policy.thresholdCents : thresholdAmount > policy.thresholdCents;
-    const rule = policy.strategies[group.classification];
+    const rule = group.classification === 'restoration' && group.surgical ? restorationSurgeryTier(policy) : policy.strategies[group.classification];
     const strategy = group.classification === 'implant' && policy.implantAdvance ? rule.above : high ? rule.above : rule.below;
     const milestones: { kind: MilestoneKind; event: CollectionEvent }[] = [];
     for (const step of strategy) {

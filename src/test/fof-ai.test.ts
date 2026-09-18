@@ -12,7 +12,7 @@ describe('safeProcedureLabel', () => {
   });
 
   it('falls back to the bare code for custom/unknown codes — never typed text', () => {
-    expect(safeProcedureLabel('D9999')).toBe('D9999');
+    expect(safeProcedureLabel('D0000')).toBe('D0000');
     expect(safeProcedureLabel('n100')).toBe('N100');
   });
 

@@ -31,8 +31,8 @@ describe('resolvePatientName', () => {
   });
 
   it('names custom office codes that have no built-in name', () => {
-    expect(resolvePatientName('D9999', {})).toBeNull();
-    expect(resolvePatientName('D9999', { D9999: 'Comfort Menu' })).toBe('Comfort Menu');
+    expect(resolvePatientName('D0000', {})).toBeNull();
+    expect(resolvePatientName('D0000', { D0000: 'Comfort Menu' })).toBe('Comfort Menu');
   });
 
   it('treats a blank or whitespace override as "use the built-in name"', () => {
@@ -71,6 +71,6 @@ describe('HIPAA boundary: overrides print but never reach the AI', () => {
   });
 
   it('still yields the code itself for an unknown code, never typed text', () => {
-    expect(safeProcedureLabel('D9999')).toBe('D9999');
+    expect(safeProcedureLabel('D0000')).toBe('D0000');
   });
 });

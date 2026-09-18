@@ -53,7 +53,16 @@ relines → denture, implant placement → implant, everything else → treatmen
 delivery); code-bank guidance for the code takes precedence over the range, and a saved
 office classification over both. Custom office codes with no saved classification still
 require a staff decision before printing, offered as a one-click suggestion in the
-preview. Related procedures
+preview.
+
+Crown lengthening or a gingivectomy (D4249, D4210-D4212) on the same tooth as a
+crown, post and core, or bridge unit is the first appointment of that restoration,
+not a separate phase: the line joins the restoration course, the course is named
+for the crown ("Porcelain Crown #11"), and the schedule collects at each of its
+appointments: under the threshold, equal parts at the surgery, the refined prep and
+delivery (three payments); at or over it, a scheduling payment first (four). A policy
+may replace those parts with strategies.restoration.withSurgery; policies saved
+without it keep working. Related procedures
 that share an appointment are grouped, using the same Visit # the Office Copy
 prints (typed, otherwise suggested from the code); staff can change their group names.
 Different classes keep separate groups and can share actual collection events.

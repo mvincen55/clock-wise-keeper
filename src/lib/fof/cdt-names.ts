@@ -5,6 +5,9 @@
  * without the leading D. Unknown codes fall back to the schedule's own
  * description.
  */
+import { CDT_NAMES, OFFICE_SHORTHAND_NAMES } from './cdt-names-table';
+
+/** Hand-tuned names; the full range lives in cdt-names-table.ts. */
 const NAMES: Record<string, string> = {
   // Diagnostic
   '0120': 'Periodic exam',
@@ -153,11 +156,15 @@ export function titleCase(text: string): string {
 }
 
 export function friendlyCdtName(code: string): string | null {
-  // Only D-prefixed codes are real CDT; bare numbers are custom office codes.
-  const match = /^D(\d{4})$/i.exec(code.trim());
-  if (!match) return null;
-  const name = NAMES[match[1]];
-  return name ? titleCase(name) : null;
+  const key = code.trim().toUpperCase();
+  // A CDT code, or an office variant of one (D2740C, D9215A, D2752.) which
+  // means the same procedure to the patient as its base code.
+  const match = /^D(\d{4})(?:[A-Z.]{1,3})?$/i.exec(key);
+  const cdt = match ? NAMES[match[1]] ?? CDT_NAMES[match[1]] : undefined;
+  if (cdt) return titleCase(cdt);
+  // The office's own shorthand codes (D001, D0041, 2014…), where the shorthand is unambiguous.
+  const shorthand = OFFICE_SHORTHAND_NAMES[key];
+  return shorthand ? titleCase(shorthand) : null;
 }
 
 /** Office overrides for what patients see, keyed by uppercase code. */

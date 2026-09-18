@@ -19,7 +19,7 @@ vi.mock('@/hooks/useMyProfile', () => ({ useMyProfile: () => ({ data: null }) })
 vi.mock('@/hooks/useOrgContext', () => ({ useOrgContext: () => ({ data: { org_id: 'org-a', user_id: 'staff-a', role: 'manager' } }) }));
 vi.mock('@/hooks/useFofPolicySettings', () => ({
   useFofPolicySettings: () => ({ data: { payment_policy: harelickPolicyTemplate() } }),
-  usePaymentClassifications: () => ({ data: { D0367: 'workup', D0470: 'workup', D6010: 'implant', D6011: 'implant', D6057: 'restoration', D6059: 'restoration' } }),
+  usePaymentClassifications: () => ({ data: { D0367: 'workup', D0470: 'workup', D6010: 'implant', D6011: 'implant', D6057: 'restoration', D6059: 'restoration', D4249: 'other', D2954: 'restoration', D2740: 'restoration' } }),
 }));
 vi.mock('@/hooks/useFofTemplates', () => ({ useFofTemplates: () => ({ data: LIVE_TEMPLATES }), useFofSettings: () => ({ data: undefined }) }));
 vi.mock('@/hooks/useOrgBranding', () => ({ useOrgBranding: () => ({ data: PRACTICE_DEFAULT_BRANDING }) }));
@@ -37,13 +37,14 @@ function mount() {
 }
 
 /** Type codes and fees without touching the Visit box, as staff usually do. */
-function addProcedures(rows: { code: string; fee: string }[]) {
+function addProcedures(rows: { code: string; fee: string; tooth?: string }[]) {
   rows.forEach((row, i) => {
     if (i > 0) fireEvent.click(screen.getByRole('button', { name: /Add Procedure/ }));
     const codes = screen.getAllByPlaceholderText('D2740 / crown');
     fireEvent.change(codes[i], { target: { value: row.code } });
     const fees = screen.getAllByPlaceholderText('$0.00');
     fireEvent.change(fees[i], { target: { value: row.fee } });
+    if (row.tooth) fireEvent.change(screen.getAllByPlaceholderText('#')[i], { target: { value: row.tooth } });
   });
 }
 
@@ -86,6 +87,21 @@ describe('payment groups follow the appointment the office copy prints', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Use Treatment without delivery for this form' }));
     expect(screen.queryByText(/Preview paused/)).toBeNull();
     expect(screen.getByRole('button', { name: /^Print$/ })).toBeEnabled();
+  });
+  it('folds crown lengthening into the crown course on the same tooth, but not on its own', () => {
+    mount();
+    addProcedures([{ code: 'D4249', fee: '1141', tooth: '11' }, { code: 'D2954', fee: '491', tooth: '11' }, { code: 'D2740', fee: '1569', tooth: '11' }]);
+    fireEvent.click(screen.getByText('Amounts & Payment Plan'));
+    expect(screen.getAllByLabelText(/^Treatment name /).map(el => (el as HTMLInputElement).value)).toEqual(['Porcelain Crown #11']);
+    expect(screen.getAllByLabelText(/^Payment amount /).map(el => (el as HTMLInputElement).value)).toEqual(['800.25', '800.25', '800.25', '800.25']);
+    // The event and its payment row both carry the wording.
+    expect(screen.getAllByDisplayValue('Porcelain Crown #11 — At crown lengthening').length).toBeGreaterThan(0);
+  });
+  it('keeps crown lengthening a separate phase when no restoration shares the tooth', () => {
+    mount();
+    addProcedures([{ code: 'D4249', fee: '1141', tooth: '11' }, { code: 'D2740', fee: '1569', tooth: '3' }]);
+    fireEvent.click(screen.getByText('Amounts & Payment Plan'));
+    expect(screen.getAllByLabelText(/^Treatment name /).map(el => (el as HTMLInputElement).value)).toEqual(['Crown Lengthening #11', 'Porcelain Crown #3']);
   });
   it('still keeps a typed visit number authoritative', () => {
     mount();

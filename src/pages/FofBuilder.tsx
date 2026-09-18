@@ -86,6 +86,7 @@ import { readLocalTreatment, type LocalTreatmentRow } from '@/lib/fof/local-trea
 import { useFofPolicySettings, usePaymentClassifications } from '@/hooks/useFofPolicySettings';
 import { PaymentScheduleEditor, classTitle, usePaymentScheduleEditor } from '@/components/fof/PaymentScheduleEditor';
 import { suggestPaymentClass } from '@/lib/fof/suggest-class';
+import { isRestorationProcedure, isRestorationSurgery, toothTokens } from '@/lib/fof/restoration-surgery';
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
 import { resolveImportedFee } from '@/lib/fof/import-fee';
 import {
@@ -1116,10 +1117,30 @@ export default function FofBuilder() {
   );
 
   const baselineComputation = effectiveTemplate ? computeFof(effectiveTemplate, amounts, overrides, visitPlan) : null;
+  // Saved office classification first; otherwise the code-bank guidance for
+  // the code; otherwise a standard D code classifies itself from its CDT
+  // range. Only custom office codes still wait for a staff decision.
+  const baseClassification = (entry: (typeof feeLineEntries)[number]) => {
+    const recipe = officeGuidance.data?.recipes.find(recipe => recipe.code === entry.line.code.toUpperCase() && recipe.scheduleId === officeSchedule?.id);
+    return classificationQuery.data?.[entry.line.code]
+      ?? (recipe && recipe.classification !== 'review' ? recipe.classification : undefined)
+      ?? (/^D\d{4}$/i.test(entry.line.code) ? suggestPaymentClass(entry.line.code) : 'review' as const);
+  };
+  // Crown lengthening (or a gingivectomy) on the same tooth as a crown, post
+  // and core, or bridge is the first appointment of that restoration, not a
+  // separate phase: it joins the restoration course and is collected at.
+  const surgicalPrerequisite = (entry: (typeof feeLineEntries)[number]) => {
+    if (!isRestorationSurgery(entry.line.code)) return false;
+    const teeth = toothTokens(state.lines.find(l => l.key === entry.key)?.tooth);
+    if (!teeth.length) return false;
+    return feeLineEntries.some(other => other.key !== entry.key && isRestorationProcedure(other.line.code) && baseClassification(other) === 'restoration' &&
+      toothTokens(state.lines.find(l => l.key === other.key)?.tooth).some(tooth => teeth.includes(tooth)));
+  };
   const policyLines = feeLineEntries.map(entry => {
     const estimateLine = perLineByKey.get(entry.key);
     const builderLine = state.lines.find(l => l.key === entry.key)!;
     const recipe = officeGuidance.data?.recipes.find(recipe => recipe.code === entry.line.code.toUpperCase() && recipe.scheduleId === officeSchedule?.id);
+    const surgical = surgicalPrerequisite(entry);
     return {
       // The payment groups must see the same appointment number the office
       // copy prints: the typed Visit #, else the stage suggested from the
@@ -1127,13 +1148,10 @@ export default function FofBuilder() {
       // own group, which fragmented the schedule into one phase per code.
       id: entry.key, code: entry.line.code, visit: String(entry.visit),
       groupingHint: recipe?.grouping, guidance: recipe ? { title: recipe.title, summary: recipe.summary, sourceId: recipe.sourceId, classification: recipe.classification } : undefined,
-      tooth: builderLine.tooth, procedureLabel: builderLine.description.trim() || safeProcedureLabel(entry.line.code) || undefined,
-      // Saved office classification first; otherwise the code-bank guidance
-      // for the code; otherwise a standard D code classifies itself from its
-      // CDT range. Only custom office codes still wait for a staff decision.
-      classification: classificationQuery.data?.[entry.line.code]
-        ?? (recipe && recipe.classification !== 'review' ? recipe.classification : undefined)
-        ?? (/^D\d{4}$/i.test(entry.line.code) ? suggestPaymentClass(entry.line.code) : 'review' as const),
+      // Patients read the friendly name, never the PMS shorthand ("CrnLngH&S").
+      tooth: builderLine.tooth, procedureLabel: resolvePatientName(entry.line.code, codeNames) || builderLine.description.trim() || safeProcedureLabel(entry.line.code) || undefined,
+      classification: surgical ? 'restoration' as const : baseClassification(entry),
+      surgical,
       responsibilityCents: builderLine.feeInput.trim() && parseCurrencyInput(builderLine.feeInput) === null ? NaN : freeUnderMembership(builderLine) ? 0 : entry.line.officeFeeCents -
         (effectiveTemplate?.showInsuranceEstimate ? estimateLine?.insurancePaysCents ?? 0 : 0) -
         (effectiveTemplate?.showWriteOff ? estimateLine?.writeOffCents ?? 0 : 0),

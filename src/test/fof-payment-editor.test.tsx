@@ -158,6 +158,24 @@ describe('payment editor and shared print result', () => {
     expect(result.current.model!.groups.map(g=>g.label)).toEqual(['Work-Up','Implant Surgery #8','Implant Crown #8']);
     expect(result.current.model!.schedule.issues).toEqual([]);
   });
+  it('treats crown lengthening, post and core, and the crown as one course with three appointments', () => {
+    const source: ScheduleSourceLine[] = [
+      { id: 'cl', code: 'D4249', visit: '1', tooth: '11', responsibilityCents: 114100, classification: 'restoration', surgical: true, procedureLabel: 'Crown Lengthening' },
+      { id: 'pc', code: 'D2954', visit: '3', tooth: '11', responsibilityCents: 49100, classification: 'restoration', procedureLabel: 'Post and Core' },
+      { id: 'cr', code: 'D2740', visit: '3', tooth: '11', responsibilityCents: 156900, classification: 'restoration', procedureLabel: 'Porcelain Crown' },
+    ];
+    const {result}=renderHook(()=>usePaymentScheduleEditor('a',policy,source,320100));
+    const model=result.current.model!;
+    expect(model.groups.map(g=>[g.label,g.surgical])).toEqual([['Porcelain Crown #11',true]]);
+    expect(model.schedule.issues).toEqual([]);
+    expect(model.schedule.rows.map(r=>[r.label,r.cents])).toEqual([
+      ['Porcelain Crown #11 — When this phase is scheduled',80025],['Porcelain Crown #11 — At crown lengthening',80025],
+      ['Porcelain Crown #11 — At prep / impression',80025],['Porcelain Crown #11 — At delivery',80025]]);
+    // Under the threshold: no scheduling payment, three appointments.
+    const small=source.map(l=>({...l,responsibilityCents:Math.round(l.responsibilityCents/4)}));
+    const {result:under}=renderHook(()=>usePaymentScheduleEditor('a',policy,small,small.reduce((s,l)=>s+l.responsibilityCents,0)));
+    expect(under.current.model!.schedule.rows.map(r=>r.label.split(' — ')[1])).toEqual(['At crown lengthening','At prep / impression','At delivery']);
+  });
   it('preserves edits and highlights unallocated credits, then resolves after allocation', () => {
     const {result}=renderHook(()=>usePaymentScheduleEditor('a',policy,[crown],60000));
     expect(result.current.model!.schedule.issues.some(i=>i.includes('adjustments'))).toBe(true);
