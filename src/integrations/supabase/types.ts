@@ -9029,6 +9029,17 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      correct_employee_schedule: {
+        Args: {
+          p_apply_to_remote: boolean
+          p_end: string
+          p_name: string
+          p_start: string
+          p_version_id: string
+          p_weekdays: Json
+        }
+        Returns: string
+      }
       create_employee_schedule: {
         Args: {
           p_apply_to_remote: boolean

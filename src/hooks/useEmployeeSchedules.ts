@@ -1,23 +1,57 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import type { Tables } from '@/integrations/supabase/types';
 
-export function useEmployeeScheduleAssignments(employeeId: string | undefined) {
+export type EmployeeScheduleVersion = Tables<'schedule_versions'> & {
+  weekdays: Tables<'schedule_weekdays'>[];
+  /** Mirrors of the version's dates; empty for a version that never received one. */
+  assignments: Tables<'schedule_assignments'>[];
+};
+
+/**
+ * Every schedule version of an employee, newest first, with its weekday rules
+ * and its assignment rows. The version is what attendance follows; the
+ * assignment is the manager-facing handle that must mirror it. A version with
+ * no assignment (left behind by an older self-service path) is still listed
+ * so a manager can see it, correct it, or remove it, instead of colliding
+ * with it invisibly.
+ */
+export function useEmployeeScheduleVersions(employeeId: string | undefined) {
   const { data: ctx } = useOrgContext();
   return useQuery({
-    queryKey: ['employee-schedule-assignments', employeeId],
+    queryKey: ['employee-schedule-versions', employeeId],
     enabled: !!employeeId && !!ctx?.org_id,
-    queryFn: async () => {
+    queryFn: async (): Promise<EmployeeScheduleVersion[]> => {
       const { data, error } = await supabase
-        .from('schedule_assignments')
-        .select('*, schedule_version:schedule_versions(*, weekdays:schedule_weekdays(*))')
+        .from('schedule_versions')
+        .select('*, weekdays:schedule_weekdays(*), assignments:schedule_assignments(*)')
         .eq('employee_id', employeeId!)
         .eq('org_id', ctx!.org_id)
-        .order('effective_start', { ascending: false });
+        .order('effective_start_date', { ascending: false });
       if (error) throw error;
-      return data;
+      return (data ?? []) as unknown as EmployeeScheduleVersion[];
     },
   });
+}
+
+/**
+ * Person-readable copy for the schedule RPCs' rejections. The RPCs already
+ * raise plain sentences (an overlap names the other schedule's dates); this
+ * covers what PostgREST and the constraints say in their own words.
+ */
+export function friendlyScheduleError(
+  error: { code?: string | null; message?: string | null } | null | undefined,
+  fallback = 'Something went wrong while saving the schedule.',
+): string {
+  if (!error) return fallback;
+  if (error.code === '23P01') {
+    return 'These dates overlap another schedule for this employee. Edit or remove that schedule first.';
+  }
+  if (error.code === 'PGRST202' || /could not find the function/i.test(error.message ?? '')) {
+    return 'This correction needs a database update that has not been applied yet. Ask whoever deploys Purple Envelope to apply the latest migration, then try again.';
+  }
+  return error.message || fallback;
 }
 
 export function useEmployeeTardies(employeeId: string | undefined, startDate?: string, endDate?: string) {
