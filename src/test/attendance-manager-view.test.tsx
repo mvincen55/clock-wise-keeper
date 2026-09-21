@@ -90,7 +90,7 @@ function mount(path = '/days-off') {
 }
 const counter = (label: string) => screen.getByText(label, { selector: 'p.text-xs' }).parentElement!;
 
-afterEach(() => { cleanup(); state.role = 'manager'; state.recompute.mockClear(); state.toast.mockClear(); });
+afterEach(() => { cleanup(); localStorage.clear(); state.role = 'manager'; state.recompute.mockClear(); state.toast.mockClear(); });
 
 describe('Attendance page — manager view', () => {
   it('names every row and explains an absence only with that person’s own day off', () => {
@@ -166,6 +166,83 @@ describe('Attendance page — manager view', () => {
   });
 });
 
+describe('Attendance page — a manager’s own attendance', () => {
+  it('My attendance shows only their own rows, keeps their tools, and sticks for next time', () => {
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'My attendance' }));
+    expect(screen.getByRole('button', { name: 'My attendance' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: 'actions Rick Roe edit 2026-09-21' })).toBeNull();
+    expect(screen.getAllByRole('button', { name: /^actions Jane Doe edit/ })).toHaveLength(2);
+    expect(screen.queryByText('Team member')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Sort' })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'My Calendar' })).toBeInTheDocument();
+    expect(screen.getByText('Your days off, tardies, missing shifts, and closures')).toBeInTheDocument();
+    expect(localStorage.getItem('purple.attendance.view')).toBe('mine');
+    cleanup();
+    mount();
+    expect(screen.getByRole('button', { name: 'My attendance' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: 'actions Rick Roe edit 2026-09-21' })).toBeNull();
+  });
+
+  it('Recompute on My attendance is the manager’s own', async () => {
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'My attendance' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Recompute' }));
+    await waitFor(() => expect(state.recompute).toHaveBeenCalledTimes(1));
+    expect(state.recompute).toHaveBeenCalledWith(expect.objectContaining({ userId: 'manager-login' }));
+  });
+
+  it('a Timesheet link to a date opens My attendance on that day', () => {
+    mount('/days-off?date=2026-09-01');
+    expect(screen.getByRole('button', { name: 'My attendance' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Start Date')).toHaveValue('2026-09-01');
+  });
+
+  it('a team-member link wins over a remembered personal view', () => {
+    localStorage.setItem('purple.attendance.view', 'mine');
+    mount('/days-off?employee=emp-rick');
+    expect(screen.getByRole('button', { name: 'Team' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'actions Rick Roe edit 2026-09-21' })).toBeInTheDocument();
+  });
+});
+
+describe('Attendance page — sorting the team', () => {
+  const dataRows = () => screen.getAllByRole('row').filter(r => /Sep \d+, 2026/.test(r.textContent || ''));
+
+  it('Needs attention puts the missed days first', () => {
+    mount();
+    const rows = dataRows();
+    expect(rows[0]).toHaveTextContent('Mon, Sep 21, 2026');
+    expect(rows[0]).toHaveTextContent('Absent');
+    expect(rows[2]).toHaveTextContent('Tue, Sep 22, 2026');
+  });
+
+  it('By date is newest first', () => {
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'By date' }));
+    expect(dataRows()[0]).toHaveTextContent('Tue, Sep 22, 2026');
+  });
+
+  it('By person groups each person’s days under one header', () => {
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'By person' }));
+    // The name lives in a header row now, not repeated on every row.
+    expect(screen.queryByRole('columnheader', { name: 'Employee' })).toBeNull();
+    const rows = screen.getAllByRole('row');
+    const janeHeader = rows.findIndex(r => (r.textContent || '').trim() === 'Jane Doe');
+    const rickHeader = rows.findIndex(r => (r.textContent || '').trim() === 'Rick Roe');
+    expect(janeHeader).toBeGreaterThan(0);
+    expect(rickHeader).toBeGreaterThan(janeHeader);
+    expect(rows[janeHeader + 1]).toHaveTextContent('Tue, Sep 22, 2026');
+    expect(rows[janeHeader + 2]).toHaveTextContent('Mon, Sep 21, 2026');
+    expect(rows[rickHeader + 1]).toHaveTextContent('Mon, Sep 21, 2026');
+    // A header is also the way to focus that person.
+    fireEvent.click(screen.getByRole('button', { name: 'Rick Roe' }));
+    expect(screen.getByRole('button', { name: 'Show everyone' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^actions Jane Doe/ })).toBeNull();
+  });
+});
+
 describe('Attendance page — employee view', () => {
   it('keeps the personal layout: no picker, no manager actions, a link into the Timesheet', () => {
     state.role = 'employee';
@@ -176,5 +253,7 @@ describe('Attendance page — employee view', () => {
     expect(screen.getByRole('button', { name: 'Request Time Off' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View in Timesheet' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'My Calendar' })).toBeInTheDocument();
+    // No view switch: an employee has only their own attendance.
+    expect(screen.queryByRole('group', { name: 'View' })).toBeNull();
   });
 });

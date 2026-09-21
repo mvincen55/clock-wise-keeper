@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDaysOff, useOrgDaysOff, useAddDayOff, useDeleteDayOff, DayOffRow } from '@/hooks/useDaysOff';
 import { PtoRequestModal } from '@/components/PtoRequestModal';
@@ -51,6 +51,29 @@ type DaysOffFilter = 'all' | 'scheduled_with_notice' | 'unscheduled' | 'medical_
 
 /** The employee picker's "everyone in the office" choice. */
 const EVERYONE = 'all';
+
+/**
+ * A manager wears two hats here: their own attendance (they clock in too)
+ * and the office's. The view is explicit, and the last choice sticks.
+ */
+type ViewMode = 'mine' | 'team';
+const VIEW_STORAGE_KEY = 'purple.attendance.view';
+function readStoredView(): ViewMode | null {
+  try {
+    const v = localStorage.getItem(VIEW_STORAGE_KEY);
+    return v === 'mine' || v === 'team' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/** How the team view orders its rows. */
+type SortMode = 'attention' | 'employee' | 'date';
+const SORT_LABELS: Record<SortMode, string> = {
+  attention: 'Needs attention',
+  employee: 'By person',
+  date: 'By date',
+};
 
 /** Day-off types that explain an absence (a callout does not — it is still a missed shift). */
 const EXPLAINED_DAY_OFF_TYPES = ['scheduled_with_notice', 'medical_leave', 'other'];
@@ -149,11 +172,28 @@ export default function DaysOff() {
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
   const roleKnown = !!ctx;
 
-  // Deep links: the Timesheet's "Resolve in Attendance" names a date, and a
-  // team-member link can name the person. Both are read once, then dropped
-  // from the address bar.
+  // Deep links: the Timesheet's "Resolve in Attendance" names a date (the
+  // signed-in person's own day), and a team-member link names the person.
+  // Both are read once, then dropped from the address bar.
   const linkedDate = useConsumedSearchParam('date');
   const linkedEmployee = useConsumedSearchParam('employee');
+
+  // Managers choose between their own attendance and the team's. A link
+  // decides the first view; otherwise the last explicit choice, else Team.
+  const [viewMode, setViewModeState] = useState<ViewMode>(() =>
+    linkedEmployee ? 'team' : linkedDate ? 'mine' : readStoredView() ?? 'team');
+  const setViewMode = (next: ViewMode) => {
+    setViewModeState(next);
+    try {
+      localStorage.setItem(VIEW_STORAGE_KEY, next);
+    } catch {
+      // Private browsing — the choice just won't stick between visits.
+    }
+  };
+  // The personal view: everyone who is not a manager, and a manager on
+  // "My attendance". Everything below that says "own" follows this.
+  const personal = !isManager || viewMode === 'mine';
+  const [sortMode, setSortMode] = useState<SortMode>('attention');
 
   // Default date range to current pay period
   const weekStartDay = payrollSettings?.week_start_day ?? 1;
@@ -173,8 +213,10 @@ export default function DaysOff() {
     const e = defaultEnd.toISOString().split('T')[0];
     return linkedDate && linkedDate > e ? linkedDate : e;
   });
-  // Managers start on the whole office; a linked person narrows it.
-  const [employeeFilter, setEmployeeFilter] = useState<string>(linkedEmployee ?? EVERYONE);
+  // The team view starts on the whole office; a linked person narrows it.
+  const [teamFilter, setEmployeeFilter] = useState<string>(linkedEmployee ?? EVERYONE);
+  // In the personal view the only person is the signed-in one.
+  const employeeFilter = personal ? (ctx?.employee_id ?? EVERYONE) : teamFilter;
 
   // The roster, for names on rows and the picker (every member may read it).
   const { data: staff } = useOrgStaff();
@@ -183,6 +225,33 @@ export default function DaysOff() {
     const m = employeeId ? staffById.get(employeeId) : undefined;
     return m ? formatEmployeeName(m.displayName) : 'Unknown';
   };
+  type Dated = { employee_id: string | null; entry_date: string };
+  const byPerson = (a: Dated, b: Dated) => nameOf(a.employee_id).localeCompare(nameOf(b.employee_id));
+  const byDateDesc = (a: Dated, b: Dated) => b.entry_date.localeCompare(a.entry_date);
+  // Sorted by person, each person's rows sit under one header instead of
+  // repeating the name on every row.
+  const withPersonHeaders = <T extends Dated>(rows: T[], colSpan: number, render: (row: T) => ReactNode): ReactNode[] => {
+    if (!groupedByEmployee) return rows.map(render);
+    const out: ReactNode[] = [];
+    let last: string | null = null;
+    for (const row of rows) {
+      const name = nameOf(row.employee_id);
+      if (name !== last) {
+        out.push(
+          <tr key={`person-${row.employee_id ?? name}`} className="bg-muted/40">
+            <td colSpan={colSpan} className="px-4 py-1.5 text-xs font-semibold">
+              <button type="button" className="hover:underline" title="Show only this team member" onClick={() => { if (row.employee_id) setEmployeeFilter(row.employee_id); }}>
+                {name}
+              </button>
+            </td>
+          </tr>,
+        );
+        last = name;
+      }
+      out.push(render(row));
+    }
+    return out;
+  };
   const pickable = useMemo(() => {
     const list = (staff || []).filter(m => m.employmentStatus === 'active');
     return list
@@ -190,21 +259,26 @@ export default function DaysOff() {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [staff]);
   const focusedMember: OrgStaffMember | undefined = employeeFilter === EVERYONE ? undefined : staffById.get(employeeFilter);
-  const showEmployeeColumn = isManager && employeeFilter === EVERYONE;
+  // The whole office at once: names on every row, or rows grouped under
+  // each name when sorted by person.
+  const teamWide = !personal && employeeFilter === EVERYONE;
+  const groupedByEmployee = teamWide && sortMode === 'employee';
+  const showEmployeeColumn = teamWide && !groupedByEmployee;
   const matchesFilter = (employeeId: string | null | undefined) => employeeFilter === EVERYONE || employeeId === employeeFilter;
 
-  // Owners and managers read the whole office (RLS already returns it);
-  // everyone else keeps their own history. Days off are the one table the
-  // personal hook scopes to the caller, so the manager view has its own.
-  const ownDaysOff = useDaysOff(undefined, roleKnown && !isManager);
-  const orgDaysOff = useOrgDaysOff(startDate, undefined, roleKnown && isManager);
-  const daysOffSource = isManager ? orgDaysOff.data : ownDaysOff.data;
+  // The team view reads the whole office (RLS already returns it to
+  // owners and managers); the personal view keeps to the signed-in person.
+  // Days off are the one table the personal hook scopes to the caller, so
+  // the team view has its own.
+  const ownDaysOff = useDaysOff(undefined, roleKnown && personal);
+  const orgDaysOff = useOrgDaysOff(startDate, undefined, roleKnown && !personal);
+  const daysOffSource = personal ? ownDaysOff.data : orgDaysOff.data;
   const daysOff: DayOffRow[] = useMemo(() => daysOffSource || [], [daysOffSource]);
-  const daysOffLoading = isManager ? orgDaysOff.isLoading : ownDaysOff.isLoading;
+  const daysOffLoading = personal ? ownDaysOff.isLoading : orgDaysOff.isLoading;
   const { data: tardies, isLoading: tardiesLoading } = useTardies(startDate, endDate);
   const { data: closures } = useOfficeClosures(new Date().getFullYear());
   const { data: statusRows, isLoading: statusLoading } = useAttendanceDayStatus(startDate, endDate);
-  const { data: entries } = useTimeEntries(startDate, endDate, isManager ? 'all' : 'own');
+  const { data: entries } = useTimeEntries(startDate, endDate, personal ? 'own' : 'all');
   const recompute = useRecomputeAttendance();
   const addDayOff = useAddDayOff();
   const deleteDayOff = useDeleteDayOff();
@@ -235,7 +309,7 @@ export default function DaysOff() {
 
   const openAddDayOff = (next: boolean) => {
     if (next) {
-      // Whose day off: the focused person, else the manager's own record.
+      // Whose day off: the person in view, else the manager's own record.
       setForm(f => ({ ...f, employee_id: focusedMember?.employeeId ?? ctx?.employee_id ?? '' }));
     }
     setOpen(next);
@@ -292,12 +366,12 @@ export default function DaysOff() {
     }
   };
 
-  // Recompute follows the picker: one person, or everyone in the office
-  // with a login (attendance is only computed for members who can clock).
+  // Recompute follows the view: yourself, one person, or everyone in the
+  // office with a login (attendance is only computed for members who can clock).
   const handleRecompute = async () => {
     if (!startDate || !endDate || !user) return;
     let targets: string[];
-    if (!isManager) {
+    if (personal) {
       targets = [user.id];
     } else if (focusedMember) {
       if (!focusedMember.userId) {
@@ -322,7 +396,7 @@ export default function DaysOff() {
   // Days off by (employee, date) so one person's leave never explains
   // another person's absence. The personal view keys on the date alone,
   // exactly as before.
-  const coverageKey = (employeeId: string | null | undefined, date: string) => (isManager ? `${employeeId ?? ''}|${date}` : date);
+  const coverageKey = (employeeId: string | null | undefined, date: string) => (personal ? date : `${employeeId ?? ''}|${date}`);
   const daysOffByKey = useMemo(() => {
     const map = new Map<string, DayOffRow[]>();
     daysOff.forEach(d => {
@@ -336,7 +410,7 @@ export default function DaysOff() {
     });
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [daysOff, isManager]);
+  }, [daysOff, personal]);
   const coverageFor = (row: AttendanceDayStatusRow) => daysOffByKey.get(coverageKey(row.employee_id, row.entry_date)) || [];
 
   // The rows in scope: the focused person, or everyone.
@@ -428,13 +502,15 @@ export default function DaysOff() {
       return 4;
     };
     return [...list].sort((a, b) => {
-      const pa = priority(a);
-      const pb = priority(b);
-      if (pa !== pb) return pa - pb;
-      return b.entry_date.localeCompare(a.entry_date) || nameOf(a.employee_id).localeCompare(nameOf(b.employee_id));
+      if (sortMode === 'attention') {
+        const pa = priority(a);
+        const pb = priority(b);
+        if (pa !== pb) return pa - pb;
+      }
+      return sortMode === 'employee' ? byPerson(a, b) || byDateDesc(a, b) : byDateDesc(a, b) || byPerson(a, b);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleRows, attendanceFilter, staffById]);
+  }, [visibleRows, attendanceFilter, staffById, sortMode]);
 
   // Days Off tab: exclude office_closed, apply filter
   const filteredDaysOff = useMemo(() => {
@@ -447,9 +523,10 @@ export default function DaysOff() {
 
   // Missing Shifts: truly absent, not closures, not covered by scheduled/medical/other day off
   const missingShiftRows = useMemo(() => {
-    return visibleRows.filter(isMissingShift).sort((a, b) => b.entry_date.localeCompare(a.entry_date));
+    return visibleRows.filter(isMissingShift).sort((a, b) =>
+      sortMode === 'employee' ? byPerson(a, b) || byDateDesc(a, b) : byDateDesc(a, b) || byPerson(a, b));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleRows, daysOffByKey]);
+  }, [visibleRows, daysOffByKey, sortMode, staffById]);
 
   const activeTardies = visibleTardies.filter(t => !t.resolved);
 
@@ -457,8 +534,16 @@ export default function DaysOff() {
     let list = activeTardies;
     if (showOnlyTracked) list = list.filter(t => t.approval_status !== 'approved');
     if (approvalFilter !== 'all') list = list.filter(t => t.approval_status === approvalFilter);
-    return list;
-  }, [activeTardies, showOnlyTracked, approvalFilter]);
+    return [...list].sort((a, b) => {
+      if (sortMode === 'attention') {
+        const ua = a.approval_status === 'unreviewed' ? 0 : 1;
+        const ub = b.approval_status === 'unreviewed' ? 0 : 1;
+        if (ua !== ub) return ua - ub;
+      }
+      return sortMode === 'employee' ? byPerson(a, b) || byDateDesc(a, b) : byDateDesc(a, b) || byPerson(a, b);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTardies, showOnlyTracked, approvalFilter, sortMode, staffById]);
 
   // Closures tab: office_closures + legacy days_off with type=office_closed
   const closuresList = useMemo(() => {
@@ -485,13 +570,13 @@ export default function DaysOff() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Attendance</h1>
           <p className="text-muted-foreground">
-            {isManager
-              ? 'Days off, tardies, missing shifts, and closures across the office — pick a team member to focus on one person'
-              : 'Track days off, tardies, missing shifts, and closures'}
+            {personal
+              ? 'Your days off, tardies, missing shifts, and closures'
+              : 'Days off, tardies, missing shifts, and closures across the office — pick a team member to focus on one person'}
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleRecompute} disabled={recompute.isPending} title={isManager ? (focusedName ? `Recompute ${focusedName}'s attendance for this range` : 'Recompute everyone\'s attendance for this range') : 'Recompute your attendance for this range'}>
+          <Button variant="outline" size="sm" onClick={handleRecompute} disabled={recompute.isPending} title={personal ? 'Recompute your attendance for this range' : focusedName ? `Recompute ${focusedName}'s attendance for this range` : 'Recompute everyone\'s attendance for this range'}>
             {recompute.isPending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1 h-3.5 w-3.5" />}
             Recompute
           </Button>
@@ -558,19 +643,37 @@ export default function DaysOff() {
         </div>
       </div>
 
-      {/* Date range + who */}
+      {/* View, date range, who, and order */}
       <Card className="card-elevated">
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-4 items-end">
-            <div className="space-y-1">
-              <Label className="text-xs">Start Date</Label>
-              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-40" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">End Date</Label>
-              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-40" />
-            </div>
             {isManager && (
+              <div className="space-y-1">
+                <Label className="text-xs">View</Label>
+                <div role="group" aria-label="View" className="flex rounded-md border overflow-hidden">
+                  {([['mine', 'My attendance'], ['team', 'Team']] as [ViewMode, string][]).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      aria-pressed={viewMode === mode}
+                      onClick={() => setViewMode(mode)}
+                      className={`h-10 px-3 text-sm font-medium transition-colors ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="space-y-1">
+              <Label className="text-xs" htmlFor="attendance-start">Start Date</Label>
+              <Input id="attendance-start" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-40" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs" htmlFor="attendance-end">End Date</Label>
+              <Input id="attendance-end" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-40" />
+            </div>
+            {!personal && (
               <div className="space-y-1">
                 <Label className="text-xs" htmlFor="attendance-employee">Team member</Label>
                 <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
@@ -587,8 +690,26 @@ export default function DaysOff() {
                 </Select>
               </div>
             )}
-            {focusedName && (
+            {!personal && focusedName && (
               <Button variant="ghost" size="sm" onClick={() => setEmployeeFilter(EVERYONE)}>Show everyone</Button>
+            )}
+            {teamWide && (
+              <div className="space-y-1">
+                <Label className="text-xs">Sort</Label>
+                <div role="group" aria-label="Sort" className="flex rounded-md border overflow-hidden">
+                  {(Object.keys(SORT_LABELS) as SortMode[]).map(mode => (
+                    <button
+                      key={mode}
+                      type="button"
+                      aria-pressed={sortMode === mode}
+                      onClick={() => setSortMode(mode)}
+                      className={`h-10 px-3 text-sm transition-colors ${sortMode === mode ? 'bg-primary text-primary-foreground font-medium' : 'bg-background hover:bg-muted'}`}
+                    >
+                      {SORT_LABELS[mode]}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </CardContent>
@@ -689,7 +810,7 @@ export default function DaysOff() {
             )}
           </TabsTrigger>
           <TabsTrigger value="closures">Closures</TabsTrigger>
-          <TabsTrigger value="calendar">{isManager ? 'Calendar' : 'My Calendar'}</TabsTrigger>
+          <TabsTrigger value="calendar">{personal ? 'My Calendar' : 'Calendar'}</TabsTrigger>
         </TabsList>
 
         {/* ATTENDANCE STATUS TAB */}
@@ -731,7 +852,7 @@ export default function DaysOff() {
                   ) : !filteredStatus.length ? (
                     <tr><td colSpan={8} className="py-12 text-center text-muted-foreground">No attendance data for this range</td></tr>
                   ) : (
-                    filteredStatus.map(row => (
+                    withPersonHeaders(filteredStatus, 8, row => (
                       <tr key={row.id} className={`hover:bg-muted/50 ${row.is_absent ? 'border-l-4 border-l-destructive' : row.is_late ? 'border-l-4 border-l-warning' : ''}`}>
                         <td className="px-4 py-3 font-medium whitespace-nowrap">{formatDate(row.entry_date)}</td>
                         {showEmployeeColumn && (
@@ -816,7 +937,7 @@ export default function DaysOff() {
                 {f === 'all' ? 'All' : typeLabels[f]}
               </button>
             ))}
-            {isManager && (
+            {!personal && (
               <span className="text-xs text-muted-foreground ml-auto">
                 {focusedName ? `${focusedName}'s` : 'Everyone\'s'} time off from {formatDate(startDate)} onward
               </span>
@@ -901,7 +1022,7 @@ export default function DaysOff() {
                   ) : !filteredTardies.length ? (
                     <tr><td colSpan={8} className="py-12 text-center text-muted-foreground">No tardies recorded</td></tr>
                   ) : (
-                    filteredTardies.map(t => (
+                    withPersonHeaders(filteredTardies, 8, t => (
                       <tr key={t.id} className={t.timezone_suspect ? 'bg-warning/5' : ''}>
                         <td className="px-4 py-3 font-medium">
                           {formatDate(t.entry_date)}
@@ -986,7 +1107,7 @@ export default function DaysOff() {
                   ) : !missingShiftRows.length ? (
                     <tr><td colSpan={5} className="py-12 text-center text-muted-foreground">No missing shifts — all clear!</td></tr>
                   ) : (
-                    missingShiftRows.map(row => {
+                    withPersonHeaders(missingShiftRows, 5, row => {
                       const hasUnscheduled = coverageFor(row).some(d => d.type === 'unscheduled');
                       return (
                         <tr key={row.id} className="border-l-4 border-l-destructive hover:bg-muted/50">
@@ -1054,7 +1175,7 @@ export default function DaysOff() {
 
         {/* CALENDAR TAB — one person at a time; a whole office on one grid says nothing */}
         <TabsContent value="calendar">
-          {isManager && !focusedMember ? (
+          {!personal && !focusedMember ? (
             <Card className="card-elevated">
               <CardContent className="py-12 text-center text-muted-foreground">
                 Choose a team member above to see their calendar.
