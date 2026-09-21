@@ -31,7 +31,7 @@ import { employeeTeamStatus } from '@/lib/team-status';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Link } from 'react-router-dom';
 import EditEmployeeDialog from '@/components/team/EditEmployeeDialog';
-import { formatEmployeeName } from '@/lib/employee-name';
+import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 
 type Employee = {
   id: string;
@@ -71,7 +71,7 @@ const DAY_OFF_LABELS: Record<string, string> = {
 
 
 export default function TeamEmployeeCard({ employee, stats, dateRange }: { employee: Employee; stats: WeekStats; dateRange: { start: string; end: string } }) {
-  const displayName = formatEmployeeName(employee.display_name);
+  const displayName = formatEmployeeNameLastFirst(employee.display_name);
   const [expanded, setExpanded] = useState(false);
   const [tab, setTab] = useState('attendance');
   const [confirmArchive, setConfirmArchive] = useState(false);
@@ -192,6 +192,9 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
                 <Archive className="h-3 w-3 mr-1" />Archive
               </Button>
             )}
+            <Link to={`/management/attendance?employee=${employee.id}`}>
+              <Button variant="outline" size="sm" className="text-xs"><Calendar className="h-3 w-3 mr-1" />Attendance</Button>
+            </Link>
             <Link to={`/team/${employee.id}`}>
               <Button variant="outline" size="sm" className="text-xs"><Pencil className="h-3 w-3 mr-1" />Full Detail</Button>
             </Link>
@@ -592,7 +595,7 @@ function ScheduleTab({ employee }: { employee: Employee }) {
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingVersion ? 'Edit Schedule' : 'New Schedule'} — {employee.display_name}</DialogTitle>
+            <DialogTitle>{editingVersion ? 'Edit Schedule' : 'New Schedule'} — {formatEmployeeNameLastFirst(employee.display_name)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1">

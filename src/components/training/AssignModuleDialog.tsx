@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAssignModule, type TrainingModule } from '@/hooks/useTraining';
 import { toast } from 'sonner';
+import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 
 export type Assignee = { user_id: string; display_name: string };
 
@@ -74,7 +75,7 @@ export default function AssignModuleDialog({ module, team, onClose }: Props) {
                     checked={selected.includes(member.user_id)}
                     onCheckedChange={() => toggle(member.user_id)}
                   />
-                  <span className="text-sm">{member.display_name}</span>
+                  <span className="text-sm">{formatEmployeeNameLastFirst(member.display_name)}</span>
                 </label>
               ))}
             </ScrollArea>

@@ -1,3 +1,4 @@
+import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useConsumedSearchParam, useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
@@ -324,7 +325,7 @@ export default function Goals() {
             return (
               <TeamGoalCard
                 key={member.id}
-                name={member.display_name}
+                name={formatEmployeeNameLastFirst(member.display_name)}
                 goal={goal}
                 tasks={goal ? tasksFor(goal.id) : []}
                 latestUpdate={goal ? latestUpdate(goal.id) : undefined}
@@ -362,7 +363,7 @@ export default function Goals() {
                 <SelectContent>
                   {(team ?? []).map(m => (
                     <SelectItem key={m.user_id} value={m.user_id}>
-                      {m.display_name}
+                      {formatEmployeeNameLastFirst(m.display_name)}
                     </SelectItem>
                   ))}
                 </SelectContent>

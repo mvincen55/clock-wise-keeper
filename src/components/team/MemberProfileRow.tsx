@@ -13,6 +13,7 @@ import {
 import { useReservedStaffCodes } from '@/hooks/useStaffCodes';
 import OperationalRolesEditor from '@/components/team/OperationalRolesEditor';
 import { validateStaffCodeInput, isLegacyStaffCode, normalizeStaffCode } from '@/lib/staff-code';
+import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 
 type Member = {
   id: string;
@@ -94,7 +95,7 @@ export default function MemberProfileRow({ employee }: { employee: Member }) {
               setDraft(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4))
             }
             className="h-7 w-20 font-mono text-xs tracking-widest"
-            aria-label={`Tag for ${employee.display_name}`}
+            aria-label={`Tag for ${formatEmployeeNameLastFirst(employee.display_name)}`}
           />
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={commit} disabled={save.isPending}>
             {save.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}

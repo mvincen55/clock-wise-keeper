@@ -69,10 +69,10 @@ describe('AttendanceActions', () => {
     expect((opened.punches as unknown[]).length).toBe(1);
   });
 
-  it('looks the name up from the roster when the caller does not know it', async () => {
+  it('looks the name up from the roster when the caller does not know it, surname first', async () => {
     render(<AttendanceActions row={row} alwaysShow editButton />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit punches' }));
-    await screen.findByText('Editor for Rick Roe on 2026-09-21');
+    await screen.findByText('Editor for Roe, Rick on 2026-09-21');
   });
 
   it('an unscheduled day hands the editor no shift, so quick fixes cannot invent one', async () => {

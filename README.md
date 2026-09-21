@@ -104,13 +104,14 @@ Navigation is a compact destination list; every feature below keeps its own rout
 | `/playbook/procedures` | PracticeProcedures | Published procedures; until any exist, the procedure sections of the uploaded handbook/SOP documents (`SourceKnowledgeReader`, `src/lib/source-knowledge.ts`) |
 | `/inbox/:tab` | InboxPage | Unified Inbox: Messages, Doctor Requests, Nudges (legacy `/messages`, `/requests`, `/nudges` redirect here) |
 | `/management` | Management | Manager/owner command center: approvals, snapshots, vitals, admin links |
+| `/management/attendance` | TeamAttendance | **Team Attendance** (owners/managers; `AttendanceWorkspace mode="team"`): the whole office with a name on every row or rows grouped per person (Sort: needs attention / by person / by date), a team-member picker (`?employee=<id>` deep link, used by Today's Team, the roster, and the dashboards), every punch of the day with breaks, days off matched per person, and row-level punch editing for that person (`AttendanceActions` → `PunchEditorModal`, quick fixes use the row's own shift), Add Day Off for anyone, Recompute for everyone or one person |
 | `/help` | Help | Help & support surface |
 
 ### Time & attendance
 | Route | Page | What it does |
 |---|---|---|
 | `/timesheet` | Timesheet | Clock in/out, punch history, manager punch editing (`PunchEditorModal`), tardy reasons (`TardyReasonModal`, `TardyReviewModal`) |
-| `/days-off` | DaysOff (**Attendance**) | Owners/managers switch between **My attendance** (their own history, remembered in `localStorage`) and **Team**: the whole office with a name on every row or rows grouped per person (Sort: needs attention / by person / by date), a team-member picker (`?employee=<id>` deep link), every punch of the day with breaks, days off matched per person, and row-level punch editing for that person (`AttendanceActions` → `PunchEditorModal`, quick fixes use the row's own shift). Everyone else: their own history plus Request Time Off. `?date=` (from the Timesheet) opens My attendance widened to that day |
+| `/days-off` | DaysOff (**Attendance**) | Everyone's own attendance, managers included (`AttendanceWorkspace mode="personal"`): own rows with every punch of the day, days off, tardies, missing shifts, closures, My Calendar; Request Time Off for employees, own-row punch editing for managers. `?date=` (from the Timesheet) widens the range to that day |
 | `/work-zones` | WorkZones | Geofenced zones for location-verified clock-in (`useGeoTracking`, `LocationStatusPanel`, `process-location-event`) |
 | `/reports` | Reports | Payroll/attendance reporting and exports (built in the browser). Timesheet reports print every clock-in/out of the day with breaks and the worked-hour adjustments (`worked_hour_adjustments`, "Offset hours" on the Team page) dated in the range — listed with their reason and counted in the employee, weekly/OT, and report totals and the CSV |
 

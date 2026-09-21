@@ -31,6 +31,11 @@ export function formatEmployeeNameLastFirst(name: string): string {
   return [`${family}, ${words.join(' ')}`, suffix].filter(Boolean).join(' ');
 }
 
+/**
+ * The office reads and lists people surname first ("Last, First"), so every
+ * roster, picker, and status list shows `formatEmployeeNameLastFirst` and
+ * sorts by it. A search still matches either spelling and the email.
+ */
 export function filterAndSortEmployees<T extends { display_name: string; email?: string | null }>(
   employees: readonly T[],
   search = '',
@@ -38,7 +43,8 @@ export function filterAndSortEmployees<T extends { display_name: string; email?:
   const query = search.trim().toLowerCase();
   return employees.filter(employee =>
     formatEmployeeName(employee.display_name).toLowerCase().includes(query) ||
+    formatEmployeeNameLastFirst(employee.display_name).toLowerCase().includes(query) ||
     employee.display_name.toLowerCase().includes(query) ||
     employee.email?.toLowerCase().includes(query)
-  ).sort((a, b) => formatEmployeeName(a.display_name).localeCompare(formatEmployeeName(b.display_name)));
+  ).sort((a, b) => formatEmployeeNameLastFirst(a.display_name).localeCompare(formatEmployeeNameLastFirst(b.display_name)));
 }

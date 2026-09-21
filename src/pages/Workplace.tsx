@@ -12,7 +12,7 @@ const SECTIONS: HubSection[] = [
     title: 'My Time',
     links: [
       { to: '/timesheet', icon: Table2, label: 'Timesheet', description: 'Your punches, totals, and pay periods.' },
-      { to: '/days-off', icon: CalendarDays, label: 'Attendance', description: 'Days off, tardies, and attendance history.' },
+      { to: '/days-off', icon: CalendarDays, label: 'Attendance', description: 'Your days off, tardies, and attendance history.' },
       { to: '/pto', icon: Clock, label: 'PTO', description: 'Balance, accrual, and time-off requests.' },
       { to: '/my-requests', icon: Send, label: 'My Requests', description: 'Corrections and changes you have submitted.' },
     ],

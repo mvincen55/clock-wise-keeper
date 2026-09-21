@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft, Clock, CalendarDays, Plus, ShieldAlert } from 'lucide-react';
 import { formatDate, formatTime, formatClock, minutesToHHMM } from '@/lib/time-utils';
 import EditEmployeeDialog from '@/components/team/EditEmployeeDialog';
-import { formatEmployeeName } from '@/lib/employee-name';
+import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 import EmployeeSetupCard from '@/components/team/EmployeeSetupCard';
 import AccountabilityHistory from '@/components/accountability/AccountabilityHistory';
 import IncidentReportModal from '@/components/IncidentReportModal';
@@ -106,7 +106,7 @@ export default function EmployeeDetail() {
           <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
         </Link>
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">{formatEmployeeName(employee.display_name)}</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">{formatEmployeeNameLastFirst(employee.display_name)}</h1>
           <p className="text-muted-foreground">{employee.email || 'No email'} · Eastern (ET)</p>
         </div>
         <EditEmployeeDialog employee={employee} />
@@ -244,7 +244,7 @@ export default function EmployeeDetail() {
 
       <IncidentReportDetail
         report={selectedIncident}
-        employeeName={employee.display_name}
+        employeeName={formatEmployeeNameLastFirst(employee.display_name)}
         onClose={() => setSelectedIncident(null)}
         onEdit={report => {
           setSelectedIncident(null);
@@ -256,7 +256,12 @@ export default function EmployeeDetail() {
       {/* Attendance Timeline */}
       <Card className="card-elevated">
         <CardHeader className="border-b">
-          <CardTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5" />Attendance</CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5" />Attendance</CardTitle>
+            <Link to={`/management/attendance?employee=${employee.id}`} className="text-xs text-primary hover:underline">
+              Edit punches and days off →
+            </Link>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {!attendance?.length ? (

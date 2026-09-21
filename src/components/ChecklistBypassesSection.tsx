@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useOrgBypasses } from '@/hooks/useChecklistBypasses';
 import { useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
-import { formatEmployeeName } from '@/lib/employee-name';
+import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 
 /** Read-only manager view of checklist bypasses. Informative, never shaming. */
 export default function ChecklistBypassesSection({ orgId, highlightId }: { orgId?: string; highlightId?: string | null }) {
@@ -45,7 +45,7 @@ export default function ChecklistBypassesSection({ orgId, highlightId }: { orgId
                     ref={r.id === highlightId ? highlightRef : undefined}
                     className={`border-b last:border-0 align-top ${r.id === highlightId ? 'bg-primary/10' : ''}`}
                   >
-                    <td className="py-2 pr-3 font-medium">{formatEmployeeName(r.display_name)}</td>
+                    <td className="py-2 pr-3 font-medium">{formatEmployeeNameLastFirst(r.display_name)}</td>
                     <td className="py-2 pr-3 whitespace-nowrap text-muted-foreground">{r.checklist_date}</td>
                     <td className="py-2 pr-3">{r.incomplete_count}</td>
                     <td className="py-2 pr-3">

@@ -292,7 +292,7 @@ export default function ManagerDashboard({ view }: { view: ManagerView }) {
           <Band
             title="Staffing today"
             count={liveRoster ? `${staffing.rows.length}` : undefined}
-            action={{ label: 'Team', to: '/team' }}
+            action={{ label: 'Attendance', to: '/management/attendance' }}
           >
             {staffing.reviewCount > 0 && (
               <SignalRow
@@ -301,7 +301,7 @@ export default function ManagerDashboard({ view }: { view: ManagerView }) {
                   label: `${staffing.reviewCount} attendance item${staffing.reviewCount === 1 ? ' needs' : 's need'} review`,
                   detail: staffing.reviewDetail,
                   value: String(staffing.reviewCount),
-                  href: '/team',
+                  href: '/management/attendance',
                   tone: 'attention',
                 }}
               />

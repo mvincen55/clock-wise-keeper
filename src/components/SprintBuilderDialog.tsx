@@ -34,6 +34,7 @@ import {
 } from '@/hooks/useSprintIdeas';
 import { getToday, shiftDate } from '@/lib/time-utils';
 import type { OperationalRole } from '@/lib/schedule-reader/types';
+import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 
 // The Intelligent Sprint Builder. Position first, then either the architect's
 // grounded suggestions or the manual form the office already knows. The AI
@@ -258,7 +259,7 @@ export default function SprintBuilderDialog({
               .filter(e => !!e.user_id)
               .map(e => (
                 <SelectItem key={e.id} value={e.user_id as string}>
-                  {e.display_name}
+                  {formatEmployeeNameLastFirst(e.display_name)}
                 </SelectItem>
               ))}
           </SelectContent>
