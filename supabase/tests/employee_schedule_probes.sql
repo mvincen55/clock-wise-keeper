@@ -122,6 +122,74 @@ DO $$ DECLARE o uuid='00000000-0000-0000-0000-000000000010'; BEGIN
  PERFORM set_office_attendance_grace(o,0);
  RAISE EXCEPTION 'employee setting accepted'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
+-- In-place corrections run as one transaction and stay drift-proof.
+-- Live case reproduced: an employee's first version was closed on Sep 6 by a
+-- self-service version starting Sep 7 that never received an assignment,
+-- while the first assignment stayed open. The old client copied the open
+-- assignment date onto the closed version and hit the exclusion constraint.
+CREATE TABLE public.schedule_correction_log(id uuid DEFAULT gen_random_uuid(),version_id uuid NOT NULL,org_id uuid,employee_id uuid,edited_by uuid NOT NULL,edited_at timestamptz DEFAULT now(),old_values jsonb NOT NULL,new_values jsonb NOT NULL);
+\ir ../migrations/20260921180000_employee_schedule_correction.sql
+SET test.org='00000000-0000-0000-0000-000000000010';
+SET test.admin='true';
+DO $$
+DECLARE emp uuid='00000000-0000-0000-0000-000000000002'; org uuid='00000000-0000-0000-0000-000000000010'; first_v uuid; later_v uuid; other_office uuid;
+ rules jsonb='[{"weekday":1,"enabled":true,"start_time":"08:00","end_time":"16:00","grace_minutes":5},{"weekday":2,"enabled":true,"start_time":"09:00","end_time":"17:00","grace_minutes":5}]';
+BEGIN
+  SELECT id INTO first_v FROM schedule_versions WHERE employee_id=emp ORDER BY effective_start_date LIMIT 1;
+  UPDATE schedule_versions SET effective_end_date='2026-09-06' WHERE id=first_v;
+  INSERT INTO schedule_versions(org_id,employee_id,name,effective_start_date) VALUES (org,emp,'Self-service','2026-09-07') RETURNING id INTO later_v;
+  INSERT INTO schedule_weekdays(schedule_version_id,weekday,enabled,start_time,end_time,grace_minutes,threshold_minutes) VALUES (later_v,1,true,'08:00','17:00',0,1);
+  ASSERT (SELECT effective_end IS NULL FROM schedule_assignments WHERE schedule_version_id=first_v), 'drift reproduced: assignment still open';
+  ASSERT (SELECT count(*)=0 FROM schedule_assignments WHERE schedule_version_id=later_v), 'drift reproduced: later version has no assignment';
+  BEGIN
+    UPDATE schedule_versions SET effective_end_date=NULL WHERE id=first_v;
+    RAISE EXCEPTION 'old client write accepted';
+  EXCEPTION WHEN exclusion_violation THEN NULL; END;
+
+  -- Correcting the later version attaches it and closes the drifted earlier assignment where its version closed.
+  PERFORM correct_employee_schedule(later_v,'2026-09-07',NULL,'Self-service',false,rules);
+  ASSERT (SELECT count(*)=1 FROM schedule_assignments WHERE schedule_version_id=later_v AND effective_start='2026-09-07' AND effective_end IS NULL), 'correction attaches an assignment';
+  ASSERT (SELECT effective_end='2026-09-06' FROM schedule_assignments WHERE schedule_version_id=first_v), 'drifted earlier assignment returns to its version';
+  ASSERT (SELECT count(*)=2 FROM schedule_weekdays WHERE schedule_version_id=later_v), 'missing weekday rule is added';
+  ASSERT (SELECT start_time='16:00' FROM schedule_weekdays WHERE schedule_version_id=later_v AND weekday=1) IS FALSE, 'weekday rule kept its own times';
+  ASSERT (SELECT end_time='16:00' FROM schedule_weekdays WHERE schedule_version_id=later_v AND weekday=1), 'weekday rule updated in place';
+  ASSERT (SELECT count(*)=1 FROM schedule_correction_log WHERE version_id=later_v AND old_values->'assignments'='[]'::jsonb AND new_values->>'effective_start_date'='2026-09-07'), 'correction logged with before and after';
+
+  -- Reopening the earlier version is refused before any write, naming the schedule in the way.
+  BEGIN
+    PERFORM correct_employee_schedule(first_v,'2026-08-24',NULL,'Reopened',false,rules);
+    RAISE EXCEPTION 'overlapping correction accepted';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    ASSERT SQLERRM LIKE '%Sep 7, 2026 to present%', 'overlap names the other schedule: '||SQLERRM;
+  END;
+  ASSERT (SELECT effective_end_date='2026-09-06' FROM schedule_versions WHERE id=first_v), 'refused correction changes nothing';
+  ASSERT (SELECT count(*)=1 FROM schedule_correction_log), 'refused correction is not logged';
+
+  -- A correction that keeps the closed range simply repairs and updates.
+  PERFORM correct_employee_schedule(first_v,'2026-08-24','2026-09-06','Training hours',true,rules);
+  ASSERT (SELECT apply_to_remote AND name='Training hours' FROM schedule_versions WHERE id=first_v), 'closed version corrected in place';
+  ASSERT (SELECT effective_start='2026-08-24' AND effective_end='2026-09-06' FROM schedule_assignments WHERE schedule_version_id=first_v), 'assignment mirrors the corrected version';
+
+  BEGIN
+    PERFORM correct_employee_schedule(later_v,'2026-09-07','2026-09-01','Backwards',false,rules);
+    RAISE EXCEPTION 'end before start accepted';
+  EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
+  BEGIN
+    PERFORM correct_employee_schedule(later_v,'2026-09-07',NULL,'No days',false,'[{"weekday":1,"enabled":false}]');
+    RAISE EXCEPTION 'no enabled weekday accepted';
+  EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
+
+  INSERT INTO schedule_versions(org_id,employee_id,effective_start_date) VALUES ('00000000-0000-0000-0000-000000000020','00000000-0000-0000-0000-000000000003','2026-09-01') RETURNING id INTO other_office;
+  BEGIN
+    PERFORM correct_employee_schedule(other_office,'2026-09-01',NULL,'Other office',false,rules);
+    RAISE EXCEPTION 'cross office correction accepted';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  PERFORM set_config('test.admin','false',true);
+  BEGIN
+    PERFORM correct_employee_schedule(later_v,'2026-09-07',NULL,'Employee attempt',false,rules);
+    RAISE EXCEPTION 'non admin correction accepted';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  RAISE NOTICE 'All schedule correction probes passed';
+END $$;
 
 ROLLBACK;
-
