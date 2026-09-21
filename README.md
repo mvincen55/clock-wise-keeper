@@ -25,7 +25,7 @@ Golden rules that must survive every change:
 - **`org_id` on every table, RLS on every table.** RLS is the *sole* security perimeter — the bundled anon key is public by design.
 - **Org identity comes from `org_members` server-side, never from client input.**
 - **Recipient emails are PII** — use the existing `maskEmail()` pattern in edge function logs.
-- **Printing is snapshot-tested.** FOF, Deposit Log, and Incident Report sheets have print-invariant tests; run the suite before merging print changes.
+- **Printing is snapshot-tested.** FOF, Deposit Log, Incident Report, and the payroll timesheet (`PayrollPrintSheet`, printed from Reports) have print-invariant tests; run the suite before merging print changes.
 
 ---
 
@@ -64,6 +64,7 @@ The FOF (fee form) prints patient-facing documents, and AI features read office 
 - This is asserted in tests, including that `safeProcedureLabel` takes no overrides argument so none can be threaded in later.
 - AI code knowledge has exactly two legitimate homes: the **office schedule** (true for every patient) and a **carrier schedule** (applies only when billing that insurance). Both are loaded and labelled so a Delta Dental rule never reaches a BCBS patient.
 - Checklist/task content is business-operations data only (enforced by convention, documented in the checklists migration header).
+- The Missed appointments importer keeps the date, code, and provider of a Dentrix posting and nothing else: `parseDentrixMissedAppointments` drops the PatID column by name and reads only those three things off a day-sheet line, skipped lines are reported by number and never by content, and `missed_appointment_events` has no column that could hold a patient identifier. Asserted in tests.
 
 ## Stack
 
@@ -105,6 +106,7 @@ Navigation is a compact destination list; every feature below keeps its own rout
 | `/inbox/:tab` | InboxPage | Unified Inbox: Messages, Doctor Requests, Nudges (legacy `/messages`, `/requests`, `/nudges` redirect here) |
 | `/management` | Management | Manager/owner command center: approvals, snapshots, vitals, admin links |
 | `/management/attendance` | TeamAttendance | **Team Attendance** (owners/managers; `AttendanceWorkspace mode="team"`): the whole office with a name on every row or rows grouped per person (Sort: needs attention / by person / by date), a team-member picker (`?employee=<id>` deep link, used by Today's Team, the roster, and the dashboards), every punch of the day with breaks, days off matched per person, and row-level punch editing for that person (`AttendanceActions` → `PunchEditorModal`, quick fixes use the row's own shift), Add Day Off for anyone, Recompute for everyone or one person |
+| `/management/missed-appointments` | MissedAppointments | **Missed appointments** (owners/managers): Dentrix 9100 no-shows and 9101 late cancellations (`missed_appointment_events`, one row per posting) by month, department, and provider, with every posting listed and removable; "Import from Dentrix" (`MissedAppointmentImportDialog`) parses the pasted Appt_Date / Appt_Provider export or a day sheet in the browser (`parseDentrixMissedAppointments`), keeps only date, code, and provider (the PatID column and day-sheet patient text are dropped before a row exists), matches providers to the registry by schedule code or name with a manual override, numbers identical postings so a re-import adds nothing, and can skip days already recorded (the default for a day sheet, which credits the chair's provider where the export names the appointment's). Separate from the counts the deposit log captures |
 | `/help` | Help | Help & support surface |
 
 ### Time & attendance
@@ -112,7 +114,7 @@ Navigation is a compact destination list; every feature below keeps its own rout
 |---|---|---|
 | `/timesheet` | Timesheet | Clock in/out, punch history, manager punch editing (`PunchEditorModal`), tardy reasons (`TardyReasonModal`, `TardyReviewModal`) |
 | `/days-off` | DaysOff (**Attendance**) | Everyone's own attendance, managers included (`AttendanceWorkspace mode="personal"`): own rows with every punch of the day, days off, tardies, missing shifts, closures, My Calendar; Request Time Off for employees, own-row punch editing for managers. `?date=` (from the Timesheet) widens the range to that day |
-| `/work-zones` | WorkZones | Geofenced zones for location-verified clock-in (`useGeoTracking`, `LocationStatusPanel`, `process-location-event`) |
+| `/work-zones` | WorkZones | Redirects to `/settings/office#work-zones`: geofenced zones for location-verified clock-in are a card in Office Settings (`WorkZonesCard`; `useGeoTracking`, `LocationStatusPanel`, `process-location-event`) |
 | `/reports` | Reports | Payroll/attendance reporting and exports (built in the browser). Timesheet reports print every clock-in/out of the day with breaks and the worked-hour adjustments (`worked_hour_adjustments`, "Offset hours" on the Team page) dated in the range — listed with their reason and counted in the employee, weekly/OT, and report totals and the CSV |
 
 ### Time off
@@ -258,7 +260,7 @@ Migration `20260723200000_checklists.sql`:
 ## Printing (house rules)
 
 - Print from a dialog requires hiding **every `<body>` child except the print root** — Radix portals dialogs as *siblings* of `#root`, so hiding only `#root` prints the dialog. This was the incident-report print bug (`225b37f`); don't regress it.
-- Print-invariant snapshot tests cover FOF, Deposit Log, Incident Report — printed output must not drift.
+- Print-invariant snapshot tests cover FOF, Deposit Log, Incident Report, and the payroll timesheet — printed output must not drift.
 - **Letters are one component.** Anything that prints as an office letter goes through `OfficeLetterheadSheet` + the `.letter-print-root` portal — never a per-feature letterhead. Signature images inside the letter must stay `display: inline-block` (a block-level replaced element makes Chromium's print fragmentation emit a phantom trailing page — see `scripts/letter-print-check.tsx`).
 
 ## Database conventions

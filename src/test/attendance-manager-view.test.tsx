@@ -15,6 +15,8 @@ import type { AttendanceDayStatusRow } from '@/hooks/useAttendanceDayStatus';
 
 const state = vi.hoisted(() => ({
   role: 'manager' as string,
+  /** How Rick's Monday absence was recorded. */
+  rickAbsence: 'scheduled_with_notice' as string,
   recompute: vi.fn().mockResolvedValue(3),
   toast: vi.fn(),
 }));
@@ -62,7 +64,7 @@ vi.mock('@/hooks/useAttendanceDayStatus', () => ({
 vi.mock('@/hooks/useDaysOff', () => ({
   useDaysOff: () => ({ data: [], isLoading: false }),
   useOrgDaysOff: () => ({ data: [
-    { id: 'off-rick', user_id: 'rick-login', employee_id: 'emp-rick', date_start: '2026-09-21', date_end: '2026-09-21', type: 'scheduled_with_notice', hours: 8, notes: 'Vacation', created_at: '' },
+    { id: 'off-rick', user_id: 'rick-login', employee_id: 'emp-rick', date_start: '2026-09-21', date_end: '2026-09-21', type: state.rickAbsence, hours: 8, notes: 'Vacation', created_at: '' },
   ], isLoading: false }),
   useAddDayOff: () => ({ mutateAsync: vi.fn(), isPending: false, isReady: true }),
   useDeleteDayOff: () => ({ mutateAsync: vi.fn() }),
@@ -102,7 +104,7 @@ function mount(path = '/management/attendance') {
 }
 const counter = (label: string) => screen.getByText(label, { selector: 'p.text-xs' }).parentElement!;
 
-afterEach(() => { cleanup(); state.role = 'manager'; state.recompute.mockClear(); state.toast.mockClear(); });
+afterEach(() => { cleanup(); state.role = 'manager'; state.rickAbsence = 'scheduled_with_notice'; state.recompute.mockClear(); state.toast.mockClear(); });
 
 describe('Team Attendance (Management)', () => {
   it('names every row and explains an absence only with that person’s own day off', () => {
@@ -111,8 +113,30 @@ describe('Team Attendance (Management)', () => {
     expect(screen.getAllByRole('button', { name: 'Roe, Rick' })).toHaveLength(1);
     // Rick's day off covers Rick's Monday; Jane's Monday is still missing.
     expect(counter('Absent')).toHaveTextContent('1Absent');
-    expect(counter('Days Off')).toHaveTextContent('1Days Off');
+    expect(counter('Time off')).toHaveTextContent('1Time off');
     expect(screen.getByRole('tab', { name: /Missing Shifts/ })).toHaveTextContent('1');
+    // Rick's day reads as what it is, not as an absence.
+    const rickRow = screen.getByRole('button', { name: 'Roe, Rick' }).closest('tr')!;
+    expect(within(rickRow).getByText('Time off')).toBeInTheDocument();
+    expect(within(rickRow).queryByText('Absent')).toBeNull();
+  });
+
+  it('a callout is an absence with a reason — counted absent, listed as a missing shift, today or in the future', () => {
+    state.rickAbsence = 'unscheduled';
+    mount();
+    const rickRow = screen.getByRole('button', { name: 'Roe, Rick' }).closest('tr')!;
+    expect(within(rickRow).getByText('Callout')).toBeInTheDocument();
+    expect(within(rickRow).queryByText(/Time off|Day Off/)).toBeNull();
+    expect(counter('Absent')).toHaveTextContent('2Absent');
+    expect(counter('Time off')).toHaveTextContent('0Time off');
+    expect(screen.getByRole('tab', { name: /Missing Shifts/ })).toHaveTextContent('2');
+  });
+
+  it('has no calendar of its own — the office calendar is its own page', () => {
+    mount();
+    expect(screen.queryByRole('tab', { name: /Calendar/ })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Time off & callouts' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Record absence' })).toBeInTheDocument();
   });
 
   it('shows every clock-in and clock-out of the day, with the break between them', () => {
@@ -147,7 +171,7 @@ describe('Team Attendance (Management)', () => {
     expect(screen.queryByRole('button', { name: 'Doe, Jane' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Show everyone' })).toBeInTheDocument();
     // The Days Off tab is scoped to them too (Radix tabs activate on mouse down).
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Days Off' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Time off & callouts' }));
     expect(screen.getByText(/Roe, Rick's time off from/)).toBeInTheDocument();
     expect(screen.getByText('Vacation')).toBeInTheDocument();
   });
@@ -204,9 +228,9 @@ describe('Workplace → Attendance for a manager', () => {
     expect(screen.getByLabelText('Start Date')).toHaveValue('2026-09-01');
   });
 
-  it('Add Day Off there is for themselves — no picker', () => {
+  it('Record absence there is for themselves — no picker', () => {
     mount('/days-off');
-    fireEvent.click(screen.getByRole('button', { name: 'Add Day Off' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record absence' }));
     expect(screen.queryByText('Team member')).toBeNull();
   });
 });
@@ -254,7 +278,7 @@ describe('Workplace → Attendance for an employee', () => {
     mount('/days-off');
     expect(screen.queryByText('Team member')).toBeNull();
     expect(screen.queryByRole('button', { name: /^actions/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Add Day Off' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Record absence' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Request Time Off' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View in Timesheet' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'My Calendar' })).toBeInTheDocument();

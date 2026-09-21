@@ -162,7 +162,7 @@ export function AttendanceActions({ row, alwaysShow = false, editButton = false,
         target: { user_id: row.user_id, employee_id: emp.id },
       });
       await recompute.mutateAsync({ startDate: row.entry_date, endDate: row.entry_date, userId: row.user_id });
-      toast({ title: 'Day off created' });
+      toast({ title: dayOffForm.type === 'unscheduled' ? 'Callout recorded' : 'Time off recorded' });
       setAction(null);
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -264,19 +264,19 @@ export function AttendanceActions({ row, alwaysShow = false, editButton = false,
           {/* Quick-add day off options */}
           <DropdownMenuItem onClick={() => openDayOffWithType('scheduled_with_notice')}>
             <CalendarPlus className="h-3.5 w-3.5 mr-2" />
-            Add Scheduled Day Off
+            Record time off
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => openDayOffWithType('unscheduled')}>
             <CalendarMinus className="h-3.5 w-3.5 mr-2" />
-            Add Callout
+            Record callout
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => openDayOffWithType('medical_leave')}>
             <Stethoscope className="h-3.5 w-3.5 mr-2" />
-            Add Medical Leave
+            Record medical leave
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setAction('mark_closed')}>
             <Building2 className="h-3.5 w-3.5 mr-2" />
-            Add Closure
+            Record office closure
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem disabled={editorLoading} onClick={() => { void openPunchEditor(); }}>
@@ -319,16 +319,16 @@ export function AttendanceActions({ row, alwaysShow = false, editButton = false,
       {/* Mark Day Off Modal */}
       <Dialog open={action === 'mark_day_off'} onOpenChange={v => !v && setAction(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Mark as Day Off — {formatDate(row.entry_date)}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Record absence — {formatDate(row.entry_date)}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1">
               <Label>Type</Label>
               <Select value={dayOffForm.type} onValueChange={v => setDayOffForm({ ...dayOffForm, type: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="scheduled_with_notice">Time off</SelectItem>
-                  <SelectItem value="unscheduled">Callout</SelectItem>
-                  <SelectItem value="medical_leave">Medical Leave</SelectItem>
+                  <SelectItem value="scheduled_with_notice">Time off (planned)</SelectItem>
+                  <SelectItem value="unscheduled">Callout (unplanned — counts as absent)</SelectItem>
+                  <SelectItem value="medical_leave">Medical leave</SelectItem>
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
@@ -351,7 +351,7 @@ export function AttendanceActions({ row, alwaysShow = false, editButton = false,
               className="w-full"
             >
               {addDayOff.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Day Off
+              Save
             </Button>
           </div>
         </DialogContent>

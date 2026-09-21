@@ -11,7 +11,7 @@
  *  - the PTO policy card moved out of the PTO page tab, which links to it;
  *  - org branding has ONE editable home (Settings) — Consents settings links
  *    to it instead of rendering a second copy;
- *  - Work Zones is manager-gated like the Settings card that links to it;
+ *  - Work Zones is a card on the Office tab; /work-zones redirects into it;
  *  - members still reach their personal settings; office tabs are gated.
  */
 import { readFileSync } from 'node:fs';
@@ -88,16 +88,24 @@ describe('settings is one organized, deep-linkable section', () => {
   });
 
   it('sub-page settings are indexed from Settings, not orphaned', () => {
-    for (const to of ['/work-zones', '/consents/settings', '/letters/settings', '/settings/reminders']) {
+    for (const to of ['/consents/settings', '/letters/settings', '/settings/reminders']) {
       expect(settings).toContain(`to="${to}"`);
     }
+  });
+
+  it('Work Zones live inside Office Settings, deep-linkable as #work-zones', () => {
+    expect(settings).toContain('<WorkZonesCard />');
+    expect(settings).toContain('id="work-zones"');
+    expect(settings).not.toContain('to="/work-zones"');
+    expect(management).not.toContain("to: '/work-zones'");
   });
 });
 
 describe('old homes stay consistent', () => {
-  it('Work Zones is manager-gated like the Settings card that links to it', () => {
-    expect(workZones).toMatch(/role === 'owner' \|\| ctx\?\.role === 'manager'/);
-    expect(workZones).toContain('<Navigate to="/" replace />');
+  it('the old Work Zones route lands on the card in Office Settings', () => {
+    expect(workZones).toContain('<Navigate to="/settings/office#work-zones" replace />');
+    // Manager gating comes from the Office tab the card lives on.
+    expect(settings).toMatch(/isManager && \(\s*<TabsContent value="office"/);
   });
 
   it('visiting /work-zones no longer lights up the Management nav item', () => {
