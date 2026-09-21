@@ -169,14 +169,19 @@ export function deriveAttendanceRows(input: DeriveInput): DerivedAttendanceRow[]
         }
       }
 
-      const isAbsent = isScheduledDay && !officeClosed && !hasDayOff && !hasPunches && date <= today;
+      // A missed scheduled day is absent whatever the date — the server engine
+      // does the same, so a future callout or no-show reads as absent here too.
+      // A callout is an absence with a reason, never planned time off.
+      const calledOut = coveringOff?.type === 'unscheduled';
+      const plannedOff = hasDayOff && !calledOut;
+      const isAbsent = isScheduledDay && !officeClosed && !hasPunches && !plannedOff;
       const ins = punches.filter(p => p.punch_type === 'in').length;
       const outs = punches.filter(p => p.punch_type === 'out').length;
       const isIncomplete = hasPunches && ins !== outs && date < today;
 
       let statusCode = 'ok';
       if (officeClosed) statusCode = 'closure';
-      else if (hasDayOff) statusCode = 'day_off';
+      else if (plannedOff) statusCode = 'day_off';
       else if (isAbsent) statusCode = 'absent';
       else if (isLate) statusCode = 'late';
       else if (isIncomplete) statusCode = 'incomplete';

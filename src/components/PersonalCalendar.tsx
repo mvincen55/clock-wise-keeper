@@ -48,7 +48,7 @@ export default function PersonalCalendar({ daysOff, closures, statusRows }: Pers
     // Days off
     (daysOff || []).forEach(d => {
       const typeLabel = d.type === 'scheduled_with_notice' ? 'Day Off' :
-        d.type === 'unscheduled' ? 'Absent' :
+        d.type === 'unscheduled' ? 'Callout' :
         d.type === 'medical_leave' ? 'Medical' :
         d.type === 'office_closed' ? 'Closed' : 'Other';
       const colorKey = d.type === 'unscheduled' ? 'absent' : d.type === 'office_closed' ? 'closure' : 'day_off';

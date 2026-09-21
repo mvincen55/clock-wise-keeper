@@ -20,7 +20,9 @@ const person = (over: Partial<EmployeeSnapshot>): EmployeeSnapshot => ({
 const today: EmployeeSnapshot[] = [
   person({ employee_id: 'megan', display_name: 'Megan Vincent', has_punches: true, is_late: true, minutes_late: 25 }),
   person({ employee_id: 'alize', display_name: 'Furtado, Alize A', is_absent: true }),
-  person({ employee_id: 'jill', display_name: 'Craveiro, Jill', is_absent: true }),
+  // Jill called out: the engine keeps the day absent and flags the recorded absence.
+  person({ employee_id: 'jill', display_name: 'Craveiro, Jill', is_absent: true, has_day_off: true }),
+  person({ employee_id: 'pat', display_name: 'Lee, Pat', has_day_off: true }),
   person({ employee_id: 'sam', display_name: 'Sam Ortiz', has_punches: true }),
   ...['Barbosa, Jen L', 'Bizarro, Lucia', 'Dore, Karen J'].map((n, i) => person({ employee_id: `u${i}`, display_name: n, is_scheduled_day: false })),
 ];
@@ -32,13 +34,19 @@ afterEach(cleanup);
 describe('statusBucket and snapshotCounts', () => {
   it('a late arrival is in, and in the late count too', () => {
     expect(statusBucket(today[0])).toBe('late');
-    expect(snapshotCounts(today)).toEqual({ total: 7, in: 2, late: 1, notIn: 2 });
+    // Not in: Alize (absent) and Jill (called out); Pat's planned time off is not a missing person.
+    expect(snapshotCounts(today)).toEqual({ total: 8, in: 2, late: 1, notIn: 2 });
   });
 
   it('scheduled with no punches is "not in yet" until the engine marks it absent', () => {
     expect(statusBucket(person({}))).toBe('not_started');
     expect(statusBucket(person({ is_absent: true }))).toBe('absent');
     expect(statusBucket(person({ has_punches: true, is_incomplete: true }))).toBe('incomplete');
+  });
+
+  it('a recorded callout is an absence with a reason; planned time off is not', () => {
+    expect(statusBucket(person({ is_absent: true, has_day_off: true }))).toBe('callout');
+    expect(statusBucket(person({ has_day_off: true }))).toBe('day_off');
   });
 });
 
@@ -50,10 +58,14 @@ describe('OrgSnapshotPanel', () => {
     expect(chip('Late')).toHaveTextContent('1Late');
     expect(chip('Not in')).toHaveTextContent('2Not in');
     expect(screen.getByRole('link', { name: /Furtado, Alize A/ })).toHaveAttribute('href', '/management/attendance?employee=alize');
+    // Jill's callout is listed with the attention groups, never folded away as time off.
+    expect(screen.getByText('Called out (1)')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Craveiro, Jill' })).toHaveAttribute('href', '/management/attendance?employee=jill');
+    expect(screen.queryByText(/Time off 1/)).not.toBeNull();
     expect(screen.getByRole('link', { name: /Vincent, Megan \+25m/ })).toHaveAttribute('href', '/management/attendance?employee=megan');
     // Not-scheduled names stay folded until asked for.
     expect(screen.queryByRole('link', { name: 'Barbosa, Jen L' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Off today \(3\)/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Off today \(4\)/ }));
     expect(screen.getByRole('link', { name: 'Barbosa, Jen L' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Team Attendance →' })).toHaveAttribute('href', '/management/attendance');
   });

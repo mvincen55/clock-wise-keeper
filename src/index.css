@@ -3813,3 +3813,308 @@
   .handbook-template-bar button { display: none !important; }
   .handbook-figure { break-inside: avoid; }
 }
+
+/* Printable payroll timesheet (Reports → Weekly / Pay Period / Monthly).
+   Hidden on screen; the only thing printed from the Reports page. Styled in
+   the practice's document language (brand accent on white, grayscale-safe)
+   and flows over as many letter pages as the period needs. */
+.payroll-print-root {
+  display: none;
+}
+
+@page payroll {
+  margin: 0.5in;
+}
+
+.pay-sheet {
+  --pay-navy: #53406e; /* brand accent default; org_branding overrides */
+  --pay-ink: #2b2733;
+  --pay-muted: #6b6577;
+  --pay-line: #d5cfe0;
+  --pay-tint: #f3f0f8;
+  page: payroll;
+  width: 7.5in;
+  margin: 0 auto;
+  background: white;
+  color: var(--pay-ink);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 8.5pt;
+  line-height: 1.35;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.pay-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.4in;
+  padding-bottom: 8pt;
+  border-bottom: 1.5pt solid var(--pay-navy);
+}
+
+.pay-brand {
+  display: flex;
+  align-items: center;
+  gap: 8pt;
+}
+
+.pay-logo {
+  height: 0.5in;
+  width: auto;
+}
+
+.pay-practice {
+  font-size: 12pt;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.pay-legal,
+.pay-generated,
+.pay-subtitle,
+.pay-muted,
+.pay-footnote {
+  font-size: 7.5pt;
+  color: var(--pay-muted);
+}
+
+.pay-head-meta {
+  text-align: right;
+}
+
+.pay-kicker {
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pay-navy);
+}
+
+.pay-title {
+  font-size: 16pt;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.pay-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6pt;
+  margin: 10pt 0;
+}
+
+.pay-box {
+  border: 0.75pt solid var(--pay-line);
+  border-radius: 3pt;
+  background: var(--pay-tint);
+  padding: 5pt 7pt;
+}
+
+.pay-box-value {
+  font-size: 13pt;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.pay-box-label {
+  font-size: 6.5pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pay-navy);
+  margin-top: 1pt;
+}
+
+.pay-box-note {
+  font-size: 7pt;
+  color: var(--pay-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pay-flags {
+  border: 1pt solid var(--pay-navy);
+  border-radius: 3pt;
+  padding: 5pt 7pt 3pt;
+  margin-bottom: 10pt;
+  break-inside: avoid;
+}
+
+.pay-flags-title,
+.pay-section-title {
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pay-navy);
+  margin-bottom: 3pt;
+}
+
+.pay-section-title {
+  border-bottom: 1.25pt solid var(--pay-navy);
+  padding-bottom: 2pt;
+  margin: 8pt 0 4pt;
+}
+
+.pay-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pay-table th {
+  text-align: left;
+  font-size: 6.5pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pay-muted);
+  border-bottom: 0.75pt solid var(--pay-navy);
+  padding: 2pt 4pt;
+}
+
+.pay-table td {
+  border-bottom: 0.5pt solid var(--pay-line);
+  padding: 2.5pt 4pt;
+  vertical-align: top;
+}
+
+.pay-table tr {
+  break-inside: avoid;
+}
+
+.pay-table tfoot td {
+  border-bottom: none;
+  border-top: 1pt solid var(--pay-navy);
+  padding-top: 3pt;
+}
+
+.pay-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pay-strong {
+  font-weight: 700;
+}
+
+.pay-flag {
+  color: var(--pay-navy);
+  font-weight: 700;
+}
+
+.pay-date {
+  white-space: nowrap;
+}
+
+.pay-stretch {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.pay-src {
+  font-size: 6.5pt;
+  color: var(--pay-muted);
+}
+
+.pay-break {
+  font-size: 7pt;
+  color: var(--pay-muted);
+  padding-left: 8pt;
+}
+
+.pay-notes {
+  font-size: 7.5pt;
+  color: var(--pay-muted);
+}
+
+.pay-foot-label {
+  font-size: 7.5pt;
+  color: var(--pay-muted);
+  text-align: right;
+}
+
+.pay-employee {
+  margin-top: 10pt;
+  break-inside: avoid;
+}
+
+.pay-employee-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  background: var(--pay-tint);
+  border: 0.75pt solid var(--pay-line);
+  border-bottom: none;
+  border-radius: 3pt 3pt 0 0;
+  padding: 3pt 6pt;
+  font-weight: 700;
+}
+
+.pay-adj td {
+  background: var(--pay-tint);
+}
+
+.pay-adj-reason {
+  font-size: 7.5pt;
+  color: var(--pay-muted);
+  white-space: normal;
+}
+
+.pay-sign {
+  display: flex;
+  gap: 0.6in;
+  margin-top: 18pt;
+  break-inside: avoid;
+}
+
+.pay-sign > div {
+  flex: 1;
+  border-top: 0.75pt solid var(--pay-ink);
+  padding-top: 3pt;
+  font-size: 7.5pt;
+  color: var(--pay-muted);
+  white-space: nowrap;
+}
+
+.pay-page-footer {
+  margin-top: 10pt;
+  padding-top: 3pt;
+  border-top: 0.5pt solid var(--pay-line);
+  font-size: 6.5pt;
+  color: var(--pay-muted);
+  text-align: center;
+}
+
+@media print {
+  /* Printing shows the payroll sheet and nothing else — same rule as the
+     other print roots (dialogs and toasts portal to <body> as siblings). */
+  body:has(.payroll-print-root) > *:not(.payroll-print-root) {
+    display: none !important;
+  }
+
+  .payroll-print-root {
+    display: block !important;
+  }
+
+  /* The sheet draws its own rules — exempt it from the generic print
+     table borders, then restate its own. */
+  .pay-sheet th,
+  .pay-sheet td {
+    border: none;
+  }
+
+  .pay-sheet .pay-table th {
+    border-bottom: 0.75pt solid var(--pay-navy);
+  }
+
+  .pay-sheet .pay-table td {
+    border-bottom: 0.5pt solid var(--pay-line);
+  }
+
+  .pay-sheet .pay-table tfoot td {
+    border-bottom: none;
+    border-top: 1pt solid var(--pay-navy);
+  }
+}
