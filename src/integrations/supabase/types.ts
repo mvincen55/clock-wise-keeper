@@ -8976,6 +8976,17 @@ export type Database = {
         }
         Returns: string
       }
+      correct_employee_schedule: {
+        Args: {
+          p_apply_to_remote: boolean
+          p_end: string
+          p_name: string
+          p_start: string
+          p_version_id: string
+          p_weekdays: Json
+        }
+        Returns: string
+      }
       correspondence_team_can: { Args: { p_org_id: string }; Returns: boolean }
       countersign_accountability_report: {
         Args: { _note: string; _report_id: string; _typed_name: string }
