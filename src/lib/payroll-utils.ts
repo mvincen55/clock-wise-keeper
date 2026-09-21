@@ -30,34 +30,119 @@ export function weekStartOf(date: string, weekStartDay: number): string {
 export type WeeklyTotalRow = {
   employee_id: string;
   week_start: string;
+  /** The payroll minutes for the week: recorded punches plus signed adjustments. */
   total_minutes: number;
+  /** Minutes from the entries' server-computed totals alone. */
+  worked_minutes: number;
+  /** Signed minutes from worked-hour adjustments dated inside the week. */
+  adjustment_minutes: number;
   /** Minutes over 40h; 0 when the week is at or under 40h. */
   ot_minutes: number;
 };
 
+/** A worked-hour offset as the payroll report needs it: whose, when, how much. */
+export type WorkedHourAdjustmentLike = {
+  employee_id: string;
+  entry_date: string;
+  /** Signed hours (numeric(10,2) may arrive as a string from PostgREST). */
+  hours_delta: number | string;
+};
+
+/** An adjustment's signed hours as whole minutes: 7.28h → 437, -7.28h → -437. */
+export function adjustmentMinutes(hoursDelta: number | string): number {
+  const hours = Number(hoursDelta);
+  if (!Number.isFinite(hours)) return 0;
+  return Math.round(hours * 60);
+}
+
+/** "+7.28h" / "-7.28h" — the sign always shows, so a deduction reads as one. */
+export function formatSignedHours(hoursDelta: number | string): string {
+  const hours = Number(hoursDelta);
+  if (!Number.isFinite(hours) || hours === 0) return '0.00h';
+  return `${hours > 0 ? '+' : '-'}${Math.abs(hours).toFixed(2)}h`;
+}
+
 /**
- * Per employee per payroll week, total worked minutes from the entries'
- * server-computed totals (which already exclude voided punches).
+ * Per employee per payroll week: recorded minutes from the entries'
+ * server-computed totals (which already exclude voided punches) plus the
+ * worked-hour adjustments dated in that week. Adjustments count toward the
+ * hours paid in the week they are dated, so they land in the week's total
+ * and in its OT flag exactly like punched time — and a week that holds only
+ * an adjustment still gets a row, because it is still paid.
  */
 export function computeWeeklyTotals(
   entries: { employee_id: string | null; entry_date: string; total_minutes: number | null }[],
   weekStartDay: number,
+  adjustments: WorkedHourAdjustmentLike[] = [],
 ): WeeklyTotalRow[] {
   const byKey = new Map<string, WeeklyTotalRow>();
+  const rowFor = (employeeId: string, date: string): WeeklyTotalRow => {
+    const week = weekStartOf(date, weekStartDay);
+    const key = `${employeeId}|${week}`;
+    let row = byKey.get(key);
+    if (!row) {
+      row = { employee_id: employeeId, week_start: week, total_minutes: 0, worked_minutes: 0, adjustment_minutes: 0, ot_minutes: 0 };
+      byKey.set(key, row);
+    }
+    return row;
+  };
   for (const e of entries) {
     if (!e.employee_id) continue;
-    const week = weekStartOf(e.entry_date, weekStartDay);
-    const key = `${e.employee_id}|${week}`;
-    const row = byKey.get(key) ?? { employee_id: e.employee_id, week_start: week, total_minutes: 0, ot_minutes: 0 };
-    row.total_minutes += e.total_minutes ?? 0;
-    byKey.set(key, row);
+    rowFor(e.employee_id, e.entry_date).worked_minutes += e.total_minutes ?? 0;
+  }
+  for (const a of adjustments) {
+    rowFor(a.employee_id, a.entry_date).adjustment_minutes += adjustmentMinutes(a.hours_delta);
   }
   const rows = [...byKey.values()];
   for (const row of rows) {
+    row.total_minutes = row.worked_minutes + row.adjustment_minutes;
     row.ot_minutes = Math.max(0, row.total_minutes - OT_WEEK_MINUTES);
   }
   rows.sort((a, b) => a.week_start.localeCompare(b.week_start) || a.employee_id.localeCompare(b.employee_id));
   return rows;
+}
+
+export type PunchLike = { punch_type: string; punch_time: string; source?: string };
+
+/** One worked stretch of a day: a clock-in and the clock-out that closed it. */
+export type PunchSegment<P extends PunchLike = PunchLike> = {
+  in: P | null;
+  out: P | null;
+  /** Worked minutes of this stretch; null while it is still open or unpaired. */
+  minutes: number | null;
+  /** Minutes between the previous stretch's clock-out and this clock-in — lunch or a break. */
+  break_minutes: number | null;
+};
+
+/**
+ * Groups a day's live punches (seq order) into worked stretches so a
+ * reader sees every clock-in and clock-out, with the lunch and break gaps
+ * between them, instead of only the first in and the last out. Pairing is
+ * forgiving: an out with no open in, or an in that never closed, still
+ * shows up as its own row rather than vanishing.
+ */
+export function punchSegments<P extends PunchLike>(punches: P[]): PunchSegment<P>[] {
+  const segments: PunchSegment<P>[] = [];
+  let open: PunchSegment<P> | null = null;
+  let lastOut: P | null = null;
+  const minutesBetween = (a: P, b: P) => Math.round((new Date(b.punch_time).getTime() - new Date(a.punch_time).getTime()) / 60000);
+  for (const p of punches) {
+    if (p.punch_type === 'in') {
+      if (open) segments.push(open);
+      open = { in: p, out: null, minutes: null, break_minutes: lastOut ? minutesBetween(lastOut, p) : null };
+    } else if (open) {
+      open.out = p;
+      open.minutes = minutesBetween(open.in!, p);
+      segments.push(open);
+      lastOut = p;
+      open = null;
+    } else {
+      segments.push({ in: null, out: p, minutes: null, break_minutes: null });
+      lastOut = p;
+    }
+  }
+  if (open) segments.push(open);
+  return segments;
 }
 
 /** "3h 15m" for a minute count. */
@@ -65,6 +150,11 @@ export function formatHoursMinutes(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return `${h}h ${m}m`;
+}
+
+/** A break's length as people say it: "30m", or "1h 15m" once it passes an hour. */
+export function formatBreak(minutes: number): string {
+  return minutes >= 60 ? formatHoursMinutes(minutes) : `${minutes}m`;
 }
 
 /** The OT flag text, e.g. "OT: 3h 15m over". */

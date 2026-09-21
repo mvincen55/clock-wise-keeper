@@ -11,6 +11,7 @@ import { describe, it, expect } from 'vitest';
 import {
   OT_WEEK_MINUTES, weekStartOf, computeWeeklyTotals,
   formatHoursMinutes, formatOtFlag, detectDayIssue, accrualBasisWorkedHours,
+  adjustmentMinutes, formatSignedHours, punchSegments, formatBreak,
 } from '@/lib/payroll-utils';
 
 describe('weekStartOf', () => {
@@ -132,5 +133,106 @@ describe('formatHoursMinutes', () => {
   it('renders h/m', () => {
     expect(formatHoursMinutes(195)).toBe('3h 15m');
     expect(formatHoursMinutes(60)).toBe('1h 0m');
+  });
+});
+
+describe('computeWeeklyTotals with worked-hour adjustments', () => {
+  const entry = (employee_id: string, entry_date: string, total_minutes: number) =>
+    ({ employee_id, entry_date, total_minutes });
+
+  it('an adjustment counts toward the hours paid in the week it is dated', () => {
+    // Mon–Fri 8h = 2400 recorded; a -7.28h installment dated Saturday of
+    // the same Monday-start week comes off the payroll total.
+    const rows = computeWeeklyTotals([
+      entry('e1', '2026-09-14', 480), entry('e1', '2026-09-15', 480),
+      entry('e1', '2026-09-16', 480), entry('e1', '2026-09-17', 480),
+      entry('e1', '2026-09-18', 480),
+    ], 1, [{ employee_id: 'e1', entry_date: '2026-09-19', hours_delta: '-7.28' }]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].worked_minutes).toBe(2400);
+    expect(rows[0].adjustment_minutes).toBe(-437);
+    expect(rows[0].total_minutes).toBe(1963);
+    expect(rows[0].ot_minutes).toBe(0);
+  });
+
+  it('an added adjustment can push a week over 40 hours, and the OT flag follows the paid total', () => {
+    const rows = computeWeeklyTotals(
+      [entry('e1', '2026-09-14', OT_WEEK_MINUTES)], 1,
+      [{ employee_id: 'e1', entry_date: '2026-09-15', hours_delta: 2.5 }],
+    );
+    expect(rows[0].total_minutes).toBe(OT_WEEK_MINUTES + 150);
+    expect(rows[0].ot_minutes).toBe(150);
+  });
+
+  it('a week that holds only an adjustment still gets a row — it is still paid', () => {
+    const rows = computeWeeklyTotals([], 1, [{ employee_id: 'e2', entry_date: '2026-09-16', hours_delta: 6.99 }]);
+    expect(rows).toEqual([{ employee_id: 'e2', week_start: '2026-09-14', total_minutes: 419, worked_minutes: 0, adjustment_minutes: 419, ot_minutes: 0 }]);
+  });
+
+  it('an adjustment dated in another week never leaks into this one', () => {
+    const rows = computeWeeklyTotals(
+      [entry('e1', '2026-09-14', 480)], 1,
+      [{ employee_id: 'e1', entry_date: '2026-09-21', hours_delta: 1 }],
+    );
+    const thisWeek = rows.find(r => r.week_start === '2026-09-14')!;
+    expect(thisWeek.adjustment_minutes).toBe(0);
+    expect(rows.find(r => r.week_start === '2026-09-21')!.adjustment_minutes).toBe(60);
+  });
+
+  it('without adjustments the totals are unchanged', () => {
+    const rows = computeWeeklyTotals([entry('e1', '2026-09-14', 500)], 1);
+    expect(rows[0]).toMatchObject({ total_minutes: 500, worked_minutes: 500, adjustment_minutes: 0 });
+  });
+});
+
+describe('adjustment helpers', () => {
+  it('converts signed hours (numeric strings included) to whole minutes', () => {
+    expect(adjustmentMinutes('-7.28')).toBe(-437);
+    expect(adjustmentMinutes(6.99)).toBe(419);
+    expect(adjustmentMinutes('nonsense')).toBe(0);
+  });
+
+  it('always shows the sign so a deduction reads as one', () => {
+    expect(formatSignedHours(-7.28)).toBe('-7.28h');
+    expect(formatSignedHours('6.99')).toBe('+6.99h');
+    expect(formatSignedHours(0)).toBe('0.00h');
+  });
+});
+
+describe('formatBreak', () => {
+  it('reads as people say it', () => {
+    expect(formatBreak(30)).toBe('30m');
+    expect(formatBreak(75)).toBe('1h 15m');
+  });
+});
+
+describe('punchSegments', () => {
+  const p = (punch_type: string, punch_time: string) => ({ punch_type, punch_time });
+
+  it('pairs every in with its out and measures the lunch between them', () => {
+    const segments = punchSegments([
+      p('in', '2026-09-14T12:29:00Z'), p('out', '2026-09-14T16:01:00Z'),
+      p('in', '2026-09-14T16:31:00Z'), p('out', '2026-09-14T22:27:00Z'),
+    ]);
+    expect(segments).toHaveLength(2);
+    expect(segments[0]).toMatchObject({ minutes: 212, break_minutes: null });
+    expect(segments[1]).toMatchObject({ minutes: 356, break_minutes: 30 });
+    expect(segments[1].in?.punch_time).toBe('2026-09-14T16:31:00Z');
+  });
+
+  it('keeps a still-open day and an orphan out visible instead of dropping them', () => {
+    const open = punchSegments([p('in', '2026-09-14T12:29:00Z')]);
+    expect(open).toEqual([{ in: p('in', '2026-09-14T12:29:00Z'), out: null, minutes: null, break_minutes: null }]);
+
+    const orphan = punchSegments([p('out', '2026-09-14T16:01:00Z'), p('in', '2026-09-14T16:31:00Z'), p('out', '2026-09-14T20:00:00Z')]);
+    expect(orphan[0]).toMatchObject({ in: null, minutes: null });
+    expect(orphan[1]).toMatchObject({ minutes: 209, break_minutes: 30 });
+  });
+
+  it('an in followed by another in closes nothing and starts a new stretch', () => {
+    const segments = punchSegments([p('in', '2026-09-14T12:00:00Z'), p('in', '2026-09-14T13:00:00Z'), p('out', '2026-09-14T14:00:00Z')]);
+    expect(segments).toHaveLength(2);
+    expect(segments[0]).toMatchObject({ out: null, minutes: null });
+    expect(segments[1]).toMatchObject({ minutes: 60 });
   });
 });

@@ -1,18 +1,22 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDaysOff, useAddDayOff, useDeleteDayOff, DayOffRow } from '@/hooks/useDaysOff';
+import { useDaysOff, useOrgDaysOff, useAddDayOff, useDeleteDayOff, DayOffRow } from '@/hooks/useDaysOff';
 import { PtoRequestModal } from '@/components/PtoRequestModal';
 import { useTardies, useUpdateTardy, TardyRow } from '@/hooks/useTardies';
 import { TardyReviewModal } from '@/components/TardyReviewModal';
 import { AttendanceActions } from '@/components/AttendanceActions';
-import { useAttendanceExceptions, AttendanceExceptionRow } from '@/hooks/useAttendanceExceptions';
 import { useAttendanceDayStatus, useRecomputeAttendance, AttendanceDayStatusRow } from '@/hooks/useAttendanceDayStatus';
-import { useOfficeClosures, useAddClosure } from '@/hooks/useOfficeClosures';
+import { useOfficeClosures } from '@/hooks/useOfficeClosures';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import { useOrgStaff, type OrgStaffMember } from '@/hooks/useStaffCodes';
+import { useTimeEntries, TimeEntryRow } from '@/hooks/useTimeEntries';
+import { useConsumedSearchParam } from '@/hooks/useDeepLink';
 import PersonalCalendar from '@/components/PersonalCalendar';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { useAuth } from '@/hooks/useAuth';
-import { formatDate, formatTime, formatClock, formatClockRange } from '@/lib/time-utils';
+import { formatDate, formatTime, formatClock, formatClockRange, minutesToHHMM } from '@/lib/time-utils';
+import { formatEmployeeName, formatEmployeeNameLastFirst } from '@/lib/employee-name';
+import { formatBreak, punchSegments } from '@/lib/payroll-utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +27,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { CalendarDays, Plus, Trash2, Loader2, AlertTriangle, Clock, Building2, Bug, RefreshCw, Pencil } from 'lucide-react';
+import { CalendarDays, Plus, Trash2, Loader2, Building2, Bug, RefreshCw, Table2, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const typeLabels: Record<string, string> = {
@@ -42,22 +46,22 @@ const typeColors: Record<string, string> = {
   other: 'bg-accent/20 text-accent',
 };
 
-const exceptionStatusColors: Record<string, string> = {
-  open: 'bg-warning/20 text-warning',
-  resolved: 'bg-success/20 text-success',
-  ignored: 'bg-muted text-muted-foreground',
-};
-
 type AttendanceFilter = 'all' | 'absent' | 'late' | 'incomplete' | 'days_off' | 'closures' | 'remote' | 'onsite';
 type DaysOffFilter = 'all' | 'scheduled_with_notice' | 'unscheduled' | 'medical_leave' | 'other';
 
-function DebugDrawer({ row, open, onClose }: { row: AttendanceDayStatusRow | null; open: boolean; onClose: () => void }) {
+/** The employee picker's "everyone in the office" choice. */
+const EVERYONE = 'all';
+
+/** Day-off types that explain an absence (a callout does not — it is still a missed shift). */
+const EXPLAINED_DAY_OFF_TYPES = ['scheduled_with_notice', 'medical_leave', 'other'];
+
+function DebugDrawer({ row, employeeName, open, onClose }: { row: AttendanceDayStatusRow | null; employeeName?: string; open: boolean; onClose: () => void }) {
   if (!row) return null;
   return (
     <Sheet open={open} onOpenChange={v => !v && onClose()}>
       <SheetContent className="w-[340px] sm:w-[400px]">
         <SheetHeader>
-          <SheetTitle className="flex items-center gap-2"><Bug className="h-4 w-4" /> Debug: {formatDate(row.entry_date)}</SheetTitle>
+          <SheetTitle className="flex items-center gap-2"><Bug className="h-4 w-4" /> Debug: {employeeName ? `${employeeName} · ` : ''}{formatDate(row.entry_date)}</SheetTitle>
         </SheetHeader>
         <div className="mt-4 space-y-3 text-sm">
           <div className="grid grid-cols-2 gap-1">
@@ -106,6 +110,35 @@ function DebugDrawer({ row, open, onClose }: { row: AttendanceDayStatusRow | nul
   );
 }
 
+/**
+ * Every clock-in and clock-out of the day as worked stretches, with the
+ * lunch or break gap between them — so a manager sees what they are about
+ * to edit, not just the first in and the last out.
+ */
+function DayPunches({ entry }: { entry: TimeEntryRow | undefined }) {
+  if (!entry || !entry.punches.length) return <span className="text-xs text-muted-foreground">—</span>;
+  const segments = punchSegments(entry.punches);
+  return (
+    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+      {segments.map((seg, i) => (
+        <span key={i} className="inline-flex items-center gap-1">
+          {seg.break_minutes != null && seg.break_minutes > 0 && (
+            <span className="text-[10px] text-muted-foreground" title="Time between the previous clock-out and this clock-in">{formatBreak(seg.break_minutes)} break ·</span>
+          )}
+          <span className="text-xs px-1.5 py-0.5 rounded bg-success/20 text-success time-display">{seg.in ? formatTime(seg.in.punch_time) : '?'}</span>
+          <span className="text-[10px] text-muted-foreground">–</span>
+          <span className={`text-xs px-1.5 py-0.5 rounded time-display ${seg.out ? 'bg-destructive/20 text-destructive' : 'bg-warning/20 text-warning'}`}>
+            {seg.out ? formatTime(seg.out.punch_time) : 'no clock out'}
+          </span>
+        </span>
+      ))}
+      {entry.total_minutes != null && (
+        <span className="text-[10px] text-muted-foreground time-display">{minutesToHHMM(entry.total_minutes)} total</span>
+      )}
+    </div>
+  );
+}
+
 export default function DaysOff() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -114,6 +147,13 @@ export default function DaysOff() {
   const { toast } = useToast();
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
+  const roleKnown = !!ctx;
+
+  // Deep links: the Timesheet's "Resolve in Attendance" names a date, and a
+  // team-member link can name the person. Both are read once, then dropped
+  // from the address bar.
+  const linkedDate = useConsumedSearchParam('date');
+  const linkedEmployee = useConsumedSearchParam('employee');
 
   // Default date range to current pay period
   const weekStartDay = payrollSettings?.week_start_day ?? 1;
@@ -125,18 +165,49 @@ export default function DaysOff() {
   const defaultEnd = new Date(defaultStart);
   defaultEnd.setDate(defaultStart.getDate() + 6);
 
-  const [startDate, setStartDate] = useState(defaultStart.toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(defaultEnd.toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(() => {
+    const s = defaultStart.toISOString().split('T')[0];
+    return linkedDate && linkedDate < s ? linkedDate : s;
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const e = defaultEnd.toISOString().split('T')[0];
+    return linkedDate && linkedDate > e ? linkedDate : e;
+  });
+  // Managers start on the whole office; a linked person narrows it.
+  const [employeeFilter, setEmployeeFilter] = useState<string>(linkedEmployee ?? EVERYONE);
 
-  const { data: daysOff, isLoading: daysOffLoading } = useDaysOff();
+  // The roster, for names on rows and the picker (every member may read it).
+  const { data: staff } = useOrgStaff();
+  const staffById = useMemo(() => new Map((staff || []).map(m => [m.employeeId, m])), [staff]);
+  const nameOf = (employeeId: string | null | undefined): string => {
+    const m = employeeId ? staffById.get(employeeId) : undefined;
+    return m ? formatEmployeeName(m.displayName) : 'Unknown';
+  };
+  const pickable = useMemo(() => {
+    const list = (staff || []).filter(m => m.employmentStatus === 'active');
+    return list
+      .map(m => ({ member: m, label: formatEmployeeNameLastFirst(m.displayName) }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [staff]);
+  const focusedMember: OrgStaffMember | undefined = employeeFilter === EVERYONE ? undefined : staffById.get(employeeFilter);
+  const showEmployeeColumn = isManager && employeeFilter === EVERYONE;
+  const matchesFilter = (employeeId: string | null | undefined) => employeeFilter === EVERYONE || employeeId === employeeFilter;
+
+  // Owners and managers read the whole office (RLS already returns it);
+  // everyone else keeps their own history. Days off are the one table the
+  // personal hook scopes to the caller, so the manager view has its own.
+  const ownDaysOff = useDaysOff(undefined, roleKnown && !isManager);
+  const orgDaysOff = useOrgDaysOff(startDate, undefined, roleKnown && isManager);
+  const daysOffSource = isManager ? orgDaysOff.data : ownDaysOff.data;
+  const daysOff: DayOffRow[] = useMemo(() => daysOffSource || [], [daysOffSource]);
+  const daysOffLoading = isManager ? orgDaysOff.isLoading : ownDaysOff.isLoading;
   const { data: tardies, isLoading: tardiesLoading } = useTardies(startDate, endDate);
-  const { data: exceptions } = useAttendanceExceptions(startDate, endDate);
   const { data: closures } = useOfficeClosures(new Date().getFullYear());
   const { data: statusRows, isLoading: statusLoading } = useAttendanceDayStatus(startDate, endDate);
+  const { data: entries } = useTimeEntries(startDate, endDate, isManager ? 'all' : 'own');
   const recompute = useRecomputeAttendance();
   const addDayOff = useAddDayOff();
   const deleteDayOff = useDeleteDayOff();
-  const addClosure = useAddClosure();
   const updateTardy = useUpdateTardy();
 
   const [open, setOpen] = useState(false);
@@ -152,6 +223,7 @@ export default function DaysOff() {
   const requiresNotes = (type: string) => type === 'medical_leave';
 
   const [form, setForm] = useState({
+    employee_id: '',
     date_start: '',
     date_end: '',
     type: 'scheduled_with_notice' as 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'medical_leave' | 'other',
@@ -161,9 +233,19 @@ export default function DaysOff() {
 
   const formNotesRequired = requiresNotes(form.type);
 
+  const openAddDayOff = (next: boolean) => {
+    if (next) {
+      // Whose day off: the focused person, else the manager's own record.
+      setForm(f => ({ ...f, employee_id: focusedMember?.employeeId ?? ctx?.employee_id ?? '' }));
+    }
+    setOpen(next);
+  };
+
   const handleAdd = async () => {
     if (!form.date_start || !form.date_end) return;
     if (formNotesRequired && !form.notes.trim()) return;
+    const target = isManager ? staffById.get(form.employee_id) : undefined;
+    if (isManager && !target) return;
     try {
       await addDayOff.mutateAsync({
         date_start: form.date_start,
@@ -171,10 +253,14 @@ export default function DaysOff() {
         type: form.type,
         hours: form.hours ? parseFloat(form.hours) : undefined,
         notes: form.notes || undefined,
+        target: target ? { user_id: target.userId, employee_id: target.employeeId } : undefined,
       });
       setOpen(false);
-      setForm({ date_start: '', date_end: '', type: 'scheduled_with_notice', hours: '0', notes: '' });
-      toast({ title: 'Day off added' });
+      setForm({ employee_id: '', date_start: '', date_end: '', type: 'scheduled_with_notice', hours: '0', notes: '' });
+      toast({ title: target ? `Day off added for ${formatEmployeeName(target.displayName)}` : 'Day off added' });
+      // Their attendance rows now know about the day off. Best effort — the
+      // day off itself is already saved.
+      if (target?.userId) recompute.mutate({ startDate: form.date_start, endDate: form.date_end, userId: target.userId });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     }
@@ -206,65 +292,103 @@ export default function DaysOff() {
     }
   };
 
+  // Recompute follows the picker: one person, or everyone in the office
+  // with a login (attendance is only computed for members who can clock).
   const handleRecompute = async () => {
-    if (!startDate || !endDate) return;
+    if (!startDate || !endDate || !user) return;
+    let targets: string[];
+    if (!isManager) {
+      targets = [user.id];
+    } else if (focusedMember) {
+      if (!focusedMember.userId) {
+        toast({ title: 'No login yet', description: `${formatEmployeeName(focusedMember.displayName)} has no linked account, so there is no attendance to recompute. Invite them from the Team page first.`, variant: 'destructive' });
+        return;
+      }
+      targets = [focusedMember.userId];
+    } else {
+      targets = pickable.map(p => p.member.userId).filter((id): id is string => !!id);
+    }
     try {
-      const count = await recompute.mutateAsync({ startDate, endDate });
-      toast({ title: `Recomputed ${count} days` });
+      let count = 0;
+      for (const userId of targets) {
+        count += await recompute.mutateAsync({ startDate, endDate, userId });
+      }
+      toast({ title: `Recomputed ${count} days${targets.length > 1 ? ` for ${targets.length} team members` : ''}` });
     } catch (err: any) {
       toast({ title: 'Recompute failed', description: err.message, variant: 'destructive' });
     }
   };
 
-
-  // Build a lookup of days_off by date for counter classification
-  const daysOffByDate = useMemo(() => {
+  // Days off by (employee, date) so one person's leave never explains
+  // another person's absence. The personal view keys on the date alone,
+  // exactly as before.
+  const coverageKey = (employeeId: string | null | undefined, date: string) => (isManager ? `${employeeId ?? ''}|${date}` : date);
+  const daysOffByKey = useMemo(() => {
     const map = new Map<string, DayOffRow[]>();
-    (daysOff || []).forEach(d => {
-      // Expand date range
+    daysOff.forEach(d => {
       const start = new Date(d.date_start + 'T00:00:00');
       const end = new Date(d.date_end + 'T00:00:00');
       for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
-        const key = cur.toISOString().split('T')[0];
+        const key = coverageKey(d.employee_id, cur.toISOString().split('T')[0]);
         if (!map.has(key)) map.set(key, []);
         map.get(key)!.push(d);
       }
     });
     return map;
-  }, [daysOff]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [daysOff, isManager]);
+  const coverageFor = (row: AttendanceDayStatusRow) => daysOffByKey.get(coverageKey(row.employee_id, row.entry_date)) || [];
 
-  // Closure dates set for quick lookup
-  const closureDates = useMemo(() => {
-    const set = new Set<string>();
-    (closures || []).forEach(c => set.add(c.closure_date));
-    return set;
-  }, [closures]);
+  // The rows in scope: the focused person, or everyone.
+  const visibleRows = useMemo(
+    () => (statusRows || []).filter(r => matchesFilter(r.employee_id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [statusRows, employeeFilter],
+  );
+  const visibleTardies = useMemo(
+    () => (tardies || []).filter(t => matchesFilter(t.employee_id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tardies, employeeFilter],
+  );
+  const visibleDaysOff = useMemo(
+    () => daysOff.filter(d => matchesFilter(d.employee_id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [daysOff, employeeFilter],
+  );
+
+  // The day's punches for each row (every in and out, not a summary).
+  const entryByKey = useMemo(() => {
+    const map = new Map<string, TimeEntryRow>();
+    (entries || []).forEach(e => { if (e.employee_id) map.set(`${e.employee_id}|${e.entry_date}`, e); });
+    return map;
+  }, [entries]);
+  const entryFor = (row: AttendanceDayStatusRow) => (row.employee_id ? entryByKey.get(`${row.employee_id}|${row.entry_date}`) : undefined);
+
+  const isMissingShift = (r: AttendanceDayStatusRow) => {
+    if (!r.is_absent) return false;
+    if (r.office_closed) return false;
+    // Excused by a scheduled, medical, or other day off — a callout still counts.
+    return !coverageFor(r).some(d => EXPLAINED_DAY_OFF_TYPES.includes(d.type));
+  };
 
   // Summary counters - properly categorized
   const summary = useMemo(() => {
-    const rows = statusRows || [];
+    const rows = visibleRows;
 
     // Absent: is_absent AND (no day_off covering OR day_off type=unscheduled)
     const absentCount = rows.filter(r => {
       if (!r.is_absent) return false;
-      const dayOffs = daysOffByDate.get(r.entry_date) || [];
+      const dayOffs = coverageFor(r);
       if (dayOffs.length === 0) return true; // no day off = truly absent
       // If covered only by unscheduled, still counts as absent
       return dayOffs.every(d => d.type === 'unscheduled');
     }).length;
 
     // Days Off: days covered by days_off with type IN (scheduled_with_notice, medical_leave, other)
-    const daysOffCount = rows.filter(r => {
-      const dayOffs = daysOffByDate.get(r.entry_date) || [];
-      return dayOffs.some(d => ['scheduled_with_notice', 'medical_leave', 'other'].includes(d.type));
-    }).length;
+    const daysOffCount = rows.filter(r => coverageFor(r).some(d => EXPLAINED_DAY_OFF_TYPES.includes(d.type))).length;
 
     // Closures: office_closed from attendance_day_status OR days_off type=office_closed
-    const closuresCount = rows.filter(r => {
-      if (r.office_closed) return true;
-      const dayOffs = daysOffByDate.get(r.entry_date) || [];
-      return dayOffs.some(d => d.type === 'office_closed');
-    }).length;
+    const closuresCount = rows.filter(r => r.office_closed || coverageFor(r).some(d => d.type === 'office_closed')).length;
 
     return {
       absent: absentCount,
@@ -274,22 +398,16 @@ export default function DaysOff() {
       closures: closuresCount,
       remote: rows.filter(r => r.is_remote).length,
       edited: rows.filter(r => r.has_edits).length,
-      unreviewedTardies: (tardies || []).filter(t => t.approval_status === 'unreviewed' && !t.resolved).length,
+      unreviewedTardies: visibleTardies.filter(t => t.approval_status === 'unreviewed' && !t.resolved).length,
       needsTimeFix: rows.filter(r => r.timezone_suspect).length,
-      missingShifts: rows.filter(r => {
-        if (!r.is_absent) return false;
-        if (r.office_closed) return false;
-        const dayOffs = daysOffByDate.get(r.entry_date) || [];
-        // Exclude if covered by scheduled/medical/other day off
-        if (dayOffs.some(d => ['scheduled_with_notice', 'medical_leave', 'other'].includes(d.type))) return false;
-        return true;
-      }).length,
+      missingShifts: rows.filter(isMissingShift).length,
     };
-  }, [statusRows, tardies, daysOffByDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleRows, visibleTardies, daysOffByKey]);
 
   // Filtered + sorted status rows
   const filteredStatus = useMemo(() => {
-    let list = statusRows || [];
+    let list = visibleRows;
     if (attendanceFilter === 'all') {
       list = list.filter(r => r.is_scheduled_day || r.has_punches || r.office_closed || r.has_day_off);
     }
@@ -313,31 +431,27 @@ export default function DaysOff() {
       const pa = priority(a);
       const pb = priority(b);
       if (pa !== pb) return pa - pb;
-      return b.entry_date.localeCompare(a.entry_date);
+      return b.entry_date.localeCompare(a.entry_date) || nameOf(a.employee_id).localeCompare(nameOf(b.employee_id));
     });
-  }, [statusRows, attendanceFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleRows, attendanceFilter, staffById]);
 
   // Days Off tab: exclude office_closed, apply filter
   const filteredDaysOff = useMemo(() => {
-    let list = (daysOff || []).filter(d => d.type !== 'office_closed');
+    let list = visibleDaysOff.filter(d => d.type !== 'office_closed');
     if (daysOffFilter !== 'all') {
       list = list.filter(d => d.type === daysOffFilter);
     }
     return [...list].sort((a, b) => b.date_start.localeCompare(a.date_start));
-  }, [daysOff, daysOffFilter]);
+  }, [visibleDaysOff, daysOffFilter]);
 
   // Missing Shifts: truly absent, not closures, not covered by scheduled/medical/other day off
   const missingShiftRows = useMemo(() => {
-    return (statusRows || []).filter(r => {
-      if (!r.is_absent) return false;
-      if (r.office_closed) return false;
-      const dayOffs = daysOffByDate.get(r.entry_date) || [];
-      if (dayOffs.some(d => ['scheduled_with_notice', 'medical_leave', 'other'].includes(d.type))) return false;
-      return true;
-    }).sort((a, b) => b.entry_date.localeCompare(a.entry_date));
-  }, [statusRows, daysOffByDate]);
+    return visibleRows.filter(isMissingShift).sort((a, b) => b.entry_date.localeCompare(a.entry_date));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleRows, daysOffByKey]);
 
-  const activeTardies = (tardies || []).filter(t => !t.resolved);
+  const activeTardies = visibleTardies.filter(t => !t.resolved);
 
   const filteredTardies = useMemo(() => {
     let list = activeTardies;
@@ -354,7 +468,7 @@ export default function DaysOff() {
       name: c.name,
       source: 'office_closures' as const,
     }));
-    const fromDaysOff = (daysOff || []).filter(d => d.type === 'office_closed').map(d => ({
+    const fromDaysOff = daysOff.filter(d => d.type === 'office_closed').map(d => ({
       id: d.id,
       date: d.date_start,
       name: d.notes || 'Office Closed',
@@ -363,15 +477,21 @@ export default function DaysOff() {
     return [...fromClosures, ...fromDaysOff].sort((a, b) => b.date.localeCompare(a.date));
   }, [closures, daysOff]);
 
+  const focusedName = focusedMember ? formatEmployeeName(focusedMember.displayName) : null;
+
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Attendance</h1>
-          <p className="text-muted-foreground">Track days off, tardies, missing shifts, and closures</p>
+          <p className="text-muted-foreground">
+            {isManager
+              ? 'Days off, tardies, missing shifts, and closures across the office — pick a team member to focus on one person'
+              : 'Track days off, tardies, missing shifts, and closures'}
+          </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleRecompute} disabled={recompute.isPending}>
+          <Button variant="outline" size="sm" onClick={handleRecompute} disabled={recompute.isPending} title={isManager ? (focusedName ? `Recompute ${focusedName}'s attendance for this range` : 'Recompute everyone\'s attendance for this range') : 'Recompute your attendance for this range'}>
             {recompute.isPending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1 h-3.5 w-3.5" />}
             Recompute
           </Button>
@@ -381,13 +501,24 @@ export default function DaysOff() {
             <Button onClick={() => setRequestOpen(true)}><Plus className="mr-2 h-4 w-4" />Request Time Off</Button>
           )}
           <PtoRequestModal open={requestOpen} onClose={() => setRequestOpen(false)} />
-          {isManager && <Dialog open={open} onOpenChange={setOpen}>
+          {isManager && <Dialog open={open} onOpenChange={openAddDayOff}>
             <DialogTrigger asChild>
               <Button><Plus className="mr-2 h-4 w-4" />Add Day Off</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Add Day Off</DialogTitle></DialogHeader>
               <div className="space-y-4">
+                <div className="space-y-1">
+                  <Label htmlFor="day-off-employee">Team member</Label>
+                  <Select value={form.employee_id} onValueChange={v => setForm({ ...form, employee_id: v })}>
+                    <SelectTrigger id="day-off-employee"><SelectValue placeholder="Choose a team member" /></SelectTrigger>
+                    <SelectContent>
+                      {pickable.map(({ member, label }) => (
+                        <SelectItem key={member.employeeId} value={member.employeeId}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label>Start Date</Label>
@@ -417,7 +548,7 @@ export default function DaysOff() {
                   <Label>Notes{formNotesRequired ? <span className="text-destructive"> *</span> : ' (optional)'}</Label>
                   <Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder={formNotesRequired ? 'Required: describe the reason' : 'Vacation, doctor appointment, etc.'} />
                 </div>
-                <Button onClick={handleAdd} disabled={addDayOff.isPending || !addDayOff.isReady || (formNotesRequired && !form.notes.trim())} className="w-full">
+                <Button onClick={handleAdd} disabled={addDayOff.isPending || !addDayOff.isReady || !form.employee_id || (formNotesRequired && !form.notes.trim())} className="w-full">
                   {addDayOff.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {!addDayOff.isReady ? 'Loading org…' : 'Save'}
                 </Button>
@@ -427,7 +558,7 @@ export default function DaysOff() {
         </div>
       </div>
 
-      {/* Date range selector */}
+      {/* Date range + who */}
       <Card className="card-elevated">
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-4 items-end">
@@ -439,6 +570,26 @@ export default function DaysOff() {
               <Label className="text-xs">End Date</Label>
               <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-40" />
             </div>
+            {isManager && (
+              <div className="space-y-1">
+                <Label className="text-xs" htmlFor="attendance-employee">Team member</Label>
+                <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
+                  <SelectTrigger id="attendance-employee" className="w-56" aria-label="Team member">
+                    <Users className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={EVERYONE}>Everyone</SelectItem>
+                    {pickable.map(({ member, label }) => (
+                      <SelectItem key={member.employeeId} value={member.employeeId}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {focusedName && (
+              <Button variant="ghost" size="sm" onClick={() => setEmployeeFilter(EVERYONE)}>Show everyone</Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -493,7 +644,7 @@ export default function DaysOff() {
       {(summary.unreviewedTardies > 0 || summary.missingShifts > 0 || summary.incomplete > 0 || summary.needsTimeFix > 0) && (
         <Card className="card-elevated border-warning/40">
           <CardContent className="p-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Unreviewed Items</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Unreviewed Items{focusedName ? ` — ${focusedName}` : ''}</p>
             <div className="flex flex-wrap gap-2">
               {summary.unreviewedTardies > 0 && (
                 <button onClick={() => { setTab('tardies'); setApprovalFilter('unreviewed'); }} className="text-xs px-3 py-1.5 rounded-full bg-destructive/10 text-destructive font-medium hover:bg-destructive/20 transition-colors">
@@ -538,7 +689,7 @@ export default function DaysOff() {
             )}
           </TabsTrigger>
           <TabsTrigger value="closures">Closures</TabsTrigger>
-          <TabsTrigger value="calendar">My Calendar</TabsTrigger>
+          <TabsTrigger value="calendar">{isManager ? 'Calendar' : 'My Calendar'}</TabsTrigger>
         </TabsList>
 
         {/* ATTENDANCE STATUS TAB */}
@@ -565,8 +716,10 @@ export default function DaysOff() {
                 <thead>
                   <tr className="border-b bg-muted/50">
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
+                    {showEmployeeColumn && <th className="px-4 py-3 text-left font-medium text-muted-foreground">Employee</th>}
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Schedule</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Punches</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Location</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tardy</th>
                     <th className="px-4 py-3 w-10"></th>
@@ -574,13 +727,25 @@ export default function DaysOff() {
                 </thead>
                 <tbody className="divide-y">
                   {statusLoading ? (
-                    <tr><td colSpan={6} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></td></tr>
+                    <tr><td colSpan={8} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></td></tr>
                   ) : !filteredStatus.length ? (
-                    <tr><td colSpan={6} className="py-12 text-center text-muted-foreground">No attendance data for this range</td></tr>
+                    <tr><td colSpan={8} className="py-12 text-center text-muted-foreground">No attendance data for this range</td></tr>
                   ) : (
                     filteredStatus.map(row => (
                       <tr key={row.id} className={`hover:bg-muted/50 ${row.is_absent ? 'border-l-4 border-l-destructive' : row.is_late ? 'border-l-4 border-l-warning' : ''}`}>
-                        <td className="px-4 py-3 font-medium">{formatDate(row.entry_date)}</td>
+                        <td className="px-4 py-3 font-medium whitespace-nowrap">{formatDate(row.entry_date)}</td>
+                        {showEmployeeColumn && (
+                          <td className="px-4 py-3">
+                            <button
+                              type="button"
+                              className="font-medium text-left hover:underline"
+                              title="Show only this team member"
+                              onClick={() => { if (row.employee_id) setEmployeeFilter(row.employee_id); }}
+                            >
+                              {nameOf(row.employee_id)}
+                            </button>
+                          </td>
+                        )}
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {row.is_absent && <span className="text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive font-medium">Absent</span>}
@@ -598,8 +763,11 @@ export default function DaysOff() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">
+                        <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
                           {row.is_scheduled_day ? formatClockRange(row.schedule_expected_start, row.schedule_expected_end) : '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <DayPunches entry={entryFor(row)} />
                         </td>
                         <td className="px-4 py-3">
                           <span className={`text-xs px-2 py-0.5 rounded ${row.is_remote ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
@@ -608,14 +776,17 @@ export default function DaysOff() {
                         </td>
                         <td className="px-4 py-3 text-xs capitalize">{row.tardy_approval_status !== 'unreviewed' ? row.tardy_approval_status : '—'}</td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-1">
-                            <AttendanceActions row={row} alwaysShow />
-                            {row.has_punches && (
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(`/timesheet?date=${row.entry_date}`)} title="View in Timesheet">
-                                <Pencil className="h-3.5 w-3.5" />
+                          <div className="flex items-center justify-end gap-1">
+                            {isManager ? (
+                              // The pencil edits THIS row's employee and day; the
+                              // menu records days off, closures, and ignores.
+                              <AttendanceActions row={row} alwaysShow editButton employeeName={nameOf(row.employee_id)} />
+                            ) : row.has_punches ? (
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(`/timesheet?date=${row.entry_date}`)} title="View in Timesheet" aria-label="View in Timesheet">
+                                <Table2 className="h-3.5 w-3.5" />
                               </Button>
-                            )}
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDebugRow(row)} title="Debug">
+                            ) : null}
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDebugRow(row)} title="Debug" aria-label="Debug">
                               <Bug className="h-3.5 w-3.5" />
                             </Button>
                           </div>
@@ -631,7 +802,7 @@ export default function DaysOff() {
 
         {/* DAYS OFF TAB — excludes office_closed, with filter pills */}
         <TabsContent value="days_off">
-          <div className="flex flex-wrap gap-2 mb-4">
+          <div className="flex flex-wrap items-center gap-2 mb-4">
             {(['all', 'scheduled_with_notice', 'unscheduled', 'medical_leave', 'other'] as DaysOffFilter[]).map(f => (
               <button
                 key={f}
@@ -645,6 +816,11 @@ export default function DaysOff() {
                 {f === 'all' ? 'All' : typeLabels[f]}
               </button>
             ))}
+            {isManager && (
+              <span className="text-xs text-muted-foreground ml-auto">
+                {focusedName ? `${focusedName}'s` : 'Everyone\'s'} time off from {formatDate(startDate)} onward
+              </span>
+            )}
           </div>
           <Card className="card-elevated">
             <CardContent className="p-0">
@@ -660,6 +836,7 @@ export default function DaysOff() {
                         <CalendarDays className="h-4 w-4 text-muted-foreground" />
                         <div>
                           <p className="text-sm font-medium">
+                            {showEmployeeColumn && <span className="mr-2">{nameOf(d.employee_id)} ·</span>}
                             {formatDate(d.date_start)}
                             {d.date_start !== d.date_end && ` — ${formatDate(d.date_end)}`}
                           </p>
@@ -709,6 +886,7 @@ export default function DaysOff() {
                 <thead>
                   <tr className="border-b bg-muted/50">
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
+                    {showEmployeeColumn && <th className="px-4 py-3 text-left font-medium text-muted-foreground">Employee</th>}
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Expected</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Actual</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Minutes Late</th>
@@ -719,9 +897,9 @@ export default function DaysOff() {
                 </thead>
                 <tbody className="divide-y">
                   {tardiesLoading ? (
-                    <tr><td colSpan={7} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></td></tr>
+                    <tr><td colSpan={8} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></td></tr>
                   ) : !filteredTardies.length ? (
-                    <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">No tardies recorded</td></tr>
+                    <tr><td colSpan={8} className="py-12 text-center text-muted-foreground">No tardies recorded</td></tr>
                   ) : (
                     filteredTardies.map(t => (
                       <tr key={t.id} className={t.timezone_suspect ? 'bg-warning/5' : ''}>
@@ -731,6 +909,7 @@ export default function DaysOff() {
                             <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning font-medium" title="This punch time looks off. Edit the punches (managers) or submit a correction request.">⚠ Time Looks Off</span>
                           )}
                         </td>
+                        {showEmployeeColumn && <td className="px-4 py-3 font-medium">{nameOf(t.employee_id)}</td>}
                         <td className="px-4 py-3 time-display text-sm">{formatClock(t.expected_start_time)}</td>
                         <td className="px-4 py-3 time-display text-sm">
                           {t.timezone_suspect ? (
@@ -768,7 +947,7 @@ export default function DaysOff() {
                 {filteredTardies.length > 0 && (
                   <tfoot>
                     <tr className="border-t-2 font-bold">
-                      <td colSpan={3} className="px-4 py-3 text-right">Totals:</td>
+                      <td colSpan={showEmployeeColumn ? 4 : 3} className="px-4 py-3 text-right">Totals:</td>
                       <td className="px-4 py-3 text-destructive">{filteredTardies.filter(t => !t.timezone_suspect).reduce((s, t) => s + t.minutes_late, 0)} min</td>
                       <td colSpan={3}></td>
                     </tr>
@@ -781,6 +960,7 @@ export default function DaysOff() {
           <TardyReviewModal
             open={!!reviewTardy}
             tardy={reviewTardy}
+            employeeName={isManager && reviewTardy ? nameOf(reviewTardy.employee_id) : undefined}
             onSubmit={handleTardyReview}
             onClose={() => setReviewTardy(null)}
           />
@@ -794,6 +974,7 @@ export default function DaysOff() {
                 <thead>
                   <tr className="border-b bg-muted/50">
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
+                    {showEmployeeColumn && <th className="px-4 py-3 text-left font-medium text-muted-foreground">Employee</th>}
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Schedule</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Coverage</th>
                     <th className="px-4 py-3 w-10"></th>
@@ -801,16 +982,22 @@ export default function DaysOff() {
                 </thead>
                 <tbody className="divide-y">
                   {statusLoading ? (
-                    <tr><td colSpan={4} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></td></tr>
+                    <tr><td colSpan={5} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></td></tr>
                   ) : !missingShiftRows.length ? (
-                    <tr><td colSpan={4} className="py-12 text-center text-muted-foreground">No missing shifts — all clear!</td></tr>
+                    <tr><td colSpan={5} className="py-12 text-center text-muted-foreground">No missing shifts — all clear!</td></tr>
                   ) : (
                     missingShiftRows.map(row => {
-                      const dayOffs = daysOffByDate.get(row.entry_date) || [];
-                      const hasUnscheduled = dayOffs.some(d => d.type === 'unscheduled');
+                      const hasUnscheduled = coverageFor(row).some(d => d.type === 'unscheduled');
                       return (
                         <tr key={row.id} className="border-l-4 border-l-destructive hover:bg-muted/50">
                           <td className="px-4 py-3 font-medium">{formatDate(row.entry_date)}</td>
+                          {showEmployeeColumn && (
+                            <td className="px-4 py-3">
+                              <button type="button" className="font-medium text-left hover:underline" title="Show only this team member" onClick={() => { if (row.employee_id) setEmployeeFilter(row.employee_id); }}>
+                                {nameOf(row.employee_id)}
+                              </button>
+                            </td>
+                          )}
                           <td className="px-4 py-3 text-xs text-muted-foreground">
                             {formatClockRange(row.schedule_expected_start, row.schedule_expected_end)}
                           </td>
@@ -822,7 +1009,9 @@ export default function DaysOff() {
                             )}
                           </td>
                           <td className="px-4 py-3">
-                            <AttendanceActions row={row} alwaysShow />
+                            <div className="flex items-center justify-end gap-1">
+                              <AttendanceActions row={row} alwaysShow editButton employeeName={nameOf(row.employee_id)} />
+                            </div>
                           </td>
                         </tr>
                       );
@@ -863,17 +1052,25 @@ export default function DaysOff() {
           </Card>
         </TabsContent>
 
-        {/* PERSONAL CALENDAR TAB */}
+        {/* CALENDAR TAB — one person at a time; a whole office on one grid says nothing */}
         <TabsContent value="calendar">
-          <PersonalCalendar
-            daysOff={daysOff || []}
-            closures={closures || []}
-            statusRows={statusRows || []}
-          />
+          {isManager && !focusedMember ? (
+            <Card className="card-elevated">
+              <CardContent className="py-12 text-center text-muted-foreground">
+                Choose a team member above to see their calendar.
+              </CardContent>
+            </Card>
+          ) : (
+            <PersonalCalendar
+              daysOff={visibleDaysOff}
+              closures={closures || []}
+              statusRows={visibleRows}
+            />
+          )}
         </TabsContent>
       </Tabs>
 
-      <DebugDrawer row={debugRow} open={!!debugRow} onClose={() => setDebugRow(null)} />
+      <DebugDrawer row={debugRow} employeeName={isManager && debugRow ? nameOf(debugRow.employee_id) : undefined} open={!!debugRow} onClose={() => setDebugRow(null)} />
     </div>
   );
 }

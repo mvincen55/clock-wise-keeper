@@ -110,13 +110,13 @@ Navigation is a compact destination list; every feature below keeps its own rout
 | Route | Page | What it does |
 |---|---|---|
 | `/timesheet` | Timesheet | Clock in/out, punch history, manager punch editing (`PunchEditorModal`), tardy reasons (`TardyReasonModal`, `TardyReviewModal`) |
+| `/days-off` | DaysOff (**Attendance**) | Owners/managers: the whole office with a name on every row, a team-member picker (`?employee=<id>` deep link), every punch of the day with breaks, days off matched per person, and row-level punch editing for that person (`AttendanceActions` → `PunchEditorModal`, quick fixes use the row's own shift). Everyone else: their own history plus Request Time Off. `?date=` (from the Timesheet) widens the range to that day |
 | `/work-zones` | WorkZones | Geofenced zones for location-verified clock-in (`useGeoTracking`, `LocationStatusPanel`, `process-location-event`) |
-| `/reports` | Reports | Payroll/attendance reporting and exports (built in the browser) |
+| `/reports` | Reports | Payroll/attendance reporting and exports (built in the browser). Timesheet reports print every clock-in/out of the day with breaks and the worked-hour adjustments (`worked_hour_adjustments`, "Offset hours" on the Team page) dated in the range — listed with their reason and counted in the employee, weekly/OT, and report totals and the CSV |
 
 ### Time off
 | Route | Page | What it does |
 |---|---|---|
-| `/days-off` | DaysOff | Days-off requests and calendar |
 | `/pto` | PTO | PTO balances and accrual engine (`usePtoEngine`), requests (`PtoRequestModal`), corrections (`PtoCorrectionModal`) |
 | `/my-requests` | MyRequests | Employee's own request history |
 | `/approvals` | ApprovalQueue | Manager queue for PTO / corrections / change requests (`useApprovalCounts` badges nav) |
