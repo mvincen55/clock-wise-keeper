@@ -135,6 +135,14 @@ Exact model in README §Checklist data model and migration
   `LocationStatusPanel`; zones are managed at `/work-zones`.
 - Tardiness has its own objects (`useTardies`, `TardyReasonModal`) — don't fold it
   into punch editing.
+- Employee schedules: a version (`schedule_versions` + `schedule_weekdays`) is what
+  attendance follows; its assignment (`schedule_assignments`) must mirror the
+  version's dates. New schedules go through `create_employee_schedule`, in-place
+  corrections through `correct_employee_schedule` (one transaction: version,
+  weekdays, assignment, `schedule_correction_log`; an overlap is refused before any
+  write and names the other schedule's dates; a drifted or missing assignment is
+  repaired). The Team page lists versions, including one without an assignment, so
+  nothing collides invisibly. Probes: `supabase/tests/employee_schedule_probes.sql`.
 
 ## 10. AI features misbehaving
 
