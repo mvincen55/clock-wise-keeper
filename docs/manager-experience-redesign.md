@@ -1,6 +1,8 @@
 # Manager experience redesign
 
-Status: design proposal (2026-09-21). Nothing in this document changes code by itself.
+Status: design proposal, round 2 (2026-09-21). Round 1 established the architecture; it is
+frozen (see §0). Round 2 is a simplification and consistency pass on the same architecture.
+Nothing in this document changes code by itself.
 Companion: `docs/manager-experience-redesign/concepts.html` — interactive high-fidelity
 concepts for every surface described here (open it in a browser; it runs on fixture data).
 
@@ -11,19 +13,37 @@ file references are given so the diagnosis can be checked.
 
 ---
 
-## 0. The one-paragraph answer
+## 0. The one-paragraph answer, and what is frozen
 
 A manager opens Purple Envelope and should see, in five seconds: *here is the office,
 here are the few things that need me, everything else is okay.* Today that read is split
-across two command centers (Home and Management), a dozen queues, and four renderings of
-"who is here." The redesign gives every management fact **one place where it is managed**
-and lets it **surface** anywhere: Home becomes the briefing, Management becomes the
-workbench with four rooms (**Attention · People · Payroll · Office**), and every item in
-every room deep-links into the same canonical editors the product already has. Nothing in
-the attendance engine, schedules, PTO, approvals, reports, goals, checklists, FOF, Close
-the Day, forms, training, employee records, settings, or permissions is rebuilt. What
-changes is the experience architecture: which page owns what, how items are triaged, and
-how the manager gets from a symptom to the fix and back.
+across two command centers, a dozen queues, and four renderings of "who is here." The
+redesign gives every management fact **one place where it is managed** and lets it
+**surface** anywhere: Home is the briefing and only navigates; Management is the workbench
+with four rooms (**Attention · People · Payroll · Office**) and is the only place actions
+happen; every item deep-links into the editors the product already has; one derived state
+powers every count. Nothing in the attendance engine, schedules, PTO, approvals, reports,
+goals, checklists, FOF, Close the Day, forms, training, employee records, settings, or
+permissions is rebuilt.
+
+**Frozen after round 1**
+
+1. Home briefs. Management acts. Consequential actions never happen on Home.
+2. Management = Attention · People · Payroll · Office.
+3. Five top-level destinations; Insurance Benefits under Practice Playbook.
+4. Personal attendance stays in Workplace; Team Attendance stays in Management.
+5. One canonical employee record.
+6. Payroll Readiness exists, and fix-and-return is the product's rhythm.
+7. Feature settings live with features; office settings live under Office.
+8. One canonical owner per fact.
+
+**Round 2 changes** (detail in §11): Home rows carry a single navigation action; busy Home
+shows three items, exceptions only, two status lines, and the challenge only when
+noteworthy; "Step into this first" is removed; Attention has a hard admission rule and a
+flat consequence order; Inbox, Attention, and notifications get one sentence each; the
+employee record has five sections; consequential actions confirm and reverse only as
+audited actions; one derived state drives every count; a legibility pass on type, labels,
+and targets.
 
 ---
 
@@ -210,31 +230,32 @@ sheet.
 ### 3.3 Exact responsibility of Home (manager)
 
 Home answers **"How is the office right now, and what needs me?"** in one screen. It is a
-*briefing*: it renders no forms, and every row is a deep link into the canonical place.
+*briefing*: it renders no forms and takes no consequential action. Every row carries exactly
+one navigation action, **Review** for decisions and **Open** for fixes and follow-ups, and
+both land on the exact Attention item in Management.
 
-1. **State line** — phase, headcount, closeout, next payroll deadline. (`staffing.ts`
-   phase; `closeDayStatus`; `usePayrollSettings`.)
-2. **Needs you** — the top five Attention items, same rows and same inline primary actions
-   as the Attention room, grouped by verb (Decide · Fix · Follow up). "+ n more" opens
-   Attention. When the queue is empty this is one line: *Nothing needs you.*
-3. **Today's team** — exceptions first (not in yet, late, off), then "n in" folded.
-   Phase-aware: before open it lists expected arrivals; after close it is one sentence.
-4. **Yesterday** — one line. *Closed and sealed at 5:41 PM by Dana R.* or the open item.
-5. **On pace** — one sentence naming which target is off, with the day scope stated
-   ("through Sat Sep 19 closeout"); numbers behind a disclosure. Rendered only when targets
-   are configured.
-6. **This month's challenge** — one compact line when one is running.
-7. **Mine** — the manager's own open items (missing day, acknowledgment, goal), the clock
-   status as a line (the shell chip remains the control), and a link to notes.
-8. **Wrap-up state** — after close, "Needs you" becomes **Before you leave**: people still
-   clocked in, Close the Day step, unanswered requests, and what will carry into tomorrow.
-   It is not a ritual: when nothing needs attention, it is one sentence.
+1. **One sentence of state**, built from recorded facts, each fact linked: *Open, 6 of 8 in.
+   Ken W. isn't in yet. Saturday's closeout still needs its seal, and payroll hours are due
+   Thursday.* The clock stays in the shell chip.
+2. **Needs you** — the first three items of the Attention order (§5.2), then *n more waiting*.
+   When the queue is empty: one line, *Nothing waiting · n parked until Friday.*
+3. **Today** — exceptions only (not in yet, late, off), then one count line: *5 in · Sam K. at
+   1:00 PM · People*. Never a roster. Phase-aware: before a shift starts nobody is absent.
+4. **Two status lines** — last workday or yesterday (sealed by whom, or the open item), and
+   pace in one clause with its day scope and a *Why?* that discloses the three numbers.
+5. **Spotlight** — the running challenge appears only when it is newly launched, needs a
+   decision, is nearing its deadline, hits a milestone, goes off track, or finishes.
+   Otherwise it lives in Office → Goals & Challenges.
+6. **Mine** — only items that need the manager personally (an acknowledgment to sign, a
+   missing day of their own). Absent when there are none.
+7. **Wrap-up state** — after close, Needs you becomes **Before you leave**: people still
+   clocked in, the closeout step, and what carries into tomorrow. Unanswered doctor notes
+   appear as an Inbox status line, not as an Attention item. When nothing needs attention it
+   is one sentence.
 
-Everything below the fold today (doctor board, Today Focus, Rescope, sprint card,
-accountability card, notes board) either moves to its owner (doctor board is owner-only
-already; Today Focus and Rescope become the "My list" drawer inside Workplace; sprints move
-to Office → Goals & Challenges; the accountability card stays only for the manager's *own*
-record) or becomes a line in **Mine**.
+Everything else that sat on the old Home (doctor board, Today Focus, Rescope, sprint card,
+accountability card, notes board, performance cards, fact tiles) moves to its owner or is
+folded into a status line.
 
 ### 3.4 Exact responsibility of Management (manager)
 
@@ -248,7 +269,8 @@ four rooms and no Administration grid.
 | **Payroll** | Is payroll clean, and what do I fix first? | period readiness list → canonical fixes → Reports → Report history |
 | **Office** | Periodic management of the office as a whole | policies & procedures · acknowledgments · training · goals & challenges · incidents · calendar & closures · practice setup · office settings |
 
-The sidebar item lands on Attention. Route map: `/management` → Attention;
+There is no recommendation box above the queue: the queue is already in order, so the first
+row is first. The sidebar item lands on Attention. Route map: `/management` → Attention;
 `/management/people`, `/management/people/:employeeId`, `/management/attendance`
 (unchanged), `/management/payroll`, `/management/office`. Legacy routes redirect:
 `/approvals` → `/management?kind=decide`, `/team` → `/management/people`,
@@ -270,10 +292,24 @@ Unchanged in scope, plus Insurance Benefits returns to Reference. Close the Day 
 exact step. Checklists stay here (completion is operational work); bypass *follow-up* is
 in Attention and bypass *history* is on the person's record.
 
-### 3.7 Inbox
+### 3.7 Inbox, Attention, and notifications
 
-Unchanged: messages, requests (office notes), nudges. The messages-closeout check becomes a
-wrap-up line on Home rather than a card of its own.
+Three sentences a manager never has to think about:
+
+- **Inbox is communication from people.** Messages, and notes handed to a named person
+  (the office-labeled tab; the product default is *Doctor notes*, not *Requests*).
+- **Attention is operational work created by records and workflows.** Decisions, fixes,
+  and rule-triggered follow-ups (§5.0).
+- **Notifications are delivery, never a destination.** The bell lists deliveries; each
+  opens an Attention item, an Inbox thread, or a record, and is marked read when that opens.
+
+Consequences: **Nudges leave Inbox.** They are system-generated, so each renders on the
+surface it concerns (the existing `surface` column) and the member's own Home counts them;
+the Inbox badge becomes unread messages plus unanswered notes. **"Request" stops being a
+category name.** PTO, correction, and change requests are Decide items in Attention; the
+employee's own submissions stay *My requests* in Workplace; the doctor-notes tab drops the
+word. The messages-closeout rule surfaces as a wrap-up status line on Home that links to
+Inbox.
 
 ### 3.8 Settings and utilities
 
@@ -295,7 +331,7 @@ Office settings (today it writes a per-user row).
 | | Before | After |
 |---|---|---|
 | Top-level destinations (desktop) | 6 | 5 |
-| Manager pages to check "what needs me" | Home, Management, Approvals (3 tabs), Team (bypasses), Acknowledgments, Knowledge, Incidents, Training, Deposit log, Goals/Home (sprints) | Home (summary) and Attention (action) |
+| Manager pages to check "what needs me" | Home, Management, Approvals (3 tabs), Team (bypasses), Acknowledgments, Knowledge, Incidents, Training, Deposit log, Goals/Home (sprints) | Home (summary, navigation only) and Attention (action) |
 | Clicks from a notification to the action | 2–3 (page → tab → card → dialog) | 1 (item panel opens) |
 | Renderings of "who is here" | 3 | 1 (People → Today; Home summarizes it) |
 | Places that host the same employee setup card | 2 | 1 |
@@ -341,6 +377,26 @@ places it may appear as a row or a line, each deep-linking to the owner.
 
 ## 5. The unified attention model
 
+### 5.0 Admission rule (an invariant, not a guideline)
+
+An item enters Attention only when one of these is true:
+
+1. **The manager must make a decision** — a PTO, correction, or change request; a version in
+   review; a challenge awaiting verification; an incident awaiting countersign.
+2. **A business record is incorrect or incomplete and the manager can fix it** — a missing
+   clock-out, a scheduled day with no time and no explanation, unpaired punches, time that
+   looks off, an unsealed, missing, or flagged Close the Day record.
+3. **A recorded office rule has reached the point where manager follow-up is required** — a
+   record awaiting sign-off, a bypass reason owed past the office's window or a repeat inside
+   it, an acknowledgment escalated to the manager by the ladder, training past its due date,
+   an incident with follow-up due.
+
+Never admitted: passive observations, weak patterns, FYIs, metrics, "approaching" states,
+the existence of training, a metric behind pace. Pace is a status line on Home and Reports;
+patterns are context in People → Patterns; overtime is *worth a look* in Payroll; nudges
+belong to the member. If a future feature wants a row in Attention it must name which of
+the three tests it passes and which record backs it.
+
 ### 5.1 One item shape
 
 Every source is normalized into one view model (composed from existing hooks, no new
@@ -348,63 +404,76 @@ tables):
 
 ```
 AttentionItem {
-  id, kind,                       // 'pto_request' | 'correction' | 'change_request' | 'content_review'
-                                  // | 'challenge_verify' | 'missing_clock_out' | 'missing_day'
-                                  // | 'unpaired_punches' | 'time_suspect' | 'close_day' | 'tardy_unreviewed'
-                                  // | 'bypass' | 'record_signoff' | 'ack_escalated' | 'training_overdue'
-                                  // | 'incident_countersign' | 'incident_followup' | 'wrapup_clocked_in'
+  id, kind,
   verb: 'decide' | 'fix' | 'follow_up',
   subject: { employeeId?, name } | { record },
   happened: string,               // "No clock-out on Fri Sep 18"
-  when: ISO, age: string,         // "3 days"
-  deadline?: { label, date },     // "payroll Thu"
-  why: string,                    // the rule: "scheduled day ended 60+ min ago with an open punch pair"
-  receipts: [{ label, value, source }],   // "punches · in 7:58 AM (kiosk)"
-  primary: { label, run },        // exactly one
-  secondary?: [{ label, run }],
-  recordHref: string,             // where the underlying record lives
-  history?: string                // "1 similar item in 90 days"
+  when: ISO, age: string,
+  deadline?: { label, date },     // "payroll Thu"; drives the order
+  why: string,                    // the office rule that admitted it
+  receipts: [{ label, value, source }],
+  actions: [{ label, kind, primary }],   // exactly one primary
+  recordHref: string,
+  history?: string
 }
 ```
 
-### 5.2 Ordering by consequence
+### 5.2 Order: a flat list by consequence
 
-1. A human said the day was unsafe or understaffed (existing rule, kept first).
-2. **Decide** — someone is waiting on an answer: requests, content in review, challenge
-   verification, incident countersign. Sorted by age.
-3. **Fix** — the record of truth is wrong or incomplete: missing clock-outs, scheduled days
-   with no time, unpaired punches, time that looks off, Close the Day unsealed/behind/needs
-   review. Sorted by deadline (payroll) then age.
-4. **Follow up** — records and patterns that need a person: records awaiting sign-off,
-   escalated acknowledgments, repeated bypasses, training overdue, incident follow-up due.
+One list, no group headers, no recommendation box. The order is:
 
-The existing `buildInterventionQueue` order is preserved inside these groups; the change
-is that every source is present and every row can be acted on where it is shown.
+1. items with a deadline, soonest first (payroll hours due, a record that escalates, tonight);
+2. then decisions, then fixes, then follow-ups;
+3. within each, oldest first.
+
+The first row is therefore the first thing to do. Home renders the first three of the same
+list. Filters narrow by verb; they never reorder.
 
 ### 5.3 Quiet intelligence rules
 
 - An item exists only when a real record exists. Zero items is one sentence, not rows of
   zeros.
 - Every item answers: what happened, who or what, how old or urgent, why the system
-  surfaced it, what I can do, where the record lives.
-- "Why am I seeing this?" is always available and names the office rule and the recorded
-  items it read. Sources are named the way the office knows them ("punches", "schedule",
-  "Close the Day"), never table names.
-- Patterns ("3 late arrivals in 14 days") appear as *context on an item*, never as a
-  separate alert, and only when they cross the office's own configured threshold.
-- **Park** is allowed for Follow-up items only ("Park until Friday"); parked items stay
-  counted and resurface. Decide and Fix items cannot be parked.
-- Language is factual and never shaming: "no clock-out recorded", "reason owed", "record
-  awaiting sign-off".
+  surfaced it (the rule), what I can do, where the record lives.
+- "Why am I seeing this?" names the office rule and the recorded items it read, in the
+  office's words (punches, schedule, Close the Day), never table names.
+- Patterns appear as *context on an item* and only when they cross the office's own
+  configured threshold; they never create an item by themselves.
+- **Park** (follow-ups) and **Snooze** (wrap-up items) keep the item counted and resurface it
+  on the stated day. Decide and Fix items cannot be parked.
+- Language is factual and never shaming.
 
-### 5.4 Deep links
+### 5.4 Consequential actions: confirm, then audited reversal
 
-Every notification and every surface row links to `/management?item=<kind>:<id>`, which
-opens the item's panel directly. The panel's "Open the record" link uses the feature's
-existing deep link (`/management/attendance?employee=&date=`, `/deposit-log?date=&step=`,
+Approving PTO writes the ledger and notifies a person; sealing a day locks a record; signing
+off closes a chain; saving punches edits payroll data. These are not UI events.
+
+- **Confirm first.** One sentence states the consequence (*This writes the PTO ledger, puts
+  the days on the calendar, and notifies Jo.*), then one button. Declines and unapprovals
+  carry the required reason in the same step.
+- **Reverse as an audited action, where the system supports one.** After the fact, the
+  panel offers *Reverse decision* (cancel an approval as a new ledger transaction), *Unseal*
+  (the existing audited unseal), *Edit the day again* (a new audited punch edit), *Withdraw
+  approval* (a version returns to review). Each is its own confirmed, audited write. A closed
+  accountability record offers no reversal; the panel says so.
+- **Undo only for UI state.** Park and Snooze keep a ten-second undo. Nothing else does.
+
+### 5.5 One derived state
+
+A single function derives the ordered item list, the counts by verb, the payroll-blocking
+subset, and the parked set. Everything reads it: the Management badge, Home's three rows and
+*n more*, the Attention filters, the Payroll heading, rows, and button, the People open-item
+chips, the mobile tab badge. Resolving an item anywhere changes all of them at once. No
+surface computes its own count.
+
+### 5.6 Deep links and return
+
+Every row and every notification opens the exact item at `/management?item=<kind>:<id>`.
+The panel's *Open the record* uses the feature's existing deep link
+(`/management/attendance?employee=&date=`, `/deposit-log?date=&step=`,
 `/incident-reports?report=`, `/training?assignment=`, `/acknowledgments?assignment=`,
-`/management/knowledge?version=`). Editors accept `?return=` and show a return pill after
-saving.
+`/management/knowledge?version=`). Editor-backed actions open the canonical editor with
+`?return=` and show a return pill; saving returns with the row resolved and an audit line.
 
 ---
 
@@ -414,91 +483,103 @@ saving.
 |---|---|---|---|
 | 7:52 | Opens the app on her phone in the parking lot. Clocks in from the sticky bar. | Home (mobile) | Reads the state line: *Opening · 5 of 8 in · Close the Day not started · payroll Thu.* Sees **Needs you (9)** with the top three. |
 | 7:58 | Ken W. is not in yet (starts 8:00). | Home → Today's team | Nothing to do yet; the row says *starts 8:00*, not *absent*. |
-| 8:15 | Ken arrives at 8:14. The row flips to *In · late 14 min · unreviewed*. | Home | She taps it → Attention item (Follow up): tardy with Ken's reason ("train"). Marks it reviewed with one tap. Context line: *3rd late arrival in 14 days — office threshold is 3; a record has opened.* |
-| 8:20 | Jo B.'s PTO request (Oct 2–3). | Attention → Decide | Panel shows balance (32h), who else is off those days (nobody), the schedule impact. **Approve**. Row collapses with *Approved · undo*. |
-| 10:40 | Bell: a correction request from Marcus (forgot to clock out Friday). | Notification → item panel | **Approve** opens the punch editor (existing behavior) for Fri Sep 18; she adds the 12:02 out. Saves. Item closes; the Payroll readiness row for that day is gone. |
-| 12:30 | Owner asks "are we on pace?" | Home → On pace | *Collections $5,516 behind September's pace; production and new patients on pace (through Sat Sep 19 closeout).* Expands "Why?" → the receipts. |
-| 2:10 | Notices Priya bypassed her checklist twice this week. | Attention → Follow up | Panel groups both bypasses, shows the one reason given and the one owed, and the last 90 days (one other). She adds a note to Priya's record: *talked 2:10 — sterilization backlog on Fridays; adjusting the list.* |
-| 3:00 | Ken's accountability record (late arrivals) needs her sign-off by Wednesday. | Attention → Follow up | Reads his note, documents the conversation, signs off. |
+| 8:15 | Ken arrives at 8:14. The row flips to *In · late 14 min · unreviewed*. | Home → Open → Attention item | Reviews the tardy with Ken's reason and confirms. Context line: *3rd late arrival in 14 days; the office threshold is 3, so a record has opened.* |
+| 8:20 | Jo B.'s PTO request (Oct 1–2). | Attention → Decide | Panel shows the balance (48h → 32h), who else is off those days (nobody), the coverage. **Approve** → confirm → *Approved 8:21 AM · Jo notified*. If she changes her mind later, *Reverse decision* records a cancellation on the ledger. |
+| 10:40 | Bell: a correction request from Marcus (forgot to clock out at lunch Friday). | Notification → item panel | **Review** opens the punch editor with the requested punches. Approve and save. The Payroll readiness row for that day disappears because it was the same item. |
+| 12:30 | Owner asks "are we on pace?" | Home → status line → Why? | *Collections $8,600 behind September's pace; production and new patients on pace (through Fri Sep 18 closeout).* The three numbers and their sources are one click down. |
+| 2:10 | Priya's Friday bypass reason is three days overdue. | Attention → Follow up | The item exists because the office rule tripped (reason owed past one working day), not because a pattern looked interesting. She adds a note to Priya's record: *talked 2:10; sterilization backlog on Fridays; adjusting the list.* |
+| 3:00 | Ken's accountability record (late arrivals) needs her sign-off by Wednesday. | Attention → Follow up | Reads his note, documents the conversation, types her name, signs off. The record closes; a closed record cannot be reopened. |
 | 4:30 | Payroll is Thursday. | Management → Payroll | *Not ready — 2 records:* Alice N., Thu Sep 17, scheduled with no time; Priya S., Fri Sep 18, no clock-out. **Record what happened** → Team Attendance day row → Callout (Alice texted). Return pill → back to Payroll. **Fix the day** → punch editor → out 5:03 PM (from the kiosk photo). Back to Payroll: *Ready — 9 people, 84 shifts, 0 open records.* |
-| 5:15 | Wrapping up. | Home (wrap-up state) | *Before you leave:* Sam K. still clocked in (scheduled to 5:00) → she checks, he is finishing a case; Close the Day at step 3 → she finishes and seals; 2 doctor requests unanswered → Inbox. *Carrying into tomorrow: 2 parked follow-ups.* Tomorrow line: *Tue · 7 scheduled · Jo B. off.* |
+| 5:15 | Wrapping up. | Home (wrap-up state) | *Before you leave:* Sam K. still clocked in (scheduled to 5:00); Close the Day at step 3 → she continues and seals. A status line says two doctor notes still need a reply in Inbox. *Carrying into tomorrow: 2 parked follow-ups.* Tomorrow: *8 scheduled · nobody off.* |
 
 At no point does she open a hub to find a feature. She never sees the same item in two
 places with two different actions.
 
 ---
 
-## 7. High-fidelity concepts
+## 7. High-fidelity concepts (round 2)
 
 The concept file (`docs/manager-experience-redesign/concepts.html`) renders each surface
 below with fixture data and three scenarios (quiet Tuesday · busy Monday · wrap-up), a
-working attention panel, the correct-and-return flow, the employee record sections, and
-phone frames. Summaries:
+working attention panel with confirmation and editor steps, audited reversals, the
+correct-and-return flow, the five-section employee record, and phone frames. Every count on
+every screen reads one derived state. Summaries:
 
 ### 7.1 Manager Home
-Masthead (office · role · date · time; the clock chip is in the shell header). State line.
-*Needs you* (grouped rows with inline primary action, capped at five). *Today's team*
-(exceptions, then folded "n in"). *Yesterday* (one line). *On pace* (one sentence,
-disclosure for numbers). *This month's challenge* (one line). *Mine* (lines). Wrap-up
-state after close. Quiet state collapses to roughly six lines.
+Masthead, one sentence of state (each fact linked), *Needs you* with the top three items and
+one navigation action each, *Today* with exceptions and a count line, two status lines, the
+challenge only when noteworthy, *Mine* only when needed. Wrap-up state after close. Quiet
+state is a sentence and four lines.
 
 ### 7.2 Management → Attention
-Header with room switcher and count. Filters by verb, a "Parked" count, and sort by
-consequence. Ruled rows grouped by verb. Selecting a row opens the panel (desktop: right
-column; mobile: bottom sheet) with what happened, why, deadline, receipts, one primary
-action, secondary actions, "Open the record", and history. Acting collapses the row with a
-ten-second undo and moves focus to the next row.
+Room switcher with the one count. Filters by verb (they never reorder), a parked count, and
+the order rule stated in one line. A flat list of rows: verb, who, what, age or deadline.
+Selecting a row opens the panel: what happened, why (the rule), deadline, one primary action
+and its secondaries, *Based on these recorded items*, *Open the record*, history.
+Consequential actions show a one-sentence confirmation; editor-backed actions open the
+canonical editor in place with a return pill; resolved items collapse into *Done today* with
+an audited reversal where one exists. Park and Snooze keep a ten-second undo.
 
 ### 7.3 Management → People
 Segments: Today · Everyone · Team Attendance · Patterns. *Today* is the single live roster
-(phase-aware, exceptions first). *Everyone* is the roster with role, today's status, open
-items, last 30 days, and schedule summary; Invite and Archived live here. *Patterns* is the
-attendance trend and repeat counts against the office's thresholds — factual, no rankings.
+(phase-aware, exceptions first, *Open* on rows that have an item). *Everyone* is the roster
+with role, today's status, open items, last 30 days, and schedule summary. *Patterns* is
+context against the office's thresholds; it never creates an item by itself.
 
-### 7.4 Person (employee record)
-Stable header (name, role, since, status, actions), an at-a-glance strip (this period's
-hours, last 30 days, PTO balance, open items), then sections: Overview · Time & attendance
-· Time off · Schedule · Record · Growth · Profile. Overview holds the person's open items,
-a 14-day strip, and manager notes. Each section is the canonical view; edits invoke the
-canonical editors. Back returns to the roster with scroll position kept.
+### 7.4 Person (employee record): five sections
+Stable header, an at-a-glance strip (this period's hours, last 30 days, PTO balance, open
+items), then **Overview · Time · Record · Development · Profile**. Time holds attendance,
+schedule, and time off as in-page blocks with a jump strip, so the schedule editor stays
+canonical without a first-level tab. Record holds accountability records, incidents,
+bypasses, adjustments, and manager notes. Development holds the month's goal, training, and
+the challenge tally. Profile holds employment, contact, role, permissions, operational roles,
+staff code.
 
 ### 7.5 Team Attendance
 The existing workspace, unchanged in capability. Two additions: it honors `?return=` with a
-return pill, and its "Unreviewed items" card becomes a filtered view of the same Attention
-items (one definition of missing).
+return pill, and its "needs attention" count is the same Attention items filtered to this
+view, so "missing" has one definition.
 
 ### 7.6 Payroll readiness
-Period picker with pay date and hours-due date. *Not ready yet — n records* list (person ·
-date · what's wrong · fix) and *Worth a look* (overtime, adjustments; never blocking).
-Period summary. Prepare report (Reports engine) and Report history. After a fix, the row
-reads *Fixed 2 min ago by you*. Ready state is one line and one button.
+Period picker with pay date and hours-due date. *Not ready yet — n records* (from the derived
+state) with person · date · what's wrong · the exact fix. *Worth a look* (overtime,
+adjustments; never blocking). Period summary. The heading, rows, and *Prepare payroll
+report · n open records* button all read the same count. After a fix, the row reads *Fixed ·
+8:34 AM* with an audited reversal. Ready state is one line and one button.
 
 ### 7.7 Office
-An index list, one live fact per area, no cards: Policies & Procedures (n in review),
-Acknowledgments (n unsigned · n overdue), Training (n open · n drafts), Goals & Challenges
-(n of m set a goal · challenge running), Incidents (n open · n awaiting countersign),
-Calendar & closures (next closure), Practice Setup, Office settings.
+An index list, one live fact per area, no cards. The challenge lives here when it is not
+noteworthy enough for Home.
 
 ### 7.8 Mobile
-Home: state line, *Needs you* (top three, tap → sheet), *Today* exceptions, wrap-up after
-close. Manage: Attention list with verb segments; item sheet with evidence and one
-action; People → Today and person overview; Payroll readiness list (fixes open the editor
-sheet). No performance strip, no notes, no roster tables on phones.
+Home: the sentence, the top three items with one navigation action each, today's exceptions
+and a count, two status lines; wrap-up after close. Manage: Attention as a flat list with
+verb filters; an item opens a bottom sheet with its evidence, one primary action, and the
+same confirmation step as desktop. Larger targets (40px buttons), less per row.
 
 ---
 
 ## 8. Interaction model
 
+**The benchmark rhythm:** state → exception → exact action → canonical editor → return →
+resolved. Payroll Readiness runs on it, and so does everything else: Attention (row → panel
+→ editor → resolved), People → Today (exception → item), Close the Day follow-up (unsealed
+day → seal step → sealed), policy review (version in review → review view → approved),
+bypass follow-up (rule tripped → reasons → note on the record), incidents (awaiting
+countersign → countersign → closed). No screen states a problem without the exact action
+beside it.
+
 | Pattern | Behavior |
 |---|---|
-| **Attention triage** | Row → panel → act → row collapses with *Done · undo* (10 s) → focus moves to the next row. Keyboard: ↑↓ move, Enter opens, A/D approve/decline where applicable. |
-| **Deep linking** | Every row and notification opens the exact item panel. Panels link to the underlying record with the feature's existing deep link. Editors honor `?return=`. |
-| **Progressive disclosure** | Row: one line + primary action. Panel: what/why/deadline/receipts/history. Record: everything. "Why am I seeing this?" is a disclosure on the panel, never a tooltip. |
-| **Correct and return** | Payroll row → editor (Team Attendance) with a return pill at the top → save → pill returns to Payroll with the row updated and an audit line. The same pattern serves Attention → editor → Attention. |
-| **Empty / quiet state** | Home collapses to state line + *Nothing needs you* + one-line sections. Attention reads *Nothing waiting · n parked until Friday.* Payroll reads *Ready.* No cards appear to fill space. |
-| **Office doing well** | Same components, fewer rows. The tone is calm: no green everywhere, one success line where a decision was resolved. |
-| **Office with several issues** | Same components, grouped by verb, the first item proposed as *step into this first* with receipts. Color appears only on tone dots and the one number that matters. Motion is limited to the row collapse and the return pill. |
-| **Data honesty** | Missing data is narrated ("not recorded"), never zero. Pace lines state the day scope. Every AI or rule-derived line has receipts. No office-health score. |
+| **Home only navigates** | One action per row, Review or Open, landing on the exact Attention item. Home never approves, declines, seals, signs, or edits. |
+| **Attention triage** | Row → panel → primary action → confirmation (or the canonical editor with a return pill) → resolved row under *Done today*, with an audited reversal where one exists. Keyboard: arrows move, Enter opens, Escape cancels a step. |
+| **Confirm and reverse, don't undo** | Consequential actions confirm in one sentence. Reversal is a separate audited action offered only where the system supports one. Ten-second undo applies to Park and Snooze only. |
+| **One derived state** | Badge, Home, Attention counts, Payroll heading/rows/button, People chips, and the mobile badge all read one model. |
+| **Deep linking and return** | Every row and notification opens the exact item. Editors honor `?return=`; saving returns with the row resolved and an audit line. |
+| **Progressive disclosure** | Row: verb, one line, age. Panel: what, why (the rule), deadline, action, receipts, history. Record: everything. |
+| **Empty / quiet state** | Home: a sentence and four lines. Attention: *Nothing waiting · n parked until Friday.* Payroll: *Ready.* No filler cards, no zero rows, no permanent challenge real estate. |
+| **Office doing well vs. several issues** | Same components; what changes is the count and the number of rows. Color only on tone dots and the one number that matters. Motion limited to the row collapse and the return pill; reduced motion honored. |
+| **Data honesty** | Missing data is narrated, never zero. Pace states its day scope. Every rule-derived or AI-derived line has receipts. No office-health score. |
 
 ---
 
@@ -515,13 +596,16 @@ countersign form, `TardyReviewModal`, `SprintBuilderDialog`/`SprintVerifyDialog`
 `notification-routing.ts`, `useDeepLink.ts`.
 
 **New composition (no new tables):**
-- `useAttentionItems()` — composes `useApprovalCounts`' three sources, `useOrgAccountabilityReports`,
-  `useOrgBypasses`, `useKnowledgeAcknowledgmentRoster`, `useTrainingAssignments`,
-  `useOrgAttendanceSnapshot` + `staffing.ts`, `useDepositLog`, incident hooks, knowledge
-  workspace `needs_action`, `useTeamGoals` (pending verification) into `AttentionItem[]`,
-  ordered per §5.2. Home renders `.slice(0, 5)`.
+- `deriveAttention()` — one pure function from the existing hooks' data (`useApprovalCounts`'
+  three sources, `useOrgAccountabilityReports`, `useOrgBypasses`,
+  `useKnowledgeAcknowledgmentRoster`, `useTrainingAssignments`, `useOrgAttendanceSnapshot` +
+  `staffing.ts`, `useDepositLog`, incident hooks, knowledge workspace `needs_action`,
+  `useTeamGoals` pending verification) to `{ items (ordered per §5.2), counts, payrollBlocking,
+  parked }`. Everything reads it; Home renders `items.slice(0, 3)`. The admission rule (§5.0)
+  lives here as code, with a test per kind naming the record and the rule that admits it.
 - `AttentionRow` / `AttentionPanel` — one row component, one panel that mounts the existing
-  editor for the item's kind.
+  editor for the item's kind, with a confirmation step for consequential kinds and reversal
+  actions wired to the existing audited paths (unseal, punch edit) or the new ones below.
 - `ManagementShell` with the four rooms; `PeopleToday` (replaces `OrgSnapshotPanel` and the
   Home staffing band, built on `staffing.ts`), `PeopleRoster` (from `Team.tsx` minus
   bypasses/trend/staff codes), `PersonRecord` (from `EmployeeDetail.tsx` + `ScheduleTab` +
@@ -529,7 +613,9 @@ countersign form, `TardyReviewModal`, `SprintBuilderDialog`/`SprintVerifyDialog`
   requests, with `?return=`), `OfficeIndex`, `OfficeSettings` (the cards from
   `Settings.tsx` office/people tabs), `MySettings` (the `me` tab), `Directory`.
 - Route redirects listed in §3.4 and §3.8; `?return=` support in `AttendanceWorkspace`,
-  `PunchEditorModal` host pages, and `DepositLog`.
+  `PunchEditorModal` host pages, `DepositLog`, and `KnowledgeWorkspace`.
+- Nudges render on their surface via the existing `surface` column; the Inbox tab and its
+  badge go; the member's Home counts open nudges.
 
 **Small additions that the design depends on (each is one column or one policy):**
 1. Managers can read the office's `attendance_exceptions` (today user-scoped).
@@ -538,13 +624,16 @@ countersign form, `TardyReviewModal`, `SprintBuilderDialog`/`SprintVerifyDialog`
 3. Notification types for `knowledge_version_in_review` and `close_day_unsealed` so the
    bell agrees with Attention.
 4. `PtoPolicySettingsCard` re-scoped to the org before it appears under Office settings.
-5. Optional: a `payroll_periods` "reviewed by / at" mark. Valuable, but the readiness flow
+5. Audited reversal paths where they do not exist yet: cancel an approved PTO request as a
+   ledger transaction (partly exists through corrections), withdraw a version approval.
+6. Optional: a `payroll_periods` "reviewed by / at" mark. Valuable, but the readiness flow
    works without it.
 
 **Vocabulary changes (UI strings only; tables keep their names):** *sprint* → *challenge*;
 *Office goal* → *This month's challenge*; office performance goals → *Targets*; *Approval
 Queue* → *Attention*; *Today's Team* → *Today*; *Team* (manager) → *People*; *Team* (everyone)
-→ *Directory*.
+→ *Directory*; *Requests* (Inbox tab) → *Doctor notes* (office-labeled); *Nudges* (Inbox tab)
+→ rendered on their own surfaces.
 
 **Tests to update:** `src/test/settings-organization.test.ts` (four-tab structure),
 notification routing inventory (new types and the `?item=` destination), dashboard
@@ -561,3 +650,24 @@ fixtures/scenarios for the new Home composition.
 - Data honesty: missing is *missing*, pace states its scope, every derived line has receipts.
 - The office's identity leads; Purple Envelope signs the footer.
 - Reorganize, connect, simplify. Rebuild nothing that works.
+
+---
+
+## 11. Round 2 — what changed and why
+
+Review of round 1 accepted the architecture and found that the concepts violated it in
+places. Each point below names the violation and the fix now in the concepts and this
+document.
+
+| # | Round-1 problem | Round-2 fix |
+|---|---|---|
+| 1 | Home said "briefing" but carried Approve, Sign off, Seal, Fix the day, Record what happened. | Home rows carry one navigation action, Review or Open, landing on the exact Attention item. No consequential action exists on Home (§3.3). |
+| 2 | Busy Home was an operational report: five items, an expandable roster, pace cards, a permanent challenge band, a Mine strip. | Three items, exceptions plus a count line, two status lines, the challenge only when noteworthy, Mine only when needed (§3.3). |
+| 3 | "Step into this first" restated the first row of an already-ordered list. | Removed. Attention is a flat list by consequence; the first row is first (§5.2). |
+| 4 | Attention's sources were listed without a rule, inviting it to become Management 2.0. | A hard admission rule with three tests and an explicit never-admitted list (§5.0). Pace, patterns, overtime, and nudges are excluded by name. |
+| 5 | Inbox (messages, requests, nudges), Attention, and the bell overlapped; "request" meant four things. | Inbox is communication from people; Attention is record-generated work; notifications are delivery. Nudges leave Inbox; the doctor-notes tab drops "request" (§3.7). |
+| 6 | The employee record had seven first-level sections. | Five: Overview · Time · Record · Development · Profile, with Time holding attendance, schedule, and time off as in-page blocks (§7.4). |
+| 7 | A ten-second Undo after PTO approval, sign-off, and content approval implied casual reversal of audited writes. | Consequential actions confirm first; reversal is a separate audited action offered only where supported; undo remains for Park and Snooze only (§5.4). |
+| 8 | The Payroll prototype showed "1 record" in the heading and "3 open records" on the button after fixes: two sources of truth. | One derived state drives every count, heading, row, button, and badge, across Home, Attention, Payroll, People, and mobile (§5.5). Verified in the concept: fixing an item in Attention updates Payroll and the badge together. |
+| 9 | Heavy reliance on 10px uppercase monospace labels; small secondary text; small targets. | Band titles and group labels are sentence-case body text; secondary text is 13.5px; buttons are 34px on desktop and 40px on phones; monospace uppercase survives only for datelines and chrome; more space between groups. |
+| 10 | Fix-and-return was described but only shown for Payroll. | Shown for Attention (punch editor, day explanation, seal, sign-off, version review) and Close the Day, with return pills and resolved rows; named as the product's benchmark rhythm (§8). |
