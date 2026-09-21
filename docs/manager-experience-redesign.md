@@ -1,8 +1,10 @@
 # Manager experience redesign
 
-Status: design proposal, round 2 (2026-09-21). Round 1 established the architecture; it is
-frozen (see §0). Round 2 is a simplification and consistency pass on the same architecture.
-Nothing in this document changes code by itself.
+Status: design proposal, round 3 (2026-09-21). Round 1 established the architecture (frozen,
+§0). Round 2 simplified it. Round 3 is a behavior-correctness and implementation-contract
+pass: three layers of state, an honest simulated prototype, acceptance tests, and a phased
+plan with reuse verified against `main` at 8b94f11. Nothing in this document changes
+production code. Implementation must branch from current main, never from this snapshot.
 Companion: `docs/manager-experience-redesign/concepts.html` — interactive high-fidelity
 concepts for every surface described here (open it in a browser; it runs on fixture data).
 
@@ -36,6 +38,12 @@ permissions is rebuilt.
 6. Payroll Readiness exists, and fix-and-return is the product's rhythm.
 7. Feature settings live with features; office settings live under Office.
 8. One canonical owner per fact.
+
+**Round 3 changes** (detail in §12): facts, work, and presentation are separate layers with one
+invariant (asking, parking, snoozing, reading never corrects a record); readiness is computed
+from period records and sources; counts are labeled subsets; consequential actions confirm
+and reverse as appended events; the prototype validates input, opens the right person,
+returns to its origin, and says which controls are illustrative.
 
 **Round 2 changes** (detail in §11): Home rows carry a single navigation action; busy Home
 shows three items, exceptions only, two status lines, and the challenge only when
@@ -267,7 +275,7 @@ four rooms and no Administration grid.
 | **Attention** | What needs me, in order of consequence? | the one triaged queue (all sources), the action panel, parked items |
 | **People** | Who is here, who is missing, who needs follow-up, what is this person's story? | Today · Everyone (roster) · Team Attendance · Patterns · person record |
 | **Payroll** | Is payroll clean, and what do I fix first? | period readiness list → canonical fixes → Reports → Report history |
-| **Office** | Periodic management of the office as a whole | policies & procedures · acknowledgments · training · goals & challenges · incidents · calendar & closures · practice setup · office settings |
+| **Office** | Periodic management of the office as a whole | policies & procedures · acknowledgments · training · goals & challenges · **practice performance** (targets, pace evidence from sealed closeouts, and Missed appointments: the Dentrix 9100/9101 import added on main in #218) · incidents · calendar & closures · practice setup · office settings (which now hosts Work Zones, per #218) |
 
 There is no recommendation box above the queue: the queue is already in order, so the first
 row is first. The sidebar item lands on Attention. Route map: `/management` → Attention;
@@ -475,6 +483,57 @@ The panel's *Open the record* uses the feature's existing deep link
 `/management/knowledge?version=`). Editor-backed actions open the canonical editor with
 `?return=` and show a return pill; saving returns with the row resolved and an audit line.
 
+### 5.7 State and ownership contract (round 3)
+
+Three layers, one invariant: **asking, reading, acknowledging, parking, or snoozing never
+corrects a source record.** Only a canonical editor changes Layer 1.
+
+| Layer | Holds | Changed by | Read by |
+|---|---|---|---|
+| 1 · Record | punches and open pairs; a day's explanation (day off, callout, closure, ignored with reason); request decisions; closeout sealed or not; version status; accountability record status; bypass reason; a shift's clocked-in state | the canonical editor for that record through its existing transaction (`save_punch_edits`, day-off insert, review mutations, seal, countersign RPC, `review_knowledge_version`) | every surface; readiness; staffing; each item's open condition |
+| 2 · Work | needs action · waiting on employee · waiting on another reviewer · followed up · corrected; owner, requested at, follow-up date | Ask, Add a note, Take back; automatically when Layer 1 closes the condition | which list an item sits in; Home; the badge |
+| 3 · Presentation | parked until a date · snoozed until a timestamp in the office timezone · filter · origin for return | Park, Snooze, Bring back, filters, navigation | needs-me-now versus deferred; nothing else |
+
+Allowed transitions:
+
+| Action | Layer | Effect |
+|---|---|---|
+| Save punches / record what happened / seal / decide / sign off / approve version | 1 | the record changes; the item's condition closes; an event is appended; readiness and staffing re-derive |
+| Ask the employee | 2 | waiting on employee (owner, requested at, follow-up date); leaves needs-me-now; stays unresolved; stays a payroll issue |
+| Add a follow-up note (bypass) | 2 | followed up: the rule's manager follow-up is satisfied; the reason stays owed on the person's record |
+| Park / Snooze | 3 | deferred until a date or timestamp; still open, still counted, still due; ten-second undo |
+| Reverse decision / Unseal / Withdraw approval | 1 | a new audited event; the record moves to its reversed state (cancelled with a ledger credit, unsealed, back in review); nothing is deleted |
+| Sign-off | 1 | closed; no reversal; a new record opens if the rule trips again |
+
+Rules the selectors enforce:
+
+- **Readiness** is computed from the selected period's records: unresolved missing time,
+  open punch pairs, unexplained scheduled days, pending in-period corrections and PTO. It is
+  never "no visible attention items". Readiness and export are separate: Prepare report is
+  always available and unresolved issues print on it.
+- **A source that is loading, stale, failed, unauthorized, or partial is not empty.**
+  Readiness reads *can't confirm* with a retry; Home and People say "as of". Nothing turns a
+  missing source into *ready* or *everything is okay*.
+- **Staffing reads Layer 1 only.** A snoozed reminder never changes who is clocked in.
+- **Priority:** a verified active coverage or safety issue outranks any deadline; then
+  deadlines, then decisions, fixes, follow-ups; oldest first. The admission rule (§5.0) is
+  unchanged.
+- **Deduplication:** one item per underlying record condition, keyed by kind plus record id.
+  A notification, a correction request, an attendance exception, and a payroll issue about
+  the same day are facets of one item, never four.
+- **Authorization** is checked per action against the existing policies: org admin for punch
+  edits, day explanations, and seals; a reviewer who is not the author for versions; nobody
+  signs their own record. The panel hides what the person may not do.
+- **Every count is labeled** with the subset it counts: needs me now (the badge), waiting on
+  others, deferred, all unresolved, payroll issues in the period.
+- **Persistence:** work state, snooze and park expiry, follow-up ownership, manager notes,
+  and reversal events must survive refresh and devices. See §9 for the storage proposal.
+
+The day example in the prototype is reconciled: Marcus's Fri Sep 18 is 7:57 AM to 5:06 PM,
+9:09 recorded; adding the 12:02–12:47 lunch pair makes it 8:24. The office has no separate
+automatic deduction (`payroll-utils.ts` derives break minutes from gaps only), and this
+design invents none.
+
 ---
 
 ## 6. Manager journey — a realistic Monday
@@ -617,8 +676,33 @@ countersign form, `TardyReviewModal`, `SprintBuilderDialog`/`SprintVerifyDialog`
 - Nudges render on their surface via the existing `surface` column; the Inbox tab and its
   badge go; the member's Home counts open nudges.
 
+**Reuse verified against main (8b94f11):** `PunchEditorModal` is item-bound (`entryDate`,
+`employeeId`, `punches`, `onSaved`) and saves through `useSavePunchEdits`; `AttendanceActions`
+is row-bound; `TardyReviewModal` and `SprintVerifyDialog` are item-bound; `useReviewPtoRequest`
+and `useReviewCorrectionRequest` are item-level mutations (denial already requires a
+10-character note); the countersign RPC, `useSealDay`, and `useReviewKnowledgeVersion` are
+callable from a panel host. `PtoRequestQueue` and `CorrectionQueuePanel` are list-bound, so
+the panel calls their mutations directly rather than mounting them.
+
+**Paths that do not exist yet (scoped separately, each with its own migration or RPC review):**
+1. An audited reversal of an approved PTO request: a credit transaction plus cancellation.
+   Today only the employee can cancel a *pending* request, and the correction path cancels an
+   approved request without a ledger credit.
+2. A knowledge "withdraw approval" path (`review_knowledge_version` accepts approved or
+   changes_requested only).
+3. An audit event on seal and unseal: `useSealDay` toggles `sealed_at` and writes none, and
+   the day-close audit trigger was dropped in July.
+4. A manager-to-employee "explain this day" request. Correction requests are employee-authored.
+5. Persistence for Layer 2 and 3: a small `manager_followups` table (org, item key, work state,
+   owner, requested at, due at, parked until, snoozed until, note, created by) unless a probe
+   shows `attendance_exceptions` plus `audit_events` can carry it. "No new tables" is a
+   preference, not a rule; what is required is that waiting state, snooze expiry, follow-up
+   ownership, notes, and reversals survive refresh and devices.
+
 **Small additions that the design depends on (each is one column or one policy):**
-1. Managers can read the office's `attendance_exceptions` (today user-scoped).
+1. Managers can read the office's `attendance_exceptions`: RLS already grants org admins
+   (policy "Org admin attendance_exceptions", Feb 18); `useAttendanceExceptions` filters by the
+   signed-in user. Confirm with the RLS probe, then widen the hook.
 2. A manager note on a bypass group ("seen", optional text) — or reuse `audit_events`
    with a `bypass_note` type; no new table.
 3. Notification types for `knowledge_version_in_review` and `close_day_unsealed` so the
@@ -671,3 +755,32 @@ document.
 | 8 | The Payroll prototype showed "1 record" in the heading and "3 open records" on the button after fixes: two sources of truth. | One derived state drives every count, heading, row, button, and badge, across Home, Attention, Payroll, People, and mobile (§5.5). Verified in the concept: fixing an item in Attention updates Payroll and the badge together. |
 | 9 | Heavy reliance on 10px uppercase monospace labels; small secondary text; small targets. | Band titles and group labels are sentence-case body text; secondary text is 13.5px; buttons are 34px on desktop and 40px on phones; monospace uppercase survives only for datelines and chrome; more space between groups. |
 | 10 | Fix-and-return was described but only shown for Payroll. | Shown for Attention (punch editor, day explanation, seal, sign-off, version review) and Close the Day, with return pills and resolved rows; named as the product's benchmark rhythm (§8). |
+
+---
+
+## 12. Round 3 — behavior correctness and implementation contract
+
+Review of round 2 accepted the architecture and found that the prototype let one "resolved"
+flag stand in for three different things. Each reproduced failure and its fix:
+
+| # | Reproduced failure | Fix |
+|---|---|---|
+| 1 | Ask Priya / Ask Alice dropped payroll issues and invented an edited clock-out; after Marcus's correction Payroll read Ready with two answers pending. | Ask is a Layer-2 transition: waiting on employee with owner, requested at, and follow-up date. The day stays unresolved, stays a payroll issue ("waiting · still unresolved for payroll"), and Team Attendance still shows no clock-out. |
+| 2 | "Still working" on Sam made Home say everyone was clocked out and People say "Out 5:20 PM". | Snooze is Layer 3 only. Sam stays clocked in everywhere with "reminder at 5:50 PM". The default action is to verify; adding a clock-out requires a confirmed time and a reason in the punch editor. |
+| 3 | Parking Ken's record made his overview read "Nothing open". | Overview distinguishes needs-action-now from open-deferred: "1 open · parked until tomorrow · still due Wed". Record shows the open record. |
+| 4 | Readiness was "no visible attention items". | Readiness reads period records and source status. Stale or failed sources yield *can't confirm* with retry. Export is never blocked. |
+| 5 | Marcus's day read 8:24 → 7:39 (a double deduction). | 9:09 → 8:24; break minutes come from gaps only, as `payroll-utils.ts` computes them. |
+| 6 | Punch inputs were ignored; empty reasons accepted; blank declines accepted. | Inputs are read and validated (time format, required reason, 10-character decline reason, sign-off note and typed name, ignore-with-reason). |
+| 7 | Every employee opened Ken. | Any person opens their own record; only Ken has full fixture detail, and other records say so. |
+| 8 | Phones were static samples. | Both phones render from the shared state; the Attention phone is interactive with the same confirmation step. |
+| 9 | Pace "Why?" linked to Payroll. | Why? reveals the figures in place and links to Office → Practice performance. |
+| 10 | Alice from Payroll returned to Attention. | Flows carry their origin; editors return to Payroll, the person record, or Attention. |
+| 11 | Reversal reset the resolved flag. | Reversal appends an event and moves the record to its reversed state (cancelled with a credit, unsealed, back in review). The trail shows both events. |
+| 12 | Anchors, keyboard, focus. | Time's jump strip scrolls to real anchors; rows are keyboard-operable with accessible names; focus moves to the panel title on open and back to the row on cancel or Escape. |
+| 13 | Spec contradictions. | "Top five", the old Inbox tabs and badge rule, and Growth/Schedule tab references are removed from the page and this document. |
+| 14 | Fixture clinical wording. | Replaced with placeholder markers; nothing here is approved clinical content. |
+
+Acceptance tests (`docs/manager-experience-redesign/acceptance.mjs`) exercise every case in
+the table in §7 of the concept page against the simulation. Results at the time of writing
+are recorded in the commit message and the round-3 summary. Production audit and
+notification paths need their own evidence; success copy in the prototype is not that.
