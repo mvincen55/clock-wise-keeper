@@ -1,3 +1,4 @@
+import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 /**
  * Incident Reports — the office injury and exposure log.
  *
@@ -186,7 +187,7 @@ export default function IncidentReports() {
                   <SelectContent>
                     <SelectItem value={ALL}>Everyone</SelectItem>
                     {roster.map(e => (
-                      <SelectItem key={e.id} value={e.id}>{e.display_name}</SelectItem>
+                      <SelectItem key={e.id} value={e.id}>{formatEmployeeNameLastFirst(e.display_name)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

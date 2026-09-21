@@ -10,6 +10,7 @@ import Dashboard from "@/pages/Dashboard";
 import OfficeCalendar from "@/pages/OfficeCalendar";
 import Timesheet from "@/pages/Timesheet";
 import DaysOff from "@/pages/DaysOff";
+import TeamAttendance from "@/pages/TeamAttendance";
 import Reports from "@/pages/Reports";
 import ReportHistory from "@/pages/ReportHistory";
 import WorkZones from "@/pages/WorkZones";
@@ -165,6 +166,7 @@ const router = createBrowserRouter(
             <Route path="/playbook/procedures" element={<ProtectedRoute><PracticeProcedures /></ProtectedRoute>} />
             <Route path="/management" element={<ProtectedRoute><Management /></ProtectedRoute>} />
             <Route path="/management/knowledge" element={<ProtectedRoute><KnowledgeWorkspace /></ProtectedRoute>} />
+            <Route path="/management/attendance" element={<ProtectedRoute><TeamAttendance /></ProtectedRoute>} />
             <Route path="/practice-setup" element={<ProtectedRoute><PracticeSetup /></ProtectedRoute>} />
             <Route path="/acknowledgments" element={<ProtectedRoute><KnowledgeAcknowledgments /></ProtectedRoute>} />
             <Route path="/inbox" element={<Navigate to="/inbox/messages" replace />} />

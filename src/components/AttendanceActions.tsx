@@ -18,7 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { MoreHorizontal, Plus, CalendarOff, Building2, EyeOff, Pencil, Loader2, CalendarPlus, Stethoscope, CalendarMinus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { formatEmployeeName } from '@/lib/employee-name';
+import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 
 type ActionType = 'add_punches' | 'mark_day_off' | 'mark_closed' | 'ignore' | null;
 
@@ -70,10 +70,10 @@ export function AttendanceActions({ row, alwaysShow = false, editButton = false,
     if (row.employee_id) {
       if (employeeName) return { id: row.employee_id, name: employeeName };
       const { data } = await supabase.from('employees').select('id, display_name').eq('id', row.employee_id).maybeSingle();
-      if (data) return { id: data.id, name: formatEmployeeName(data.display_name) };
+      if (data) return { id: data.id, name: formatEmployeeNameLastFirst(data.display_name) };
     }
     const { data } = await supabase.from('employees').select('id, display_name').eq('user_id', row.user_id).limit(1).maybeSingle();
-    return data ? { id: data.id, name: employeeName ?? formatEmployeeName(data.display_name) } : null;
+    return data ? { id: data.id, name: employeeName ?? formatEmployeeNameLastFirst(data.display_name) } : null;
   };
 
   // The shift the editor's quick fixes fill from: this row's schedule, never

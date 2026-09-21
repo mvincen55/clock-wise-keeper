@@ -10,6 +10,7 @@ import {
   useSetPermissionDelegation,
 } from '@/hooks/useEmployeePermissions';
 import { PERMISSION_DEFS, type PermissionKey } from '@/lib/permissions';
+import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 
 /**
  * Per-employee permissions, chosen by the owner.
@@ -98,7 +99,7 @@ export default function EmployeePermissionsCard() {
               const set = grants?.get(emp.id);
               return (
                 <div key={emp.id} className="rounded-lg border p-3">
-                  <p className="text-sm font-semibold">{emp.display_name}</p>
+                  <p className="text-sm font-semibold">{formatEmployeeNameLastFirst(emp.display_name)}</p>
                   <div className="mt-2 grid gap-2 sm:grid-cols-3">
                     {PERMISSION_DEFS.map(def => (
                       <label
@@ -116,7 +117,7 @@ export default function EmployeePermissionsCard() {
                           checked={set?.has(def.key) ?? false}
                           disabled={!canEdit}
                           onCheckedChange={v => onToggle(emp.id, def.key, v)}
-                          aria-label={`${def.label} for ${emp.display_name}`}
+                          aria-label={`${def.label} for ${formatEmployeeNameLastFirst(emp.display_name)}`}
                         />
                       </label>
                     ))}

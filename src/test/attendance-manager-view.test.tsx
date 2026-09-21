@@ -1,13 +1,16 @@
 /**
- * The Attendance page as a manager sees it: every row says whose it is,
- * one person can be focused, a person's own days off explain only their
- * own absences, every punch of the day is on the row, and the row actions
- * target the row's employee. Employees keep their personal view.
+ * Attendance in two places. Management → Team Attendance: every row says
+ * whose it is, one person can be focused, a person's own days off explain
+ * only their own absences, every punch of the day is on the row, rows sort
+ * by attention, person, or date, and the row actions target the row's
+ * employee. Workplace → Attendance stays personal for everyone, managers
+ * included.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import DaysOff from '@/pages/DaysOff';
+import TeamAttendance from '@/pages/TeamAttendance';
 import type { AttendanceDayStatusRow } from '@/hooks/useAttendanceDayStatus';
 
 const state = vi.hoisted(() => ({
@@ -44,7 +47,7 @@ const janePunches = [
 ];
 
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'manager-login' } }) }));
-vi.mock('@/hooks/useOrgContext', () => ({ useOrgContext: () => ({ data: { org_id: 'office', employee_id: 'emp-jane', user_id: 'manager-login', role: state.role, org_name: 'Office' } }) }));
+vi.mock('@/hooks/useOrgContext', () => ({ useOrgContext: () => ({ data: { org_id: 'office', employee_id: 'emp-jane', user_id: 'manager-login', role: state.role, org_name: 'Office' }, isLoading: false }) }));
 vi.mock('@/hooks/usePayrollSettings', () => ({ usePayrollSettings: () => ({ data: { week_start_day: 1 } }) }));
 vi.mock('@/hooks/useStaffCodes', () => ({
   useOrgStaff: () => ({ data: [
@@ -85,18 +88,27 @@ vi.mock('@/components/AttendanceActions', () => ({
   ),
 }));
 
-function mount(path = '/days-off') {
-  return render(<MemoryRouter initialEntries={[path]}><DaysOff /></MemoryRouter>);
+/** Management → Team Attendance, at its real route. */
+function mount(path = '/management/attendance') {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/management/attendance" element={<TeamAttendance />} />
+        <Route path="/days-off" element={<DaysOff />} />
+        <Route path="/" element={<div>home</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
 }
 const counter = (label: string) => screen.getByText(label, { selector: 'p.text-xs' }).parentElement!;
 
-afterEach(() => { cleanup(); localStorage.clear(); state.role = 'manager'; state.recompute.mockClear(); state.toast.mockClear(); });
+afterEach(() => { cleanup(); state.role = 'manager'; state.recompute.mockClear(); state.toast.mockClear(); });
 
-describe('Attendance page — manager view', () => {
+describe('Team Attendance (Management)', () => {
   it('names every row and explains an absence only with that person’s own day off', () => {
     mount();
-    expect(screen.getAllByRole('button', { name: 'Jane Doe' })).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: 'Rick Roe' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Doe, Jane' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Roe, Rick' })).toHaveLength(1);
     // Rick's day off covers Rick's Monday; Jane's Monday is still missing.
     expect(counter('Absent')).toHaveTextContent('1Absent');
     expect(counter('Days Off')).toHaveTextContent('1Days Off');
@@ -115,28 +127,28 @@ describe('Attendance page — manager view', () => {
 
   it('row actions target the row’s employee and offer the punch editor directly', () => {
     mount();
-    expect(screen.getAllByRole('button', { name: /^actions Jane Doe edit/ })).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'actions Rick Roe edit 2026-09-21' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^actions Doe, Jane edit/ })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'actions Roe, Rick edit 2026-09-21' })).toBeInTheDocument();
   });
 
   it('clicking a name focuses that person; Show everyone widens it again', () => {
     mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Rick Roe' }));
-    expect(screen.queryByRole('button', { name: 'Jane Doe' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'actions Rick Roe edit 2026-09-21' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Roe, Rick' }));
+    expect(screen.queryByRole('button', { name: 'Doe, Jane' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'actions Roe, Rick edit 2026-09-21' })).toBeInTheDocument();
     expect(counter('Absent')).toHaveTextContent('0Absent');
     expect(screen.getByRole('tab', { name: /Missing Shifts/ })).not.toHaveTextContent('1');
     fireEvent.click(screen.getByRole('button', { name: 'Show everyone' }));
-    expect(screen.getAllByRole('button', { name: 'Jane Doe' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Doe, Jane' })).toHaveLength(2);
   });
 
   it('a link that names a team member opens focused on them', () => {
-    mount('/days-off?employee=emp-rick');
-    expect(screen.queryByRole('button', { name: 'Jane Doe' })).toBeNull();
+    mount('/management/attendance?employee=emp-rick');
+    expect(screen.queryByRole('button', { name: 'Doe, Jane' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Show everyone' })).toBeInTheDocument();
     // The Days Off tab is scoped to them too (Radix tabs activate on mouse down).
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Days Off' }));
-    expect(screen.getByText(/Rick Roe's time off from/)).toBeInTheDocument();
+    expect(screen.getByText(/Roe, Rick's time off from/)).toBeInTheDocument();
     expect(screen.getByText('Vacation')).toBeInTheDocument();
   });
 
@@ -144,9 +156,9 @@ describe('Attendance page — manager view', () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: '1 Unreviewed Tardies' }));
     const tardyRow = (await screen.findByText('Review')).closest('tr')!;
-    expect(within(tardyRow).getByText('Jane Doe')).toBeInTheDocument();
+    expect(within(tardyRow).getByText('Doe, Jane')).toBeInTheDocument();
     fireEvent.click(within(tardyRow).getByText('Review'));
-    expect(await screen.findByText(/Review Tardy — Jane Doe — /)).toBeInTheDocument();
+    expect(await screen.findByText(/Review Tardy — Doe, Jane — /)).toBeInTheDocument();
   });
 
   it('Recompute covers everyone in the office when no one is focused', async () => {
@@ -159,54 +171,47 @@ describe('Attendance page — manager view', () => {
   });
 
   it('with a person focused, Recompute is theirs alone', async () => {
-    mount('/days-off?employee=emp-rick');
+    mount('/management/attendance?employee=emp-rick');
     fireEvent.click(screen.getByRole('button', { name: 'Recompute' }));
     await waitFor(() => expect(state.recompute).toHaveBeenCalledTimes(1));
     expect(state.recompute).toHaveBeenCalledWith(expect.objectContaining({ userId: 'rick-login' }));
   });
 });
 
-describe('Attendance page — a manager’s own attendance', () => {
-  it('My attendance shows only their own rows, keeps their tools, and sticks for next time', () => {
-    mount();
-    fireEvent.click(screen.getByRole('button', { name: 'My attendance' }));
-    expect(screen.getByRole('button', { name: 'My attendance' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.queryByRole('button', { name: 'actions Rick Roe edit 2026-09-21' })).toBeNull();
-    expect(screen.getAllByRole('button', { name: /^actions Jane Doe edit/ })).toHaveLength(2);
+describe('Workplace → Attendance for a manager', () => {
+  it('is their own attendance, with their tools, and points at Team Attendance', () => {
+    mount('/days-off');
+    expect(screen.getByRole('heading', { name: 'Attendance' })).toBeInTheDocument();
+    expect(screen.getByText('Your days off, tardies, missing shifts, and closures')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'actions Roe, Rick edit 2026-09-21' })).toBeNull();
+    expect(screen.getAllByRole('button', { name: /^actions Doe, Jane edit/ })).toHaveLength(2);
     expect(screen.queryByText('Team member')).toBeNull();
     expect(screen.queryByRole('group', { name: 'Sort' })).toBeNull();
     expect(screen.getByRole('tab', { name: 'My Calendar' })).toBeInTheDocument();
-    expect(screen.getByText('Your days off, tardies, missing shifts, and closures')).toBeInTheDocument();
-    expect(localStorage.getItem('purple.attendance.view')).toBe('mine');
-    cleanup();
-    mount();
-    expect(screen.getByRole('button', { name: 'My attendance' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.queryByRole('button', { name: 'actions Rick Roe edit 2026-09-21' })).toBeNull();
+    expect(screen.getByRole('link', { name: /Team Attendance is under Management/ })).toHaveAttribute('href', '/management/attendance');
   });
 
-  it('Recompute on My attendance is the manager’s own', async () => {
-    mount();
-    fireEvent.click(screen.getByRole('button', { name: 'My attendance' }));
+  it('Recompute there is the manager’s own', async () => {
+    mount('/days-off');
     fireEvent.click(screen.getByRole('button', { name: 'Recompute' }));
     await waitFor(() => expect(state.recompute).toHaveBeenCalledTimes(1));
     expect(state.recompute).toHaveBeenCalledWith(expect.objectContaining({ userId: 'manager-login' }));
   });
 
-  it('a Timesheet link to a date opens My attendance on that day', () => {
+  it('a Timesheet link to a date opens their own attendance on that day', () => {
     mount('/days-off?date=2026-09-01');
-    expect(screen.getByRole('button', { name: 'My attendance' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('heading', { name: 'Attendance' })).toBeInTheDocument();
     expect(screen.getByLabelText('Start Date')).toHaveValue('2026-09-01');
   });
 
-  it('a team-member link wins over a remembered personal view', () => {
-    localStorage.setItem('purple.attendance.view', 'mine');
-    mount('/days-off?employee=emp-rick');
-    expect(screen.getByRole('button', { name: 'Team' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'actions Rick Roe edit 2026-09-21' })).toBeInTheDocument();
+  it('Add Day Off there is for themselves — no picker', () => {
+    mount('/days-off');
+    fireEvent.click(screen.getByRole('button', { name: 'Add Day Off' }));
+    expect(screen.queryByText('Team member')).toBeNull();
   });
 });
 
-describe('Attendance page — sorting the team', () => {
+describe('Team Attendance — sorting', () => {
   const dataRows = () => screen.getAllByRole('row').filter(r => /Sep \d+, 2026/.test(r.textContent || ''));
 
   it('Needs attention puts the missed days first', () => {
@@ -229,31 +234,37 @@ describe('Attendance page — sorting the team', () => {
     // The name lives in a header row now, not repeated on every row.
     expect(screen.queryByRole('columnheader', { name: 'Employee' })).toBeNull();
     const rows = screen.getAllByRole('row');
-    const janeHeader = rows.findIndex(r => (r.textContent || '').trim() === 'Jane Doe');
-    const rickHeader = rows.findIndex(r => (r.textContent || '').trim() === 'Rick Roe');
+    const janeHeader = rows.findIndex(r => (r.textContent || '').trim() === 'Doe, Jane');
+    const rickHeader = rows.findIndex(r => (r.textContent || '').trim() === 'Roe, Rick');
     expect(janeHeader).toBeGreaterThan(0);
     expect(rickHeader).toBeGreaterThan(janeHeader);
     expect(rows[janeHeader + 1]).toHaveTextContent('Tue, Sep 22, 2026');
     expect(rows[janeHeader + 2]).toHaveTextContent('Mon, Sep 21, 2026');
     expect(rows[rickHeader + 1]).toHaveTextContent('Mon, Sep 21, 2026');
     // A header is also the way to focus that person.
-    fireEvent.click(screen.getByRole('button', { name: 'Rick Roe' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Roe, Rick' }));
     expect(screen.getByRole('button', { name: 'Show everyone' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^actions Jane Doe/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^actions Doe, Jane/ })).toBeNull();
   });
 });
 
-describe('Attendance page — employee view', () => {
+describe('Workplace → Attendance for an employee', () => {
   it('keeps the personal layout: no picker, no manager actions, a link into the Timesheet', () => {
     state.role = 'employee';
-    mount();
+    mount('/days-off');
     expect(screen.queryByText('Team member')).toBeNull();
     expect(screen.queryByRole('button', { name: /^actions/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Add Day Off' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Request Time Off' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View in Timesheet' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'My Calendar' })).toBeInTheDocument();
-    // No view switch: an employee has only their own attendance.
-    expect(screen.queryByRole('group', { name: 'View' })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Team Attendance/ })).toBeNull();
+  });
+
+  it('is sent home from Team Attendance', () => {
+    state.role = 'employee';
+    mount('/management/attendance');
+    expect(screen.getByText('home')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Team Attendance' })).toBeNull();
   });
 });

@@ -2,7 +2,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
-  BookOpenCheck, CheckSquare, FileText, FolderCog, Users, UserCheck, MapPin, Settings, BellRing, ChevronRight, Loader2,
+  BookOpenCheck, CheckSquare, FileText, FolderCog, Users, UserCheck, MapPin, Settings, BellRing, ChevronRight, Loader2, CalendarDays,
 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useApprovalCounts } from '@/hooks/useApprovalCounts';
@@ -13,6 +13,7 @@ import AccountabilityReviewQueue from '@/components/accountability/Accountabilit
 
 const ADMIN_LINKS = [
   { to: '/approvals', icon: CheckSquare, label: 'Approvals', description: 'Review pending requests' },
+  { to: '/management/attendance', icon: CalendarDays, label: 'Team Attendance', description: 'Who is late, absent, or missing punches; edit punches and record days off for anyone' },
   { to: '/management/knowledge', icon: BookOpenCheck, label: 'Manage Policies & Procedures', description: 'Draft, review, and publish the office handbook and playbook' },
   { to: '/practice-setup', icon: FolderCog, label: 'Practice Setup', description: 'Sort existing documents and create human-confirmed office drafts' },
   { to: '/acknowledgments', icon: UserCheck, label: 'Office Acknowledgments', description: 'See who has opened, signed, paused, or missed a required office version' },

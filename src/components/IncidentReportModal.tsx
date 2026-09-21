@@ -1,3 +1,4 @@
+import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 import { useEffect, useState } from 'react';
 import {
   Dialog,
@@ -182,7 +183,7 @@ export default function IncidentReportModal({
                 <SelectTrigger><SelectValue placeholder="Select an employee" /></SelectTrigger>
                 <SelectContent>
                   {employees.map(e => (
-                    <SelectItem key={e.id} value={e.id}>{e.display_name}</SelectItem>
+                    <SelectItem key={e.id} value={e.id}>{formatEmployeeNameLastFirst(e.display_name)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

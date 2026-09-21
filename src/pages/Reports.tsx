@@ -703,7 +703,7 @@ export default function Reports() {
               </ul>
               <p className="text-xs text-muted-foreground">
                 Fix these from the{' '}
-                <Link to="/days-off" className="underline font-medium">Attendance table</Link>
+                <Link to="/management/attendance" className="underline font-medium">Team Attendance page</Link>
                 {' '}before sending hours to payroll. The report stays available either way.
               </p>
             </div>

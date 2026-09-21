@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Archive, RotateCcw, Loader2 } from 'lucide-react';
 import { useArchivedEmployees, useRestoreEmployee } from '@/hooks/useEmployees';
 import { useState } from 'react';
-import { filterAndSortEmployees, formatEmployeeName } from '@/lib/employee-name';
+import { filterAndSortEmployees, formatEmployeeNameLastFirst } from '@/lib/employee-name';
 
 export default function ArchivedMembersDialog() {
   const [open, setOpen] = useState(false);
@@ -29,7 +29,7 @@ export default function ArchivedMembersDialog() {
             {filterAndSortEmployees(archived).map(emp => (
               <div key={emp.id} className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
                 <div>
-                  <div className="font-medium text-sm">{formatEmployeeName(emp.display_name)}</div>
+                  <div className="font-medium text-sm">{formatEmployeeNameLastFirst(emp.display_name)}</div>
                   {emp.email && <div className="text-xs text-muted-foreground">{emp.email}</div>}
                 </div>
                 <Button

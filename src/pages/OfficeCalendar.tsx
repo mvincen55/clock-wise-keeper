@@ -20,6 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAddDayOff } from '@/hooks/useDaysOff';
+import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -978,7 +979,7 @@ export default function OfficeCalendar() {
                     <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
                     <SelectContent>
                       {(employees || []).map(e => (
-                        <SelectItem key={e.id} value={e.id}>{e.display_name}</SelectItem>
+                        <SelectItem key={e.id} value={e.id}>{formatEmployeeNameLastFirst(e.display_name)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

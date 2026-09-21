@@ -23,10 +23,10 @@ describe('team name display', () => {
     Object.freeze({ id: '3', display_name: 'Brown, Amy L', email: null }),
   ]);
 
-  it('sorts by displayed name without changing stored records or order', () => {
+  it('sorts surname first without changing stored records or order', () => {
     const result = filterAndSortEmployees(employees);
-    expect(result.map(employee => employee.id)).toEqual(['3', '2', '1']);
-    expect(result[0]).toBe(employees[2]);
+    expect(result.map(employee => employee.id)).toEqual(['1', '3', '2']);
+    expect(result[0]).toBe(employees[0]);
     expect(employees.map(employee => employee.id)).toEqual(['1', '2', '3']);
     expect(employees[2].display_name).toBe('Brown, Amy L');
   });

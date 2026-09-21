@@ -366,7 +366,7 @@ export default function OwnerDashboard({ view }: { view: OwnerView }) {
             <Band
               title="Staffing today"
               count={liveRoster ? `${staffing.rows.length}` : undefined}
-              action={{ label: 'Team', to: '/team' }}
+              action={{ label: 'Attendance', to: '/management/attendance' }}
             >
               {exceptions.map((s) => (
                 <SignalRow key={s.id} signal={s} />
