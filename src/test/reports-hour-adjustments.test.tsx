@@ -37,6 +37,8 @@ vi.mock('@/hooks/useAttendanceDayStatus', () => ({ useAttendanceDayStatus: () =>
 vi.mock('@/hooks/useWorkedHourAdjustments', () => ({ useWorkedHourAdjustments: () => ({ data: state.adjustments }) }));
 vi.mock('@/hooks/useEmployees', () => ({ useOrgEmployees: () => ({ data: [] }) }));
 vi.mock('@/hooks/useOrgAttendanceSnapshot', () => ({ useOwnerUserIds: () => ({ data: new Set() }) }));
+vi.mock('@/hooks/useOrgContext', () => ({ useOrgContext: () => ({ data: { org_id: 'office', employee_id: 'emp-a', user_id: 'user-a', role: 'manager', org_name: 'Office' } }) }));
+vi.mock('@/hooks/useOrgBranding', () => ({ useOrgBranding: () => ({ data: { displayName: 'Northfield Dental Group', legalName: 'Northfield Dental Group, LLC', logoUrl: '', brandColor: '#53406e', brandTint: '#f3f0f8' } }) }));
 vi.mock('@/hooks/useStaffCodes', () => ({
   useOrgStaff: () => ({ data: [{ employeeId: 'emp-a', userId: 'user-a', displayName: 'Doe, Jane', code: 'JD01', employmentStatus: 'active', membershipStatus: 'active', kind: 'active', isActiveActor: true }] }),
 }));
@@ -55,10 +57,11 @@ afterEach(() => { cleanup(); state.adjustments = []; });
 describe('payroll report', () => {
   it('lists every clock-in and clock-out of the day with the break between them', () => {
     generate();
+    // On screen (the printed sheet, also in the DOM, is checked below).
     for (const time of ['08:29 AM', '12:01 PM', '12:31 PM', '06:27 PM']) {
-      expect(screen.getByText(time)).toBeInTheDocument();
+      expect(screen.getAllByText(time).length).toBeGreaterThanOrEqual(1);
     }
-    expect(screen.getByText('30m break')).toBeInTheDocument();
+    expect(screen.getAllByText('30m break').length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText('HOURS ADJUSTMENT')).toBeNull();
     // Recorded time alone: 568 minutes.
     expect(screen.getAllByText('09:28').length).toBeGreaterThanOrEqual(3);
@@ -72,16 +75,31 @@ describe('payroll report', () => {
     }];
     generate();
     expect(screen.getByText('HOURS ADJUSTMENT')).toBeInTheDocument();
-    expect(screen.getByText(/Scheduled installment 2 of 2/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Scheduled installment 2 of 2/).length).toBeGreaterThanOrEqual(2);
     // The row itself, and the weekly total's note.
     expect(screen.getAllByText(/-7\.28h/).length).toBeGreaterThanOrEqual(2);
     // 568 recorded − 437 adjusted = 131 minutes, in the summary, the
     // employee's group, the weekly total, and the footer.
     expect(screen.getAllByText('02:11').length).toBeGreaterThanOrEqual(4);
     expect(screen.getByText('09:28 recorded − 07:17 adjustments')).toBeInTheDocument();
-    // It sits under the employee's staff code (group header and weekly
-    // total), dated where it is paid.
-    expect(screen.getAllByText('JD01').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText('Sat, Sep 19, 2026')).toBeInTheDocument();
+    expect(screen.getAllByText('09:28 recorded −07:17 adjustments').length).toBeGreaterThanOrEqual(2);
+    // It sits under the employee's name and staff code (group header and
+    // weekly total on screen, plus the printed sheet), dated where it is paid.
+    expect(screen.getAllByText('Doe, Jane · JD01').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('Sat, Sep 19, 2026').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('mounts the payroll record sheet for printing, prepared by the signed-in manager', () => {
+    state.adjustments = [{ id: 'adj-1', org_id: 'office', employee_id: 'emp-a', entry_date: '2026-09-19', hours_delta: -7.28, reason: 'Installment', entered_by: 'user-a', created_at: '' }];
+    generate();
+    const root = document.body.querySelector('.payroll-print-root')!;
+    expect(root).not.toBeNull();
+    expect(root.textContent).toContain('Payroll records');
+    expect(root.textContent).toContain('Prepared by Doe, Jane · JD01');
+    expect(root.textContent).toContain('Hours adjustment');
+    expect(root.textContent).toContain('Installment');
+    expect(root.textContent).toContain('Reviewed by');
+    // Every punch of the day is on paper too.
+    for (const time of ['08:29 AM', '12:01 PM', '12:31 PM', '06:27 PM']) expect(root.textContent).toContain(time);
   });
 });

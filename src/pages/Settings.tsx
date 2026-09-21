@@ -23,6 +23,7 @@ import OfficeClosuresCard from '@/components/settings/OfficeClosuresCard';
 import SecurityPrivacyCard from '@/components/settings/SecurityPrivacyCard';
 import AttendanceGraceSettingsCard from '@/components/settings/AttendanceGraceSettingsCard';
 import PtoPolicySettingsCard from '@/components/settings/PtoPolicySettingsCard';
+import WorkZonesCard from '@/components/settings/WorkZonesCard';
 
 /**
  * Settings — the one organized home for configuration.
@@ -39,8 +40,9 @@ import PtoPolicySettingsCard from '@/components/settings/PtoPolicySettingsCard';
  *
  * Regular members see only "My settings" — the office tabs are manager
  * territory, matching the RLS that backs every card. Settings that live on
- * their own pages (work zones, forms & consents, correspondence, reminders)
- * are linked from here so this page stays the single index.
+ * their own pages (forms & consents, correspondence, reminders) are linked
+ * from here so this page stays the single index; work zones are a card on
+ * the Office tab (`/work-zones` redirects to it).
  */
 
 const MANAGER_TABS = ['office', 'people', 'workflows', 'me'] as const;
@@ -93,8 +95,8 @@ export default function Settings() {
   const active: SettingsTab = isManager ? requested : 'me';
   const showSchedule = active === 'workflows' && location.hash === '#schedule-intelligence';
   useEffect(() => {
-    if (active === 'office' && location.hash === '#office-closures') {
-      const target = document.getElementById('office-closures');
+    if (active === 'office' && (location.hash === '#office-closures' || location.hash === '#work-zones')) {
+      const target = document.getElementById(location.hash.slice(1));
       target?.scrollIntoView({ block: 'start' });
       target?.focus({ preventScroll: true });
     }
@@ -133,13 +135,7 @@ export default function Settings() {
             <div id="office-closures" tabIndex={-1} className="scroll-mt-6"><OfficeClosuresCard isManager={isManager} /></div>
             <ProviderRegistryCard />
             <PayrollSettingsCard />
-            <SettingsLinkCard
-              icon={MapPin}
-              title="Work Zones"
-              description="Geofenced clock-in zones and location tracking configuration."
-              to="/work-zones"
-              cta="Manage Work Zones"
-            />
+            <div id="work-zones" tabIndex={-1} className="scroll-mt-6"><WorkZonesCard /></div>
           </TabsContent>
         )}
 

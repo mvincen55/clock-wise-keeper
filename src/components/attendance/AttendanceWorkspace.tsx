@@ -33,9 +33,17 @@ import { useToast } from '@/hooks/use-toast';
 const typeLabels: Record<string, string> = {
   scheduled_with_notice: 'Time off',
   unscheduled: 'Callout',
-  office_closed: 'Office Closed',
-  medical_leave: 'Medical Leave',
+  office_closed: 'Office closed',
+  medical_leave: 'Medical leave',
   other: 'Other',
+};
+/** What the Record absence dialog offers, in plain words. A callout is an absence with a reason, never time off. */
+const typeChoices: Record<string, string> = {
+  scheduled_with_notice: 'Time off (planned)',
+  unscheduled: 'Callout (unplanned — counts as absent)',
+  medical_leave: 'Medical leave',
+  other: 'Other',
+  office_closed: 'Office closed',
 };
 
 const typeColors: Record<string, string> = {
@@ -312,7 +320,8 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
       });
       setOpen(false);
       setForm({ employee_id: '', date_start: '', date_end: '', type: 'scheduled_with_notice', hours: '0', notes: '' });
-      toast({ title: target ? `Day off added for ${formatEmployeeNameLastFirst(target.displayName)}` : 'Day off added' });
+      const what = form.type === 'unscheduled' ? 'Callout' : form.type === 'office_closed' ? 'Closure' : 'Time off';
+      toast({ title: target ? `${what} recorded for ${formatEmployeeNameLastFirst(target.displayName)}` : `${what} recorded` });
       // Their attendance rows now know about the day off. Best effort — the
       // day off itself is already saved.
       if (target?.userId) recompute.mutate({ startDate: form.date_start, endDate: form.date_end, userId: target.userId });
@@ -418,6 +427,24 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
     return map;
   }, [entries]);
   const entryFor = (row: AttendanceDayStatusRow) => (row.employee_id ? entryByKey.get(`${row.employee_id}|${row.entry_date}`) : undefined);
+
+  // One primary word per day. Planned time off and a callout are read from
+  // the recorded absence, so a callout never shows as time off: it is an
+  // absence with a reason, and stays absent for future dates too.
+  const primaryStatus = (row: AttendanceDayStatusRow): { label: string; className: string } => {
+    const cover = coverageFor(row);
+    const planned = cover.find(d => EXPLAINED_DAY_OFF_TYPES.includes(d.type));
+    const callout = cover.some(d => d.type === 'unscheduled');
+    if (row.office_closed) return { label: 'Closed', className: 'bg-success/20 text-success' };
+    if (planned) return { label: typeLabels[planned.type], className: 'bg-primary/20 text-primary' };
+    if (callout) return { label: 'Callout', className: 'bg-destructive/20 text-destructive' };
+    if (row.is_absent) return { label: 'Absent', className: 'bg-destructive/20 text-destructive' };
+    if (row.has_day_off) return { label: 'Time off', className: 'bg-primary/20 text-primary' };
+    if (row.is_incomplete) return { label: 'Incomplete', className: 'bg-warning/20 text-warning' };
+    if (row.has_punches) return { label: 'Arrived', className: 'bg-muted text-muted-foreground' };
+    if (!row.is_scheduled_day) return { label: 'Not scheduled', className: 'bg-muted text-muted-foreground' };
+    return { label: 'Not in yet', className: 'bg-muted text-muted-foreground' };
+  };
 
   const isMissingShift = (r: AttendanceDayStatusRow) => {
     if (!r.is_absent) return false;
@@ -553,7 +580,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
           <p className="text-muted-foreground">
             {personal
               ? 'Your days off, tardies, missing shifts, and closures'
-              : 'Who is late, absent, or missing punches across the office — edit punches and record days off for anyone'}
+              : 'Who is late, absent, or missing punches across the office — edit punches and record time off or callouts for anyone'}
           </p>
           {personal && isManager && (
             <Link to={TEAM_ATTENDANCE_PATH} className="mt-1 inline-flex items-center gap-1 text-sm text-primary hover:underline">
@@ -574,10 +601,10 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
           <PtoRequestModal open={requestOpen} onClose={() => setRequestOpen(false)} />
           {isManager && <Dialog open={open} onOpenChange={openAddDayOff}>
             <DialogTrigger asChild>
-              <Button><Plus className="mr-2 h-4 w-4" />Add Day Off</Button>
+              <Button><Plus className="mr-2 h-4 w-4" />Record absence</Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader><DialogTitle>Add Day Off</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>Record an absence</DialogTitle></DialogHeader>
               <div className="space-y-4">
                 {!personal && (
                   <div className="space-y-1">
@@ -607,7 +634,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
                   <Select value={form.type} onValueChange={v => setForm({ ...form, type: v as any })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {Object.entries(typeLabels).map(([k, v]) => (
+                      {Object.entries(typeChoices).map(([k, v]) => (
                         <SelectItem key={k} value={k}>{v}</SelectItem>
                       ))}
                     </SelectContent>
@@ -708,7 +735,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
         <Card className="card-elevated">
           <CardContent className="p-3 text-center">
             <p className="text-2xl font-bold text-primary">{summary.daysOff}</p>
-            <p className="text-xs text-muted-foreground">Days Off</p>
+            <p className="text-xs text-muted-foreground">Time off</p>
           </CardContent>
         </Card>
         <Card className="card-elevated">
@@ -766,7 +793,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="status">Attendance Status</TabsTrigger>
-          <TabsTrigger value="days_off">Days Off</TabsTrigger>
+          <TabsTrigger value="days_off">Time off &amp; callouts</TabsTrigger>
           <TabsTrigger value="tardies">
             Tardies
             {activeTardies.length > 0 && (
@@ -780,7 +807,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
             )}
           </TabsTrigger>
           <TabsTrigger value="closures">Closures</TabsTrigger>
-          <TabsTrigger value="calendar">{personal ? 'My Calendar' : 'Calendar'}</TabsTrigger>
+          {personal && <TabsTrigger value="calendar">My Calendar</TabsTrigger>}
         </TabsList>
 
         {/* ATTENDANCE STATUS TAB */}
@@ -793,7 +820,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
                 <SelectItem value="absent">Absent ({summary.absent})</SelectItem>
                 <SelectItem value="late">Late ({summary.late})</SelectItem>
                 <SelectItem value="incomplete">Incomplete ({summary.incomplete})</SelectItem>
-                <SelectItem value="days_off">Days Off ({summary.daysOff})</SelectItem>
+                <SelectItem value="days_off">Time off ({summary.daysOff})</SelectItem>
                 <SelectItem value="closures">Closures ({summary.closures})</SelectItem>
                 <SelectItem value="remote">Remote ({summary.remote})</SelectItem>
                 <SelectItem value="onsite">On-site</SelectItem>
@@ -839,19 +866,10 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
                         )}
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            {row.is_absent && <span className="text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive font-medium">Absent</span>}
-                            {row.is_incomplete && <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">Incomplete</span>}
+                            {(() => { const st = primaryStatus(row); return <span className={`text-xs px-2 py-0.5 rounded font-medium ${st.className}`}>{st.label}</span>; })()}
                             {row.is_late && <span className="text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive font-medium">{row.minutes_late}m late</span>}
                             {row.has_edits && <span className="text-xs px-2 py-0.5 rounded bg-accent/20 text-accent font-medium">Edited</span>}
                             {row.timezone_suspect && <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium" title="This day's punch time looks off. Edit the punches (managers) or submit a correction request.">⚠ Time Looks Off</span>}
-                            {row.office_closed && <span className="text-xs px-2 py-0.5 rounded bg-success/20 text-success font-medium">Closed</span>}
-                            {row.has_day_off && <span className="text-xs px-2 py-0.5 rounded bg-primary/20 text-primary font-medium">Day Off</span>}
-                            {!row.is_absent && !row.is_incomplete && !row.is_late && !row.office_closed && !row.has_day_off && row.has_punches && (
-                              <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">Arrived</span>
-                            )}
-                            {!row.is_scheduled_day && !row.office_closed && !row.has_day_off && !row.has_punches && (
-                              <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">Not scheduled</span>
-                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
@@ -1143,22 +1161,16 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
           </Card>
         </TabsContent>
 
-        {/* CALENDAR TAB — one person at a time; a whole office on one grid says nothing */}
-        <TabsContent value="calendar">
-          {!personal && !focusedMember ? (
-            <Card className="card-elevated">
-              <CardContent className="py-12 text-center text-muted-foreground">
-                Choose a team member above to see their calendar.
-              </CardContent>
-            </Card>
-          ) : (
+        {/* MY CALENDAR — personal only; the office's calendar is the Office Calendar page */}
+        {personal && (
+          <TabsContent value="calendar">
             <PersonalCalendar
               daysOff={visibleDaysOff}
               closures={closures || []}
               statusRows={visibleRows}
             />
-          )}
-        </TabsContent>
+          </TabsContent>
+        )}
       </Tabs>
 
       <DebugDrawer row={debugRow} employeeName={isManager && debugRow ? nameOf(debugRow.employee_id) : undefined} open={!!debugRow} onClose={() => setDebugRow(null)} />

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useTimeEntries, TimeEntryRow, PunchRow } from '@/hooks/useTimeEntries';
 import { useDaysOff } from '@/hooks/useDaysOff';
@@ -29,9 +30,23 @@ import AccountabilityHistory from '@/components/accountability/AccountabilityHis
 import { eventTypeLabel, buildAuditCsv, auditCodes, type AuditCodeMaps } from '@/lib/audit-export';
 import { auditReason, describeAuditEvent, effectiveEventType } from '@/lib/audit-summary';
 import { useOrgStaff } from '@/hooks/useStaffCodes';
+import { useOrgContext } from '@/hooks/useOrgContext';
+import { useOrgBranding } from '@/hooks/useOrgBranding';
+import BrandPrintStyle from '@/components/BrandPrintStyle';
+import PayrollPrintSheet, { type PayrollPrintItem } from '@/components/PayrollPrintSheet';
 import { staffCodeLabel } from '@/lib/staff-code';
+import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 
 type ReportType = 'weekly' | 'pay_period' | 'monthly' | 'pto' | 'tardy' | 'attendance_exceptions';
+
+const REPORT_TITLES: Record<ReportType, string> = {
+  weekly: 'Weekly Timesheet',
+  pay_period: 'Pay Period Summary',
+  monthly: 'Monthly Summary',
+  pto: 'PTO Summary',
+  tardy: 'Tardy Report',
+  attendance_exceptions: 'Attendance Exceptions',
+};
 
 const exportTypeMap: Record<ReportType, string | null> = {
   weekly: 'timesheet',
@@ -181,6 +196,8 @@ function AuditTrailRow({ event, codes }: { event: AuditEvent; codes: AuditCodeMa
 
 export default function Reports() {
   const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+  const { data: branding } = useOrgBranding();
   const { data: payrollSettings } = usePayrollSettings();
 
   const weekStartDay = payrollSettings?.week_start_day ?? 1;
@@ -217,8 +234,8 @@ export default function Reports() {
   const adjustmentRows: WorkedHourAdjustmentRow[] = adjustments || [];
   const { data: orgEmployees } = useOrgEmployees();
   const { data: ownerUserIds } = useOwnerUserIds();
-  // Canonical staff codes (employees.tag): everything printed here is
-  // attributed by code, never by a person's name.
+  // People are listed by name (Last, First) with their canonical staff code
+  // (employees.tag) beside it; the audit trail keeps attributing by code.
   const { data: orgStaff } = useOrgStaff();
   const codeByEmployee = new Map<string, string>();
   const codeByUser = new Map<string, string>();
@@ -243,13 +260,21 @@ export default function Reports() {
   const editedDays = entries?.filter(e => e.punches.some(p => p.is_edited)).length || 0;
 
   // ---- The payroll dimension: one week definition, per-employee ----
-  const employeeName = (id: string | null | undefined) =>
-    id ? staffCodeLabel(codeByEmployee.get(id)) : 'Unassigned';
+  const nameByEmployee = new Map<string, string>();
+  (orgStaff || []).forEach(m => nameByEmployee.set(m.employeeId, formatEmployeeNameLastFirst(m.displayName)));
+  const employeeName = (id: string | null | undefined) => {
+    if (!id) return 'Unassigned';
+    const name = nameByEmployee.get(id);
+    const code = codeByEmployee.get(id);
+    if (!name) return staffCodeLabel(code);
+    return code ? `${name} · ${staffCodeLabel(code)}` : name;
+  };
   const today = getToday();
 
   // OT flags: per employee per payroll week from server-computed totals
   // (voided punches never count). 2400 minutes = 40 hours.
-  const weeklyTotals: WeeklyTotalRow[] = computeWeeklyTotals(entries || [], weekStartDay, adjustmentRows);
+  const weeklyTotals: WeeklyTotalRow[] = computeWeeklyTotals(entries || [], weekStartDay, adjustmentRows)
+    .sort((a, b) => a.week_start.localeCompare(b.week_start) || employeeName(a.employee_id).localeCompare(employeeName(b.employee_id)));
   const weeklyByKey = new Map(weeklyTotals.map(w => [`${w.employee_id}|${w.week_start}`, w]));
   const weeklyFor = (e: TimeEntryRow): WeeklyTotalRow | undefined =>
     e.employee_id ? weeklyByKey.get(`${e.employee_id}|${weekStartOf(e.entry_date, weekStartDay)}`) : undefined;
@@ -318,6 +343,67 @@ export default function Reports() {
     for (const g of groups.values()) g.items.sort((a, b) => b.date.localeCompare(a.date));
     return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label));
   })();
+
+  // The printed payroll record: the same figures as the screen, laid out
+  // as a document. Days read oldest first on paper.
+  const isTimesheetReport = reportType === 'weekly' || reportType === 'pay_period' || reportType === 'monthly';
+  const sourceLabelOf = (s: string) => s === 'auto_location' ? 'GPS' : s === 'system_adjustment' ? 'System' : s === 'import' ? 'Import' : 'Manual';
+  const printEmployees = groupedEntries.map(group => {
+    const items: PayrollPrintItem[] = [...group.items]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(item => {
+        if (item.kind === 'adjustment') {
+          return { kind: 'adjustment' as const, date: item.date, hoursDelta: item.adjustment.hours_delta, reason: item.adjustment.reason };
+        }
+        const e = item.entry;
+        const tardy = tardyMap.get(e.entry_date);
+        return {
+          kind: 'day' as const,
+          date: e.entry_date,
+          segments: punchSegments(e.punches).map(seg => ({
+            inTime: seg.in ? formatTime(seg.in.punch_time) : null,
+            outTime: seg.out ? formatTime(seg.out.punch_time) : null,
+            inSource: seg.in ? sourceLabelOf(seg.in.source) : undefined,
+            outSource: seg.out ? sourceLabelOf(seg.out.source) : undefined,
+            breakMinutes: seg.break_minutes,
+          })),
+          totalMinutes: e.total_minutes,
+          minutesLate: tardy && !tardy.resolved ? tardy.minutes_late : 0,
+          remote: e.is_remote,
+          edited: e.punches.some(p => p.is_edited),
+          comment: e.entry_comment || '',
+          timeStatus: timeStatusFor(e),
+        };
+      });
+    const recorded = group.items.reduce((sum, item) => sum + (item.kind === 'entry' ? item.entry.total_minutes || 0 : 0), 0);
+    return { label: group.label, items, recordedMinutes: recorded, adjustmentMinutes: group.minutes - recorded, totalMinutes: group.minutes };
+  });
+  const printedAt = new Date();
+  const printProps = {
+    title: REPORT_TITLES[reportType],
+    periodStart: startDate,
+    periodEnd: endDate,
+    generatedAt: `${formatDate(printedAt)} ${formatTime(printedAt)}`,
+    preparedBy: employeeName(ctx?.employee_id),
+    totals: {
+      payrollMinutes,
+      recordedMinutes: totalMinutes,
+      adjustmentMinutes: adjustmentTotalMinutes,
+      daysWorked: totalDays,
+      lateDays: activeTardies.length,
+      editedDays,
+    },
+    weeks: weeklyTotals.map(w => ({
+      label: employeeName(w.employee_id),
+      weekStart: w.week_start,
+      workedMinutes: w.worked_minutes,
+      adjustmentMinutes: w.adjustment_minutes,
+      totalMinutes: w.total_minutes,
+      otMinutes: w.ot_minutes,
+    })),
+    employees: printEmployees,
+    flags: timeFlags.map(f => ({ label: f.employeeLabel, date: f.date, kind: f.kind })),
+  };
 
   // Fetch audit events and resolve actor names
   useEffect(() => {
@@ -709,7 +795,10 @@ export default function Reports() {
             </div>
           )}
 
-          <div className="no-print flex justify-end">
+          <div className="no-print flex items-center justify-end gap-3">
+            {isTimesheetReport && (
+              <span className="text-xs text-muted-foreground">Prints as a payroll record: every punch, adjustments, weekly totals, and a signature line.</span>
+            )}
             <Button variant="outline" size="sm" onClick={handlePrint}>
               <Printer className="mr-2 h-4 w-4" />
               Print
@@ -985,6 +1074,15 @@ export default function Reports() {
           <div className="no-print">
             <AccountabilityHistory />
           </div>
+
+          {/* Printing shows this sheet and nothing else (.payroll-print-root). */}
+          {isTimesheetReport && branding && createPortal(
+            <div className="payroll-print-root">
+              <BrandPrintStyle branding={branding} />
+              <PayrollPrintSheet {...printProps} branding={branding} />
+            </div>,
+            document.body,
+          )}
         </div>
       )}
     </div>

@@ -116,10 +116,10 @@ describe('deriveAttendanceRows — pending employee (no login)', () => {
     expect(monday.status_code).toBe('closure');
   });
 
-  it('marks a missed scheduled workday absent, but never a future day', () => {
+  it('marks a missed scheduled workday absent, future days included — like the engine', () => {
     const rows = deriveAttendanceRows(baseInput({ today: '2026-09-09' }));
     expect(rows.find(r => r.entry_date === '2026-09-07')!.is_absent).toBe(true);
-    expect(rows.find(r => r.entry_date === '2026-09-10')!.is_absent).toBe(false);
+    expect(rows.find(r => r.entry_date === '2026-09-10')!.is_absent).toBe(true);
   });
 
   it('flags an unbalanced past day as incomplete', () => {

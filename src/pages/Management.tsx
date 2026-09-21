@@ -2,7 +2,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
-  BookOpenCheck, CheckSquare, FileText, FolderCog, Users, UserCheck, MapPin, Settings, BellRing, ChevronRight, Loader2, CalendarDays,
+  BookOpenCheck, CheckSquare, FileText, FolderCog, Users, UserCheck, Settings, BellRing, ChevronRight, Loader2, CalendarDays,
 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useApprovalCounts } from '@/hooks/useApprovalCounts';
@@ -19,8 +19,7 @@ const ADMIN_LINKS = [
   { to: '/acknowledgments', icon: UserCheck, label: 'Office Acknowledgments', description: 'See who has opened, signed, paused, or missed a required office version' },
   { to: '/team', icon: Users, label: 'Team', description: 'Roster, schedules, and details' },
   { to: '/reports', icon: FileText, label: 'Reports', description: 'Hours, payroll, and exports' },
-  { to: '/work-zones', icon: MapPin, label: 'Work Zones', description: 'GPS auto-clock zones' },
-  { to: '/settings', icon: Settings, label: 'Office Settings', description: 'Branding, payroll, policies, escalation, workflows' },
+  { to: '/settings', icon: Settings, label: 'Office Settings', description: 'Branding, payroll, closures, work zones, policies, workflows' },
   { to: '/settings/reminders', icon: BellRing, label: 'Reminders', description: 'Automated reminder rules' },
 ];
 

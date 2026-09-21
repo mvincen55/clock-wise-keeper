@@ -25,7 +25,7 @@ Golden rules that must survive every change:
 - **`org_id` on every table, RLS on every table.** RLS is the *sole* security perimeter — the bundled anon key is public by design.
 - **Org identity comes from `org_members` server-side, never from client input.**
 - **Recipient emails are PII** — use the existing `maskEmail()` pattern in edge function logs.
-- **Printing is snapshot-tested.** FOF, Deposit Log, and Incident Report sheets have print-invariant tests; run the suite before merging print changes.
+- **Printing is snapshot-tested.** FOF, Deposit Log, Incident Report, and the payroll timesheet (`PayrollPrintSheet`, printed from Reports) have print-invariant tests; run the suite before merging print changes.
 
 ---
 
@@ -112,7 +112,7 @@ Navigation is a compact destination list; every feature below keeps its own rout
 |---|---|---|
 | `/timesheet` | Timesheet | Clock in/out, punch history, manager punch editing (`PunchEditorModal`), tardy reasons (`TardyReasonModal`, `TardyReviewModal`) |
 | `/days-off` | DaysOff (**Attendance**) | Everyone's own attendance, managers included (`AttendanceWorkspace mode="personal"`): own rows with every punch of the day, days off, tardies, missing shifts, closures, My Calendar; Request Time Off for employees, own-row punch editing for managers. `?date=` (from the Timesheet) widens the range to that day |
-| `/work-zones` | WorkZones | Geofenced zones for location-verified clock-in (`useGeoTracking`, `LocationStatusPanel`, `process-location-event`) |
+| `/work-zones` | WorkZones | Redirects to `/settings/office#work-zones`: geofenced zones for location-verified clock-in are a card in Office Settings (`WorkZonesCard`; `useGeoTracking`, `LocationStatusPanel`, `process-location-event`) |
 | `/reports` | Reports | Payroll/attendance reporting and exports (built in the browser). Timesheet reports print every clock-in/out of the day with breaks and the worked-hour adjustments (`worked_hour_adjustments`, "Offset hours" on the Team page) dated in the range — listed with their reason and counted in the employee, weekly/OT, and report totals and the CSV |
 
 ### Time off
@@ -258,7 +258,7 @@ Migration `20260723200000_checklists.sql`:
 ## Printing (house rules)
 
 - Print from a dialog requires hiding **every `<body>` child except the print root** — Radix portals dialogs as *siblings* of `#root`, so hiding only `#root` prints the dialog. This was the incident-report print bug (`225b37f`); don't regress it.
-- Print-invariant snapshot tests cover FOF, Deposit Log, Incident Report — printed output must not drift.
+- Print-invariant snapshot tests cover FOF, Deposit Log, Incident Report, and the payroll timesheet — printed output must not drift.
 - **Letters are one component.** Anything that prints as an office letter goes through `OfficeLetterheadSheet` + the `.letter-print-root` portal — never a per-feature letterhead. Signature images inside the letter must stay `display: inline-block` (a block-level replaced element makes Chromium's print fragmentation emit a phantom trailing page — see `scripts/letter-print-check.tsx`).
 
 ## Database conventions

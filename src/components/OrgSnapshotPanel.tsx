@@ -9,16 +9,17 @@ import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 const bucketConfig: Record<SnapshotBucket, { label: string; color: string; bg: string; icon: typeof Users }> = {
   late: { label: 'Late', color: 'text-destructive', bg: 'bg-destructive/10', icon: AlertTriangle },
   absent: { label: 'Absent', color: 'text-warning', bg: 'bg-warning/10', icon: UserX },
+  callout: { label: 'Called out', color: 'text-destructive', bg: 'bg-destructive/10', icon: UserX },
   incomplete: { label: 'Missing clock out', color: 'text-warning', bg: 'bg-warning/10', icon: AlertTriangle },
   not_started: { label: 'Not in yet', color: 'text-muted-foreground', bg: 'bg-muted', icon: Clock },
   clocked_in: { label: 'In', color: 'text-success', bg: 'bg-success/10', icon: UserCheck },
-  day_off: { label: 'Day off', color: 'text-primary', bg: 'bg-primary/10', icon: Coffee },
+  day_off: { label: 'Time off', color: 'text-primary', bg: 'bg-primary/10', icon: Coffee },
   closed: { label: 'Office closed', color: 'text-muted-foreground', bg: 'bg-muted', icon: Coffee },
   unscheduled: { label: 'Not scheduled', color: 'text-muted-foreground', bg: 'bg-muted', icon: Clock },
 };
 
 /** What needs a manager's eye today, in the order it needs it. */
-const ATTENTION_ORDER: SnapshotBucket[] = ['late', 'absent', 'incomplete', 'not_started', 'clocked_in'];
+const ATTENTION_ORDER: SnapshotBucket[] = ['late', 'absent', 'callout', 'incomplete', 'not_started', 'clocked_in'];
 /** Nothing to do about these; shown folded so eight unscheduled names do not bury one absence. */
 const QUIET_ORDER: SnapshotBucket[] = ['day_off', 'closed', 'unscheduled'];
 
@@ -113,7 +114,7 @@ export function OrgSnapshotPanel() {
             <p className="text-xl font-bold text-destructive">{counts.late}</p>
             <p className="text-[10px] text-destructive uppercase">Late</p>
           </div>
-          <div className="text-center p-2 rounded-lg bg-warning/10" title="Scheduled today with no punches yet">
+          <div className="text-center p-2 rounded-lg bg-warning/10" title="Scheduled today with no punches: absent, called out, or not in yet">
             <p className="text-xl font-bold text-warning">{counts.notIn}</p>
             <p className="text-[10px] text-warning uppercase">Not in</p>
           </div>
