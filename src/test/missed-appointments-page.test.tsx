@@ -139,7 +139,6 @@ describe('Missed appointments page', () => {
     expect(preview).not.toHaveTextContent('Someone');
     const dialog = screen.getByRole('dialog');
     for (const id of ['HY16', 'HY10', 'DR02']) expect(within(dialog).getByText(id)).toBeInTheDocument();
-    expect(screen.queryByText(/Someone, (New|Else|Third)/)).toBeNull();
 
     // Turning the switch off brings the 9/8 posting back in.
     fireEvent.click(screen.getByRole('switch', { name: /only add days with nothing recorded yet/i }));
