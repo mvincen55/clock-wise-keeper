@@ -19,11 +19,13 @@ type Props = {
     reason_text: string | null;
     timezone_suspect?: boolean;
   } | null;
+  /** Whose tardy this is — shown in the title so a manager reviewing the office never guesses. */
+  employeeName?: string;
   onSubmit: (id: string, status: 'approved' | 'unapproved', reason: string) => Promise<void>;
   onClose: () => void;
 };
 
-export function TardyReviewModal({ open, tardy, onSubmit, onClose }: Props) {
+export function TardyReviewModal({ open, tardy, employeeName, onSubmit, onClose }: Props) {
   const [status, setStatus] = useState<'approved' | 'unapproved'>('approved');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -60,7 +62,7 @@ export function TardyReviewModal({ open, tardy, onSubmit, onClose }: Props) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
             <AlertTriangle className="h-5 w-5" />
-            Review Tardy — {formatDate(tardy.entry_date)}
+            Review Tardy — {employeeName ? `${employeeName} — ` : ''}{formatDate(tardy.entry_date)}
           </DialogTitle>
           <DialogDescription>
             {tardy.minutes_late} minutes late (Expected: {formatClock(tardy.expected_start_time)}, Actual: {actualLocal})

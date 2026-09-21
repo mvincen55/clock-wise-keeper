@@ -6,6 +6,8 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 export type DayOffRow = {
   id: string;
   user_id: string | null;
+  /** Whose day off this is — the key attendance rows are matched on. */
+  employee_id: string;
   date_start: string;
   date_end: string;
   type: 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'medical_leave' | 'other';
@@ -14,17 +16,41 @@ export type DayOffRow = {
   created_at: string;
 };
 
-export function useDaysOff(year?: number) {
+export function useDaysOff(year?: number, enabled = true) {
   const { user } = useAuth();
   const { data: ctx } = useOrgContext();
   return useQuery({
     queryKey: ['days-off', ctx?.org_id, ctx?.employee_id, year],
-    enabled: !!user && !!ctx?.employee_id,
+    enabled: enabled && !!user && !!ctx?.employee_id,
     queryFn: async () => {
       let q = supabase.from('days_off').select('*').eq('org_id', ctx!.org_id).eq('employee_id', ctx!.employee_id).order('date_start', { ascending: false });
       if (year) {
         q = q.gte('date_end', `${year}-01-01`).lte('date_start', `${year}-12-31`);
       }
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data || []) as DayOffRow[];
+    },
+  });
+}
+
+/**
+ * Every day off in the office that ends on or after `startDate` (and, when
+ * given, starts on or before `endDate`) — the owner/manager view. Leave that
+ * began before the start date is included so a range opening mid-leave still
+ * explains the absence. RLS limits everyone else to their own rows, so callers
+ * enable this only for admins and use `useDaysOff` otherwise.
+ */
+export function useOrgDaysOff(startDate?: string, endDate?: string, enabled = true) {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+  return useQuery({
+    queryKey: ['org-days-off', 'range', ctx?.org_id, startDate ?? null, endDate ?? null],
+    enabled: enabled && !!user && !!ctx?.org_id,
+    queryFn: async () => {
+      let q = supabase.from('days_off').select('*').eq('org_id', ctx!.org_id).order('date_start', { ascending: false });
+      if (startDate) q = q.gte('date_end', startDate);
+      if (endDate) q = q.lte('date_start', endDate);
       const { data, error } = await q;
       if (error) throw error;
       return (data || []) as DayOffRow[];
@@ -59,6 +85,7 @@ export function useAddDayOff() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['days-off'] });
+      qc.invalidateQueries({ queryKey: ['org-days-off'] });
       qc.invalidateQueries({ queryKey: ['employee-days-off'] });
       qc.invalidateQueries({ queryKey: ['employee-attendance'] });
       qc.invalidateQueries({ queryKey: ['org-attendance-summary'] });
@@ -77,6 +104,7 @@ export function useUpdateDayOffHours() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['days-off'] });
+      qc.invalidateQueries({ queryKey: ['org-days-off'] });
       qc.invalidateQueries({ queryKey: ['employee-days-off'] });
       qc.invalidateQueries({ queryKey: ['employee-attendance'] });
       qc.invalidateQueries({ queryKey: ['org-attendance-summary'] });
@@ -93,6 +121,7 @@ export function useDeleteDayOff() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['days-off'] });
+      qc.invalidateQueries({ queryKey: ['org-days-off'] });
       qc.invalidateQueries({ queryKey: ['employee-days-off'] });
       qc.invalidateQueries({ queryKey: ['employee-attendance'] });
       qc.invalidateQueries({ queryKey: ['org-attendance-summary'] });
