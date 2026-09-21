@@ -35,6 +35,14 @@ type Props = {
   /** The entry owner, required when entryId is null; purely informational otherwise. */
   employeeId?: string | null;
   employeeName?: string;
+  /**
+   * The shift the quick fixes fill from ("HH:MM" or "HH:MM:SS"). Pass the
+   * entry owner's schedule when editing someone else's day — an attendance
+   * row already carries it — and null when that day is not scheduled.
+   * Omitted, the editor falls back to the signed-in person's own schedule
+   * (the personal Timesheet path).
+   */
+  scheduleWindow?: { start_time: string; end_time: string } | null;
   /** Fired after a successful save with the RPC result (audit event ids included). */
   onSaved?: (result: SavePunchEditsResult | null) => void;
 };
@@ -74,7 +82,7 @@ const SOURCE_LABELS: Record<string, string> = {
   system_adjustment: 'System',
 };
 
-export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, employeeId, employeeName, onSaved }: Props) {
+export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, employeeId, employeeName, scheduleWindow, onSaved }: Props) {
   const originalPunches = useMemo(() => punches.map(punchToEditable), [punches]);
   const [editedPunches, setEditedPunches] = useState<EditablePunch[]>([]);
   const [reason, setReason] = useState('');
@@ -170,9 +178,16 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, e
     });
   };
 
-  // Quick fixes
+  // Quick fixes fill from the entry owner's shift: the caller's window when
+  // given (another employee's day), otherwise the signed-in person's own.
+  const shiftWindow = (): { start_time: string; end_time: string } | null => {
+    if (scheduleWindow !== undefined) return scheduleWindow;
+    const own = schedule ? getScheduleForWeekday(schedule, entryDate) : null;
+    return own ? { start_time: own.start_time, end_time: own.end_time } : null;
+  };
+
   const setClockOutToScheduledEnd = () => {
-    const sched = schedule ? getScheduleForWeekday(schedule, entryDate) : null;
+    const sched = shiftWindow();
     if (!sched) {
       toast({ title: 'No schedule found for this day', variant: 'destructive' });
       return;
@@ -204,7 +219,7 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, e
   };
 
   const fillMissingPunches = () => {
-    const sched = schedule ? getScheduleForWeekday(schedule, entryDate) : null;
+    const sched = shiftWindow();
     if (!sched) {
       toast({ title: 'No schedule found', variant: 'destructive' });
       return;

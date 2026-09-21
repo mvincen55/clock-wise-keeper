@@ -18,6 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { MoreHorizontal, Plus, CalendarOff, Building2, EyeOff, Pencil, Loader2, CalendarPlus, Stethoscope, CalendarMinus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { formatEmployeeName } from '@/lib/employee-name';
 
 type ActionType = 'add_punches' | 'mark_day_off' | 'mark_closed' | 'ignore' | null;
 
@@ -25,9 +26,23 @@ interface AttendanceActionsProps {
   row: AttendanceDayStatusRow;
   /** If true, show actions even on rows without issues (for quick-add from any row) */
   alwaysShow?: boolean;
+  /**
+   * Also render a pencil beside the menu that opens the punch editor for
+   * this row's employee and day directly — the one-click manager path.
+   */
+  editButton?: boolean;
+  /** The row's employee, when the caller already knows the name (saves a lookup). */
+  employeeName?: string;
 }
 
-export function AttendanceActions({ row, alwaysShow = false }: AttendanceActionsProps) {
+/**
+ * Every action here is manager-only: recording days off, closures, punch
+ * edits, and ignored absences are attendance-record changes that RLS and
+ * the edit RPC refuse for everyone else. Employees get the request paths
+ * (Request Time Off, the Timesheet's correction request) instead, so the
+ * menu renders nothing for them rather than offering dead ends.
+ */
+export function AttendanceActions({ row, alwaysShow = false, editButton = false, employeeName }: AttendanceActionsProps) {
   const { user } = useAuth();
   const { data: ctx } = useOrgContext();
   const { toast } = useToast();
@@ -53,12 +68,19 @@ export function AttendanceActions({ row, alwaysShow = false }: AttendanceActions
   // this menu targets the ROW's employee.)
   const resolveEmployee = async (): Promise<{ id: string; name?: string } | null> => {
     if (row.employee_id) {
+      if (employeeName) return { id: row.employee_id, name: employeeName };
       const { data } = await supabase.from('employees').select('id, display_name').eq('id', row.employee_id).maybeSingle();
-      if (data) return { id: data.id, name: data.display_name };
+      if (data) return { id: data.id, name: formatEmployeeName(data.display_name) };
     }
     const { data } = await supabase.from('employees').select('id, display_name').eq('user_id', row.user_id).limit(1).maybeSingle();
-    return data ? { id: data.id, name: data.display_name } : null;
+    return data ? { id: data.id, name: employeeName ?? formatEmployeeName(data.display_name) } : null;
   };
+
+  // The shift the editor's quick fixes fill from: this row's schedule, never
+  // the signed-in manager's own.
+  const scheduleWindow = row.is_scheduled_day && row.schedule_expected_start && row.schedule_expected_end
+    ? { start_time: row.schedule_expected_start, end_time: row.schedule_expected_end }
+    : null;
 
   const openPunchEditor = async () => {
     setEditorLoading(true);
@@ -112,7 +134,9 @@ export function AttendanceActions({ row, alwaysShow = false }: AttendanceActions
   const [ignoreReason, setIgnoreReason] = useState('');
 
   const hasIssue = row.is_absent || row.is_incomplete || (row.is_late && row.tardy_approval_status === 'unreviewed') || row.timezone_suspect;
-  
+  const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
+
+  if (!isManager) return null;
   // If alwaysShow is false, only render when there's an issue
   if (!alwaysShow && !hasIssue) return null;
 
@@ -213,11 +237,26 @@ export function AttendanceActions({ row, alwaysShow = false }: AttendanceActions
     other: 'Other',
   };
 
+  const editLabel = row.is_absent ? 'Add punches' : 'Edit punches';
+
   return (
     <>
+      {editButton && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          title={editLabel}
+          aria-label={editLabel}
+          disabled={editorLoading}
+          onClick={() => { void openPunchEditor(); }}
+        >
+          {editorLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
+        </Button>
+      )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-7 w-7">
+          <Button variant="ghost" size="icon" className="h-7 w-7" title="More actions" aria-label="More actions">
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
@@ -270,6 +309,7 @@ export function AttendanceActions({ row, alwaysShow = false }: AttendanceActions
           punches={editorData.punches}
           employeeId={editorData.employeeId}
           employeeName={editorData.employeeName}
+          scheduleWindow={scheduleWindow}
           onSaved={() => {
             void recompute.mutateAsync({ startDate: row.entry_date, endDate: row.entry_date, userId: row.user_id });
           }}

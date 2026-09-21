@@ -6,6 +6,8 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 export type TardyRow = {
   id: string;
   user_id: string;
+  /** Whose tardy this is — what the manager view groups and filters on. */
+  employee_id: string;
   time_entry_id: string | null;
   entry_date: string;
   expected_start_time: string;
