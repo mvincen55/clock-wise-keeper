@@ -4643,6 +4643,69 @@ export type Database = {
           },
         ]
       }
+      missed_appointment_events: {
+        Row: {
+          business_date: string
+          code: string
+          created_at: string
+          department: string
+          id: string
+          imported_by: string | null
+          ordinal: number
+          org_id: string
+          primary_provider_code: string | null
+          provider_id: string | null
+          provider_name: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          business_date: string
+          code: string
+          created_at?: string
+          department?: string
+          id?: string
+          imported_by?: string | null
+          ordinal?: number
+          org_id: string
+          primary_provider_code?: string | null
+          provider_id?: string | null
+          provider_name: string
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          business_date?: string
+          code?: string
+          created_at?: string
+          department?: string
+          id?: string
+          imported_by?: string | null
+          ordinal?: number
+          org_id?: string
+          primary_provider_code?: string | null
+          provider_id?: string | null
+          provider_name?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "missed_appointment_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "missed_appointment_events_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "org_providers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       moment_prefs: {
         Row: {
           animations_muted: boolean
