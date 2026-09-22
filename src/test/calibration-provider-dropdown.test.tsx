@@ -29,25 +29,38 @@ vi.mock('@/lib/schedule-reader', async original => ({
 it('selects office providers and derives their type and department', async () => {
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D);
   render(<CalibrationWizard open onClose={() => {}} />);
+  // The practice software is shown, not asked, once Practice settings has it.
+  expect(screen.getByText('Dentrix')).toBeInTheDocument();
+  expect(document.querySelector('select')).toBeNull();
   fireEvent.change(screen.getByLabelText('Privacy-view schedule screenshot'), { target: { files: [new File([''], 'schedule.png', { type: 'image/png' })] } });
   await waitFor(() => expect(screen.getByText('Schedule ID: DR02')).toBeInTheDocument());
   const select = screen.getByRole('option', { name: 'Dr. Test' }).closest('select')!;
-  expect(screen.getByRole('button', { name: 'Next: working day' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Next: review and save' })).toBeDisabled();
   fireEvent.change(select, { target: { value: 'doctor' } });
   expect(screen.getByText('Dentist')).toBeInTheDocument();
   expect(screen.getByText('Doctor')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Next: working day' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Next: review and save' })).toBeEnabled();
   fireEvent.change(select, { target: { value: 'hygiene' } });
   expect(screen.getByText('Hygienist')).toBeInTheDocument();
   expect(screen.getByText('Hygiene')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Next: working day' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Next: review and save' }));
   expect(screen.queryByRole('button', { name: 'Completed' })).not.toBeInTheDocument();
-  // What the office already knows is filled in: the hygienist's saved work
-  // schedule, and a working day taken from it — nothing asked for twice.
-  expect(screen.getByLabelText('Review weekly hours')).toHaveValue('Monday,07:30,16:30');
+  // The last step is a glance, not a form: what the office already knows is
+  // summarized — the hygienist's saved work schedule and a working day taken
+  // from it — and Save is ready without touching anything.
+  expect(screen.getByText('Working day 7:30 AM – 4:30 PM')).toBeInTheDocument();
+  expect(screen.getByText('Mon 7:30 AM–4:30 PM')).toBeInTheDocument();
   expect(screen.getByText(/Filled from Hygienist Test's work schedule in Team/)).toBeInTheDocument();
+  expect(screen.queryByLabelText('Review weekly hours')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Confirm working hours' })).toBeNull();
+  expect(screen.queryByText(/lunch and admin blocks/)).toBeNull();
+  expect(screen.getByRole('button', { name: 'Save layout profile' })).toBeEnabled();
+  // The fields are still there for the office that needs them — behind Adjust.
+  fireEvent.click(screen.getByRole('button', { name: 'Adjust the working day or hours' }));
+  expect(screen.getByLabelText('Review weekly hours')).toHaveValue('Monday,07:30,16:30');
   expect(screen.getByLabelText('Day starts')).toHaveValue('07:30');
   expect(screen.getByLabelText('Day ends')).toHaveValue('16:30');
+  expect(screen.queryByRole('button', { name: 'Confirm working hours' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Save layout profile' })).toBeEnabled();
   fireEvent.click(screen.getByRole('button', { name: 'Save layout profile' }));
   await waitFor(() => expect(saveProfile).toHaveBeenCalledWith(expect.objectContaining({

@@ -20,7 +20,7 @@ import { recognizeFrame } from './ocr';
 import { suggestDailyColumns, type ScheduleProvider } from './provider-mapping';
 
 import type { LayoutColumn } from './types';
-import { applyProviderHours } from './provider-hours';
+import { applyProviderHours, applyProviderWideBlocks, type PlacedBlock } from './provider-hours';
 import { postedColumnStatuses } from './posted-statuses';
 import { applyCompletedEvidence } from './completed-evidence';
 import { isEmptyBlueGridColumn } from './appointment-regions';
@@ -92,7 +92,11 @@ function gridRows(
   }));
 }
 
-/** Classify visible notes in a column and size them against blocked runs. */
+/**
+ * Classify visible notes in a column and size them against blocked runs.
+ * Each block comes back with the rows it was attributed to, so a
+ * provider-wide block can be applied to the provider's other columns.
+ */
 function classifyColumnNotes(
   colWords: OcrWord[],
   rows: Array<{ yTop: number; yBottom: number }>,
@@ -101,8 +105,8 @@ function classifyColumnNotes(
   phraseRules: PhraseRule[],
   providerLabel: string | null,
   department: ClassifiedBlock['department']
-): ClassifiedBlock[] {
-  const blocks: ClassifiedBlock[] = [];
+): PlacedBlock[] {
+  const blocks: PlacedBlock[] = [];
   const lines = groupWordsIntoLines(colWords);
 
   for (const line of lines) {
@@ -122,21 +126,25 @@ function classifyColumnNotes(
     const rowIndex = rows.findIndex(r => midY >= r.yTop && midY < r.yBottom);
 
     let minutes = minutesPerRow;
+    let rowStart = rowIndex;
+    let rowEnd = rowIndex;
     if (rowIndex >= 0 && rowStatuses[rowIndex] === 'blocked') {
-      let start = rowIndex;
-      while (start > 0 && rowStatuses[start - 1] === 'blocked') start -= 1;
-      let end = rowIndex;
-      while (end < rowStatuses.length - 1 && rowStatuses[end + 1] === 'blocked') end += 1;
-      minutes = (end - start + 1) * minutesPerRow;
+      while (rowStart > 0 && rowStatuses[rowStart - 1] === 'blocked') rowStart -= 1;
+      while (rowEnd < rowStatuses.length - 1 && rowStatuses[rowEnd + 1] === 'blocked') rowEnd += 1;
+      minutes = (rowEnd - rowStart + 1) * minutesPerRow;
     }
 
     blocks.push({
-      code: finalCode,
-      minutes,
-      providerLabel,
-      department,
-      confidence: finalConfidence,
-      userConfirmed: false,
+      block: {
+        code: finalCode,
+        minutes,
+        providerLabel,
+        department,
+        confidence: finalConfidence,
+        userConfirmed: false,
+      },
+      rowStart,
+      rowEnd,
     });
   }
   return blocks;
@@ -209,14 +217,7 @@ export async function processScheduleFrame(
       const perColumnStatuses = cols.map(col =>
         postedImage ? postedColumnStatuses(postedImage, col, rows, regions, words, options.phraseRules) : applyCompletedEvidence(sampleColumnStatuses(ctx, col, rows, options.profile.statusLegend), rows, regions, words, col, options.phraseRules)
       );
-      const availability = applyProviderHours(
-        rows.map((_, i) => reduceRow(perColumnStatuses.map(s => s[i]))),
-        cols[0].workingHours, options.businessDate, grid.dayStartMinutes, grid.minutesPerRow,
-      );
-      const reduced = availability.rows;
-      providerRows[label] = reduced;
-
-      const blocks = cols.flatMap((col, c) =>
+      const placed = cols.flatMap((col, c) =>
         classifyColumnNotes(
           wordsInColumn(words, col, headerBottomPx),
           rows,
@@ -227,6 +228,18 @@ export async function processScheduleFrame(
           col.department
         )
       );
+      const blocks = placed.map(p => p.block);
+
+      // Reduce the provider's chairs to one row per slot; a provider-wide
+      // block read in any chair (off, lunch, meeting) then covers that span
+      // in every chair, and the saved working hours block off-duty time.
+      const availability = applyProviderHours(
+        applyProviderWideBlocks(rows.map((_, i) => reduceRow(perColumnStatuses.map(s => s[i]))), placed),
+        cols[0].workingHours, options.businessDate, grid.dayStartMinutes, grid.minutesPerRow,
+      );
+      const reduced = availability.rows;
+      providerRows[label] = reduced;
+
       if (availability.offDutyMinutes > 0) blocks.push({
         code: 'PROVIDER_OFF', minutes: availability.offDutyMinutes,
         providerLabel: label, department: cols[0].department,

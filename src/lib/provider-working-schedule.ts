@@ -1,3 +1,5 @@
+import { formatClock } from '@/lib/time-utils';
+
 export type WorkingPeriod = { weekday: number; startMinutes: number; endMinutes: number };
 export const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const time = (raw: string): number | null => {
@@ -80,6 +82,24 @@ export function currentScheduleByEmployee(schedules: TeamSchedule[], today: stri
     if (periods.length) result.set(employeeId, periods);
   }
   return result;
+}
+
+/**
+ * Working hours as one readable line — "Mon 8:25 AM–5:00 PM · Tue off" —
+ * for a glance-and-confirm summary. Split shifts list every range; unlisted
+ * weekdays are left out because they are unknown, not off.
+ */
+export function describeWorkingHours(periods: WorkingPeriod[]): string {
+  const byDay = new Map<number, WorkingPeriod[]>();
+  for (const p of [...periods].sort((a, b) => a.weekday - b.weekday || a.startMinutes - b.startMinutes)) {
+    byDay.set(p.weekday, [...(byDay.get(p.weekday) ?? []), p]);
+  }
+  const clock = (minutes: number) => formatClock(workingTime(minutes));
+  return [...byDay]
+    .map(([weekday, ps]) => `${WEEKDAYS[weekday].slice(0, 3)} ${
+      ps.some(p => p.endMinutes === p.startMinutes) ? 'off' : ps.map(p => `${clock(p.startMinutes)}–${clock(p.endMinutes)}`).join(', ')
+    }`)
+    .join(' · ');
 }
 
 export function workingScheduleText(periods: WorkingPeriod[]): string {
