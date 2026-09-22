@@ -233,7 +233,7 @@ async function exportToExcel(
       const totalHHMM = entry.total_minutes != null ? minutesToHHMM(entry.total_minutes) : '';
       const totalHrs = entry.total_minutes != null ? Number((entry.total_minutes / 60).toFixed(2)) : '';
       const location = entry.location_status === 'remote' ? 'Remote' : entry.location_status === 'onsite' ? 'On-site' : 'Location unavailable';
-      const status = isAbsent ? 'Absent' : isIncomplete ? 'Incomplete' : isLate ? 'Late' : 'Arrived';
+      const status = isAbsent ? 'Absent' : isIncomplete ? 'Missing clock-out' : isLate ? 'Late' : 'Arrived';
       const tardy = tardyMap.get(entry.entry_date);
       const tardyStatus = tardy ? tardy.approval_status : '';
       const comment = entry.entry_comment || '';
@@ -305,11 +305,13 @@ export default function Timesheet() {
 
   const [tardyModal, setTardyModal] = useState<{ entry: TimeEntryRow; minutesLate: number; expectedStart: string; actualStart: string } | null>(null);
 
+  // This page is one person's record. A manager's read returns the whole
+  // office's tardies, so keep only the signed-in person's before keying by date.
   const tardyMap = useMemo(() => {
     const map = new Map<string, TardyRow>();
-    (tardies || []).forEach(t => map.set(t.entry_date, t));
+    (tardies || []).filter(t => t.user_id === user?.id).forEach(t => map.set(t.entry_date, t));
     return map;
-  }, [tardies]);
+  }, [tardies, user?.id]);
 
   // Auto-detect tardies. Only INSERT when no tardy row exists yet — existing
   // rows are owned by the server-side recompute (and employees cannot update

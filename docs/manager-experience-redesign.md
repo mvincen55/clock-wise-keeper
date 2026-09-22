@@ -946,3 +946,27 @@ state.
 **Known gaps carried forward:** the `close_day_unsealed` producer (a scheduled function); an
 "explain this day" answer that lands on the item; the member Home, which was out of scope,
 still carries its own cards.
+
+### Follow-up — one vocabulary for a person's day, and the time rule everywhere
+
+Reported from the product on the day Phase 3 shipped: future dates on Team Attendance read
+"Absent", the same condition carried four names (Absent, Missing Shifts, Scheduled with no
+time recorded, No punch today), and the payroll report showed a team member as late on days
+she was not.
+
+- `src/lib/attendance-day.ts` is the one vocabulary (Absent, Missing clock-out, Late, Time
+  off, Callout, Office closed, Not scheduled, Scheduled, Not in yet, In, Arrived) and the one
+  time rule: the engine sets `is_absent` the moment a scheduled day has no punches, so every
+  reader applies `dayIsPast` (the shared missing-time rule) before calling a day absent. A day
+  ahead is *Scheduled*; today is *Not in yet* once the shift has started and *Absent* once it
+  has ended plus the office's buffer. A callout stays an absence with a reason whenever it
+  falls (#218). `useDayClock()` supplies today, the wall-clock minute, and the buffer.
+- Readers: Team Attendance (the word, the Absent and Missing clock-out counters, the Absences
+  tab, the filters, the sort), People's 30-day stats, the person record and the roster card,
+  the Today snapshot (`statusBucket` with the clock), Home's staffing word, Attention's item
+  labels (*Absent · date*, *Missing clock-out · date*), Reports' headings, the member's
+  banner (*Absence to explain*), and the Timesheet export.
+- Reports keyed tardies by date alone, so one person's late arrival was stamped on every
+  employee's row for that date (the print sheet and the CSV included). Tardies are keyed by
+  person and date now. The personal Timesheet keeps only the signed-in person's tardies,
+  since a manager's read returns the whole office's.

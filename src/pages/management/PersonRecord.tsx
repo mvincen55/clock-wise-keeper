@@ -27,6 +27,8 @@ import IncidentReportModal from '@/components/IncidentReportModal';
 import IncidentReportDetail from '@/components/IncidentReportDetail';
 import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 import { formatDate, formatTime, formatClock, minutesToHHMM, getToday, shiftDate } from '@/lib/time-utils';
+import { DAY_TONE_CLASS, STATUS_CODE_LABELS, dayWord, isAbsence, type DayClock, type DayLike } from '@/lib/attendance-day';
+import { useDayClock } from '@/hooks/useDayClock';
 import { CATEGORY_LABELS, SEVERITY_CLASSES, SEVERITY_LABELS, STATUS_CLASSES, STATUS_LABELS, formatClockTime, labelFor, type IncidentSeverity, type IncidentStatus } from '@/lib/incidents';
 
 /**
@@ -44,16 +46,10 @@ const SECTIONS = [
   { id: 'profile', label: 'Profile' },
 ] as const;
 
-const statusBadge: Record<string, { label: string; className: string }> = {
-  ok: { label: 'Arrived', className: 'bg-success/20 text-success' },
-  remote_ok: { label: 'Remote', className: 'bg-accent/20 text-accent' },
-  late: { label: 'Late', className: 'bg-warning/20 text-warning' },
-  absent: { label: 'Absent', className: 'bg-destructive/20 text-destructive' },
-  incomplete: { label: 'Incomplete', className: 'bg-warning/20 text-warning' },
-  closure: { label: 'Closed', className: 'bg-muted text-muted-foreground' },
-  day_off: { label: 'Day Off', className: 'bg-primary/20 text-primary' },
-  unscheduled: { label: 'No Schedule', className: 'bg-muted text-muted-foreground' },
-  timezone_suspect: { label: 'TZ Issue', className: 'bg-destructive/20 text-destructive' },
+/** A day's badge, in the office's one vocabulary and under its time rule (src/lib/attendance-day.ts). */
+const dayBadge = (row: DayLike & { status_code: string }, clock: DayClock): { label: string; className: string } => {
+  const w = row.status_code === 'timezone_suspect' ? STATUS_CODE_LABELS.timezone_suspect : dayWord(row, [], clock);
+  return { label: w.label, className: DAY_TONE_CLASS[w.tone] };
 };
 
 const DAY_OFF_LABELS: Record<string, string> = {
@@ -74,6 +70,7 @@ export default function PersonRecord() {
   const { data: ctx } = useOrgContext();
   const { data: employee, isLoading: empLoading } = useEmployeeDetail(employeeId);
   const [range, setRange] = useState(() => ({ start: shiftDate(getToday(), -29), end: getToday() }));
+  const clock = useDayClock();
   const { data: daysOff, isLoading: daysOffLoading, error: daysOffError } = useEmployeeDaysOff(employeeId, range.start, range.end);
   const { rows: attendance, isLoading: attLoading } = useResolvedEmployeeAttendance(employeeId, range);
   const { data: entries } = useEmployeeTimeEntries(employeeId, range);
@@ -115,7 +112,7 @@ export default function PersonRecord() {
   const name = formatEmployeeNameLastFirst(employee.display_name);
   const stats = (attendance || []).reduce(
     (acc, row) => {
-      if (row.is_absent) acc.absent++;
+      if (isAbsence(row, [], clock)) acc.absent++;
       else if (row.is_late) acc.late++;
       else if (row.has_punches) acc.present++;
       return acc;
@@ -195,8 +192,8 @@ export default function PersonRecord() {
             <CardContent className="p-0">
               {!attendance?.length ? <p className="py-8 text-center text-muted-foreground">No attendance data in this range.</p> : (
                 <div className="divide-y">
-                  {attendance.map((row: { id: string; entry_date: string; status_code: string; schedule_expected_start?: string | null; minutes_late?: number | null }) => {
-                    const sb = statusBadge[row.status_code] || statusBadge.ok;
+                  {attendance.map((row: DayLike & { id: string; status_code: string; minutes_late?: number | null }) => {
+                    const sb = dayBadge(row, clock);
                     return (
                       <div key={row.id} className="flex items-center justify-between px-4 py-2.5">
                         <div className="flex items-center gap-3">

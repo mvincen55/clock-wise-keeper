@@ -5,12 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, UserCheck, AlertTriangle, UserX, Clock, Coffee, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
+import { easternWallMinutes } from '@/lib/time-utils';
 
 const bucketConfig: Record<SnapshotBucket, { label: string; color: string; bg: string; icon: typeof Users }> = {
   late: { label: 'Late', color: 'text-destructive', bg: 'bg-destructive/10', icon: AlertTriangle },
   absent: { label: 'Absent', color: 'text-warning', bg: 'bg-warning/10', icon: UserX },
   callout: { label: 'Called out', color: 'text-destructive', bg: 'bg-destructive/10', icon: UserX },
-  incomplete: { label: 'Missing clock out', color: 'text-warning', bg: 'bg-warning/10', icon: AlertTriangle },
+  incomplete: { label: 'Missing clock-out', color: 'text-warning', bg: 'bg-warning/10', icon: AlertTriangle },
   not_started: { label: 'Not in yet', color: 'text-muted-foreground', bg: 'bg-muted', icon: Clock },
   clocked_in: { label: 'In', color: 'text-success', bg: 'bg-success/10', icon: UserCheck },
   day_off: { label: 'Time off', color: 'text-primary', bg: 'bg-primary/10', icon: Coffee },
@@ -46,16 +47,17 @@ export function OrgSnapshotPanel({ openItemFor }: {
   if (!snapshots?.length) return null;
 
   // Group by bucket, names surname first like every roster in the office.
+  const nowMinutes = easternWallMinutes(new Date());
   const groups: Partial<Record<SnapshotBucket, EmployeeSnapshot[]>> = {};
   snapshots.forEach(s => {
-    const b = statusBucket(s);
+    const b = statusBucket(s, nowMinutes);
     (groups[b] ??= []).push(s);
   });
   for (const list of Object.values(groups)) {
     list.sort((a, b) => formatEmployeeNameLastFirst(a.display_name).localeCompare(formatEmployeeNameLastFirst(b.display_name)));
   }
 
-  const counts = snapshotCounts(snapshots);
+  const counts = snapshotCounts(snapshots, nowMinutes);
   const quietTotal = QUIET_ORDER.reduce((n, b) => n + (groups[b]?.length ?? 0), 0);
 
   const renderGroup = (bucket: SnapshotBucket) => {

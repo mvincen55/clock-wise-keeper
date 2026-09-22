@@ -272,7 +272,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
       const myOpenReports = myReports.filter(r => r.status === 'awaiting_member');
       const mineAll: Signal[] = [
         { id: 'acks', label: 'Policies to sign', detail: 'Signing means you read that exact version.', value: String(myOpenAcks.length), href: '/playbook', tone: 'attention' },
-        { id: 'missing', label: 'Missing time of my own, last 14 days', detail: 'Scheduled days with no punches.', value: String(missingDays.length), href: '/timesheet', tone: 'attention' },
+        { id: 'missing', label: 'My absences to explain, last 14 days', detail: 'Scheduled days with no time recorded.', value: String(missingDays.length), href: '/timesheet', tone: 'attention' },
         { id: 'bypasses', label: 'Bypass reasons I owe', detail: 'Never blocks you — just needs a sentence.', value: String(bypasses.length), href: '/checklists', tone: 'attention' },
         { id: 'records', label: 'Records awaiting my response', detail: 'You always get to add your side.', value: String(myOpenReports.length), href: '/', tone: 'urgent' },
       ];
@@ -364,7 +364,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
                 }
               : missingDays.length > 0
                 ? {
-                    title: 'Explain a missing day',
+                    title: 'Explain an absence',
                     detail: `${missingDays.length} scheduled day${missingDays.length === 1 ? '' : 's'} with no time recorded.`,
                     href: '/timesheet',
                     cta: 'Review time',
@@ -398,8 +398,8 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
       },
       {
         id: 'missing',
-        label: 'Missing time, last 14 days',
-        detail: 'Scheduled days with no punches.',
+        label: 'Absences to explain, last 14 days',
+        detail: 'Scheduled days with no time recorded.',
         value: String(missingDays.length),
         href: '/timesheet',
         tone: 'attention',

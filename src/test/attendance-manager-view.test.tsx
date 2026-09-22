@@ -15,6 +15,8 @@ import type { AttendanceDayStatusRow } from '@/hooks/useAttendanceDayStatus';
 
 const state = vi.hoisted(() => ({
   role: 'manager' as string,
+  /** The day-status rows the page reads; a test may add days. */
+  rows: null as unknown[] | null,
   /** How Rick's Monday absence was recorded. */
   rickAbsence: 'scheduled_with_notice' as string,
   recompute: vi.fn().mockResolvedValue(3),
@@ -57,8 +59,14 @@ vi.mock('@/hooks/useStaffCodes', () => ({
     { employeeId: 'emp-rick', userId: 'rick-login', displayName: 'Roe, Rick', code: 'RR02', employmentStatus: 'active', membershipStatus: 'active', kind: 'active', isActiveActor: true },
   ] }),
 }));
+// The office clock the day rule reads: Tuesday Sep 22 at 10:00 AM.
+vi.mock('@/lib/time-utils', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/lib/time-utils')>()),
+  getToday: () => '2026-09-22',
+  easternWallMinutes: () => 10 * 60,
+}));
 vi.mock('@/hooks/useAttendanceDayStatus', () => ({
-  useAttendanceDayStatus: () => ({ data: rows, isLoading: false }),
+  useAttendanceDayStatus: () => ({ data: state.rows ?? rows, isLoading: false }),
   useRecomputeAttendance: () => ({ mutateAsync: state.recompute, mutate: vi.fn(), isPending: false }),
 }));
 vi.mock('@/hooks/useDaysOff', () => ({
@@ -104,7 +112,7 @@ function mount(path = '/management/attendance') {
 }
 const counter = (label: string) => screen.getByText(label, { selector: 'p.text-xs' }).parentElement!;
 
-afterEach(() => { cleanup(); state.role = 'manager'; state.rickAbsence = 'scheduled_with_notice'; state.recompute.mockClear(); state.toast.mockClear(); });
+afterEach(() => { cleanup(); state.role = 'manager'; state.rickAbsence = 'scheduled_with_notice'; state.rows = null; state.recompute.mockClear(); state.toast.mockClear(); });
 
 describe('Team Attendance (Management)', () => {
   it('names every row and explains an absence only with that person’s own day off', () => {
@@ -114,14 +122,14 @@ describe('Team Attendance (Management)', () => {
     // Rick's day off covers Rick's Monday; Jane's Monday is still missing.
     expect(counter('Absent')).toHaveTextContent('1Absent');
     expect(counter('Time off')).toHaveTextContent('1Time off');
-    expect(screen.getByRole('tab', { name: /Missing Shifts/ })).toHaveTextContent('1');
+    expect(screen.getByRole('tab', { name: /Absences/ })).toHaveTextContent('1');
     // Rick's day reads as what it is, not as an absence.
     const rickRow = screen.getByRole('button', { name: 'Roe, Rick' }).closest('tr')!;
     expect(within(rickRow).getByText('Time off')).toBeInTheDocument();
     expect(within(rickRow).queryByText('Absent')).toBeNull();
   });
 
-  it('a callout is an absence with a reason — counted absent, listed as a missing shift, today or in the future', () => {
+  it('a callout is an absence with a reason — counted absent, listed as an absence, today or in the future', () => {
     state.rickAbsence = 'unscheduled';
     mount();
     const rickRow = screen.getByRole('button', { name: 'Roe, Rick' }).closest('tr')!;
@@ -129,7 +137,37 @@ describe('Team Attendance (Management)', () => {
     expect(within(rickRow).queryByText(/Time off|Day Off/)).toBeNull();
     expect(counter('Absent')).toHaveTextContent('2Absent');
     expect(counter('Time off')).toHaveTextContent('0Time off');
-    expect(screen.getByRole('tab', { name: /Missing Shifts/ })).toHaveTextContent('2');
+    expect(screen.getByRole('tab', { name: /Absences/ })).toHaveTextContent('2');
+  });
+
+  it('a day that has not ended is never absent: ahead reads Scheduled, today reads Not in yet, and neither is counted', () => {
+    state.rows = [
+      ...rows,
+      // The engine flags a scheduled day the moment it has no punches, Friday included.
+      day({ id: 'rick-0925', user_id: 'rick-login', employee_id: 'emp-rick', entry_date: '2026-09-25', is_absent: true, status_code: 'absent' }),
+      // Rick today at 10:00 AM: his 8:25 shift has started and has not ended.
+      day({ id: 'rick-0922', user_id: 'rick-login', employee_id: 'emp-rick', entry_date: '2026-09-22', is_absent: true, status_code: 'absent' }),
+    ];
+    mount();
+    const rick = screen.getAllByRole('button', { name: 'Roe, Rick' }).map(b => b.closest('tr')!);
+    const byDate = (d: string) => rick.find(r => r.textContent!.includes(d))!;
+    expect(within(byDate('Sep 25, 2026')).getByText('Scheduled')).toBeInTheDocument();
+    expect(within(byDate('Sep 22, 2026')).getByText('Not in yet')).toBeInTheDocument();
+    expect(screen.queryAllByText('Absent', { selector: 'span' }).map(el => el.closest('tr')!.textContent)).toEqual(
+      expect.arrayContaining([expect.stringContaining('Sep 21, 2026')]),
+    );
+    expect(screen.queryAllByText('Absent', { selector: 'span' })).toHaveLength(1);
+    // Only Jane's Monday counts; the days ahead do not.
+    expect(counter('Absent')).toHaveTextContent('1Absent');
+    expect(screen.getByRole('tab', { name: /Absences/ })).toHaveTextContent('1');
+  });
+
+  it('an open punch pair today is In, not a missing clock-out, until the day ends', () => {
+    mount();
+    // Jane at 10:00 AM with an open pair since 8:50: clocked in.
+    const jane = screen.getAllByRole('button', { name: 'Doe, Jane' }).map(b => b.closest('tr')!).find(r => r.textContent!.includes('Sep 22, 2026'))!;
+    expect(within(jane).getByText('In')).toBeInTheDocument();
+    expect(counter('Missing clock-out')).toHaveTextContent('0Missing clock-out');
   });
 
   it('has no calendar of its own — the office calendar is its own page', () => {
@@ -161,7 +199,7 @@ describe('Team Attendance (Management)', () => {
     expect(screen.queryByRole('button', { name: 'Doe, Jane' })).toBeNull();
     expect(screen.getByRole('button', { name: 'actions Roe, Rick edit 2026-09-21' })).toBeInTheDocument();
     expect(counter('Absent')).toHaveTextContent('0Absent');
-    expect(screen.getByRole('tab', { name: /Missing Shifts/ })).not.toHaveTextContent('1');
+    expect(screen.getByRole('tab', { name: /Absences/ })).not.toHaveTextContent('1');
     fireEvent.click(screen.getByRole('button', { name: 'Show everyone' }));
     expect(screen.getAllByRole('button', { name: 'Doe, Jane' })).toHaveLength(2);
   });
@@ -178,7 +216,7 @@ describe('Team Attendance (Management)', () => {
 
   it('the tardy review says whose tardy it is', async () => {
     mount();
-    fireEvent.click(screen.getByRole('button', { name: '1 Unreviewed Tardies' }));
+    fireEvent.click(screen.getByRole('button', { name: '1 Unreviewed tardy' }));
     const tardyRow = (await screen.findByText('Review')).closest('tr')!;
     expect(within(tardyRow).getByText('Doe, Jane')).toBeInTheDocument();
     fireEvent.click(within(tardyRow).getByText('Review'));
@@ -206,7 +244,7 @@ describe('Workplace → Attendance for a manager', () => {
   it('is their own attendance, with their tools, and points at Team Attendance', () => {
     mount('/days-off');
     expect(screen.getByRole('heading', { name: 'Attendance' })).toBeInTheDocument();
-    expect(screen.getByText('Your days off, tardies, missing shifts, and closures')).toBeInTheDocument();
+    expect(screen.getByText('Your days off, tardies, absences, and closures')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'actions Roe, Rick edit 2026-09-21' })).toBeNull();
     expect(screen.getAllByRole('button', { name: /^actions Doe, Jane edit/ })).toHaveLength(2);
     expect(screen.queryByText('Team member')).toBeNull();
@@ -238,12 +276,15 @@ describe('Workplace → Attendance for a manager', () => {
 describe('Team Attendance — sorting', () => {
   const dataRows = () => screen.getAllByRole('row').filter(r => /Sep \d+, 2026/.test(r.textContent || ''));
 
-  it('Needs attention puts the missed days first', () => {
+  it('Needs attention puts the missed days first, and an explained day off last', () => {
     mount();
     const rows = dataRows();
     expect(rows[0]).toHaveTextContent('Mon, Sep 21, 2026');
     expect(rows[0]).toHaveTextContent('Absent');
-    expect(rows[2]).toHaveTextContent('Tue, Sep 22, 2026');
+    // Jane's late Tuesday outranks Rick's Monday, which his time off explains.
+    expect(rows[1]).toHaveTextContent('Tue, Sep 22, 2026');
+    expect(rows[2]).toHaveTextContent('Roe, Rick');
+    expect(rows[2]).toHaveTextContent('Time off');
   });
 
   it('By date is newest first', () => {

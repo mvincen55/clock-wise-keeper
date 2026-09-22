@@ -26,6 +26,8 @@ import ChecklistBypassesSection from '@/components/ChecklistBypassesSection';
 import { OrgSnapshotPanel } from '@/components/OrgSnapshotPanel';
 import { filterAndSortEmployees } from '@/lib/employee-name';
 import { getToday, shiftDate } from '@/lib/time-utils';
+import { isAbsence } from '@/lib/attendance-day';
+import { useDayClock } from '@/hooks/useDayClock';
 
 /**
  * Management → People (design §3.4, §7.3): who is here, who is missing, who
@@ -73,6 +75,7 @@ function EveryoneView() {
   const { data: employees, isLoading } = useOrgEmployees();
   const [dateRange, setDateRange] = useState(() => ({ start: shiftDate(getToday(), -29), end: getToday() }));
   const { data: attendance } = useEmployeeAttendanceSummary(dateRange);
+  const clock = useDayClock();
   const addEmployee = useAddEmployee();
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({ first_name: '', middle_initial: '', last_name: '', email: '' });
@@ -97,12 +100,12 @@ function EveryoneView() {
     for (const row of [...attendance, ...(derivedAttendance || [])]) {
       const s = stats[row.employee_id];
       if (!s) continue;
-      if (row.is_absent) s.absent++;
+      if (isAbsence(row, [], clock)) s.absent++;
       else if (row.is_late) s.late++;
       else if (row.has_punches) s.present++;
     }
     return stats;
-  }, [attendance, derivedAttendance, employees]);
+  }, [attendance, derivedAttendance, employees, clock]);
 
   const filteredEmployees = useMemo(() => filterAndSortEmployees(employees ?? [], search), [employees, search]);
 

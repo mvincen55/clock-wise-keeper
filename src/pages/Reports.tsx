@@ -256,8 +256,12 @@ export default function Reports() {
   const totalMinutes = entries?.reduce((sum, e) => sum + (e.total_minutes || 0), 0) || 0;
   const adjustmentTotalMinutes = adjustmentRows.reduce((sum, a) => sum + adjustmentMinutes(a.hours_delta), 0);
   const payrollMinutes = totalMinutes + adjustmentTotalMinutes;
+  // A tardy belongs to one person on one day. Keyed by date alone, one
+  // person's late arrival was stamped on everyone's row for that date.
+  const tardyKey = (employeeId: string | null | undefined, date: string) => `${employeeId ?? ''}|${date}`;
   const tardyMap = new Map<string, TardyRow>();
-  (tardies || []).forEach(t => tardyMap.set(t.entry_date, t));
+  (tardies || []).forEach(t => tardyMap.set(tardyKey(t.employee_id, t.entry_date), t));
+  const tardyFor = (e: TimeEntryRow) => tardyMap.get(tardyKey(e.employee_id, e.entry_date));
 
   const activeTardies = (tardies || []).filter(t => !t.resolved);
   const trackedTardies = activeTardies.filter(t => t.approval_status !== 'approved');
@@ -362,7 +366,7 @@ export default function Reports() {
           return { kind: 'adjustment' as const, date: item.date, hoursDelta: item.adjustment.hours_delta, reason: item.adjustment.reason };
         }
         const e = item.entry;
-        const tardy = tardyMap.get(e.entry_date);
+        const tardy = tardyFor(e);
         return {
           kind: 'day' as const,
           date: e.entry_date,
@@ -490,7 +494,7 @@ export default function Reports() {
       const csvItems: { label: string; date: string; cells: string[] }[] = (entries || []).map(e => {
         const firstIn = e.punches.find(p => p.punch_type === 'in');
         const lastOut = [...e.punches].reverse().find(p => p.punch_type === 'out');
-        const tardy = tardyMap.get(e.entry_date);
+        const tardy = tardyFor(e);
         const hasEdits = e.punches.some(p => p.is_edited);
         const weekly = weeklyFor(e);
         return { label: employeeName(e.employee_id), date: e.entry_date, cells: [
@@ -628,7 +632,7 @@ export default function Reports() {
   );
 
   const renderTimesheetRow = (e: TimeEntryRow) => {
-    const tardy = tardyMap.get(e.entry_date);
+    const tardy = tardyFor(e);
     const hasEdits = e.punches.some(p => p.is_edited);
     const entryAudit = auditByEntry.get(e.id) || [];
     const isExpanded = expandedAudit.has(e.id);
@@ -1000,7 +1004,7 @@ export default function Reports() {
                   <div className="grid grid-cols-3 gap-0 border-b divide-x">
                     <div className="p-4 text-center">
                       <p className="text-2xl font-bold text-warning">{(exceptions || []).filter(e => e.type === 'missing_shift').length}</p>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Missing Shifts</p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Absences</p>
                     </div>
                     <div className="p-4 text-center">
                       <p className="text-2xl font-bold text-destructive">{activeTardies.length}</p>
@@ -1015,7 +1019,7 @@ export default function Reports() {
                   {(exceptions || []).filter(e => e.type === 'missing_shift').length > 0 && (
                     <div className="border-b">
                       <div className="px-4 py-2 bg-muted/40">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Missing Shifts</h3>
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Absences</h3>
                       </div>
                       <div className="divide-y">
                         {(exceptions || []).filter(e => e.type === 'missing_shift').map(e => (

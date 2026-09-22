@@ -120,7 +120,7 @@ export function useEmployeeAttendanceSummary(dateRange: { start: string; end: st
     queryFn: async () => {
       const { data, error } = await supabase
         .from('attendance_day_status')
-        .select('employee_id, entry_date, status_code, is_late, is_absent, minutes_late, has_punches')
+        .select('employee_id, entry_date, status_code, is_late, is_absent, minutes_late, has_punches, is_incomplete, has_day_off, office_closed, is_scheduled_day, schedule_expected_start, schedule_expected_end')
         .eq('org_id', ctx!.org_id)
         .gte('entry_date', dateRange.start)
         .lte('entry_date', dateRange.end);
