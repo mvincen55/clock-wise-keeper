@@ -326,6 +326,18 @@ export interface ProviderDayMetrics {
   automatedWorkloadClass: WorkloadClass | null;
   confidence: number; // 0–1
   reviewStatus: ReviewStatus;
+
+  /**
+   * The provider's observed day on the grid, minutes from midnight office
+   * time: when the first patient was seated and the last patient left, and
+   * the visible availability window (booked or open). Null when nothing of
+   * the kind was visible. Captures accumulate these so the office's real
+   * hours can be learned instead of asked for.
+   */
+  firstPatientMinute?: number | null;
+  lastPatientMinute?: number | null;
+  availableStartMinute?: number | null;
+  availableEndMinute?: number | null;
 }
 
 /** Practice- and department-level rollups, derived from provider metrics. */
@@ -368,6 +380,8 @@ export interface ScheduleAnalysis {
    */
   providerRows: Record<string, ReducedRow[]>;
   minutesPerRow: number;
+  /** Minutes from midnight of the first grid row, so rows can be rebuilt with their clock times. */
+  dayStartMinutes?: number;
   /** Set when any provider is below the confidence threshold. */
   needsReview: boolean;
 }

@@ -226,6 +226,7 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
           businessDate: p.businessDate,
           rows,
           minutesPerRow: prev.minutesPerRow,
+          dayStartMinutes: prev.dayStartMinutes,
           activeColumns: p.activeColumns,
           blocks: mine,
           supportStaffAssigned: p.supportStaffAssigned,

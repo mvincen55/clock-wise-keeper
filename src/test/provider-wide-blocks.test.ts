@@ -101,9 +101,14 @@ describe('a posted day with the provider out', () => {
   });
 
   it('a pale-tinted second chair reads as open, not unclassified', async () => {
-    const [dr] = (await analyze(['Do', 'NOT', 'Book'], PALE)).providers;
+    const result = await analyze(['Do', 'NOT', 'Book'], PALE);
+    const [dr] = result.providers;
     expect(dr.trueOpenMinutes).toBe(60);
     expect(dr.unclassifiedMinutes).toBe(0);
     expect(dr.reviewStatus).toBe('auto_accepted');
+    // The observed day rides along: open from the first row (8:00) to the
+    // last (9:20), no patient seated, so hours can be learned from it later.
+    expect(result.dayStartMinutes).toBe(480);
+    expect(dr).toMatchObject({ firstPatientMinute: null, lastPatientMinute: null, availableStartMinute: 480, availableEndMinute: 560 });
   });
 });
