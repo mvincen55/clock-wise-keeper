@@ -5,3 +5,4 @@ export * from './readiness';
 export * from './derive';
 export * from './period';
 export * from './compose';
+export * from './labels';

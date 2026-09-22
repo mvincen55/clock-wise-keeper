@@ -1,13 +1,10 @@
-import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import AddToMyListButton from '@/components/copilot/AddToMyListButton';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { ArrowUpRight, Check, Inbox, Loader2, X } from 'lucide-react';
-import { useOfficeNudges, useResolveNudge, type OfficeNudge } from '@/hooks/useOfficeNudges';
+import { ArrowUpRight, Check, X } from 'lucide-react';
+import { useResolveNudge, type OfficeNudge } from '@/hooks/useOfficeNudges';
 import {
   humanizeKey,
   humanizeText,
@@ -17,6 +14,12 @@ import {
 } from '@/lib/nudge-display';
 import { formatDate } from '@/lib/time-utils';
 
+/**
+ * One nudge: a quiet note from the office assistant, the recorded data it
+ * was built from, the record it points at, and the member's verdict on it.
+ * Nudges render on the surface they concern (design §3.7); this card is the
+ * one way any surface shows them.
+ */
 const KIND_LABEL: Record<string, string> = {
   goal_task_due: 'Goal step due',
   training_due: 'Training due',
@@ -69,7 +72,7 @@ function onInteractive(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && !!target.closest('button, a, input, label');
 }
 
-function NudgeCard({ nudge }: { nudge: OfficeNudge }) {
+export default function NudgeCard({ nudge }: { nudge: OfficeNudge }) {
   const resolve = useResolveNudge();
   const navigate = useNavigate();
   const resolved = nudge.status === 'acted_on' || nudge.status === 'dismissed';
@@ -138,56 +141,5 @@ function NudgeCard({ nudge }: { nudge: OfficeNudge }) {
 
       </CardContent>
     </Card>
-  );
-}
-
-export default function OfficeNudgesPage() {
-  const [showResolved, setShowResolved] = useState(false);
-  const { data: nudges, isLoading } = useOfficeNudges(showResolved);
-
-  return (
-    <div className="mx-auto max-w-3xl space-y-5">
-        <header className="space-y-1">
-          <h1 className="flex items-center gap-2 text-2xl font-semibold">
-            <Inbox className="h-5 w-5 text-primary" />
-            Nudge inbox
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Quiet notes from the office assistant, each one showing the recorded data behind it.
-            Click a note to open the record it points at. Nothing here reads your messages —
-            only your own work records.
-          </p>
-        </header>
-
-        <div className="flex items-center gap-2">
-          <Switch id="show-resolved" checked={showResolved} onCheckedChange={setShowResolved} />
-          <Label htmlFor="show-resolved" className="text-sm text-muted-foreground">
-            Include handled notes
-          </Label>
-        </div>
-
-        {isLoading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
-        ) : !nudges?.length ? (
-          <Card className="card-elevated">
-            <CardHeader>
-              <CardTitle className="text-base">Nothing waiting</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                The assistant stays quiet when there's nothing worth saying. Check back later.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {nudges.map(n => (
-              <NudgeCard key={n.id} nudge={n} />
-            ))}
-          </div>
-        )}
-    </div>
   );
 }

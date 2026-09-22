@@ -31,6 +31,8 @@ import SetGoalCard from '@/components/goals/SetGoalCard';
 import GoalsAnalytics from '@/components/goals/GoalsAnalytics';
 import GoalsCsvImport from '@/components/goals/GoalsCsvImport';
 import TeamGoalCard from '@/components/goals/TeamGoalCard';
+import TodayFocusCard from '@/components/copilot/TodayFocusCard';
+import RescopeCard from '@/components/copilot/RescopeCard';
 import GoalsPrintSheet, { type GoalsReportRow } from '@/components/goals/GoalsPrintSheet';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
 import { useOrgBranding } from '@/hooks/useOrgBranding';
@@ -289,6 +291,15 @@ export default function Goals() {
             setPendingReplacement(null);
           }}
         />
+      )}
+
+      {/* Today Focus and Rescope: members keep them on Home (My work); the
+          manager and owner Home is a briefing, so they live with the goals. */}
+      {isManager && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <TodayFocusCard />
+          <RescopeCard />
+        </div>
       )}
 
       {myGoals.length > 0 && (

@@ -123,7 +123,7 @@ describe('notification routing — every current type has a destination', () => 
       .toBe('/checklists');
   });
 
-  it('routes sprint updates to the dashboard sprint card', () => {
+  it('routes sprint updates to the sprint card: Home for members, Office for admins', () => {
     for (const type of [
       'ai_sprint_verify',
       'ai_sprint_announced',
@@ -132,7 +132,8 @@ describe('notification routing — every current type has a destination', () => 
       'ai_sprint_pending_verification',
       'ai_sprint_progress',
     ]) {
-      expect(resolveNotificationDestination(n(type, 'team_goals', 'tg-1'), asManager).to).toBe('/?sprint=tg-1');
+      expect(resolveNotificationDestination(n(type, 'team_goals', 'tg-1'), asEmployee).to).toBe('/?sprint=tg-1');
+      expect(resolveNotificationDestination(n(type, 'team_goals', 'tg-1'), asManager).to).toBe('/management/office?sprint=tg-1');
     }
   });
 
@@ -167,9 +168,9 @@ describe('notification routing — legacy and missing metadata', () => {
     expect(dest.fallback).toBe(true);
   });
 
-  it('routes an unknown AI type to the nudge inbox', () => {
+  it('routes an unknown AI type to Home, where its nudge renders', () => {
     const dest = resolveNotificationDestination(n('ai_shiny_new_thing', null, null), asEmployee);
-    expect(dest.to).toBe('/inbox/nudges');
+    expect(dest.to).toBe('/');
     expect(dest.fallback).toBe(true);
   });
 

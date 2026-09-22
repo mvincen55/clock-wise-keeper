@@ -114,12 +114,15 @@ describe('owner attention', () => {
     expect(screen.getByText('$8,150')).toBeInTheDocument();
   });
 
-  it('decisions route to their existing surfaces', () => {
+  it('decisions are the first Attention items, each opening its exact item', () => {
     renderView(<OwnerDashboard view={ownerFixture} />);
-    expect(screen.getByText('Approvals pending').closest('a')).toHaveAttribute('href', '/management?kind=decide');
-    expect(
-      screen.getByText('Accountability records at owner review').closest('a'),
-    ).toHaveAttribute('href', '/management');
+    expect(screen.getByText('Needs you')).toBeInTheDocument();
+    expect(screen.getByText('Priya S. · Record awaiting your sign-off · attendance').closest('a'))
+      .toHaveAttribute('href', '/management?item=record_signoff:r1');
+    expect(screen.getByText('Sterilization log · version 4 in review').closest('a'))
+      .toHaveAttribute('href', '/management?item=content_review:v4');
+    expect(screen.getByRole('link', { name: /^Attention$/ })).toHaveAttribute('href', '/management');
+    expect(screen.getByText('5 now')).toBeInTheDocument();
   });
 });
 

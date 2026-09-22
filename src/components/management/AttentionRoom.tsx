@@ -5,7 +5,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useAttentionItems } from '@/hooks/useAttentionItems';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { formatDate } from '@/lib/time-utils';
-import type { AttentionItem, AttentionVerb } from '@/lib/attention';
+import { ageLabel, type AttentionItem, type AttentionVerb } from '@/lib/attention';
 import AttentionPanel, { type DoneRecord } from './AttentionPanel';
 import ReversalButton from './ReversalButton';
 
@@ -20,15 +20,6 @@ const VERB_LABEL: Record<AttentionVerb, string> = { decide: 'Decide', fix: 'Fix'
 const FILTERS: { id: 'all' | AttentionVerb; label: string }[] = [
   { id: 'all', label: 'All' }, { id: 'decide', label: 'Decide' }, { id: 'fix', label: 'Fix' }, { id: 'follow_up', label: 'Follow up' },
 ];
-
-function ageLabel(item: AttentionItem): string {
-  if (item.deadline) return item.deadline.days === 0 ? item.deadline.label : `${item.deadline.label} · ${item.deadline.days}d`;
-  const h = item.ageHours;
-  if (h === null) return '';
-  if (h < 1) return 'now';
-  if (h < 24) return `${Math.round(h)}h`;
-  return `${Math.round(h / 24)}d`;
-}
 
 function Dot({ item }: { item: AttentionItem }) {
   const tone = item.coverage ? 'bg-destructive' : item.deadline && item.deadline.days <= 1 ? 'bg-warning' : item.verb === 'follow_up' ? 'bg-muted-foreground/50' : 'bg-primary';

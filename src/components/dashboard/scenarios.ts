@@ -52,16 +52,18 @@ const MEMBER_SOURCES: [string, string][] = [
 ];
 
 const MANAGER_SOURCES: [string, string][] = [
-  ...PULSE_SOURCES,
-  ['What needs your hands', 'manager-pulse.ts buildInterventionQueue — fixed consequence order'],
-  ['Close the Day status', 'useDepositLog(today) → closeDayStatus (pure)'],
-  ['Staffing', 'useOrgAttendanceSnapshot + staffing.ts (owners excluded; phase-aware)'],
-  ['Approvals / reviews / training', 'useApprovalCounts, useAccountability, useTraining'],
+  ['The sentence, Needs you, Today, status lines, spotlight', 'home-brief.ts buildHomeBrief — pure, from the sources below'],
+  ['Needs you (top three, "n more")', 'useAttentionItems → attention/deriveAttention — consequence order, one navigation action per row'],
+  ['Today exceptions + count line', 'useOrgAttendanceSnapshot + staffing.ts (owners excluded; phase-aware)'],
+  ['Last closeout line', 'useRecentDepositLogs(14) + closeDayStatus (pure)'],
+  ['Pace line + Why? figures', 'metric-pace.ts — each metric vs ONLY its own org-configured goal'],
+  ['Inbox line (wrap-up)', 'useMessagesCloseout'],
+  ['Mine', 'useMyKnowledgeAcknowledgments, useMissingShifts, useChecklistBypasses, useMyAccountabilityReports'],
 ];
 
 const ADMIN_SOURCES: [string, string][] = [
   ['Office status + staffing', 'useOrgAttendanceSnapshot + staffing.ts (owners excluded; phase-aware)'],
-  ['Approvals', 'useApprovalCounts'],
+  ['Needs you', 'useAttentionItems → attention/deriveAttention (top three, one navigation action each)'],
   ['Attendance to review', 'staffing.ts attendanceReview — only facts already true'],
   ['Acknowledgments', 'useKnowledgeAcknowledgments'],
   ['Training', 'useTrainingAssignments'],
@@ -122,7 +124,7 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     slug: 'manager-closed',
-    title: 'Manager — after close, closeout saved but unsealed',
+    title: 'Manager — after close: one person still in, closeout unsealed',
     tier: 'Manager',
     primary: 'Office manager',
     secondary: 'None',
@@ -130,12 +132,12 @@ export const SCENARIOS: Scenario[] = [
     sources: MANAGER_SOURCES,
     omitted: [
       ...NO_CLINICAL,
-      'Live staffing — the workday is over; the staffing band collapses to a calm summary.',
+      'Live staffing — the workday is over; Today names who is still clocked in and nothing else.',
     ],
   },
   {
     slug: 'manager-off-pace',
-    title: 'Manager — collections materially behind pace',
+    title: 'Manager — collections behind pace, challenge off track',
     tier: 'Manager',
     primary: 'Office manager',
     secondary: 'None',

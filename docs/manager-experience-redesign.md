@@ -891,3 +891,58 @@ schedule projection, not a day-status read, and stays as it is.
 **Known gaps carried into Phase 3:** Home and mobile composition; the Nudges tab; the
 `close_day_unsealed` producer (a scheduled function); an "explain this day" answer that lands
 on the item (today the answer arrives as a message).
+
+### Phase 3 — Home, mobile, and presentation
+
+**Landed**
+
+- Manager Home is the briefing (§3.3). `src/lib/home-brief.ts` builds it as a pure
+  function of the Attention result, the staffing summary, the recent closeouts, the pace
+  lines, the challenge, the payroll deadline, and the messages-closeout state: one sentence
+  of state with every fact linked; **Needs you** as the first three Attention items in
+  consequence order with one navigation action each (Review for a decision, Open otherwise)
+  and *n more need you now · Open Attention*, plus *n waiting on others · n parked*;
+  **Today** as exceptions only (an exception opens the person's attendance item when one
+  exists, else their record in People) and one count line, never a roster, and a roster
+  still loading is said rather than read as an empty office; two **status lines**, the last
+  closeout (or today's after close) and pace in one clause with its day scope and a *Why?*
+  that discloses the three figures; **Spotlight** only when the challenge needs a decision,
+  is off track, has finished, or ends within three days; **Mine** only when non-empty; after
+  close, **Before you leave** lists who is still clocked in, the closeout step, the Inbox
+  line, then what carries into tomorrow. Home renders no form and no consequential action
+  (`manager-home.test.tsx` pins zero buttons and forms on the page). Owner Home's "Owner
+  attention" band reads the same top three items as **Needs you**. `ManagerView` is now the
+  header, the role context, the lanes, the office state, the brief, and Mine; the design
+  fixtures build it through the same functions.
+- Everything else that sat on the old manager Home moved to its owner: fact tiles and
+  performance cards to Office → Practice performance; the sprint card to Office → Goals &
+  challenges (`?sprint=` deep links land there for owners and managers; members keep the
+  card on Home); the notes board to Workplace and Today Focus and Rescope to Goals, both for
+  owners and managers only, since members keep theirs on Home; the doctor board already lived
+  in Inbox. The manager's own accountability record is the one card left below the briefing,
+  and it renders only while one is open. `manager-pulse.ts` keeps `closeDayStatus` alone;
+  `useApprovalCounts` is gone.
+- Mobile (§3.2): the bottom navigation is role-shaped, Home · Workplace · Playbook · Inbox
+  and, for owners and managers, **Manage** with the Attention badge; the More sheet is gone
+  and the account menu (settings, help, report a problem, privacy lock, sign-out, privacy &
+  terms) sits under the avatar in both headers. Insurance Benefits is a Playbook door again,
+  route unchanged. Attention's bottom sheets landed with Phase 2.
+- Nudges leave Inbox (§3.7). `NudgeCard` and `HomeNudges` render the person's open Home
+  nudges on Home for every role (the sprint idea stays on the sprint card, the close-day
+  insight on Close the Day); `useOfficeNudges` reads the person's own and office-wide notes
+  only, whatever the row policy allows an admin; the Inbox tab, `/inbox/nudges`, and
+  `/nudges` land on Home; an unregistered `ai_*` notice routes to Home; sprint notices route
+  members to Home and admins to Office.
+- `src/lib/attention/labels.ts` holds the row labels Attention and Home share (age or
+  deadline, tone, the navigation verb), so the same item never reads two ways.
+
+**Departures, and why:** the design's sentence and Today line both carried "n in"; the
+sentence now says *n of s in* and the count line keeps *n in · Sam K. at 1:00 PM*, so each
+number reads once per meaning. An exception with no attendance item opens the person's record
+in People rather than nothing, because the row rule is one navigation action per row. The
+brand-new office shows no challenge prompt on Home; Office → Goals & challenges owns that
+state.
+
+**Known gaps carried forward:** the `close_day_unsealed` producer (a scheduled function); an
+"explain this day" answer that lands on the item; the member Home, which was out of scope,
+still carries its own cards.

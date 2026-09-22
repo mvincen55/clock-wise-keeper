@@ -18,7 +18,7 @@ import {
  *
  *   today's production/collected/new patients/missed             → hero
  *   the single recommendation                                    → What I'd look at
- *   approvals/reviews/acks/verifications                         → Owner attention
+ *   the first three Attention items                              → Needs you
  *   the primary sprint                                           → Office goal
  *   MTD production/collections/new-patient pace, missed, history → Month in progress
  *   live roster and real exceptions                              → Staffing
@@ -160,11 +160,12 @@ export default function OwnerDashboard({ view }: { view: OwnerView }) {
       <div className="mt-8 grid gap-8 [&>*]:min-w-0 lg:grid-cols-[1.35fr_1fr] lg:gap-10">
         {/* Left: decisions, the goal, and the month's detail. */}
         <div className="space-y-8">
-          {/* D — OWNER ATTENTION. Prominent when real, one calm line when clear. */}
+          {/* D — NEEDS YOU. The first three Attention items, one navigation
+              action each; prominent when real, one calm line when clear. */}
           <Band
-            title="Owner attention"
-            count={openDecisions.length > 0 ? `${decisionCount} waiting` : undefined}
-            action={{ label: 'Approvals', to: '/management?kind=decide' }}
+            title="Needs you"
+            count={openDecisions.length > 0 ? `${decisionCount} now` : undefined}
+            action={{ label: 'Attention', to: '/management' }}
           >
             {openDecisions.length === 0 ? (
               <EmptyState

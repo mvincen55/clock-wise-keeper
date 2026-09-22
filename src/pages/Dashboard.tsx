@@ -6,13 +6,12 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import { useConsumedSearchParam } from '@/hooks/useDeepLink';
 import TodayFocusCard from '@/components/copilot/TodayFocusCard';
 import MessagesCloseoutCard from '@/components/MessagesCloseoutCard';
-import DoctorBoardCard from '@/components/board/DoctorBoardCard';
-import RescopeCard from '@/components/copilot/RescopeCard';
 import SprintCard from '@/components/SprintCard';
 import MyMomentumCard from '@/components/MyMomentumCard';
 import MyAccountabilityCard from '@/components/accountability/MyAccountabilityCard';
 import UserNotesBoard from '@/components/UserNotesBoard';
 import FirstGoalTaskCard from '@/components/goals/FirstGoalTaskCard';
+import HomeNudges from '@/components/nudges/HomeNudges';
 import OwnerDashboard from '@/components/dashboard/OwnerDashboard';
 import ManagerDashboard from '@/components/dashboard/ManagerDashboard';
 import MemberDashboard from '@/components/dashboard/MemberDashboard';
@@ -27,6 +26,12 @@ import { MicroLabel } from '@/components/dashboard/kit';
  * interactive surfaces that tier actually works, under a named section — never
  * a generic "Detail" dump of every card, and never a second copy of something
  * the command center already answered.
+ *
+ * The manager's Home is a briefing (design §3.3): the doctor board, Today
+ * Focus, Rescope, the sprint card, and the notes board live with their owners
+ * now (Playbook, Office → Goals & challenges, Workplace). Only the record
+ * that can be signed nowhere else — the manager's own accountability record —
+ * still renders here, and only when one exists.
  *
  * Deep links (`?record=`, `?sprint=`) still land on their card: if a tier does
  * not normally show that card, the link forces it in and scrolls to it.
@@ -95,48 +100,24 @@ export default function Home() {
       <div className="mx-auto mt-8 w-full max-w-[1400px] space-y-8 px-4 sm:px-6 md:px-8">
         {!isOwner && missingDays.length > 0 && <MissingShiftBanner missingDays={missingDays} />}
 
-        {/* OWNER — decisions and records only. No clock, no momentum, no
-            manager task queue: those belong to the people doing the work. */}
+        {/* Nudges render on the surface they concern (design §3.7): the ones
+            aimed at Home land here, for everyone, and only when there are any. */}
+        <HomeNudges />
+
+        {/* OWNER — records only. The challenge lives in Office → Goals &
+            challenges; decisions are the Attention items above. */}
         {isOwner && (
-          <Section label="Records & decisions" hint="Sign-offs and sprints that need an owner.">
-            <div className="grid gap-4 lg:grid-cols-2">
-              <DeepLinked active={!!linkedRecordId}>
-                <MyAccountabilityCard highlightId={linkedRecordId} />
-              </DeepLinked>
-              <DeepLinked active={!!linkedSprintId}>
-                <SprintCard highlightId={linkedSprintId} />
-              </DeepLinked>
-            </div>
-          </Section>
+          <DeepLinked active={!!linkedRecordId}>
+            <MyAccountabilityCard highlightId={linkedRecordId} />
+          </DeepLinked>
         )}
 
-        {/* MANAGER — the floor in detail, then their own assigned work. */}
+        {/* MANAGER — the briefing above is the page. The one card left is the
+            manager's own record, which renders only while one is open. */}
         {isManager && (
-          <>
-            <Section label="The floor in detail" hint="Closeout, the doctor board, and today's scope.">
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="space-y-4">
-                  <MessagesCloseoutCard />
-                  <DoctorBoardCard />
-                </div>
-                <div className="space-y-4">
-                  <TodayFocusCard />
-                  <RescopeCard />
-                </div>
-              </div>
-            </Section>
-            <Section label="My own work" hint="What is assigned to you, not to the office.">
-              <div className="grid gap-4 lg:grid-cols-2">
-                <DeepLinked active={!!linkedSprintId}>
-                  <SprintCard highlightId={linkedSprintId} />
-                </DeepLinked>
-                <DeepLinked active={!!linkedRecordId}>
-                  <MyAccountabilityCard highlightId={linkedRecordId} />
-                </DeepLinked>
-                <UserNotesBoard />
-              </div>
-            </Section>
-          </>
+          <DeepLinked active={!!linkedRecordId}>
+            <MyAccountabilityCard highlightId={linkedRecordId} />
+          </DeepLinked>
         )}
 
         {/* TEAM MEMBER — own work only. No management surfaces. */}

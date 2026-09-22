@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import {
   Home, Briefcase, BookOpen, Inbox, Gauge, Mail, LogOut, Settings,
-  ShieldCheck, MoreHorizontal, ChevronLeft, ChevronRight, LifeBuoy,
+  ShieldCheck, ChevronLeft, ChevronRight, LifeBuoy,
   type LucideIcon,
 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
@@ -27,7 +27,6 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 
 interface Destination {
   to: string;
@@ -40,9 +39,11 @@ interface Destination {
   managerOnly?: boolean;
 }
 
-// The compact destination list (blueprint §4). Every feature keeps its
-// existing route; these are the doors, and the hub pages inside organize
-// the rooms. Feature paths listed in `match` keep their destination lit.
+// The five destinations (design §3.1). Every feature keeps its existing
+// route; these are the doors, and the hub pages inside organize the rooms.
+// Feature paths listed in `match` keep their destination lit. Insurance
+// Benefits is a Playbook door: it keeps its whole workspace and its route,
+// not a top-level slot.
 const DESTINATIONS: Destination[] = [
   { to: '/', icon: Home, label: 'Home', match: [] },
   {
@@ -53,19 +54,15 @@ const DESTINATIONS: Destination[] = [
   {
     to: '/playbook', icon: BookOpen, label: 'Practice Playbook', shortLabel: 'Playbook',
     match: ['/morning-huddle', '/checklists', '/deposit-log', '/incident-reports', '/fof',
-            '/account-balance', '/broken-appointments', '/consents',
-            '/important-numbers', '/assistant'],
-  },
-  {
-    to: '/insurance-desk', icon: ShieldCheck, label: 'Insurance Benefits', shortLabel: 'Benefits',
-    match: [],
+            '/account-balance', '/broken-appointments', '/consents', '/letters',
+            '/important-numbers', '/assistant', '/insurance-desk'],
   },
   {
     to: '/inbox', icon: Inbox, label: 'Inbox',
-    match: ['/messages', '/requests', '/nudges'],
+    match: ['/messages', '/requests'],
   },
   {
-    to: '/management', icon: Gauge, label: 'Management', managerOnly: true,
+    to: '/management', icon: Gauge, label: 'Management', shortLabel: 'Manage', managerOnly: true,
     match: ['/approvals', '/reports', '/report-history', '/team', '/acknowledgments', '/practice-setup'],
   },
 ];
@@ -130,7 +127,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { data: ctx } = useOrgContext();
   const { data: branding } = useOrgBranding();
   const [collapsed, setCollapsed] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   // Inbox counts communication from people (unread conversations). Nudges are
   // suggestions, not work owed, and never badge a destination.
   const { data: conversations } = useConversations();
@@ -180,6 +176,51 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   const userInitials = (user?.email ?? '?').slice(0, 2).toUpperCase();
 
+  /**
+   * The account menu: settings, help, privacy lock, sign-out. One component
+   * for both headers, so the phone never needs a "More" sheet (design §3.2).
+   */
+  const accountMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
+          aria-label="Account"
+        >
+          {userInitials}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="truncate text-xs font-normal text-muted-foreground">
+          {user?.email}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/settings"><Settings className="mr-2 h-4 w-4" />Settings</Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link to="/help"><LifeBuoy className="mr-2 h-4 w-4" />Help &amp; Support</Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => window.dispatchEvent(new CustomEvent('pe:open-support'))}>
+          <LifeBuoy className="mr-2 h-4 w-4" />Report a Problem
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={privacyLock} className="text-destructive focus:text-destructive">
+          <ShieldCheck className="mr-2 h-4 w-4" />Privacy Lock
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
+          <LogOut className="mr-2 h-4 w-4" />Log Out
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/privacy" className="text-xs text-muted-foreground">
+            <Mail className="mr-2 h-3 w-3 text-primary" />Powered by Purple Envelope · Privacy &amp; Terms
+          </Link>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   return (
     <TooltipProvider>
       <ClockProvider>
@@ -228,38 +269,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <GlobalTimeControl variant="header" />
               <SendMomentDialog />
               <NotificationBell />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
-                    aria-label="Account"
-                  >
-                    {userInitials}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel className="truncate text-xs font-normal text-muted-foreground">
-                    {user?.email}
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link to="/settings"><Settings className="mr-2 h-4 w-4" />Settings</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/help"><LifeBuoy className="mr-2 h-4 w-4" />Help &amp; Support</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={privacyLock} className="text-destructive focus:text-destructive">
-                    <ShieldCheck className="mr-2 h-4 w-4" />Privacy Lock
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
-                    <LogOut className="mr-2 h-4 w-4" />Log Out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {accountMenu}
             </header>
 
-            {/* Mobile top header: office identity, notifications, privacy lock. */}
+            {/* Mobile top header: office identity, notifications, and the
+                account menu under the avatar (settings, help, privacy lock,
+                sign-out). Privacy lock stays one tap away inside it. */}
             <header className="md:hidden flex items-center justify-between px-4 py-3 border-b bg-card sticky top-0 z-30">
               <Link to="/" className="flex items-center gap-2 min-w-0">
                 <OfficeMark name={officeName} logoUrl={branding?.logoUrl} size="sm" />
@@ -268,9 +283,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <div className="flex items-center gap-1 shrink-0">
                 <SendMomentDialog />
                 <NotificationBell />
-                <Button variant="ghost" size="icon" onClick={privacyLock} className="text-destructive" aria-label="Privacy lock">
-                  <ShieldCheck className="h-5 w-5" />
-                </Button>
+                {accountMenu}
               </div>
             </header>
 
@@ -286,92 +299,32 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           {/* Mobile sticky clock bar (above the bottom navigation). */}
           <GlobalTimeControl variant="bar" />
 
-          {/* Mobile bottom navigation. Safe-area padding keeps the
+          {/* Mobile bottom navigation, role-shaped (design §3.2): Home ·
+              Workplace · Playbook · Inbox, and Manage with the Attention
+              badge for owners and managers. Safe-area padding keeps the
               row clear of home indicators; nothing may float over it. */}
           <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 flex min-h-16 items-stretch border-t bg-card pb-[env(safe-area-inset-bottom)]">
-            {destinations
-              .filter(d => !d.managerOnly)
-              .map(dest => {
-                const active = isActive(dest);
-                const badge = badgeFor(dest);
-                return (
-                  <Link
-                    key={dest.to}
-                    to={dest.to}
-                    className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors ${
-                      active ? 'text-primary' : 'text-muted-foreground'
-                    }`}
-                  >
-                    <span className="relative">
-                      <dest.icon className="h-5 w-5" />
-                      <CountBadge count={badge} floating />
-                    </span>
-                    {dest.shortLabel ?? dest.label}
-                  </Link>
-                );
-              })}
-            <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
-              <SheetTrigger asChild>
-                <button className="flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-muted-foreground" aria-label="More">
+            {destinations.map(dest => {
+              const active = isActive(dest);
+              const badge = badgeFor(dest);
+              return (
+                <Link
+                  key={dest.to}
+                  to={dest.to}
+                  className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors ${
+                    active ? 'text-primary' : 'text-muted-foreground'
+                  }`}
+                >
                   <span className="relative">
-                    <MoreHorizontal className="h-5 w-5" />
-                    {isManager && <ManagementBadge floating />}
+                    <dest.icon className="h-5 w-5" />
+                    {dest.to === '/management' && isManager
+                      ? <ManagementBadge floating />
+                      : <CountBadge count={badge} floating />}
                   </span>
-                  More
-                </button>
-              </SheetTrigger>
-              <SheetContent side="bottom" className="rounded-t-2xl pb-8">
-                <SheetHeader className="text-left">
-                  <SheetTitle className="text-base">{officeName}</SheetTitle>
-                </SheetHeader>
-                <div className="mt-2 space-y-1">
-                  {isManager && (
-                    <Link
-                      to="/management"
-                      onClick={() => setMoreOpen(false)}
-                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted"
-                    >
-                      <Gauge className="h-4 w-4" />Management
-                      <ManagementBadge />
-                    </Link>
-                  )}
-                  <Link to="/settings" onClick={() => setMoreOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted">
-                    <Settings className="h-4 w-4" />Settings
-                  </Link>
-                  <Link to="/help" onClick={() => setMoreOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted">
-                    <LifeBuoy className="h-4 w-4" />Help &amp; Support
-                  </Link>
-                  <button
-                    onClick={() => {
-                      setMoreOpen(false);
-                      window.dispatchEvent(new CustomEvent('pe:open-support'));
-                    }}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted"
-                  >
-                    <LifeBuoy className="h-4 w-4" />Report a Problem
-                  </button>
-                  <button
-                    onClick={() => { setMoreOpen(false); privacyLock(); }}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/10"
-                  >
-                    <ShieldCheck className="h-4 w-4" />Privacy Lock
-                  </button>
-                  <button
-                    onClick={signOut}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/10"
-                  >
-                    <LogOut className="h-4 w-4" />Log Out
-                  </button>
-                  <p className="flex items-center gap-1.5 px-3 pt-3 text-[11px] text-muted-foreground">
-                    <Mail className="h-3 w-3 text-primary" />
-                    Powered by Purple Envelope ·{' '}
-                    <Link to="/privacy" onClick={() => setMoreOpen(false)} className="underline">
-                      Privacy &amp; Terms
-                    </Link>
-                  </p>
-                </div>
-              </SheetContent>
-            </Sheet>
+                  {dest.shortLabel ?? dest.label}
+                </Link>
+              );
+            })}
           </nav>
 
           {/* Team Moments: anchored, never blocking navigation or clocking. */}
