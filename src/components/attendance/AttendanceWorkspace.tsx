@@ -11,6 +11,7 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import { useOrgStaff, type OrgStaffMember } from '@/hooks/useStaffCodes';
 import { useTimeEntries, TimeEntryRow } from '@/hooks/useTimeEntries';
 import { useConsumedSearchParam } from '@/hooks/useDeepLink';
+import ReturnPill from '@/components/management/ReturnPill';
 import PersonalCalendar from '@/components/PersonalCalendar';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { useAuth } from '@/hooks/useAuth';
@@ -446,6 +447,11 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
     return { label: 'Not in yet', className: 'bg-muted text-muted-foreground' };
   };
 
+  // Attendance's "missing shift": a scheduled absence with nothing recorded,
+  // callouts included (an absence with a reason is still an absence). Payroll
+  // asks a different question, "does this day need a fix", and reads the
+  // shared rule in src/lib/attention/missing-time.ts, where a recorded
+  // callout explains the day.
   const isMissingShift = (r: AttendanceDayStatusRow) => {
     if (!r.is_absent) return false;
     if (r.office_closed) return false;
@@ -577,6 +583,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">{personal ? 'Attendance' : 'Team Attendance'}</h1>
+          <ReturnPill />
           <p className="text-muted-foreground">
             {personal
               ? 'Your days off, tardies, missing shifts, and closures'

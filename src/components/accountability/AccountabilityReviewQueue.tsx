@@ -19,7 +19,11 @@ import {
 import AccountabilityAuditTimeline from './AccountabilityAuditTimeline';
 import { useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
 
-function ReviewForm({ report }: { report: AccountabilityReport }) {
+/**
+ * The countersign step: document the conversation, type your name, sign off
+ * and close. Shared by the review queue and the Attention panel.
+ */
+export function AccountabilitySignoffForm({ report, onSigned }: { report: AccountabilityReport; onSigned?: () => void }) {
   const sign = useCountersignAccountabilityReport();
   const [note, setNote] = useState('');
   const [name, setName] = useState('');
@@ -52,7 +56,7 @@ function ReviewForm({ report }: { report: AccountabilityReport }) {
       <Button
         size="sm"
         disabled={sign.isPending || !name.trim() || note.trim().length < 3}
-        onClick={() => sign.mutate({ reportId: report.id, note, typedName: name })}
+        onClick={() => sign.mutate({ reportId: report.id, note, typedName: name }, { onSuccess: () => onSigned?.() })}
       >
         {sign.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         Sign off and close
@@ -124,7 +128,7 @@ export default function AccountabilityReviewQueue({ highlightId }: { highlightId
               </p>
             )}
             <AccountabilityAuditTimeline report={r} />
-            <ReviewForm report={r} />
+            <AccountabilitySignoffForm report={r} />
           </div>
         ))}
       </CardContent>

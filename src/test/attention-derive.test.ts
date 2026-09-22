@@ -312,6 +312,14 @@ describe('deriveAttention · work and presentation', () => {
     expect(r.unresolved[0].deadline).toBeNull();
   });
 
+  it('a follow-up note resolves only the kinds whose rule asks for one', () => {
+    const closeouts = { today: log({ staffing_assessment: 'unsafe' }), latestSealedDate: '2026-09-18', officeDaysSinceSeal: 0, unsealedPast: [] };
+    const noted = deriveAttention(src({ closeouts, followups: [followup({ item_key: 'staffing_answer:dl-today', work_state: 'followed_up', note: 'Talked to Dana; two hygienists out, covered by Thursday.' })] }));
+    expect(noted.unresolved).toEqual([]);
+    const tardyNoted = deriveAttention(src({ tardies: [tardy()], followups: [followup({ item_key: 'tardy_unreviewed:t1', work_state: 'followed_up' })] }));
+    expect(tardyNoted.counts).toMatchObject({ unresolved: 1, needsNow: 0, waiting: 1 });
+  });
+
   it('a follow-up never admits an item whose record is resolved', () => {
     const r = deriveAttention(src({ tardies: [tardy({ approval_status: 'approved' })], followups: [followup({ item_key: 'tardy_unreviewed:t1', work_state: 'waiting_on_employee' })] }));
     expect(r.unresolved).toEqual([]);

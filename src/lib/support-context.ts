@@ -43,7 +43,7 @@ export function buildTicketContext(
   else if (pathname.startsWith('/attendance')) what = 'attendance';
   else if (pathname.startsWith('/pto')) what = 'time off';
   else if (pathname.startsWith('/schedule')) what = 'schedule';
-  else if (pathname.startsWith('/team')) what = 'team';
+  else if (pathname.startsWith('/management/people') || pathname.startsWith('/team')) what = 'team';
   else if (pathname === '/' || pathname.startsWith('/dashboard')) what = 'time clock';
 
   const importId = params.get('import') ?? params.get('import_id');

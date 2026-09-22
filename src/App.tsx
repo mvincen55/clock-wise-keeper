@@ -19,9 +19,6 @@ import WorkflowSettings from '@/pages/WorkflowSettings';
 import Settings from "@/pages/Settings";
 import PTO from "@/pages/PTO";
 import MyRequests from "@/pages/MyRequests";
-import ApprovalQueue from "@/pages/ApprovalQueue";
-import Team from "@/pages/Team";
-import EmployeeDetail from "@/pages/EmployeeDetail";
 import OrgSetup from "@/pages/OrgSetup";
 import FofBuilder from "@/pages/FofBuilder";
 import AccountBalanceExplainer from "@/pages/AccountBalanceExplainer";
@@ -56,6 +53,15 @@ import Workplace from "@/pages/Workplace";
 import Playbook from "@/pages/Playbook";
 import PracticeProcedures from "@/pages/PracticeProcedures";
 import Management from "@/pages/Management";
+import People from "@/pages/management/People";
+import PersonRecord from "@/pages/management/PersonRecord";
+import PayrollReadiness from "@/pages/management/PayrollReadiness";
+import OfficeIndex from "@/pages/management/OfficeIndex";
+import OfficeSettings from "@/pages/management/OfficeSettings";
+import Directory from "@/pages/Directory";
+import {
+  LegacyAcknowledgmentsRedirect, LegacyApprovalsRedirect, LegacyEmployeeRedirect, LegacySettingsTabRedirect, LegacyTeamRedirect,
+} from "@/components/management/LegacyRedirects";
 import KnowledgeWorkspace from "@/pages/KnowledgeWorkspace";
 import KnowledgeAcknowledgments from "@/pages/KnowledgeAcknowledgments";
 import PracticeSetup from "@/pages/PracticeSetup";
@@ -166,11 +172,18 @@ const router = createBrowserRouter(
             <Route path="/playbook" element={<ProtectedRoute><Playbook /></ProtectedRoute>} />
             <Route path="/playbook/procedures" element={<ProtectedRoute><PracticeProcedures /></ProtectedRoute>} />
             <Route path="/management" element={<ProtectedRoute><Management /></ProtectedRoute>} />
+            <Route path="/management/people" element={<ProtectedRoute><People /></ProtectedRoute>} />
+            <Route path="/management/people/:employeeId" element={<ProtectedRoute><PersonRecord /></ProtectedRoute>} />
+            <Route path="/management/payroll" element={<ProtectedRoute><PayrollReadiness /></ProtectedRoute>} />
+            <Route path="/management/office" element={<ProtectedRoute><OfficeIndex /></ProtectedRoute>} />
+            <Route path="/management/office/settings" element={<ProtectedRoute><OfficeSettings /></ProtectedRoute>} />
+            <Route path="/management/office/acknowledgments" element={<ProtectedRoute><KnowledgeAcknowledgments /></ProtectedRoute>} />
+            <Route path="/directory" element={<ProtectedRoute><Directory /></ProtectedRoute>} />
             <Route path="/management/knowledge" element={<ProtectedRoute><KnowledgeWorkspace /></ProtectedRoute>} />
             <Route path="/management/attendance" element={<ProtectedRoute><TeamAttendance /></ProtectedRoute>} />
             <Route path="/management/missed-appointments" element={<ProtectedRoute><MissedAppointments /></ProtectedRoute>} />
             <Route path="/practice-setup" element={<ProtectedRoute><PracticeSetup /></ProtectedRoute>} />
-            <Route path="/acknowledgments" element={<ProtectedRoute><KnowledgeAcknowledgments /></ProtectedRoute>} />
+            <Route path="/acknowledgments" element={<LegacyAcknowledgmentsRedirect />} />
             <Route path="/inbox" element={<Navigate to="/inbox/messages" replace />} />
             <Route path="/inbox/:tab" element={<ProtectedRoute><InboxPage /></ProtectedRoute>} />
             <Route path="/help" element={<ProtectedRoute><Help /></ProtectedRoute>} />
@@ -187,12 +200,12 @@ const router = createBrowserRouter(
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             {/* Deep-linkable settings tabs (/settings/reminders stays its own
                 page — the static segment outranks this param route). */}
-            <Route path="/settings/:tab" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="/settings/:tab" element={<LegacySettingsTabRedirect />} />
             <Route path="/pto" element={<ProtectedRoute><PTO /></ProtectedRoute>} />
             <Route path="/my-requests" element={<ProtectedRoute><MyRequests /></ProtectedRoute>} />
-            <Route path="/approvals" element={<ProtectedRoute><ApprovalQueue /></ProtectedRoute>} />
-            <Route path="/team" element={<ProtectedRoute><Team /></ProtectedRoute>} />
-            <Route path="/team/:employeeId" element={<ProtectedRoute><EmployeeDetail /></ProtectedRoute>} />
+            <Route path="/approvals" element={<LegacyApprovalsRedirect />} />
+            <Route path="/team" element={<LegacyTeamRedirect />} />
+            <Route path="/team/:employeeId" element={<LegacyEmployeeRedirect />} />
             <Route path="/org-setup" element={<ProtectedRoute><OrgSetup /></ProtectedRoute>} />
             <Route path="/broken-appointments" element={<ProtectedRoute><BrokenAppointments /></ProtectedRoute>} />
             <Route path="/fof" element={<ProtectedRoute><FofBuilder /></ProtectedRoute>} />

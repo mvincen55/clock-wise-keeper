@@ -79,7 +79,7 @@ export default function ConsentSettings() {
           instead of a second copy of the card living here. */}
       <p className="text-sm text-muted-foreground">
         Practice identity &amp; branding (name, logo, colors) lives in{' '}
-        <Link to="/settings/office" className="text-primary underline-offset-2 hover:underline">
+        <Link to="/management/office/settings#identity" className="text-primary underline-offset-2 hover:underline">
           Settings → Office
         </Link>
         . Every print sheet uses that same identity.

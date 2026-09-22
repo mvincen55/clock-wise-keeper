@@ -86,8 +86,8 @@ export const ROLE_MODULES: Record<OperationalRole, RoleModule> = {
     label: ROLE_LABELS.office_manager,
     mission: 'Running the floor: approvals, people, and follow-through.',
     shortcuts: [
-      { id: 'approvals', label: 'Approvals', to: '/approvals', minTier: 'manager' },
-      { id: 'team', label: 'Team', to: '/team', minTier: 'manager' },
+      { id: 'approvals', label: 'Approvals', to: '/management?kind=decide', minTier: 'manager' },
+      { id: 'team', label: 'Team', to: '/management/people', minTier: 'manager' },
       { id: 'checklists', label: 'Checklists', to: '/checklists' },
       { id: 'reports', label: 'Reports', to: '/reports', minTier: 'manager', permission: 'view_reports' },
     ],
@@ -103,8 +103,8 @@ export const ROLE_MODULES: Record<OperationalRole, RoleModule> = {
       { id: 'playbook', label: 'Playbook', to: '/playbook' },
       { id: 'training', label: 'Training', to: '/training' },
       { id: 'reports', label: 'Reports', to: '/reports', minTier: 'manager', permission: 'view_reports' },
-      { id: 'approvals', label: 'Approvals', to: '/approvals', minTier: 'manager' },
-      { id: 'team', label: 'Team', to: '/team', minTier: 'manager' },
+      { id: 'approvals', label: 'Approvals', to: '/management?kind=decide', minTier: 'manager' },
+      { id: 'team', label: 'Team', to: '/management/people', minTier: 'manager' },
     ],
   },
   sterilization: {

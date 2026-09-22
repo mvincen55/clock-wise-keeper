@@ -168,7 +168,7 @@ export function BrokenApptSettingsCard() {
               <p className="text-sm font-medium">Office closed dates</p>
               <p className="text-xs text-muted-foreground">Full-day closures from the shared Office Closures calendar are automatically excluded from notice calculations. Previously saved policy dates are also retained. Weekends are excluded automatically.</p>
               <p className="text-xs text-muted-foreground">{settings?.officeClosedDates.length ?? 0} saved closed dates included.</p>
-              <Button variant="outline" asChild><Link to="/settings/office#office-closures">Manage Office Closures</Link></Button>
+              <Button variant="outline" asChild><Link to="/management/office/settings#hours">Manage Office Closures</Link></Button>
               {!!settings?.legacyOfficeClosedDates.length && <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">Previously entered policy dates. Remove any that no longer apply; manage new closures in Office Closures.</p>
                 {settings.legacyOfficeClosedDates.map(date => <div key={date} className="flex items-center gap-2 text-xs">

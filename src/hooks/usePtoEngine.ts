@@ -100,6 +100,56 @@ export function useUpsertPtoSettings() {
   });
 }
 
+/* ───────── Hooks: Office policy ───────── */
+
+export type OrgPtoPolicy = {
+  org_id: string;
+  worked_hours_cap_weekly: number;
+  max_balance: number;
+  allow_negative: boolean;
+  updated_by: string | null;
+  updated_at: string;
+};
+
+/** The office's PTO accrual defaults. Every member may read them. */
+export function useOrgPtoPolicy() {
+  const { data: ctx } = useOrgContext();
+  return useQuery({
+    queryKey: ['org-pto-policy', ctx?.org_id],
+    enabled: !!ctx?.org_id,
+    queryFn: async (): Promise<OrgPtoPolicy | null> => {
+      const { data, error } = await supabase.from('org_pto_policy').select('*').eq('org_id', ctx!.org_id).maybeSingle();
+      if (error) throw error;
+      return data ? { ...data, worked_hours_cap_weekly: Number(data.worked_hours_cap_weekly), max_balance: Number(data.max_balance) } : null;
+    },
+  });
+}
+
+/**
+ * Owners set the office policy through `set_org_pto_policy`; the new
+ * default reaches everyone without an exception in the same transaction.
+ */
+export function useSetOrgPtoPolicy() {
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { worked_hours_cap_weekly: number; max_balance: number; allow_negative: boolean }) => {
+      if (!ctx) throw new Error('Not authenticated');
+      const { data, error } = await supabase.rpc('set_org_pto_policy', {
+        p_org_id: ctx.org_id, p_cap: input.worked_hours_cap_weekly, p_max: input.max_balance, p_allow_negative: input.allow_negative,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['org-pto-policy'] });
+      qc.invalidateQueries({ queryKey: ['pto-settings'] });
+      qc.invalidateQueries({ queryKey: ['pto-ledger'] });
+      qc.invalidateQueries({ queryKey: ['employee-setup'] });
+    },
+  });
+}
+
 /* ───────── Hooks: Snapshots ───────── */
 
 export function usePtoSnapshots() {

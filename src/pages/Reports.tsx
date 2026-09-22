@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useTimeEntries, TimeEntryRow, PunchRow } from '@/hooks/useTimeEntries';
 import { useDaysOff } from '@/hooks/useDaysOff';
 import { useTardies, TardyRow } from '@/hooks/useTardies';
@@ -211,9 +211,15 @@ export default function Reports() {
   const priorEnd = new Date(priorStart);
   priorEnd.setDate(priorStart.getDate() + 6);
 
-  const [reportType, setReportType] = useState<ReportType>('weekly');
-  const [startDate, setStartDate] = useState(priorStart.toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(priorEnd.toISOString().split('T')[0]);
+  // Payroll readiness hands over the period it judged: /reports?type=pay_period&start=&end=
+  const [linkParams] = useSearchParams();
+  const isDate = (v: string | null): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const linkedType = linkParams.get('type');
+  const [reportType, setReportType] = useState<ReportType>(
+    linkedType && (['weekly', 'pay_period', 'monthly', 'pto', 'tardy', 'attendance_exceptions'] as string[]).includes(linkedType) ? (linkedType as ReportType) : 'weekly',
+  );
+  const [startDate, setStartDate] = useState(isDate(linkParams.get('start')) ? linkParams.get('start')! : priorStart.toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(isDate(linkParams.get('end')) ? linkParams.get('end')! : priorEnd.toISOString().split('T')[0]);
   const [generated, setGenerated] = useState(false);
   const [showAuditTrail, setShowAuditTrail] = useState(false);
   const [showLateFlags, setShowLateFlags] = useState(true);

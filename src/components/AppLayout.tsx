@@ -48,7 +48,7 @@ const DESTINATIONS: Destination[] = [
   {
     to: '/workplace', icon: Briefcase, label: 'Workplace',
     match: ['/timesheet', '/days-off', '/pto', '/my-requests', '/office-calendar',
-            '/handbook', '/policy-manual', '/goals', '/training', '/team'],
+            '/handbook', '/policy-manual', '/goals', '/training', '/directory'],
   },
   {
     to: '/playbook', icon: BookOpen, label: 'Practice Playbook', shortLabel: 'Playbook',
@@ -66,7 +66,7 @@ const DESTINATIONS: Destination[] = [
   },
   {
     to: '/management', icon: Gauge, label: 'Management', managerOnly: true,
-    match: ['/approvals', '/reports'],
+    match: ['/approvals', '/reports', '/report-history', '/team', '/acknowledgments', '/practice-setup'],
   },
 ];
 

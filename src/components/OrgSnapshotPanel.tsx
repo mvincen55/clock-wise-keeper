@@ -26,7 +26,10 @@ const QUIET_ORDER: SnapshotBucket[] = ['day_off', 'closed', 'unscheduled'];
 /** The Team Attendance page, focused on one person: where a manager acts on what they see here. */
 const attendanceLink = (employeeId: string) => `/management/attendance?employee=${employeeId}`;
 
-export function OrgSnapshotPanel() {
+export function OrgSnapshotPanel({ openItemFor }: {
+  /** The first open Attention item for a person, so a row can say “Open”. */
+  openItemFor?: (employeeId: string) => { key: string; label: string } | null;
+} = {}) {
   const { data: snapshots, isLoading } = useOrgAttendanceSnapshot();
   const [quietOpen, setQuietOpen] = useState(false);
 
@@ -83,6 +86,18 @@ export function OrgSnapshotPanel() {
               {emp.is_remote && <span className="ml-1 opacity-70" title="Remote">📍</span>}
             </Link>
           ))}
+          {openItemFor && list.some(emp => openItemFor(emp.employee_id)) && (
+            <span className="basis-full text-xs text-muted-foreground">
+              {list.filter(emp => openItemFor(emp.employee_id)).map(emp => {
+                const item = openItemFor(emp.employee_id)!;
+                return (
+                  <Link key={emp.employee_id} to={`/management?item=${item.key}`} className="mr-3 underline-offset-2 hover:underline">
+                    Open · {formatEmployeeNameLastFirst(emp.display_name)} · {item.label}
+                  </Link>
+                );
+              })}
+            </span>
+          )}
         </div>
       </div>
     );

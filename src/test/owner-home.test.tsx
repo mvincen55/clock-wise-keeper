@@ -116,7 +116,7 @@ describe('owner attention', () => {
 
   it('decisions route to their existing surfaces', () => {
     renderView(<OwnerDashboard view={ownerFixture} />);
-    expect(screen.getByText('Approvals pending').closest('a')).toHaveAttribute('href', '/approvals');
+    expect(screen.getByText('Approvals pending').closest('a')).toHaveAttribute('href', '/management?kind=decide');
     expect(
       screen.getByText('Accountability records at owner review').closest('a'),
     ).toHaveAttribute('href', '/management');

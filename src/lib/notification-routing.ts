@@ -57,13 +57,17 @@ export function isSafeId(value: string): boolean {
 
 type RouteBuilder = (n: NotificationLike, ctx: RoutingContext) => Omit<NotificationDestination, 'fallback'>;
 
-/** The approval queue, opened on the right tab with the right card highlighted. */
-const approvalsTab =
-  (tab: 'change-requests' | 'pto-requests' | 'corrections', tabLabel: string): RouteBuilder =>
+/**
+ * Management → Attention, opened on the exact item. Item keys are
+ * `kind:recordId`, so the link is built from the kind and a safe id rather
+ * than through withParam (which only accepts bare ids).
+ */
+const attentionItem =
+  (kind: string, kindLabel: string): RouteBuilder =>
   n => ({
-    to: withParam('/approvals', 'request', n.related_id, `tab=${tab}`),
-    label: `Approvals · ${tabLabel}`,
-    exact: !!n.related_id,
+    to: n.related_id && isSafeId(n.related_id) ? `/management?item=${kind}:${n.related_id}` : '/management?kind=decide',
+    label: `Attention · ${kindLabel}`,
+    exact: !!n.related_id && isSafeId(n.related_id),
   });
 
 const incidentReport: RouteBuilder = n => ({
@@ -73,8 +77,8 @@ const incidentReport: RouteBuilder = n => ({
 });
 
 const acknowledgment: RouteBuilder = n => ({
-  to: withParam('/acknowledgments', 'assignment', n.related_id),
-  label: 'Office Acknowledgments',
+  to: withParam('/management/office/acknowledgments', 'assignment', n.related_id),
+  label: 'Office · Acknowledgments',
   exact: !!n.related_id,
 });
 
@@ -86,11 +90,7 @@ const trainingAssignment: RouteBuilder = n => ({
 
 const accountability: RouteBuilder = (n, ctx) =>
   isAdmin(ctx.role)
-    ? {
-        to: withParam('/management', 'record', n.related_id),
-        label: 'Management · Sign-offs',
-        exact: !!n.related_id,
-      }
+    ? attentionItem('record_signoff', 'Sign-offs')(n, ctx)
     : {
         to: withParam('/', 'record', n.related_id),
         label: 'Home · My records',
@@ -109,11 +109,11 @@ const dashboardSprint: RouteBuilder = n => ({
  * legacy rows and anything not listed here.
  */
 const NOTIFICATION_ROUTES: Record<string, RouteBuilder> = {
-  employee_anniversary: n => ({ to: n.related_id && isSafeId(n.related_id) ? `/team/${n.related_id}` : '/team', label: 'Team · Work anniversary', exact: !!n.related_id && isSafeId(n.related_id) }),
+  employee_anniversary: n => ({ to: n.related_id && isSafeId(n.related_id) ? `/management/people/${n.related_id}` : '/management/people', label: 'People · Work anniversary', exact: !!n.related_id && isSafeId(n.related_id) }),
   // ── PTO ──────────────────────────────────────────────────────────────
   pto_request_new: (n, ctx) =>
     isAdmin(ctx.role)
-      ? approvalsTab('pto-requests', 'PTO Requests')(n, ctx)
+      ? attentionItem('pto_request', 'PTO requests')(n, ctx)
       : { to: withParam('/pto', 'request', n.related_id), label: 'PTO', exact: !!n.related_id },
   pto_request_approved: n => ({
     to: withParam('/pto', 'request', n.related_id),
@@ -125,11 +125,17 @@ const NOTIFICATION_ROUTES: Record<string, RouteBuilder> = {
     label: 'PTO · My requests',
     exact: !!n.related_id,
   }),
+  /** An approval reversed by a manager (audited; the days come off the calendar and the hours are credited back). */
+  pto_request_reversed: n => ({
+    to: withParam('/pto', 'request', n.related_id),
+    label: 'PTO · My requests',
+    exact: !!n.related_id,
+  }),
 
   // ── Corrections ──────────────────────────────────────────────────────
   correction_request_new: (n, ctx) =>
     isAdmin(ctx.role)
-      ? approvalsTab('corrections', 'Corrections')(n, ctx)
+      ? attentionItem('correction_request', 'Corrections')(n, ctx)
       : { to: withParam('/my-requests', 'correction', n.related_id), label: 'My Requests', exact: !!n.related_id },
   correction_approved: n => ({
     to: withParam('/my-requests', 'correction', n.related_id),
@@ -145,7 +151,7 @@ const NOTIFICATION_ROUTES: Record<string, RouteBuilder> = {
   // ── Change requests ──────────────────────────────────────────────────
   change_request_new: (n, ctx) =>
     isAdmin(ctx.role)
-      ? approvalsTab('change-requests', 'Change Requests')(n, ctx)
+      ? attentionItem('change_request', 'Change requests')(n, ctx)
       : { to: withParam('/my-requests', 'request', n.related_id), label: 'My Requests', exact: !!n.related_id },
   change_request_approved: n => ({
     to: withParam('/my-requests', 'request', n.related_id),
@@ -213,8 +219,29 @@ const NOTIFICATION_ROUTES: Record<string, RouteBuilder> = {
   // ── Checklist bypasses ───────────────────────────────────────────────
   checklist_bypass: (n, ctx) =>
     isAdmin(ctx.role)
-      ? { to: withParam('/team', 'bypass', n.related_id), label: 'Team · Checklist bypasses', exact: !!n.related_id }
+      ? { to: withParam('/management/people', 'bypass', n.related_id, 'view=patterns'), label: 'People · Patterns', exact: !!n.related_id }
       : { to: '/checklists', label: 'Checklists', exact: false },
+
+  // ── Policies & procedures ────────────────────────────────────────────
+  /** A version submitted for review; reviewers decide it in Attention. */
+  knowledge_version_in_review: (n, ctx) =>
+    isAdmin(ctx.role)
+      ? attentionItem('content_review', 'Content review')(n, ctx)
+      : { to: withParam('/management/knowledge', 'version', n.related_id), label: 'Policies & procedures', exact: !!n.related_id },
+  /** An approval withdrawn; the version is back in review. */
+  knowledge_approval_withdrawn: n => ({
+    to: withParam('/management/knowledge', 'version', n.related_id),
+    label: 'Policies & procedures',
+    exact: !!n.related_id,
+  }),
+
+  // ── Close the Day ────────────────────────────────────────────────────
+  /** A saved closeout left unsealed; fixing it is an Attention item. */
+  close_day_unsealed: n => ({
+    to: n.related_id && isSafeId(n.related_id) ? `/management?item=close_day_unsealed:${n.related_id}` : '/deposit-log',
+    label: 'Attention · Close the Day',
+    exact: !!n.related_id && isSafeId(n.related_id),
+  }),
 
   // ── Team sprints (office pulse) ──────────────────────────────────────
   ai_sprint_verify: dashboardSprint,
@@ -232,8 +259,8 @@ const NOTIFICATION_ROUTES: Record<string, RouteBuilder> = {
   }),
 
   // ── Integrity & safety (owner-facing; no per-event screen exists) ────
-  integrity_elevated: () => ({ to: '/settings', label: 'Office Settings', exact: false }),
-  integrity_digest: () => ({ to: '/settings', label: 'Office Settings', exact: false }),
+  integrity_elevated: () => ({ to: '/management/office/settings', label: 'Office settings', exact: false }),
+  integrity_digest: () => ({ to: '/management/office/settings', label: 'Office settings', exact: false }),
 };
 
 /**
@@ -244,15 +271,15 @@ const NOTIFICATION_ROUTES: Record<string, RouteBuilder> = {
 const TABLE_ROUTES: Record<string, RouteBuilder> = {
   pto_requests: (n, ctx) =>
     isAdmin(ctx.role)
-      ? approvalsTab('pto-requests', 'PTO Requests')(n, ctx)
+      ? attentionItem('pto_request', 'PTO requests')(n, ctx)
       : { to: withParam('/pto', 'request', n.related_id), label: 'PTO', exact: !!n.related_id },
   correction_requests: (n, ctx) =>
     isAdmin(ctx.role)
-      ? approvalsTab('corrections', 'Corrections')(n, ctx)
+      ? attentionItem('correction_request', 'Corrections')(n, ctx)
       : { to: withParam('/my-requests', 'correction', n.related_id), label: 'My Requests', exact: !!n.related_id },
   change_requests: (n, ctx) =>
     isAdmin(ctx.role)
-      ? approvalsTab('change-requests', 'Change Requests')(n, ctx)
+      ? attentionItem('change_request', 'Change requests')(n, ctx)
       : { to: withParam('/my-requests', 'request', n.related_id), label: 'My Requests', exact: !!n.related_id },
   incident_reports: incidentReport,
   training_assignments: trainingAssignment,
@@ -272,7 +299,7 @@ const TABLE_ROUTES: Record<string, RouteBuilder> = {
   accountability_reports: accountability,
   checklist_bypasses: (n, ctx) =>
     isAdmin(ctx.role)
-      ? { to: withParam('/team', 'bypass', n.related_id), label: 'Team · Checklist bypasses', exact: !!n.related_id }
+      ? { to: withParam('/management/people', 'bypass', n.related_id, 'view=patterns'), label: 'People · Patterns', exact: !!n.related_id }
       : { to: '/checklists', label: 'Checklists', exact: false },
   team_goals: dashboardSprint,
   conversations: n => ({
@@ -280,7 +307,13 @@ const TABLE_ROUTES: Record<string, RouteBuilder> = {
     label: 'Inbox · Messages',
     exact: !!n.related_id,
   }),
-  security_events: () => ({ to: '/settings', label: 'Office Settings', exact: false }),
+  security_events: () => ({ to: '/management/office/settings', label: 'Office settings', exact: false }),
+  deposit_logs: n => ({
+    to: n.related_id && isSafeId(n.related_id) ? `/management?item=close_day_unsealed:${n.related_id}` : '/deposit-log',
+    label: 'Attention · Close the Day',
+    exact: !!n.related_id && isSafeId(n.related_id),
+  }),
+  knowledge_versions: n => ({ to: withParam('/management/knowledge', 'version', n.related_id), label: 'Policies & procedures', exact: !!n.related_id }),
 };
 
 /** Every notification type with an explicit destination. Tests inventory against this. */

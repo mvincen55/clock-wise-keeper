@@ -61,13 +61,13 @@ describe('grants unlock shortcuts without widening the tier', () => {
       new Set(['view_reports', 'edit_closeout_history', 'manage_office_goals']),
     ).map(s => s.to);
     expect(links).toContain('/reports'); // named grant
-    expect(links).not.toContain('/approvals'); // tier-only, stays hidden
-    expect(links).not.toContain('/team'); // tier-only, stays hidden
+    expect(links).not.toContain('/management?kind=decide'); // tier-only, stays hidden
+    expect(links).not.toContain('/management/people'); // tier-only, stays hidden
   });
 
   it('managers keep everything without any grant', () => {
     const links = shortcutsFor('office_manager', 'manager').map(s => s.to);
-    expect(links).toEqual(expect.arrayContaining(['/approvals', '/team', '/reports']));
+    expect(links).toEqual(expect.arrayContaining(['/management?kind=decide', '/management/people', '/reports']));
   });
 });
 

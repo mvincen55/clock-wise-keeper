@@ -15,6 +15,9 @@ import type {
 } from '@/lib/knowledge';
 import { knowledgeStatusPriority } from '@/lib/knowledge';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { createNotification } from '@/hooks/useNotifications';
 
 const workspaceKey = (orgId?: string) => ['knowledge-workspace', orgId] as const;
 const blocksKey = (versionId?: string | null) => ['knowledge-blocks', versionId] as const;
@@ -243,6 +246,7 @@ export function useCreateKnowledgeRevision() {
 
 export function useSubmitKnowledgeReview() {
   const invalidate = useKnowledgeInvalidation();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (versionId: string) => {
       const { data, error } = await knowledgeSupabase.rpc(
@@ -251,6 +255,48 @@ export function useSubmitKnowledgeReview() {
       );
       throwIfError(error);
       if (!data) throw new Error('The draft was not submitted');
+      return data;
+    },
+    onSuccess: async data => {
+      await invalidate(data.id);
+      // Reviewers hear about it: every other owner or manager gets the exact
+      // Attention item, so the bell agrees with Attention (design §3.7).
+      if (!user) return;
+      const { data: admins } = await supabase
+        .from('org_members')
+        .select('user_id')
+        .eq('org_id', data.org_id)
+        .in('role', ['owner', 'manager'])
+        .eq('status', 'active');
+      for (const m of admins ?? []) {
+        if (m.user_id === user.id) continue;
+        await createNotification({
+          org_id: data.org_id,
+          recipient_user_id: m.user_id,
+          actor_user_id: user.id,
+          notification_type: 'knowledge_version_in_review',
+          title: 'A version is in review',
+          message: `“${data.title}” (version ${data.version_number}) needs a reviewer who is not its author.`,
+          related_table: 'knowledge_versions',
+          related_id: data.id,
+        });
+      }
+    },
+  });
+}
+
+/**
+ * Withdraws an approval through `withdraw_knowledge_approval`: the version
+ * returns to review, the approving decision is removed, and the audit row
+ * and the submitter's notification are written in the same transaction.
+ */
+export function useWithdrawKnowledgeApproval() {
+  const invalidate = useKnowledgeInvalidation();
+  return useMutation({
+    mutationFn: async ({ versionId, note }: { versionId: string; note?: string }) => {
+      const { data, error } = await knowledgeSupabase.rpc('withdraw_knowledge_approval', { p_version_id: versionId, p_note: (note ?? '').trim() });
+      throwIfError(error);
+      if (!data) throw new Error('The approval was not withdrawn');
       return data;
     },
     onSuccess: data => invalidate(data.id),

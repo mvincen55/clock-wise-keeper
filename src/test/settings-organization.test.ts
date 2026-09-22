@@ -1,18 +1,9 @@
 /**
- * Settings consolidation — every configuration surface lives in (or is
- * indexed from) the organized Settings section, and the old scattered homes
- * stay clean. Source-structure assertions, same style as the mobile-nav
- * checks in dashboard-empty-states:
- *
- *  - Settings is tabbed and deep-linkable (/settings/:tab);
- *  - the Acknowledgment escalation card moved off Management into Settings;
- *  - Close the Day setup cards moved off the Deposit Log page, which links
- *    to their new home instead;
- *  - the PTO policy card moved out of the PTO page tab, which links to it;
- *  - org branding has ONE editable home (Settings) — Consents settings links
- *    to it instead of rendering a second copy;
- *  - Work Zones is a card on the Office tab; /work-zones redirects into it;
- *  - members still reach their personal settings; office tabs are gated.
+ * Settings have three homes (design §3.8): office-wide settings on ONE page
+ * under Management → Office; personal settings under the account menu;
+ * feature-local settings on their features. The old scattered homes stay
+ * clean and the old addresses redirect. Source-structure assertions, same
+ * style as the mobile-nav checks in dashboard-empty-states.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -20,99 +11,89 @@ import { describe, expect, it } from 'vitest';
 
 const read = (p: string) => readFileSync(resolve(__dirname, '..', p), 'utf8');
 
-const settings = read('pages/Settings.tsx');
+const mySettings = read('pages/Settings.tsx');
+const officeSettings = read('pages/management/OfficeSettings.tsx');
 const management = read('pages/Management.tsx');
 const depositLog = read('pages/DepositLog.tsx');
 const pto = read('pages/PTO.tsx');
 const consentSettings = read('pages/ConsentSettings.tsx');
 const workZones = read('pages/WorkZones.tsx');
+const redirects = read('components/management/LegacyRedirects.tsx');
 const app = read('App.tsx');
 const appLayout = read('components/AppLayout.tsx');
 
-describe('settings is one organized, deep-linkable section', () => {
-  it('renders four named tabs behind /settings/:tab', () => {
-    expect(app).toMatch(/path="\/settings\/:tab"/);
-    for (const tab of ['office', 'people', 'workflows', 'me']) {
-      expect(settings).toContain(`TabsTrigger value="${tab}"`);
+describe('office settings are one page with anchors under Management → Office', () => {
+  it('is routed, and the old tabbed addresses redirect to it', () => {
+    expect(app).toMatch(/path="\/management\/office\/settings"/);
+    expect(app).toMatch(/path="\/settings\/:tab" element=\{<LegacySettingsTabRedirect \/>\}/);
+    expect(redirects).toContain("tab === 'office' || tab === 'people' || tab === 'workflows'");
+    expect(redirects).toContain('/management/office/settings${search}${hash}');
+  });
+
+  it('hosts every office-wide card once, in named sections', () => {
+    for (const card of [
+      'OrgBrandingCard', 'PracticeSettingsCard', 'OfficeClosuresCard', 'ProviderRegistryCard', 'PayrollSettingsCard',
+      'WorkZonesCard', 'EmployeePermissionsCard', 'EscalationPoliciesCard', 'AcknowledgmentEscalationSettingsCard',
+      'AttendanceGraceSettingsCard', 'PtoPolicySettingsCard', 'MessagingSettingsCard',
+    ]) {
+      expect(officeSettings).toContain(`<${card}`);
+      expect(mySettings).not.toContain(card);
     }
-    // Tab navigation retains the closing date used by the return link.
-    expect(settings).toMatch(/navigate\(`\/settings\/\$\{v\}\$\{location\.search\}`\)/);
-  });
-
-  it('members get personal settings only; office tabs are manager-gated', () => {
-    // The manager tab list and all office tab content render behind isManager.
-    expect(settings).toMatch(/\{isManager && \(\s*\n?\s*<TabsList/);
-    const officeTabs = settings.match(/\{isManager && \(\s*\n?\s*<TabsContent/g) ?? [];
-    expect(officeTabs).toHaveLength(3); // office, people, workflows
-    // The personal tab is not gated.
-    expect(settings).toMatch(/<TabsContent value="me"/);
-    // Members are coerced onto their tab, never an empty office tab.
-    expect(settings).toMatch(/isManager \? requested : 'me'/);
-  });
-
-  it('the acknowledgment escalation card lives in Settings, not Management', () => {
-    expect(settings).toContain('AcknowledgmentEscalationSettingsCard');
+    for (const id of ['identity', 'hours', 'payroll', 'attendance', 'pto', 'people-policies', 'permissions', 'providers', 'messaging', 'work-zones']) {
+      expect(officeSettings).toContain(`id: '${id}'`);
+    }
+    expect(officeSettings).not.toContain('TabsTrigger');
     expect(management).not.toContain('AcknowledgmentEscalationSettingsCard');
   });
 
-  it('Close the Day setup moved here; the Deposit Log page links instead', () => {
-    expect(settings).toContain('to="/settings/schedule-intelligence"');
+  it('keeps the Close the Day handoff: #schedule-intelligence redirects to setup and the return link survives', () => {
+    expect(officeSettings).toContain("location.hash === '#schedule-intelligence'");
+    expect(officeSettings).toContain('scheduleReturnUrl(closingDate)');
     expect(read('pages/WorkflowSettings.tsx')).toContain('ScheduleIntelligenceSetupCard');
-    expect(settings).toContain('to="/settings/deposits"');
     expect(depositLog).not.toContain('ScheduleIntelligenceSetupCard');
     expect(depositLog).not.toContain('<DepositSettingsCard');
     expect(depositLog).toContain('to="/settings/deposits"');
   });
 
-  it('PTO policy moved here; the PTO tab links instead of duplicating it', () => {
-    expect(settings).toContain('PtoPolicySettingsCard');
-    expect(pto).not.toContain('PTO Policy Settings');
-    expect(pto).not.toContain('useUpsertPtoSettings');
-    expect(pto).toContain('to="/settings/people"');
-  });
-
-  it('org branding keeps one editable home — Consents settings links to it', () => {
-    expect(settings).toContain('OrgBrandingCard');
-    expect(consentSettings).not.toContain('OrgBrandingCard');
-    expect(consentSettings).toContain('to="/settings/office"');
-  });
-
-  it('the extracted cards replaced the old inline blocks', () => {
-    for (const card of ['PayrollSettingsCard', 'OfficeClosuresCard', 'SecurityPrivacyCard']) {
-      expect(settings).toContain(card);
+  it('feature-local settings are listed once, not as link cards', () => {
+    for (const to of ['/fof/settings', '/broken-appointments/settings', '/settings/schedule-intelligence', '/settings/deposits', '/insurance-desk/settings', '/consents/settings', '/letters/settings']) {
+      expect(officeSettings).toContain(`to: '${to}'`);
     }
-    // The old inline implementations are gone from the page.
-    expect(settings).not.toContain('usePayrollSettings');
-    expect(settings).not.toContain('useOfficeClosures');
-    expect(settings).not.toContain('sessionTimeoutMinutes');
-  });
-
-  it('sub-page settings are indexed from Settings, not orphaned', () => {
-    for (const to of ['/consents/settings', '/letters/settings', '/settings/reminders']) {
-      expect(settings).toContain(`to="${to}"`);
-    }
-  });
-
-  it('Work Zones live inside Office Settings, deep-linkable as #work-zones', () => {
-    expect(settings).toContain('<WorkZonesCard />');
-    expect(settings).toContain('id="work-zones"');
-    expect(settings).not.toContain('to="/work-zones"');
-    expect(management).not.toContain("to: '/work-zones'");
+    expect(officeSettings).not.toContain('SettingsLinkCard');
   });
 });
 
-describe('old homes stay consistent', () => {
-  it('the old Work Zones route lands on the card in Office Settings', () => {
-    expect(workZones).toContain('<Navigate to="/settings/office#work-zones" replace />');
-    // Manager gating comes from the Office tab the card lives on.
-    expect(settings).toMatch(/isManager && \(\s*<TabsContent value="office"/);
-  });
-
-  it('visiting /work-zones no longer lights up the Management nav item', () => {
-    expect(appLayout).not.toMatch(/match: \[[^\]]*'\/work-zones'/);
+describe('personal settings stay personal', () => {
+  it('/settings is My settings for everyone, with the personal cards only', () => {
+    expect(app).toMatch(/path="\/settings" element=\{<ProtectedRoute><Settings \/>/);
+    for (const card of ['MySignatureCard', 'StaffInitialsCard', 'SecurityPrivacyCard', 'PrivacyTermsCard']) {
+      expect(mySettings).toContain(card);
+    }
+    expect(mySettings).toContain('to="/settings/reminders"');
+    expect(mySettings).not.toContain('TabsTrigger');
   });
 
   it('/settings/reminders keeps its own page (static beats the :tab param)', () => {
     expect(app).toMatch(/path="\/settings\/reminders"/);
+  });
+});
+
+describe('old homes stay consistent', () => {
+  it('the PTO page and Consents settings link into Office settings instead of duplicating cards', () => {
+    expect(pto).not.toContain('PTO Policy Settings');
+    expect(pto).not.toContain('useUpsertPtoSettings');
+    expect(pto).toContain('to="/management/office/settings#pto"');
+    expect(consentSettings).not.toContain('OrgBrandingCard');
+    expect(consentSettings).toContain('to="/management/office/settings#identity"');
+  });
+
+  it('the old Work Zones route lands on the card in Office settings', () => {
+    expect(workZones).toContain('<Navigate to="/management/office/settings#work-zones" replace />');
+    expect(officeSettings).toContain('id="work-zones"');
+    expect(management).not.toContain("to: '/work-zones'");
+  });
+
+  it('visiting /work-zones no longer lights up the Management nav item', () => {
+    expect(appLayout).not.toMatch(/match: \[[^\]]*'\/work-zones'/);
   });
 });

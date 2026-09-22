@@ -213,6 +213,33 @@ export function useOrgPtoRequests(statusFilter?: string) {
   });
 }
 
+/* ───────── Manager: Reverse an approval (audited) ───────── */
+
+/**
+ * Reverses an approved request through `reverse_pto_approval`: the
+ * approval's calendar rows come off, the hours are credited back, the
+ * request reads cancelled, the audit row and the person's notification are
+ * written in the same transaction. Nothing is deleted from the audit log.
+ */
+export function useReversePtoApproval() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (input: { id: string; reason: string }) => {
+      const { data, error } = await supabase.rpc('reverse_pto_approval', { p_request_id: input.id, p_reason: input.reason.trim() });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      for (const key of ['org-pto-requests', 'my-pto-requests', 'days-off', 'org-days-off', 'employee-days-off', 'employee-attendance', 'pto-ledger', 'approval-counts', 'attendance-day-status']) {
+        qc.invalidateQueries({ queryKey: [key] });
+      }
+      toast({ title: 'Approval reversed', description: 'The days are off the calendar and the hours are credited back.' });
+    },
+    onError: (e: Error) => toast({ title: 'Could not reverse the approval', description: e.message, variant: 'destructive' }),
+  });
+}
+
 /* ───────── Manager: Review PTO Request (approve/deny) ───────── */
 
 export function useReviewPtoRequest() {

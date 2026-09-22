@@ -193,6 +193,10 @@ type KnowledgeDatabase = {
         Args: { p_version_id: string };
         Returns: KnowledgeVersionRow;
       };
+      withdraw_knowledge_approval: {
+        Args: { p_version_id: string; p_note?: string };
+        Returns: KnowledgeVersionRow;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
