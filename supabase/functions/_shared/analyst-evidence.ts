@@ -18,6 +18,15 @@ export type Row = {
   has_day_off?: boolean; is_late?: boolean; is_absent?: boolean; is_incomplete?: boolean;
   has_edits?: boolean; timezone_suspect?: boolean; tardy_approval_status?: string;
   schedule_expected_start?: string | null; schedule_expected_end?: string | null;
+  // punches
+  time_entry_id?: string; punch_time?: string; punch_type?: string;
+  // provider_day_metrics (schedule captures: aggregates only, never appointment text)
+  provider_label?: string; business_date?: string; review_status?: string;
+  first_patient_minute?: number | null; last_patient_minute?: number | null;
+  available_start_minute?: number | null; available_end_minute?: number | null;
+  scheduled_minutes?: number | null; net_bookable_minutes?: number | null; true_open_minutes?: number | null;
+  // org_practice_settings
+  timezone?: string | null;
 };
 type Query = {
   select(columns: string): Query; eq(column: string,value: unknown): Query;
@@ -39,8 +48,20 @@ const ROW_LIMIT = 1000;
 const LABELS: Record<string, string> = {
   attendance: 'Attendance days', days_off: 'Days off', attendance_exceptions: 'Attendance exceptions',
   checklist_completions: 'Checklist completions', checklist_bypasses: 'Checklist bypasses',
-  accountability: 'Accountability reports',
+  accountability: 'Accountability reports', schedule_days: 'Schedule captures',
 };
+/** Minutes from midnight as a clock reading, e.g. 1020 → "5:00 PM". */
+export function clockLabel(minutes: number | null | undefined): string | null {
+  if (minutes == null || !Number.isFinite(minutes)) return null;
+  const h = Math.floor(minutes / 60), m = minutes % 60;
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h >= 12 && h < 24 ? 'PM' : 'AM'}`;
+}
+/** An instant as the office's wall clock, e.g. "6:02 PM"; empty when unreadable. */
+export function wallClock(iso: string | undefined, timeZone: string): string {
+  if (!iso || Number.isNaN(Date.parse(iso))) return '';
+  try { return new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit' }).format(new Date(iso)); }
+  catch { return new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }).format(new Date(iso)); }
+}
 export function validDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) &&
     new Date(value).toISOString().slice(0, 10) === value;
@@ -106,6 +127,22 @@ export function normalizeEvidence(data: Record<string, Row[]>, from: string, to:
   const statuses = new Map((data.attendance_day_status || []).map(r => [identity(r), r]));
   const seen = new Set<string>();
   const daysOff = data.days_off || [];
+  const timeZone = short(data.org_practice_settings?.[0]?.timezone, 60) || 'America/New_York';
+  // The clock, per attendance day: first in and last out of that day's entry.
+  const punchesByEntry = new Map<string, Row[]>();
+  for (const p of [...(data.punches || [])].sort((a, b) => String(a.punch_time).localeCompare(String(b.punch_time)))) {
+    if (p.time_entry_id) punchesByEntry.set(p.time_entry_id, [...(punchesByEntry.get(p.time_entry_id) ?? []), p]);
+  }
+  // The office's own schedule, per day: what the capture read off the posted grid.
+  const scheduleByDate = new Map<string, Row[]>();
+  for (const s of data.provider_day_metrics || []) {
+    if (s.business_date && validDate(s.business_date)) scheduleByDate.set(s.business_date, [...(scheduleByDate.get(s.business_date) ?? []), s]);
+  }
+  const edge = (rows: Row[], key: 'first_patient_minute' | 'last_patient_minute' | 'available_start_minute' | 'available_end_minute', pick: 'min' | 'max') => {
+    const values = rows.map(s => s[key]).filter((v): v is number => typeof v === 'number');
+    return values.length ? (pick === 'min' ? Math.min(...values) : Math.max(...values)) : null;
+  };
+  const columnLine = (s: Row) => `first patient ${clockLabel(s.first_patient_minute) ?? 'none visible'}, last patient left ${clockLabel(s.last_patient_minute) ?? 'none visible'}, available ${clockLabel(s.available_start_minute) ?? 'unknown'} to ${clockLabel(s.available_end_minute) ?? 'unknown'}`;
   function attendance(r: Row, table: string, status?: Row) {
     if (owners.has(r.user_id)) return;
     const day = r.entry_date;
@@ -133,6 +170,18 @@ export function normalizeEvidence(data: Record<string, Row[]>, from: string, to:
     if (off.length) parts.push(`Recorded time off: ${off.map(o => o.type).join(', ')}. Count the day-off record and this attendance day as the same event, not two absences.`);
     if (status?.timezone_suspect) parts.push('Time zone flagged for review; timing is uncertain.');
     if (status?.has_edits) parts.push('Record has corrections; a correction is not misconduct.');
+    const punches = table === 'time_entries' ? punchesByEntry.get(r.id) ?? [] : [];
+    const firstIn = punches.find(p => p.punch_type === 'in');
+    const lastOut = [...punches].reverse().find(p => p.punch_type === 'out');
+    if (punches.length) parts.push(`Clock: in ${wallClock(firstIn?.punch_time, timeZone) || 'not recorded'}, out ${wallClock(lastOut?.punch_time, timeZone) || 'not recorded'} (${punches.length} punches).`);
+    // The schedule beside the clock: the office's own posted schedule for the
+    // same day, read locally at close of day. Context, not a verdict.
+    const schedule = scheduleByDate.get(day);
+    if (schedule?.length) {
+      parts.push(`Office schedule capture that day: first patient ${clockLabel(edge(schedule, 'first_patient_minute', 'min')) ?? 'none visible'}, last patient left ${clockLabel(edge(schedule, 'last_patient_minute', 'max')) ?? 'none visible'}; on the grid: ${schedule.map(s => short(s.provider_label, 60)).filter(Boolean).join(', ') || 'no provider named'}.`);
+      const own = schedule.find(s => !!s.employee_id && s.employee_id === r.employee_id);
+      if (own) parts.push(`Their own column: ${columnLine(own)}.`);
+    }
     add(table, r, 'attendance', day, day, state, parts.join(' '), r.entry_comment);
   }
   for (const r of data.time_entries || []) { seen.add(identity(r)); attendance(r, 'time_entries', statuses.get(identity(r))); }
@@ -155,13 +204,18 @@ export function normalizeEvidence(data: Record<string, Row[]>, from: string, to:
     r.resolved ? 'reason_recorded' : 'awaiting_reason', `${r.incomplete_count} required items were incomplete at clock-out. This is a historical snapshot, not proof they remain incomplete now.`, r.reason);
   for (const r of data.accountability_reports || []) add('accountability_reports', r, 'accountability', r.period_start, r.period_end, r.status,
     `${r.kind}: ${short(r.summary,1000)}. ${r.review_due_at ? `Review due ${r.review_due_at}.` : ''}`, r.member_reason, r.manager_note);
+  // One record per provider per captured day. A provider linked to a team
+  // member is that person; an unlinked provider keeps the label the office
+  // gave the column (a staff name, never a patient).
+  for (const r of data.provider_day_metrics || []) add('provider_day_metrics', { ...r, employee_name: r.provider_label }, 'schedule_days', r.business_date, r.business_date, r.review_status,
+    `Schedule capture for ${short(r.provider_label, 100) || 'a provider'}: ${columnLine(r)}; ${r.scheduled_minutes ?? 'unknown'} min booked of ${r.net_bookable_minutes ?? 'unknown'} bookable, ${r.true_open_minutes ?? 'unknown'} min open. Read from the office's own posted schedule at close of day, not from the time clock.`);
   return out.sort((a,b) => b.period_start.localeCompare(a.period_start) || a.id.localeCompare(b.id));
 }
 
 export async function loadEvidence(db: EvidenceDb, orgId: string, filter: {from: string; to: string; source: Source; kind?: string; employeeId?: string}) {
   const {from,to,source,kind,employeeId} = filter;
   const data: Record<string,Row[]> = {}; const warnings: string[] = [];
-  async function read(table: string, columns: string, start?: string, end?: string, tune?: (q: Query) => Query) {
+  async function read(table: string, columns: string, start?: string, end?: string, tune?: (q: Query) => Query, limit = ROW_LIMIT) {
     let q = db.from(table).select(columns).eq('org_id',orgId);
     if (start) {
       if (from) q = q.gte(end || start,from);
@@ -169,11 +223,15 @@ export async function loadEvidence(db: EvidenceDb, orgId: string, filter: {from:
       q = q.order(start,{ascending:false});
     } else q = q.order('id');
     if (tune) q = tune(q);
-    const result = await q.limit(ROW_LIMIT);
+    const result = await q.limit(limit);
     if (result.error) throw new Error(`Could not load ${table.replace(/_/g,' ')}. Please retry.`);
     data[table] = result.data || [];
-    if (data[table].length === ROW_LIMIT) warnings.push(`${table.replace(/_/g,' ')} reached the ${ROW_LIMIT}-record limit. Narrow the date range.`);
+    if (data[table].length === limit) warnings.push(`${table.replace(/_/g,' ')} reached the ${limit}-record limit. Narrow the date range.`);
   }
+  // Punch times are UTC instants; a local day can start the previous UTC
+  // evening and end the next UTC morning. Read a day of slack each side and
+  // let the day's own time entry decide which day a punch belongs to.
+  const dayShift = (date: string, days: number) => { const d = new Date(date + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
   await read('employees','id,user_id,display_name,preferred_name');
   if (employeeId && !data.employees.some(e => e.id === employeeId)) throw new Error('Employee is not available in this office.');
   const personFilter = (column = 'employee_id') => (q: Query) => employeeId ? q.eq(column,employeeId) : q;
@@ -184,6 +242,16 @@ export async function loadEvidence(db: EvidenceDb, orgId: string, filter: {from:
     jobs.push(read('attendance_day_status','id,employee_id,user_id,entry_date,is_scheduled_day,office_closed,has_punches,is_absent,is_incomplete,is_late,minutes_late,tardy_approval_status,schedule_expected_start,schedule_expected_end,has_day_off,has_edits,timezone_suspect','entry_date',undefined,personFilter()));
     jobs.push(read('days_off','id,employee_id,user_id,date_start,date_end,type,hours,notes','date_start','date_end',personFilter()));
     jobs.push(read('attendance_exceptions','id,employee_id,user_id,exception_date,type,status,reason_text,resolution_action','exception_date',undefined,personFilter()));
+    jobs.push(read('punches','id,time_entry_id,employee_id,punch_time,punch_type',undefined,undefined,q=>{
+      let p = personFilter()(q);
+      if (from) p = p.gte('punch_time', dayShift(from, -1));
+      if (to) p = p.lte('punch_time', dayShift(to, 2));
+      return p;
+    }, 4000));
+    // The whole office's captures, whoever is selected: the last patient to
+    // leave the building is context for everyone who was there.
+    jobs.push(read('provider_day_metrics','id,employee_id,provider_label,business_date,review_status,first_patient_minute,last_patient_minute,available_start_minute,available_end_minute,scheduled_minutes,net_bookable_minutes,true_open_minutes','business_date'));
+    jobs.push(read('org_practice_settings','id,timezone'));
   }
   if (source === 'all' || source === 'checklists') {
     jobs.push(read('checklists','id,name,owner_user_id',undefined,undefined,q=>q.is('owner_user_id',null)));

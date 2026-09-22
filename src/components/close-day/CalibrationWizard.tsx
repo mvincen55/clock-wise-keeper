@@ -41,7 +41,7 @@ import { PMS_LABELS } from '@/lib/pms';
 import { describeWorkingHours, workingScheduleText, workingTime, type WorkingPeriod } from '@/lib/provider-working-schedule';
 import { providerColumn, suggestColumnProvider } from '@/lib/schedule-provider-mapping';
 import { useSaveLayoutProfile, useLayoutProfiles } from '@/hooks/useScheduleIntelligence';
-import { formatClockRange, hhmmToMinutes } from '@/lib/time-utils';
+import { formatClockRange, formatDate, hhmmToMinutes } from '@/lib/time-utils';
 import ProviderWorkingSchedule from '@/components/close-day/ProviderWorkingSchedule';
 import { wipeOcrWords } from '@/lib/schedule-reader/destroy-capture';
 import { columnsFromRegions, isNotesOnlyColumn, isEmptyBlueGridColumn } from '@/lib/schedule-reader/appointment-regions';
@@ -534,6 +534,8 @@ export default function CalibrationWizard({ open, onClose }: Props) {
               </li>
               {reviewed.map(col => {
                 const source = hoursSource(col);
+                const observed = teamHours[col.providerId!]?.observed;
+                const observedDiffers = observed && col.workingHours && workingScheduleText(observed.periods) !== workingScheduleText(col.workingHours);
                 return (
                   <li key={col.providerId} className="rounded-md border p-3">
                     <p className="font-medium">{col.providerLabel}</p>
@@ -541,6 +543,11 @@ export default function CalibrationWizard({ open, onClose }: Props) {
                       <>
                         <p>{describeWorkingHours(col.workingHours)}</p>
                         {source && <p className="text-xs text-muted-foreground">{source}</p>}
+                        {observedDiffers && (
+                          <p className="text-xs text-muted-foreground">
+                            Captures show {describeWorkingHours(observed.periods)} ({observed.days} days since {formatDate(observed.since)}).
+                          </p>
+                        )}
                       </>
                     ) : (
                       <p className="text-xs text-muted-foreground">

@@ -6,6 +6,7 @@ import {
   type ProviderBuildInput,
   type RowStatus,
 } from '@/lib/schedule-reader/metrics-builder';
+import { observedDay } from '@/lib/schedule-reader/metrics-builder';
 import { computeRollup, refereeMetrics } from '@/lib/schedule-reader/metrics-referee';
 import type { ClassifiedBlock } from '@/lib/schedule-reader/types';
 
@@ -159,5 +160,24 @@ describe('row reduction', () => {
     expect(reduceRow(['open', 'no_show']).category).toBe('no_show');
     expect(reduceRow(['blocked', 'open']).category).toBe('open');
     expect(reduceRow([null, null]).category).toBeNull();
+  });
+});
+
+describe('observedDay', () => {
+  const row = (category: 'scheduled' | 'completed' | 'open' | 'blocked' | 'cancelled' | null) => ({ category, scheduledColumns: category === 'scheduled' || category === 'completed' ? 1 : 0 });
+  it('reads where patients and bookable time sat on the grid, in minutes from midnight', () => {
+    // 8:00 start, 10-minute rows: blocked, open, scheduled, scheduled, cancelled, open, blocked, null
+    const rows = [row('blocked'), row('open'), row('scheduled'), row('completed'), row('cancelled'), row('open'), row('blocked'), row(null)];
+    expect(observedDay(rows, 10, 480)).toEqual({ firstPatientMinute: 500, lastPatientMinute: 520, availableStartMinute: 490, availableEndMinute: 540 });
+  });
+  it('is null without a day start or without anything of the kind visible', () => {
+    expect(observedDay([row('scheduled')], 10)).toEqual({ firstPatientMinute: null, lastPatientMinute: null, availableStartMinute: null, availableEndMinute: null });
+    expect(observedDay([row('blocked'), row(null)], 10, 480)).toEqual({ firstPatientMinute: null, lastPatientMinute: null, availableStartMinute: null, availableEndMinute: null });
+    expect(observedDay([row('open')], 30, 480)).toEqual({ firstPatientMinute: null, lastPatientMinute: null, availableStartMinute: 480, availableEndMinute: 510 });
+  });
+  it('rides along on built metrics and survives the referee', () => {
+    const metrics = buildProviderMetrics({ providerLabel: 'Cori', providerRole: 'hygienist', department: 'hygiene', employeeId: null, businessDate: '2026-09-21', rows: [row('open'), row('scheduled'), row('scheduled'), row('open')], minutesPerRow: 60, activeColumns: 1, blocks: [], supportStaffAssigned: null, ocrConfidence: 1, layoutConfidence: 1, dayStartMinutes: 480 });
+    expect(metrics).toMatchObject({ firstPatientMinute: 540, lastPatientMinute: 660, availableStartMinute: 480, availableEndMinute: 720 });
+    expect(refereeMetrics({ providers: [metrics], blocks: [], rollup: computeRollup([metrics]) }).ok).toBe(true);
   });
 });
