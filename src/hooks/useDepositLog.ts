@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import type { Tables } from '@/integrations/supabase/types';
+import { getToday, shiftDate } from '@/lib/time-utils';
 import { scrubFreeText } from '../../supabase/functions/_shared/phi-scrub';
 
 // Daily deposit sheet: one record per office day. Check amounts only —
@@ -43,6 +44,34 @@ export function useDepositLog(date: string) {
         .maybeSingle();
       if (error) throw error;
       return data;
+    },
+  });
+}
+
+/**
+ * The office's closeouts for the last `days` days through today, oldest
+ * first — what Attention reads to know whether Close the Day is behind and
+ * which saved days were never sealed.
+ */
+export function useRecentDepositLogs(days = 14) {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+  const today = getToday();
+  const start = shiftDate(today, -days);
+
+  return useQuery({
+    queryKey: ['deposit-logs-recent', ctx?.org_id, start, today],
+    enabled: !!user && !!ctx,
+    queryFn: async (): Promise<DepositLog[]> => {
+      const { data, error } = await supabase
+        .from('deposit_logs')
+        .select('*')
+        .eq('org_id', ctx!.org_id)
+        .gte('deposit_date', start)
+        .lte('deposit_date', today)
+        .order('deposit_date');
+      if (error) throw error;
+      return data ?? [];
     },
   });
 }
@@ -124,6 +153,7 @@ export function useSaveDepositLog() {
     },
     onSuccess: (_, input) => {
       qc.invalidateQueries({ queryKey: ['deposit-log', ctx?.org_id, input.depositDate] });
+      qc.invalidateQueries({ queryKey: ['deposit-logs-recent'] });
       qc.invalidateQueries({ queryKey: ['practice-vitals'] });
     },
   });
@@ -153,6 +183,7 @@ export function useSealDay() {
     },
     onSuccess: (_, input) => {
       qc.invalidateQueries({ queryKey: ['deposit-log', ctx?.org_id, input.depositDate] });
+      qc.invalidateQueries({ queryKey: ['deposit-logs-recent'] });
     },
   });
 }
