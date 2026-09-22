@@ -84,6 +84,52 @@ export function currentScheduleByEmployee(schedules: TeamSchedule[], today: stri
   return result;
 }
 
+/** One captured day for a provider, as provider_day_metrics stores it. */
+export type ObservedDay = {
+  businessDate: string;
+  availableStartMinute: number | null;
+  availableEndMinute: number | null;
+  firstPatientMinute: number | null;
+  lastPatientMinute: number | null;
+};
+
+/** Weekly hours learned from captures, with how much they rest on. */
+export type ObservedHours = { periods: WorkingPeriod[]; days: number; since: string };
+
+/**
+ * Weekly hours as the office's own captures have shown them. For each weekday
+ * with at least `minDays` captured days, the provider's visible availability
+ * (booked or open; patients alone when the grid showed no open slots) gives a
+ * start and an end; the period is the lower median start and upper median end,
+ * both real observed values. A weekday with too few captures stays unknown —
+ * never guessed from other days — so a provider who is never captured on
+ * Fridays is unknown on Fridays, not off.
+ */
+export function observedHoursByWeekday(days: ObservedDay[], minDays = 2): ObservedHours | null {
+  const byWeekday = new Map<number, Array<{ start: number; end: number; date: string }>>();
+  for (const d of days) {
+    const start = d.availableStartMinute ?? d.firstPatientMinute;
+    const end = d.availableEndMinute ?? d.lastPatientMinute;
+    if (start === null || end === null || end <= start || !/^\d{4}-\d{2}-\d{2}$/.test(d.businessDate)) continue;
+    const weekday = new Date(`${d.businessDate}T12:00:00Z`).getUTCDay();
+    byWeekday.set(weekday, [...(byWeekday.get(weekday) ?? []), { start, end, date: d.businessDate }]);
+  }
+  const sorted = (values: number[]) => [...values].sort((a, b) => a - b);
+  const periods: WorkingPeriod[] = [];
+  let count = 0;
+  let since: string | null = null;
+  for (const [weekday, spans] of byWeekday) {
+    if (spans.length < minDays) continue;
+    const starts = sorted(spans.map(s => s.start));
+    const ends = sorted(spans.map(s => s.end));
+    periods.push({ weekday, startMinutes: starts[Math.floor((starts.length - 1) / 2)], endMinutes: ends[Math.ceil((ends.length - 1) / 2)] });
+    count += spans.length;
+    for (const s of spans) if (!since || s.date < since) since = s.date;
+  }
+  if (!periods.length || !since) return null;
+  return { periods: periods.sort((a, b) => a.weekday - b.weekday), days: count, since };
+}
+
 /**
  * Working hours as one readable line — "Mon 8:25 AM–5:00 PM · Tue off" —
  * for a glance-and-confirm summary. Split shifts list every range; unlisted

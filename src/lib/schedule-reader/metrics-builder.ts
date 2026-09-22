@@ -141,6 +141,36 @@ export interface ProviderBuildInput {
   supportStaffAssigned: number | null;
   ocrConfidence: number; // 0–1
   layoutConfidence: number; // 0–1
+  /** Minutes from midnight of row 0; without it the observed day stays null. */
+  dayStartMinutes?: number;
+}
+
+/**
+ * Where the provider's day actually sat on the grid: the first and last
+ * booked row (patients seated and gone) and the first and last row that was
+ * theirs to book (booked or open). Blocked and unknown rows are neither.
+ */
+export function observedDay(
+  rows: Array<{ category: RowStatus }>,
+  minutesPerRow: number,
+  dayStartMinutes?: number
+): Pick<ProviderDayMetrics, 'firstPatientMinute' | 'lastPatientMinute' | 'availableStartMinute' | 'availableEndMinute'> {
+  const none = { firstPatientMinute: null, lastPatientMinute: null, availableStartMinute: null, availableEndMinute: null };
+  if (dayStartMinutes === undefined) return none;
+  let firstPatient = -1, lastPatient = -1, firstAvailable = -1, lastAvailable = -1;
+  rows.forEach((row, i) => {
+    const booked = row.category === 'scheduled' || row.category === 'completed';
+    const available = booked || row.category === 'open' || row.category === 'cancelled' || row.category === 'no_show' || row.category === 'moved';
+    if (booked) { if (firstPatient < 0) firstPatient = i; lastPatient = i; }
+    if (available) { if (firstAvailable < 0) firstAvailable = i; lastAvailable = i; }
+  });
+  const at = (i: number) => dayStartMinutes + i * minutesPerRow;
+  return {
+    firstPatientMinute: firstPatient < 0 ? null : at(firstPatient),
+    lastPatientMinute: lastPatient < 0 ? null : at(lastPatient + 1),
+    availableStartMinute: firstAvailable < 0 ? null : at(firstAvailable),
+    availableEndMinute: lastAvailable < 0 ? null : at(lastAvailable + 1),
+  };
 }
 
 function runs(rows: Array<{ category: RowStatus }>, wanted: ScheduleStatus): number[] {
@@ -320,5 +350,7 @@ export function buildProviderMetrics(input: ProviderBuildInput): ProviderDayMetr
     }),
     confidence,
     reviewStatus: confidence >= CONFIDENCE_THRESHOLD ? 'auto_accepted' : 'needs_review',
+
+    ...observedDay(input.rows, mpr, input.dayStartMinutes),
   };
 }

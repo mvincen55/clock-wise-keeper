@@ -6360,6 +6360,8 @@ export type Database = {
         Row: {
           active_columns: number
           automated_workload_class: string | null
+          available_end_minute: number | null
+          available_start_minute: number | null
           business_date: string
           cancellation_count: number
           cancellation_open_minutes: number
@@ -6370,9 +6372,11 @@ export type Database = {
           created_by: string
           department: string
           employee_id: string | null
+          first_patient_minute: number | null
           gross_available_minutes: number
           id: string
           intentional_unavailable_minutes: number
+          last_patient_minute: number | null
           longest_booked_stretch_minutes: number | null
           net_bookable_minutes: number
           no_show_count: number
@@ -6399,6 +6403,8 @@ export type Database = {
         Insert: {
           active_columns?: number
           automated_workload_class?: string | null
+          available_end_minute?: number | null
+          available_start_minute?: number | null
           business_date: string
           cancellation_count?: number
           cancellation_open_minutes?: number
@@ -6409,9 +6415,11 @@ export type Database = {
           created_by: string
           department: string
           employee_id?: string | null
+          first_patient_minute?: number | null
           gross_available_minutes?: number
           id?: string
           intentional_unavailable_minutes?: number
+          last_patient_minute?: number | null
           longest_booked_stretch_minutes?: number | null
           net_bookable_minutes?: number
           no_show_count?: number
@@ -6438,6 +6446,8 @@ export type Database = {
         Update: {
           active_columns?: number
           automated_workload_class?: string | null
+          available_end_minute?: number | null
+          available_start_minute?: number | null
           business_date?: string
           cancellation_count?: number
           cancellation_open_minutes?: number
@@ -6448,9 +6458,11 @@ export type Database = {
           created_by?: string
           department?: string
           employee_id?: string | null
+          first_patient_minute?: number | null
           gross_available_minutes?: number
           id?: string
           intentional_unavailable_minutes?: number
+          last_patient_minute?: number | null
           longest_booked_stretch_minutes?: number | null
           net_bookable_minutes?: number
           no_show_count?: number

@@ -260,6 +260,7 @@ export async function processScheduleFrame(
         supportStaffAssigned: options.supportStaffByProvider?.[label] ?? null,
         ocrConfidence,
         layoutConfidence: match.confidence,
+        dayStartMinutes: grid.dayStartMinutes,
       });
       if (availability.conflict) availabilityConflicts.push(label);
       return availability.conflict ? { ...metrics, reviewStatus: 'needs_review' as const } : metrics;
@@ -284,6 +285,7 @@ export async function processScheduleFrame(
       rollup,
       providerRows,
       minutesPerRow: grid.minutesPerRow,
+      dayStartMinutes: grid.dayStartMinutes,
       needsReview:
         match.needsColumnConfirmation || providers.some(p => p.reviewStatus === 'needs_review'),
     };

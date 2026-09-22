@@ -39,6 +39,35 @@ describe('analyst evidence',()=>{
     const rows=normalizeEvidence({employees,days_off:[{id:'111111',employee_id:'e1',date_start:'2026-08-29',date_end:'2026-09-03',type:'scheduled_with_notice'}],checklist_bypasses:[{id:'222222',employee_id:'e1',checklist_date:'2026-09-02',incomplete_count:2,resolved:true,reason:'Coverage change'}]},'2026-09-01','2026-09-10');
     expect(rows).toHaveLength(2);expect(rows[0].status).toBe('reason_recorded');expect(rows[0].member_reason).toBe('Coverage change');
   });
+  it('puts the clock and the office schedule capture side by side on an attendance day',()=>{
+    const data={employees:[...employees,{id:'e3',user_id:'u3',display_name:'Cori'}],org_practice_settings:[{id:'settings',timezone:'America/New_York'}],
+      time_entries:[{id:'aaaaaaaa-0000-0000-0000-000000000001',employee_id:'e1',entry_date:'2026-09-21',total_minutes:602},{id:'aaaaaaaa-0000-0000-0000-000000000002',employee_id:'e3',entry_date:'2026-09-21',total_minutes:510}],
+      punches:[
+        {id:'p2',time_entry_id:'aaaaaaaa-0000-0000-0000-000000000001',employee_id:'e1',punch_time:'2026-09-21T22:02:00Z',punch_type:'out'},
+        {id:'p1',time_entry_id:'aaaaaaaa-0000-0000-0000-000000000001',employee_id:'e1',punch_time:'2026-09-21T11:58:00Z',punch_type:'in'},
+        {id:'p3',time_entry_id:'aaaaaaaa-0000-0000-0000-000000000002',employee_id:'e3',punch_time:'2026-09-21T12:20:00Z',punch_type:'in'},
+      ],
+      provider_day_metrics:[
+        {id:'bbbbbbbb-0000-0000-0000-000000000001',employee_id:'e3',provider_label:'Cori',business_date:'2026-09-21',review_status:'auto_accepted',first_patient_minute:520,last_patient_minute:1010,available_start_minute:520,available_end_minute:1010,scheduled_minutes:400,net_bookable_minutes:490,true_open_minutes:90},
+        {id:'bbbbbbbb-0000-0000-0000-000000000002',employee_id:null,provider_label:'Lucia',business_date:'2026-09-21',review_status:'user_confirmed',first_patient_minute:520,last_patient_minute:1020,available_start_minute:520,available_end_minute:1020,scheduled_minutes:430,net_bookable_minutes:500,true_open_minutes:70},
+      ]};
+    const rows=normalizeEvidence(data,'2026-09-01','2026-09-30');
+    const megan=rows.find(r=>r.kind==='attendance'&&r.who==='Megan')!;
+    expect(megan.summary).toContain('Clock: in 7:58 AM, out 6:02 PM (2 punches).');
+    expect(megan.summary).toContain('Office schedule capture that day: first patient 8:40 AM, last patient left 5:00 PM; on the grid: Cori, Lucia.');
+    expect(megan.summary).not.toContain('Their own column');
+    const cori=rows.find(r=>r.kind==='attendance'&&r.who==='Cori')!;
+    expect(cori.summary).toContain('Clock: in 8:20 AM, out not recorded (1 punches).');
+    expect(cori.summary).toContain('Their own column: first patient 8:40 AM, last patient left 4:50 PM, available 8:40 AM to 4:50 PM.');
+    const captures=rows.filter(r=>r.kind==='schedule_days');
+    expect(captures.map(r=>r.who).sort()).toEqual(['Cori','Lucia']);
+    expect(captures.find(r=>r.who==='Lucia')!.summary).toContain('last patient left 5:00 PM');
+    expect(captures.every(r=>r.kind_label==='Schedule captures'&&r.source_table==='provider_day_metrics')).toBe(true);
+    // The selected-employee boundary keeps the office capture as context on their day and their own column only.
+    const mine=normalizeEvidence(data,'2026-09-01','2026-09-30','e1');
+    expect(mine.map(r=>r.kind)).toEqual(['attendance']);
+    expect(mine[0].summary).toContain('last patient left 5:00 PM');
+  });
   it('honors the selected employee even for employees without logins',()=>{
     const rows=normalizeEvidence({employees,time_entries:[{id:'111111',employee_id:'e1',entry_date:'2026-09-10'},{id:'222222',employee_id:'e2',entry_date:'2026-09-10'}]},'','','e2');
     expect(rows.map(r=>r.who)).toEqual(['Pending hire']);
@@ -79,6 +108,14 @@ describe('evidence queries',()=>{
     expect(calls).toContainEqual({table:'days_off',method:'gte',args:['date_end','2026-09-01']});
     expect(calls).toContainEqual({table:'accountability_reports',method:'eq',args:['subject_employee_id','e1']});
     expect(calls).toContainEqual({table:'checklist_completions',method:'eq',args:['completed_by','u1']});
+    // The clock comes with a day of slack each side (UTC instants, local days); the
+    // office's captures come whole, whoever is selected, as context for their days.
+    expect(calls).toContainEqual({table:'punches',method:'eq',args:['employee_id','e1']});
+    expect(calls).toContainEqual({table:'punches',method:'gte',args:['punch_time','2026-08-31']});
+    expect(calls).toContainEqual({table:'punches',method:'lte',args:['punch_time','2026-09-17']});
+    expect(calls).toContainEqual({table:'provider_day_metrics',method:'gte',args:['business_date','2026-09-01']});
+    expect(calls.filter(c=>c.table==='provider_day_metrics'&&c.method==='eq').map(c=>c.args)).toEqual([['org_id','office']]);
+    expect(calls).toContainEqual({table:'org_practice_settings',method:'eq',args:['org_id','office']});
   });
   it('does not turn a source failure into zero records',async()=>{
     const {db}=fakeDb('checklist_completions');await expect(loadEvidence(db,'office',{from:'',to:'',source:'checklists'})).rejects.toThrow('Could not load checklist completions');
