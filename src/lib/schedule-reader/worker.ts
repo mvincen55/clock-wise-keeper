@@ -158,7 +158,7 @@ export async function processScheduleFrame(
   frame: CaptureFrame,
   options: ProcessOptions
 ): Promise<ScheduleAnalysis> {
-  const { words, regions = [], confidence: ocrConfidence } = await recognizeFrame(frame.canvas);
+  const { words, regions = [], railWords = [], confidence: ocrConfidence } = await recognizeFrame(frame.canvas);
 
   try {
     // Privacy gate FIRST. Failing it stops everything.
@@ -188,7 +188,7 @@ export async function processScheduleFrame(
     }
 
     const grid = options.profile.signature.timeGrid;
-    const rail = detectTimeRail(words, frame.width, grid.dayStartMinutes);
+    const rail = detectTimeRail([...words, ...railWords], frame.width, grid.dayStartMinutes);
     const rows = gridRows(rail, frame.height, options.profile);
     if (rows.length === 0) {
       throw new ScheduleReaderError('LAYOUT_NOT_RECOGNIZED', { reason: 'empty_time_grid' });
@@ -292,6 +292,7 @@ export async function processScheduleFrame(
   } finally {
     // Raw OCR text dies here on every path. Only structured metrics leave.
     wipeOcrWords(words);
+    wipeOcrWords(railWords);
   }
 }
 
