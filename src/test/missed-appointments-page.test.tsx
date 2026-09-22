@@ -153,10 +153,10 @@ describe('Missed appointments page', () => {
   });
 });
 
-describe('Missed appointments lives under Management', () => {
+describe('Missed appointments lives under Management → Office', () => {
   const read = (p: string) => readFileSync(resolve(__dirname, '..', p), 'utf8');
-  it('is routed and linked from the Management grid', () => {
+  it('is routed and linked from the Office index', () => {
     expect(read('App.tsx')).toMatch(/path="\/management\/missed-appointments"/);
-    expect(read('pages/Management.tsx')).toContain("to: '/management/missed-appointments'");
+    expect(read('pages/management/OfficeIndex.tsx')).toContain("to: '/management/missed-appointments'");
   });
 });

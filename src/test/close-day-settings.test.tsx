@@ -1,10 +1,13 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import Settings from '@/pages/Settings';
+import OfficeSettings from '@/pages/management/OfficeSettings';
 import WorkflowSettings from '@/pages/WorkflowSettings';
 const state = vi.hoisted(() => ({ role: 'owner' }));
-vi.mock('@/hooks/useOrgContext', () => ({ useOrgContext: () => ({ data: { role: state.role } }) }));
+vi.mock('@/hooks/useOrgContext', () => ({ useOrgContext: () => ({ data: { role: state.role }, isLoading: false }) }));
+vi.mock('@/hooks/useAttentionItems', () => ({ useAttentionItems: () => ({ counts: { needsNow: 0 } }) }));
+vi.mock('@/components/settings/AttendanceGraceSettingsCard', () => ({ default: () => null }));
+vi.mock('@/components/settings/WorkZonesCard', () => ({ default: () => null }));
 vi.mock('@/components/onboarding/PrivacyTermsCard', () => ({ default: () => null }));
 vi.mock('@/components/OrgBrandingCard', () => ({ default: () => null }));
 vi.mock('@/components/accountability/EscalationPoliciesCard', () => ({ default: () => null }));
@@ -27,7 +30,7 @@ vi.mock('@/components/DepositSettingsCard', () => ({ default: () => null }));
 
 const scroll = vi.fn();
 beforeEach(() => { state.role = 'owner'; HTMLElement.prototype.scrollIntoView = scroll; vi.clearAllMocks(); });
-function mount() { render(<MemoryRouter initialEntries={['/settings/workflows?closingDate=2026-06-08#schedule-intelligence']}><Routes><Route path='/settings/schedule-intelligence' element={<WorkflowSettings kind='schedule-intelligence' />} /><Route path='/settings/:tab' element={<Settings />} /></Routes></MemoryRouter>); }
+function mount() { render(<MemoryRouter initialEntries={['/management/office/settings?closingDate=2026-06-08#schedule-intelligence']}><Routes><Route path='/settings/schedule-intelligence' element={<WorkflowSettings kind='schedule-intelligence' />} /><Route path='/management/office/settings' element={<OfficeSettings />} /><Route path='/' element={<p>Home</p>} /></Routes></MemoryRouter>); }
 it.each(['owner', 'manager'])('opens the configuration section and focuses it for %s', role => {
  state.role = role; mount();
  const section = screen.getByRole('heading', { name: 'Schedule Intelligence' });
@@ -40,7 +43,8 @@ it.each(['owner', 'manager'])('opens the configuration section and focuses it fo
 it('does not expose configuration to employees through a direct URL', () => {
  state.role = 'employee'; mount();
  expect(screen.queryByText('Expanded calibration')).not.toBeInTheDocument();
- expect(screen.getByText('Your personal preferences.')).toBeInTheDocument();
+ // Members are sent home by the Management shell; nothing office-wide renders.
+ expect(screen.getByText('Home')).toBeInTheDocument();
 });
 
 it.each([

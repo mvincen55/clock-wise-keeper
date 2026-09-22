@@ -110,6 +110,15 @@ export const KIND_VERB: Record<AttentionKind, AttentionVerb> = {
 
 export const itemKey = (kind: AttentionKind, recordId: string) => `${kind}:${recordId}`;
 
+/**
+ * Kinds whose office rule asks for a manager follow-up and nothing else: a
+ * `followed_up` follow-up satisfies the rule, so the item leaves Attention
+ * even though the record itself does not change (the bypass reason stays
+ * owed on the person's record; the staffing answer stays on the closeout).
+ * Every other kind leaves only when its record changes.
+ */
+export const FOLLOWUP_RESOLVES: ReadonlySet<AttentionKind> = new Set<AttentionKind>(['staffing_answer', 'bypass_followup']);
+
 function hoursBetween(fromIso: string | null, toIso: string): number | null {
   if (!fromIso) return null;
   const from = new Date(fromIso.length === 10 ? `${fromIso}T12:00:00Z` : fromIso).getTime();
@@ -158,6 +167,7 @@ export function deriveAttention(src: AttentionSources): AttentionResult {
     const key = itemKey(partial.kind, partial.recordId);
     if (items.has(key)) return;
     const f = followupFor(key);
+    if (f?.work_state === 'followed_up' && FOLLOWUP_RESOLVES.has(partial.kind)) return; // the rule's follow-up is on record
     const parkedUntil = f?.parked_until && stillAhead(f.parked_until) ? f.parked_until : null;
     const snoozedUntil = f?.snoozed_until && stillAhead(f.snoozed_until) ? f.snoozed_until : null;
     const work: WorkState = f?.work_state ?? 'needs_action';
@@ -313,8 +323,6 @@ export function deriveAttention(src: AttentionSources): AttentionResult {
     if (b.resolved) continue;
     const age = hoursBetween(b.bypassed_at, nowIso) ?? 0;
     if (age < rules.bypassReasonHours) continue;
-    const key = itemKey('bypass_followup', b.id);
-    if (followupFor(key)?.work_state === 'followed_up') continue; // the rule's manager follow-up is on record
     add({ kind: 'bypass_followup', recordTable: 'checklist_bypasses', recordId: b.id, subject: subjectOf(b.employee_id, b.user_id),
       label: `Checklist bypass reason owed · ${b.checklist_date}`, detail: `${b.incomplete_count} item${b.incomplete_count === 1 ? '' : 's'} were open · level ${b.escalation_level}`,
       why: `Office rule: a bypass reason owed past ${rules.bypassReasonHours} hours needs manager follow-up.`, occurredAt: b.bypassed_at, deadline: null, coverage: false, payroll: false,
@@ -333,7 +341,7 @@ export function deriveAttention(src: AttentionSources): AttentionResult {
     if ((a.escalation_level ?? 0) < rules.ackManagerLevel) continue;
     add({ kind: 'ack_escalated', recordTable: 'knowledge_acknowledgments', recordId: a.id, subject: subjectOf(a.employee_id, a.user_id),
       label: `Acknowledgment escalated to you · ${a.title_snapshot ?? 'published version'}`, detail: a.overdue_at ? `Overdue since ${a.overdue_at.slice(0, 10)}` : '',
-      why: 'The acknowledgment ladder reached the manager step.', occurredAt: a.overdue_at, deadline: null, coverage: false, payroll: false, href: `/acknowledgments?assignment=${a.id}` });
+      why: 'The acknowledgment ladder reached the manager step.', occurredAt: a.overdue_at, deadline: null, coverage: false, payroll: false, href: `/management/office/acknowledgments?assignment=${a.id}` });
   }
   if (sourceOk('training', src.training)) for (const t of src.training!) {
     if (t.status === 'completed' || !t.due_date || t.due_date >= today) continue;

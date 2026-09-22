@@ -22,7 +22,7 @@ const asEmployee = { role: 'employee' as const };
 describe('notification routing — every current type has a destination', () => {
   it('routes PTO requests by role', () => {
     const manager = resolveNotificationDestination(n('pto_request_new', 'pto_requests', 'pto-1'), asManager);
-    expect(manager.to).toBe('/approvals?tab=pto-requests&request=pto-1');
+    expect(manager.to).toBe('/management?item=pto_request:pto-1');
     expect(manager.exact).toBe(true);
     expect(manager.fallback).toBe(false);
 
@@ -38,7 +38,7 @@ describe('notification routing — every current type has a destination', () => 
 
   it('routes correction requests to the queue for managers and history for employees', () => {
     expect(resolveNotificationDestination(n('correction_request_new', 'correction_requests', 'cr-1'), asManager).to)
-      .toBe('/approvals?tab=corrections&request=cr-1');
+      .toBe('/management?item=correction_request:cr-1');
     expect(resolveNotificationDestination(n('correction_approved', 'correction_requests', 'cr-2'), asEmployee).to)
       .toBe('/my-requests?correction=cr-2');
     expect(resolveNotificationDestination(n('correction_denied', 'correction_requests', 'cr-3'), asEmployee).to)
@@ -47,7 +47,7 @@ describe('notification routing — every current type has a destination', () => 
 
   it('routes change requests by role', () => {
     expect(resolveNotificationDestination(n('change_request_new', 'change_requests', 'ch-1'), asOwner).to)
-      .toBe('/approvals?tab=change-requests&request=ch-1');
+      .toBe('/management?item=change_request:ch-1');
     expect(resolveNotificationDestination(n('change_request_approved', 'change_requests', 'ch-2'), asEmployee).to)
       .toBe('/my-requests?request=ch-2');
     expect(resolveNotificationDestination(n('change_request_denied', 'change_requests', 'ch-3'), asEmployee).to)
@@ -101,7 +101,7 @@ describe('notification routing — every current type has a destination', () => 
       'knowledge_acknowledgment_owner_escalation',
     ]) {
       const dest = resolveNotificationDestination(n(type, 'knowledge_acknowledgments', 'ack-7'), asManager);
-      expect(dest.to).toBe('/acknowledgments?assignment=ack-7');
+      expect(dest.to).toBe('/management/office/acknowledgments?assignment=ack-7');
       expect(dest.exact).toBe(true);
     }
   });
@@ -110,14 +110,14 @@ describe('notification routing — every current type has a destination', () => 
     expect(resolveNotificationDestination(n('accountability_record', 'accountability_reports', 'r-1'), asEmployee).to)
       .toBe('/?record=r-1');
     expect(resolveNotificationDestination(n('accountability_review_due', 'accountability_reports', 'r-2'), asManager).to)
-      .toBe('/management?record=r-2');
+      .toBe('/management?item=record_signoff:r-2');
     expect(resolveNotificationDestination(n('accountability_escalation', 'accountability_reports', 'r-3'), asOwner).to)
-      .toBe('/management?record=r-3');
+      .toBe('/management?item=record_signoff:r-3');
   });
 
   it('routes checklist bypasses to the team view for managers only', () => {
     expect(resolveNotificationDestination(n('checklist_bypass', 'checklist_bypasses', 'b-1'), asManager).to)
-      .toBe('/team?bypass=b-1');
+      .toBe('/management/people?view=patterns&bypass=b-1');
     // Employees have no bypass surface; they get the checklists module, not a manager page.
     expect(resolveNotificationDestination(n('checklist_bypass', 'checklist_bypasses', 'b-1'), asEmployee).to)
       .toBe('/checklists');
@@ -143,9 +143,9 @@ describe('notification routing — every current type has a destination', () => 
 
   it('routes integrity notices to settings (no per-event screen exists)', () => {
     expect(resolveNotificationDestination(n('integrity_elevated', 'security_events', 'sec-1'), asOwner).to)
-      .toBe('/settings');
+      .toBe('/management/office/settings');
     expect(resolveNotificationDestination(n('integrity_digest', 'security_events', null), asOwner).to)
-      .toBe('/settings');
+      .toBe('/management/office/settings');
   });
 });
 
@@ -154,7 +154,7 @@ describe('notification routing — legacy and missing metadata', () => {
     expect(resolveNotificationDestination(n('pto_request_approved', 'pto_requests', null), asEmployee))
       .toMatchObject({ to: '/pto', exact: false });
     expect(resolveNotificationDestination(n('correction_request_new', 'correction_requests', null), asManager))
-      .toMatchObject({ to: '/approvals?tab=corrections', exact: false });
+      .toMatchObject({ to: '/management?kind=decide', exact: false });
     expect(resolveNotificationDestination(n('goal_step_due', null, null), asEmployee))
       .toMatchObject({ to: '/checklists', exact: false });
     expect(resolveNotificationDestination(n('incident_report_new', 'incident_reports', null), asManager))
@@ -219,6 +219,9 @@ describe('notification routing — producer inventory contract', () => {
     'knowledge_acknowledgment_question',
     'knowledge_acknowledgment_question_answered',
     'accountability_escalation',
+    // supabase/migrations — the manager experience's audited paths (Phase 2)
+    'pto_request_reversed',
+    'knowledge_approval_withdrawn',
     // supabase/functions/office-pulse — notification_type is `ai_${kind}`
     'ai_goal_task_due',
     'ai_training_due',

@@ -135,7 +135,7 @@ describe('NotificationBell interactions', () => {
     openBell();
     fireEvent.click(await screen.findByText('New PTO Request'));
     await waitFor(() =>
-      expect(screen.getByTestId('location')).toHaveTextContent('/approvals?tab=pto-requests&request=pto-42')
+      expect(screen.getByTestId('location')).toHaveTextContent('/management?item=pto_request:pto-42')
     );
     expect(markReadMutate).toHaveBeenCalledWith('n1');
   });

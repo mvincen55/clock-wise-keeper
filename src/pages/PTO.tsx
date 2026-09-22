@@ -406,7 +406,7 @@ export default function PTO() {
                 PTO policy settings moved to Settings, next to the other office policies.
               </p>
               <Button asChild variant="outline">
-                <Link to="/settings/people">Open PTO policy settings</Link>
+                <Link to="/management/office/settings#pto">Open PTO policy settings</Link>
               </Button>
             </CardContent>
           </Card>

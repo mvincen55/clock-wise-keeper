@@ -214,7 +214,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
           label: 'Approvals pending',
           detail: `${approvals?.ptoRequests ?? 0} PTO · ${approvals?.corrections ?? 0} corrections · ${approvals?.changeRequests ?? 0} changes`,
           value: String(approvals?.total ?? 0),
-          href: '/approvals',
+          href: '/management?kind=decide',
           tone: (approvals?.total ?? 0) > 0 ? 'attention' : 'calm',
         },
         {
@@ -276,7 +276,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
           label: `${staffing.reviewCount} attendance item${staffing.reviewCount === 1 ? '' : 's'} need review`,
           detail: staffing.reviewDetail,
           value: String(staffing.reviewCount),
-          href: '/team',
+          href: '/management/people',
           tone: 'attention',
         });
       }
@@ -393,7 +393,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         ? {
             title: 'Sign your record',
             detail: 'A record is waiting on your response before it moves on.',
-            href: '/management',
+            href: '/',
             cta: 'Open record',
           }
         : bypasses.length > 0
@@ -464,7 +464,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         label: 'Records awaiting my response',
         detail: 'You always get to add your side.',
         value: String(openReports.length),
-        href: '/management',
+        href: '/',
         tone: 'urgent',
       },
     ];

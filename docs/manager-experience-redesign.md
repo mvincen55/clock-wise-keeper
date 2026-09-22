@@ -690,8 +690,10 @@ the panel calls their mutations directly rather than mounting them.
    approved request without a ledger credit.
 2. A knowledge "withdraw approval" path (`review_knowledge_version` accepts approved or
    changes_requested only).
-3. An audit event on seal and unseal: `useSealDay` toggles `sealed_at` and writes none, and
-   the day-close audit trigger was dropped in July.
+3. An audit event on seal and unseal: `useSealDay` toggles `sealed_at` and writes none. The
+   `log_day_close_change` trigger is defined in the July migrations and no later migration
+   drops it (whether it exists in the live database can only be checked there); even when
+   present it logs past-day field diffs only, never a same-day seal or unseal.
 4. A manager-to-employee "explain this day" request. Correction requests are employee-authored.
 5. Persistence for Layer 2 and 3: a small `manager_followups` table (org, item key, work state,
    owner, requested at, due at, parked until, snoozed until, note, created by) unless a probe
@@ -837,3 +839,55 @@ one, and is calm while the office is still working.
 audited reversal paths (§9 "paths that do not exist yet"), the PTO office-wide default, Home
 and mobile composition. Existing pages keep reading their own hooks until Phase 2 wires them
 to the selector.
+
+### Phase 2 — the Management rooms, the audited paths, the office PTO policy
+
+**Landed**
+
+- `ManagementShell` with four rooms: `/management` is Attention; `/management/people` (Today ·
+  Everyone · Team Attendance · Patterns) and `/management/people/:employeeId` (the
+  five-section person record, with the schedule editor moved out of the roster card into
+  `ScheduleTab`); `/management/payroll` (readiness from `deriveReadiness`, a period picker,
+  fix-and-return, the report never blocked); `/management/office` (an index with one live fact
+  per area, Practice performance and Missed appointments included), `/management/office/settings`
+  (one page with anchors), `/management/office/acknowledgments`. `/settings` is My settings;
+  `/directory` is Workplace's Directory. `/approvals`, `/team`, `/team/:id`, `/acknowledgments`,
+  and `/settings/:tab` redirect, carrying their deep links; `Team.tsx`, `EmployeeDetail.tsx`,
+  and `ApprovalQueue.tsx` are gone.
+- Attention: three labeled lists (now · waiting on others · later), filters by verb that never
+  reorder, `?item=` and `?kind=` deep links, keyboard rows, focus to the panel title and back.
+  The panel hosts the record's existing editor or review mutation per kind, states the
+  consequence before a consequential write, and offers Ask, Park, Snooze, and a note as
+  Layer 2/3 actions that write `manager_followups` only. Ask sends the person a message in
+  Inbox (communication from people) and marks the item waiting; a person with no login is
+  marked "asked in person". Done rows carry an audited reversal where one exists.
+- Three audited paths as SECURITY DEFINER functions (migration `20260922150000`), because an
+  audit row written from the browser proves nothing (the INSERT policy checks membership
+  only): `seal_close_day` (same rule as the row policy; logs seal and unseal with who and
+  why), `reverse_pto_approval` (removes the approval's calendar rows, which is what the ledger
+  deducts; credits the transaction log; cancels the request; notifies), and
+  `withdraw_knowledge_approval` (approved → in review, the approving decision removed, the
+  submitter notified). Notification types `pto_request_reversed`,
+  `knowledge_approval_withdrawn`, `knowledge_version_in_review` (sent to the other admins on
+  submit) and `close_day_unsealed` (routed; no producer yet) are registered.
+- Office-wide PTO policy (migration `20260922160000`, shown for review): `org_pto_policy` per
+  office, seeded with the defaults every ledger already assumed; `pto_settings.policy_override`
+  backfilled so a row equal to the default follows the office and any other row is an explicit
+  exception; people without a row get one on the default only when they have an employment
+  date; owners change the policy through `set_org_pto_policy`, which reaches everyone without
+  an exception in the same write; new employees start on the default and a row follows the
+  login when one is linked later. The ledger keeps reading `pto_settings`, so nobody's accrual
+  changes on the day this runs. `PtoPolicySettingsCard` edits the office policy (owners) and
+  the person's card marks exceptions.
+- Notifications open the exact item: request and sign-off notices go to `/management?item=`,
+  bypass notices to People → Patterns, acknowledgment notices to Office → Acknowledgments.
+
+**Deliberately not wired:** Team Attendance's "Missing Shifts" keeps its attendance rule
+(a callout is an absence with a reason and is listed), which #218 tests; the payroll
+question "does this day need a fix" is the shared rule Attention and Payroll read, under
+which a recorded callout explains the day. `useMissingShifts` (the member's own banner) is a
+schedule projection, not a day-status read, and stays as it is.
+
+**Known gaps carried into Phase 3:** Home and mobile composition; the Nudges tab; the
+`close_day_unsealed` producer (a scheduled function); an "explain this day" answer that lands
+on the item (today the answer arrives as a message).

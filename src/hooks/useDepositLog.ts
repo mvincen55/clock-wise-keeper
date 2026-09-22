@@ -160,8 +160,10 @@ export function useSaveDepositLog() {
 }
 
 /**
- * Seal the day. Same-day sealing by whoever closes; unsealing or later edits
- * are owner/manager territory (RLS + the audit trigger enforce it).
+ * Seal or unseal the day through `seal_close_day`, which applies the same
+ * rule as the row policy (any member today; later, owners, managers, or the
+ * closeout-history grant) and writes the audit event in the same
+ * transaction. Unsealing is a separate audited action; pass its reason.
  */
 export function useSealDay() {
   const { user } = useAuth();
@@ -169,16 +171,13 @@ export function useSealDay() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { closeoutId: string; depositDate: string; seal: boolean }) => {
+    mutationFn: async (input: { closeoutId: string; depositDate: string; seal: boolean; reason?: string }) => {
       if (!ctx || !user) throw new Error('Not authenticated');
-      const { error } = await supabase
-        .from('deposit_logs')
-        .update(
-          input.seal
-            ? { sealed_at: new Date().toISOString(), sealed_by: user.id }
-            : { sealed_at: null, sealed_by: null }
-        )
-        .eq('id', input.closeoutId);
+      const { error } = await supabase.rpc('seal_close_day', {
+        p_closeout_id: input.closeoutId,
+        p_seal: input.seal,
+        p_reason: input.reason ?? '',
+      });
       if (error) throw error;
     },
     onSuccess: (_, input) => {

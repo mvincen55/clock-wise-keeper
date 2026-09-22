@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import EmployeeSetupCard from '@/components/team/EmployeeSetupCard';
 const state=vi.hoisted(()=>({employee:{} as any,snapshots:[] as any[],saved:vi.fn()}));
 vi.mock('@/hooks/useOrgContext',()=>({useOrgContext:()=>({data:{org_id:'office'}})}));
+vi.mock('@/hooks/usePtoEngine',()=>({useOrgPtoPolicy:()=>({data:{org_id:'office',worked_hours_cap_weekly:40,max_balance:100,allow_negative:false,updated_by:null,updated_at:''}})}));
 vi.mock('sonner',()=>({toast:{success:vi.fn(),error:vi.fn()}}));
 vi.mock('@/integrations/supabase/client',()=>({supabase:{from:(table:string)=>{
  let update:any;
@@ -24,7 +25,7 @@ describe('Purple Envelope join date and starting balance',()=>{
   await waitFor(()=>expect((screen.getByLabelText('PTO balance on join date (hours)') as HTMLInputElement).value).toBe('4.61'));
   expect(screen.queryByLabelText('Confirmed PTO balance date')).toBeNull();
   expect((screen.getByLabelText('Purple Envelope join date') as HTMLInputElement).value).toBe('2026-06-07');
-  fireEvent.click(screen.getByRole('button',{name:'Save dates and PTO policy'}));
+  fireEvent.click(screen.getByRole('button',{name:'Save dates and PTO settings'}));
   await waitFor(()=>expect(state.saved).toHaveBeenCalledWith(expect.objectContaining({snapshot_date:'2026-06-07',snapshot_balance_hours:4.61})));
   await waitFor(()=>expect((screen.getByLabelText('PTO balance on join date (hours)') as HTMLInputElement).value).toBe('4.61'));
   client.clear();
@@ -35,7 +36,7 @@ describe('Purple Envelope join date and starting balance',()=>{
   await screen.findByLabelText('Purple Envelope join date');
   fireEvent.change(screen.getByLabelText('Purple Envelope join date'),{target:{value:'2026-06-01'}});
   fireEvent.change(screen.getByLabelText('PTO balance on join date (hours)'),{target:{value:'0'}});
-  fireEvent.click(screen.getByRole('button',{name:'Save dates and PTO policy'}));
+  fireEvent.click(screen.getByRole('button',{name:'Save dates and PTO settings'}));
   await waitFor(()=>expect(state.saved).toHaveBeenCalledWith(expect.objectContaining({snapshot_date:'2026-06-01',snapshot_balance_hours:0})));
   await waitFor(()=>expect((screen.getByLabelText('Purple Envelope join date') as HTMLInputElement).value).toBe('2026-06-01'));
   client.clear();

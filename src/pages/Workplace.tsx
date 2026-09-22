@@ -22,7 +22,7 @@ const SECTIONS: HubSection[] = [
     links: [
       { to: '/office-calendar', icon: Calendar, label: 'Office Calendar', description: 'Closures, events, and the office schedule.' },
       { to: '/handbook', icon: BookOpen, label: 'Employee Handbook', description: 'Policies, benefits, expectations, and information for working here.' },
-      { to: '/team', icon: Users, label: 'Team', description: 'The team roster and member details.', managerOnly: true },
+      { to: '/directory', icon: Users, label: 'Directory', description: 'Who works here, staff codes, and this week’s closures.' },
     ],
   },
   {

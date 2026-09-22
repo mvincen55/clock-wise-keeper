@@ -37,10 +37,10 @@ describe('the canonical role list', () => {
 
   it('an assistant office manager role never widens a member’s permissions', () => {
     const memberLinks = shortcutsFor('assistant_office_manager', 'member').map(s => s.to);
-    expect(memberLinks).not.toContain('/approvals');
-    expect(memberLinks).not.toContain('/team');
+    expect(memberLinks).not.toContain('/management?kind=decide');
+    expect(memberLinks).not.toContain('/management/people');
     const managerLinks = shortcutsFor('assistant_office_manager', 'manager').map(s => s.to);
-    expect(managerLinks).toContain('/approvals');
+    expect(managerLinks).toContain('/management?kind=decide');
   });
 });
 

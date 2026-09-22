@@ -27,7 +27,7 @@ export default function WorkflowSettings({ kind }: { kind: Kind }) {
   return <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4">
     <div className="flex flex-wrap gap-2">
       <Button variant="outline" asChild><Link to={back}>{kind === 'fof' ? 'Return to FOF' : kind === 'broken-appointments' ? 'Return to Broken Appointments' : 'Return to Close the Day'}</Link></Button>
-      <Button variant="ghost" asChild><Link to="/settings/workflows">All workflow settings</Link></Button>
+      <Button variant="ghost" asChild><Link to="/management/office/settings">All workflow settings</Link></Button>
     </div>
     <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{TITLES[kind]}</h1>
     {isPending ? <p role="status">Loading permissions…</p> : !canConfigure ? <p>An owner or manager must configure these settings.</p> : <>

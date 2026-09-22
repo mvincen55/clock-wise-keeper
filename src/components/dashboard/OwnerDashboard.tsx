@@ -164,7 +164,7 @@ export default function OwnerDashboard({ view }: { view: OwnerView }) {
           <Band
             title="Owner attention"
             count={openDecisions.length > 0 ? `${decisionCount} waiting` : undefined}
-            action={{ label: 'Approvals', to: '/approvals' }}
+            action={{ label: 'Approvals', to: '/management?kind=decide' }}
           >
             {openDecisions.length === 0 ? (
               <EmptyState

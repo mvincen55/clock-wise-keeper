@@ -267,7 +267,7 @@ export const ownerFixture: OwnerView = {
   lookAt: ownerRecommendation(openPulseInput, fxGoals),
   decisionCount: 7,
   decisions: [
-    { id: '1', label: 'Approvals pending', detail: '2 PTO · 1 correction · 1 change', value: '4', href: '/approvals', tone: 'attention' },
+    { id: '1', label: 'Approvals pending', detail: '2 PTO · 1 correction · 1 change', value: '4', href: '/management?kind=decide', tone: 'attention' },
     { id: '2', label: 'Accountability records at owner review', detail: 'Nobody reviews their own record — these have reached you.', value: '2', href: '/management', tone: 'urgent' },
     { id: '3', label: 'Policy acknowledgments overdue', detail: 'Published versions still unsigned past their due date.', value: '1', href: '/playbook', tone: 'attention' },
   ],
@@ -276,7 +276,7 @@ export const ownerFixture: OwnerView = {
   staffing: staffingOpen,
   exceptions: [
     { id: 'p1', label: 'Unresolved office notes', detail: 'Notes Purple Envelope flagged, still open.', value: '3', href: '/inbox', tone: 'attention' },
-    { id: 'p2', label: '1 attendance item needs review', detail: '1 unreviewed late arrival', value: '1', href: '/team', tone: 'attention' },
+    { id: 'p2', label: '1 attendance item needs review', detail: '1 unreviewed late arrival', value: '1', href: '/management/people', tone: 'attention' },
   ],
 };
 

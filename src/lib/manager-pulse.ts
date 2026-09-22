@@ -318,7 +318,7 @@ export function buildInterventionQueue(args: InterventionInput): {
       label: 'PTO requests pending',
       value: String(args.ptoRequests),
       detail: 'Approve or decline before the schedule locks.',
-      href: '/approvals',
+      href: '/management?kind=decide',
       tone: 'attention',
     });
   }
@@ -328,7 +328,7 @@ export function buildInterventionQueue(args: InterventionInput): {
       label: 'Time corrections pending',
       value: String(args.timeCorrections),
       detail: 'Each one keeps the original punch on record.',
-      href: '/approvals',
+      href: '/management?kind=decide',
       tone: 'attention',
     });
   }
@@ -338,7 +338,7 @@ export function buildInterventionQueue(args: InterventionInput): {
       label: 'Change requests pending',
       value: String(args.changeRequests),
       detail: 'Waiting on a manager decision.',
-      href: '/approvals',
+      href: '/management?kind=decide',
       tone: 'attention',
     });
   }

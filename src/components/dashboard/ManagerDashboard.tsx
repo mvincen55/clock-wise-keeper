@@ -47,7 +47,7 @@ export default function ManagerDashboard({ view }: { view: ManagerView }) {
         timeLabel={header.timeLabel}
         right={
           <Link
-            to="/approvals"
+            to="/management?kind=decide"
             className="group inline-flex items-center gap-2 rounded-full border border-primary/35 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.12em] text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
           >
             Approvals

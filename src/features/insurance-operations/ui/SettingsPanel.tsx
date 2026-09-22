@@ -512,7 +512,7 @@ export function SettingsPanel({
             Edit Important Numbers
           </Link>
           .{' '}
-          <Link className="underline" to="/settings/workflows">
+          <Link className="underline" to="/management/office/settings">
             Edit providers
           </Link>
           .

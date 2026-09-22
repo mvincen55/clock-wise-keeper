@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useConsumedSearchParam } from '@/hooks/useDeepLink';
 import { Link, Navigate } from 'react-router-dom';
 import {
   BookOpenCheck,
@@ -83,6 +84,16 @@ export default function KnowledgeWorkspace() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<KnowledgeWorkspaceItem | null>(null);
+  // An Attention item or a notification names the version to review.
+  const linkedVersionId = useConsumedSearchParam('version');
+  useEffect(() => {
+    if (!linkedVersionId || !data) return;
+    const item = data.items.find(i => i.versions.some(v => v.id === linkedVersionId));
+    if (!item) return;
+    setSelectedItem(item);
+    if (item.workingVersion?.id === linkedVersionId && item.workingVersion.status === 'in_review') setReviewOpen(true);
+    else setEditorOpen(true);
+  }, [linkedVersionId, data]);
 
   const sources = useSourceKnowledge();
   const items = data?.items ?? [];
