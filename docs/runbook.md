@@ -156,7 +156,12 @@ Exact model in README §Checklist data model and migration
   Employee detail retains the selected employee boundary. Personal checklist
   items/lists are excluded. Source errors must surface as errors, never as zero.
   Deploy both `reports-analyst` and its `_shared/analyst-evidence.ts` dependency
-  before publishing the frontend; no database migration is needed.
+  before publishing the frontend. Since 2026-09-22 the evidence also reads
+  `punches`, `provider_day_metrics` (the schedule beside the clock: first
+  patient, last patient left, a provider's own column), and the practice time
+  zone; the four observed-day columns come from migration
+  `20260922180000_provider_observed_day.sql`, which must be applied before a
+  capture is saved with the new frontend.
   `analyst-evidence.test.ts`, `reports-analyst-edge.test.ts`, and
   `reports-analyst.test.tsx` cover authorization, source scoping,
   day-off context, period overlap, citation preservation, and loading/error states.

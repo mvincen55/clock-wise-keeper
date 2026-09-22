@@ -343,6 +343,10 @@ function metricsToRow(
     automated_workload_class: m.automatedWorkloadClass,
     confidence: m.confidence,
     review_status: m.reviewStatus,
+    first_patient_minute: m.firstPatientMinute ?? null,
+    last_patient_minute: m.lastPatientMinute ?? null,
+    available_start_minute: m.availableStartMinute ?? null,
+    available_end_minute: m.availableEndMinute ?? null,
     created_by: userId,
   };
 }
@@ -409,6 +413,8 @@ export function useSaveScheduleMetrics() {
     onSuccess: (_, input) => {
       qc.invalidateQueries({ queryKey: ['provider-day-metrics'] });
       qc.invalidateQueries({ queryKey: ['provider-metrics-history'] });
+      // A new captured day may change the hours calibration learns from.
+      qc.invalidateQueries({ queryKey: ['provider-working-hours'] });
       qc.invalidateQueries({ queryKey: ['deposit-log', ctx?.org_id, input.businessDate] });
     },
   });

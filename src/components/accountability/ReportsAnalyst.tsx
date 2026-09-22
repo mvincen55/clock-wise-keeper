@@ -114,6 +114,12 @@ const QUICK_ASKS: { label: string; icon: typeof Search; question: string }[] = [
       'Summarize the exceptions in this date range — the records that are out of the ordinary or fall outside normal expectations — grouped by person, with the count for each. Cite the records.',
   },
   {
+    label: 'Clock vs schedule',
+    icon: CalendarClock,
+    question:
+      "Compare each person's clock-in and clock-out with the office's schedule captures for the same days: the first patient, the last patient to leave, and their own column when they are a provider. Describe where a day ran long or short after the last patient left as context, not as a fault. Only a repeated, sizable gap for one person across several days is worth a look. Cite the records.",
+  },
+  {
     label: 'Stalled reviews',
     icon: CalendarClock,
     question:
