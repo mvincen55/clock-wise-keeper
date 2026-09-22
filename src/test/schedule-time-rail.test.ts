@@ -55,6 +55,35 @@ describe('detectTimeRail', () => {
     expect(at(rail, 220)).toBe(600);
   });
 
+  it('reads a Dentrix rail — "7:00am" on the hour, ":10" marks between — and learns the row size', () => {
+    // Hour labels every 78px, six 13px rows per hour, starting at y=48.
+    const words: OcrWord[] = [];
+    for (let hr = 7; hr <= 18; hr++) {
+      const base = 48 + (hr - 7) * 78;
+      words.push(word(`${hr > 12 ? hr - 12 : hr}:00${hr >= 12 ? 'pm' : 'am'}`, base, 3, 37));
+      for (let k = 1; k < 6; k++) words.push(word(`:${k}0`, base + k * 13, 20, 20));
+    }
+    const rail = detectTimeRail(words, 1825, 480);
+    expect(rail).not.toBeNull();
+    expect(rail!.rowMinutes).toBe(10);
+    expect(at(rail, 48)).toBe(420);
+    expect(at(rail, 48 + 3 * 78 + 2 * 13)).toBe(620); // 10:20
+    expect(at(rail, rail!.yBottom)).toBe(1080 + 50); // the last ":50" mark
+  });
+
+  it('accepts minute marks without their colon, ignores a misread one, and leaves the row size alone when marks are sparse', () => {
+    const hours = [8, 9, 10, 11].map((h, i) => word(`${h}:00`, 100 + i * 60));
+    const marks = [15, 30, 45].flatMap(m => [0, 1, 2].map(i => word(String(m), 100 + i * 60 + m, 20, 20)));
+    const rail = detectTimeRail([...hours, ...marks, word('16', 100 + 16, 20, 20)], 1000, 480);
+    expect(rail!.rowMinutes).toBe(15);
+    expect(at(rail, 100 + 60 + 30)).toBe(570);
+    // Half-hour marks alone do not establish a row size; the default stands.
+    const halves = [30].flatMap(m => [0, 1, 2].map(i => word(`:${m}`, 100 + i * 60 + m, 20, 20)));
+    expect(detectTimeRail([...hours, ...halves], 1000, 480)!.rowMinutes).toBeUndefined();
+    // Marks need hour labels to hang on; alone they are just numbers.
+    expect(detectTimeRail(marks, 1000, 480)).toBeNull();
+  });
+
   it('refuses a rail whose time runs upward', () => {
     expect(detectTimeRail([word('11:00', 100), word('10:00', 160), word('9:00', 220)], 1000, 480)).toBeNull();
   });

@@ -20,8 +20,17 @@ import { groupWordsIntoLines } from './privacy-detector';
  */
 const TIME_LABEL = /^(\d{1,2})(?::(\d{2}))?\s*(a|p)?(?:\.?m\.?)?$/i;
 
+/**
+ * A minute mark between hour labels — ":10", ":20" (or "10", "20" when OCR
+ * drops the colon). Read only once the hour labels have anchored the rail.
+ */
+const MINUTE_MARK = /^[:.]?(\d{2})$/;
+
 /** A label this many minutes off the fitted rail is a misread digit, not a label. */
 const RAIL_OUTLIER_MINUTES = 20;
+
+/** Row sizes a rail's minute marks can establish; sparser marks leave the default. */
+const ROW_MINUTES = [5, 10, 15];
 
 export interface TimeRail {
   /** Linear map: y pixel → minutes from midnight. */
@@ -30,6 +39,8 @@ export interface TimeRail {
   pxPerMinute: number;
   yTop: number;
   yBottom: number;
+  /** Minutes per grid row when the rail's minute marks establish it. */
+  rowMinutes?: number;
 }
 
 function parseTimeLabel(text: string, dayStartMinutes: number): number | null {
@@ -65,7 +76,9 @@ function fitRail(pts: Array<{ y: number; m: number }>): { a: number; b: number }
  * Fits y→minutes from the labels found; needs at least three to trust it.
  *
  * Labels are read per line, so a meridiem the OCR split into its own word
- * ("8:00" + "AM") is rejoined. One label clearly off the fitted rail — a
+ * ("8:00" + "AM") is rejoined. Minute marks between hour labels (":10",
+ * ":20") join the fit once the hours anchor it, and the smallest gap between
+ * marks tells the grid's row size. One label clearly off the fitted rail — a
  * misread digit — is dropped rather than allowed to bend the fit.
  */
 export function detectTimeRail(
@@ -73,17 +86,36 @@ export function detectTimeRail(
   frameWidth: number,
   dayStartMinutes: number
 ): TimeRail | null {
-  const lines = groupWordsIntoLines(words.filter(w => w.bbox.x1 < frameWidth * 0.18));
-  let pts = lines
+  const lines = groupWordsIntoLines(words.filter(w => w.bbox.x1 < frameWidth * 0.18)).map(line => ({
+    y: line.words.reduce((s, w) => s + (w.bbox.y0 + w.bbox.y1) / 2, 0) / line.words.length,
+    text: line.text,
+    words: line.words,
+  }));
+  const anchors = lines
     .map(line => ({
-      y: line.words.reduce((s, w) => s + (w.bbox.y0 + w.bbox.y1) / 2, 0) / line.words.length,
+      y: line.y,
       m:
         parseTimeLabel(line.text, dayStartMinutes) ??
         line.words.map(w => parseTimeLabel(w.text, dayStartMinutes)).find(v => v !== null) ??
         null,
     }))
-    .filter((p): p is { y: number; m: number } => p.m !== null);
-  if (pts.length < 3) return null;
+    .filter((p): p is { y: number; m: number } => p.m !== null)
+    .sort((a, b) => a.y - b.y);
+  if (anchors.length < 3) return null;
+
+  // A minute mark belongs to the nearest hour label above it, and must land
+  // before the next label below.
+  const marks: Array<{ y: number; m: number }> = [];
+  for (const line of lines) {
+    const mark = line.text.match(MINUTE_MARK);
+    const minute = mark ? Number(mark[1]) : NaN;
+    if (!mark || minute >= 60 || minute % 5 !== 0) continue;
+    const above = [...anchors].reverse().find(a => a.y < line.y);
+    const below = anchors.find(a => a.y > line.y);
+    if (!above || (below && above.m + minute >= below.m)) continue;
+    marks.push({ y: line.y, m: above.m + minute });
+  }
+  let pts = [...anchors, ...marks];
 
   let fit = fitRail(pts);
   while (fit && pts.length > 3) {
@@ -97,12 +129,19 @@ export function detectTimeRail(
   if (!fit || fit.a <= 0) return null; // time must increase downward
   const { a, b } = fit;
 
+  // The grid's row size shows in the spacing of surviving minute marks.
+  const kept = pts.filter(p => marks.includes(p)).map(p => p.m).sort((x, y) => x - y);
+  const gaps = kept.slice(1).map((m, i) => m - kept[i]).filter(g => g > 0);
+  const smallest = gaps.length ? Math.min(...gaps) : NaN;
+  const rowMinutes = ROW_MINUTES.includes(smallest) ? smallest : undefined;
+
   const ys = pts.map(p => p.y);
   return {
     minutesAt: (y: number) => a * y + b,
     pxPerMinute: a,
     yTop: Math.min(...ys),
     yBottom: Math.max(...ys),
+    ...(rowMinutes ? { rowMinutes } : {}),
   };
 }
 

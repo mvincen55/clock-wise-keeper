@@ -138,6 +138,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
   const [minutesPerRow, setMinutesPerRow] = useState('10');
   const [blockStyle, setBlockStyle] = useState<'solid' | 'labeled' | 'mixed'>('mixed');
   const [gridSource, setGridSource] = useState<string | null>(null);
+  const [rowSource, setRowSource] = useState<string | null>(null);
   const [pmsTouched, setPmsTouched] = useState(false);
   const prefilled = useRef(false);
 
@@ -179,6 +180,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
     setConfirmed(false);
     setColumns([]);
     setGridSource(null);
+    setRowSource(null);
     setPmsTouched(false);
     setAdjust(false);
   };
@@ -226,6 +228,11 @@ export default function CalibrationWizard({ open, onClose }: Props) {
         setDayStart(workingTime(top));
         setDayEnd(workingTime(bottom));
         setGridSource('read from the time labels in this screenshot');
+      }
+      // The minute marks between hour labels (":10", ":20") give the row size.
+      if (rail.rowMinutes) {
+        setMinutesPerRow(String(rail.rowMinutes));
+        setRowSource('read from the minute marks in this screenshot');
       }
     }
     const detected = columnsFromRegions(regions, frame.width);
@@ -522,7 +529,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
               <li className="rounded-md border p-3">
                 <p className="font-medium">Working day {formatClockRange(dayStart, dayEnd)}</p>
                 <p className="text-xs text-muted-foreground">
-                  {gridSource ? `Day start and end ${gridSource}.` : 'A default working day — adjust it if the screenshot shows a different range.'} Rows of {minutesPerRow} minutes.
+                  {gridSource ? `Day start and end ${gridSource}.` : 'A default working day — adjust it if the screenshot shows a different range.'} Rows of {minutesPerRow} minutes{rowSource ? `, ${rowSource}` : ''}.
                 </p>
               </li>
               {reviewed.map(col => {
