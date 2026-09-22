@@ -38,10 +38,10 @@ import { useProviders } from '@/hooks/useProviders';
 import { usePracticeSettings } from '@/hooks/usePracticeSettings';
 import { useProviderWorkingHours } from '@/hooks/useProviderWorkingHours';
 import { PMS_LABELS } from '@/lib/pms';
-import { workingScheduleText, workingTime, type WorkingPeriod } from '@/lib/provider-working-schedule';
+import { describeWorkingHours, workingScheduleText, workingTime, type WorkingPeriod } from '@/lib/provider-working-schedule';
 import { providerColumn, suggestColumnProvider } from '@/lib/schedule-provider-mapping';
 import { useSaveLayoutProfile, useLayoutProfiles } from '@/hooks/useScheduleIntelligence';
-import { hhmmToMinutes } from '@/lib/time-utils';
+import { formatClockRange, hhmmToMinutes } from '@/lib/time-utils';
 import ProviderWorkingSchedule from '@/components/close-day/ProviderWorkingSchedule';
 import { wipeOcrWords } from '@/lib/schedule-reader/destroy-capture';
 import { columnsFromRegions, isNotesOnlyColumn, isEmptyBlueGridColumn } from '@/lib/schedule-reader/appointment-regions';
@@ -85,10 +85,13 @@ type Props = {
  * uploaded anywhere.
  *
  * Nothing the office has already told the app is asked for twice: the
- * practice-management system comes from Practice settings, the grid and block
- * style from the last calibration (or the screenshot's own time rail), and
- * each provider's weekly hours from the work schedule saved in Team for the
- * team member they are linked to. Every prefilled value stays editable.
+ * practice-management system comes from Practice settings, the grid from the
+ * screenshot's own time rail (else the last calibration, else the providers'
+ * hours), and each provider's weekly hours from the work schedule saved in
+ * Team for the team member they are linked to. The last step is a summary of
+ * what was read with one Save; the fields behind it open only on request.
+ * The block-style setting is carried over from the last layout, never asked —
+ * nothing in the reader consumes it.
  */
 export default function CalibrationWizard({ open, onClose }: Props) {
   const save = useSaveLayoutProfile();
@@ -127,7 +130,9 @@ export default function CalibrationWizard({ open, onClose }: Props) {
   const [columns, setColumns] = useState<DraftColumn[]>([]);
   const [pendingHours, setPendingHours] = useState<Record<string, boolean>>({});
   const onPendingHours = useCallback((id: string, pending: boolean) => setPendingHours(prev => prev[id] === pending ? prev : { ...prev, [id]: pending }), []);
-  useEffect(() => { if (step !== 3) setPendingHours({}); }, [step]);
+  /** The review step shows a summary; the editable fields open only when asked for. */
+  const [adjust, setAdjust] = useState(false);
+  useEffect(() => { if (step !== 3) { setPendingHours({}); setAdjust(false); } }, [step]);
   const [dayStart, setDayStart] = useState('08:00');
   const [dayEnd, setDayEnd] = useState('17:00');
   const [minutesPerRow, setMinutesPerRow] = useState('10');
@@ -175,6 +180,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
     setColumns([]);
     setGridSource(null);
     setPmsTouched(false);
+    setAdjust(false);
   };
 
   const teardown = async () => {
@@ -287,7 +293,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
     if (Object.values(pendingHours).some(Boolean)) return;
     const startMin = hhmmToMinutes(dayStart);
     const endMin = hhmmToMinutes(dayEnd);
-    if (endMin <= startMin) {
+    if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) {
       toast.error('The working day must end after it starts.');
       return;
     }
@@ -325,36 +331,41 @@ export default function CalibrationWizard({ open, onClose }: Props) {
     }
   };
 
+  /** One entry per provider for the review step, however many columns they occupy. */
+  const reviewed = [...new Map(columns.filter(c => c.kind !== 'non_clinical' && c.providerId).map(c => [c.providerId!, c])).values()];
+
   return (
     <Dialog open={open} onOpenChange={o => !o && onClose()}>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Calibrate Schedule Intelligence</DialogTitle>
-          <DialogDescription>Confirm the providers and working day for your posted end-of-day screenshot. What the office has already set up — its practice software, provider list, and team schedules — is filled in for you. No status-color setup is needed.</DialogDescription>
+          <DialogDescription>The reader fills in what it can from the screenshot and from what the office has already set up. Check it and save.</DialogDescription>
         </DialogHeader>
 
         {step === 0 && (
           <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Practice management system</Label>
-              <Select value={pms} onValueChange={v => { setPmsTouched(true); setPms(v); }}>
-                <SelectTrigger className="w-56">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PMS_OPTIONS.map(o => (
-                    <SelectItem key={o} value={o}>
-                      {o}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {configuredPms && (
-                <p className="text-xs text-muted-foreground">
-                  From Practice settings (Settings → Office). Change it there to keep every capture assistant in sync.
-                </p>
-              )}
-            </div>
+            {configuredPms ? (
+              <p className="text-sm">
+                Practice software: <span className="font-medium">{configuredPms}</span>
+                <span className="text-muted-foreground"> — from Practice settings (Settings → Office).</span>
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                <Label>Practice management system</Label>
+                <Select value={pms} onValueChange={v => { setPmsTouched(true); setPms(v); }}>
+                  <SelectTrigger className="w-56">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PMS_OPTIONS.map(o => (
+                      <SelectItem key={o} value={o}>
+                        {o}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <p className="text-sm text-muted-foreground">
               Turn on your practice software's privacy view before capturing. Purple Envelope
               processes the image on this device and does not save or upload it.
@@ -497,73 +508,93 @@ export default function CalibrationWizard({ open, onClose }: Props) {
                   }
                 }
                 setStep(3);
-              }}>Next: working day</Button>
+              }}>Next: review and save</Button>
             </div>
           </div>
         )}
 
         {step === 3 && (
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">The time grid describes the visible screenshot. Each provider’s weekly hours come from the work schedule saved in Team when the provider is linked to a team member; adjust them or attach a file only if the clinic schedule differs. Off-duty time is never counted as an opening.</p>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="cal-start">Day starts</Label>
-                <Input
-                  id="cal-start"
-                  type="time"
-                  value={dayStart}
-                  onChange={e => setDayStart(e.target.value)}
-                />
+            <p className="text-sm text-muted-foreground">
+              Here is what will be saved. Off-duty hours are never counted as openings. Save it, or adjust anything that looks wrong.
+            </p>
+            <ul className="space-y-2 text-sm">
+              <li className="rounded-md border p-3">
+                <p className="font-medium">Working day {formatClockRange(dayStart, dayEnd)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {gridSource ? `Day start and end ${gridSource}.` : 'A default working day — adjust it if the screenshot shows a different range.'} Rows of {minutesPerRow} minutes.
+                </p>
+              </li>
+              {reviewed.map(col => {
+                const source = hoursSource(col);
+                return (
+                  <li key={col.providerId} className="rounded-md border p-3">
+                    <p className="font-medium">{col.providerLabel}</p>
+                    {col.workingHours ? (
+                      <>
+                        <p>{describeWorkingHours(col.workingHours)}</p>
+                        {source && <p className="text-xs text-muted-foreground">{source}</p>}
+                      </>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        No saved hours, so off-duty time will read as open. Link {col.providerLabel} to a team member with a work schedule (Settings → Office → Providers) so they fill in next time, or add them {adjust ? 'below' : 'under Adjust'}.
+                      </p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            {adjust ? (
+              <div className="space-y-4 rounded-md border p-3">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cal-start">Day starts</Label>
+                    <Input
+                      id="cal-start"
+                      type="time"
+                      value={dayStart}
+                      onChange={e => setDayStart(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cal-end">Day ends</Label>
+                    <Input
+                      id="cal-end"
+                      type="time"
+                      value={dayEnd}
+                      onChange={e => setDayEnd(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Minutes per grid row</Label>
+                    <Select value={minutesPerRow} onValueChange={setMinutesPerRow}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {['5', '10', '15'].map(m => (
+                          <SelectItem key={m} value={m}>
+                            {m} minutes
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">The time grid describes the visible screenshot: the first and last time labels, and how many minutes one row covers.</p>
+                {reviewed.map(col => (
+                  <ProviderWorkingSchedule key={col.providerId} providerId={col.providerId!} name={col.providerLabel!} value={col.workingHours}
+                    sourceNote={hoursSource(col)}
+                    emptyHint={teamHours[col.providerId!] ? undefined : `No saved schedule for ${col.providerLabel} yet — link them to a team member with a work schedule (Settings → Office → Providers) and these hours fill in automatically next time.`}
+                    onPendingChange={onPendingHours}
+                    onChange={workingHours => setColumns(previous => previous.map(c => c.providerId === col.providerId ? { ...c, workingHours } : c))} />
+                ))}
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="cal-end">Day ends</Label>
-                <Input
-                  id="cal-end"
-                  type="time"
-                  value={dayEnd}
-                  onChange={e => setDayEnd(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Minutes per grid row</Label>
-                <Select value={minutesPerRow} onValueChange={setMinutesPerRow}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {['5', '10', '15'].map(m => (
-                      <SelectItem key={m} value={m}>
-                        {m} minutes
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            {gridSource && (
-              <p className="text-xs text-muted-foreground">Day start and end {gridSource}. Adjust them if the screenshot shows more of the day.</p>
+            ) : (
+              <Button type="button" variant="outline" size="sm" onClick={() => setAdjust(true)}>
+                Adjust the working day or hours
+              </Button>
             )}
-            {[...new Map(columns.filter(c => c.kind !== 'non_clinical' && c.providerId).map(c => [c.providerId!, c])).values()].map(col => (
-              <ProviderWorkingSchedule key={col.providerId} providerId={col.providerId!} name={col.providerLabel!} value={col.workingHours}
-                sourceNote={hoursSource(col)}
-                emptyHint={teamHours[col.providerId!] ? undefined : `No saved schedule for ${col.providerLabel} yet — link them to a team member with a work schedule (Settings → Office → Providers) and these hours fill in automatically next time.`}
-                onPendingChange={onPendingHours}
-                onChange={workingHours => setColumns(previous => previous.map(c => c.providerId === col.providerId ? { ...c, workingHours } : c))} />
-            ))}
-            <div className="space-y-1.5">
-              <Label>How do lunch and admin blocks appear?</Label>
-              <Select value={blockStyle} onValueChange={v => setBlockStyle(v as typeof blockStyle)}>
-                <SelectTrigger className="w-64">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="solid">Solid blocks</SelectItem>
-                  <SelectItem value="labeled">Text labels (e.g. "Lunch")</SelectItem>
-                  <SelectItem value="mixed">Both</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <p className="text-sm text-muted-foreground">Posted screenshots no longer show the original appointment statuses. The reader checks appointment blocks and provider codes; unclear blocks need review. Cancellation and no-show answers stay as entered in Close the Day.</p>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setStep(1)}>
                 Back
@@ -574,8 +605,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Only the column map, posted capture mode, and time grid are saved. The calibration
-              screenshot is destroyed and never stored.
+              Only the column map and time grid are saved. The screenshot is destroyed, never stored.
             </p>
           </div>
         )}

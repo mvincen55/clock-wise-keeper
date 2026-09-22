@@ -23,3 +23,17 @@ it('does not replace confirmed hours with an invalid schedule', () => {
   expect(screen.getByRole('alert')).toHaveTextContent('Check the working hours');
   expect(onChange).not.toHaveBeenCalled();
 });
+
+it('treats prefilled hours as settled — no confirmation, and no dateline control, until they are edited', () => {
+  const onChange = vi.fn(); const onPendingChange = vi.fn();
+  render(<ProviderWorkingSchedule providerId="p1" name="Dr. Test" value={[{ weekday: 1, startMinutes: 480, endMinutes: 1020 }]}
+    sourceNote="Filled from Dr. Test's work schedule in Team." onChange={onChange} onPendingChange={onPendingChange} />);
+  expect(screen.getByText("Filled from Dr. Test's work schedule in Team.")).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Confirm working hours' })).toBeNull();
+  expect(screen.queryByRole('button', { name: /Dateline/ })).toBeNull();
+  expect(onPendingChange).toHaveBeenLastCalledWith('p1', false);
+  fireEvent.change(screen.getByLabelText('Review weekly hours'), { target: { value: 'Monday,08:00,16:00' } });
+  expect(onPendingChange).toHaveBeenLastCalledWith('p1', true);
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm working hours' }));
+  expect(onChange).toHaveBeenCalledWith([{ weekday: 1, startMinutes: 480, endMinutes: 960 }]);
+});

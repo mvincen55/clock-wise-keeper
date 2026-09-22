@@ -117,9 +117,8 @@ The unconfigured Schedule step links directly to Schedule Intelligence setup. Pe
 
 Schedule capture is optional: Next step proceeds to Staffing without changing capture status. A day without a capture can still be sealed once the other required answers are saved. Practice Vitals asks for completed first visits, not new-patient appointments scheduled; historical scheduled counts remain preserved.
 
-Layout calibration wizard (PMS pick → capture → label columns → click status
-colors → working-day grid), staffing expectations, phrase shorthand, mobile
-fallback toggle.
+Layout calibration wizard (capture → confirm providers → check what was read
+and save), staffing expectations, phrase shorthand, mobile fallback toggle.
 
 ## Known risks / follow-ups
 
@@ -140,7 +139,9 @@ Schedule setup uses `/settings/schedule-intelligence`; FOF policy and procedure 
 
 Calibration selects active registry providers and derives their type and department. High-confidence header codes such as DR02 reuse a previously confirmed provider mapping. Unknown or ambiguous codes require selection; they never guess a doctor.
 
-Each selected provider can import weekly hours from CSV, text, or an image, then review and confirm the normalized weekday/time rows. Image reading runs locally. Original files are not retained; only reviewed hours are saved with the layout. PDFs and arbitrary calendar formats are not supported. Unlisted weekdays remain unknown. Confirmed off-duty time is blocked rather than counted as open; actual appointments outside confirmed hours remain in the metrics and trigger review.
+Calibration asks only for what it cannot work out. The practice software comes from Practice settings and is shown, not asked, once set there. The working day is read from the screenshot's own time rail — labels printed as `8:00`, `8:00 AM`, `8:00am`, `8 AM`, or `8a`, read per line so a meridiem the OCR split off is rejoined, with one label clearly off the fitted rail (a misread digit) dropped rather than allowed to bend the fit — and otherwise kept from the last calibration or taken from the providers' earliest start and latest end. Each linked provider's weekly hours come from the work schedule saved in Team. The last step is a one-glance summary with a single Save: the working day, its source, and each provider's hours on one line each. Day bounds, grid rows, and hours are editable behind an Adjust control; hours the office already holds need no confirmation click, only edits and attached files do. A provider with no saved hours is noted (off-duty time will read as open) but never required. The lunch/admin block-style setting is no longer asked — nothing in the reader consumes it — and is carried over from the last layout.
+
+Each selected provider can also import weekly hours from CSV, text, or an image, then review and confirm the normalized weekday/time rows. Image reading runs locally. Original files are not retained; only reviewed hours are saved with the layout. PDFs and arbitrary calendar formats are not supported. Unlisted weekdays remain unknown. Confirmed off-duty time is blocked rather than counted as open; actual appointments outside confirmed hours remain in the metrics and trigger review.
 
 Daily captures now reread column assignments and require a date-specific review before computing metrics. Readable unique staff names, confirmed provider codes, and explicit Notes/Memo headers suggest assignments. An unreadable header remains unassigned rather than inheriting a prior provider or notes designation. One provider may occupy several columns. Reviewed assignments apply only to the captured day; the reusable calibration is unchanged. The privacy gate runs before review, and cancel/navigation destroys the capture without saving metrics. This supports provider assignments that change between days; providers mixed within one column on the same day still need a different capture layout. Notes-only detection relies on explicit header text, not guesses about appointment prose.
 

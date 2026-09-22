@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { currentScheduleByEmployee, periodsFromWeekdays } from '@/lib/provider-working-schedule';
+import { currentScheduleByEmployee, describeWorkingHours, periodsFromWeekdays } from '@/lib/provider-working-schedule';
 
 // Calibration reuses the work schedules the office already saved in Team.
 // These pin the translation from schedule rows to working periods and the
@@ -46,5 +46,16 @@ describe('currentScheduleByEmployee', () => {
       { employeeId: 'e1', effectiveStart: '2026-06-01', effectiveEnd: null, weekdays: friday },
     ], '2026-09-15');
     expect(result.get('e1')).toEqual([{ weekday: 1, startMinutes: 480, endMinutes: 1020 }]);
+  });
+});
+
+describe('describeWorkingHours', () => {
+  it('reads as one line, with split shifts listed and off-days named', () => {
+    expect(describeWorkingHours([
+      { weekday: 2, startMinutes: 0, endMinutes: 0 },
+      { weekday: 1, startMinutes: 780, endMinutes: 1020 },
+      { weekday: 1, startMinutes: 505, endMinutes: 720 },
+      { weekday: 5, startMinutes: 505, endMinutes: 1020 },
+    ])).toBe('Mon 8:25 AM–12:00 PM, 1:00 PM–5:00 PM · Tue off · Fri 8:25 AM–5:00 PM');
   });
 });
