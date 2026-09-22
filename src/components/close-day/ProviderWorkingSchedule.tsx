@@ -49,14 +49,15 @@ export default function ProviderWorkingSchedule({ providerId, name, value, onCha
     <Button type="button" variant="outline" disabled={busy} onClick={() => fileInput.current?.click()}>{busy ? 'Reading schedule…' : 'Attach working schedule'}</Button>
     <input ref={fileInput} type="file" accept=".csv,.txt,image/*" className="hidden" aria-label={`Working schedule file for ${name}`} onChange={e => void read(e.target.files?.[0])} />
     <Label htmlFor={`working-${providerId}`}>Review weekly hours</Label>
-    <Textarea id={`working-${providerId}`} value={draft} onChange={e => setDraft(e.target.value)} placeholder={'Monday,08:00,17:00\nTuesday,off'} />
+    <Textarea id={`working-${providerId}`} hideDateline value={draft} onChange={e => setDraft(e.target.value)} placeholder={'Monday,08:00,17:00\nTuesday,off'} />
     <p className="text-xs text-muted-foreground">One weekday per row; use 24-hour times or AM/PM. Add separate rows for split shifts. Unlisted days stay unknown.</p>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {pending && <p className="text-xs text-muted-foreground">Confirm these working hours before saving the layout.</p>}
     <div className="flex flex-wrap gap-2">
-      <Button type="button" disabled={busy || !draft.trim()} onClick={() => { try { const periods = parseWorkingSchedule(draft); setDraft(workingScheduleText(periods)); onChange(periods); setError(''); } catch (e) { setError((e as Error).message); } }}>Confirm working hours</Button>
+      {/* Hours the office already holds are settled; the confirm step exists only for edits and attached files. */}
+      {pending && <Button type="button" disabled={busy || !draft.trim()} onClick={() => { try { const periods = parseWorkingSchedule(draft); setDraft(workingScheduleText(periods)); onChange(periods); setError(''); } catch (e) { setError((e as Error).message); } }}>Confirm working hours</Button>}
       {value && <Button type="button" variant="ghost" onClick={() => { onChange(undefined); setDraft(''); }}>Remove working hours</Button>}
     </div>
-    {value && <p className="text-xs text-muted-foreground">Confirmed for this layout. Save the layout to keep these hours.</p>}
+    {value && !pending && !sourceNote && <p className="text-xs text-muted-foreground">Confirmed for this layout. Save the layout to keep these hours.</p>}
   </div>;
 }

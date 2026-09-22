@@ -1,20 +1,46 @@
 import type { OcrBox, OcrWord, LayoutColumn } from './types';
 
-/** A uniform blue grid contains neither text nor appointment blocks. Unfamiliar pixels stay for review. */
-export function isEmptyBlueGridColumn(image: {width:number;height:number;data:ArrayLike<number>}, col: Pick<LayoutColumn,'xStart'|'xEnd'>, yStart=0, yEnd=1): boolean {
+type Pixels = { width: number; height: number; data: ArrayLike<number> };
+
+/**
+ * Share of a cell that is empty background, or null when any pixel is
+ * something else (text, a gray block, an unfamiliar shade). Blue grid always
+ * counts; a uniform light tint counts only when the caller allows it.
+ */
+function emptyShare(image: Pixels, col: Pick<LayoutColumn,'xStart'|'xEnd'>, yStart: number, yEnd: number, allowTint: boolean): number | null {
   const left=Math.max(0,Math.ceil(col.xStart*image.width)+3), right=Math.min(image.width,Math.floor(col.xEnd*image.width)-3);
   const top=Math.max(0,Math.ceil(yStart*image.height)), bottom=Math.min(image.height,Math.floor(yEnd*image.height));
-  if(right-left<10 || bottom-top<1) return false;
-  let blue=0,total=0;
+  if(right-left<10 || bottom-top<1) return null;
+  let empty=0,total=0;
   for(let y=top;y<bottom;y++)for(let x=left;x<right;x++) {
     const i=(y*image.width+x)*4,r=image.data[i],g=image.data[i+1],b=image.data[i+2];
     const background=b-r>=20 && b-g>=8 && g-r>=8 && r>=65;
-    // Bright neutral grid lines are harmless; dark text or gray/green blocks are not.
-    const gridLine=r>=220 && g>=220 && b>=220;
-    if(!background && !gridLine) return false;
-    blue+=Number(background); total++;
+    // A pale tint (Dentrix shades an unbooked slot inside the provider's
+    // hours this way) is light on every channel but not neutral.
+    const lo=Math.min(r,g,b), hi=Math.max(r,g,b);
+    const tint=allowTint && lo>=200 && hi-lo>=6;
+    // Bright neutral grid lines are harmless; dark text or gray blocks are not.
+    const gridLine=r>=220 && g>=220 && b>=220 && hi-lo<6;
+    if(!background && !tint && !gridLine) return null;
+    empty+=Number(background||tint); total++;
   }
-  return total>0 && blue/total>.7;
+  return total>0 ? empty/total : null;
+}
+
+/** A uniform blue grid contains neither text nor appointment blocks. Unfamiliar pixels stay for review. */
+export function isEmptyBlueGridColumn(image: Pixels, col: Pick<LayoutColumn,'xStart'|'xEnd'>, yStart=0, yEnd=1): boolean {
+  return (emptyShare(image, col, yStart, yEnd, false) ?? 0) > .7;
+}
+
+/**
+ * One grid cell that is an open slot: blank blue grid, or a uniform pale
+ * tint with nothing drawn on it. A neutral light gray is not assumed open —
+ * some practice software shades unavailable time that way — and stays for
+ * review. Lane omission keeps the stricter blue-only test above: a column
+ * tinted all day is a provider with nothing booked, not an empty lane.
+ */
+export function isOpenSlotCell(image: Pixels, col: Pick<LayoutColumn,'xStart'|'xEnd'>, yStart: number, yEnd: number): boolean {
+  return (emptyShare(image, col, yStart, yEnd, true) ?? 0) > .7;
 }
 
 /** Neutral appointment backgrounds in blue-grid schedules. Other themes fall back to layout OCR. */

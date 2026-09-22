@@ -30,8 +30,14 @@ const LEXICON: LexiconEntry[] = [
   {
     code: 'PROVIDER_OFF',
     patterns: [
-      /\b(?:doctor|dr|doc|provider|hygienist)\.? (?:is )?off\b/,
+      /\b(?:doctor|dr|doc|dentist|provider|hygienist)\.? (?:is )?off\b/,
+      // "Dr out", "doctor is out" — but "out early" / "out at 3" / "out of
+      // office" belong to their own patterns.
+      /\b(?:doctor|dr|doc|dentist|provider|hygienist)\.? (?:is )?out\b(?! early| late| at \d| of)/,
+      // "No Doctor - Yom Kippur", "no dr today"
+      /\bno (?:doctor|dr|doc|dentist|provider)\b/,
       /\bday off\b/,
+      /\btime off\b/,
       /\bnot in today\b/,
       /\bvacation\b/,
       /\bpto\b/,
@@ -69,7 +75,18 @@ const LEXICON: LexiconEntry[] = [
   },
   {
     code: 'STAFFING_LIMITATION',
-    patterns: [/\bno assistant\b/, /\bno asst\b/, /\bshort staffed\b/, /\bno hygienist\b/, /\bno front desk\b/],
+    patterns: [
+      /\bno assistant\b/,
+      /\bno asst\b/,
+      /\bshort staffed\b/,
+      /\bno hygienist\b/,
+      /\bno front desk\b/,
+      // "JB Out", "GC OFF", "Megan out (in 10ish)": a team member named by
+      // initials or a single first name is out. Role words keep their own
+      // codes; "pt"/"patient", "call", "hold", "block", "time" and the like
+      // are about something else and stay unclassified here.
+      /^(?!(?:doctor|dr|doc|dentist|provider|hygienist|hyg|day|time|no|not|op|out|pt|pts|patient|call|check|hold|block|blocked|move|moved|sent|room)\b)[a-z]{1,12}\.? (?:is )?(?:out|off)\b(?! early| late| at \d| of)/,
+    ],
   },
   {
     code: 'OFFICE_CLOSED',

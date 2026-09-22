@@ -25,6 +25,19 @@ describe('note classifier', () => {
     ['office closed', 'OFFICE_CLOSED'],
     ['blocked', 'OTHER_OPERATIONAL_BLOCK'],
     ['do not book', 'OTHER_OPERATIONAL_BLOCK'],
+    // How offices actually write it on the grid.
+    ['No Doctor - Yom Kippur', 'PROVIDER_OFF'],
+    ['no dr today', 'PROVIDER_OFF'],
+    ['Dr out', 'PROVIDER_OFF'],
+    ['Dr. out of office', 'PROVIDER_OFF'],
+    ['time off', 'PROVIDER_OFF'],
+    ['Dr out early today', 'PROVIDER_OUT_EARLY'],
+    ['dr out at 3', 'PROVIDER_OUT_EARLY'],
+    ['JB Out (In 930ish-1030ish)', 'STAFFING_LIMITATION'],
+    ['JC Out', 'STAFFING_LIMITATION'],
+    ['GC OFF', 'STAFFING_LIMITATION'],
+    ['Megan out', 'STAFFING_LIMITATION'],
+    ['Do NOT Book--pt moved up', 'OTHER_OPERATIONAL_BLOCK'],
   ])('classifies "%s" as %s', (note, code) => {
     const result = classifyNote(note);
     expect(result.code).toBe(code);
@@ -34,6 +47,19 @@ describe('note classifier', () => {
   it('returns UNCLASSIFIED with zero confidence for unknown notes', () => {
     expect(classifyNote('crown seat follow up')).toEqual({ code: 'UNCLASSIFIED', confidence: 0 });
     expect(classifyNote('')).toEqual({ code: 'UNCLASSIFIED', confidence: 0 });
+  });
+
+  it.each([
+    'pt out', // a patient, not the team
+    'call out', // could be either — the closer decides
+    'check out',
+    'HCU - SENT', // outreach on an open slot is not a block
+    '<sent blast',
+    'Moved down 1 unit',
+    'NO MORE CROWNS FOR RNH',
+    'NB',
+  ])('never turns "%s" into a block', note => {
+    expect(classifyNote(note)).toEqual({ code: 'UNCLASSIFIED', confidence: 0 });
   });
 
   it('refuses to guess between two conflicting specific codes', () => {

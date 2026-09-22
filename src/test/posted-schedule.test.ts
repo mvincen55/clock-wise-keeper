@@ -36,3 +36,13 @@ it('reads a posted gray day without a color legend and leaves ambiguous or color
  expect(postedColumnStatuses({width,height,data},col,rows,regions,words,[])).toEqual(['completed','blocked',null,'open',null]);
  expect(postedColumnStatuses({width,height,data},col,[rows[0]],[],words,[])).toEqual([null]);
 });
+
+it('counts a pale-tinted unbooked slot as open on a posted day', () => {
+ const width=100,height=100,data=new Uint8ClampedArray(width*height*4);
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++)data.set(y<40?[128,128,128,255]:y<60?[223,238,225,255]:y<80?[133,173,214,255]:[215,215,215,255],(y*width+x)*4);
+ const col:LayoutColumn & {pxStart:number;pxEnd:number}={xStart:0,xEnd:1,pxStart:0,pxEnd:100,kind:'provider',providerCode:'HY14',providerLabel:'Cori',providerRole:'hygienist',department:'hygiene',employeeId:null};
+ const rows=Array.from({length:5},(_,i)=>({yTop:i*20,yBottom:(i+1)*20}));
+ const regions=rows.slice(0,2).map(r=>({x0:0,x1:100,y0:r.yTop,y1:r.yBottom}));
+ const words:OcrWord[]=['HY14','Lunch'].map((text,i)=>({text,confidence:99,bbox:{x0:5,x1:40,y0:i*20+2,y1:i*20+10}}));
+ expect(postedColumnStatuses({width,height,data},col,rows,regions,words,[])).toEqual(['completed','blocked','open','open',null]);
+});

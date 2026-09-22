@@ -13,7 +13,24 @@ import type { LayoutColumn, LayoutMatch, LayoutProfile, OcrWord } from './types'
 import { ScheduleReaderError } from './types';
 import { groupWordsIntoLines } from './privacy-detector';
 
-const TIME_WORD = /^\d{1,2}:\d{2}\s*(?:am|pm)?$/i;
+/**
+ * One time label on the rail. PMS rails print times several ways — "8:00",
+ * "8:00 AM", "8:00am", "8 AM", "8a" — so a label needs minutes or a
+ * meridiem; a bare number is never a time.
+ */
+const TIME_LABEL = /^(\d{1,2})(?::(\d{2}))?\s*(a|p)?(?:\.?m\.?)?$/i;
+
+/**
+ * A minute mark between hour labels — ":10", ":20" (or "10", "20" when OCR
+ * drops the colon). Read only once the hour labels have anchored the rail.
+ */
+const MINUTE_MARK = /^[:.]?(\d{2})$/;
+
+/** A label this many minutes off the fitted rail is a misread digit, not a label. */
+const RAIL_OUTLIER_MINUTES = 20;
+
+/** Row sizes a rail's minute marks can establish; sparser marks leave the default. */
+const ROW_MINUTES = [5, 10, 15];
 
 export interface TimeRail {
   /** Linear map: y pixel → minutes from midnight. */
@@ -22,16 +39,18 @@ export interface TimeRail {
   pxPerMinute: number;
   yTop: number;
   yBottom: number;
+  /** Minutes per grid row when the rail's minute marks establish it. */
+  rowMinutes?: number;
 }
 
-function parseTimeWord(text: string, dayStartMinutes: number): number | null {
-  const m = text.trim().toLowerCase().match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/);
-  if (!m) return null;
+function parseTimeLabel(text: string, dayStartMinutes: number): number | null {
+  const m = text.trim().toLowerCase().match(TIME_LABEL);
+  if (!m || (m[2] === undefined && m[3] === undefined)) return null;
   let h = Number(m[1]);
-  const min = Number(m[2]);
-  if (h > 23 || min > 59) return null;
-  if (m[3] === 'pm' && h < 12) h += 12;
-  if (m[3] === 'am' && h === 12) h = 0;
+  const min = m[2] === undefined ? 0 : Number(m[2]);
+  if (h > 23 || min > 59 || (m[3] && (h < 1 || h > 12))) return null;
+  if (m[3] === 'p' && h < 12) h += 12;
+  if (m[3] === 'a' && h === 12) h = 0;
   let total = h * 60 + min;
   // Schedules often print "1:00" for 1pm with no meridiem — if the value
   // lands before the working day starts, read it as afternoon.
@@ -39,28 +58,8 @@ function parseTimeWord(text: string, dayStartMinutes: number): number | null {
   return total;
 }
 
-/**
- * Find the time rail: the column of time labels along the left edge.
- * Fits y→minutes from the labels found; needs at least three to trust it.
- */
-export function detectTimeRail(
-  words: OcrWord[],
-  frameWidth: number,
-  dayStartMinutes: number
-): TimeRail | null {
-  const railWords = words
-    .map(w => ({ w, minutes: TIME_WORD.test(w.text) ? parseTimeWord(w.text, dayStartMinutes) : null }))
-    .filter(
-      (x): x is { w: OcrWord; minutes: number } =>
-        x.minutes !== null && x.w.bbox.x1 < frameWidth * 0.18
-    );
-  if (railWords.length < 3) return null;
-
-  // Least-squares fit minutes = a·y + b over label midpoints.
-  const pts = railWords.map(({ w, minutes }) => ({
-    y: (w.bbox.y0 + w.bbox.y1) / 2,
-    m: minutes,
-  }));
+/** Least-squares minutes = a·y + b over label midpoints. */
+function fitRail(pts: Array<{ y: number; m: number }>): { a: number; b: number } | null {
   const n = pts.length;
   const sumY = pts.reduce((s, p) => s + p.y, 0);
   const sumM = pts.reduce((s, p) => s + p.m, 0);
@@ -69,8 +68,72 @@ export function detectTimeRail(
   const denom = n * sumYY - sumY * sumY;
   if (denom === 0) return null;
   const a = (n * sumYM - sumY * sumM) / denom;
-  const b = (sumM - a * sumY) / n;
-  if (a <= 0) return null; // time must increase downward
+  return { a, b: (sumM - a * sumY) / n };
+}
+
+/**
+ * Find the time rail: the column of time labels along the left edge.
+ * Fits y→minutes from the labels found; needs at least three to trust it.
+ *
+ * Labels are read per line, so a meridiem the OCR split into its own word
+ * ("8:00" + "AM") is rejoined. Minute marks between hour labels (":10",
+ * ":20") join the fit once the hours anchor it, and the smallest gap between
+ * marks tells the grid's row size. One label clearly off the fitted rail — a
+ * misread digit — is dropped rather than allowed to bend the fit.
+ */
+export function detectTimeRail(
+  words: OcrWord[],
+  frameWidth: number,
+  dayStartMinutes: number
+): TimeRail | null {
+  const lines = groupWordsIntoLines(words.filter(w => w.bbox.x1 < frameWidth * 0.18)).map(line => ({
+    y: line.words.reduce((s, w) => s + (w.bbox.y0 + w.bbox.y1) / 2, 0) / line.words.length,
+    text: line.text,
+    words: line.words,
+  }));
+  const anchors = lines
+    .map(line => ({
+      y: line.y,
+      m:
+        parseTimeLabel(line.text, dayStartMinutes) ??
+        line.words.map(w => parseTimeLabel(w.text, dayStartMinutes)).find(v => v !== null) ??
+        null,
+    }))
+    .filter((p): p is { y: number; m: number } => p.m !== null)
+    .sort((a, b) => a.y - b.y);
+  if (anchors.length < 3) return null;
+
+  // A minute mark belongs to the nearest hour label above it, and must land
+  // before the next label below.
+  const marks: Array<{ y: number; m: number }> = [];
+  for (const line of lines) {
+    const mark = line.text.match(MINUTE_MARK);
+    const minute = mark ? Number(mark[1]) : NaN;
+    if (!mark || minute >= 60 || minute % 5 !== 0) continue;
+    const above = [...anchors].reverse().find(a => a.y < line.y);
+    const below = anchors.find(a => a.y > line.y);
+    if (!above || (below && above.m + minute >= below.m)) continue;
+    marks.push({ y: line.y, m: above.m + minute });
+  }
+  let pts = [...anchors, ...marks];
+
+  let fit = fitRail(pts);
+  while (fit && pts.length > 3) {
+    const { a, b } = fit;
+    const off = (p: { y: number; m: number }) => Math.abs(a * p.y + b - p.m);
+    const worst = pts.reduce((w, p) => (off(p) > off(w) ? p : w));
+    if (off(worst) <= RAIL_OUTLIER_MINUTES) break;
+    pts = pts.filter(p => p !== worst);
+    fit = fitRail(pts);
+  }
+  if (!fit || fit.a <= 0) return null; // time must increase downward
+  const { a, b } = fit;
+
+  // The grid's row size shows in the spacing of surviving minute marks.
+  const kept = pts.filter(p => marks.includes(p)).map(p => p.m).sort((x, y) => x - y);
+  const gaps = kept.slice(1).map((m, i) => m - kept[i]).filter(g => g > 0);
+  const smallest = gaps.length ? Math.min(...gaps) : NaN;
+  const rowMinutes = ROW_MINUTES.includes(smallest) ? smallest : undefined;
 
   const ys = pts.map(p => p.y);
   return {
@@ -78,6 +141,7 @@ export function detectTimeRail(
     pxPerMinute: a,
     yTop: Math.min(...ys),
     yBottom: Math.max(...ys),
+    ...(rowMinutes ? { rowMinutes } : {}),
   };
 }
 
