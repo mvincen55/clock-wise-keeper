@@ -61,12 +61,13 @@ describe('owner — clear and closed states', () => {
 });
 
 describe('manager — empty office', () => {
-  it('clear queues celebrate, sprints offer setup, no floor claim off-hours', () => {
-    renderView(<ManagerDashboard view={managerNewFixture} />);
+  it('a clear queue says so once, the challenge is not forced onto Home, no floor claim off-hours', () => {
+    const { container } = renderView(<ManagerDashboard view={managerNewFixture} />);
     expect(screen.getByText(/Nothing is waiting on you\./)).toBeInTheDocument();
-    expect(screen.getByText(/No office goal is running\./)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Choose a goal/ })).toHaveAttribute('href', '/goals');
+    // No challenge is running: Office → Goals owns that state, Home says nothing.
+    expect(container.textContent).not.toMatch(/Challenge/);
     expect(screen.queryByText(/on the floor/i)).not.toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/not in yet/i);
   });
 });
 
@@ -97,7 +98,7 @@ describe('mobile navigation is never obscured by the floating support control', 
     expect(src).toMatch(/bottom-\[calc\(4rem\+env\(safe-area-inset-bottom\)/);
   });
 
-  it('mobile can still reach support through the More sheet', () => {
+  it('mobile can still reach support through the account menu', () => {
     const src = read('components/AppLayout.tsx');
     expect(src).toContain('Report a Problem');
     expect(src).toContain("pe:open-support");

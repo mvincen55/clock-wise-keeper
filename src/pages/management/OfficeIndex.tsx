@@ -2,7 +2,9 @@ import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import ManagementShell from '@/components/management/ManagementShell';
 import PracticeVitalsCard from '@/components/PracticeVitalsCard';
+import SprintCard from '@/components/SprintCard';
 import { useAttentionItems } from '@/hooks/useAttentionItems';
+import { useConsumedSearchParam } from '@/hooks/useDeepLink';
 import type { AttentionKind } from '@/lib/attention';
 
 /**
@@ -26,6 +28,9 @@ const AREAS: Area[] = [
 
 export default function OfficeIndex() {
   const attention = useAttentionItems();
+  // Sprint notices deep-link here for admins (`?sprint=`); Home shows the
+  // challenge only while it is noteworthy.
+  const linkedSprintId = useConsumedSearchParam('sprint');
   const countFor = (kinds?: AttentionKind[]) => (kinds ? attention.unresolved.filter(i => kinds.includes(i.kind)).length : 0);
   return (
     <ManagementShell room="office">
@@ -54,6 +59,12 @@ export default function OfficeIndex() {
             );
           })}
         </ul>
+
+        <section aria-labelledby="goals-challenges" className="space-y-3">
+          <h2 id="goals-challenges" className="text-lg font-semibold">Goals &amp; challenges</h2>
+          <p className="text-sm text-muted-foreground">The month’s challenge lives here; Home mentions it only when it needs a decision, is off track, is ending, or has finished.</p>
+          <SprintCard highlightId={linkedSprintId} />
+        </section>
 
         <section aria-labelledby="practice-performance" className="space-y-3">
           <h2 id="practice-performance" className="text-lg font-semibold">Practice performance</h2>

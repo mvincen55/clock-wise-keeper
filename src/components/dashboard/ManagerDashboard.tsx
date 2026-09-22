@@ -1,41 +1,196 @@
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { money } from '@/lib/owner-pulse';
-import type { ManagerView, MonthPaceLine, PulseFact } from './types';
+import { ageLabel, itemAction, itemTone, type AttentionItem } from '@/lib/attention';
+import type { PaceLine, SentencePart, StatusLine, TodayException } from '@/lib/home-brief';
+import type { ManagerView } from './types';
 import {
-  Band, DashboardShell, EmptyState, Lanes, Masthead, MicroLabel, PersonRow, SignalRow,
-  StatusDot, ViewContext,
+  Band, DashboardShell, EmptyState, Lanes, Masthead, MicroLabel, SignalRow, StatusDot, ViewContext,
+  toneText,
 } from './kit';
 
 /**
- * MANAGER — "is the office okay, is performance on pace, what needs my hands?"
+ * MANAGER — "How is the office right now, and what needs me?" (design §3.3)
  *
- * Rebuilt around the same canonical pulse layer Owner Home reads:
+ * Home is a briefing. It renders no forms and takes no consequential action:
+ * every row carries one navigation action, Review for a decision and Open for
+ * a fix or a follow-up, and both land on the exact Attention item.
  *
- *   A  quiet office context (state line + role context — never a hero)
- *   B  Manager Pulse: deterministic briefing + the day's facts
- *   C  Office performance: production / collections / new patients, each
- *      against ONLY its own goal, receipts on tap
- *   D  What needs your hands: one recommended intervention with evidence,
- *      then the queue ordered by operational consequence
- *   E  Close the Day status, linked to the exact record
- *   F  Staffing — live roster only while the office works; calm summary
- *      otherwise. Attendance no longer leads the page.
- *   G  Office goal (one primary sprint; the rest collapse to a count)
- *   H  personal role lane, compact
+ *   1  one sentence of state, each fact linked
+ *   2  Needs you — the first three Attention items, then "n more"
+ *   3  Today — exceptions only, then one count line; never a roster
+ *   4  two status lines — the last closeout, and pace with a Why?
+ *   5  Spotlight — the challenge only when it is noteworthy today
+ *   6  Mine — only what needs the manager personally
+ *   7  after close, Needs you becomes Before you leave
  *
- * The clock stays in the shell's GlobalTimeControl. Missing closeouts are
- * narrated, never rendered as $0, and a closed office invents no urgency.
+ * Everything else that sat here (fact tiles, performance cards, the doctor
+ * board, the sprint card, the notes board) lives with its owner now.
  */
+
+const actionClass =
+  'inline-flex shrink-0 items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-primary';
+const arrow = <ArrowUpRight className="h-3 w-3 transition-transform group-hover:-translate-y-0.5" />;
+
+/** The sentence: recorded facts, each one a link to where it can be acted on. */
+function Sentence({ parts }: { parts: SentencePart[] }) {
+  return (
+    <p className="mt-3 max-w-[64ch] font-display text-[clamp(1.25rem,3.2vw,1.85rem)] font-bold leading-snug tracking-[-0.02em]">
+      {parts.map((p, i) =>
+        p.href ? (
+          <Link
+            key={i}
+            to={p.href}
+            className={cn(
+              'underline decoration-border underline-offset-4 transition-colors hover:decoration-current',
+              p.tone === 'attention' && 'text-warning',
+              p.tone === 'urgent' && 'text-destructive',
+            )}
+          >
+            {p.text}
+          </Link>
+        ) : (
+          <span key={i} className={cn(p.tone === 'attention' && 'text-warning', p.tone === 'urgent' && 'text-destructive')}>
+            {p.text}
+          </span>
+        ),
+      )}
+    </p>
+  );
+}
+
+/** One Attention item: dot, who and what, age or deadline, one navigation action. */
+function ItemRow({ item }: { item: AttentionItem }) {
+  return (
+    <Link
+      to={`/management?item=${item.key}`}
+      data-item-key={item.key}
+      className="group flex items-center gap-3 border-b border-border py-3 transition-colors hover:bg-muted/60"
+    >
+      <StatusDot tone={itemTone(item)} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[14px] font-medium leading-snug">
+          {item.subject.name ? `${item.subject.name} · ` : ''}
+          {item.label}
+        </span>
+        {item.detail && (
+          <span className="block truncate text-[12.5px] leading-snug text-muted-foreground">{item.detail}</span>
+        )}
+      </span>
+      <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-muted-foreground">{ageLabel(item)}</span>
+      <span className={actionClass}>
+        {itemAction(item)}
+        {arrow}
+      </span>
+    </Link>
+  );
+}
+
+/** A person who is an exception today. Links to their item when one exists. */
+function ExceptionRow({ person }: { person: TodayException }) {
+  const inner = (
+    <>
+      <StatusDot tone={person.tone} />
+      <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium">{person.name}</span>
+      <span className={cn('font-mono text-[10.5px] uppercase tracking-[0.1em]', toneText[person.tone])}>{person.status}</span>
+      {person.action && (
+        <span className={actionClass}>
+          {person.action}
+          {arrow}
+        </span>
+      )}
+    </>
+  );
+  const base = 'flex items-center gap-3 border-b border-border py-2.5';
+  return person.href ? (
+    <Link to={person.href} className={cn(base, 'group transition-colors hover:bg-muted/60')}>{inner}</Link>
+  ) : (
+    <div className={base}>{inner}</div>
+  );
+}
+
+/** A status line: what it is, where it stands, and the one place to go. */
+function StatusRow({ line }: { line: StatusLine }) {
+  const inner = (
+    <>
+      <StatusDot tone={line.tone} />
+      <span className="min-w-0 flex-1 text-[13.5px] leading-snug">
+        <span className="font-medium">{line.label}</span>{' '}
+        <span className={cn(line.tone === 'attention' ? 'text-warning' : line.tone === 'urgent' ? 'text-destructive' : 'text-muted-foreground')}>
+          {line.text}
+        </span>
+      </span>
+      {line.action && (
+        <span className={actionClass}>
+          {line.action}
+          {arrow}
+        </span>
+      )}
+    </>
+  );
+  return (
+    <Link to={line.href} className="group flex items-center gap-3 border-b border-border py-3 transition-colors hover:bg-muted/60">
+      {inner}
+    </Link>
+  );
+}
+
+/** Pace in one clause with its scope; Why? discloses the three figures. */
+function PaceRow({ pace }: { pace: PaceLine }) {
+  return (
+    <div className="border-b border-border py-3">
+      <div className="flex items-center gap-3">
+        <StatusDot tone={pace.tone} />
+        <p className="min-w-0 flex-1 text-[13.5px] leading-snug">
+          <span className="font-medium">Pace</span>{' '}
+          <span className={cn(pace.tone === 'attention' ? 'text-warning' : 'text-muted-foreground')}>{pace.text}</span>{' '}
+          <span className="text-muted-foreground">({pace.scope})</span>
+        </p>
+      </div>
+      {pace.figures.length > 0 && (
+        <details className="mt-1.5 pl-5">
+          <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+            Why?
+          </summary>
+          <dl className="mt-2 grid gap-3 sm:grid-cols-3">
+            {pace.figures.map((f) => (
+              <div key={f.label} className="min-w-0">
+                <dt className="text-[11px] text-muted-foreground">{f.label}</dt>
+                <dd className={cn('mt-0.5 font-display text-[1.2rem] font-bold leading-none tabular-nums', f.tone === 'attention' && 'text-warning')}>
+                  {f.value}
+                </dd>
+                <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{f.detail}</p>
+              </div>
+            ))}
+          </dl>
+        </details>
+      )}
+    </div>
+  );
+}
+
 export default function ManagerDashboard({ view }: { view: ManagerView }) {
-  const {
-    header, office, summary, brief, performance, pipeline, next, queue, closeDay, staffing, goal,
-    lanes, roleContext,
-  } = view;
-  const liveRoster = staffing.rows.length > 0;
-  const factTiles: PulseFact[] = brief?.facts ?? [];
-  const newOffice = brief?.scope === 'none';
+  const { header, office, home, mine, lanes, roleContext } = view;
+  const { needs, today, wrapUp, spotlight } = home;
+  const nowCount = needs.top.length + needs.more;
+  const stillIn = today.exceptions.filter((e) => e.status.startsWith('Still clocked in'));
+  const closeoutStep = wrapUp && home.lastDay?.action ? home.lastDay : null;
+  const wrapEmpty = wrapUp && stillIn.length === 0 && !closeoutStep && !home.inbox && nowCount === 0;
+  const alsoOpen = [
+    needs.waiting > 0 && `${needs.waiting} waiting on others`,
+    needs.deferred > 0 && `${needs.deferred} parked`,
+  ].filter(Boolean).join(' · ');
+  const statusLines: StatusLine[] = [];
+  // The closeout step already leads Before you leave; the status band does not repeat it.
+  if (home.lastDay && !closeoutStep) statusLines.push(home.lastDay);
+
+  const todayLine = today.asOf
+    ? today.asOf === 'loading'
+      ? 'Reading today’s roster…'
+      : 'The roster could not be read. Nobody is marked in or out.'
+    : today.exceptions.length === 0 && (today.phase === 'open' || today.phase === 'unknown_hours')
+      ? `Everyone scheduled is in · ${today.countLine}`
+      : today.countLine;
 
   return (
     <DashboardShell>
@@ -47,16 +202,16 @@ export default function ManagerDashboard({ view }: { view: ManagerView }) {
         timeLabel={header.timeLabel}
         right={
           <Link
-            to="/management?kind=decide"
+            to="/management"
             className="group inline-flex items-center gap-2 rounded-full border border-primary/35 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.12em] text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
           >
-            Approvals
+            Attention
             <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:-translate-y-0.5" />
           </Link>
         }
       />
 
-      {/* A — quiet office context. A state line, never a siren. */}
+      {/* Quiet office context. A state line, never a siren. */}
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
         <span className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
           <StatusDot tone={office.phase === 'open' ? 'steady' : 'calm'} />
@@ -65,260 +220,137 @@ export default function ManagerDashboard({ view }: { view: ManagerView }) {
         <ViewContext context={roleContext} />
       </div>
 
-      {/* B — MANAGER PULSE. Same facts and honesty rules as Owner Home. */}
+      {/* 1 — the sentence. Every fact in it is recorded, and linked. */}
       <section className="mt-6 rounded-2xl border border-border bg-card px-5 py-6 sm:px-7">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <MicroLabel className="text-primary">Manager pulse</MicroLabel>
-          {brief && brief.scope !== 'none' && <MicroLabel>{brief.dayLabel}</MicroLabel>}
-        </div>
-
-        {summary ? (
-          <p className="mt-3 max-w-[64ch] font-display text-[clamp(1.2rem,3vw,1.7rem)] font-bold leading-snug tracking-[-0.02em]">
-            {summary}
-          </p>
-        ) : (
-          <p className="mt-3 text-[14px] text-muted-foreground">Reading the day&rsquo;s numbers…</p>
-        )}
-        {brief?.note && <p className="mt-2 text-[13px] text-muted-foreground">{brief.note}</p>}
-
-        {newOffice ? (
-          <EmptyState
-            tone="setup"
-            title="No days have been closed out yet."
-            detail="The pulse reads production, collections, new patients, and missed appointments straight off the deposit log."
-            action={{ label: 'Open Close the Day', to: '/deposit-log' }}
-          />
-        ) : (
-          factTiles.length > 0 && (
-            <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3 lg:grid-cols-5">
-              {factTiles.map((f) => {
-                const body = (
-                  <>
-                    <MicroLabel>{f.label}</MicroLabel>
-                    <p
-                      className={cn(
-                        'mt-2 font-display text-[clamp(1.35rem,3vw,1.9rem)] font-extrabold leading-[0.9] tabular-nums tracking-[-0.03em]',
-                        f.tone === 'attention' && 'text-warning',
-                        f.tone === 'urgent' && 'text-destructive',
-                      )}
-                    >
-                      {f.value}
-                    </p>
-                    {f.detail && (
-                      <p className="mt-1.5 text-[11.5px] leading-tight text-muted-foreground">{f.detail}</p>
-                    )}
-                  </>
-                );
-                return f.href ? (
-                  <Link key={f.id} to={f.href} className="block bg-card px-4 py-4 transition-colors hover:bg-muted/50">
-                    {body}
-                  </Link>
-                ) : (
-                  <div key={f.id} className="bg-card px-4 py-4">
-                    {body}
-                  </div>
-                );
-              })}
-            </div>
-          )
-        )}
+        <MicroLabel className="text-primary">{wrapUp ? 'Wrap-up' : 'Right now'}</MicroLabel>
+        <Sentence parts={home.sentence} />
       </section>
 
-      {/* C — OFFICE PERFORMANCE. Three compact cards, one metric each,
-          paced only against their own goals. Receipts on tap. */}
-      {!newOffice && performance && (
-        <div className="mt-3 grid gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-3">
-          {performance.map((line: MonthPaceLine) => (
-            <div key={line.id} className="bg-card px-5 py-5">
-              <MicroLabel>{line.label}</MicroLabel>
-              <p
-                className={cn(
-                  'mt-2 font-display text-[clamp(1.5rem,3.2vw,2rem)] font-extrabold leading-none tabular-nums tracking-[-0.03em]',
-                  line.tone === 'attention' && 'text-warning',
-                )}
-              >
-                {line.value}
-              </p>
-              <p className="mt-1.5 text-[12px] leading-snug text-muted-foreground">{line.detail}</p>
-              {line.id === 'new_patients' && pipeline && (
-                <p className="mt-1.5 text-[12px] leading-snug text-muted-foreground">
-                  Pipeline: {pipeline.scheduledThisWeek} scheduled this week
-                  {pipeline.recordedDays === 0 ? ' (nothing recorded yet)' : ''} — scheduled never
-                  counts toward the seen goal.
-                </p>
-              )}
-              {line.pace && (
-                <details className="mt-2">
-                  <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
-                    Why?
-                  </summary>
-                  <p className="mt-1.5 text-[11.5px] leading-snug text-muted-foreground">
-                    {(() => {
-                      const fmt = line.id === 'new_patients' ? String : money;
-                      return `${fmt(line.pace.actual)} recorded vs ${fmt(line.pace.pacedTarget)} expected by now — the full ${fmt(line.pace.target)} goal × the share of the month elapsed. Paced against this metric's own goal only.`;
-                    })()}
-                  </p>
-                </details>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* D (top) — the one recommended intervention, evidence attached. */}
-      {next && (
-        <section className="mt-3 rounded-2xl border border-primary/25 bg-primary/[0.04] px-5 py-5 sm:px-7">
-          <MicroLabel className="text-primary">What I&rsquo;d step into first</MicroLabel>
-          <p className="mt-2 max-w-[72ch] text-[14.5px] leading-relaxed">{next.text}</p>
-          {next.action && (
-            <Link
-              to={next.action.to}
-              className="group mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
-            >
-              {next.action.label}
-              <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:-translate-y-0.5" />
-            </Link>
-          )}
-          {next.receipts.length > 0 && (
-            <details className="mt-3">
-              <summary className="cursor-pointer list-none font-mono text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
-                Why? — the recorded facts behind this
-              </summary>
-              <dl className="mt-3 space-y-2.5 border-t border-border pt-3">
-                {next.receipts.map((r) => (
-                  <div key={r.label}>
-                    <div className="flex items-baseline justify-between gap-3">
-                      <dt className="text-[12px] text-muted-foreground">{r.label}</dt>
-                      <dd className="text-[12px] font-medium tabular-nums">{r.value}</dd>
-                    </div>
-                    <p className="text-[11px] leading-snug text-muted-foreground/80">{r.source}</p>
-                  </div>
-                ))}
-              </dl>
-            </details>
-          )}
-        </section>
-      )}
-
       <div className="mt-8 grid gap-8 [&>*]:min-w-0 lg:grid-cols-[1.35fr_1fr] lg:gap-10">
-        {/* Left, dominant: the consequence-ordered queue, then the goal. */}
         <div className="space-y-8">
-          <Band title="What needs your hands" count={queue.length > 0 ? `${queue.length} open` : undefined}>
-            {queue.length === 0 ? (
-              <EmptyState
-                tone="good"
-                title="Nothing is waiting on you."
-                detail="Closeouts, approvals, reviews, and follow-through are all clear."
-              />
-            ) : (
-              queue.map((s) => <SignalRow key={s.id} signal={s} />)
+          {/* 2 / 7 — Needs you, or Before you leave after close. Navigation only. */}
+          <Band
+            title={wrapUp ? 'Before you leave' : 'Needs you'}
+            count={nowCount > 0 ? `${nowCount} now` : undefined}
+            action={{ label: 'Attention', to: '/management' }}
+          >
+            {wrapUp && stillIn.map((p) => <ExceptionRow key={p.id} person={p} />)}
+            {closeoutStep && <StatusRow line={closeoutStep} />}
+            {wrapUp && home.inbox && <StatusRow line={home.inbox} />}
+            {wrapUp && needs.top.length > 0 && (
+              <MicroLabel className="pt-3">Carries into tomorrow</MicroLabel>
+            )}
+            {needs.top.map((item) => <ItemRow key={item.key} item={item} />)}
+            {needs.more > 0 && (
+              <Link
+                to="/management"
+                className="group flex items-center justify-between gap-3 border-b border-border py-3 text-[13px] text-muted-foreground transition-colors hover:bg-muted/60"
+              >
+                <span>{needs.more} more need{needs.more === 1 ? 's' : ''} you now</span>
+                <span className={actionClass}>Open Attention{arrow}</span>
+              </Link>
+            )}
+            {nowCount > 0 && alsoOpen && (
+              <Link to="/management" className="block border-b border-border py-2.5 text-[12px] text-muted-foreground hover:underline">
+                {alsoOpen}
+              </Link>
+            )}
+            {wrapEmpty && (
+              <EmptyState tone="good" title="Nothing needs attention tonight." detail="Everyone is clocked out and the closeout is sealed." />
+            )}
+            {!wrapUp && nowCount === 0 && (
+              needs.degraded ? (
+                <EmptyState
+                  tone="neutral"
+                  title="Some sources could not be read."
+                  detail="Attention names which. Nothing here is confirmed clear."
+                  action={{ label: 'Open Attention', to: '/management' }}
+                />
+              ) : (
+                <EmptyState
+                  tone="good"
+                  title="Nothing is waiting on you."
+                  detail={alsoOpen ? `${alsoOpen}. Decisions, fixes, and follow-ups are clear.` : 'Decisions, fixes, and follow-ups are all clear.'}
+                />
+              )
             )}
           </Band>
 
-          {/* G — the office goal. One primary sprint, verification preserved. */}
-          <Band title="Office goal" action={{ label: 'Goals', to: '/goals' }}>
-            {goal ? (
+          {/* 3 — Today: exceptions, then one count line. Never a roster. */}
+          <Band
+            title="Today"
+            count={today.scheduled > 0 ? `${today.scheduled} scheduled` : undefined}
+            action={{ label: 'People', to: '/management/people' }}
+          >
+            {!wrapUp && today.exceptions.map((p) => <ExceptionRow key={p.id} person={p} />)}
+            <p className={cn('py-3 text-[13px]', today.asOf === 'unavailable' ? 'text-warning' : 'text-muted-foreground')}>
+              {todayLine}
+            </p>
+          </Band>
+        </div>
+
+        <div className="space-y-8">
+          {/* 4 — the status lines: the last closeout and the pace, with receipts. */}
+          {(statusLines.length > 0 || home.pace) && (
+            <Band title="Status">
+              {statusLines.map((line) => <StatusRow key={line.id} line={line} />)}
+              {home.pace && <PaceRow pace={home.pace} />}
+            </Band>
+          )}
+
+          {/* 5 — Spotlight: the challenge, only while it is noteworthy. */}
+          {spotlight && (
+            <Band title={`Challenge · ${spotlight.reason}`} action={{ label: 'Goals', to: '/goals' }}>
               <div className="border-b border-border py-4">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                  <p className="text-[15px] font-semibold leading-snug">{goal.title}</p>
+                  <p className="text-[15px] font-semibold leading-snug">{spotlight.goal.title}</p>
                   <span
                     className={cn(
                       'font-mono text-[10px] uppercase tracking-[0.12em]',
-                      goal.state === 'on_track' && 'text-success',
-                      goal.state === 'needs_push' && 'text-warning',
-                      goal.state === 'awaiting_verification' && 'text-primary',
+                      spotlight.goal.state === 'on_track' && 'text-success',
+                      spotlight.goal.state === 'needs_push' && 'text-warning',
+                      spotlight.goal.state === 'awaiting_verification' && 'text-primary',
                     )}
                   >
-                    {goal.stateLabel}
+                    {spotlight.goal.stateLabel}
                   </span>
                 </div>
                 <p className="mt-3 font-display text-[2rem] font-extrabold leading-none tabular-nums tracking-[-0.02em]">
-                  {goal.done}
-                  <span className="text-[1.25rem] text-muted-foreground"> / {goal.total}</span>
+                  {spotlight.goal.done}
+                  <span className="text-[1.25rem] text-muted-foreground"> / {spotlight.goal.total}</span>
                 </p>
                 <div className="mt-3 h-1.5 w-full bg-muted">
                   <div
-                    className={cn(
-                      'h-full transition-[width] duration-700',
-                      goal.done >= goal.total ? 'bg-success' : 'bg-primary',
-                    )}
-                    style={{ width: `${Math.min(100, goal.total > 0 ? (goal.done / goal.total) * 100 : 0)}%` }}
+                    className={cn('h-full transition-[width] duration-700', spotlight.goal.done >= spotlight.goal.total ? 'bg-success' : 'bg-primary')}
+                    style={{ width: `${Math.min(100, spotlight.goal.total > 0 ? (spotlight.goal.done / spotlight.goal.total) * 100 : 0)}%` }}
                   />
                 </div>
                 <p className="mt-2 text-[12.5px] text-muted-foreground">
-                  {goal.remaining} remaining · ends {goal.endsLabel}
-                  {goal.daysLeft > 0 ? ` (${goal.daysLeft} day${goal.daysLeft === 1 ? '' : 's'} left)` : ' (today)'}
+                  {spotlight.goal.remaining} remaining · ends {spotlight.goal.endsLabel}
+                  {spotlight.goal.daysLeft > 0 ? ` (${spotlight.goal.daysLeft} day${spotlight.goal.daysLeft === 1 ? '' : 's'} left)` : ' (today)'}
                   {' · '}
-                  {goal.stateDetail}
+                  {spotlight.goal.stateDetail}
                 </p>
-                {goal.moreCount > 0 && (
+                {spotlight.goal.state === 'awaiting_verification' && (
                   <Link
-                    to="/goals"
-                    className="group mt-2 inline-flex items-center gap-1 font-mono text-[10.5px] uppercase tracking-[0.12em] text-primary hover:underline"
+                    to={`/management?item=challenge_verify:${spotlight.goal.id}`}
+                    className={cn(actionClass, 'group mt-2 hover:underline')}
                   >
-                    {goal.moreCount} more active
-                    <ArrowUpRight className="h-3 w-3 transition-transform group-hover:-translate-y-0.5" />
+                    Review{arrow}
                   </Link>
                 )}
-              </div>
-            ) : (
-              <EmptyState
-                tone="setup"
-                title="No office goal is running."
-                detail="Pick one shared number the office can rally around — the Sprint Builder can scope it."
-                action={{ label: 'Choose a goal', to: '/goals' }}
-              />
-            )}
-          </Band>
-        </div>
-
-        {/* Right: the record of truth, staffing when it matters, my own lane. */}
-        <div className="space-y-8">
-          {/* E — Close the Day status, linked to the exact record. */}
-          {closeDay && (
-            <Band title="Close the Day" action={{ label: 'Open', to: closeDay.href }}>
-              <div className="border-b border-border py-4">
-                <div className="flex items-center gap-2.5">
-                  <StatusDot tone={closeDay.tone} />
-                  <p className="text-[15px] font-semibold leading-snug">{closeDay.label}</p>
-                </div>
-                <p className="mt-1.5 text-[12.5px] text-muted-foreground">{closeDay.detail}</p>
               </div>
             </Band>
           )}
 
-          {/* F — staffing. A live question only while the office works; a calm
-              summary (never manufactured urgency) when it does not. */}
-          <Band
-            title="Staffing today"
-            count={liveRoster ? `${staffing.rows.length}` : undefined}
-            action={{ label: 'Attendance', to: '/management/attendance' }}
-          >
-            {staffing.reviewCount > 0 && (
-              <SignalRow
-                signal={{
-                  id: 'attendance-review',
-                  label: `${staffing.reviewCount} attendance item${staffing.reviewCount === 1 ? ' needs' : 's need'} review`,
-                  detail: staffing.reviewDetail,
-                  value: String(staffing.reviewCount),
-                  href: '/management/attendance',
-                  tone: 'attention',
-                }}
-              />
-            )}
-            {liveRoster ? (
-              staffing.rows.map((p) => <PersonRow key={p.id} person={p} />)
-            ) : (
-              <EmptyState
-                tone="neutral"
-                title={office.headline}
-                detail={`${office.detail} No live staffing status is needed.`}
-              />
-            )}
-          </Band>
+          {/* 6 — Mine: only what needs the manager personally. */}
+          {mine.length > 0 && (
+            <Band title="Mine" count={`${mine.length}`}>
+              {mine.map((s) => <SignalRow key={s.id} signal={s} />)}
+            </Band>
+          )}
 
-          {/* H — a manager who also works the floor keeps a compact personal
-              lane. It never turns Home into two dashboards. */}
+          {/* A manager who also works the floor keeps a compact personal lane. */}
           <Lanes lanes={lanes} />
         </div>
       </div>

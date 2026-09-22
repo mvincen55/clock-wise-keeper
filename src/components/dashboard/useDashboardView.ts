@@ -3,21 +3,19 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 import { useMyProfile } from '@/hooks/useMyProfile';
 import { useTick } from '@/hooks/useTick';
 import { useOrgAttendanceSnapshot } from '@/hooks/useOrgAttendanceSnapshot';
-import { useApprovalCounts } from '@/hooks/useApprovalCounts';
 import { usePracticeVitals } from '@/hooks/usePracticeVitals';
-import { useDepositLog } from '@/hooks/useDepositLog';
+import { useDepositLog, useRecentDepositLogs } from '@/hooks/useDepositLog';
 import { useTeamGoals, type TeamGoal } from '@/hooks/useTeamGoals';
-import { useOfficeNudges } from '@/hooks/useOfficeNudges';
 import { useUnresolvedBypasses } from '@/hooks/useChecklistBypasses';
-import { useOrgAccountabilityReports, useMyAccountabilityReports } from '@/hooks/useAccountability';
-import {
-  useKnowledgeAcknowledgmentRoster,
-  useMyKnowledgeAcknowledgments,
-} from '@/hooks/useKnowledgeAcknowledgments';
+import { useMyAccountabilityReports } from '@/hooks/useAccountability';
+import { useMyKnowledgeAcknowledgments } from '@/hooks/useKnowledgeAcknowledgments';
 import { useTrainingAssignments } from '@/hooks/useTraining';
 import { useCurrentPtoBalance } from '@/hooks/usePtoEngine';
 import { useMissingShifts } from '@/hooks/useMissingShifts';
 import { useTodayEntry } from '@/hooks/useTimeEntries';
+import { useAttentionItems } from '@/hooks/useAttentionItems';
+import { useMessagesCloseout } from '@/hooks/useMessagesCloseout';
+import { buildHomeBrief } from '@/lib/home-brief';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyOperationalRoles } from '@/hooks/useMyOperationalRoles';
 import { useMyPermissionGrants } from '@/hooks/useEmployeePermissions';
@@ -29,7 +27,7 @@ import {
   buildDailyBrief, buildGoalBrief, buildMonthDetail, dailySummary, monthPaceLines,
   ownerRecommendation, type OwnerPulseInput,
 } from '@/lib/owner-pulse';
-import { buildInterventionQueue, buildManagerBrief, closeDayStatus } from '@/lib/manager-pulse';
+import { closeDayStatus } from '@/lib/manager-pulse';
 import { memberOfficeLines, rolePulseItems } from '@/lib/member-pulse';
 import type {
   DashboardHeader, DashboardView, Figure, ManagerView, MemberView, OwnerView,
@@ -75,18 +73,21 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
   const { data: profile } = useMyProfile();
 
   // Shared / admin sources (each hook disables itself when the role is wrong).
-  const { data: snapshot = [] } = useOrgAttendanceSnapshot();
-  const { data: approvals } = useApprovalCounts();
+  const snapshotQuery = useOrgAttendanceSnapshot();
+  const snapshot = snapshotQuery.data ?? [];
   const { data: vitals } = usePracticeVitals();
   const today = getToday();
   const { data: todayLog } = useDepositLog(today);
+  const { data: recentLogs } = useRecentDepositLogs(14);
   const { data: sprintData } = useTeamGoals();
-  const { data: nudges = [] } = useOfficeNudges();
   const { data: bypasses = [] } = useUnresolvedBypasses();
-  const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
-  const { data: orgReports = [] } = useOrgAccountabilityReports(isAdmin);
+  // The one derived state every management surface reads (design §5.5).
+  // Empty and disabled for members; they never read the office's records.
+  const attention = useAttentionItems();
+  const messagesCloseout = useMessagesCloseout();
+  // The office's records (reports, the acknowledgment roster) are read once,
+  // by useAttentionItems; Home never re-reads them for a count of its own.
   const { data: myReports = [] } = useMyAccountabilityReports();
-  const { data: ackRoster = [] } = useKnowledgeAcknowledgmentRoster();
   const { data: myAcks = [] } = useMyKnowledgeAcknowledgments();
   const { data: assignments = [] } = useTrainingAssignments();
   const pto = useCurrentPtoBalance();
@@ -202,46 +203,17 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
     if (ctx.role === 'owner') {
       // Owners are already excluded from `snapshot` at the hook boundary —
       // an owner without punches can never appear absent or out.
-      const ownerReviews = orgReports.filter(r => r.status === 'awaiting_owner');
-      const overdueAcks = ackRoster.filter(a => !a.acknowledged_at && a.overdue_at);
-      const verifySprints = sprints.filter(s => s.status === 'pending_verification');
-      const decisionCount =
-        (approvals?.total ?? 0) + ownerReviews.length + overdueAcks.length + verifySprints.length;
-
-      const decisions: Signal[] = [
-        {
-          id: 'approvals',
-          label: 'Approvals pending',
-          detail: `${approvals?.ptoRequests ?? 0} PTO · ${approvals?.corrections ?? 0} corrections · ${approvals?.changeRequests ?? 0} changes`,
-          value: String(approvals?.total ?? 0),
-          href: '/management?kind=decide',
-          tone: (approvals?.total ?? 0) > 0 ? 'attention' : 'calm',
-        },
-        {
-          id: 'reviews',
-          label: 'Accountability records at owner review',
-          detail: 'Nobody reviews their own record — these have reached you.',
-          value: String(ownerReviews.length),
-          href: '/management',
-          tone: ownerReviews.length > 0 ? 'urgent' : 'calm',
-        },
-        {
-          id: 'acks',
-          label: 'Policy acknowledgments overdue',
-          detail: 'Published versions still unsigned past their due date.',
-          value: String(overdueAcks.length),
-          href: '/playbook',
-          tone: overdueAcks.length > 0 ? 'attention' : 'calm',
-        },
-        {
-          id: 'verify',
-          label: 'Sprints awaiting verification',
-          detail: 'Wins that need a second pair of eyes before they count.',
-          value: String(verifySprints.length),
-          href: '/goals',
-          tone: verifySprints.length > 0 ? 'attention' : 'calm',
-        },
-      ];
+      // Decisions are the same list Attention shows, top three, one
+      // navigation action each. No count is computed here.
+      const decisionCount = attention.counts.needsNow;
+      const decisions: Signal[] = attention.needsNow.slice(0, 3).map(i => ({
+        id: i.key,
+        label: `${i.subject.name ? `${i.subject.name} · ` : ''}${i.label}`,
+        detail: i.deadline ? i.deadline.label : i.verb === 'decide' ? 'Waiting on your decision' : i.verb === 'fix' ? 'A record to fix' : 'Follow-up the office rule asks for',
+        value: '',
+        href: `/management?item=${i.key}`,
+        tone: i.coverage ? 'urgent' : 'attention',
+      }));
 
       // The daily pulse is a pure function of recorded vitals. While the
       // query is in flight everything stays null — the hero renders a quiet
@@ -260,16 +232,6 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
       // Operational exceptions: only real, unresolved signals. A zero here is
       // silence, not a row — normal staffing mostly disappears.
       const exceptions: Signal[] = [];
-      if (nudges.length > 0) {
-        exceptions.push({
-          id: 'nudges',
-          label: 'Unresolved office notes',
-          detail: 'Notes Purple Envelope flagged, still open.',
-          value: String(nudges.length),
-          href: '/inbox',
-          tone: 'attention',
-        });
-      }
       if (staffing.reviewCount > 0) {
         exceptions.push({
           id: 'attendance-review',
@@ -302,45 +264,35 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
 
     /* ----------------------------- manager ----------------------------- */
     if (ctx.role === 'manager') {
-      const managerReviews = orgReports.filter(r => r.status === 'awaiting_manager');
-      const openAcks = ackRoster.filter(a => !a.acknowledged_at).length;
-      const trainingDue = assignments.filter(a => a.status !== 'completed').length;
-
       const closeDay = closeDayStatus(todayLog ?? null, staffing.office.phase);
+      // The pace receipts come from the same layer Owner Home reads.
+      const performance = pulseInput && vitals ? monthPaceLines(pulseInput) : null;
+      // What needs the manager personally, never the office's work.
+      const myOpenAcks = myAcks.filter(a => !a.acknowledged_at);
+      const myOpenReports = myReports.filter(r => r.status === 'awaiting_member');
+      const mineAll: Signal[] = [
+        { id: 'acks', label: 'Policies to sign', detail: 'Signing means you read that exact version.', value: String(myOpenAcks.length), href: '/playbook', tone: 'attention' },
+        { id: 'missing', label: 'Missing time of my own, last 14 days', detail: 'Scheduled days with no punches.', value: String(missingDays.length), href: '/timesheet', tone: 'attention' },
+        { id: 'bypasses', label: 'Bypass reasons I owe', detail: 'Never blocks you — just needs a sentence.', value: String(bypasses.length), href: '/checklists', tone: 'attention' },
+        { id: 'records', label: 'Records awaiting my response', detail: 'You always get to add your side.', value: String(myOpenReports.length), href: '/', tone: 'urgent' },
+      ];
+      const mine = mineAll.filter(s => s.value !== '0');
 
-      let summary: string | null = null;
-      let brief: ManagerView['brief'] = null;
-      let performance: ManagerView['performance'] = null;
-      let pipeline: ManagerView['pipeline'] = null;
-      let next: ManagerView['next'] = null;
-      let queue: ManagerView['queue'] = [];
-      if (pulseInput && vitals) {
-        const managerBrief = buildManagerBrief(pulseInput, todayLog?.staffing_assessment ?? null);
-        summary = managerBrief.summary;
-        brief = managerBrief.daily;
-        performance = monthPaceLines(pulseInput);
-        pipeline = {
-          scheduledThisWeek: vitals.scheduledThisWeek,
-          recordedDays: vitals.scheduledThisWeekRecordedDays,
-        };
-        const interventions = buildInterventionQueue({
-          input: pulseInput,
-          closeDay,
-          staffingAssessment: todayLog?.staffing_assessment ?? null,
-          lowConfidenceCount: todayLog?.needs_manager_review ? 1 : 0,
-          ptoRequests: approvals?.ptoRequests ?? 0,
-          timeCorrections: approvals?.corrections ?? 0,
-          changeRequests: approvals?.changeRequests ?? 0,
-          managerReviews: managerReviews.length,
-          bypasses: bypasses.length,
-          overdueAcks: openAcks,
-          openTraining: trainingDue,
-          nudges: nudges.length,
-          goals: sprints,
-        });
-        next = interventions.next;
-        queue = interventions.queue;
-      }
+      const home = buildHomeBrief({
+        attention,
+        summary: staffing,
+        snapshot,
+        now,
+        today,
+        closeouts: (recentLogs ?? []).map(l => ({ id: l.id, deposit_date: l.deposit_date, sealed_at: l.sealed_at, needs_manager_review: l.needs_manager_review })),
+        closeDay,
+        pace: performance,
+        paceScopeDate: pulseInput?.latest?.date ?? null,
+        goal,
+        payroll: attention.payrollPeriod ? { dueDate: attention.payrollPeriod.dueDate, dueLabel: attention.payrollPeriod.dueLabel } : null,
+        inbox: messagesCloseout.applies ? { outstanding: messagesCloseout.outstanding.length, label: messagesCloseout.label.replace(/ read$/, '') } : null,
+        asOf: snapshotQuery.isError ? 'unavailable' : snapshotQuery.data === undefined ? 'loading' : null,
+      });
 
       const manager: ManagerView = {
         kind: 'manager',
@@ -348,15 +300,8 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         roleContext,
         lanes,
         office: staffing.office,
-        summary,
-        brief,
-        performance,
-        pipeline,
-        next,
-        queue,
-        closeDay,
-        staffing,
-        goal,
+        home,
+        mine,
       };
       return { view: manager, isLoading: false };
     }
@@ -528,8 +473,8 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
     };
     return { view: member, isLoading: false };
   }, [
-    ctx, ctxLoading, profile, now, today, snapshot, approvals, vitals, todayLog, sprintData,
-    nudges, bypasses, orgReports, myReports, ackRoster, myAcks, assignments, pto, todayEntry,
-    missingDays, user, ops, grants,
+    ctx, ctxLoading, profile, now, today, snapshot, vitals, todayLog, sprintData,
+    bypasses, myReports, myAcks, assignments, pto, todayEntry,
+    missingDays, user, ops, grants, attention, recentLogs, messagesCloseout, snapshotQuery.isError, snapshotQuery.data,
   ]);
 }

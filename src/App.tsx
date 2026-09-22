@@ -185,6 +185,8 @@ const router = createBrowserRouter(
             <Route path="/practice-setup" element={<ProtectedRoute><PracticeSetup /></ProtectedRoute>} />
             <Route path="/acknowledgments" element={<LegacyAcknowledgmentsRedirect />} />
             <Route path="/inbox" element={<Navigate to="/inbox/messages" replace />} />
+            {/* Nudges render on the surface they concern; the old tab lands on Home. */}
+            <Route path="/inbox/nudges" element={<Navigate to="/" replace />} />
             <Route path="/inbox/:tab" element={<ProtectedRoute><InboxPage /></ProtectedRoute>} />
             <Route path="/help" element={<ProtectedRoute><Help /></ProtectedRoute>} />
             <Route path="/timesheet" element={<ProtectedRoute><Timesheet /></ProtectedRoute>} />
@@ -240,7 +242,7 @@ const router = createBrowserRouter(
             <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
             <Route path="/requests" element={<Navigate to="/inbox/requests" replace />} />
             <Route path="/messages" element={<Navigate to="/inbox/messages" replace />} />
-            <Route path="/nudges" element={<Navigate to="/inbox/nudges" replace />} />
+            <Route path="/nudges" element={<Navigate to="/" replace />} />
             <Route path="/onboarding" element={<OnboardingRoute />} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/reset-password" element={<ResetPassword />} />

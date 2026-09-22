@@ -12,14 +12,15 @@ import type { OfficeStatus, StaffingSummary } from './staffing';
 import type {
   DailyBrief, GoalBrief, MissedMonth, MonthDetail, MonthPaceLine, OwnerRecommendation, PulseFact,
 } from '@/lib/owner-pulse';
-import type { ActionItem, CloseDayStatus, ManagerIntervention } from '@/lib/manager-pulse';
+import type { CloseDayStatus } from '@/lib/manager-pulse';
 import type { RolePulseItem } from '@/lib/member-pulse';
+import type { HomeBrief } from '@/lib/home-brief';
 
 export type { OfficeStatus, StaffingSummary };
 export type {
   DailyBrief, GoalBrief, MissedMonth, MonthDetail, MonthPaceLine, OwnerRecommendation, PulseFact,
 };
-export type { ActionItem, CloseDayStatus, ManagerIntervention, RolePulseItem };
+export type { CloseDayStatus, RolePulseItem, HomeBrief };
 
 export type Tone = 'urgent' | 'attention' | 'steady' | 'calm';
 
@@ -184,30 +185,18 @@ export type ManagerView = {
   kind: 'manager';
   header: DashboardHeader;
   roleContext: RoleContext;
-  /** H — compact personal-work lane; never displaces the cockpit. */
+  /** A compact personal-work lane; never displaces the briefing. */
   lanes: RoleLane[];
-  /** A — current office state, kept calm and compact. */
+  /** Current office state, kept calm and compact. */
   office: OfficeStatus;
   /**
-   * B — Manager Pulse: deterministic briefing sentence + the day's facts,
-   * built by the same canonical layer Owner Home reads. Null while loading.
+   * The briefing (design §3.3): the sentence, the top three Attention
+   * items, today's exceptions, the status lines, the spotlight, wrap-up.
+   * Everything Home renders is in here; every number has one home.
    */
-  summary: string | null;
-  brief: DailyBrief | null;
-  /** C — the three performance cards. Null while vitals load. */
-  performance: MonthPaceLine[] | null;
-  /** The new-patient card's pipeline row: scheduled this week. */
-  pipeline: { scheduledThisWeek: number; recordedDays: number } | null;
-  /** D — the single recommended intervention, with receipts. */
-  next: ManagerIntervention | null;
-  /** D — the rest of the queue, ordered by operational consequence. */
-  queue: ActionItem[];
-  /** E — where today's Close the Day record stands. */
-  closeDay: CloseDayStatus | null;
-  /** F — phase-aware staffing: live roster while open, calm summary after. */
-  staffing: StaffingSummary;
-  /** G — the primary office sprint; moreCount collapses the rest. */
-  goal: GoalBrief | null;
+  home: HomeBrief;
+  /** What needs the manager personally; absent when there is nothing. */
+  mine: Signal[];
 };
 
 export type MemberView = {

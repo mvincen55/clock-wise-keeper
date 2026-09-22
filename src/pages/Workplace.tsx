@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import HubLinkGrid, { HubSection } from '@/components/HubLinkGrid';
+import UserNotesBoard from '@/components/UserNotesBoard';
 
 // Workplace: employee and office life (blueprint §2). Each feature keeps its
 // existing route; this hub is its primary home in the navigation.
@@ -45,6 +46,9 @@ export default function Workplace() {
         <p className="text-muted-foreground">Your time, your office, and your growth.</p>
       </div>
       <HubLinkGrid sections={SECTIONS} isManager={isManager} />
+      {/* Personal notes: members keep theirs on Home (My work); the manager
+          and owner Home is a briefing, so their notes live here. */}
+      {isManager && <UserNotesBoard />}
     </div>
   );
 }

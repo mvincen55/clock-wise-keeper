@@ -97,11 +97,15 @@ const accountability: RouteBuilder = (n, ctx) =>
         exact: !!n.related_id,
       };
 
-const dashboardSprint: RouteBuilder = n => ({
-  to: withParam('/', 'sprint', n.related_id),
-  label: 'Home · Team sprint',
-  exact: !!n.related_id,
-});
+/**
+ * The sprint card lives on the member's Home and, for owners and managers,
+ * under Management → Office → Goals & challenges (the manager Home is a
+ * briefing and carries no cards).
+ */
+const dashboardSprint: RouteBuilder = (n, ctx) =>
+  isAdmin(ctx.role)
+    ? { to: withParam('/management/office', 'sprint', n.related_id), label: 'Office · Goals & challenges', exact: !!n.related_id }
+    : { to: withParam('/', 'sprint', n.related_id), label: 'Home · Team sprint', exact: !!n.related_id };
 
 /**
  * Explicit type → destination mapping. Use notification_type when it routes
@@ -359,13 +363,14 @@ export function resolveNotificationDestination(
     return { ...table(n, ctx), fallback: true };
   }
 
-  // AI nudges we have not met yet read best in the nudge inbox.
+  // AI nudges we have not met yet are mirrored as Home nudges, so Home is
+  // the one place they are sure to render.
   if (type.startsWith('ai_')) {
     warnOnce(
       `type:${type}`,
-      `No route registered for AI notification_type "${type}"; sending to the nudge inbox. Add it to NOTIFICATION_ROUTES in src/lib/notification-routing.ts.`
+      `No route registered for AI notification_type "${type}"; sending to Home. Add it to NOTIFICATION_ROUTES in src/lib/notification-routing.ts.`
     );
-    return { to: '/inbox/nudges', label: 'Inbox · Nudges', exact: false, fallback: true };
+    return { to: '/', label: 'Home', exact: false, fallback: true };
   }
 
   warnOnce(

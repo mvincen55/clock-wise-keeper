@@ -9,6 +9,12 @@ import { toast } from 'sonner';
  * carrying the recorded data it was based on. Members decide what happens to
  * them — "On it" or "Not for me" — and dismissals teach the system to stay
  * quieter about that kind of thing.
+ *
+ * A nudge renders on the surface it concerns (design §3.7): Home for the
+ * "dashboard" surface, Close the Day for "deposit", the sprint card for a
+ * sprint idea. There is no nudge inbox. The read is always the signed-in
+ * person's own notes plus office-wide ones — an admin never sees another
+ * person's nudges here, whatever the row policy would allow.
  */
 
 export type NudgeStatus = 'new' | 'shown' | 'acted_on' | 'dismissed';
@@ -39,6 +45,7 @@ export function useOfficeNudges(includeResolved = false) {
         .from('office_nudges')
         .select('id, kind, surface, content, data_refs, status, created_at, resolved_at, user_id')
         .eq('org_id', ctx!.org_id)
+        .or(`user_id.eq.${user!.id},user_id.is.null`)
         .order('created_at', { ascending: false })
         .limit(100);
       if (!includeResolved) q = q.in('status', OPEN);
@@ -52,12 +59,6 @@ export function useOfficeNudges(includeResolved = false) {
       })) as OfficeNudge[];
     },
   });
-}
-
-/** Count of open nudges, for the sidebar badge. */
-export function useOpenNudgeCount() {
-  const { data } = useOfficeNudges(false);
-  return data?.length ?? 0;
 }
 
 export function useResolveNudge() {
