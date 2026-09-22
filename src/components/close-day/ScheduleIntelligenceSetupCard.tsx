@@ -173,12 +173,14 @@ export default function ScheduleIntelligenceSetupCard({ initiallyExpanded = fals
             )}
           </section>
 
-          <section className="space-y-2">
-            <p className="text-sm font-medium">Schedule phrase shorthand</p>
+          <details className="space-y-2">
+            <summary className="cursor-pointer text-sm font-medium">Schedule phrase shorthand (rarely needed)</summary>
             <p className="text-xs text-muted-foreground">
-              Short, generic office phrases the reader should recognize on the schedule (for
-              example "doc gone" → Provider off). No names, no patient details — the reader
-              rejects anything that isn't a plain office phrase.
+              The reader already understands the usual notes: lunch, meetings, training, admin time,
+              the doctor off or out, a team member out, do not book, holds, office closed, equipment
+              down. Add a phrase only for shorthand it gets wrong (for example "doc gone" → Provider
+              off). No names, no patient details — the reader rejects anything that isn't a plain
+              office phrase.
             </p>
             <div className="flex flex-wrap items-end gap-2">
               <div className="space-y-1">
@@ -240,7 +242,7 @@ export default function ScheduleIntelligenceSetupCard({ initiallyExpanded = fals
                 ))}
               </div>
             )}
-          </section>
+          </details>
 
           <section className="flex items-center justify-between gap-3">
             <div>

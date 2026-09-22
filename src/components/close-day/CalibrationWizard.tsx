@@ -216,11 +216,11 @@ export default function CalibrationWizard({ open, onClose }: Props) {
   const runCalibration = async (frame: CaptureFrame) => {
     await teardown(); // a retry never leaks the previous frame
     frameRef.current = frame;
-    const { words, regions = [] } = await recognizeFrame(frame.canvas);
+    const { words, regions = [], railWords = [] } = await recognizeFrame(frame.canvas);
     try {
     // The screenshot's own time rail (the labels down its left edge) says
     // when the visible day starts and ends — read it rather than asking.
-    const rail = detectTimeRail(words, frame.width, hhmmToMinutes(dayStart));
+    const rail = detectTimeRail([...words, ...railWords], frame.width, hhmmToMinutes(dayStart));
     if (rail) {
       const top = Math.round(rail.minutesAt(rail.yTop) / 5) * 5;
       const bottom = Math.round(rail.minutesAt(rail.yBottom) / 5) * 5;
@@ -260,7 +260,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
       }); })
     );
     setStep(1);
-    } finally { wipeOcrWords(words); }
+    } finally { wipeOcrWords(words); wipeOcrWords(railWords); }
   };
 
   const fail = async (err: unknown) => {
