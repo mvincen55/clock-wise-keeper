@@ -6,6 +6,8 @@ import { useOrgContext } from '@/hooks/useOrgContext';
 export type AttendanceExceptionRow = {
   id: string;
   user_id: string;
+  /** Whose exception this is — the key attendance rows are matched on. */
+  employee_id: string;
   exception_date: string;
   type: 'missing_shift' | 'other';
   status: 'open' | 'resolved' | 'ignored';
@@ -26,6 +28,27 @@ export function useAttendanceExceptions(startDate?: string, endDate?: string) {
       if (startDate) q = q.gte('exception_date', startDate);
       if (endDate) q = q.lte('exception_date', endDate);
       const { data } = await q;
+      return (data || []) as AttendanceExceptionRow[];
+    },
+  });
+}
+
+/**
+ * Every exception in the office in the range — the manager view. RLS limits
+ * everyone else to their own rows ("Org admin attendance_exceptions" grants
+ * owners and managers the org), so callers enable this only for admins.
+ */
+export function useOrgAttendanceExceptions(startDate?: string, endDate?: string, enabled = true) {
+  const { data: ctx } = useOrgContext();
+  return useQuery({
+    queryKey: ['attendance-exceptions', 'org', ctx?.org_id, startDate ?? null, endDate ?? null],
+    enabled: enabled && !!ctx?.org_id,
+    queryFn: async () => {
+      let q = supabase.from('attendance_exceptions').select('*').eq('org_id', ctx!.org_id).order('exception_date', { ascending: false });
+      if (startDate) q = q.gte('exception_date', startDate);
+      if (endDate) q = q.lte('exception_date', endDate);
+      const { data, error } = await q;
+      if (error) throw error;
       return (data || []) as AttendanceExceptionRow[];
     },
   });

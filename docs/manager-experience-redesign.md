@@ -784,3 +784,56 @@ Acceptance tests (`docs/manager-experience-redesign/acceptance.mjs`) exercise ev
 the table in §7 of the concept page against the simulation. Results at the time of writing
 are recorded in the commit message and the round-3 summary. Production audit and
 notification paths need their own evidence; success copy in the prototype is not that.
+
+---
+
+## 13. Implementation log
+
+Implementation follows the three phases agreed after round 3, one pull request each:
+Phase 1 data and selectors; Phase 2 the Management rooms, routes, and the new audited paths;
+Phase 3 Home, mobile, and presentation. Each entry below records what landed and where it
+departs from §9, so the design and the code stay one document.
+
+### Phase 1 — data and selectors (no visible page changes beyond the badges)
+
+**Landed**
+
+- `src/lib/attention/` — the selector layer. `deriveAttention()` (§5.0 admission rule, §5.2
+  order, `kind:recordId` dedup, correction-supersedes-missing-time) reads the existing hooks'
+  rows and persisted follow-ups and returns `unresolved`, `needsNow`, `waiting`, `deferred`,
+  one `counts` object, and `degradedSources`. `missingTimeConditions()` is the one rule for
+  missing time; `deriveReadiness()` is the period verdict (`ready` / `not_ready` / `unknown`,
+  export never blocked). Tests name each kind's record and the rule that admits it.
+- `manager_followups` (migration `20260922120000`): Layer 2 and 3 persistence, keyed by item
+  key, owners and managers only, author stamped by trigger. §9 preferred no new table; the
+  probe showed `attendance_exceptions` is per person per date and `audit_events` has no
+  addressable key, so neither can carry a waiting state for a request or a version. A row
+  never resolves an item; membership stays with the record.
+- `useAttentionItems()` composes the sources (attendance day status, entries, days off,
+  closures, org-wide exceptions, tardies, the three request tables, recent closeouts, bypasses,
+  accountability records, the acknowledgment roster, training, incidents, versions in review,
+  challenges, follow-ups) with a per-source status, so a failed or loading source reads as
+  *can't confirm*, never as clean. It mounts only for owners and managers.
+- The Management badge counts `needsNow` (§5.5); the mobile More button and sheet use the
+  same number. The Inbox badge counts conversations with unread messages; nudges no longer
+  badge anything (§3.7). The Nudges tab itself stays until the member Home renders nudges
+  (Phase 3).
+- `useOrgAttendanceExceptions()` — §9 small addition 1, widened as a new hook rather than
+  changing `useAttendanceExceptions`, whose callers are all self-scoped.
+- `payroll_settings.payroll_due_days_after_period` and `pay_period_anchor` (same migration),
+  with fields on the Payroll settings card. The design's "payroll Thu" deadline needs a real
+  due date; the office sets one or no deadline is derived anywhere. A bi-weekly office names
+  a known period start or the selector marks the period *assumed*.
+
+**Office rules written down as code (no settings knob yet):** tardies past grace are
+reviewed (`reviewTardies`); a checklist bypass with no reason after 24 hours needs manager
+follow-up (`bypassReasonHours`); an acknowledgment is the manager's once the escalation ladder
+has sent the manager step (`escalation_level ≥ 3`, matching the edge function). "Close the Day
+is behind" counts office days (someone scheduled, no closure), not calendar days, so a
+weekend never reads as a gap; a closeout not started after close is admitted like an unsealed
+one, and is calm while the office is still working.
+
+**Not in Phase 1 (by plan):** the Attention panel and editors, the rooms and redirects, the
+audited reversal paths (§9 "paths that do not exist yet"), the PTO office-wide default, Home
+and mobile composition. Existing pages keep reading their own hooks until Phase 2 wires them
+to the selector.

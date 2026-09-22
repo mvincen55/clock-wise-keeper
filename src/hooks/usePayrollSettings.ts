@@ -10,6 +10,10 @@ export type PayrollSettingsRow = {
   week_start_day: number;
   missing_shift_buffer_minutes: number;
   timezone: string;
+  /** Days after a pay period ends that payroll is due; null = no deadline is derived anywhere. */
+  payroll_due_days_after_period: number | null;
+  /** A known first day of a pay period; bi-weekly periods are counted from it. */
+  pay_period_anchor: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -38,7 +42,7 @@ export function useUpsertPayrollSettings() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (updates: Partial<Pick<PayrollSettingsRow, 'pay_period_type' | 'week_start_day' | 'missing_shift_buffer_minutes' | 'timezone'>>) => {
+    mutationFn: async (updates: Partial<Pick<PayrollSettingsRow, 'pay_period_type' | 'week_start_day' | 'missing_shift_buffer_minutes' | 'timezone' | 'payroll_due_days_after_period' | 'pay_period_anchor'>>) => {
       if (!user || !ctx) throw new Error('Not authenticated');
       const { error } = await supabase.from('payroll_settings').upsert(
         { user_id: user.id, org_id: ctx.org_id, ...updates },

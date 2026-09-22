@@ -4440,6 +4440,65 @@ export type Database = {
           },
         ]
       }
+      manager_followups: {
+        Row: {
+          created_at: string
+          created_by: string
+          due_at: string | null
+          id: string
+          item_key: string
+          note: string | null
+          org_id: string
+          owner_user_id: string | null
+          parked_until: string | null
+          requested_at: string | null
+          snoozed_until: string | null
+          updated_at: string
+          updated_by: string
+          work_state: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          due_at?: string | null
+          id?: string
+          item_key: string
+          note?: string | null
+          org_id: string
+          owner_user_id?: string | null
+          parked_until?: string | null
+          requested_at?: string | null
+          snoozed_until?: string | null
+          updated_at?: string
+          updated_by: string
+          work_state?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          due_at?: string | null
+          id?: string
+          item_key?: string
+          note?: string | null
+          org_id?: string
+          owner_user_id?: string | null
+          parked_until?: string | null
+          requested_at?: string | null
+          snoozed_until?: string | null
+          updated_at?: string
+          updated_by?: string
+          work_state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manager_followups_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       marketing_leads: {
         Row: {
           created_at: string
@@ -5846,7 +5905,9 @@ export type Database = {
           id: string
           missing_shift_buffer_minutes: number
           org_id: string
+          pay_period_anchor: string | null
           pay_period_type: string
+          payroll_due_days_after_period: number | null
           timezone: string
           updated_at: string
           user_id: string
@@ -5857,7 +5918,9 @@ export type Database = {
           id?: string
           missing_shift_buffer_minutes?: number
           org_id: string
+          pay_period_anchor?: string | null
           pay_period_type?: string
+          payroll_due_days_after_period?: number | null
           timezone?: string
           updated_at?: string
           user_id: string
@@ -5868,7 +5931,9 @@ export type Database = {
           id?: string
           missing_shift_buffer_minutes?: number
           org_id?: string
+          pay_period_anchor?: string | null
           pay_period_type?: string
+          payroll_due_days_after_period?: number | null
           timezone?: string
           updated_at?: string
           user_id?: string

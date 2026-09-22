@@ -19,8 +19,8 @@ import TeamMomentsReveal from '@/components/moments/TeamMomentsReveal';
 import AppFooter from '@/components/AppFooter';
 import OfficeBrandStyle from '@/components/OfficeBrandStyle';
 import GlobalTimeControl, { ClockProvider } from '@/components/GlobalTimeControl';
-import { useApprovalCounts } from '@/hooks/useApprovalCounts';
-import { useOpenNudgeCount } from '@/hooks/useOfficeNudges';
+import { useAttentionItems } from '@/hooks/useAttentionItems';
+import { useConversations } from '@/hooks/useMessaging';
 import { useTimezoneSync } from '@/hooks/useTimezoneSync';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -111,6 +111,17 @@ function CountBadge({ count, floating }: { count: number; floating?: boolean }) 
   );
 }
 
+/**
+ * The Management badge: how many attention items need the manager now — one
+ * derived state, not a sum of queues. Waiting and parked items stay open but
+ * are not counted here. Mounted only for owners and managers, so members
+ * never read the office's records for a badge they cannot see.
+ */
+function ManagementBadge({ floating }: { floating?: boolean }) {
+  const attention = useAttentionItems();
+  return <CountBadge count={attention.counts.needsNow} floating={floating} />;
+}
+
 export default function AppLayout({ children }: { children: ReactNode }) {
   // Display timezone follows org context (person's override, else the
   // office setting) — one sync point for every wall-clock render.
@@ -120,8 +131,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { data: branding } = useOrgBranding();
   const [collapsed, setCollapsed] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const { data: approvalCounts } = useApprovalCounts();
-  const openNudges = useOpenNudgeCount();
+  // Inbox counts communication from people (unread conversations). Nudges are
+  // suggestions, not work owed, and never badge a destination.
+  const { data: conversations } = useConversations();
+  const unreadConversations = (conversations ?? []).reduce((sum, c) => sum + (c.unreadCount > 0 ? 1 : 0), 0);
   const isActive = useIsActive();
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
@@ -130,8 +143,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const officeName = branding?.displayName || ctx?.org_name || 'Purple Envelope';
 
   const badgeFor = (dest: Destination) => {
-    if (dest.to === '/management') return approvalCounts?.total ?? 0;
-    if (dest.to === '/inbox') return openNudges;
+    if (dest.to === '/inbox') return unreadConversations;
     return 0;
   };
 
@@ -152,7 +164,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       >
         <dest.icon className="h-4 w-4 shrink-0" />
         {!collapsed && <span className="truncate">{dest.label}</span>}
-        <CountBadge count={badge} floating={collapsed} />
+        {dest.to === '/management' && isManager
+          ? <ManagementBadge floating={collapsed} />
+          : <CountBadge count={badge} floating={collapsed} />}
       </Link>
     );
     if (!collapsed) return link;
@@ -301,7 +315,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 <button className="flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-muted-foreground" aria-label="More">
                   <span className="relative">
                     <MoreHorizontal className="h-5 w-5" />
-                    {isManager && <CountBadge count={approvalCounts?.total ?? 0} floating />}
+                    {isManager && <ManagementBadge floating />}
                   </span>
                   More
                 </button>
@@ -318,7 +332,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                       className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted"
                     >
                       <Gauge className="h-4 w-4" />Management
-                      <CountBadge count={approvalCounts?.total ?? 0} />
+                      <ManagementBadge />
                     </Link>
                   )}
                   <Link to="/settings" onClick={() => setMoreOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted">
