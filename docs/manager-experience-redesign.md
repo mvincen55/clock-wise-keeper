@@ -970,3 +970,17 @@ she was not.
   employee's row for that date (the print sheet and the CSV included). Tardies are keyed by
   person and date now. The personal Timesheet keeps only the signed-in person's tardies,
   since a manager's read returns the whole office's.
+### Follow-up — the pending-schema bridge
+
+Lovable regenerates `src/integrations/supabase/types.ts` from the live database
+whenever its agent syncs. The three Phase 1/2 migrations were merged before they
+were applied live, so the first sync after Phase 3 stripped their tables,
+columns, and functions from the generated file and main stopped typechecking
+(commit cd652fe). `src/integrations/supabase/pending-schema.ts` now declares
+that schema itself and merges it over the generated type; the six readers of it
+(manager follow-ups, the office PTO policy, PTO approval reversal, the seal, the
+payroll deadline settings, the employee PTO exception) import the same client
+from there, typed with the merge. The app typechecks against either version of
+the generated file, and the generated definition wins wherever it exists. The
+migrations still have to be applied live for the features to work; once they
+are and the types are regenerated, the entries in that module come out.
