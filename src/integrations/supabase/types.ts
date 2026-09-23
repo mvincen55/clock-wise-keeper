@@ -4440,65 +4440,6 @@ export type Database = {
           },
         ]
       }
-      manager_followups: {
-        Row: {
-          created_at: string
-          created_by: string
-          due_at: string | null
-          id: string
-          item_key: string
-          note: string | null
-          org_id: string
-          owner_user_id: string | null
-          parked_until: string | null
-          requested_at: string | null
-          snoozed_until: string | null
-          updated_at: string
-          updated_by: string
-          work_state: string
-        }
-        Insert: {
-          created_at?: string
-          created_by: string
-          due_at?: string | null
-          id?: string
-          item_key: string
-          note?: string | null
-          org_id: string
-          owner_user_id?: string | null
-          parked_until?: string | null
-          requested_at?: string | null
-          snoozed_until?: string | null
-          updated_at?: string
-          updated_by: string
-          work_state?: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string
-          due_at?: string | null
-          id?: string
-          item_key?: string
-          note?: string | null
-          org_id?: string
-          owner_user_id?: string | null
-          parked_until?: string | null
-          requested_at?: string | null
-          snoozed_until?: string | null
-          updated_at?: string
-          updated_by?: string
-          work_state?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "manager_followups_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "orgs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       marketing_leads: {
         Row: {
           created_at: string
@@ -5759,44 +5700,6 @@ export type Database = {
           },
         ]
       }
-      org_pto_policy: {
-        Row: {
-          allow_negative: boolean
-          created_at: string
-          max_balance: number
-          org_id: string
-          updated_at: string
-          updated_by: string | null
-          worked_hours_cap_weekly: number
-        }
-        Insert: {
-          allow_negative?: boolean
-          created_at?: string
-          max_balance?: number
-          org_id: string
-          updated_at?: string
-          updated_by?: string | null
-          worked_hours_cap_weekly?: number
-        }
-        Update: {
-          allow_negative?: boolean
-          created_at?: string
-          max_balance?: number
-          org_id?: string
-          updated_at?: string
-          updated_by?: string | null
-          worked_hours_cap_weekly?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "org_pto_policy_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: true
-            referencedRelation: "orgs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       orgs: {
         Row: {
           created_at: string
@@ -5943,9 +5846,7 @@ export type Database = {
           id: string
           missing_shift_buffer_minutes: number
           org_id: string
-          pay_period_anchor: string | null
           pay_period_type: string
-          payroll_due_days_after_period: number | null
           timezone: string
           updated_at: string
           user_id: string
@@ -5956,9 +5857,7 @@ export type Database = {
           id?: string
           missing_shift_buffer_minutes?: number
           org_id: string
-          pay_period_anchor?: string | null
           pay_period_type?: string
-          payroll_due_days_after_period?: number | null
           timezone?: string
           updated_at?: string
           user_id: string
@@ -5969,9 +5868,7 @@ export type Database = {
           id?: string
           missing_shift_buffer_minutes?: number
           org_id?: string
-          pay_period_anchor?: string | null
           pay_period_type?: string
-          payroll_due_days_after_period?: number | null
           timezone?: string
           updated_at?: string
           user_id?: string
@@ -6870,7 +6767,6 @@ export type Database = {
           id: string
           max_balance: number
           org_id: string
-          policy_override: boolean
           timezone: string
           updated_at: string
           user_id: string | null
@@ -6884,7 +6780,6 @@ export type Database = {
           id?: string
           max_balance?: number
           org_id: string
-          policy_override?: boolean
           timezone?: string
           updated_at?: string
           user_id?: string | null
@@ -6898,7 +6793,6 @@ export type Database = {
           id?: string
           max_balance?: number
           org_id?: string
-          policy_override?: boolean
           timezone?: string
           updated_at?: string
           user_id?: string | null
@@ -9169,18 +9063,6 @@ export type Database = {
         Returns: string
       }
       correspondence_team_can: { Args: { p_org_id: string }; Returns: boolean }
-      seal_close_day: {
-        Args: { p_closeout_id: string; p_seal: boolean; p_reason?: string }
-        Returns: Database["public"]["Tables"]["deposit_logs"]["Row"]
-      }
-      reverse_pto_approval: {
-        Args: { p_request_id: string; p_reason: string }
-        Returns: Database["public"]["Tables"]["pto_requests"]["Row"]
-      }
-      set_org_pto_policy: {
-        Args: { p_org_id: string; p_cap: number; p_max: number; p_allow_negative: boolean }
-        Returns: Database["public"]["Tables"]["org_pto_policy"]["Row"]
-      }
       countersign_accountability_report: {
         Args: { _note: string; _report_id: string; _typed_name: string }
         Returns: undefined
