@@ -9169,18 +9169,6 @@ export type Database = {
         Returns: string
       }
       correspondence_team_can: { Args: { p_org_id: string }; Returns: boolean }
-      seal_close_day: {
-        Args: { p_closeout_id: string; p_seal: boolean; p_reason?: string }
-        Returns: Database["public"]["Tables"]["deposit_logs"]["Row"]
-      }
-      reverse_pto_approval: {
-        Args: { p_request_id: string; p_reason: string }
-        Returns: Database["public"]["Tables"]["pto_requests"]["Row"]
-      }
-      set_org_pto_policy: {
-        Args: { p_org_id: string; p_cap: number; p_max: number; p_allow_negative: boolean }
-        Returns: Database["public"]["Tables"]["org_pto_policy"]["Row"]
-      }
       countersign_accountability_report: {
         Args: { _note: string; _report_id: string; _typed_name: string }
         Returns: undefined
@@ -9724,6 +9712,32 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      reverse_pto_approval: {
+        Args: { p_reason: string; p_request_id: string }
+        Returns: {
+          created_at: string
+          created_by: string
+          employee_id: string
+          end_date: string
+          hours_requested: number | null
+          id: string
+          manager_note: string | null
+          note: string
+          org_id: string
+          pto_type: Database["public"]["Enums"]["pto_request_type"]
+          reviewed_at: string | null
+          reviewed_by: string | null
+          start_date: string
+          status: Database["public"]["Enums"]["pto_request_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "pto_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       review_knowledge_version: {
         Args: { p_decision: string; p_note?: string; p_version_id: string }
         Returns: {
@@ -9922,6 +9936,50 @@ export type Database = {
         }
         Returns: string
       }
+      seal_close_day: {
+        Args: { p_closeout_id: string; p_reason?: string; p_seal: boolean }
+        Returns: {
+          capture_confidence: number | null
+          cash_cents: number
+          checks: Json
+          created_at: string
+          deposit_date: string
+          doctor_cancellations: number
+          doctor_no_shows: number
+          hygiene_cancellations: number
+          hygiene_no_shows: number
+          id: string
+          illumitrac_cents: number
+          ins_cc_cents: number
+          missed_appointments_recorded: boolean
+          needs_manager_review: boolean
+          new_patients_scheduled_count: number | null
+          new_patients_seen_count: number | null
+          notes: string
+          org_id: string
+          other_collections_cents: number
+          outside_financing_cents: number
+          prepared_by: string | null
+          prepared_by_name: string
+          print_snapshot: Json | null
+          production_cents: number | null
+          pt_cc_cents: number
+          schedule_capture_status: string
+          sealed_at: string | null
+          sealed_by: string | null
+          staffing_assessment: string | null
+          staffing_factors: string[]
+          staffing_note: string
+          staffing_pressure: string[]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "deposit_logs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       search_office_doc_chunks: {
         Args: {
           p_collections?: string[]
@@ -9954,6 +10012,29 @@ export type Database = {
       set_office_attendance_grace: {
         Args: { p_minutes: number; p_org_id: string }
         Returns: undefined
+      }
+      set_org_pto_policy: {
+        Args: {
+          p_allow_negative: boolean
+          p_cap: number
+          p_max: number
+          p_org_id: string
+        }
+        Returns: {
+          allow_negative: boolean
+          created_at: string
+          max_balance: number
+          org_id: string
+          updated_at: string
+          updated_by: string | null
+          worked_hours_cap_weekly: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "org_pto_policy"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
@@ -10159,6 +10240,43 @@ export type Database = {
       }
       user_owns_time_entry: { Args: { _entry_id: string }; Returns: boolean }
       valid_fof_payment_policy: { Args: { p: Json }; Returns: boolean }
+      withdraw_knowledge_approval: {
+        Args: { p_note?: string; p_version_id: string }
+        Returns: {
+          acknowledgment_due_days: number | null
+          acknowledgment_required: boolean
+          acknowledgment_statement: string
+          approved_at: string | null
+          approved_by: string | null
+          audience_roles: string[]
+          based_on_version_id: string | null
+          category_id: string | null
+          change_summary: string
+          created_at: string
+          created_by: string
+          effective_on: string | null
+          id: string
+          item_id: string
+          org_id: string
+          published_at: string | null
+          published_by: string | null
+          review_due_on: string | null
+          source_kind: string
+          status: string
+          submitted_at: string | null
+          submitted_by: string | null
+          summary: string
+          title: string
+          updated_at: string
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "knowledge_versions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       app_org_role: "owner" | "manager" | "employee"
@@ -10203,12 +10321,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10232,11 +10350,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10257,11 +10375,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10282,11 +10400,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10299,11 +10417,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10347,3 +10465,4 @@ export const Constants = {
     },
   },
 } as const
+
