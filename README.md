@@ -87,6 +87,8 @@ The FOF (fee form) prints patient-facing documents, and AI features read office 
 `{"code":"NOT_FOUND","message":"Requested function was not found"}` at runtime, surfacing in the UI as
 "Failed to send a request to the Edge Function." Fix by deploying it (Lovable prompt, dashboard paste, or `supabase functions deploy <name> --project-ref lfiplzmxpmybtbzhmnkp`). Full probe procedure in `docs/runbook.md`.
 
+**Types ahead of the database:** Lovable regenerates `src/integrations/supabase/types.ts` from the *live* database whenever its agent syncs, so a table, column, or function whose migration is merged but not yet applied live drops out of that file on the next sync and breaks typecheck. Until the migration is applied and the types regenerated, declare the object in `src/integrations/supabase/pending-schema.ts` and read it through the client exported there (the same instance, typed with the merged schema); the file's header lists what it covers and when to remove each entry.
+
 Manual steps that only exist in dashboards (no code representation): Supabase Auth signup toggle, Site URL + redirect URLs, sender-domain DNS verification in Lovable email settings, the `process-email-queue` cron schedule, the auth hook pointing at `auth-email-hook`.
 
 ## Application map (every route)

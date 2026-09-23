@@ -946,3 +946,18 @@ state.
 **Known gaps carried forward:** the `close_day_unsealed` producer (a scheduled function); an
 "explain this day" answer that lands on the item; the member Home, which was out of scope,
 still carries its own cards.
+
+### Follow-up — the pending-schema bridge
+
+Lovable regenerates `src/integrations/supabase/types.ts` from the live database
+whenever its agent syncs. The three Phase 1/2 migrations were merged before they
+were applied live, so the first sync after Phase 3 stripped their tables,
+columns, and functions from the generated file and main stopped typechecking
+(commit cd652fe). `src/integrations/supabase/pending-schema.ts` now declares
+that schema itself and merges it over the generated type; the six readers of it
+(manager follow-ups, the office PTO policy, PTO approval reversal, the seal, the
+payroll deadline settings, the employee PTO exception) import the same client
+from there, typed with the merge. The app typechecks against either version of
+the generated file, and the generated definition wins wherever it exists. The
+migrations still have to be applied live for the features to work; once they
+are and the types are regenerated, the entries in that module come out.
