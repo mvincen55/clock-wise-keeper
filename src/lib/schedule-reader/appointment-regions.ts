@@ -1,4 +1,5 @@
 import type { OcrBox, OcrWord, LayoutColumn } from './types';
+import { providerCodeCandidate, readProviderCodes } from './provider-codes';
 
 type Pixels = { width: number; height: number; data: ArrayLike<number> };
 
@@ -80,12 +81,26 @@ export function columnsFromRegions(regions: OcrBox[], width: number): Array<Pick
   return groups.sort((a,b) => a.x0-b.x0).map(b => ({ xStart: b.x0/width, xEnd: b.x1/width }));
 }
 
+/** Wording that reserves a provider's time even without a code: holds and early arrivals stay clinical. */
+const RESERVES_TIME = /\b(?:hold|holds|arriv\w*|asap|reserved?|early)\b/i;
+
+/**
+ * A column whose boxes are all notes — "NO MORE CROWNS", "Moved down 1
+ * unit", "sent blast" — is not a provider's chair. When appointment boxes
+ * elsewhere on this grid carry provider codes, a box with no code and no
+ * hold wording is a note, whatever it says; when no code is visible anywhere
+ * (a view that hides them), only positive note wording counts, because the
+ * absence of a code alone proves nothing.
+ */
 export function isNotesOnlyColumn(words: OcrWord[], regions: OcrBox[], column: Pick<LayoutColumn,'xStart'|'xEnd'>, width: number): boolean {
   const boxes = regions.filter(b => b.x0 >= column.xStart * width - 4 && b.x1 <= column.xEnd * width + 4);
   if (!boxes.length) return false;
-  // Require positive note wording in every box; lack of a code alone is not evidence.
+  const codesVisibleOnGrid = readProviderCodes(words).length > 0;
   return boxes.every(b => {
-    const text = words.filter(w => w.bbox.x0 >= b.x0-2 && w.bbox.x1 <= b.x1+2 && w.bbox.y0 >= b.y0-2 && w.bbox.y1 <= b.y1+2).map(w => w.text).join(' ');
-    return !/\b(?:DR|HY|HYG)\s*\d{1,4}\b/i.test(text) && /\b(?:sent|call|question|reminder|memo|notes?)\b/i.test(text);
+    const inside = words.filter(w => w.bbox.x0 >= b.x0-2 && w.bbox.x1 <= b.x1+2 && w.bbox.y0 >= b.y0-2 && w.bbox.y1 <= b.y1+2);
+    const text = inside.map(w => w.text).join(' ');
+    if (/\b(?:DR|HY|HYG)\s*\d{1,4}\b/i.test(text) || inside.some(w => w.confidence >= 40 && providerCodeCandidate(w.text))) return false;
+    if (RESERVES_TIME.test(text)) return false;
+    return codesVisibleOnGrid || /\b(?:sent|call|question|reminder|memo|notes?)\b/i.test(text);
   });
 }

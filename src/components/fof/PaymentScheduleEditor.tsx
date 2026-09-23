@@ -10,7 +10,9 @@ import type { MilestoneKind } from '@/lib/fof/payment-policy';
 
 export interface ScheduleSourceLine { id: string; code: string; visit: string; tooth?: string; procedureLabel?: string; responsibilityCents: number; classification?: PaymentClass | 'review'; groupingHint?: 'same_tooth' | 'same_visit' | 'separate'; guidance?: { title: string; summary: string; sourceId: string; classification: PaymentClass | 'review' };
   /** Surgery that prepares this tooth for its restoration (crown lengthening before a crown): one course, collected at the surgery too. */
-  surgical?: boolean }
+  surgical?: boolean;
+  /** This line's share of the form's discounts and credits, spread by the builder; used until staff allocate by hand. */
+  defaultAdjustmentCents?: number }
 /** Per-line staff decisions. `code` records which procedure the decision was
  * made for: a row retyped to a different code drops its old decisions instead
  * of carrying a classification (or adjustment) meant for another procedure. */
@@ -46,6 +48,9 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
       explicitGroup: editFor(state.lines, line).group,
       groupingHint: line.groupingHint,
     })));
+    // Form-level discounts spread themselves across the lines; the moment staff
+    // allocate any line by hand, every line follows the hand allocation instead.
+    const manualAllocation = source.some(line => editFor(state.lines, line).adjustment?.trim());
     const procedures = source.map(line => {
       const edit = editFor(state.lines, line);
       const classification = edit.classification ?? line.classification ?? 'review';
@@ -65,7 +70,8 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
         }
         groups.set(groupId, { id: groupId, label: groupLabel, classification, events: links, surgical: false });
       }
-      return { id: line.id, code: line.code, groupId, responsibilityCents: line.responsibilityCents, adjustmentCents: parse(edit.adjustment), paidCents: parse(edit.paid) };
+      const adjustmentCents = manualAllocation ? parse(edit.adjustment) : line.defaultAdjustmentCents ?? 0;
+      return { id: line.id, code: line.code, groupId, responsibilityCents: line.responsibilityCents, adjustmentCents, paidCents: parse(edit.paid) };
     });
     // Patient wording is independent of appointment numbers and grouping identity.
     // These existing form fields stay local; they are never added to AI requests.
@@ -179,7 +185,7 @@ export function PaymentScheduleEditor({ editor }: { editor: ReturnType<typeof us
         </div>}
         {line.responsibilityCents === 0 && <label className="block text-sm">Use this zero-fee appointment as delivery for <select aria-label={`Delivery marker ${line.id}`} value={edit.deliveryGroup ?? ''} onChange={e => editLine(line.id, { deliveryGroup: e.target.value })}><option value="">No payment milestone (for example, post-op)</option>{groups.filter(g => ['restoration','denture'].includes(g.classification)).map(g => <option key={g.id} value={g.id}>{g.label}</option>)}</select></label>}
         <label className="block text-sm">Payment group<Input aria-label={`Group ${line.id}`} value={edit.group ?? ''} placeholder={model.procedures.find(p => p.id === line.id)?.groupId} onChange={e => editLine(line.id, { group: e.target.value })} /></label>
-        <div className="grid grid-cols-2 gap-2"><label className="text-sm">Allocated discount / credit<Input aria-label={`Adjustment ${line.id}`} value={edit.adjustment ?? ''} placeholder="0.00" onChange={e => editLine(line.id, { adjustment: e.target.value })} /></label>
+        <div className="grid grid-cols-2 gap-2"><label className="text-sm">Allocated discount / credit<Input aria-label={`Adjustment ${line.id}`} value={edit.adjustment ?? ''} placeholder={line.defaultAdjustmentCents ? (line.defaultAdjustmentCents / 100).toFixed(2) : '0.00'} onChange={e => editLine(line.id, { adjustment: e.target.value })} /></label>
         <label className="text-sm">Explicitly paid already<Input aria-label={`Paid ${line.id}`} value={edit.paid ?? ''} placeholder="0.00" onChange={e => editLine(line.id, { paid: e.target.value })} /></label></div>
       </fieldset>;
     })}

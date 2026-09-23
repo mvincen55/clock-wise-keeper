@@ -19,8 +19,30 @@ const ASSET_BASE = '/tesseract';
 export interface OcrResult {
   regions?: OcrBox[];
   words: OcrWord[];
+  /**
+   * Time labels and minute marks read off the left rail in a separate,
+   * upscaled pass. The rail's type is too small for the full-page read
+   * ("7:00am" comes back as "oem"), so the strip is read at 3x as sparse
+   * text, and only time-shaped tokens are kept. In frame coordinates.
+   */
+  railWords?: OcrWord[];
   /** Mean word confidence, 0–1. */
   confidence: number;
+}
+
+/** A token the rail pass keeps: an hour label, possibly with a stray bracket, or a minute mark. */
+export const RAIL_TOKEN = /^[[|(]?\d{1,2}(?:[:.;]\d{2}\s*(?:am|pm)?|\d{2}\s*(?:am|pm)|\s*(?:am|pm))[\]|)]?$|^[:.]?\d{2}$/i;
+
+/**
+ * The strip the rail pass reads: from the left edge to just before the first
+ * appointment box, capped at an eighth of the frame. Null when the frame is
+ * too narrow to hold a rail.
+ */
+export function railCropBounds(width: number, height: number, regions: OcrBox[]): OcrBox | null {
+  const firstBox = regions.length ? Math.min(...regions.map(b => b.x0)) : Infinity;
+  const right = Math.floor(Math.min(width * 0.125, firstBox - 2));
+  if (right < 24 || height < 24) return null;
+  return { x0: 0, y0: 0, x1: right, y1: height };
 }
 
 interface TesseractWordLike {
@@ -107,7 +129,37 @@ export async function recognizeFrame(canvas: HTMLCanvasElement): Promise<OcrResu
       words.length === 0
         ? 0
         : words.reduce((a, w) => a + w.confidence, 0) / words.length / 100;
-    return { words, regions, confidence: Math.min(1, Math.max(0, mean)) };
+
+    // The rail: the day's time labels, read at 3x as sparse text.
+    const railWords: OcrWord[] = [];
+    const rail = context ? railCropBounds(canvas.width, canvas.height, regions) : null;
+    if (rail && context) {
+      const crop = document.createElement('canvas');
+      const scaled = document.createElement('canvas');
+      try {
+        crop.width = rail.x1 - rail.x0; crop.height = rail.y1 - rail.y0;
+        crop.getContext('2d')!.putImageData(context.getImageData(rail.x0, rail.y0, crop.width, crop.height), 0, 0);
+        scaled.width = crop.width * 3; scaled.height = crop.height * 3;
+        scaled.getContext('2d')!.drawImage(crop, 0, 0, scaled.width, scaled.height);
+        await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT });
+        try {
+          const { data: detail } = await worker.recognize(scaled, {}, { blocks: true });
+          for (const w of collectWordsFromBlocks(detail as unknown as { blocks?: unknown[] })) {
+            const text = typeof w.text === 'string' ? w.text.trim() : '';
+            if (!w.bbox || !RAIL_TOKEN.test(text)) continue;
+            railWords.push({
+              text,
+              bbox: { x0: rail.x0 + w.bbox.x0 / 3, x1: rail.x0 + w.bbox.x1 / 3, y0: rail.y0 + w.bbox.y0 / 3, y1: rail.y0 + w.bbox.y1 / 3 },
+              confidence: typeof w.confidence === 'number' ? w.confidence : 0,
+            });
+          }
+        } finally { await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO }); }
+      } catch {
+        // A failed rail read costs nothing but the rail: the day's bounds then
+        // come from the last calibration or the providers' hours.
+      } finally { crop.width = 0; crop.height = 0; scaled.width = 0; scaled.height = 0; }
+    }
+    return { words, regions, railWords, confidence: Math.min(1, Math.max(0, mean)) };
   } catch (err) {
     if (err instanceof ScheduleReaderError) throw err;
     throw new ScheduleReaderError('OCR_FAILED', {
