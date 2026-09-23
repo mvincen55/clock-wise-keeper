@@ -80,6 +80,11 @@ not infer which group receives the adjustment or changes its threshold. A positi
 allocated adjustment reduces responsibility; a negative adjustment increases it.
 This is the remaining business input for plans with ambiguous adjustments.
 Prior payments are explicit amounts per procedure, never inferred from visit age.
+Form-level discounts and credits (office discount, patient credit, membership or
+senior discount) spread themselves across the paid lines in proportion to each
+line's patient responsibility, in whole cents that sum exactly, so an office
+discount no longer stops the form. The moment staff allocate any line by hand,
+every line follows the hand allocation and the reconciliation check applies to it.
 
 Amount and label overrides retain their event identity and calculation basis.
 Changed or removed events, mismatched allocations, and stale overrides block print

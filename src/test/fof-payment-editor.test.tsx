@@ -176,6 +176,20 @@ describe('payment editor and shared print result', () => {
     const {result:under}=renderHook(()=>usePaymentScheduleEditor('a',policy,small,small.reduce((s,l)=>s+l.responsibilityCents,0)));
     expect(under.current.model!.schedule.rows.map(r=>r.label.split(' — ')[1])).toEqual(['At crown lengthening','At prep / impression','At delivery']);
   });
+  it('applies the builder’s spread of a form discount until staff allocate a line by hand', () => {
+    // $700 crown and $300 filling; a $100 office discount spread 70/30 by the builder.
+    const source: ScheduleSourceLine[] = [
+      { ...crown, defaultAdjustmentCents: 7000 },
+      { id: 'b', code: 'D2391', visit: '1', responsibilityCents: 30000, classification: 'other', defaultAdjustmentCents: 3000 },
+    ];
+    const {result}=renderHook(()=>usePaymentScheduleEditor('a',policy,source,90000));
+    expect(result.current.model!.schedule.issues).toEqual([]);
+    expect(result.current.model!.schedule.remainingCents).toBe(90000);
+    // A hand allocation on one line switches every line to hand allocation, so the rest must be entered too.
+    act(()=>result.current.update(s=>({...s,lines:{a:{code:'D2740',adjustment:'100.00'}}})));
+    expect(result.current.model!.schedule.issues).toEqual([]);
+    expect(result.current.model!.procedures.map(p=>p.adjustmentCents)).toEqual([10000,0]);
+  });
   it('preserves edits and highlights unallocated credits, then resolves after allocation', () => {
     const {result}=renderHook(()=>usePaymentScheduleEditor('a',policy,[crown],60000));
     expect(result.current.model!.schedule.issues.some(i=>i.includes('adjustments'))).toBe(true);

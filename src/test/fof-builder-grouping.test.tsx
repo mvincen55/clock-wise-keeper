@@ -103,6 +103,17 @@ describe('payment groups follow the appointment the office copy prints', () => {
     fireEvent.click(screen.getByText('Amounts & Payment Plan'));
     expect(screen.getAllByLabelText(/^Treatment name /).map(el => (el as HTMLInputElement).value)).toEqual(['Crown Lengthening #11', 'Porcelain Crown #3']);
   });
+  it('spreads an office discount across the lines so the schedule keeps printing', () => {
+    mount();
+    addProcedures([{ code: 'D6010', fee: '2717' }, { code: 'D6011', fee: '492' }]);
+    fireEvent.click(screen.getByText('Discounts & Credits'));
+    fireEvent.change(screen.getByLabelText('Office Discount (optional)'), { target: { value: '100' } });
+    expect(screen.queryByText(/Preview paused/)).toBeNull();
+    fireEvent.click(screen.getByText('Amounts & Payment Plan'));
+    // $3,209 less $100 = $3,109, collected in implant halves.
+    expect(screen.getAllByLabelText(/^Payment amount /).map(el => (el as HTMLInputElement).value)).toEqual(['1554.50', '1554.50']);
+    expect(screen.queryByText(/Allocate the form/)).toBeNull();
+  });
   it('still keeps a typed visit number authoritative', () => {
     mount();
     addProcedures([{ code: 'D6010', fee: '2717' }, { code: 'D6011', fee: '492' }]);

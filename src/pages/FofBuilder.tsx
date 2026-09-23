@@ -87,6 +87,7 @@ import { useFofPolicySettings, usePaymentClassifications } from '@/hooks/useFofP
 import { PaymentScheduleEditor, classTitle, usePaymentScheduleEditor } from '@/components/fof/PaymentScheduleEditor';
 import { suggestPaymentClass } from '@/lib/fof/suggest-class';
 import { isRestorationProcedure, isRestorationSurgery, toothTokens } from '@/lib/fof/restoration-surgery';
+import { allocateAcrossLines } from '@/lib/fof/adjustments';
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
 import { resolveImportedFee } from '@/lib/fof/import-fee';
 import {
@@ -1136,7 +1137,7 @@ export default function FofBuilder() {
     return feeLineEntries.some(other => other.key !== entry.key && isRestorationProcedure(other.line.code) && baseClassification(other) === 'restoration' &&
       toothTokens(state.lines.find(l => l.key === other.key)?.tooth).some(tooth => teeth.includes(tooth)));
   };
-  const policyLines = feeLineEntries.map(entry => {
+  const policyLinesBase = feeLineEntries.map(entry => {
     const estimateLine = perLineByKey.get(entry.key);
     const builderLine = state.lines.find(l => l.key === entry.key)!;
     const recipe = officeGuidance.data?.recipes.find(recipe => recipe.code === entry.line.code.toUpperCase() && recipe.scheduleId === officeSchedule?.id);
@@ -1157,7 +1158,16 @@ export default function FofBuilder() {
         (effectiveTemplate?.showWriteOff ? estimateLine?.writeOffCents ?? 0 : 0),
     };
   });
-  const paymentEditor = usePaymentScheduleEditor(orgCtx?.org_id, paymentPolicy, policyLines, baselineComputation?.effective.patientPortionCents ?? 0);
+  // Form-level discounts and credits (office discount, patient credit,
+  // membership or senior discount) come off the patient portion as a whole.
+  // Spread them across the paid lines in proportion so the schedule
+  // reconciles on its own; staff can still allocate any line by hand.
+  const expectedPortionCents = baselineComputation?.effective.patientPortionCents ?? 0;
+  const lineResponsibilityCents = policyLinesBase.reduce((sum, line) => sum + (Number.isFinite(line.responsibilityCents) ? line.responsibilityCents : 0), 0);
+  const formAdjustments = allocateAcrossLines(lineResponsibilityCents - expectedPortionCents,
+    policyLinesBase.map(line => (Number.isFinite(line.responsibilityCents) ? line.responsibilityCents : 0)));
+  const policyLines = policyLinesBase.map((line, i) => ({ ...line, defaultAdjustmentCents: formAdjustments[i] }));
+  const paymentEditor = usePaymentScheduleEditor(orgCtx?.org_id, paymentPolicy, policyLines, expectedPortionCents);
   const computation = effectiveTemplate ? computeFof(effectiveTemplate, amounts, overrides, visitPlan, paymentEditor.model?.schedule) : null;
   const legacyOverrideReview = !!paymentPolicy && (state.installmentOverrides.some(Boolean) || state.installmentLabelOverrides.some(Boolean) || !!state.paymentCountOverride);
   const policyBlocked = policyQuery.isLoading || !!policyQuery.error || (!!paymentPolicy && (classificationQuery.isLoading || !!classificationQuery.error || legacyOverrideReview || !!paymentEditor.model?.schedule.issues.length));
