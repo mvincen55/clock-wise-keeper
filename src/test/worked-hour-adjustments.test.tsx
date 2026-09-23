@@ -4,6 +4,7 @@ import {afterEach,describe,it,expect,vi} from 'vitest';
 import WorkedHourAdjustments,{adjustmentWeek} from '@/components/team/WorkedHourAdjustments';
 import {AttendanceTab} from '@/components/TeamEmployeeCard';
 vi.mock('@/hooks/useAttendanceFallback',()=>({useResolvedEmployeeAttendance:()=>({rows:[],isLoading:false})}));
+vi.mock('@/hooks/useDayClock',()=>({useDayClock:()=>({today:'2026-09-12',nowMinutes:10*60,bufferMinutes:60})}));
 const state=vi.hoisted(()=>({role:'manager',adjustments:[] as any[],rpc:vi.fn().mockResolvedValue({data:'saved',error:null})}));
 vi.mock('@/hooks/useOrgContext',()=>({useOrgContext:()=>({data:{org_id:'office',role:state.role}})}));
 vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc:state.rpc,from:(table:string)=>{let start='',end='9999';const q:any={select:()=>q,eq:()=>q,gte:(_:string,v:string)=>{start=v;return q},lte:(_:string,v:string)=>{end=v;return q},order:()=>q,then:(resolve:any)=>Promise.resolve({data:table==='worked_hour_adjustments'?state.adjustments.filter(r=>r.entry_date>=start&&r.entry_date<=end):[],error:null}).then(resolve)};return q;}}}));

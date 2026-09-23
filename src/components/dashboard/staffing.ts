@@ -201,7 +201,7 @@ export function personStatusAt(row: EmployeeSnapshot, now: Date): PersonStatus {
   }
 
   // No punches at all today.
-  if (shiftEnded) return { ...base, status: 'No punch today', tone: 'attention' };
+  if (shiftEnded) return { ...base, status: 'Absent', tone: 'attention' };
   if (shiftStarted) return { ...base, status: 'Not in yet', tone: 'attention' };
   if (start !== null) return { ...base, status: `Starts ${formatClockLabel(row.schedule_expected_start)}`, tone: 'calm' };
   return { ...base, status: 'Scheduled today', tone: 'calm' };

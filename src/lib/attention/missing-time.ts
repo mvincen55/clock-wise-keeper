@@ -50,7 +50,7 @@ export type MissingTimeInput = {
 };
 
 /** True once the scheduled shift (plus buffer) is behind us. */
-export function dayIsPast(row: AttendanceDayStatusRow, today: string, nowMinutes: number, bufferMinutes: number): boolean {
+export function dayIsPast(row: Pick<AttendanceDayStatusRow, 'entry_date' | 'schedule_expected_end'>, today: string, nowMinutes: number, bufferMinutes: number): boolean {
   if (row.entry_date < today) return true;
   if (row.entry_date > today) return false;
   const end = parseClockMinutes(row.schedule_expected_end);

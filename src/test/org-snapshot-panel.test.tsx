@@ -44,6 +44,13 @@ describe('statusBucket and snapshotCounts', () => {
     expect(statusBucket(person({ has_punches: true, is_incomplete: true }))).toBe('incomplete');
   });
 
+  it('with the clock, the engine flag reads "not in yet" while the shift is still running and absent once it has ended', () => {
+    // Shift 8:25 to 5:00; at 10:00 AM nobody is absent yet, at 5:30 PM they are.
+    expect(statusBucket(person({ is_absent: true }), 10 * 60)).toBe('not_started');
+    expect(statusBucket(person({ is_absent: true }), 17 * 60 + 30)).toBe('absent');
+    expect(snapshotCounts([person({ is_absent: true })], 10 * 60).notIn).toBe(1);
+  });
+
   it('a recorded callout is an absence with a reason; planned time off is not', () => {
     expect(statusBucket(person({ is_absent: true, has_day_off: true }))).toBe('callout');
     expect(statusBucket(person({ has_day_off: true }))).toBe('day_off');

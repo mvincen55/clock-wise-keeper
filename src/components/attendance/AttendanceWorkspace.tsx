@@ -16,6 +16,8 @@ import PersonalCalendar from '@/components/PersonalCalendar';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { useAuth } from '@/hooks/useAuth';
 import { formatDate, formatTime, formatClock, formatClockRange, minutesToHHMM } from '@/lib/time-utils';
+import { DAY_OFF_LABELS, DAY_TONE_CLASS, EXPLAINED_DAY_OFF_TYPES, dayWord, isAbsence, isMissingClockOut } from '@/lib/attendance-day';
+import { useDayClock } from '@/hooks/useDayClock';
 import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 import { formatBreak, punchSegments } from '@/lib/payroll-utils';
 import { Card, CardContent } from '@/components/ui/card';
@@ -31,13 +33,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { CalendarDays, Plus, Trash2, Loader2, Building2, Bug, RefreshCw, Table2, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const typeLabels: Record<string, string> = {
-  scheduled_with_notice: 'Time off',
-  unscheduled: 'Callout',
-  office_closed: 'Office closed',
-  medical_leave: 'Medical leave',
-  other: 'Other',
-};
+const typeLabels = DAY_OFF_LABELS;
 /** What the Record absence dialog offers, in plain words. A callout is an absence with a reason, never time off. */
 const typeChoices: Record<string, string> = {
   scheduled_with_notice: 'Time off (planned)',
@@ -78,7 +74,6 @@ const SORT_LABELS: Record<SortMode, string> = {
 };
 
 /** Day-off types that explain an absence (a callout does not — it is still a missed shift). */
-const EXPLAINED_DAY_OFF_TYPES = ['scheduled_with_notice', 'medical_leave', 'other'];
 
 function DebugDrawer({ row, employeeName, open, onClose }: { row: AttendanceDayStatusRow | null; employeeName?: string; open: boolean; onClose: () => void }) {
   if (!row) return null;
@@ -114,7 +109,7 @@ function DebugDrawer({ row, employeeName, open, onClose }: { row: AttendanceDayS
           <div className="border-t pt-2 grid grid-cols-2 gap-1">
             <span className="text-muted-foreground">Absent:</span>
             <span className={row.is_absent ? 'text-destructive font-semibold' : ''}>{row.is_absent ? 'YES' : 'No'}</span>
-            <span className="text-muted-foreground">Incomplete:</span>
+            <span className="text-muted-foreground">Missing clock-out:</span>
             <span className={row.is_incomplete ? 'text-warning font-semibold' : ''}>{row.is_incomplete ? 'YES' : 'No'}</span>
             <span className="text-muted-foreground">Late:</span>
             <span className={row.is_late ? 'text-destructive font-semibold' : ''}>{row.is_late ? `YES (${row.minutes_late}m)` : 'No'}</span>
@@ -168,6 +163,9 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: payrollSettings } = usePayrollSettings();
+  // The one day rule (src/lib/attendance-day.ts): a day is absent only once
+  // it has ended; a day still ahead is scheduled, never absent.
+  const clock = useDayClock();
   const { data: ctx } = useOrgContext();
   const { toast } = useToast();
 
@@ -429,48 +427,28 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
   }, [entries]);
   const entryFor = (row: AttendanceDayStatusRow) => (row.employee_id ? entryByKey.get(`${row.employee_id}|${row.entry_date}`) : undefined);
 
-  // One primary word per day. Planned time off and a callout are read from
-  // the recorded absence, so a callout never shows as time off: it is an
-  // absence with a reason, and stays absent for future dates too.
+  // One primary word per day, from the shared rule. Planned time off and a
+  // callout are read from the recorded absence, so a callout never shows as
+  // time off: it is an absence with a reason, whenever it falls. A day that
+  // has not ended reads Scheduled or Not in yet, never Absent.
   const primaryStatus = (row: AttendanceDayStatusRow): { label: string; className: string } => {
-    const cover = coverageFor(row);
-    const planned = cover.find(d => EXPLAINED_DAY_OFF_TYPES.includes(d.type));
-    const callout = cover.some(d => d.type === 'unscheduled');
-    if (row.office_closed) return { label: 'Closed', className: 'bg-success/20 text-success' };
-    if (planned) return { label: typeLabels[planned.type], className: 'bg-primary/20 text-primary' };
-    if (callout) return { label: 'Callout', className: 'bg-destructive/20 text-destructive' };
-    if (row.is_absent) return { label: 'Absent', className: 'bg-destructive/20 text-destructive' };
-    if (row.has_day_off) return { label: 'Time off', className: 'bg-primary/20 text-primary' };
-    if (row.is_incomplete) return { label: 'Incomplete', className: 'bg-warning/20 text-warning' };
-    if (row.has_punches) return { label: 'Arrived', className: 'bg-muted text-muted-foreground' };
-    if (!row.is_scheduled_day) return { label: 'Not scheduled', className: 'bg-muted text-muted-foreground' };
-    return { label: 'Not in yet', className: 'bg-muted text-muted-foreground' };
+    const w = dayWord(row, coverageFor(row), clock);
+    return { label: w.label, className: DAY_TONE_CLASS[w.tone] };
   };
 
-  // Attendance's "missing shift": a scheduled absence with nothing recorded,
-  // callouts included (an absence with a reason is still an absence). Payroll
-  // asks a different question, "does this day need a fix", and reads the
-  // shared rule in src/lib/attention/missing-time.ts, where a recorded
-  // callout explains the day.
-  const isMissingShift = (r: AttendanceDayStatusRow) => {
-    if (!r.is_absent) return false;
-    if (r.office_closed) return false;
-    // Excused by a scheduled, medical, or other day off — a callout still counts.
-    return !coverageFor(r).some(d => EXPLAINED_DAY_OFF_TYPES.includes(d.type));
-  };
+  // An absence: a scheduled day that ended with nothing recorded, callouts
+  // included (an absence with a reason is still an absence). Payroll asks a
+  // different question, "does this day need a fix", and reads
+  // src/lib/attention/missing-time.ts, where a recorded callout explains the
+  // day. Both read the same clock, so a future day is absent nowhere.
+  const isAbsent = (r: AttendanceDayStatusRow) => isAbsence(r, coverageFor(r), clock);
+  const missingClockOut = (r: AttendanceDayStatusRow) => isMissingClockOut(r, clock);
 
   // Summary counters - properly categorized
   const summary = useMemo(() => {
     const rows = visibleRows;
 
-    // Absent: is_absent AND (no day_off covering OR day_off type=unscheduled)
-    const absentCount = rows.filter(r => {
-      if (!r.is_absent) return false;
-      const dayOffs = coverageFor(r);
-      if (dayOffs.length === 0) return true; // no day off = truly absent
-      // If covered only by unscheduled, still counts as absent
-      return dayOffs.every(d => d.type === 'unscheduled');
-    }).length;
+    const absentCount = rows.filter(isAbsent).length;
 
     // Days Off: days covered by days_off with type IN (scheduled_with_notice, medical_leave, other)
     const daysOffCount = rows.filter(r => coverageFor(r).some(d => EXPLAINED_DAY_OFF_TYPES.includes(d.type))).length;
@@ -481,17 +459,17 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
     return {
       absent: absentCount,
       late: rows.filter(r => r.is_late).length,
-      incomplete: rows.filter(r => r.is_incomplete).length,
+      incomplete: rows.filter(missingClockOut).length,
       daysOff: daysOffCount,
       closures: closuresCount,
       remote: rows.filter(r => r.is_remote).length,
       edited: rows.filter(r => r.has_edits).length,
       unreviewedTardies: visibleTardies.filter(t => t.approval_status === 'unreviewed' && !t.resolved).length,
       needsTimeFix: rows.filter(r => r.timezone_suspect).length,
-      missingShifts: rows.filter(isMissingShift).length,
+      missingShifts: absentCount,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleRows, visibleTardies, daysOffByKey]);
+  }, [visibleRows, visibleTardies, daysOffByKey, clock]);
 
   // Filtered + sorted status rows
   const filteredStatus = useMemo(() => {
@@ -500,17 +478,17 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
       list = list.filter(r => r.is_scheduled_day || r.has_punches || r.office_closed || r.has_day_off);
     }
     switch (attendanceFilter) {
-      case 'absent': list = list.filter(r => r.is_absent); break;
+      case 'absent': list = list.filter(isAbsent); break;
       case 'late': list = list.filter(r => r.is_late); break;
-      case 'incomplete': list = list.filter(r => r.is_incomplete); break;
+      case 'incomplete': list = list.filter(missingClockOut); break;
       case 'days_off': list = list.filter(r => r.has_day_off); break;
       case 'closures': list = list.filter(r => r.office_closed); break;
       case 'remote': list = list.filter(r => r.is_remote); break;
       case 'onsite': list = list.filter(r => !r.is_remote && r.has_punches); break;
     }
     const priority = (r: AttendanceDayStatusRow) => {
-      if (r.is_absent) return 0;
-      if (r.is_incomplete) return 1;
+      if (isAbsent(r)) return 0;
+      if (missingClockOut(r)) return 1;
       if (r.is_late) return 2;
       if (r.has_edits) return 3;
       return 4;
@@ -524,7 +502,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
       return sortMode === 'employee' ? byPerson(a, b) || byDateDesc(a, b) : byDateDesc(a, b) || byPerson(a, b);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleRows, attendanceFilter, staffById, sortMode]);
+  }, [visibleRows, attendanceFilter, staffById, sortMode, clock]);
 
   // Days Off tab: exclude office_closed, apply filter
   const filteredDaysOff = useMemo(() => {
@@ -535,12 +513,12 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
     return [...list].sort((a, b) => b.date_start.localeCompare(a.date_start));
   }, [visibleDaysOff, daysOffFilter]);
 
-  // Missing Shifts: truly absent, not closures, not covered by scheduled/medical/other day off
+  // Absences: the same rows the Absent counter counts, listed on their own tab.
   const missingShiftRows = useMemo(() => {
-    return visibleRows.filter(isMissingShift).sort((a, b) =>
+    return visibleRows.filter(isAbsent).sort((a, b) =>
       sortMode === 'employee' ? byPerson(a, b) || byDateDesc(a, b) : byDateDesc(a, b) || byPerson(a, b));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleRows, daysOffByKey, sortMode, staffById]);
+  }, [visibleRows, daysOffByKey, sortMode, staffById, clock]);
 
   const activeTardies = visibleTardies.filter(t => !t.resolved);
 
@@ -586,7 +564,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
           <ReturnPill />
           <p className="text-muted-foreground">
             {personal
-              ? 'Your days off, tardies, missing shifts, and closures'
+              ? 'Your days off, tardies, absences, and closures'
               : 'Who is late, absent, or missing punches across the office — edit punches and record time off or callouts for anyone'}
           </p>
           {personal && isManager && (
@@ -736,7 +714,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
         <Card className="card-elevated border-warning/30">
           <CardContent className="p-3 text-center">
             <p className="text-2xl font-bold text-warning">{summary.incomplete}</p>
-            <p className="text-xs text-muted-foreground">Incomplete</p>
+            <p className="text-xs text-muted-foreground">Missing clock-out</p>
           </CardContent>
         </Card>
         <Card className="card-elevated">
@@ -773,22 +751,22 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
             <div className="flex flex-wrap gap-2">
               {summary.unreviewedTardies > 0 && (
                 <button onClick={() => { setTab('tardies'); setApprovalFilter('unreviewed'); }} className="text-xs px-3 py-1.5 rounded-full bg-destructive/10 text-destructive font-medium hover:bg-destructive/20 transition-colors">
-                  {summary.unreviewedTardies} Unreviewed Tardies
+                  {summary.unreviewedTardies} Unreviewed {summary.unreviewedTardies === 1 ? 'tardy' : 'tardies'}
                 </button>
               )}
               {summary.missingShifts > 0 && (
                 <button onClick={() => setTab('missing')} className="text-xs px-3 py-1.5 rounded-full bg-warning/10 text-warning font-medium hover:bg-warning/20 transition-colors">
-                  {summary.missingShifts} Missing Shifts
+                  {summary.missingShifts} {summary.missingShifts === 1 ? 'Absence' : 'Absences'}
                 </button>
               )}
               {summary.incomplete > 0 && (
                 <button onClick={() => { setTab('status'); setAttendanceFilter('incomplete'); }} className="text-xs px-3 py-1.5 rounded-full bg-warning/10 text-warning font-medium hover:bg-warning/20 transition-colors">
-                  {summary.incomplete} Incomplete Punches
+                  {summary.incomplete} Missing {summary.incomplete === 1 ? 'clock-out' : 'clock-outs'}
                 </button>
               )}
               {summary.needsTimeFix > 0 && (
                 <button onClick={() => { setTab('status'); setAttendanceFilter('all'); }} className="text-xs px-3 py-1.5 rounded-full bg-warning/10 text-warning font-medium hover:bg-warning/20 transition-colors">
-                  {summary.needsTimeFix} Needs Time Fix
+                  {summary.needsTimeFix} Time looks off
                 </button>
               )}
             </div>
@@ -808,7 +786,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
             )}
           </TabsTrigger>
           <TabsTrigger value="missing">
-            Missing Shifts
+            Absences
             {summary.missingShifts > 0 && (
               <span className="ml-1.5 text-xs bg-warning/20 text-warning px-1.5 py-0.5 rounded-full">{summary.missingShifts}</span>
             )}
@@ -826,7 +804,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
                 <SelectItem value="all">All Days</SelectItem>
                 <SelectItem value="absent">Absent ({summary.absent})</SelectItem>
                 <SelectItem value="late">Late ({summary.late})</SelectItem>
-                <SelectItem value="incomplete">Incomplete ({summary.incomplete})</SelectItem>
+                <SelectItem value="incomplete">Missing clock-out ({summary.incomplete})</SelectItem>
                 <SelectItem value="days_off">Time off ({summary.daysOff})</SelectItem>
                 <SelectItem value="closures">Closures ({summary.closures})</SelectItem>
                 <SelectItem value="remote">Remote ({summary.remote})</SelectItem>
@@ -857,7 +835,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
                     <tr><td colSpan={8} className="py-12 text-center text-muted-foreground">No attendance data for this range</td></tr>
                   ) : (
                     withPersonHeaders(filteredStatus, 8, row => (
-                      <tr key={row.id} className={`hover:bg-muted/50 ${row.is_absent ? 'border-l-4 border-l-destructive' : row.is_late ? 'border-l-4 border-l-warning' : ''}`}>
+                      <tr key={row.id} className={`hover:bg-muted/50 ${isAbsent(row) ? 'border-l-4 border-l-destructive' : row.is_late ? 'border-l-4 border-l-warning' : ''}`}>
                         <td className="px-4 py-3 font-medium whitespace-nowrap">{formatDate(row.entry_date)}</td>
                         {showEmployeeColumn && (
                           <td className="px-4 py-3">
@@ -1100,7 +1078,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
                   {statusLoading ? (
                     <tr><td colSpan={5} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></td></tr>
                   ) : !missingShiftRows.length ? (
-                    <tr><td colSpan={5} className="py-12 text-center text-muted-foreground">No missing shifts — all clear!</td></tr>
+                    <tr><td colSpan={5} className="py-12 text-center text-muted-foreground">No absences — all clear!</td></tr>
                   ) : (
                     withPersonHeaders(missingShiftRows, 5, row => {
                       const hasUnscheduled = coverageFor(row).some(d => d.type === 'unscheduled');

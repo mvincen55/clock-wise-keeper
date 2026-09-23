@@ -270,8 +270,8 @@ export function deriveAttention(src: AttentionSources): AttentionResult {
       for (const kind of kinds) {
         const payroll = inPeriod(row.entry_date);
         const texts: Record<typeof kind, [string, string, string]> = {
-          missing_day: ['Scheduled, no time recorded', 'No punches, no day off, no closure', 'A scheduled day ended more than the buffer ago with no time recorded and no explanation.'],
-          missing_clock_out: ['No clock-out', 'An open punch pair after the scheduled end', 'A scheduled day ended more than the buffer ago with an open punch pair.'],
+          missing_day: ['Absent', 'Scheduled, no time recorded, no day off, no closure', 'A scheduled day ended more than the buffer ago with no time recorded and no explanation.'],
+          missing_clock_out: ['Missing clock-out', 'An open punch pair after the scheduled end', 'A scheduled day ended more than the buffer ago with an open punch pair.'],
           unpaired_punches: ['Punches do not pair', 'The day’s punches break in/out order', 'A past day’s punch sequence does not pair, so its hours cannot be trusted.'],
           time_suspect: ['Time looks off', 'The recompute flagged this day’s timezone', 'The attendance recompute marked this row as timezone-suspect.'],
         };

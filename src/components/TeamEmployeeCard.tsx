@@ -16,6 +16,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { formatDate, formatClock } from '@/lib/time-utils';
+import { DAY_OFF_LABELS, DAY_TONE_CLASS, STATUS_CODE_LABELS, dayWord, type DayClock, type DayLike } from '@/lib/attendance-day';
+import { useDayClock } from '@/hooks/useDayClock';
 import { ChevronDown, ChevronUp, Clock, Calendar, AlertTriangle, CalendarOff, Loader2, Pencil, Archive } from 'lucide-react';
 import { useTeamOnboardingStatus } from '@/hooks/useOnboarding';
 import { employeeTeamStatus } from '@/lib/team-status';
@@ -29,24 +31,10 @@ import ScheduleTab, { Employee } from '@/components/team/ScheduleTab';
 type WeekStats = { present: number; late: number; absent: number };
 
 
-const statusBadge: Record<string, { label: string; className: string }> = {
-  ok: { label: 'Arrived', className: 'bg-success/20 text-success' },
-  remote_ok: { label: 'Remote', className: 'bg-accent/20 text-accent' },
-  late: { label: 'Late', className: 'bg-warning/20 text-warning' },
-  absent: { label: 'Absent', className: 'bg-destructive/20 text-destructive' },
-  incomplete: { label: 'Incomplete', className: 'bg-warning/20 text-warning' },
-  closure: { label: 'Closed', className: 'bg-muted text-muted-foreground' },
-  day_off: { label: 'Day Off', className: 'bg-primary/20 text-primary' },
-  unscheduled: { label: 'No Sched', className: 'bg-muted text-muted-foreground' },
-  timezone_suspect: { label: 'TZ Issue', className: 'bg-destructive/20 text-destructive' },
-};
-
-const DAY_OFF_LABELS: Record<string, string> = {
-  scheduled_with_notice: 'Time off',
-  unscheduled: 'Callout',
-  office_closed: 'Office Closed',
-  medical_leave: 'Medical',
-  other: 'Other',
+/** A day's badge, in the office's one vocabulary and under its time rule (src/lib/attendance-day.ts). */
+const dayBadge = (row: DayLike & { status_code: string }, clock: DayClock): { label: string; className: string } => {
+  const w = row.status_code === 'timezone_suspect' ? STATUS_CODE_LABELS.timezone_suspect : dayWord(row, [], clock);
+  return { label: w.label, className: DAY_TONE_CLASS[w.tone] };
 };
 
 
@@ -213,6 +201,7 @@ export function AttendanceTab({ employeeId, range }: { employeeId: string; range
   // schedule, and time-off history, so attendance is derived when the
   // user-scoped status table has nothing for them.
   const { rows: attendance, isLoading } = useResolvedEmployeeAttendance(employeeId, range);
+  const clock = useDayClock();
   const {data:ctx}=useOrgContext();
   const {data:adjustments=[],isLoading:adjustmentsLoading,error:adjustmentsError}=useQuery({
     queryKey:['worked-adjustments',employeeId,ctx?.org_id,range.start,range.end],
@@ -244,7 +233,7 @@ export function AttendanceTab({ employeeId, range }: { employeeId: string; range
             <p className="mt-1 text-xs text-muted-foreground">{item.row.reason}</p>
           </div>
         );
-        const sb = statusBadge[row.status_code] || statusBadge.ok;
+        const sb = dayBadge(row, clock);
         return (
           <div key={row.id} className="flex items-center justify-between px-3 py-2 text-sm">
             <div className="flex items-center gap-2">

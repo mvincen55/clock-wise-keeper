@@ -199,7 +199,7 @@ export function stateSentence(input: {
     if (s === 'Not in yet') return `${e.name} isn't in yet`;
     if (s.startsWith('Still clocked in')) return `${e.name} is still clocked in`;
     if (s.startsWith('In') && s.includes('late')) return `${e.name} came in late`;
-    if (s === 'No punch today') return `${e.name} has no punch today`;
+    if (s === 'Absent') return `${e.name} is absent today`;
     return `${e.name}: ${s.toLowerCase()}`;
   };
 

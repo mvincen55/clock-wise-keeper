@@ -57,14 +57,14 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
             date_start: actionDay.date,
             date_end: actionDay.date,
             type: 'scheduled_with_notice',
-            notes: reason || 'Added from missing shift prompt',
+            notes: reason || 'Added from the absence prompt',
           });
         } else {
           await submitPto.mutateAsync({
             start_date: actionDay.date,
             end_date: actionDay.date,
             pto_type: 'pto',
-            note: reason || 'Missing shift: requesting time off for this day',
+            note: reason || 'Absence: requesting time off for this day',
           });
         }
         const { data: exc } = await supabase.from('attendance_exceptions')
@@ -102,7 +102,7 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
         });
       }
 
-      toast({ title: action === 'pto' && !isManager ? 'PTO request sent for approval' : 'Missing shift resolved' });
+      toast({ title: action === 'pto' && !isManager ? 'PTO request sent for approval' : 'Absence resolved' });
       qc.invalidateQueries({ queryKey: ['attendance-exceptions'] });
       qc.invalidateQueries({ queryKey: ['time-entries'] });
       qc.invalidateQueries({ queryKey: ['days-off'] });
@@ -120,7 +120,7 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center gap-2 text-warning font-semibold">
             <AlertTriangle className="h-5 w-5" />
-            Missing Shift{openDays.length > 1 ? 's' : ''} Detected
+            {openDays.length > 1 ? 'Absences' : 'Absence'} to explain
           </div>
           {openDays.slice(0, 5).map(day => (
             <div key={day.date} className="flex flex-wrap items-center gap-3 bg-background rounded-lg px-3 py-2">
@@ -132,7 +132,7 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
             </div>
           ))}
           {openDays.length > 5 && (
-            <p className="text-xs text-muted-foreground">+ {openDays.length - 5} more missing shift(s)</p>
+            <p className="text-xs text-muted-foreground">+ {openDays.length - 5} more</p>
           )}
         </CardContent>
       </Card>
@@ -140,7 +140,7 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
       <Dialog open={!!actionDay} onOpenChange={open => { if (!open) setActionDay(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Missing Shift — {actionDay ? formatDate(actionDay.date) : ''}</DialogTitle>
+            <DialogTitle>Absence — {actionDay ? formatDate(actionDay.date) : ''}</DialogTitle>
             <DialogDescription>
               No work recorded for your scheduled shift. What happened?
             </DialogDescription>
