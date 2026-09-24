@@ -26,6 +26,8 @@ const CLINICAL_WORDS =
 const NAME_PAIR = /\b[A-Z][a-z]{1,}\s*,\s*[A-Z][a-z]+\b|\b[A-Z][a-z]{2,}\s+[A-Z]\.(?!\w)/;
 /** Bare paired initials like "J.D." near other data. */
 const PAIRED_INITIALS = /\b[A-Z]\.\s?[A-Z]\.(?!\w)/;
+/** "NP - FIRST LAST": a new-patient note that names the patient, in any case. */
+const NEW_PATIENT_NAME = /\b(?:NP|N\/P|NEW PATIENT|NEW PT)\b\s*[-–:]?\s*([A-Za-z][A-Za-z'-]+)\s+([A-Za-z][A-Za-z'-]+)/i;
 
 /** Words per line beyond which a note reads as free-text narrative. */
 const LONG_NOTE_WORDS = 14;
@@ -109,6 +111,8 @@ export function checkPrivacy(words: OcrWord[], known: KnownNames): PrivacyCheckR
     if (CLINICAL_WORDS.test(text)) hit('clinical_narrative');
 
     if (NAME_PAIR.test(text) && !coveredByKnownNames(text, known)) hit('full_name');
+    const newPatient = text.match(NEW_PATIENT_NAME);
+    if (newPatient && !(known.tokens.has(newPatient[1].toLowerCase()) && known.tokens.has(newPatient[2].toLowerCase()))) hit('full_name');
 
     // Initials only count when the line also carries other data — bare
     // initials alone are how many privacy views label appointments.

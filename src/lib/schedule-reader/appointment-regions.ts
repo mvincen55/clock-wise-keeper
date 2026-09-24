@@ -1,5 +1,5 @@
 import type { OcrBox, OcrWord, LayoutColumn } from './types';
-import { providerCodeCandidate, readProviderCodes } from './provider-codes';
+import { looksLikeAppointment, providerCodeCandidate, readProviderCodes } from './provider-codes';
 
 type Pixels = { width: number; height: number; data: ArrayLike<number> };
 
@@ -100,6 +100,7 @@ export function isNotesOnlyColumn(words: OcrWord[], regions: OcrBox[], column: P
     const inside = words.filter(w => w.bbox.x0 >= b.x0-2 && w.bbox.x1 <= b.x1+2 && w.bbox.y0 >= b.y0-2 && w.bbox.y1 <= b.y1+2);
     const text = inside.map(w => w.text).join(' ');
     if (/\b(?:DR|HY|HYG)\s*\d{1,4}\b/i.test(text) || inside.some(w => w.confidence >= 40 && providerCodeCandidate(w.text))) return false;
+    if (looksLikeAppointment(text)) return false; // an appointment whose code the engine misread is still an appointment
     if (RESERVES_TIME.test(text)) return false;
     return codesVisibleOnGrid || /\b(?:sent|call|question|reminder|memo|notes?)\b/i.test(text);
   });

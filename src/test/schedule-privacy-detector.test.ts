@@ -97,3 +97,12 @@ describe('privacy detector', () => {
     }
   });
 });
+
+describe('a new-patient note that names the patient', () => {
+  it('is caught in any case, unless the name is a team member', () => {
+    expect(checkPrivacy(line('NP - JANE DOE'), none).violations).toContainEqual({ kind: 'full_name', count: 1 });
+    expect(checkPrivacy(line('New Patient: Jane Doe'), none).passed).toBe(false);
+    expect(checkPrivacy(line('NP - MOLLY SMITH'), buildKnownNames(['Molly Smith'])).passed).toBe(true);
+    expect(checkPrivacy(line('NP exam, ProphyAd'), none).passed).toBe(true);
+  });
+});
