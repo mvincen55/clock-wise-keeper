@@ -365,3 +365,24 @@ describe('deriveAttention · sources', () => {
     expect(itemKey('pto_request', 'p1')).toBe(r.unresolved[0].key);
   });
 });
+
+describe('deriveAttention · roster', () => {
+  it('ignores attendance, tardy, and bypass records of people off the active roster', () => {
+    const gone = { user_id: 'u-gone', employee_id: 'e-gone' };
+    const r = deriveAttention(src({
+      dayStatuses: [day({ id: 'ds-gone', ...gone, entry_date: '2026-09-15', has_punches: false, is_absent: true, status_code: 'absent' })],
+      tardies: [tardy({ id: 't-gone', ...gone })],
+      bypasses: [bypass({ id: 'b-gone', ...gone, bypassed_at: '2026-09-15T22:00:00Z' })],
+    }));
+    expect(kinds(r)).toEqual([]);
+  });
+
+  it('keeps the same records for someone on the roster', () => {
+    const r = deriveAttention(src({
+      dayStatuses: [day({ id: 'ds-here', entry_date: '2026-09-15', has_punches: false, is_absent: true, status_code: 'absent' })],
+      tardies: [tardy()],
+    }));
+    expect(kinds(r)).toContain('missing_day');
+    expect(kinds(r)).toContain('tardy_unreviewed');
+  });
+});
