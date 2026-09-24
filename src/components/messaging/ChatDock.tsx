@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +16,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useOrgEmployees } from '@/hooks/useEmployees';
+import { useChatDirectory } from '@/hooks/useChatDirectory';
 import { useMessagingSettings } from '@/hooks/useMessagingSettings';
 import {
   useConversations,
@@ -194,16 +194,10 @@ export default function ChatDock() {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const { data: conversations = [] } = useConversations();
-  const { data: employees } = useOrgEmployees();
+  // Same directory as the Messages page: names resolve for every member, not
+  // only for those allowed to read the employees table.
+  const { nameByUserId } = useChatDirectory();
   const ensureAi = useEnsureAiConversation();
-
-  const nameByUserId = useMemo(() => {
-    const m = new Map<string, string>();
-    (employees ?? []).forEach(e => {
-      if (e.user_id) m.set(e.user_id, e.preferred_name || e.display_name || e.email || 'Teammate');
-    });
-    return m;
-  }, [employees]);
 
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
   const active = conversations.find(c => c.id === activeId) ?? null;
@@ -287,7 +281,7 @@ export default function ChatDock() {
               <div className="flex-1 overflow-y-auto">
                 <div className="divide-y">
                   <button
-                    onClick={async () => setActiveId(await ensureAi.mutateAsync())}
+                    onClick={() => ensureAi.mutate(undefined, { onSuccess: id => setActiveId(id) })}
                     disabled={ensureAi.isPending}
                     className="flex w-full items-center gap-2 p-3 text-left transition-colors hover:bg-muted/60"
                   >

@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { useOrgEmployees } from '@/hooks/useEmployees';
+import { useChatDirectory } from '@/hooks/useChatDirectory';
 import { useConsumedSearchParam } from '@/hooks/useDeepLink';
 import MessageAttachments from '@/components/MessageAttachments';
 import {
@@ -113,7 +113,9 @@ function Highlight({ text, term }: { text: string; term: string }) {
 
 export default function Messages() {
   const { user } = useAuth();
-  const { data: employees } = useOrgEmployees();
+  // Names and the New-chat roster come from the staff directory every member
+  // may read; the employees table shows a non-admin only their own row.
+  const { nameByUserId, teammates, isLoading: directoryLoading } = useChatDirectory();
   const { data: conversations = [], isLoading } = useConversations();
 
   // A message notification opens the exact conversation it came from —
@@ -146,13 +148,12 @@ export default function Messages() {
     return m;
   }, [attachments]);
 
-  const nameByUserId = useMemo(() => {
-    const m = new Map<string, string>();
-    (employees ?? []).forEach(e => {
-      if (e.user_id) m.set(e.user_id, e.preferred_name || e.display_name || e.email || 'Teammate');
-    });
-    return m;
-  }, [employees]);
+  // Everyone with a login, for the sender filter — archived senders included,
+  // so an old thread can still be filtered by who wrote it.
+  const senderOptions = useMemo(
+    () => [...nameByUserId].sort((a, b) => a[1].localeCompare(b[1])),
+    [nameByUserId],
+  );
 
   const convTitle = (c: ConversationSummary): string =>
     conversationTitle(c, user?.id, nameByUserId);
@@ -246,16 +247,24 @@ export default function Messages() {
     setScopeToThread(false);
   };
 
-  const openDm = async (userId: string) => {
-    const id = await ensureDm.mutateAsync(userId);
-    setActiveId(id);
-    setNewDmOpen(false);
-  };
+  const openDm = (userId: string) =>
+    ensureDm.mutate(userId, {
+      onSuccess: id => {
+        setActiveId(id);
+        setNewDmOpen(false);
+      },
+    });
 
-  const openAi = async () => {
-    const id = await ensureAi.mutateAsync();
-    setActiveId(id);
-  };
+  const openAi = () => ensureAi.mutate(undefined, { onSuccess: id => setActiveId(id) });
+
+  // Office AI is one tap away: until the member's private channel exists, the
+  // list offers it where the conversation will appear once started.
+  const showAiStarter =
+    !isLoading &&
+    !searching &&
+    !unreadOnly &&
+    (typeFilter === 'all' || typeFilter === 'ai') &&
+    !conversations.some(c => c.type === 'ai');
 
   const onPickFiles = (list: FileList | null) => {
     if (!list) return;
@@ -314,20 +323,25 @@ export default function Messages() {
 
         {newDmOpen && (
           <Card>
-            <CardContent className="flex flex-wrap gap-2 pt-5">
-              {(employees ?? [])
-                .filter(e => e.user_id && e.user_id !== user?.id)
-                .map(e => (
-                  <Button
-                    key={e.id}
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => openDm(e.user_id as string)}
-                    disabled={ensureDm.isPending}
-                  >
-                    {e.preferred_name || e.display_name}
-                  </Button>
-                ))}
+            <CardContent className="flex flex-wrap items-center gap-2 pt-5">
+              {teammates.map(t => (
+                <Button
+                  key={t.userId}
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => openDm(t.userId)}
+                  disabled={ensureDm.isPending}
+                >
+                  {t.name}
+                </Button>
+              ))}
+              {teammates.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {directoryLoading
+                    ? 'Loading your team…'
+                    : 'No teammates have signed in yet. People appear here once they accept their invitation.'}
+                </p>
+              )}
             </CardContent>
           </Card>
         )}
@@ -375,13 +389,11 @@ export default function Messages() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Anyone</SelectItem>
-                  {(employees ?? [])
-                    .filter(e => e.user_id)
-                    .map(e => (
-                      <SelectItem key={e.id} value={e.user_id as string}>
-                        {e.preferred_name || e.display_name}
-                      </SelectItem>
-                    ))}
+                  {senderOptions.map(([userId, name]) => (
+                    <SelectItem key={userId} value={userId}>
+                      {name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
 
@@ -428,8 +440,28 @@ export default function Messages() {
                     <Loader2 className="h-4 w-4 animate-spin" /> Loading…
                   </div>
                 )}
+                {showAiStarter && (
+                  <button
+                    onClick={openAi}
+                    disabled={ensureAi.isPending}
+                    className="flex w-full flex-col gap-1 p-3 text-left transition-colors hover:bg-muted/60"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+                      <span className="truncate text-sm font-medium">Office AI</span>
+                      {ensureAi.isPending && <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin" />}
+                    </div>
+                    <p className="line-clamp-1 text-xs text-muted-foreground">
+                      Your private channel — ask anything about the office.
+                    </p>
+                  </button>
+                )}
                 {!isLoading && visibleConversations.length === 0 && (
-                  <p className="p-4 text-sm text-muted-foreground">No conversations match.</p>
+                  <p className="p-4 text-sm text-muted-foreground">
+                    {conversations.length === 0
+                      ? 'No conversations yet. Say hello to a teammate with New chat.'
+                      : 'No conversations match.'}
+                  </p>
                 )}
                 {visibleConversations.map(c => {
                   const Icon = typeIcon(c.type);
