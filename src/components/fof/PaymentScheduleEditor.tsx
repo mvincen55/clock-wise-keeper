@@ -27,16 +27,38 @@ export const classTitle: Record<PaymentClass | 'review', string> = { workup: 'Wo
 const classOrder = { workup: 0, implant: 1, restoration: 2, denture: 2, other: 1, review: 3 };
 const patientClassTitle = { workup: 'Work-up', implant: 'Implant surgery', restoration: 'Restoration', denture: 'Denture / partial', other: 'Treatment', review: 'Treatment' };
 
+const friendlyMilestone: Record<MilestoneKind, string> = {
+  booking: 'When you schedule this treatment', workup: 'At your planning visit',
+  surgery: 'At your implant placement visit', prep: 'At your preparation and impressions visit',
+  impressions: 'At your impressions visit', tryin: 'At your trial fitting visit',
+  delivery: 'At your final fitting visit', treatment: 'At your treatment visit',
+};
+const legacyMilestone = new Set(['When this phase is scheduled','At work-up','At implant surgery','At prep / impression','At initial impressions','At try-in','At delivery','At treatment']);
+const milestoneLabel = (policy: PaymentPolicy, kind: MilestoneKind) => legacyMilestone.has(policy.labels[kind]) ? friendlyMilestone[kind] : policy.labels[kind];
+
 function MoneyEdit({ cents, label, commit }: { cents: number; label: string; commit: (cents: number) => void }) {
   const [raw, setRaw] = useState(Number.isFinite(cents) ? (cents / 100).toFixed(2) : '');
   return <Input aria-label={label} inputMode="decimal" value={raw} onChange={e => setRaw(e.target.value)} onBlur={() => commit(parseCurrencyInput(raw) ?? NaN)} />;
 }
 
 /** All edits are component memory. Org changes hide prior-office state immediately. */
-export function usePaymentScheduleEditor(orgId: string | undefined, policy: PaymentPolicy | null | undefined, source: ScheduleSourceLine[], expected: number) {
+export function usePaymentScheduleEditor(orgId: string | undefined, policy: PaymentPolicy | null | undefined, input: ScheduleSourceLine[], expected: number) {
   const [stored, setStored] = useState<{ orgId?: string; value: EditorState }>({ orgId, value: empty() });
   const state = stored.orgId === orgId ? stored.value : empty();
   const update = (fn: (old: EditorState) => EditorState) => setStored(old => ({orgId,value:fn(old.orgId===orgId?old.value:empty())}));
+  // An uncovered adjunct can share the implant payment without gaining insurance
+  // coverage. Only the same tooth AND appointment qualify; staff decisions win.
+  const source = useMemo(() => input.map(line => {
+    const edit = editFor(state.lines, line);
+    const tooth = (line.tooth ?? '').trim().replace(/^#/, '').toUpperCase();
+    if (line.code.trim().toUpperCase() !== 'D4265' || !tooth || !line.visit.trim() ||
+      edit.classification || edit.group?.trim() || line.groupingHint === 'separate') return line;
+    const implant = input.find(other => /^D6010$/i.test(other.code.trim()) &&
+      (other.tooth ?? '').trim().replace(/^#/, '').toUpperCase() === tooth && other.visit.trim() === line.visit.trim() &&
+      other.groupingHint !== 'separate' && !editFor(state.lines, other).group?.trim() &&
+      (editFor(state.lines, other).classification ?? other.classification) === 'implant');
+    return implant ? { ...line, classification: 'implant' as const, guidance: undefined } : line;
+  }), [input, state.lines]);
   const model = useMemo(() => {
     if (!policy) return null;
     const groups = new Map<string, PaymentGroup>();
@@ -65,7 +87,7 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
           // Appointment order within a course: scheduling, work-up, surgery, prep or
           // impressions, try-in, treatment, delivery. Distinct so rows print in sequence.
           const offset = ({ booking: 0, workup: 2, surgery: 3, prep: 4, impressions: 4, tryin: 5, treatment: 6, delivery: 8 } as Record<MilestoneKind, number>)[kind];
-          events.set(id, { id, label: `${groupLabel} — ${policy.labels[kind] ?? kind}`, order: baseOrder + offset, appointmentId: kind === 'booking' ? undefined : id });
+          events.set(id, { id, label: `${groupLabel} — ${milestoneLabel(policy, kind)}`, order: baseOrder + offset, appointmentId: kind === 'booking' ? undefined : id });
           links[kind] = id;
         }
         groups.set(groupId, { id: groupId, label: groupLabel, classification, events: links, surgical: false });
@@ -106,14 +128,16 @@ export function usePaymentScheduleEditor(orgId: string | undefined, policy: Paym
       const treatment = titles.length > 0 && titles.length <= 2 ? titles.join(' + ') : labels.length === 1 ? labels[0] : courseTitle();
       const numberedTeeth = teeth.map(tooth => `#${tooth}`);
       const toothLabel = numberedTeeth.length > 1 ? `${numberedTeeth.slice(0, -1).join(', ')} and ${numberedTeeth.at(-1)}` : numberedTeeth[0];
-      const treatmentTitle = titleCase(treatment);
+      const guideOnly = members.length > 0 && members.every(line => /^(D6190|D5982)$/i.test(line.code));
+      const implantWithMaterial = group.classification === 'implant' && members.some(line => /^D6010$/i.test(line.code)) && members.some(line => /^D4265$/i.test(line.code));
+      const treatmentTitle = guideOnly ? 'Implant Planning Guide' : implantWithMaterial ? 'Implant Placement' : titleCase(treatment);
       group.label = state.groups[group.id]?.label?.trim() || `${treatmentTitle}${toothLabel ? ` ${toothLabel}` : ''}`;
       for (const kind of milestoneKinds) {
         const event = events.get(group.events[kind] ?? '');
         if (!event) continue;
         // A surgery-first restoration collects "at crown lengthening", not "at implant surgery".
         const surgeryName = kind === 'surgery' && group.surgical && surgicalMember?.procedureLabel?.trim() ? `At ${surgicalMember.procedureLabel.trim().toLowerCase()}` : undefined;
-        event.label = `${group.label} — ${surgeryName ?? policy.labels[kind] ?? kind}`;
+        event.label = `${group.label} — ${surgeryName ?? milestoneLabel(policy, kind)}`;
       }
     }
     for (const line of source) {
@@ -166,9 +190,34 @@ export function PaymentScheduleEditor({ editor }: { editor: ReturnType<typeof us
   const editGroup = (id: string, patch: Partial<PaymentGroup>) => update(s => ({ ...s, groups: { ...s.groups, [id]: { ...s.groups[id], ...patch } } }));
   const editEvent = (id: string, patch: Partial<CollectionEvent>) => update(s => ({ ...s, events: { ...s.events, [id]: { ...s.events[id], ...patch } } }));
   const editOverride = (id: string, patch: Partial<PaymentOverride>) => update(s => ({ ...s, overrides: { ...s.overrides, [id]: { ...s.overrides[id], basis: schedule.signature, ...patch } } }));
-  return <section className="space-y-4 border p-4" aria-label="Office payment schedule">
-    <h3 className="font-semibold">Payment groups & collection events</h3>
-    <p className="text-sm">Review the proposed groups and appointments. Give related procedures the same group name when prepared together. To combine different treatments, keep separate groups, enter the same arrangement name, and link their actual collection events below. Booking means when that phase is booked; no date is assumed.</p>
+  const activeGroups = groups.filter(group => model.procedures.some(p => p.groupId === group.id && (p.responsibilityCents !== 0 || p.adjustmentCents || p.paidCents)));
+  const activeEventIds = new Set(schedule.rows.map(row => row.id));
+  const relevantKinds = (group: PaymentGroup): MilestoneKind[] => {
+    const used = [...new Set(schedule.rows.flatMap(row => row.allocations.filter(a => a.groupId === group.id).map(a => a.milestone)))];
+    // Keep the repair controls available if an appointment was unlinked.
+    if (used.length && !schedule.issues.length) return used;
+    switch (group.classification) {
+      case 'workup': return ['workup'];
+      case 'implant': return ['booking', 'surgery'];
+      case 'restoration': return group.surgical ? ['booking', 'surgery', 'prep', 'delivery'] : ['booking', 'prep', 'delivery'];
+      case 'denture': return ['booking', 'impressions', 'tryin', 'delivery'];
+      default: return ['booking', 'treatment'];
+    }
+  };
+  return <section className="space-y-4 rounded-lg border p-4" aria-label="Office payment schedule">
+    <h3 className="font-semibold">Patient payment schedule</h3>
+    <p className="text-sm text-muted-foreground">Review what the patient pays and when. Related implant procedures share the same payments. You can edit the wording below.</p>
+    {activeGroups.map(group => <label key={group.id} className="block text-sm">Treatment name on the patient form<Input aria-label={`Treatment name ${group.id}`} value={group.label} onChange={e => editGroup(group.id, { label: e.target.value })} /></label>)}
+    <p>Patient total: {formatCents(schedule.obligationCents)} · Recorded paid: {formatCents(schedule.paidCents)} · Remaining: {formatCents(schedule.remainingCents)}</p>
+    {schedule.rows.map((row, index) => <div key={row.id} className="rounded-md border p-3 space-y-2">
+      <p className="text-xs font-medium text-muted-foreground">Payment {index + 1}</p>
+      <label className="block text-sm">When payment is due<Input aria-label={`Payment label ${row.id}`} value={row.label} onChange={e => editOverride(row.id, { label: e.target.value })} /></label>
+      <label className="block text-sm">Amount<MoneyEdit key={`${row.id}:${row.cents}`} label={`Payment amount ${row.id}`} cents={row.cents} commit={cents => editOverride(row.id, { cents, ...(row.allocations.length === 1 ? { allocations: [{ ...row.allocations[0], cents }] } : {}) })} /></label>
+    </div>)}
+    {schedule.issues.length > 0 && <div role="alert" className="text-destructive"><strong>Review required before printing</strong><ul>{[...new Set(schedule.issues)].map(issue => <li key={issue}>{issue}</li>)}</ul><p>Use Advanced payment settings below to resolve these items.</p></div>}
+    <details className="rounded-md border p-3" open={schedule.issues.length > 0 || undefined}><summary className="cursor-pointer font-medium">Advanced payment settings</summary>
+    <div className="mt-3 space-y-4">
+    <p className="text-sm text-muted-foreground">Only needed to change which procedures are paid together, record prior payments, or adjust how discounts are assigned.</p>
     {source.map(line => {
       const edit = editFor(state.lines, line);
       return <fieldset key={line.id} className="border p-2 space-y-2"><legend>{line.code || 'Procedure'} — OOP {formatCents(line.responsibilityCents)}</legend>
@@ -184,33 +233,28 @@ export function PaymentScheduleEditor({ editor }: { editor: ReturnType<typeof us
           </div>}
         </div>}
         {line.responsibilityCents === 0 && <label className="block text-sm">Use this zero-fee appointment as delivery for <select aria-label={`Delivery marker ${line.id}`} value={edit.deliveryGroup ?? ''} onChange={e => editLine(line.id, { deliveryGroup: e.target.value })}><option value="">No payment milestone (for example, post-op)</option>{groups.filter(g => ['restoration','denture'].includes(g.classification)).map(g => <option key={g.id} value={g.id}>{g.label}</option>)}</select></label>}
-        <label className="block text-sm">Payment group<Input aria-label={`Group ${line.id}`} value={edit.group ?? ''} placeholder={model.procedures.find(p => p.id === line.id)?.groupId} onChange={e => editLine(line.id, { group: e.target.value })} /></label>
+        <label className="block text-sm">Payment group<Input aria-label={`Group ${line.id}`} value={edit.group ?? ''} placeholder="Optional shared treatment name" onChange={e => editLine(line.id, { group: e.target.value })} /></label>
         <div className="grid grid-cols-2 gap-2"><label className="text-sm">Allocated discount / credit<Input aria-label={`Adjustment ${line.id}`} value={edit.adjustment ?? ''} placeholder={line.defaultAdjustmentCents ? (line.defaultAdjustmentCents / 100).toFixed(2) : '0.00'} onChange={e => editLine(line.id, { adjustment: e.target.value })} /></label>
         <label className="text-sm">Explicitly paid already<Input aria-label={`Paid ${line.id}`} value={edit.paid ?? ''} placeholder="0.00" onChange={e => editLine(line.id, { paid: e.target.value })} /></label></div>
       </fieldset>;
     })}
-    {groups.map(group => <div key={group.id} className="border p-2 space-y-2">
-      <label className="block text-sm">Treatment name on the patient form<Input aria-label={`Treatment name ${group.id}`} value={group.label} onChange={e => editGroup(group.id, { label: e.target.value })} /></label>
+    {activeGroups.map(group => <div key={group.id} className="border p-2 space-y-2">
+      <p className="font-medium">{group.label}</p>
       {groups.some(other => other.id !== group.id && other.label === group.label) && <p className="text-sm text-muted-foreground">These treatments have the same name. Add the teeth or a clear description to distinguish them.</p>}
       <details><summary>Appointments for {group.label}</summary>
       <label className="block text-sm">Combined arrangement (optional)<Input value={group.arrangementId ?? ''} onChange={e => editGroup(group.id, { arrangementId: e.target.value })} /></label>
-      {milestoneKinds.map(kind => <label key={kind} className="block text-sm">{kind} <select aria-label={`${group.id} ${kind}`} value={group.events[kind] ?? ''} onChange={e => editGroup(group.id, { events: { ...group.events, [kind]: e.target.value } })}>
+      {relevantKinds(group).map(kind => <label key={kind} className="block text-sm">{friendlyMilestone[kind]} <select aria-label={`${group.id} ${kind}`} value={group.events[kind] ?? ''} onChange={e => editGroup(group.id, { events: { ...group.events, [kind]: e.target.value } })}>
         <option value="">No appointment selected</option>{events.map(event => <option key={event.id} value={event.id}>{event.label}</option>)}
       </select></label>)}
     </details></div>)}
     <details className="border p-2"><summary>Collection event names and order</summary>
       <p className="text-sm">Order records the actual appointment sequence, not a predicted calendar date. Use the same event above only when money is collected together.</p>
-      {events.map(event => <div key={event.id} className="flex gap-2 py-1"><Input aria-label={`Event label ${event.id}`} value={event.label} onChange={e => editEvent(event.id, { label: e.target.value })} /><Input aria-label={`Event order ${event.id}`} className="w-24" type="number" value={event.order} onChange={e => editEvent(event.id, { order: Number(e.target.value) })} /></div>)}
+      {events.filter(event => activeEventIds.has(event.id) || state.extraEvents.some(extra => extra.id === event.id)).map(event => <div key={event.id} className="flex gap-2 py-1"><Input aria-label={`Event label ${event.id}`} value={event.label} onChange={e => editEvent(event.id, { label: e.target.value })} /><Input aria-label={`Event order ${event.id}`} className="w-24" type="number" value={event.order} onChange={e => editEvent(event.id, { order: Number(e.target.value) })} /></div>)}
       <Button type="button" variant="outline" onClick={() => update(s => ({ ...s, extraEvents: [...s.extraEvents, { id: `custom:${crypto.randomUUID()}`, label: 'New collection event', order: events.length * 100 }] }))}>Add collection event</Button>
     </details>
-    <p>Full obligation: {formatCents(schedule.obligationCents)} · Recorded paid: {formatCents(schedule.paidCents)} · Remaining: {formatCents(schedule.remainingCents)}</p>
-    {schedule.rows.map(row => <div key={row.id} className="border p-2 space-y-1">
-      <Input aria-label={`Payment label ${row.id}`} value={row.label} onChange={e => editOverride(row.id, { label: e.target.value })} />
-      <MoneyEdit key={`${row.id}:${row.cents}`} label={`Payment amount ${row.id}`} cents={row.cents} commit={cents => editOverride(row.id, { cents, ...(row.allocations.length === 1 ? { allocations: [{ ...row.allocations[0], cents }] } : {}) })} />
-      <details className="text-xs"><summary>Component allocations (must match payment and procedure totals)</summary>{row.allocations.map((a, i) => <label className="block" key={i}>{a.groupId} / {a.procedureId}<MoneyEdit key={`${row.id}:${a.procedureId}:${a.cents}`} label={`Allocation ${row.id} ${a.procedureId} ${i}`} cents={a.cents} commit={cents => { const allocations = row.allocations.map((b, j) => j === i ? { ...b, cents } : b); editOverride(row.id, { allocations, cents: allocations.reduce((s, b) => s + b.cents, 0) }); }} /></label>)}</details>
-    </div>)}
+    {schedule.rows.map(row => <details key={row.id} className="text-sm"><summary>Adjust procedure amounts for {row.label}</summary>{row.allocations.map((a, i) => <label className="block" key={i}>{schedule.procedureLabels[a.procedureId]} — {schedule.groupLabels[a.groupId]}<MoneyEdit key={`${row.id}:${a.procedureId}:${a.cents}`} label={`Allocation ${row.id} ${a.procedureId} ${i}`} cents={a.cents} commit={cents => { const allocations = row.allocations.map((b, j) => j === i ? { ...b, cents } : b); editOverride(row.id, { allocations, cents: allocations.reduce((s, b) => s + b.cents, 0) }); }} /></label>)}</details>)}
     {Object.keys(state.overrides).length > 0 && <Button variant="outline" onClick={() => update(s => ({ ...s, overrides: {} }))}>Clear payment overrides</Button>}
-    {Object.entries(state.overrides).filter(([, o]) => o.basis !== schedule.signature).map(([id, o]) => <div key={id} className="text-sm">Saved override for {id}: {o.label} {o.cents === undefined ? '' : formatCents(o.cents)} <Button variant="outline" onClick={() => editOverride(id, {})}>Confirm after review</Button></div>)}
-    {schedule.issues.length > 0 && <div role="alert" className="text-destructive"><strong>Review required before printing</strong><ul>{[...new Set(schedule.issues)].map(issue => <li key={issue}>{issue}</li>)}</ul></div>}
+    {Object.entries(state.overrides).filter(([, o]) => o.basis !== schedule.signature).map(([id, o]) => <div key={id} className="text-sm">Saved payment change: {o.label} {o.cents === undefined ? '' : formatCents(o.cents)} <Button variant="outline" onClick={() => editOverride(id, {})}>Confirm after review</Button></div>)}
+    </div></details>
   </section>;
 }

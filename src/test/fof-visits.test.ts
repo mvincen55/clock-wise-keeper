@@ -75,6 +75,10 @@ describe('decideVisitPlan', () => {
 });
 
 describe('suggestVisitStage', () => {
+  it('places the implant planning guide before placement', () => {
+    expect(suggestVisitStage('D6190')).toBe(1);
+    expect(suggestVisitStage('D6010')).toBe(2);
+  });
   it('stages surgery first, placement second, restoration last', () => {
     expect(suggestVisitStage('D7210')).toBe(1); // extraction
     expect(suggestVisitStage('D7953')).toBe(1); // bone graft

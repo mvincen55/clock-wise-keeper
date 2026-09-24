@@ -10,7 +10,7 @@ import type { FeeCategory } from './insurance';
  */
 // Diagnostic work-up codes (CT scan, diagnostic models): no coverage,
 // billed at their visit rather than prepaid.
-const WORKUP_CODES = new Set([367, 470]);
+const WORKUP_CODES = new Set([367, 470, 6190]);
 
 // Office policy: codes insurance never covers regardless of their CDT
 // range — bio material (D4265), soft-tissue grafts adjunct (D4268),

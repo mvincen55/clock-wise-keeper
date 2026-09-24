@@ -218,7 +218,7 @@ export function estimateInsurance(
     let insurancePays = 0;
     const payOverride = line.insurancePaysOverrideCents ?? null;
 
-    if (payOverride !== null) {
+    if (payOverride !== null && line.category !== 'workup') {
       insurancePays = Math.max(0, payOverride);
       if (!exemptFromMax) {
         insurancePays = Math.min(insurancePays, remainingMax);

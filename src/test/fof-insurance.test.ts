@@ -32,6 +32,14 @@ describe('sumOfficeFees', () => {
 });
 
 describe('estimateInsurance', () => {
+  it('keeps the guide uncovered despite a schedule allowance or an old insurance override', () => {
+    const result = estimateInsurance([
+      line({code:'D6190',category:'workup',officeFeeCents:112000,allowedCents:90000,fixedPayCents:60000,insurancePaysOverrideCents:45000}),
+      line({code:'D6010',category:'major',officeFeeCents:271700,allowedCents:220000}),
+    ], plan, {remainingAnnualMaxCents:47055,remainingDeductibleCents:0});
+    expect(result.perLine[0]).toMatchObject({insurancePaysCents:0,writeOffCents:0,deductibleAppliedCents:0,allowedCents:112000});
+    expect(result.perLine[1]).toMatchObject({insurancePaysCents:47055,writeOffCents:51700});
+  });
   it('returns zero insurance without a plan', () => {
     const result = estimateInsurance([line({})], null, noBenefitsUsed);
     expect(result.totalCents).toBe(10_000);
