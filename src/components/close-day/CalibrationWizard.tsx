@@ -57,7 +57,7 @@ const PMS_OPTIONS = [
   'Other',
 ];
 
-type DraftColumn = LayoutColumn & { pxStart: number; pxEnd: number };
+type DraftColumn = LayoutColumn & { pxStart: number; pxEnd: number; /** What the work in the column said, when no code named the provider. */ readDepartment?: 'doctor' | 'hygiene' | null };
 
 const CAPTURE_ERROR_COPY: Record<string, string> = {
   CAPTURE_PERMISSION_DENIED:
@@ -253,6 +253,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
         department: null,
         employeeId: null,
         providerCode: suggestion.providerCode,
+        readDepartment: suggestion.department,
         ...(suggestion.provider ? {
           ...providerColumn(suggestion.provider),
           workingHours: knownHours(suggestion.provider.id),
@@ -316,7 +317,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
         pmsName: pms,
         isDefault: true,
         signature: {
-          columns: columns.map(({ pxStart: _s, pxEnd: _e, ...col }) => col),
+          columns: columns.map(({ pxStart: _s, pxEnd: _e, readDepartment: _d, ...col }) => col),
           timeGrid: {
             minutesPerRow: Number(minutesPerRow),
             yStart: 0.12,
@@ -481,6 +482,7 @@ export default function CalibrationWizard({ open, onClose }: Props) {
                         </Select>
                         {col.providerCode && <p className="text-xs text-muted-foreground">Schedule ID: {col.providerCode}</p>}
                         {col.providerCode && !col.providerId && <p className="text-xs text-muted-foreground">Code read from appointments. Select its provider once; saving the layout remembers this match.</p>}
+                        {!col.providerCode && col.readDepartment && <p className="text-xs text-muted-foreground">{col.readDepartment === 'doctor' ? "Doctor's" : 'Hygiene'} procedures read in this column{col.providerId ? '' : ' — more than one provider of that kind is active, so pick which'}.</p>}
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs">Provider type</Label>
