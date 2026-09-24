@@ -25,6 +25,7 @@ import {
   type CaptureFrame,
   type ScheduleAnalysis,
 } from '@/lib/schedule-reader';
+import { describeViolations } from '@/lib/privacy-violations';
 import { computeRollup, refereeMetrics } from '@/lib/schedule-reader/metrics-referee';
 import { useOrgEmployees } from '@/hooks/useEmployees';
 import { usePracticeSettings } from '@/hooks/usePracticeSettings';
@@ -122,6 +123,8 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
   const [detailsConfirmed, setDetailsConfirmed] = useState(false);
   const [analysis, setAnalysis] = useState<ScheduleAnalysis | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
+  /** For a refused capture: what it looked like, by kind (never the text). */
+  const [errorLooked, setErrorLooked] = useState<string | null>(null);
   const frameRef = useRef<CaptureFrame | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -151,6 +154,7 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
     frameRef.current = frame;
     setPhase('processing');
     setErrorCode(null);
+    setErrorLooked(null);
     try {
       const result = await processScheduleFrame(frame, {
         profile: toLayoutProfile(profileRow!),
@@ -172,6 +176,7 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
       if (version !== captureVersion.current) return;
       const code = err instanceof ScheduleReaderError ? err.code : 'OCR_FAILED';
       setErrorCode(code);
+      setErrorLooked(err instanceof ScheduleReaderError ? describeViolations(typeof err.detail?.kinds === 'string' ? err.detail.kinds : undefined) : null);
       setPhase('idle');
       setPrivacyConfirmed(false);
       setDetailsConfirmed(false);
@@ -332,9 +337,14 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
       </CardHeader>
       <CardContent className="space-y-4">
         {errorCode && phase === 'idle' && (
-          <p className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm">
-            {ERROR_COPY[errorCode] ?? 'Something went wrong. Nothing was saved.'}
-          </p>
+          <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm space-y-1">
+            <p>{ERROR_COPY[errorCode] ?? 'Something went wrong. Nothing was saved.'}</p>
+            {errorCode === 'PRIVACY_CHECK_FAILED' && errorLooked && (
+              <p className="text-xs text-muted-foreground">
+                What it looked like: {errorLooked}. The reader reports only the kind of match, never the text. If the privacy view is on, this is worth reporting so the reader can be taught the difference.
+              </p>
+            )}
+          </div>
         )}
 
         {phase === 'idle' && (
