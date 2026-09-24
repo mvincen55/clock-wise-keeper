@@ -10,7 +10,8 @@
  * Known employee/provider names are allowed (they are needed for column
  * mapping) but they stay local like everything else.
  */
-import type { OcrWord, PrivacyCheckResult, PrivacyViolationKind } from './types';
+import type { OcrBox, OcrWord, PrivacyCheckResult, PrivacyViolationKind } from './types';
+import { PROCEDURE_WORDS } from './provider-codes';
 
 const PHONE = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)/;
 const DOB = /\b(?:dob|d\.o\.b|birth|born)\b|(?:\b(?:19|20)\d{2}[/-]\d{1,2}[/-]\d{1,2}\b)|(?:\b\d{1,2}[/-]\d{1,2}[/-](?:19|20)\d{2}\b)/i;
@@ -28,6 +29,24 @@ const NAME_PAIR = /\b[A-Z][a-z]{1,}\s*,\s*[A-Z][a-z]+\b|\b[A-Z][a-z]{2,}\s+[A-Z]
 const PAIRED_INITIALS = /\b[A-Z]\.\s?[A-Z]\.(?!\w)/;
 /** "NP - FIRST LAST": a new-patient note that names the patient, in any case. */
 const NEW_PATIENT_NAME = /\b(?:NP|N\/P|NEW PATIENT|NEW PT)\b\s*[-–:]?\s*([A-Za-z][A-Za-z'-]+)\s+([A-Za-z][A-Za-z'-]+)/i;
+/**
+ * Procedure shorthand as the practice software prints it inside a box:
+ * comma lists of abbreviations ("EP, P-Screen, ProphyAd"). Read at 3x, a
+ * CamelCase code can come back as one lowercase run ("Prophypdd"), and the
+ * pair before and after a comma then has the exact shape of "Doe, Jane".
+ * Two tells say it is the list, not a name: the pair sits in a list of three
+ * or more items, or the line carries procedure vocabulary (the words the
+ * column reader uses to tell a doctor's chair from hygiene's) or an exam
+ * code. A name on its own line in an unblinded box has neither.
+ */
+const PROCEDURE_WORD = new RegExp(`\\b(?:${PROCEDURE_WORDS.map(w => w.replace(/[-]/g, '\\-')).join('|')})`, 'i');
+const EXAM_CODE = /\b(?:ep|el|pe|exam|ltd|emerg\w*|npv|re-?eval\w*|post-?op)\b/i;
+
+function readsAsProcedureList(text: string): boolean {
+  const items = text.split(/\s*[,;]\s*/).filter(Boolean);
+  if (items.length >= 3) return true;
+  return PROCEDURE_WORD.test(text) || EXAM_CODE.test(text);
+}
 
 /** Words per line beyond which a note reads as free-text narrative. */
 const LONG_NOTE_WORDS = 14;
@@ -89,13 +108,34 @@ export function groupWordsIntoLines(words: OcrWord[]): LineIn[] {
 }
 
 /**
- * Run the privacy check over OCR output. Returns kinds + counts only.
+ * Lines for the gate: each appointment box is its own text. Grouped across
+ * the whole frame, six chairs' boxes at one height read as a single line —
+ * a sixteen-word "note", or an "NP" beside the next chair's procedures —
+ * and none of that is what the rules are looking for. Words outside every
+ * box (rail, headers) still group by height among themselves.
  */
-export function checkPrivacy(words: OcrWord[], known: KnownNames): PrivacyCheckResult {
+export function privacyLines(words: OcrWord[], regions: OcrBox[]): LineIn[] {
+  if (regions.length === 0) return groupWordsIntoLines(words);
+  const inBox: OcrWord[][] = regions.map(() => []);
+  const loose: OcrWord[] = [];
+  for (const w of words) {
+    const cx = (w.bbox.x0 + w.bbox.x1) / 2, cy = (w.bbox.y0 + w.bbox.y1) / 2;
+    const i = regions.findIndex(r => cx >= r.x0 && cx < r.x1 && cy >= r.y0 && cy < r.y1);
+    if (i >= 0) inBox[i].push(w); else loose.push(w);
+  }
+  return [...inBox.flatMap(b => groupWordsIntoLines(b)), ...groupWordsIntoLines(loose)];
+}
+
+/**
+ * Run the privacy check over OCR output. Returns kinds + counts only.
+ * `regions` are the appointment boxes the OCR found; with them, each box is
+ * read as its own text.
+ */
+export function checkPrivacy(words: OcrWord[], known: KnownNames, regions: OcrBox[] = []): PrivacyCheckResult {
   const counts = new Map<PrivacyViolationKind, number>();
   const hit = (kind: PrivacyViolationKind) => counts.set(kind, (counts.get(kind) ?? 0) + 1);
 
-  const lines = groupWordsIntoLines(words);
+  const lines = privacyLines(words, regions);
 
   for (const line of lines) {
     const text = line.text;
@@ -110,7 +150,7 @@ export function checkPrivacy(words: OcrWord[], known: KnownNames): PrivacyCheckR
     if (STREET_ADDRESS.test(text)) hit('street_address');
     if (CLINICAL_WORDS.test(text)) hit('clinical_narrative');
 
-    if (NAME_PAIR.test(text) && !coveredByKnownNames(text, known)) hit('full_name');
+    if (NAME_PAIR.test(text) && !coveredByKnownNames(text, known) && !readsAsProcedureList(text)) hit('full_name');
     const newPatient = text.match(NEW_PATIENT_NAME);
     if (newPatient && !(known.tokens.has(newPatient[1].toLowerCase()) && known.tokens.has(newPatient[2].toLowerCase()))) hit('full_name');
 
