@@ -39,9 +39,12 @@ export function suggestColumnProvider(words: OcrWord[], column: Pick<LayoutColum
   const body = includeAppointmentCodes ? codeWords.filter(w => w.bbox.y0 > height * 0.16) : [];
   const department: WorkDepartment | null = inferDepartment(boxTexts(body)) ?? chairDepartment(header.map(w => w.text).join(' '));
   const ofDepartment = department ? providers.filter(p => p.active && p.providerType === (department === 'doctor' ? 'doctor' : 'hygienist')) : [];
-  const byCode = registered.length === 1 ? (registered[0].active ? registered[0] : undefined) : registered.length > 1 ? undefined : candidates.length === 1 ? candidates[0] : undefined;
+  // A hold without a code takes no owner from its header: the name there
+  // may be the provider the hold is for, not the chair's. Registered and
+  // previously confirmed codes still name the owner.
+  const byCode = hasHold && !providerCode ? undefined : registered.length === 1 ? (registered[0].active ? registered[0] : undefined) : registered.length > 1 ? undefined : candidates.length === 1 ? candidates[0] : undefined;
   const byWork = registered.length === 0 && candidates.length === 0 && ofDepartment.length === 1 ? ofDepartment[0] : undefined;
-  return { providerCode, notesOnly, department, provider: !notesOnly && codes.length <= 1 ? (byCode ?? (hasHold && !providerCode && !department ? undefined : byWork)) : undefined };
+  return { providerCode, notesOnly, department, provider: !notesOnly && codes.length <= 1 ? (byCode ?? byWork) : undefined };
 }
 
 /** The words of a column's body grouped into boxes by their rows, so each box can vote once. */
