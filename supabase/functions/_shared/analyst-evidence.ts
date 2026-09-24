@@ -3,7 +3,7 @@
 export type Row = {
   id: string; employee_id?: string | null; subject_employee_id?: string | null;
   user_id?: string | null; subject_user_id?: string | null; completed_by?: string;
-  display_name?: string; preferred_name?: string | null; employee_name?: string;
+  display_name?: string; preferred_name?: string | null; employee_name?: string; clocks_in?: boolean | null;
   completed_by_name?: string; entry_date?: string; date_start?: string; date_end?: string;
   exception_date?: string; checklist_date?: string; period_start?: string; period_end?: string;
   item_id?: string; checklist_id?: string; owner_user_id?: string | null;
@@ -144,7 +144,10 @@ export function normalizeEvidence(data: Record<string, Row[]>, from: string, to:
   };
   const columnLine = (s: Row) => `first patient ${clockLabel(s.first_patient_minute) ?? 'none visible'}, last patient left ${clockLabel(s.last_patient_minute) ?? 'none visible'}, available ${clockLabel(s.available_start_minute) ?? 'unknown'} to ${clockLabel(s.available_end_minute) ?? 'unknown'}`;
   function attendance(r: Row, table: string, status?: Row) {
-    if (owners.has(r.user_id)) return;
+    // Owners and roster members off the clock (a doctor kept on Team for the
+    // schedule) never punch: no attendance day of theirs is evidence. Their
+    // schedule captures still are.
+    if (owners.has(r.user_id) || person(r)?.clocks_in === false) return;
     const day = r.entry_date;
     if (!day || !validDate(day)) return;
     const off = daysOff.filter(o => ((r.employee_id && o.employee_id === r.employee_id) || (!r.employee_id && r.user_id && o.user_id === r.user_id)) && !!o.date_start && !!o.date_end && o.date_start <= day && o.date_end >= day);
@@ -232,7 +235,7 @@ export async function loadEvidence(db: EvidenceDb, orgId: string, filter: {from:
   // evening and end the next UTC morning. Read a day of slack each side and
   // let the day's own time entry decide which day a punch belongs to.
   const dayShift = (date: string, days: number) => { const d = new Date(date + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
-  await read('employees','id,user_id,display_name,preferred_name');
+  await read('employees','id,user_id,display_name,preferred_name,clocks_in');
   if (employeeId && !data.employees.some(e => e.id === employeeId)) throw new Error('Employee is not available in this office.');
   const personFilter = (column = 'employee_id') => (q: Query) => employeeId ? q.eq(column,employeeId) : q;
   const jobs: Promise<void>[] = [];

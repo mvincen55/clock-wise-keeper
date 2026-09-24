@@ -20,3 +20,12 @@ export function memberRoleLabel(role: string | null | undefined): string {
 export function roleClocksIn(role: string | null | undefined): boolean {
   return !!role && role !== 'owner';
 }
+
+/**
+ * Whether this member is held to the time clock: the role decides first
+ * (owners never), then the roster (`employees.clocks_in`, off for someone on
+ * the schedule who never punches, like a doctor).
+ */
+export function memberClocksIn(role: string | null | undefined, clocksIn?: boolean | null): boolean {
+  return roleClocksIn(role) && clocksIn !== false;
+}

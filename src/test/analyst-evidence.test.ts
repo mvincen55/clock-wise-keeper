@@ -68,6 +68,15 @@ describe('analyst evidence',()=>{
     expect(mine.map(r=>r.kind)).toEqual(['attendance']);
     expect(mine[0].summary).toContain('last patient left 5:00 PM');
   });
+  it('leaves an off-clock member out of attendance while keeping their schedule captures',()=>{
+    vi.useFakeTimers();vi.setSystemTime(new Date('2026-09-25T12:00:00Z'));
+    const doctor={id:'e-doc',user_id:null,display_name:'Dr. Lin',clocks_in:false};
+    const rows=normalizeEvidence({employees:[...employees,doctor],
+      attendance_day_status:[{id:'111111',employee_id:'e-doc',entry_date:'2026-09-21',is_scheduled_day:true,is_absent:true},{id:'222222',employee_id:'e1',user_id:'u1',entry_date:'2026-09-21',is_scheduled_day:true,is_absent:true}],
+      provider_day_metrics:[{id:'bbbbbbbb-0000-0000-0000-000000000009',employee_id:'e-doc',provider_label:'Dr. Lin',business_date:'2026-09-21',review_status:'user_confirmed',first_patient_minute:520,last_patient_minute:1000,available_start_minute:520,available_end_minute:1000,scheduled_minutes:400,net_bookable_minutes:480,true_open_minutes:80}]},'2026-09-01','2026-09-30');
+    expect(rows.filter(r=>r.kind==='attendance').map(r=>r.who)).toEqual(['Megan']);
+    expect(rows.filter(r=>r.kind==='schedule_days').map(r=>r.who)).toEqual(['Dr. Lin']);
+  });
   it('honors the selected employee even for employees without logins',()=>{
     const rows=normalizeEvidence({employees,time_entries:[{id:'111111',employee_id:'e1',entry_date:'2026-09-10'},{id:'222222',employee_id:'e2',entry_date:'2026-09-10'}]},'','','e2');
     expect(rows.map(r=>r.who)).toEqual(['Pending hire']);

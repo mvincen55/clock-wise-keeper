@@ -129,7 +129,7 @@ Navigation is a compact destination list; every feature below keeps its own rout
 ### Team & org
 | Route | Page | What it does |
 |---|---|---|
-| `/team` | Team | Roster (`TeamEmployeeCard`), invites (`InviteEmployeeModal`), archived members |
+| `/team` | Team | Roster (`TeamEmployeeCard`), invites (`InviteEmployeeModal`), archived members. Each card's **Time clock and PTO** block (`WorkArrangementSetting`, owner/manager, audited `set_employee_work_arrangement`) marks a member who never punches or does not accrue PTO (`employees.clocks_in`, `employees.pto_eligible`; a doctor kept on Team for the schedule reader). An off-clock member is left out of attendance, missing-time, payroll readiness, the Team snapshot and the Reports Analyst the way owners are (`src/lib/clocking.ts`), and shows "No login" rather than "Pending" when they have no account |
 | `/team/:employeeId` | EmployeeDetail | Per-employee detail: schedules, time, PTO |
 | `/org-setup` | OrgSetup | First-run org configuration |
 | `/settings` | Settings | Org settings, payroll settings, deposit settings, **WipeDataTool** (destructive — owner-only) |

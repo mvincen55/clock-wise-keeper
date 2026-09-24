@@ -2250,6 +2250,7 @@ export type Database = {
           address_line2: string | null
           alternate_phone: string | null
           city: string | null
+          clocks_in: boolean
           country: string | null
           created_at: string
           display_name: string
@@ -2271,6 +2272,7 @@ export type Database = {
           phone: string | null
           postal_code: string | null
           preferred_name: string | null
+          pto_eligible: boolean
           real_hire_date: string | null
           state_region: string | null
           tag: string | null
@@ -2284,6 +2286,7 @@ export type Database = {
           address_line2?: string | null
           alternate_phone?: string | null
           city?: string | null
+          clocks_in?: boolean
           country?: string | null
           created_at?: string
           display_name: string
@@ -2305,6 +2308,7 @@ export type Database = {
           phone?: string | null
           postal_code?: string | null
           preferred_name?: string | null
+          pto_eligible?: boolean
           real_hire_date?: string | null
           state_region?: string | null
           tag?: string | null
@@ -2318,6 +2322,7 @@ export type Database = {
           address_line2?: string | null
           alternate_phone?: string | null
           city?: string | null
+          clocks_in?: boolean
           country?: string | null
           created_at?: string
           display_name?: string
@@ -2339,6 +2344,7 @@ export type Database = {
           phone?: string | null
           postal_code?: string | null
           preferred_name?: string | null
+          pto_eligible?: boolean
           real_hire_date?: string | null
           state_region?: string | null
           tag?: string | null
@@ -10008,6 +10014,10 @@ export type Database = {
       set_employee_checklist_requirement: {
         Args: { p_employee_id: string; p_required: boolean }
         Returns: undefined
+      }
+      set_employee_work_arrangement: {
+        Args: { p_clocks_in: boolean; p_employee_id: string; p_pto_eligible: boolean }
+        Returns: Json
       }
       set_office_attendance_grace: {
         Args: { p_minutes: number; p_org_id: string }

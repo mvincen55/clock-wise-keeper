@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { getToday } from '@/lib/time-utils';
+import { employeeClocksIn } from '@/lib/clocking';
 
 export type EmployeeSnapshot = {
   employee_id: string;
@@ -26,7 +27,9 @@ export type EmployeeSnapshot = {
 /**
  * User ids that hold the org's Owner membership. Owners run the office and do
  * not clock in (`roleClocksIn`), so every attendance surface excludes them —
- * they must never read as absent, out, or a staffing exception.
+ * they must never read as absent, out, or a staffing exception. Roster members
+ * marked `clocks_in = false` are excluded the same way, by employee id
+ * (`src/lib/clocking.ts`).
  * Readable by any member under the "Members see org admin memberships" policy.
  */
 export function useOwnerUserIds() {
@@ -65,14 +68,14 @@ export function useOrgAttendanceSnapshot(date?: string) {
         .eq('status', 'active');
       const ownerIds = new Set((owners || []).map(m => m.user_id as string));
 
-      // All active employees who clock.
+      // All active employees who clock: not an owner, not marked off the clock.
       const { data: employees } = await supabase
         .from('employees')
-        .select('id, user_id, display_name')
+        .select('id, user_id, display_name, clocks_in')
         .eq('org_id', ctx!.org_id)
         .eq('employment_status', 'active');
 
-      const clocking = (employees || []).filter(e => !e.user_id || !ownerIds.has(e.user_id));
+      const clocking = (employees || []).filter(e => employeeClocksIn(e, ownerIds));
       if (!clocking.length) return [];
 
       // Today's attendance status for all org employees.

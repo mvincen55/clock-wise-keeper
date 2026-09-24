@@ -8,6 +8,10 @@ export type OrgContext = {
   user_id: string;
   role: 'owner' | 'manager' | 'employee';
   org_name: string;
+  /** employees.clocks_in — false for a roster member who never punches. */
+  clocks_in?: boolean;
+  /** employees.pto_eligible — false for a roster member who does not accrue PTO. */
+  pto_eligible?: boolean;
 };
 
 /**
@@ -37,7 +41,7 @@ export function useOrgContext() {
 
       const { data: employee } = await supabase
         .from('employees')
-        .select('id')
+        .select('id, clocks_in, pto_eligible')
         .eq('org_id', membership.org_id)
         .eq('user_id', user.id)
         .limit(1)
@@ -57,6 +61,8 @@ export function useOrgContext() {
         user_id: user.id,
         role: membership.role as OrgContext['role'],
         org_name: org?.name || 'Organization',
+        clocks_in: employee.clocks_in ?? true,
+        pto_eligible: employee.pto_eligible ?? true,
       };
     },
   });

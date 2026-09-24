@@ -34,6 +34,10 @@ export type Employee = {
   /** Short code shown on reports and print sheets instead of the full name. */
   tag?: string | null;
   preferred_name?: string | null;
+  /** False for a roster member who never punches (employees.clocks_in). */
+  clocks_in?: boolean | null;
+  /** False for a roster member who does not accrue PTO (employees.pto_eligible). */
+  pto_eligible?: boolean | null;
 };
 
 type WeekdayDraft = Omit<ScheduleWeekdayRow, 'id' | 'schedule_version_id'>;

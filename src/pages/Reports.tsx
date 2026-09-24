@@ -10,6 +10,7 @@ import { useWorkedHourAdjustments, type WorkedHourAdjustmentRow } from '@/hooks/
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { useOrgEmployees } from '@/hooks/useEmployees';
 import { useOwnerUserIds } from '@/hooks/useOrgAttendanceSnapshot';
+import { nonClockingEmployeeIds, rowClocksIn } from '@/lib/clocking';
 import { minutesToHHMM, formatTime, formatClock, formatDate, getToday } from '@/lib/time-utils';
 import {
   adjustmentMinutes, computeWeeklyTotals, detectDayIssue, formatBreak, formatHoursMinutes, formatOtFlag,
@@ -292,16 +293,17 @@ export default function Reports() {
   // Missing-time flags. Missing days come from attendance_day_status —
   // the same schedule resolution the recompute engine maintains — so a
   // day only counts as missing when it was scheduled with no punches,
-  // no day-off coverage, and no office closure. Owners never clock, so
-  // their rows are excluded. Unpaired sequences and pairing anomalies
-  // come from the entries' live punches.
+  // no day-off coverage, and no office closure. Owners and roster members
+  // off the clock never punch, so their rows are excluded. Unpaired
+  // sequences and pairing anomalies come from the entries' live punches.
   const dayIssueByEntry = new Map<string, Exclude<TimeStatus, 'OK' | 'MISSING DAY'>>();
   for (const e of entries || []) {
     const issue = detectDayIssue(e.punches, e.total_minutes, e.entry_date, today);
     if (issue) dayIssueByEntry.set(e.id, issue);
   }
+  const offClock = nonClockingEmployeeIds(orgEmployees || [], ownerUserIds ?? new Set<string>());
   const missingDays = (dayStatus || []).filter(r =>
-    r.is_absent && r.entry_date < today && !(r.user_id && ownerUserIds?.has(r.user_id)),
+    r.is_absent && r.entry_date < today && rowClocksIn(r, ownerUserIds ?? new Set<string>(), offClock),
   );
   type TimeFlag = { employeeLabel: string; date: string; kind: TimeStatus };
   const timeFlags: TimeFlag[] = [

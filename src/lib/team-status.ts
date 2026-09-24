@@ -9,11 +9,19 @@
 //                         steps are not finished
 //   Active              — onboarding complete
 //   Expired             — the invite lapsed before a login was created
+//   No login            — a roster record that is not on the time clock (a
+//                         doctor kept for the schedule reader); nothing is
+//                         waiting on an invite
+//
+//   Team status is about the join pipeline. Whether the person punches a
+//   clock or accrues PTO is a separate roster fact (employees.clocks_in,
+//   employees.pto_eligible) shown as its own badges.
 
 export type TeamStatusKind =
   | 'active'
   | 'pending_onboarding'
   | 'pending_login'
+  | 'no_login'
   | 'invite_expired';
 
 export type TeamStatus = {
@@ -34,7 +42,17 @@ export type OnboardingSnapshot = {
 export function employeeTeamStatus(args: {
   hasLogin: boolean;
   onboarding: OnboardingSnapshot;
+  /** employees.clocks_in — defaults to true; false means no invite is owed. */
+  clocksIn?: boolean | null;
 }): TeamStatus {
+  if (!args.hasLogin && args.clocksIn === false) {
+    return {
+      kind: 'no_login',
+      label: 'No login',
+      detail: 'Not on the time clock, so nothing is waiting on an invite. Invite them only if they should use the app.',
+      tone: 'muted',
+    };
+  }
   if (!args.hasLogin) {
     return {
       kind: 'pending_login',
