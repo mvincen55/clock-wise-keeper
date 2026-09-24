@@ -146,6 +146,10 @@ export function deriveAttention(src: AttentionSources): AttentionResult {
     const e = (employeeId && employees.find(x => x.id === employeeId)) || (userId && employees.find(x => x.user_id === userId)) || null;
     return { employeeId: e?.id ?? employeeId ?? null, userId: e?.user_id ?? userId ?? null, name: e?.display_name ?? null };
   };
+  // The roster is the active people. Records of someone who has been archived
+  // are not the office's work any more, so they never become items.
+  const onRoster = (employeeId?: string | null, userId?: string | null): boolean =>
+    employees.some(x => (!!employeeId && x.id === employeeId) || (!!userId && x.user_id === userId));
   const deadlineOn = (date: string, label: string): AttentionDeadline => ({ label, date, days: Math.max(0, daysBetween(today, date)) });
   const inPeriod = (date: string | null | undefined) => !!(payrollPeriod && date && date >= payrollPeriod.start && date <= payrollPeriod.end);
   const payrollDeadline = () => (payrollPeriod?.dueDate ? deadlineOn(payrollPeriod.dueDate, payrollPeriod.dueLabel ?? 'payroll') : null);
@@ -254,6 +258,7 @@ export function deriveAttention(src: AttentionSources): AttentionResult {
     const excByKey = new Map(src.exceptions!.map(x => [`${x.employee_id}|${x.exception_date}`, x]));
     for (const row of src.dayStatuses!) {
       if (ownerUserIds.has(row.user_id)) continue;
+      if (!onRoster(row.employee_id, row.user_id)) continue;
       const dayKey = `${row.employee_id}|${row.entry_date}`;
       const subject = subjectOf(row.employee_id, row.user_id);
       const end = parseClockMinutes(row.schedule_expected_end);
@@ -314,6 +319,7 @@ export function deriveAttention(src: AttentionSources): AttentionResult {
   /* ---- 4. follow-through the office's rules ask for ---- */
   if (rules.reviewTardies && sourceOk('tardies', src.tardies)) for (const t of src.tardies!) {
     if (t.approval_status !== 'unreviewed') continue;
+    if (!onRoster(t.employee_id, t.user_id)) continue;
     add({ kind: 'tardy_unreviewed', recordTable: 'tardies', recordId: t.id, subject: subjectOf(t.employee_id, t.user_id),
       label: `Late ${t.minutes_late} min · ${t.entry_date} · unreviewed`, detail: t.reason_text ? `Reason given: “${t.reason_text}”` : 'No reason given yet',
       why: 'Office rule: late arrivals past grace are reviewed by a manager.', occurredAt: t.created_at, deadline: null, coverage: false, payroll: false,
@@ -321,6 +327,7 @@ export function deriveAttention(src: AttentionSources): AttentionResult {
   }
   if (sourceOk('bypasses', src.bypasses)) for (const b of src.bypasses!) {
     if (b.resolved) continue;
+    if (!onRoster(b.employee_id, b.user_id)) continue;
     const age = hoursBetween(b.bypassed_at, nowIso) ?? 0;
     if (age < rules.bypassReasonHours) continue;
     add({ kind: 'bypass_followup', recordTable: 'checklist_bypasses', recordId: b.id, subject: subjectOf(b.employee_id, b.user_id),
