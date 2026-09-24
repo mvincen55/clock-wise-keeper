@@ -49,6 +49,8 @@ export type WorkDepartment = 'doctor' | 'hygiene';
 // ("CrwnMod#15", "ProphyAd", "PerMaint", "TopFlride").
 const DOCTOR_WORK = ['crwn', 'crown', 'inly', 'inlay', 'onlay', 'endo', 'rct', 'pulp', 'exo', 'extr', 'impl', 'compo', 'amal', 'fill', 'bridge', 'pontic', 'abut', 'veneer', 'dentur', 'partial', 'buildup', 'bldup', 'occl', 'deliv', 'seat', 'prep', 'nightg', 'ngrd', 'whiten', 'sig'];
 const HYGIENE_WORK = ['prophy', 'perio', 'permain', 'srp', 'scal', 'fluor', 'flrid', 'fl1', 'fl2', 'flpc', 'xray', 'x-ray', 'bwx', 'fmx', 'pano', 'pa1', 'paa', 'screen', 'seal', 'sdf', 'arrest', 'debrid', 'recall'];
+/** Every procedure word the reader knows, for anyone who needs to tell shorthand from prose. */
+export const PROCEDURE_WORDS: readonly string[] = [...DOCTOR_WORK, ...HYGIENE_WORK];
 
 /** Which department's work a box describes, or null when it names neither or both equally. */
 export function boxDepartment(text: string): WorkDepartment | null {
