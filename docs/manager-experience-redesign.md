@@ -984,3 +984,16 @@ from there, typed with the merge. The app typechecks against either version of
 the generated file, and the generated definition wins wherever it exists. The
 migrations still have to be applied live for the features to work; once they
 are and the types are regenerated, the entries in that module come out.
+
+### Follow-up — archived people leave the engine and Attention
+
+Archiving a person set `employment_status` and nothing else: their schedule
+assignment stayed open, the attendance engine kept recomputing every scheduled
+day as absent, and Attention showed those days as nameless rows because it
+names people from the active roster. Migration `20260924000000` makes the
+schedule read (`get_schedule_for_date`) return nothing for a login whose
+employee records are all inactive or terminated, recomputes the person's recent
+window whenever their status changes, and re-reads the recent window once for
+everyone not active today. The selector also ignores attendance, tardy, and
+bypass records of anyone off the active roster, so an archived person never
+becomes an item even before a recompute lands.
