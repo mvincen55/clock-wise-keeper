@@ -169,6 +169,7 @@ export function visitSegmentsForCode(code: string): VisitSegment[] {
 export function suggestVisitStage(code: string): number {
   const n = codeNumber(code);
   if (n === null) return 1;
+  if (n === 6190) return 1; // Planning guide precedes implant placement.
   if ((n >= 7000 && n < 8000) || (n >= 4210 && n < 4300)) return 1;
   // Implant placement/second-stage (6010-6054), surgical guides
   // (6190-6199), and endo happen mid-sequence; implant restorative

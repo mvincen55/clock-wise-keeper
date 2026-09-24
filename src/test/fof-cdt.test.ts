@@ -17,6 +17,7 @@ describe('categorizeCdtCode', () => {
   });
 
   it('maps diagnostic work-up codes to workup (billed at visit, no coverage)', () => {
+    expect(categorizeCdtCode('D6190')).toBe('workup'); // implant planning guide
     expect(categorizeCdtCode('D0367')).toBe('workup'); // CT scan
     expect(categorizeCdtCode('D0470')).toBe('workup'); // diagnostic models
   });

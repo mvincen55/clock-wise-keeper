@@ -4,6 +4,7 @@ import { suggestPaymentClass } from '@/lib/fof/suggest-class';
 describe('suggested payment classification from the CDT range', () => {
   it.each([
     ['D0367', 'workup'], ['D0470', 'workup'],
+    ['D6190', 'workup'], ['D5982', 'workup'],
     ['D2740', 'restoration'], ['D2950', 'restoration'],
     ['D5110', 'denture'], ['D5750', 'denture'], ['D5820', 'denture'],
     ['D6010', 'implant'], ['D6011', 'implant'],

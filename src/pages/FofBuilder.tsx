@@ -584,7 +584,7 @@ export default function FofBuilder() {
             // the form (schedule description as fallback).
             description: resolvePatientName(match.code, codeNames) || match.description,
             feeInput: formatCents(match.feeCents),
-            ...resolveCategory(match.category),
+            ...resolveCategory(categorizeCdtCode(match.code) === 'workup' ? 'workup' : match.category),
           }
         : { code: rawCode, ...resolveCategory(categorizeCdtCode(rawCode.trim().toUpperCase())) },
     });
@@ -652,7 +652,7 @@ export default function FofBuilder() {
         ? resolvePatientName(match.code, codeNames) || match.description
         : resolvePatientName(rawCode.toUpperCase(), codeNames) || '',
       feeInput: match ? formatCents(match.feeCents) : '',
-      ...resolveCategory(match?.category ?? categorizeCdtCode(rawCode.toUpperCase())),
+      ...resolveCategory(categorizeCdtCode(rawCode) === 'workup' ? 'workup' : match?.category ?? categorizeCdtCode(rawCode)),
     };
   };
 
@@ -731,7 +731,7 @@ export default function FofBuilder() {
             line: {
               code,
               description: l.description.trim(),
-              category: l.category,
+              category: l.workupFlag === 'yes' || categorizeCdtCode(code) === 'workup' ? 'workup' : l.category,
               // Membership-included fees stay in the total (the patient
               // sees the value); they come off as their own covered row.
               officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
