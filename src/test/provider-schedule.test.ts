@@ -16,7 +16,7 @@ describe('Provider mapping', () => {
     expect(providerColumn({ ...doctor, providerType: 'assistant' })).toMatchObject({ providerRole: 'dental_assistant', department: 'other' });
   });
   it('recognizes DR02 but only suggests a previously confirmed provider', () => {
-    expect(suggestColumnProvider([word('DR02')], col, 100, 100, [doctor], [])).toEqual({ providerCode: 'DR02', provider: undefined, notesOnly: false });
+    expect(suggestColumnProvider([word('DR02')], col, 100, 100, [doctor], [])).toEqual({ providerCode: 'DR02', provider: undefined, notesOnly: false, department: null });
     expect(suggestColumnProvider([word('DR02')], col, 100, 100, [doctor], [col]).provider).toEqual(doctor);
   });
   it('does not match ambiguous, inactive, low-confidence or body codes', () => {
