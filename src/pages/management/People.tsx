@@ -85,11 +85,12 @@ function EveryoneView() {
 
   // Employees with no stored attendance rows (typically pending members with
   // no login) still have punch history keyed by employee_id — derive theirs so
-  // the roster counts are complete.
+  // the roster counts are complete. A member off the clock (a doctor kept on
+  // Team for the schedule) is never derived: nothing about them is absent.
   const missingAttendanceIds = useMemo(() => {
     if (!attendance || !employees) return [] as string[];
     const covered = new Set(attendance.map(r => r.employee_id));
-    return employees.filter(e => !covered.has(e.id)).map(e => e.id);
+    return employees.filter(e => !covered.has(e.id) && e.clocks_in !== false).map(e => e.id);
   }, [attendance, employees]);
   const { data: derivedAttendance } = useDerivedOrgAttendance(missingAttendanceIds, dateRange);
 

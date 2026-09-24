@@ -24,6 +24,7 @@ import { useTeamGoals } from '@/hooks/useTeamGoals';
 import { useManagerFollowups } from '@/hooks/useManagerFollowups';
 import { officeStatus } from '@/components/dashboard/staffing';
 import { easternWallMinutes, getToday, shiftDate } from '@/lib/time-utils';
+import { nonClockingEmployeeIds } from '@/lib/clocking';
 import {
   closeoutsFrom, deriveAttention, lastCompletedPayPeriod, queryStatus, versionsInReviewFrom,
   type AttentionResult, type AttentionSources, type SourceStatus,
@@ -113,6 +114,7 @@ export function useAttentionItems(): AttentionItemsResult {
 
     const now = new Date();
     const ownerUserIds = owners.data ?? new Set<string>();
+    const offClock = nonClockingEmployeeIds(employees.data ?? [], ownerUserIds);
     const rosterStatus: SourceStatus = employees.isError || owners.isError
       ? { state: 'error', asOf: null }
       : employees.data === undefined || owners.data === undefined
@@ -128,6 +130,7 @@ export function useAttentionItems(): AttentionItemsResult {
       viewer: { userId: user.id, role: ctx.role === 'owner' ? 'owner' : 'manager' },
       employees: (employees.data ?? []).map(e => ({ id: e.id, user_id: e.user_id ?? null, display_name: e.display_name })),
       ownerUserIds,
+      nonClockingEmployeeIds: offClock,
       payrollPeriod,
       rules: ATTENTION_RULES,
       dayStatuses: dayStatuses.data,
@@ -139,7 +142,7 @@ export function useAttentionItems(): AttentionItemsResult {
       ptoRequests: ptoRequests.data,
       corrections: corrections.data,
       changeRequests: changeRequests.data,
-      closeouts: depositLogs.data && dayStatuses.data ? closeoutsFrom(depositLogs.data, dayStatuses.data, today, ownerUserIds) : undefined,
+      closeouts: depositLogs.data && dayStatuses.data ? closeoutsFrom(depositLogs.data, dayStatuses.data, today, ownerUserIds, offClock) : undefined,
       bypasses: bypasses.data,
       accountability: accountability.data,
       acks: acks.data,

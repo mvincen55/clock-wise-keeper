@@ -72,6 +72,26 @@ export default function PTO() {
 
   const reversedLedger = [...(ledger || [])].reverse();
 
+  // A roster member who does not accrue PTO (employees.pto_eligible) has no
+  // balance, tier or request here; the page says so instead of showing zeros.
+  if (ctx && ctx.pto_eligible === false) {
+    return (
+      <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold">PTO</h1>
+          <p className="text-muted-foreground">
+            {branding?.displayName ? `${branding.displayName} — Combined PTO Bank` : 'Combined PTO Bank'}
+          </p>
+        </div>
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">
+            PTO does not apply to your arrangement with the office, so there is no balance, accrual or request to show here. If that is wrong, ask an owner or manager to change it on your Team card.
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">

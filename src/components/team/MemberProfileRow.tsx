@@ -23,6 +23,8 @@ type Member = {
   tag?: string | null;
   /** Shared-by-choice fun facts, used for thank-yous and birthdays. */
   favorites?: Record<string, string> | null;
+  /** False for a roster member who never punches (employees.clocks_in). */
+  clocks_in?: boolean | null;
 };
 
 const FAVORITE_LABELS: Record<string, string> = {
@@ -128,11 +130,18 @@ export default function MemberProfileRow({ employee }: { employee: Member }) {
 
       {/* One join-pipeline vocabulary everywhere: Active / Pending Onboarding
           / Pending (no login). A loginless roster record is "Pending", never
-          mislabeled as un-started onboarding. */}
+          mislabeled as un-started onboarding — unless the person is off the
+          clock, when no invite is owed and "No login" is the whole story. */}
       {!employee.user_id ? (
-        <Badge variant="outline" className="text-muted-foreground" title="Login not created yet">
-          Pending
-        </Badge>
+        employee.clocks_in === false ? (
+          <Badge variant="outline" className="text-muted-foreground" title="Not on the time clock; nothing is waiting on an invite">
+            No login
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="text-muted-foreground" title="Login not created yet">
+            Pending
+          </Badge>
+        )
       ) : status ? (
         status.complete ? (
           <Badge variant="outline" className="border-success/30 text-success">Active</Badge>

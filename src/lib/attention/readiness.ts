@@ -62,6 +62,8 @@ export type ReadinessInput = {
   employees: { id: string; user_id: string | null; display_name: string }[];
   /** Owners never clock; their rows are excluded from every verdict. */
   ownerUserIds: Set<string>;
+  /** Roster members off the clock (employees.clocks_in = false); excluded the same way. */
+  nonClockingEmployeeIds?: Set<string>;
   dayStatuses: AttendanceDayStatusRow[];
   entries: TimeEntryRow[];
   daysOff: DayOffRow[];
@@ -121,7 +123,8 @@ export function deriveReadiness(input: ReadinessInput): ReadinessResult {
   exceptions.forEach(x => exceptionByKey.set(`${x.employee_id}|${x.exception_date}`, x));
 
   const issues: ReadinessIssue[] = [];
-  const rows = dayStatuses.filter(r => inPeriod(r.entry_date, period) && !ownerUserIds.has(r.user_id));
+  const offClock = input.nonClockingEmployeeIds ?? new Set<string>();
+  const rows = dayStatuses.filter(r => inPeriod(r.entry_date, period) && !ownerUserIds.has(r.user_id) && !(r.employee_id && offClock.has(r.employee_id)));
   for (const row of rows) {
     const kinds = missingTimeConditions({
       row,

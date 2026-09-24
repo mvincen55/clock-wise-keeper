@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { useAttendanceDayStatus } from '@/hooks/useAttendanceDayStatus';
 import { useOwnerUserIds } from '@/hooks/useOrgAttendanceSnapshot';
+import { useOrgEmployees } from '@/hooks/useEmployees';
+import { nonClockingEmployeeIds, rowClocksIn } from '@/lib/clocking';
 import { TrendChart } from '@/components/dashboard/charts';
 import type { Series } from '@/components/dashboard/types';
 import { getToday, shiftDate } from '@/lib/time-utils';
@@ -16,17 +18,21 @@ function dayTick(date: string): string {
  * purpose, here on Team. It deliberately does NOT live on Home: attendance is
  * one signal among many, not the product's headline.
  *
- * Owners never clock, so their rows are excluded from every denominator.
- * Days with no scheduled people render as no-data, never as 0%.
+ * Owners and roster members off the clock never punch, so their rows are
+ * excluded from every denominator. Days with no scheduled people render as
+ * no-data, never as 0%.
  */
 export default function AttendanceTrendCard() {
   const today = getToday();
   const chartStart = shiftDate(today, -13);
   const { data: rows = [] } = useAttendanceDayStatus(chartStart, today);
   const { data: ownerIds } = useOwnerUserIds();
+  const { data: employees } = useOrgEmployees();
 
   const series: Series = useMemo(() => {
-    const clockingRows = rows.filter(r => !ownerIds?.has(r.user_id));
+    const owners = ownerIds ?? new Set<string>();
+    const offClock = nonClockingEmployeeIds(employees ?? [], owners);
+    const clockingRows = rows.filter(r => rowClocksIn(r, owners, offClock));
     const dayKeys = Array.from({ length: 14 }, (_, i) => shiftDate(chartStart, i));
     return {
       id: 'arrivals',
@@ -44,7 +50,7 @@ export default function AttendanceTrendCard() {
         };
       }),
     };
-  }, [rows, ownerIds, chartStart]);
+  }, [rows, ownerIds, employees, chartStart]);
 
   const hasAnySchedule = series.points.some(p => (p.of ?? 0) > 0);
   if (!hasAnySchedule) {

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import { roleClocksIn } from '@/lib/roles';
+import { memberClocksIn } from '@/lib/roles';
 import { normalizePmsSystem, type PmsSystem } from '@/lib/pms';
 import { DEFAULT_CONFIRMATION_LEAD_DAYS } from '@/components/goals/goal-examples';
 
@@ -95,10 +95,11 @@ export function useUpsertPracticeSettings() {
 
 /**
  * True when this member should see the clock and be held to closeout rules.
- * Of the three membership types — Owner, Manager, Team — owners are the only
- * ones who never punch; Managers and Team always do.
+ * Of the three membership types — Owner, Manager, Team — owners never punch;
+ * Managers and Team do unless their roster record says otherwise
+ * (`employees.clocks_in`, off for a doctor kept on Team for the schedule).
  */
 export function useClocksIn() {
   const { data: ctx } = useOrgContext();
-  return roleClocksIn(ctx?.role);
+  return memberClocksIn(ctx?.role, ctx?.clocks_in);
 }

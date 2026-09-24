@@ -20,6 +20,7 @@ import EmployeeSetupCard from '@/components/team/EmployeeSetupCard';
 import EmployeeContactCard from '@/components/team/EmployeeContactCard';
 import EmployeeFavoritesCard from '@/components/team/EmployeeFavoritesCard';
 import MemberProfileRow from '@/components/team/MemberProfileRow';
+import WorkArrangementSetting from '@/components/team/WorkArrangementSetting';
 import WorkedHourAdjustments from '@/components/team/WorkedHourAdjustments';
 import ScheduleTab from '@/components/team/ScheduleTab';
 import AccountabilityHistory from '@/components/accountability/AccountabilityHistory';
@@ -72,7 +73,10 @@ export default function PersonRecord() {
   const [range, setRange] = useState(() => ({ start: shiftDate(getToday(), -29), end: getToday() }));
   const clock = useDayClock();
   const { data: daysOff, isLoading: daysOffLoading, error: daysOffError } = useEmployeeDaysOff(employeeId, range.start, range.end);
-  const { rows: attendance, isLoading: attLoading } = useResolvedEmployeeAttendance(employeeId, range);
+  // Attendance is neither stored nor derived for a member off the clock
+  // (employees.clocks_in): a doctor with a schedule and no punches is not absent.
+  const clocksIn = employee ? employee.clocks_in !== false : true;
+  const { rows: attendance, isLoading: attLoading } = useResolvedEmployeeAttendance(clocksIn ? employeeId : undefined, range);
   const { data: entries } = useEmployeeTimeEntries(employeeId, range);
   const { data: incidents } = useEmployeeIncidentReports(employeeId);
   const { data: bypasses } = useOrgBypasses(ctx?.org_id);
@@ -135,13 +139,13 @@ export default function PersonRecord() {
           <Button asChild variant="ghost" size="icon" aria-label="Back to People"><Link to="/management/people?view=everyone"><ArrowLeft className="h-4 w-4" /></Link></Button>
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl md:text-3xl font-bold">{name}</h1>
-            <p className="text-muted-foreground">{employee.email || 'No email'}{employee.tag ? ` · code ${employee.tag}` : ''}{employee.team ? ` · ${employee.team}` : ''}</p>
+            <p className="text-muted-foreground">{employee.email || 'No email'}{employee.tag ? ` · code ${employee.tag}` : ''}{employee.team ? ` · ${employee.team}` : ''}{clocksIn ? '' : ' · no time clock'}{employee.pto_eligible === false ? ' · no PTO' : ''}</p>
           </div>
           <EditEmployeeDialog employee={employee} />
         </div>
 
         <dl className="grid gap-3 sm:grid-cols-4">
-          <div className="rounded-lg border p-3"><dt className="text-xs text-muted-foreground">Last 30 days</dt><dd className="text-sm font-medium">{stats.present} present · {stats.late} late · {stats.absent} absent</dd></div>
+          <div className="rounded-lg border p-3"><dt className="text-xs text-muted-foreground">Last 30 days</dt><dd className="text-sm font-medium">{clocksIn ? `${stats.present} present · ${stats.late} late · ${stats.absent} absent` : 'Not on the time clock'}</dd></div>
           <div className="rounded-lg border p-3"><dt className="text-xs text-muted-foreground">Hours in range</dt><dd className="text-sm font-medium">{minutesToHHMM(minutesInRange)}</dd></div>
           <div className="rounded-lg border p-3"><dt className="text-xs text-muted-foreground">Open items</dt><dd className="text-sm font-medium">{glance}</dd></div>
           <div className="rounded-lg border p-3"><dt className="text-xs text-muted-foreground">Employment start</dt><dd className="text-sm font-medium">{employee.real_hire_date ? formatDate(employee.real_hire_date) : employee.hire_date ? formatDate(employee.hire_date) : 'not set'}</dd></div>
@@ -342,7 +346,7 @@ export default function PersonRecord() {
         </Section>
 
         <Section id="profile" title="Profile">
-          <Card><CardContent className="p-4"><MemberProfileRow employee={{ id: employee.id, user_id: employee.user_id, display_name: employee.display_name, preferred_name: employee.preferred_name, tag: employee.tag, favorites: employee.favorites as Record<string, string> | null }} /></CardContent></Card>
+          <Card><CardContent className="p-4"><MemberProfileRow employee={{ id: employee.id, user_id: employee.user_id, display_name: employee.display_name, preferred_name: employee.preferred_name, tag: employee.tag, favorites: employee.favorites as Record<string, string> | null, clocks_in: employee.clocks_in }} /><WorkArrangementSetting employee={employee} /></CardContent></Card>
           <EmployeeContactCard employee={employee} />
           <EmployeeFavoritesCard favorites={employee.favorites} />
           <p className="text-sm text-muted-foreground">Permissions and operational roles are set for the office in <Link to="/management/office/settings#permissions" className="underline">Office settings</Link>.</p>

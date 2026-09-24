@@ -60,6 +60,8 @@ export type AttentionSources = {
   viewer: { userId: string; role: 'owner' | 'manager' };
   employees: AttentionEmployee[];
   ownerUserIds: Set<string>;
+  /** Roster members off the clock (employees.clocks_in = false), by employee id. */
+  nonClockingEmployeeIds?: Set<string>;
   /**
    * The pay period being prepared; null when payroll is not configured. The
    * deadline exists only when the office set one (dueDate null otherwise).
@@ -244,8 +246,10 @@ export function deriveAttention(src: AttentionSources): AttentionResult {
   }
 
   /* ---- 3. the record of truth: time and the closeout ---- */
-  // Attendance needs the roster too: owners are excluded by user id, so an
-  // unloaded owner list would read an owner's day as missing time.
+  // Attendance needs the roster too: owners are excluded by user id and
+  // non-clocking members by employee id, so an unloaded roster would read
+  // their days as missing time.
+  const offClock = src.nonClockingEmployeeIds ?? new Set<string>();
   const attendanceOk = sourceOk('roster', src.employees) && sourceOk('dayStatuses', src.dayStatuses) && sourceOk('entries', src.entries)
     && sourceOk('daysOff', src.daysOff) && sourceOk('closures', src.closures) && sourceOk('exceptions', src.exceptions);
   if (attendanceOk) {
@@ -253,7 +257,7 @@ export function deriveAttention(src: AttentionSources): AttentionResult {
     const entryByKey = new Map(src.entries!.filter(e => e.employee_id).map(e => [`${e.employee_id}|${e.entry_date}`, e]));
     const excByKey = new Map(src.exceptions!.map(x => [`${x.employee_id}|${x.exception_date}`, x]));
     for (const row of src.dayStatuses!) {
-      if (ownerUserIds.has(row.user_id)) continue;
+      if (ownerUserIds.has(row.user_id) || (row.employee_id && offClock.has(row.employee_id))) continue;
       const dayKey = `${row.employee_id}|${row.entry_date}`;
       const subject = subjectOf(row.employee_id, row.user_id);
       const end = parseClockMinutes(row.schedule_expected_end);

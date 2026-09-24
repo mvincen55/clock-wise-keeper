@@ -135,6 +135,18 @@ Exact model in README §Checklist data model and migration
   `LocationStatusPanel`; zones are managed at `/work-zones`.
 - Tardiness has its own objects (`useTardies`, `TardyReasonModal`) — don't fold it
   into punch editing.
+- Someone reads as absent who never punches (a doctor on Team for the schedule
+  reader): their roster record should say so. Owners are off the clock by role
+  (`roleClocksIn`); anyone else by `employees.clocks_in = false`, set from the
+  card's "Time clock and PTO" block (`set_employee_work_arrangement`, audited).
+  Every attendance surface filters on both through `src/lib/clocking.ts`; the
+  Reports Analyst skips their attendance days but keeps their schedule captures.
+  `employees.pto_eligible = false` hides PTO for them the same way.
+- A treating provider whose schedule code (DR05) equals exactly one active team
+  member's staff code is linked to that member by the database
+  (`employee_for_schedule_code`, triggers on `org_providers.schedule_code` and
+  `employees.tag`), so captures file under the right person without a second
+  pick in the registry. An explicit "Not linked" holds until either code changes.
 - Employee schedules: a version (`schedule_versions` + `schedule_weekdays`) is what
   attendance follows; its assignment (`schedule_assignments`) must mirror the
   version's dates. New schedules go through `create_employee_schedule`, in-place

@@ -26,20 +26,22 @@ export function queryStatus(q: QueryLike): SourceStatus {
  * Closeout facts for Attention: today's record, the last sealed day, how
  * many office days have passed since it with nothing sealed, and the saved
  * past days that were never sealed. An "office day" is a date some clocking
- * person was scheduled on and no closure covered.
+ * person (not an owner, not a roster member off the clock) was scheduled on
+ * and no closure covered.
  */
 export function closeoutsFrom(
   logs: DepositLog[],
   dayStatuses: AttendanceDayStatusRow[],
   today: string,
   ownerUserIds: Set<string>,
+  nonClockingEmployeeIds: Set<string> = new Set(),
 ): NonNullable<AttentionSources['closeouts']> {
   const byDate = new Map(logs.map(l => [l.deposit_date, l]));
   const sealedDates = logs.filter(l => l.sealed_at).map(l => l.deposit_date).sort();
   const latestSealedDate = sealedDates.length ? sealedDates[sealedDates.length - 1] : null;
   const officeDays = new Set(
     dayStatuses
-      .filter(r => r.is_scheduled_day && !r.office_closed && !ownerUserIds.has(r.user_id))
+      .filter(r => r.is_scheduled_day && !r.office_closed && !ownerUserIds.has(r.user_id) && !(r.employee_id && nonClockingEmployeeIds.has(r.employee_id)))
       .map(r => r.entry_date),
   );
   const officeDaysSinceSeal = latestSealedDate === null

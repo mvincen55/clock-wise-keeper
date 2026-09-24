@@ -1,4 +1,5 @@
 import EmployeeChecklistSetting from '@/components/team/EmployeeChecklistSetting';
+import WorkArrangementSetting from '@/components/team/WorkArrangementSetting';
 import WorkedHourAdjustments from '@/components/team/WorkedHourAdjustments';
 import EmployeeInviteAction from '@/components/team/EmployeeInviteAction';
 import { useState } from 'react';
@@ -49,6 +50,10 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
   const qc = useQueryClient();
   const { toast } = useToast();
   const canArchive = orgCtx?.role === 'owner' || orgCtx?.role === 'manager';
+  // Roster facts, not join-pipeline state: a doctor kept on Team for the
+  // schedule reader is on neither the clock nor the PTO bank.
+  const clocksIn = employee.clocks_in !== false;
+  const ptoEligible = employee.pto_eligible !== false;
 
   // Join-pipeline status (React Query dedupes the org-wide fetch per card).
   const { data: onboardingTeam } = useTeamOnboardingStatus();
@@ -57,6 +62,7 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
     : undefined;
   const teamStatus = employeeTeamStatus({
     hasLogin: !!employee.user_id,
+    clocksIn,
     onboarding: onboardingRow
       ? {
           complete: onboardingRow.complete,
@@ -113,6 +119,16 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
               >
                 {teamStatus.label}
               </Badge>
+              {!clocksIn && (
+                <Badge variant="outline" className="ml-2 text-[10px] text-muted-foreground" title="Not on the time clock: left out of attendance, missing-time and payroll checks">
+                  No time clock
+                </Badge>
+              )}
+              {!ptoEligible && (
+                <Badge variant="outline" className="ml-2 text-[10px] text-muted-foreground" title="Does not accrue PTO">
+                  No PTO
+                </Badge>
+              )}
             </p>
             <p className="text-xs text-muted-foreground">{employee.email || 'No email'}</p>
           </div>
@@ -125,6 +141,7 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
       {expanded && (
         <CardContent className="border-t pt-3 pb-4 px-4">
           <MemberProfileRow employee={employee as never} />
+          <WorkArrangementSetting employee={employee} />
           <EmployeeChecklistSetting employeeId={employee.id}/>
 
           {/* Per-employee stats */}
@@ -136,16 +153,24 @@ export default function TeamEmployeeCard({ employee, stats, dateRange }: { emplo
 
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="w-full grid grid-cols-5 mb-3">
-              <TabsTrigger value="setup" className="text-xs">Dates / PTO</TabsTrigger>
+              <TabsTrigger value="setup" className="text-xs">{ptoEligible ? 'Dates / PTO' : 'Dates'}</TabsTrigger>
               <TabsTrigger value="attendance" className="text-xs"><Calendar className="h-3 w-3 mr-1" />Attendance</TabsTrigger>
               <TabsTrigger value="schedule" className="text-xs"><Clock className="h-3 w-3 mr-1" />Schedule</TabsTrigger>
               <TabsTrigger value="tardies" className="text-xs"><AlertTriangle className="h-3 w-3 mr-1" />Tardies</TabsTrigger>
               <TabsTrigger value="callouts" className="text-xs"><CalendarOff className="h-3 w-3 mr-1" />Callouts</TabsTrigger>
             </TabsList>
             <TabsContent value="setup"><EmployeeSetupCard employeeId={employee.id}/></TabsContent>
-            <TabsContent value="attendance"><WorkedHourAdjustments employeeId={employee.id}/><AttendanceTab employeeId={employee.id} range={dateRange} /></TabsContent>
+            <TabsContent value="attendance">
+              {clocksIn
+                ? <><WorkedHourAdjustments employeeId={employee.id}/><AttendanceTab employeeId={employee.id} range={dateRange} /></>
+                : <EmptyState text="Not on the time clock. No attendance is recorded for this team member." />}
+            </TabsContent>
             <TabsContent value="schedule"><ScheduleTab employee={employee} /></TabsContent>
-            <TabsContent value="tardies"><TardiesTab employeeId={employee.id} range={dateRange} /></TabsContent>
+            <TabsContent value="tardies">
+              {clocksIn
+                ? <TardiesTab employeeId={employee.id} range={dateRange} />
+                : <EmptyState text="Not on the time clock. Tardies do not apply to this team member." />}
+            </TabsContent>
             <TabsContent value="callouts"><CalloutsTab employeeId={employee.id} range={dateRange} /></TabsContent>
           </Tabs>
           <div className="mt-3 flex flex-wrap justify-end gap-2">

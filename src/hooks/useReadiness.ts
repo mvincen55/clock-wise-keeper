@@ -15,6 +15,7 @@ import { useWorkedHourAdjustments } from '@/hooks/useWorkedHourAdjustments';
 import { useManagerFollowups } from '@/hooks/useManagerFollowups';
 import { deriveReadiness, queryStatus, type ReadinessResult, type SourceStatus } from '@/lib/attention';
 import { easternWallMinutes, getToday } from '@/lib/time-utils';
+import { nonClockingEmployeeIds } from '@/lib/clocking';
 
 /**
  * Payroll readiness for one period, from the period's records (design
@@ -70,6 +71,7 @@ export function useReadiness(period: { start: string; end: string } | null): Rea
       weekStartDay: payroll.data?.week_start_day ?? 1,
       employees: (employees.data ?? []).map(e => ({ id: e.id, user_id: e.user_id ?? null, display_name: e.display_name })),
       ownerUserIds: owners.data ?? new Set<string>(),
+      nonClockingEmployeeIds: nonClockingEmployeeIds(employees.data ?? [], owners.data ?? new Set<string>()),
       dayStatuses: dayStatuses.data ?? [],
       entries: entries.data ?? [],
       daysOff: daysOff.data ?? [],
