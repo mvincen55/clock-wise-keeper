@@ -2653,22 +2653,42 @@
   --letter-muted: #6b6577;
   --letter-line: #d5cfe0;
   --letter-tint: #f3f0f8;
+  /* One sheet's height, a hair under the 10in printable height: fractional
+     layout rounding on an exactly-full sheet can throw the keep-together
+     footer onto a blank second page. The slack is invisible on paper. */
+  --letter-page-min: 9.95in;
+  /* Vertical inset of the on-screen sheet (zeroed in print, where the
+     @page margin does the job). .letter-page subtracts it so the sheet
+     stays exactly --letter-page-min tall in both media. */
+  --letter-pad-y: 0.4in;
   page: letterdoc;
   width: 7.5in;
-  /* A hair under the 10in printable height: fractional layout rounding on
-     an exactly-full sheet can throw the keep-together footer onto a blank
-     second page. The slack is invisible on paper. */
-  min-height: 9.95in;
-  display: flex;
-  flex-direction: column;
+  min-height: var(--letter-page-min);
+  /* Own formatting context: a first child's top margin (the standalone
+     OFFICE COPY sheet) must stay inside the sheet, not shift the whole
+     one-page box down and onto a second page. */
+  display: flow-root;
   background: white;
   color: var(--letter-ink);
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 10.5pt;
   line-height: 1.5;
-  padding: 0.4in 0.55in;
+  padding: var(--letter-pad-y) 0.55in;
   print-color-adjust: exact;
   -webkit-print-color-adjust: exact;
+}
+
+/* The letter proper — masthead through the identity footer — as its own
+   flex column at least one sheet tall. This is what pins the footer to the
+   page bottom (flex margin-top auto on .letter-foot): attachment pages
+   (Rung 4's appointment list, the OFFICE COPY) render AFTER this box, so
+   their height can never eat the free space the footer needs. A letter
+   longer than one page simply grows past the minimum and the footer
+   follows its last page. */
+.letter-page {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(var(--letter-page-min) - 2 * var(--letter-pad-y));
 }
 
 /* Masthead: the office's configured logo only — identity text lives in the
@@ -2787,8 +2807,9 @@
 }
 
 /* Practice identity footer — the ONE place the office name/address/phone/
-   website print, fed from org_branding. Pinned to the sheet bottom on a
-   one-page letter (flex margin-top auto); follows the content on the last
+   website print, fed from org_branding. Pinned to the bottom of
+   .letter-page on a one-page letter (flex margin-top auto) — whatever
+   attachment pages follow the letter — and follows the content on the last
    page of a longer one. The preceding blocks carry explicit bottom margins
    (flex items never collapse margins), so content can never touch the rule. */
 .letter-foot {
@@ -3035,6 +3056,7 @@
   .letter-print-root .letter-sheet {
     width: 100%;
     padding: 0;
+    --letter-pad-y: 0in; /* keeps .letter-page a full --letter-page-min */
   }
 
   /* The letter's appointment table draws its own rules — exempt it from

@@ -196,5 +196,10 @@ describe('BaLetterSheet — the five shipped letters', () => {
     const letterAt = html.indexOf('letter-closing');
     const officeAt = html.indexOf('OFFICE COPY');
     expect(officeAt).toBeGreaterThan(letterAt);
+    // The office copy sits outside the letter's page box, so the identity
+    // footer stays pinned to the bottom of the letter's page.
+    expect(html).toMatch(
+      /<footer class="letter-foot">[\s\S]*?<\/footer><\/div><div class="ba-office-sheet ba-office-sheet--break">OFFICE COPY<\/div><\/div>$/,
+    );
   });
 });

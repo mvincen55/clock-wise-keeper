@@ -7,11 +7,15 @@
  *   - one-page letters keep a safety margin from the page boundary,
  *   - the practice-identity footer renders exactly once, below the content
  *     (never overlapped), on every variant,
+ *   - the footer closes the letter's page box (.letter-page) and, on a
+ *     one-page letter, sits at the very bottom of the sheet — including
+ *     when attachment pages follow the letter in the same print job,
  *   - no variant carries an unresolved {{merge_field}}.
  *
  * Variants: generic one-page letter, long-but-one-page letter, multi-page
  * letter, school note, work note, with/without Address Line 2,
- * with/without a signature image, long office name/footer.
+ * with/without a signature image, long office name/footer, one-page
+ * letter followed by an attachment page.
  *
  * Run:  npx vite-node scripts/letter-print-check.tsx
  * Uses the same Chromium/Playwright setup as print-layout-check.mjs.
@@ -201,6 +205,24 @@ const VARIANTS: Variant[] = [
       body: <LetterBodyContent markup={SHORT_BODY} />,
     }),
   },
+  // An attachment page after a one-page letter must not pull the footer up
+  // off the bottom of page 1 (the Broken Appointments OFFICE COPY case).
+  {
+    name: 'with-attachment',
+    branding: BRANDING,
+    expectedPages: 2,
+    sheet: letter(BRANDING, {
+      recipient: RECIPIENT,
+      salutation: 'Dear Ann Example,',
+      body: <LetterBodyContent markup={SHORT_BODY} />,
+      attachment: (
+        <div className="letter-attach-page">
+          <div className="letter-attach-title">Attached Appointment List</div>
+          <div className="letter-attach-sub">Ann Example · Prepared August 7, 2026</div>
+        </div>
+      ),
+    }),
+  },
 ];
 
 for (const v of VARIANTS) {
@@ -233,6 +255,7 @@ function pdfPageCount(buf: Buffer): number {
 
 const PAGE_PX = 960; // 10in printable height at 96dpi
 const NATURAL_MAX_PX = 945; // slack for cross-machine font metrics
+const SHEET_MIN_PX = 9.95 * 96; // .letter-sheet / .letter-page minimum (--letter-page-min)
 
 const chromium = await loadChromium();
 const browser = await chromium.launch({
@@ -247,14 +270,21 @@ for (const v of VARIANTS) {
   await page.emulateMedia({ media: 'print' });
   const info = await page.evaluate(() => {
     const sheet = document.querySelector('.letter-sheet') as HTMLElement | null;
+    const letterPage = document.querySelector('.letter-page') as HTMLElement | null;
     const feet = [...document.querySelectorAll('.letter-foot')];
     const foot = feet[0] as HTMLElement | undefined;
+    const attach = document.querySelector('.letter-attach-page') as HTMLElement | null;
     let natural = 0;
-    if (sheet) {
-      const prev = sheet.style.minHeight;
+    if (sheet && letterPage) {
+      // Both boxes hold the sheet at one page tall; release both to read
+      // how much of the page the content itself needs.
+      const prevSheet = sheet.style.minHeight;
+      const prevPage = letterPage.style.minHeight;
       sheet.style.minHeight = '0';
-      natural = sheet.getBoundingClientRect().height;
-      sheet.style.minHeight = prev;
+      letterPage.style.minHeight = '0';
+      natural = letterPage.getBoundingClientRect().height;
+      sheet.style.minHeight = prevSheet;
+      letterPage.style.minHeight = prevPage;
     }
     // The footer must sit below every piece of letter content.
     let contentBottom = 0;
@@ -265,9 +295,13 @@ for (const v of VARIANTS) {
     }
     return {
       text: sheet?.textContent ?? '',
+      hasPage: !!letterPage,
       footCount: feet.length,
       footTop: foot ? foot.getBoundingClientRect().top : -1,
+      footBottom: foot ? foot.getBoundingClientRect().bottom : -1,
       footText: foot?.textContent ?? '',
+      pageBottom: letterPage ? letterPage.getBoundingClientRect().bottom : -1,
+      attachTop: attach ? attach.getBoundingClientRect().top : null,
       contentBottom,
       natural: Math.round(natural * 100) / 100,
     };
@@ -285,6 +319,20 @@ for (const v of VARIANTS) {
     problems.push(
       `letter content overlaps the footer (content bottom ${info.contentBottom}px > footer top ${info.footTop}px)`,
     );
+  if (!info.hasPage) problems.push('letter is missing its .letter-page box');
+  // The footer closes the page box, and that box is never shorter than a
+  // sheet — so on a one-page letter the footer sits at the bottom of the
+  // page whatever follows it.
+  if (Math.abs(info.pageBottom - info.footBottom) > 0.5)
+    problems.push(
+      `footer does not close the letter page (footer bottom ${info.footBottom}px, page bottom ${info.pageBottom}px)`,
+    );
+  if (info.footBottom < SHEET_MIN_PX - 0.5)
+    problems.push(
+      `footer is not pinned to the page bottom (footer bottom ${info.footBottom}px < ${SHEET_MIN_PX}px)`,
+    );
+  if (info.attachTop !== null && info.attachTop < info.footBottom - 0.5)
+    problems.push(`attachment starts above the footer (${info.attachTop}px < ${info.footBottom}px)`);
   if (v.expectedPages === 1 && info.natural > NATURAL_MAX_PX)
     problems.push(`one-page letter too close to the boundary: natural ${info.natural}px > ${NATURAL_MAX_PX}px`);
   if (v.expectedPages === 1 && info.natural > PAGE_PX)

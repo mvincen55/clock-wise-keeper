@@ -142,6 +142,22 @@ describe('OfficeLetterheadSheet — canonical structure', () => {
     expect(html).toContain(long.addressLine2);
   });
 
+  it('attachment pages follow the letter page — the footer stays inside .letter-page', () => {
+    const html = renderSheet({ attachment: <div className="letter-attach-page">Attached list</div> });
+    // Masthead through footer live in the one-page-tall box that pins the
+    // footer to the page bottom; the attachment renders after that box,
+    // never inside it (inside, its height would push the footer up).
+    expect(html).toMatch(
+      /^<div class="letter-sheet"><div class="letter-page"><header class="letter-masthead">[\s\S]*<footer class="letter-foot">[\s\S]*?<\/footer><\/div><div class="letter-attach-page">Attached list<\/div><\/div>$/,
+    );
+  });
+
+  it('with no attachment the footer closes the letter page', () => {
+    const html = renderSheet();
+    expect(html).toMatch(/<\/footer><\/div><\/div>$/);
+    expect(html).not.toContain('letter-attach-page');
+  });
+
   it('sheet DOM is independent of branding except the logo src', () => {
     const a = renderSheet();
     const b = renderSheet({ branding: { ...BRANDING, logoUrl: 'https://cdn.example/other.png' } });
