@@ -386,12 +386,6 @@ export interface ScheduleAnalysis {
   dayStartMinutes?: number;
   /** Set when any provider is below the confidence threshold. */
   needsReview: boolean;
-  /**
-   * True when the layout has notes columns beside the chairs: the office logs
-   * each cancellation ("CX >>") and no-show ("NS") there, so the counts are
-   * read, and zero means none was logged.
-   */
-  eventsFromNotes?: boolean;
 }
 
 // ---------------------------------------------------------------------------

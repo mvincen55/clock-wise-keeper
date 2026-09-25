@@ -21,8 +21,10 @@ import {
   processScheduleFrame,
   buildProviderMetrics,
   ScheduleReaderError,
+  CONFIDENCE_THRESHOLD,
   type BlockCode,
   type CaptureFrame,
+  type ClassifiedBlock,
   type ScheduleAnalysis,
 } from '@/lib/schedule-reader';
 import { describeViolations } from '@/lib/privacy-violations';
@@ -73,6 +75,25 @@ const BLOCK_LABELS: Record<BlockCode, string> = {
   OTHER_OPERATIONAL_BLOCK: 'Other operational block',
   UNCLASSIFIED: 'Unclassified',
 };
+
+/** Notes that say the provider is not here, however the office wrote it. A team member out mid-day closes a chair, not the provider. */
+const AWAY_CODES: readonly BlockCode[] = ['PROVIDER_OFF', 'PROVIDER_OUT_EARLY', 'PROVIDER_STARTS_LATE'];
+
+/**
+ * A provider's blocked time as the office reads it off the grid: the time
+ * the provider was not here, meeting time, and the other blocks (lunch,
+ * holds), from the confident or confirmed notes in that provider's chairs.
+ * The grid's own closed time is not a note and is listed separately.
+ */
+function blockedTime(blocks: ClassifiedBlock[], providerLabel: string): { notHere: number; meeting: number; other: number } {
+  const notes = blocks.filter(b => b.providerLabel === providerLabel && b.source !== 'grid' && b.code !== 'UNCLASSIFIED' && (b.userConfirmed || b.confidence >= CONFIDENCE_THRESHOLD));
+  const minutes = (pick: (b: ClassifiedBlock) => boolean) => notes.filter(pick).reduce((sum, b) => sum + b.minutes, 0);
+  return {
+    notHere: minutes(b => AWAY_CODES.includes(b.code)),
+    meeting: minutes(b => b.code === 'MEETING_BLOCK'),
+    other: minutes(b => !AWAY_CODES.includes(b.code) && b.code !== 'MEETING_BLOCK'),
+  };
+}
 
 function fmtMin(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -130,10 +151,10 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
 
   const profileRow = profiles?.find(p => p.is_default) ?? profiles?.[0];
   const visibleStatuses = profileRow ? toLayoutProfile(profileRow)?.statusLegend ?? [] : [];
+  // Cancellations and no-shows are read only from a legend that paints them.
+  // A posted view has none: the team enters them in Step 2, and the reading
+  // never counts them from the notes beside a chair.
   const eventHistoryVisible = visibleStatuses.some(s => s.status === 'cancelled') && visibleStatuses.some(s => s.status === 'no_show');
-  // Cancellations and no-shows are known from a status legend, or from the
-  // notes columns beside the chairs where the office logs each one.
-  const eventsKnown = eventHistoryVisible || !!analysis?.eventsFromNotes;
 
   // Whatever happens — navigation, unmount, cancel — the frame dies.
   useEffect(() => {
@@ -271,10 +292,10 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
         providers,
         blocks: analysis.blocks,
         captureConfidence: analysis.layoutConfidence,
-        needsReview: !eventsKnown || providers.some(p => p.unclassifiedMinutes > 0) || !!analysis.availabilityConflicts?.length || analysis.blocks.some(b => b.code === 'UNCLASSIFIED' && !b.userConfirmed),
+        needsReview: providers.some(p => p.unclassifiedMinutes > 0) || !!analysis.availabilityConflicts?.length || analysis.blocks.some(b => b.code === 'UNCLASSIFIED' && !b.userConfirmed),
       });
       const r = analysis.rollup.byDepartment;
-      if (eventsKnown) onVitalsFromSchedule?.({
+      if (eventHistoryVisible) onVitalsFromSchedule?.({
         hygieneCancellations: r.hygiene.cancellationCount,
         hygieneNoShows: r.hygiene.noShowCount,
         doctorCancellations: r.doctor.cancellationCount,
@@ -474,45 +495,47 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
               )}
             </div>
 
-            {!eventsKnown && <p className="text-sm text-muted-foreground">This posted view does not distinguish cancellations and no-shows. Those counts remain for manual review, and your Practice Vitals answers will not be overwritten.</p>}
-            {!eventHistoryVisible && analysis.eventsFromNotes && <p className="text-sm text-muted-foreground">Cancellations and no-shows were read from the notes columns beside each chair (CX, NS), so a zero means none was logged there.</p>}
+            {!eventHistoryVisible && <p className="text-sm text-muted-foreground">Cancellations and no-shows are not read from the schedule; enter them in Step 2. This reading is each provider's open time, the time the provider was not here, meeting time, and other blocked time.</p>}
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
                     <th className="py-1.5 pr-2 font-medium">Provider</th>
                     <th className="py-1.5 pr-2 font-medium">Dept</th>
-                    <th className="py-1.5 pr-2 font-medium">Bookable</th>
-                    <th className="py-1.5 pr-2 font-medium">Appointment time</th>
-                    <th className="py-1.5 pr-2 font-medium">True open</th>
-                    <th className="py-1.5 pr-2 font-medium">Cancels</th>
-                    <th className="py-1.5 pr-2 font-medium">No-shows</th>
+                    <th className="py-1.5 pr-2 font-medium">Booked</th>
+                    <th className="py-1.5 pr-2 font-medium">Open</th>
+                    <th className="py-1.5 pr-2 font-medium">Not here</th>
+                    <th className="py-1.5 pr-2 font-medium">Meeting</th>
+                    <th className="py-1.5 pr-2 font-medium">Other blocked</th>
+                    {eventHistoryVisible && <th className="py-1.5 pr-2 font-medium">Cancels</th>}
+                    {eventHistoryVisible && <th className="py-1.5 pr-2 font-medium">No-shows</th>}
                     <th className="py-1.5 pr-2 font-medium">Unclassified</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {analysis.providers.map(p => (
-                    <tr key={p.providerLabel} className="border-b last:border-0">
-                      <td className="py-1.5 pr-2 font-medium">{p.providerLabel}</td>
-                      <td className="py-1.5 pr-2">{p.department}</td>
-                      <td className="py-1.5 pr-2">{fmtMin(p.netBookableMinutes)}</td>
-                      <td className="py-1.5 pr-2">{fmtMin(p.scheduledMinutes)}</td>
-                      <td className="py-1.5 pr-2">{fmtMin(p.trueOpenMinutes)}</td>
-                      <td className="py-1.5 pr-2">
-                        {eventsKnown ? `${p.cancellationCount} (${fmtMin(p.cancellationOpenMinutes)})` : 'Not distinguishable'}
-                      </td>
-                      <td className="py-1.5 pr-2">
-                        {eventsKnown ? `${p.noShowCount} (${fmtMin(p.noShowOpenMinutes)})` : 'Not distinguishable'}
-                      </td>
-                      <td className="py-1.5 pr-2">
-                        {p.unclassifiedMinutes > 0 ? (
-                          <span className="text-warning">{fmtMin(p.unclassifiedMinutes)}</span>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {analysis.providers.map(p => {
+                    const time = blockedTime(analysis.blocks, p.providerLabel);
+                    return (
+                      <tr key={p.providerLabel} className="border-b last:border-0">
+                        <td className="py-1.5 pr-2 font-medium">{p.providerLabel}</td>
+                        <td className="py-1.5 pr-2">{p.department}</td>
+                        <td className="py-1.5 pr-2">{fmtMin(p.scheduledMinutes)}</td>
+                        <td className="py-1.5 pr-2">{fmtMin(p.trueOpenMinutes)}</td>
+                        <td className="py-1.5 pr-2">{fmtMin(time.notHere)}</td>
+                        <td className="py-1.5 pr-2">{fmtMin(time.meeting)}</td>
+                        <td className="py-1.5 pr-2">{fmtMin(time.other)}</td>
+                        {eventHistoryVisible && <td className="py-1.5 pr-2">{`${p.cancellationCount} (${fmtMin(p.cancellationOpenMinutes)})`}</td>}
+                        {eventHistoryVisible && <td className="py-1.5 pr-2">{`${p.noShowCount} (${fmtMin(p.noShowOpenMinutes)})`}</td>}
+                        <td className="py-1.5 pr-2">
+                          {p.unclassifiedMinutes > 0 ? (
+                            <span className="text-warning">{fmtMin(p.unclassifiedMinutes)}</span>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -574,7 +597,7 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
               <p>Schedule metrics saved for {date}.</p>
               <p className="text-xs text-muted-foreground">
                 The captured image was destroyed after processing — it was never saved or
-                uploaded. {eventsKnown ? 'Practice Vitals were prefilled from the confirmed numbers; correct them in Step 2 if the schedule missed something.' : 'Practice Vitals were preserved. Review cancellation and no-show counts in Step 2 because this posted view does not distinguish them.'}
+                uploaded. {eventHistoryVisible ? 'Practice Vitals were prefilled from the confirmed numbers; correct them in Step 2 if the schedule missed something.' : 'Cancellations and no-shows are entered in Step 2; the schedule reading does not count them.'}
               </p>
             </div>
           </div>

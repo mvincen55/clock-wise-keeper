@@ -24,7 +24,6 @@ import { applyProviderHours, applyProviderWideBlocks, type PlacedBlock, refinePr
 import { postedColumnStatuses } from './posted-statuses';
 import { applyCompletedEvidence } from './completed-evidence';
 import { isEmptyBlueGridColumn, openSlotKind } from './appointment-regions';
-import { applySideEvents, inkArrowHint, readSideEvents } from './side-events';
 import { buildKnownNames, checkPrivacy, groupWordsIntoLines } from './privacy-detector';
 import { detectTimeRail, matchLayout, wordsInColumn, type TimeRail } from './layout-detector';
 import { classifyNote } from './note-classifier';
@@ -227,10 +226,10 @@ export async function processScheduleFrame(
     // hours are not applied over it.
     const slotKind = (col: { xStart: number; xEnd: number }, i: number) => postedImage ? openSlotKind(postedImage, col, rows[i].yTop / frame.height, rows[i].yBottom / frame.height) : null;
     const blankGridIsClosed = !!postedImage && (/dentrix/i.test(options.profile.pmsName ?? '') || providerColumns.some(col => rows.some((_, i) => slotKind(col, i) === 'tint')));
-    // The notes columns beside the chairs log each cancellation and no-show.
-    const sideEvents = readSideEvents(words, match.frameColumns, rows, headerBottomPx,
-      inkArrowHint(regions, box => ctx.getImageData?.(box.x0, box.y0, box.x1 - box.x0, box.y1 - box.y0) ?? null), regions);
-    const eventsFromNotes = match.frameColumns.some(c => c.kind === 'non_clinical');
+    // The notes columns beside the chairs are the office's own log (CX, NS,
+    // offered an earlier time) and are not counted: the team enters
+    // cancellations and no-shows themselves. The reading is the chair's
+    // time — booked, open, the provider not here, meetings and other blocks.
 
     // Group columns by provider label (overflow columns share the label).
     const byProvider = new Map<string, typeof providerColumns>();
@@ -245,14 +244,8 @@ export async function processScheduleFrame(
     const availabilityConflicts: string[] = [];
     const providerRows: Record<string, Array<ReturnType<typeof reduceRow>>> = {};
     const providers = [...byProvider.entries()].map(([label, cols]) => {
-      const perColumn = cols.map(col => applySideEvents(
+      const perColumnStatuses = cols.map(col =>
         postedImage ? postedColumnStatuses(postedImage, col, rows, regions, words, options.phraseRules, blankGridIsClosed) : applyCompletedEvidence(sampleColumnStatuses(ctx, col, rows, options.profile.statusLegend), rows, regions, words, col, options.phraseRules),
-        sideEvents, col, rows, regions,
-      ));
-      const perColumnStatuses = perColumn.map(o => o.statuses);
-      const sideTotals = perColumn.reduce(
-        (a, o) => ({ cancellations: a.cancellations + o.counts.cancelled, noShows: a.noShows + o.counts.no_show, recoveredRows: a.recoveredRows + o.recoveredRows }),
-        { cancellations: 0, noShows: 0, recoveredRows: 0 },
       );
       const placed = cols.flatMap((col, c) =>
         classifyColumnNotes(
@@ -307,7 +300,6 @@ export async function processScheduleFrame(
         ocrConfidence,
         layoutConfidence: match.confidence,
         dayStartMinutes: grid.dayStartMinutes,
-        sideEvents: eventsFromNotes ? { cancellations: sideTotals.cancellations, noShows: sideTotals.noShows, recoveredMinutes: sideTotals.recoveredRows * grid.minutesPerRow } : undefined,
       });
       if (availability.conflict) availabilityConflicts.push(label);
       return availability.conflict ? { ...metrics, reviewStatus: 'needs_review' as const } : metrics;
@@ -335,7 +327,6 @@ export async function processScheduleFrame(
       dayStartMinutes: grid.dayStartMinutes,
       needsReview:
         match.needsColumnConfirmation || providers.some(p => p.reviewStatus === 'needs_review'),
-      eventsFromNotes,
     };
   } finally {
     // Raw OCR text dies here on every path. Only structured metrics leave.

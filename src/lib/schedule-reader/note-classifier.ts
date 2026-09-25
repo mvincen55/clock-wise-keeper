@@ -48,6 +48,11 @@ const LEXICON: LexiconEntry[] = [
       /\bpto\b/,
       /\bout of office\b/,
       /\bout today\b/,
+      // "DO NOT BOOK", "DNB": the office closes the chair because the
+      // provider is not here; where it sits in the day says whether they
+      // came late or left early.
+      /\bdo not book\b/,
+      /\bdnb\b/,
     ],
   },
   { code: 'LUNCH_BLOCK', patterns: [/\blunch\b/, /\bmeal break\b/] },
@@ -100,13 +105,20 @@ const LEXICON: LexiconEntry[] = [
   },
   {
     code: 'OTHER_OPERATIONAL_BLOCK',
-    // "NP hold" is a slot held for a new patient; "NP" alone in a chair is the patient, seen.
-    patterns: [/\bblocked\b/, /\bblock\b/, /\bhold\b/, /\bbuffer\b/, /\bdo not book\b/, /\bdnb\b/, /\b(?:np|new (?:pt|patient)) (?:hold|block|slot|reserv\w*)\b/],
+    // "NP hold" is a slot held for a new patient; "NP" alone in a chair is the patient, booked time.
+    patterns: [/\bblocked\b/, /\bblock\b/, /\bhold\b/, /\bbuffer\b/, /\b(?:np|new (?:pt|patient)) (?:hold|block|slot|reserv\w*)\b/],
   },
 ];
 
 /** Ordered so specific codes win over the OTHER_OPERATIONAL_BLOCK catch-all. */
 const ORDERED = LEXICON;
+
+/**
+ * Ways of saying someone is away, most specific first: the provider's own
+ * early or late, then a named team member out (which closes that chair),
+ * then the chair closed without a name ("do not book").
+ */
+const AWAY_PRIORITY: readonly BlockCode[] = ['PROVIDER_OUT_EARLY', 'PROVIDER_STARTS_LATE', 'STAFFING_LIMITATION', 'PROVIDER_OFF'];
 
 export interface NoteClassification {
   code: BlockCode;
@@ -174,5 +186,9 @@ export function classifyNote(note: string, officeRules: PhraseRule[] = []): Note
 
   const codes = new Set(specific.map(m => m.code));
   if (codes.size === 1) return { code: specific[0].code, confidence: 0.9 };
+  // Two ways of saying someone is away ("DO NOT BOOK - LUCY OUT", "Dr out
+  // early - JB out") still close the chair: the most specific away code wins.
+  const away = AWAY_PRIORITY.find(code => codes.has(code));
+  if (away && [...codes].every(code => AWAY_PRIORITY.includes(code))) return { code: away, confidence: 0.85 };
   return { code: 'UNCLASSIFIED', confidence: 0 };
 }

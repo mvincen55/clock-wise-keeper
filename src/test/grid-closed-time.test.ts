@@ -82,10 +82,13 @@ describe('a grid that paints its open slots', () => {
     expect(result.blocks.find(b => b.code === 'LUNCH_BLOCK')?.minutes).toBe(10);
   });
 
-  it('an "NP" box in the chair is the patient, seen', async () => {
+  it('an "NP" box in the chair is booked time and nothing else', async () => {
     const result = await analyze(PALE, column(), 'NP');
-    expect(result.providers[0].scheduledMinutes).toBe(40);
+    const p = result.providers[0];
+    expect(p.scheduledMinutes).toBe(40);
     expect(result.blocks.some(b => b.code === 'OTHER_OPERATIONAL_BLOCK')).toBe(false);
+    expect(p.cancellationCount).toBe(0);
+    expect(p.recoveredMinutes).toBeNull();
   });
 
   it('a provider away at the end of the day left early; at the start, came late', async () => {
@@ -99,24 +102,27 @@ describe('a grid that paints its open slots', () => {
       profile: profile(column()), businessDate: '2026-09-21', knownStaffNames: [doctor.displayName], phraseRules: [], providers: [doctor], reviewColumns: async () => [column()],
     });
     expect(early.blocks.find(b => b.minutes === 20)?.code).toBe('PROVIDER_STARTS_LATE');
+    // "Do not book" on its own closes the chair the same way: at the end of the day, left early.
+    const dnb = await analyze(PALE, column(), 'Do NOT Book');
+    expect(dnb.blocks.find(b => b.minutes === 10)?.code).toBe('PROVIDER_OUT_EARLY');
   });
 
-  it('reads the side column\'s "CX >>" as a cancellation whose open time follows in the chair', async () => {
+  it('does not count the "CX" and "NS" bars in the notes column: open time is open time, and the team enters the events', async () => {
     const notes: LayoutColumn = { xStart: 1 / 3, xEnd: 2 / 3, kind: 'non_clinical', providerLabel: null, providerRole: null, department: null, employeeId: null };
-    // The bar sits at row 5 in the notes column, pointing left at the chair's two open rows.
+    // A bar at row 5 in the notes column, pointing left at the chair's two open rows.
     const result = await analyze(PALE, column(), 'Lunch', [say('<--', 142, 71), say('CX', 160, 71)], [column(), notes]);
     const p = result.providers[0];
-    expect(result.eventsFromNotes).toBe(true);
-    expect(p.cancellationCount).toBe(1);
-    expect(p.cancellationOpenMinutes).toBe(20);
+    expect(p.cancellationCount).toBe(0);
+    expect(p.cancellationOpenMinutes).toBe(0);
+    expect(p.otherOpenMinutes).toBe(20);
     expect(p.trueOpenMinutes).toBe(20);
-    expect(p.recoveredMinutes).toBe(0);
-    // Pointed at the visit instead, the slot was refilled: counted, recovered, no open time.
-    const refilled = await analyze(PALE, column(), 'Lunch', [say('<--', 142, 51), say('NS', 160, 51)], [column(), notes]);
-    expect(refilled.providers[0].noShowCount).toBe(1);
-    expect(refilled.providers[0].noShowOpenMinutes).toBe(0);
-    expect(refilled.providers[0].recoveredMinutes).toBe(30);
-    expect(refilled.providers[0].recoveredOpenPct).toBe(1);
+    expect(p.recoveredMinutes).toBeNull();
+    // Pointed at the visit instead: the visit is booked time, nothing is refilled or recovered.
+    const beside = await analyze(PALE, column(), 'Lunch', [say('<--', 142, 51), say('NS', 160, 51)], [column(), notes]);
+    expect(beside.providers[0].noShowCount).toBe(0);
+    expect(beside.providers[0].scheduledMinutes).toBe(30);
+    expect(beside.providers[0].recoveredMinutes).toBeNull();
+    expect(beside.providers[0].recoveredOpenPct).toBeNull();
   });
 
   it('on a Dentrix grid, blue is not patient time even on a day with no open slot to show it', async () => {
