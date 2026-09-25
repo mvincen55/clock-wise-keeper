@@ -23,7 +23,7 @@ import type { LayoutColumn } from './types';
 import { applyProviderHours, applyProviderWideBlocks, type PlacedBlock } from './provider-hours';
 import { postedColumnStatuses } from './posted-statuses';
 import { applyCompletedEvidence } from './completed-evidence';
-import { isEmptyBlueGridColumn } from './appointment-regions';
+import { isEmptyBlueGridColumn, openSlotKind } from './appointment-regions';
 import { buildKnownNames, checkPrivacy, groupWordsIntoLines } from './privacy-detector';
 import { detectTimeRail, matchLayout, wordsInColumn, type TimeRail } from './layout-detector';
 import { classifyNote } from './note-classifier';
@@ -40,7 +40,8 @@ import {
   type CaptureFrame,
   type ClassifiedBlock,
   type LayoutProfile,
-  type OcrWord,
+  type OcrBox,
+  OcrWord,
   type PhraseRule,
   type ScheduleAnalysis,
 } from './types';
@@ -104,7 +105,8 @@ function classifyColumnNotes(
   minutesPerRow: number,
   phraseRules: PhraseRule[],
   providerLabel: string | null,
-  department: ClassifiedBlock['department']
+  department: ClassifiedBlock['department'],
+  regions: OcrBox[] = []
 ): PlacedBlock[] {
   const blocks: PlacedBlock[] = [];
   const lines = groupWordsIntoLines(colWords);
@@ -116,19 +118,31 @@ function classifyColumnNotes(
     const finalConfidence = ruleHit.code !== 'UNCLASSIFIED' ? ruleHit.confidence : confidence;
     if (finalCode === 'UNCLASSIFIED') continue;
 
-    // Attribute the note to the blocked run containing its midpoint; the run's
-    // span is the block's minutes. A note outside any blocked run covers at
-    // least one row.
+    // A note printed in its own box is as long as the box: the rows the box
+    // covers by more than half. A note outside any box is attributed to the
+    // blocked run containing its midpoint, and covers at least one row.
     const midY =
       line.words.length === 0
         ? 0
         : line.words.reduce((s, w) => s + (w.bbox.y0 + w.bbox.y1) / 2, 0) / line.words.length;
+    const midX =
+      line.words.length === 0
+        ? 0
+        : line.words.reduce((s, w) => s + (w.bbox.x0 + w.bbox.x1) / 2, 0) / line.words.length;
     const rowIndex = rows.findIndex(r => midY >= r.yTop && midY < r.yBottom);
+    const box = regions.find(b => midX >= b.x0 && midX < b.x1 && midY >= b.y0 && midY < b.y1);
 
     let minutes = minutesPerRow;
     let rowStart = rowIndex;
     let rowEnd = rowIndex;
-    if (rowIndex >= 0 && rowStatuses[rowIndex] === 'blocked') {
+    const covered = box
+      ? rows.map((r, i) => ({ i, share: (Math.min(r.yBottom, box.y1) - Math.max(r.yTop, box.y0)) / (r.yBottom - r.yTop) })).filter(x => x.share >= 0.5).map(x => x.i)
+      : [];
+    if (covered.length) {
+      rowStart = covered[0];
+      rowEnd = covered[covered.length - 1];
+      minutes = covered.length * minutesPerRow;
+    } else if (rowIndex >= 0 && rowStatuses[rowIndex] === 'blocked') {
       while (rowStart > 0 && rowStatuses[rowStart - 1] === 'blocked') rowStart -= 1;
       while (rowEnd < rowStatuses.length - 1 && rowStatuses[rowEnd + 1] === 'blocked') rowEnd += 1;
       minutes = (rowEnd - rowStart + 1) * minutesPerRow;
@@ -203,6 +217,12 @@ export async function processScheduleFrame(
     const postedImage = options.profile.signature.captureMode === 'posted' ? ctx.getImageData(0, 0, frame.width, frame.height) : null;
     const headerBottomPx = rows[0].yTop;
     const providerColumns = match.frameColumns.filter(c => c.kind !== 'non_clinical');
+    // When the grid paints an unbooked slot inside a provider's hours in a
+    // pale tint, blank blue grid is closed time — before the first patient,
+    // at lunch, after the last — and the grid itself is the office's record
+    // of the day's hours, so saved hours are not applied over it.
+    const slotKind = (col: { xStart: number; xEnd: number }, i: number) => postedImage ? openSlotKind(postedImage, col, rows[i].yTop / frame.height, rows[i].yBottom / frame.height) : null;
+    const blankGridIsClosed = !!postedImage && providerColumns.some(col => rows.some((_, i) => slotKind(col, i) === 'tint'));
 
     // Group columns by provider label (overflow columns share the label).
     const byProvider = new Map<string, typeof providerColumns>();
@@ -218,7 +238,7 @@ export async function processScheduleFrame(
     const providerRows: Record<string, Array<ReturnType<typeof reduceRow>>> = {};
     const providers = [...byProvider.entries()].map(([label, cols]) => {
       const perColumnStatuses = cols.map(col =>
-        postedImage ? postedColumnStatuses(postedImage, col, rows, regions, words, options.phraseRules) : applyCompletedEvidence(sampleColumnStatuses(ctx, col, rows, options.profile.statusLegend), rows, regions, words, col, options.phraseRules)
+        postedImage ? postedColumnStatuses(postedImage, col, rows, regions, words, options.phraseRules, blankGridIsClosed) : applyCompletedEvidence(sampleColumnStatuses(ctx, col, rows, options.profile.statusLegend), rows, regions, words, col, options.phraseRules)
       );
       const placed = cols.flatMap((col, c) =>
         classifyColumnNotes(
@@ -228,7 +248,8 @@ export async function processScheduleFrame(
           grid.minutesPerRow,
           options.phraseRules,
           col.providerLabel,
-          col.department
+          col.department,
+          regions
         )
       );
       const blocks = placed.map(p => p.block);
@@ -236,10 +257,15 @@ export async function processScheduleFrame(
       // Reduce the provider's chairs to one row per slot; a provider-wide
       // block read in any chair (off, lunch, meeting) then covers that span
       // in every chair, and the saved working hours block off-duty time.
-      const availability = applyProviderHours(
-        applyProviderWideBlocks(rows.map((_, i) => reduceRow(perColumnStatuses.map(s => s[i]))), placed),
-        cols[0].workingHours, options.businessDate, grid.dayStartMinutes, grid.minutesPerRow,
-      );
+      const withWideBlocks = applyProviderWideBlocks(rows.map((_, i) => reduceRow(perColumnStatuses.map(s => s[i]))), placed);
+      const availability = blankGridIsClosed
+        ? {
+            rows: withWideBlocks,
+            // Closed on the grid in every chair, with nothing drawn there: the provider's off-duty time as the office set it.
+            offDutyMinutes: withWideBlocks.filter((row, i) => row.category === 'blocked' && cols.every(col => slotKind(col, i) === 'blue')).length * grid.minutesPerRow,
+            conflict: false,
+          }
+        : applyProviderHours(withWideBlocks, cols[0].workingHours, options.businessDate, grid.dayStartMinutes, grid.minutesPerRow);
       const reduced = availability.rows;
       providerRows[label] = reduced;
 
