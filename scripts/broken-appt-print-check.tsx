@@ -15,7 +15,9 @@
  *   - the shared-signature ink variant prints without a phantom page,
  *   - the identity footer sits at the very bottom of the letter's page on
  *     every letter — the OFFICE COPY / attachment pages that follow it in
- *     the same job never pull it up the page,
+ *     the same job never pull it up the page — and still does when the tab
+ *     prints at 67% browser zoom (the page area is then 1/0.67 as many
+ *     CSS px tall, which the vh-based page box must track),
  *   - no letter carries an unresolved {{merge_field}}.
  *
  * Run:  npx vite-node scripts/broken-appt-print-check.tsx
@@ -312,13 +314,59 @@ function pdfPageCount(buf: Buffer): number {
   return m ? Number(m[1]) : (s.match(/\/Type\s*\/Page[^s]/g) || []).length;
 }
 
-const SHEET_MIN_PX = 9.95 * 96; // .letter-page minimum height (--letter-page-min) at 96dpi
+// 720×960px viewport = the 7.5in×10in printable area at 96dpi, so 100vh in
+// print emulation is the page area exactly as it is in a real print run.
+const PAGE_AREA = { width: 720, height: 960 };
+// The same page area as Chrome lays it out when the tab is zoomed to 67%:
+// every CSS px covers less paper, so the area holds 1/0.67 as many of them.
+const ZOOM = 0.67;
+const ZOOMED_PAGE_AREA = {
+  width: Math.round(PAGE_AREA.width / ZOOM),
+  height: Math.round(PAGE_AREA.height / ZOOM),
+};
+// .letter-page minimum height: 99.5vh of the page area (--letter-page-min).
+const pageMinPx = (areaHeight: number) => 0.995 * areaHeight;
 
 const chromium = await loadChromium();
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium',
 });
-const page = await browser.newPage({ viewport: { width: 720, height: 1200 } });
+const page = await browser.newPage({ viewport: PAGE_AREA });
+
+/** Where the letter's page box, its footer, and whatever follows them sit. */
+const measureLetter = () =>
+  page.evaluate(() => {
+    const letterPage = document.querySelector('.letter-page');
+    const foot = document.querySelector('.letter-foot');
+    const after = document.querySelector('.letter-attach-page, .ba-office-sheet--break');
+    return {
+      hasLetter: !!letterPage,
+      pageBottom: letterPage ? letterPage.getBoundingClientRect().bottom : -1,
+      footBottom: foot ? foot.getBoundingClientRect().bottom : -1,
+      afterTop: after ? after.getBoundingClientRect().top : null,
+    };
+  });
+
+/** The footer must close the page box, the box must fill the page area. */
+function footerProblems(
+  m: Awaited<ReturnType<typeof measureLetter>>,
+  areaHeight: number,
+  label: string
+): string[] {
+  const out: string[] = [];
+  if (!m.hasLetter) return out;
+  if (Math.abs(m.pageBottom - m.footBottom) > 0.5)
+    out.push(
+      `${label}: footer does not close the letter page (footer bottom ${m.footBottom}px, page bottom ${m.pageBottom}px)`
+    );
+  if (m.footBottom < pageMinPx(areaHeight) - 0.5)
+    out.push(
+      `${label}: footer is not pinned to the page bottom (footer bottom ${m.footBottom}px < ${pageMinPx(areaHeight)}px)`
+    );
+  if (m.afterTop !== null && m.afterTop < m.footBottom - 0.5)
+    out.push(`${label}: attachment/office copy starts above the footer (${m.afterTop}px < ${m.footBottom}px)`);
+  return out;
+}
 
 let failures = 0;
 for (const v of VARIANTS) {
@@ -326,21 +374,27 @@ for (const v of VARIANTS) {
   await page.emulateMedia({ media: 'print' });
   const info = await page.evaluate(() => {
     const letter = document.querySelector('.letter-sheet');
-    const letterPage = document.querySelector('.letter-page');
-    const foot = document.querySelector('.letter-foot');
-    const after = document.querySelector('.letter-attach-page, .ba-office-sheet--break');
     return {
       text: letter?.textContent ?? '',
       hasAttachment: !!document.querySelector('.letter-attach-page'),
       hasInlineNote: (letter?.textContent ?? '').includes('A full appointment list is attached'),
-      hasLetter: !!letterPage,
-      pageBottom: letterPage ? letterPage.getBoundingClientRect().bottom : -1,
-      footBottom: foot ? foot.getBoundingClientRect().bottom : -1,
-      afterTop: after ? after.getBoundingClientRect().top : null,
     };
   });
+  const letterAt100 = await measureLetter();
   const pdf = await page.pdf({ format: 'Letter', printBackground: true, preferCSSPageSize: true });
   const pages = pdfPageCount(pdf);
+
+  // The same job printed from a tab at 67% zoom.
+  await page.setViewportSize(ZOOMED_PAGE_AREA);
+  const letterAtZoom = await measureLetter();
+  const pdfAtZoom = await page.pdf({
+    format: 'Letter',
+    printBackground: true,
+    preferCSSPageSize: true,
+    scale: ZOOM,
+  });
+  const pagesAtZoom = pdfPageCount(pdfAtZoom);
+  await page.setViewportSize(PAGE_AREA);
 
   const problems: string[] = [];
   if (pages !== v.expectedPages)
@@ -352,23 +406,13 @@ for (const v of VARIANTS) {
   if (v.expectAttachment && !info.hasInlineNote)
     problems.push('letter body missing the "full appointment list is attached" note');
   if (info.text.includes('{{')) problems.push('unresolved merge field in rendered letter');
-  if (info.hasLetter) {
-    // Every shipped letter is one page: its footer must close the page box
-    // and that box must be a full sheet tall, so the footer prints at the
-    // bottom of page 1 whatever pages follow it.
-    if (Math.abs(info.pageBottom - info.footBottom) > 0.5)
-      problems.push(
-        `footer does not close the letter page (footer bottom ${info.footBottom}px, page bottom ${info.pageBottom}px)`
-      );
-    if (info.footBottom < SHEET_MIN_PX - 0.5)
-      problems.push(
-        `footer is not pinned to the page bottom (footer bottom ${info.footBottom}px < ${SHEET_MIN_PX}px)`
-      );
-    if (info.afterTop !== null && info.afterTop < info.footBottom - 0.5)
-      problems.push(
-        `attachment/office copy starts above the footer (${info.afterTop}px < ${info.footBottom}px)`
-      );
-  }
+  // Every shipped letter is one page: its footer must close the page box
+  // and that box must fill the page, so the footer prints at the bottom of
+  // page 1 whatever pages follow it — at 100% and at 67% browser zoom.
+  problems.push(...footerProblems(letterAt100, PAGE_AREA.height, '100%'));
+  problems.push(...footerProblems(letterAtZoom, ZOOMED_PAGE_AREA.height, '67% zoom'));
+  if (pagesAtZoom !== v.expectedPages)
+    problems.push(`67% zoom: expected ${v.expectedPages} PDF page(s), got ${pagesAtZoom}`);
   for (const t of v.expectTexts ?? []) {
     if (!info.text.includes(t)) problems.push(`missing expected text: ${t}`);
   }

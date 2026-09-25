@@ -255,14 +255,15 @@ function pdfPageCount(buf: Buffer): number {
 
 const PAGE_PX = 960; // 10in printable height at 96dpi
 const NATURAL_MAX_PX = 945; // slack for cross-machine font metrics
-const SHEET_MIN_PX = 9.95 * 96; // .letter-sheet / .letter-page minimum (--letter-page-min)
+const SHEET_MIN_PX = 9.95 * 96; // .letter-page minimum: 99.5vh of the 960px page area (--letter-page-min)
 
 const chromium = await loadChromium();
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium',
 });
-// 720px viewport = the 7.5in printable width at 96dpi.
-const page = await browser.newPage({ viewport: { width: 720, height: 1200 } });
+// 720×960px viewport = the 7.5in×10in printable area at 96dpi, so 100vh in
+// print emulation is the page area exactly as it is in a real print run.
+const page = await browser.newPage({ viewport: { width: 720, height: 960 } });
 
 let failures = 0;
 for (const v of VARIANTS) {

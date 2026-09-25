@@ -2655,7 +2655,9 @@
   --letter-tint: #f3f0f8;
   /* One sheet's height, a hair under the 10in printable height: fractional
      layout rounding on an exactly-full sheet can throw the keep-together
-     footer onto a blank second page. The slack is invisible on paper. */
+     footer onto a blank second page. The slack is invisible on paper.
+     (The print override below re-expresses this as 99.5vh so it survives
+     printing at a browser zoom other than 100%.) */
   --letter-page-min: 9.95in;
   /* Vertical inset of the on-screen sheet (zeroed in print, where the
      @page margin does the job). .letter-page subtracts it so the sheet
@@ -3057,6 +3059,12 @@
     width: 100%;
     padding: 0;
     --letter-pad-y: 0in; /* keeps .letter-page a full --letter-page-min */
+    /* The printed page's own height, not a fixed 9.95in: Chrome prints a
+       tab at its zoom level, so at 67% zoom every in/pt unit covers only
+       two-thirds of the paper and a fixed-inch box ends mid-page. 100vh is
+       the printable page area in whatever pixels this print run uses, and
+       the 0.5% slack is the same rounding guard as the 9.95in figure. */
+    --letter-page-min: 99.5vh;
   }
 
   /* The letter's appointment table draws its own rules — exempt it from
