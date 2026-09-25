@@ -10,7 +10,7 @@
  *  - timekeeping and PTO live in a small utility band at the bottom.
  */
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import MemberDashboard from '@/components/dashboard/MemberDashboard';
 import {
@@ -35,12 +35,21 @@ describe('my next move leads', () => {
 });
 
 describe('our office pulse', () => {
-  it('shows real dollar values when visibility is "everyone"', () => {
-    renderView(<MemberDashboard view={hygienistFixture} />);
+  it('shows real dollar values, the shared chart, and the goal meters when visibility is "everyone"', () => {
+    renderView(<MemberDashboard view={hygienistFixture} chartWidth={700} />);
     expect(screen.getByText('Our office pulse')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'This month' }));
     // Actual values from the canonical layer, not vague percentages.
-    expect(screen.getByText('$13,900')).toBeInTheDocument(); // production MTD
-    expect(screen.getByText('$9,000')).toBeInTheDocument(); // collections MTD
+    expect(screen.getByRole('listitem', { name: /^Production, .*\$7,420/ })).toBeInTheDocument();
+    expect(screen.getByRole('listitem', { name: /^Collections, .*\$6,150/ })).toBeInTheDocument();
+    expect(screen.getByTestId('performance-chart-frame').querySelector('svg')).not.toBeNull();
+    expect(screen.getByRole('meter', { name: /Production 5% of the \$160,000 goal/ })).toBeInTheDocument();
+    // No setup action for a member, and no management detail.
+    expect(screen.queryByRole('link', { name: /Set a .* goal/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('What I’m noticing')).not.toBeInTheDocument();
+    expect(screen.queryByText('Missed appointments')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Source' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Report history/ })).not.toBeInTheDocument();
   });
 
   it('states the honest time semantics for financial figures', () => {
@@ -50,12 +59,13 @@ describe('our office pulse', () => {
     ).toBeInTheDocument();
   });
 
-  it('admin-only metrics are omitted cleanly — no teaser, no lock', () => {
-    const { container } = renderView(<MemberDashboard view={memberHiddenFinancialsFixture} />);
-    expect(container.textContent).not.toContain('Production month to date');
-    expect(container.textContent).not.toContain('Collections month to date');
+  it('admin-only metrics are omitted cleanly — no teaser, no lock, no dollar figure anywhere', () => {
+    const { container } = renderView(<MemberDashboard view={memberHiddenFinancialsFixture} chartWidth={700} />);
+    expect(container.textContent).not.toMatch(/Production|Collections|\$/);
+    expect(screen.queryByTestId('performance-chart-frame')).not.toBeInTheDocument();
+    expect(screen.queryByRole('meter', { name: /Production|Collections/ })).not.toBeInTheDocument();
     // The metric whose own setting is 'everyone' remains.
-    expect(screen.getByText('New patients seen month to date')).toBeInTheDocument();
+    expect(screen.getByRole('listitem', { name: /^New patients seen/ })).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/hidden|locked|admins only/i);
   });
 
@@ -71,7 +81,7 @@ describe('role-relevant emphasis', () => {
     expect(screen.getByText('New patients scheduled')).toBeInTheDocument();
     // Mid-morning, today's closeout not in yet: the pipeline shows the week
     // count rather than pretending to know today live.
-    expect(screen.getByText('5 this week')).toBeInTheDocument();
+    expect(screen.getByText('3 this week')).toBeInTheDocument();
   });
 
   it('a hygienist gets hygiene-side disruption, not front-desk emphasis', () => {

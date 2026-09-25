@@ -180,7 +180,7 @@ export function PracticeSettingsCard() {
           </div>
         ) : (
           <>
-            <section className="space-y-5">
+            <section id="office-goals" tabIndex={-1} className="space-y-5 scroll-mt-24 outline-none">
               <div>
                 <p className="flex items-center gap-2 text-sm font-semibold">
                   <Target className="h-4 w-4 text-primary" />

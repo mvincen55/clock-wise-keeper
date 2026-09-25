@@ -997,3 +997,55 @@ window whenever their status changes, and re-reads the recent window once for
 everyone not active today. The selector also ignores attendance, tardy, and
 bypass records of anyone off the active roster, so an archived person never
 becomes an item even before a recompute lands.
+
+### Follow-up — the financial picture comes out of the disclosure (Home, all three roles)
+
+Manager Home stayed a briefing, but §3.3's "pace in one clause with a *Why?*"
+left the month's money behind a `<details>` while Owner Home carried figures and
+small history bars: the two roles were reading the same numbers through two
+compositions, and neither let a person interact with the series or reach a
+supporting record. This pass gives Home one performance block, shared by Owner,
+Manager and (limited by visibility) Team, and keeps everything else in §3.3.
+
+- `src/lib/performance-series.ts` — period presets (this week, this month, last
+  month, last 3 months; 6 and 12 months only when history exists), daily points
+  from `deposit_logs` closeouts or from a loaded report package
+  (`practice_report_imports`, posting date), an explicit precedence rule
+  (closeouts when the period has any, report history otherwise, never a blended
+  total), weekly buckets past 45 days, cumulative running totals over recorded
+  days only, and partial-period comparisons against the same elapsed span of the
+  prior period, judged per recorded day so a span with fewer office days never
+  reads as a drop. A day with no row stays null.
+- `src/lib/goal-progress.ts` — production and collections meters against their
+  own targets through the shared `metricPace`, labeled calendar-day pace; no
+  goal → "No goal set" with the setup anchor
+  (`/management/office/settings#office-goals`); over-goal stays over.
+- `src/lib/home-insights.ts` — at most three observations from fixed rules
+  (missing or stale data first, a goal reached, collections vs the same days
+  last month, behind calendar pace, cancellations and no-shows vs the
+  comparable period, work waiting on the manager), each with the comparison,
+  the period, receipts and one next step; extends `ownerRecommendation`.
+- `src/lib/missed-trend.ts` — cancellations and no-shows with Dentrix postings
+  first, Close the Day counts otherwise, unassigned kept apart.
+- `src/components/dashboard/performance/` — the period row, the strip, the
+  Recharts chart (one dollar axis, bars by day or week, a step line for
+  cumulative, series switches, keyboard readout, a table twin whose rows link
+  to the record), the goal meters, the observations, the missed-appointment
+  trend, and the quick tools (Create FOF, Fee schedules, Close the Day, Report
+  history). `NeedsYou.tsx` holds the Attention rows Owner and Manager share.
+- Destinations now read what Home sends: `/deposit-log?date=` (already did),
+  `/report-history?start=&end=&tab=` (opens the covering package on that tab
+  with its daily rows narrowed to the range), and
+  `/management/missed-appointments?start=&end=` (seeds the range).
+- Departures from §3.3, on purpose: the pace clause and its *Why?* are gone
+  from the status band (the meters and the observations carry the same figures
+  from the same layer); Owner Home's "Month in progress" band and "What I'd
+  look at" box are folded into the strip, the meters and the observations; the
+  masthead is compact so the strip and the chart sit on the first screen. Home
+  still renders no form and takes no consequential action — its only buttons
+  are period, source, series, view, split and table controls
+  (`manager-home.test.tsx` pins that every button is one of them).
+- Team Home keeps the same block limited to metrics whose visibility is
+  "everyone", with no report history, no observations, no missed-appointment
+  trend and no setup actions. Source map and definitions:
+  `docs/home-performance-redesign.md`.

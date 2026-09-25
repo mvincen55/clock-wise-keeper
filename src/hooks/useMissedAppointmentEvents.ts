@@ -11,11 +11,11 @@ const PAGE = 1000;
  * managers can add or remove them. Read in pages so a long history is never
  * cut off at PostgREST's row cap.
  */
-export function useMissedAppointmentEvents() {
+export function useMissedAppointmentEvents(enabled = true) {
   const { data: ctx } = useOrgContext();
   return useQuery({
     queryKey: ['missed-appointments', ctx?.org_id],
-    enabled: !!ctx?.org_id,
+    enabled: !!ctx?.org_id && enabled,
     queryFn: async (): Promise<MissedAppointmentEvent[]> => {
       const rows: MissedAppointmentEvent[] = [];
       for (let from = 0; ; from += PAGE) {

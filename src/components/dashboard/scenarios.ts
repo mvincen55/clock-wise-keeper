@@ -3,7 +3,7 @@ import {
   assistantFixture, frontDeskBackupAssistFixture, frontDeskFixture, hygienistFixture,
   managerClosedFixture, managerFixture, managerFrontDeskFixture, managerNewFixture,
   managerOffPaceFixture, memberClearFixture, memberHiddenFinancialsFixture, memberNewFixture,
-  ownerClosedFixture, ownerFixture, ownerNewFixture,
+  ownerClosedFixture, ownerFixture, ownerIncompleteFixture, ownerNewFixture,
 } from './fixtures';
 
 /**
@@ -37,13 +37,16 @@ const NO_CLINICAL = [
 
 const PULSE_SOURCES: [string, string][] = [
   ['Daily pulse + summary sentence', 'usePracticeVitals (deposit_logs) → owner-pulse.ts, deterministic'],
-  ['Month pace lines', 'metric-pace.ts — each metric vs ONLY its own org-configured goal'],
+  ['Performance strip + chart', 'performance-series.ts over deposit_logs closeouts; report history (practice_report_imports, posting date) as a separate labeled view — never blended'],
+  ['Goal meters', 'goal-progress.ts → metric-pace.ts — each metric vs ONLY its own org-configured goal, calendar-day pace'],
+  ['What I’m noticing', 'home-insights.ts — fixed rules over the same rows, with receipts; extends owner-pulse ownerRecommendation'],
+  ['Cancellations and no-shows', 'missed-trend.ts — Dentrix postings (missed_appointment_events) first, Close the Day counts otherwise; unassigned kept apart'],
   ['New-patient pipeline', 'deposit_logs new_patients_scheduled_count (never goal progress)'],
 ];
 
 const MEMBER_SOURCES: [string, string][] = [
   ['Next move', 'derived from the first open item across my assigned-work hooks'],
-  ['Our office pulse', 'usePracticeVitals → member-pulse.ts, filtered by per-metric visibility'],
+  ['Our office pulse', 'the same performance-series / goal-progress block the owner reads, limited to metrics whose visibility is "everyone"; no report history, no observations'],
   ['For my role', 'member-pulse.ts rolePulseItems — operational role, never permission tier'],
   ['My open work', 'useMyTrainingAssignments, useMyAcknowledgments, useChecklistBypasses'],
   ['Office goal', 'useTeamGoals (shared sprints)'],
@@ -53,6 +56,7 @@ const MEMBER_SOURCES: [string, string][] = [
 
 const MANAGER_SOURCES: [string, string][] = [
   ['The sentence, Needs you, Today, status lines, spotlight', 'home-brief.ts buildHomeBrief — pure, from the sources below'],
+  ...PULSE_SOURCES.slice(1, 5),
   ['Needs you (top three, "n more")', 'useAttentionItems → attention/deriveAttention — consequence order, one navigation action per row'],
   ['Today exceptions + count line', 'useOrgAttendanceSnapshot + staffing.ts (owners excluded; phase-aware)'],
   ['Last closeout line', 'useRecentDepositLogs(14) + closeDayStatus (pure)'],
@@ -97,6 +101,20 @@ export const SCENARIOS: Scenario[] = [
     omitted: [
       ...NO_CLINICAL,
       'Live staffing — the workday is over, so no "on the floor" claim is made and no exceptions are invented.',
+    ],
+  },
+  {
+    slug: 'owner-incomplete',
+    title: 'Owner — incomplete history: closeouts since Feb 16, a report package for Nov–Jan, no goals set',
+    tier: 'Owner',
+    primary: 'Dentist',
+    secondary: 'None',
+    view: ownerIncompleteFixture,
+    sources: ADMIN_SOURCES,
+    omitted: [
+      ...NO_CLINICAL,
+      'A blended production line across closeouts and the report package — the two are separate labeled views.',
+      'A pace verdict — no goal is configured, so the meters say "No goal set" and offer the setup action.',
     ],
   },
   {

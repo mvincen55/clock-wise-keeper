@@ -55,6 +55,11 @@
     --clock-fg: 265 45% 72%;
     --break-bg: 200 80% 45%;
     --break-fg: 0 0% 100%;
+    /* Home performance chart series (validated categorical slots, light surface):
+       1 production / posted charges · 2 collections / receipts · 3 third category. */
+    --pe-chart-1: #6b4f9f;
+    --pe-chart-2: #a66330;
+    --pe-chart-3: #1d78a5;
   }
 
   .dark {
@@ -103,6 +108,10 @@
     --clock-fg: 265 45% 72%;
     --break-bg: 200 80% 45%;
     --break-fg: 0 0% 100%;
+    /* Same slots re-stepped for the dark card surface. */
+    --pe-chart-1: #8f74b8;
+    --pe-chart-2: #c47c36;
+    --pe-chart-3: #3f9fd6;
   }
 }
 

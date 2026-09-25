@@ -364,3 +364,83 @@ or any other edge function).
 - Verification: typecheck clean, production build clean, 1097/1097 tests pass
   (86 files) including new `operational-coverage` and `team-moments-delivery`
   database suites. Production was NOT published.
+
+---
+
+## Pass 6 — Home performance: production and collections with real visual presence
+
+Authenticated Home only (`/`), all three roles. Fixture previews at
+`/design-review/dashboard/<slug>`; **fixture data is fictional** (Sample Family
+Dental, invented names and figures), no session, no queries, refused on
+production hosts. Production was **not** published. Source map, precedence
+rules and definitions: `docs/home-performance-redesign.md`.
+
+### What changed
+
+| Surface | Before | After |
+| --- | --- | --- |
+| Masthead | Oversized greeting, one Management pill | Compact: office · role · date · time on one rule, a small greeting, the office state, and the frequent tools (Create FOF, Fee schedules, Close the Day, Report history) beside it |
+| Owner opening screen | Sentence + five fact tiles, one recommendation box, then a "Month in progress" list with 56px history bars | Sentence with the day's facts inline, one period row, a four-tile strip (production, collections, new patients seen, missed appointments), a Recharts chart beside the two goal meters and "What I'm noticing" |
+| Manager opening screen | Sentence, Needs you, Today, a pace clause behind a *Why?* disclosure | Sentence, then the same performance block the owner reads; Needs you, Today, the last-closeout line, the challenge when noteworthy, Mine and the lane follow |
+| Team member | Three number tiles | The same strip, chart and goal meters limited to metrics whose visibility is "everyone"; no observations, no report history, no missed trend, no setup actions |
+| Goals | One collections gauge on Office → Practice performance; pace verdicts in text | Production and collections meters, each against its own target, with achieved, remaining, percentage, the calendar-day expectation marker, "No goal set" + setup anchor, over-goal preserved |
+| Insights | One recommendation (owner only) | ≤3 observations for owner and manager, each with what changed, the comparison and period, why it deserves a look, receipts (source · calculation · coverage) and one next step |
+| Supporting visual | Two six-month bars | Cancellations and no-shows by week, stacked by kind or split doctor / hygiene / unassigned, Dentrix postings first, Close the Day counts otherwise |
+| Drilldowns | Static links | A day opens `/deposit-log?date=`; report days open `/report-history?start=&end=&tab=daily` (the page now reads these); the trend opens `/management/missed-appointments?start=&end=` (the page now reads these); the table twin links every recorded row |
+
+### Files added
+- `src/lib/performance-series.ts`, `src/lib/report-history.ts`, `src/lib/missed-trend.ts`, `src/lib/goal-progress.ts`, `src/lib/home-insights.ts`, `src/lib/home-performance.ts`
+- `src/hooks/usePracticeReportImports.ts` (the one query Report history and Home share; admins only)
+- `src/components/dashboard/performance/` — `PerformanceSection`, `PerformanceChart`, `PerformanceStrip`, `GoalMeters`, `Noticing`, `MissedTrend`, `QuickTools`, `block.ts`, `chart-theme.ts`
+- `src/components/dashboard/NeedsYou.tsx`, `ChallengeCard.tsx`, `tools.ts`
+- `scripts/design-review-capture.mjs` — the capture script behind the screenshots below
+- Tests: `performance-series`, `missed-trend`, `goal-progress`, `home-insights`, `home-performance`, `performance-chart`, `home-drilldown-destinations`
+
+### Files changed
+- `src/components/dashboard/{Owner,Manager,Member}Dashboard.tsx`, `types.ts`, `useDashboardView.ts`, `kit.tsx` (`CompactMasthead`), `fixtures.ts` (one fictional history drives every surface), `scenarios.ts` (+ `owner-incomplete`)
+- `src/hooks/usePracticeVitals.ts` (exposes the twelve-month day rows, the seal state and the org the rows were read for), `src/hooks/useMissedAppointmentEvents.ts` (`enabled` flag)
+- `src/pages/ReportHistory.tsx`, `src/pages/MissedAppointments.tsx` (query-parameter handling), `src/components/settings/PracticeSettingsCard.tsx` (`#office-goals` anchor)
+- `src/lib/home-brief.ts` (`needsYou` shared), `src/index.css` (validated chart tokens), docs and the tests named below
+
+### Honesty rules the surfaces enforce (each pinned by a test)
+- A day with no closeout is null: not summed, not drawn, "Not recorded" in the tooltip and the table; a closeout with $0 collected is a real zero; the axis baseline reads `0`, never `$0`.
+- Closeouts and report history are separate labeled views with different series names (Production / Collections vs Posted charges / Receipts) and date bases; the precedence rule is explicit; two overlapping packages never double-count a day.
+- Partial periods say so and compare against the same elapsed span of the prior period, per recorded day, only with similar coverage.
+- Pace is calendar-day pace and is labeled as such everywhere; no working-day pace, projection or per-remaining-day figure.
+- An unset goal is "No goal set" with the setup action for owners and managers; missing data is never "behind".
+- Members never receive report history or postings from the builder, whatever the cache holds; hidden metrics are absent, not teased; rows read for another office never render.
+- Home takes no consequential action: every button is a period, source, series, view, split or table control.
+
+### Intentional test changes
+- `owner-home.test.tsx` — rewritten for the new composition: the "What I'd look at" box and "Month in progress" band are gone (their figures live in the strip, the meters and the observations); the "one number, one home" rule now reads "the period tile and the goal meter hold the month figure; observations cite it as evidence".
+- `manager-home.test.tsx` — the pace-clause tests became meter and observation tests; "no consequential action" now allows buttons that carry `data-home-control` and still forbids forms, inputs and Approve / Seal / Sign off / Deny.
+- `member-home.test.tsx` — the "Our office pulse" labels are the shared strip's; hidden financials assert no dollar figure and no financial meter anywhere on the page.
+- `dashboard-empty-states.test.tsx` — the US-English / non-punitive copy sweep now covers the new files.
+
+### Palette
+Series colors were validated with the data-viz palette checker (lightness band,
+chroma floor, protan/deutan separation, normal-vision floor, contrast) for the
+light card and the dark card: `#6b4f9f` / `#a66330` / `#1d78a5` on light,
+`#8f74b8` / `#c47c36` / `#3f9fd6` on dark (`--pe-chart-1/2/3`). Identity is
+never color alone: legends are buttons with labels, tooltips and the table
+name every series.
+
+### Verification run
+
+| Check | Result |
+| --- | --- |
+| Typecheck (`tsc --noEmit -p tsconfig.app.json`) | clean |
+| Full test suite (`vitest run`) | 2398 passed / 53 skipped / 1 failed — `fof-builder-grouping.test.tsx`, a 5 s timeout that fails on `main` in this sandbox as well (baseline: 2319 passed, same single failure) and passes when run alone; unrelated to Home |
+| Lint (`eslint .`) | 210 errors / 51 warnings, all pre-existing (edge functions, `tailwind.config.ts`, older pages); 0 errors in the files this pass adds, and every modified file has the same count before and after |
+| Production build (`vite build`) | built in 55 s, no errors |
+| Captures | 16 scenarios × 1440 px and 390 px: no page errors, no horizontal overflow |
+| Production publish | **not** performed |
+
+### Screenshots (`design-review/`, 1440×1000 and 390×844, full page)
+`owner`, `owner-closed`, `owner-new`, `owner-incomplete` (closeouts since Feb 16, a
+Nov–Jan report package, no goals), `manager`, `manager-closed`, `manager-off-pace`,
+`manager-new`, `manager-front-desk`, `front-desk`, `hygienist`, `dental-assistant`,
+`member-hidden-financials`, `member-clear`, `member-new`, `front-desk-backup-assistant`
+— each `-desktop.png` and `-mobile.png`. The stale tablet captures and the legacy
+`team-*` captures were removed. No horizontal overflow at either width; no page
+errors in any capture.

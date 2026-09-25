@@ -32,6 +32,8 @@ export type DayVitals = {
   hygieneNoShows: number;
   doctorCancellations: number;
   doctorNoShows: number;
+  /** When the closeout was sealed; null while saved but unsealed. Absent on older callers' fixtures. */
+  sealedAt?: string | null;
 };
 
 export function collectedCentsOf(log: DepositLog): number {
@@ -57,6 +59,7 @@ function toDayVitals(log: DepositLog): DayVitals {
     hygieneNoShows: log.hygiene_no_shows,
     doctorCancellations: log.doctor_cancellations,
     doctorNoShows: log.doctor_no_shows,
+    sealedAt: log.sealed_at ?? null,
   };
 }
 
@@ -237,6 +240,11 @@ export function usePracticeVitals() {
       const prevMonth = months.find(m => m.month === prevMonthKey) ?? null;
 
       return {
+        /** The office these rows belong to — a consumer must never show them under another org. */
+        orgId: ctx!.org_id,
+        /** Every closeout in the twelve-month window, oldest first. Days with no row are absent, not zero. */
+        days: all,
+        windowStart: monthStart(today, -11),
         today: all.find(d => d.date === today) ?? null,
         /** Most recent closed-out day on record (may be today), or null. */
         latest: all.length > 0 ? all[all.length - 1] : null,

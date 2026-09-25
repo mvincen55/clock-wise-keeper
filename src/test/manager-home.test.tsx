@@ -1,18 +1,22 @@
 /**
- * Manager Home composition — the briefing (design §3.3).
+ * Manager Home composition — the briefing (design §3.3), now with the
+ * financial picture in the open instead of behind a disclosure.
  *
  *  - one sentence of state leads, built from recorded facts, each one linked;
+ *  - the same strip, chart, goal meters, and observations Owner Home shows
+ *    follow it — Manager Home is no longer primarily a text checklist;
  *  - Needs you is the first three Attention items with one navigation action
  *    each (Review for a decision, Open otherwise), then "n more";
  *  - Today lists exceptions and one count line, never a roster;
- *  - the status lines name the last closeout and the pace with a Why?;
+ *  - the status line names the last closeout; pace lives in the meters;
  *  - the challenge appears only when it is noteworthy;
  *  - after close, Needs you becomes Before you leave;
  *  - a brand-new office gets honest lines, not a wall of zeros;
- *  - Home carries no consequential action: no Approve, Seal, or Sign off.
+ *  - Home carries no consequential action: the only buttons are chart and
+ *    period controls; no Approve, Seal, or Sign off.
  */
 import { describe, expect, it } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import ManagerDashboard from '@/components/dashboard/ManagerDashboard';
 import {
@@ -35,8 +39,43 @@ describe('the sentence', () => {
   });
 
   it('never renders a missing closeout as zeros', () => {
-    const { container } = renderView(<ManagerDashboard view={managerFixture} />);
+    const { container } = renderView(<ManagerDashboard view={managerFixture} chartWidth={800} />);
     expect(container.textContent).not.toContain('$0');
+  });
+});
+
+describe('the financial picture is in the open', () => {
+  it('the strip, the chart, the goal meters, and the observations follow the sentence', () => {
+    const { container } = renderView(<ManagerDashboard view={managerFixture} chartWidth={800} />);
+    const text = container.textContent!;
+    expect(text.indexOf('Right now')).toBeLessThan(text.indexOf('Production'));
+    expect(screen.getByRole('list', { name: 'Performance strip' }).querySelectorAll('[role="listitem"]')).toHaveLength(4);
+    expect(screen.getByTestId('performance-chart-frame').querySelector('svg')).not.toBeNull();
+    expect(screen.getByRole('meter', { name: /Production 5% of the \$160,000 goal/ })).toBeInTheDocument();
+    expect(screen.getByRole('meter', { name: /Collections 4% of the \$150,000 goal/ })).toBeInTheDocument();
+    expect(screen.getByText('What I’m noticing')).toBeInTheDocument();
+    expect(text.indexOf('Production and Collections')).toBeLessThan(text.indexOf('Needs you'));
+    expect(screen.getAllByText('Why?', { selector: 'summary' }).length).toBeGreaterThan(0);
+  });
+
+  it('carries the frequent tools near the top, on existing routes', () => {
+    renderView(<ManagerDashboard view={managerFixture} />);
+    const tools = screen.getByRole('navigation', { name: 'Quick tools' });
+    expect(within(tools).getAllByRole('link').map(a => a.getAttribute('href'))).toEqual(['/fof', '/fof/fees', '/deposit-log', '/report-history']);
+  });
+
+  it('the strip follows the chosen period', () => {
+    renderView(<ManagerDashboard view={managerFixture} chartWidth={800} />);
+    fireEvent.click(screen.getByRole('button', { name: 'This month' }));
+    expect(screen.getByRole('listitem', { name: /^Production, Mar 1 – Mar 3, 2026 · partial: \$7,420/ })).toBeInTheDocument();
+    expect(screen.getByRole('listitem', { name: /^Missed appointments, .*: 1\./ })).toBeInTheDocument();
+  });
+
+  it('observations include the work waiting on the manager, with the payroll deadline', () => {
+    renderView(<ManagerDashboard view={managerFixture} />);
+    expect(managerFixture.insights!.map(i => i.id)).toContain('work_waiting');
+    expect(screen.getByText('5 items need you now, 1 more waiting on others.')).toBeInTheDocument();
+    expect(screen.getByText('the oldest 2d old · payroll Thu in 2 days')).toBeInTheDocument();
   });
 });
 
@@ -61,9 +100,12 @@ describe('needs you', () => {
     expect(screen.getByText('5 now')).toBeInTheDocument();
   });
 
-  it('carries no consequential action — Home only navigates', () => {
-    const { container } = renderView(<ManagerDashboard view={managerFixture} />);
-    expect(container.querySelectorAll('button, form, input, textarea, select')).toHaveLength(0);
+  it('carries no consequential action — Home only navigates; its buttons are chart and period controls', () => {
+    const { container } = renderView(<ManagerDashboard view={managerFixture} chartWidth={800} />);
+    expect(container.querySelectorAll('form, input, textarea, select')).toHaveLength(0);
+    const buttons = [...container.querySelectorAll('button')];
+    expect(buttons.length).toBeGreaterThan(0);
+    expect(buttons.every(b => b.hasAttribute('data-home-control'))).toBe(true);
     expect(container.textContent).not.toMatch(/\bApprove\b|\bSeal\b|\bSign off\b|\bDeny\b/);
   });
 
@@ -97,25 +139,21 @@ describe('today', () => {
   });
 });
 
-describe('status lines', () => {
-  it('name the last closeout and where it stands, and the pace with its scope and a Why?', () => {
+describe('status and pace', () => {
+  it('names the last closeout and where it stands', () => {
     renderView(<ManagerDashboard view={managerFixture} />);
     expect(managerFixture.home.lastDay).toMatchObject({ label: "Yesterday's closeout", text: 'saved, not sealed', action: 'Open' });
     expect(screen.getByText("Yesterday's closeout").closest('a')).toHaveAttribute('href', '/management?item=close_day_unsealed:log-0302');
-    const pace = managerFixture.home.pace!;
-    expect(pace.scope).toBe("through yesterday's closeout");
-    expect(screen.getByText(pace.text)).toBeInTheDocument();
-    expect(screen.getByText('Why?')).toBeInTheDocument();
-    // The receipts are the shared layer's own figures — none is hand-typed.
-    for (const f of pace.figures) expect(screen.getAllByText(f.value).length).toBeGreaterThan(0);
   });
 
-  it('flags a metric behind pace by name', () => {
-    renderView(<ManagerDashboard view={managerOffPaceFixture} />);
-    const pace = managerOffPaceFixture.home.pace!;
-    expect(pace.tone).toBe('attention');
-    expect(pace.text).toMatch(/collections/);
-    expect(screen.getByText(pace.text)).toBeInTheDocument();
+  it('flags a metric behind pace by name, in the meters and in the observations', () => {
+    renderView(<ManagerDashboard view={managerOffPaceFixture} chartWidth={800} />);
+    const meters = managerOffPaceFixture.goalMeters!;
+    expect(meters.map(m => [m.id, m.pace?.status])).toEqual([['production', 'behind'], ['collections', 'behind']]);
+    expect(screen.getAllByText('Behind calendar pace')).toHaveLength(2);
+    expect(screen.getByText('Collections are behind calendar pace for March.')).toBeInTheDocument();
+    // The receipts are the shared layer's own figures — none is hand-typed.
+    expect(screen.getByText(`${meters[1].detail}`)).toBeInTheDocument();
   });
 });
 
@@ -152,11 +190,15 @@ describe('after close', () => {
 
 describe('brand-new office', () => {
   it('states what is missing, links the door, and shows no zeros', () => {
-    const { container } = renderView(<ManagerDashboard view={managerNewFixture} />);
+    const { container } = renderView(<ManagerDashboard view={managerNewFixture} chartWidth={800} />);
     expect(screen.getByText('Last closeout').closest('a')).toHaveAttribute('href', '/deposit-log');
     expect(screen.getByText('none on record in the last two weeks')).toBeInTheDocument();
-    expect(screen.getByText('No days have been closed out yet; pace reads from Close the Day.')).toBeInTheDocument();
+    expect(screen.getByText('Nothing recorded for this period.')).toBeInTheDocument();
+    for (const door of screen.getAllByRole('link', { name: /Close out a day/ })) expect(door).toHaveAttribute('href', '/deposit-log');
+    expect(screen.getAllByText('No goal set')).toHaveLength(2);
+    expect(screen.getByText('No office days have been closed out yet.')).toBeInTheDocument();
     expect(container.textContent).not.toContain('$0');
     expect(container.textContent).not.toMatch(/\b0 now\b/);
+    expect(container.textContent).not.toMatch(/%/);
   });
 });

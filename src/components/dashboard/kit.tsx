@@ -345,6 +345,55 @@ export function Masthead({
   );
 }
 
+/**
+ * Compact masthead for Home: office, role, date and time on one rule; a
+ * short greeting; the role context and the quick tools on the next line.
+ * Deliberately small so the performance strip and the chart stay on the
+ * first screen.
+ */
+export function CompactMasthead({
+  officeName,
+  roleLabel,
+  title,
+  dateLabel,
+  timeLabel,
+  context,
+  tools,
+  right,
+}: {
+  officeName: string;
+  roleLabel: string;
+  title: string;
+  dateLabel: string;
+  timeLabel: string;
+  context?: ReactNode;
+  tools?: ReactNode;
+  right?: ReactNode;
+}) {
+  return (
+    <header className="border-b border-border pb-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+        <MicroLabel>
+          {officeName} · {roleLabel}
+        </MicroLabel>
+        <MicroLabel>
+          {dateLabel} · {timeLabel}
+        </MicroLabel>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+        <div className="min-w-0">
+          <h1 className="font-display text-[clamp(1.2rem,2.6vw,1.55rem)] font-bold leading-tight tracking-[-0.02em]">{title}</h1>
+          {context && <div className="mt-1">{context}</div>}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {tools}
+          {right}
+        </div>
+      </div>
+    </header>
+  );
+}
+
 /** Page frame: wide, gutter-consistent, and never centered in a narrow column. */
 export function DashboardShell({ children }: { children: ReactNode }) {
   return <div className="mx-auto w-full max-w-[1400px] px-4 py-5 sm:px-6 md:px-8 md:py-8">{children}</div>;

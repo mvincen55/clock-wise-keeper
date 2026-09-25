@@ -101,7 +101,7 @@ Navigation is a compact destination list; every feature below keeps its own rout
 
 | Route | Page | What it does |
 |---|---|---|
-| `/` | Dashboard (Home) | Role-personalized launchpad: attention items, spotlight, restrained progress summary |
+| `/` | Dashboard (Home) | Role-personalized briefing: the day's sentence, a period strip and a production-and-collections chart (closeouts, or a loaded report package as a separate labeled view), goal meters by calendar-day pace, at most three grounded observations, Needs you (top Attention items), the challenge, the cancellation/no-show trend; team members get the shared scoreboard only. Source map: `docs/home-performance-redesign.md` |
 | `/workplace` | Workplace | Hub: time, attendance, PTO, calendar, policies, goals, training, team |
 | `/playbook` | Playbook | Hub: huddle, checklists, close the day, incidents, FOF, Ask AI |
 | `/playbook/procedures` | PracticeProcedures | Published procedures; until any exist, the procedure sections of the uploaded handbook/SOP documents (`SourceKnowledgeReader`, `src/lib/source-knowledge.ts`) |
