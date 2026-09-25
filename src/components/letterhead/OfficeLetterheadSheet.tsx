@@ -8,7 +8,10 @@ import type { LetterRecipient, LetterSigner } from '@/lib/letters/types';
  * via props; this component owns the structure: logo-only masthead,
  * right-aligned long-form dateline, recipient block (blank lines collapse),
  * salutation, subject, body, closing with optional real-signature ink,
- * enclosure, and the practice-identity footer.
+ * enclosure, and the practice-identity footer. Those blocks sit inside
+ * .letter-page — a flex column at least one sheet tall — so the footer
+ * pins to the bottom of the letter's last page; attachment pages render
+ * after it, outside the page box, and can never push the footer up.
  *
  * Pure props → JSX with no hooks or fetching (FofPrintSheet pattern);
  * rendered once as the on-screen preview and once via portal
@@ -42,7 +45,8 @@ export interface OfficeLetterheadSheetProps {
   enclosure?: string;
   /**
    * Extra pages after the letter (each child should carry
-   * .letter-attach-page so it starts on its own sheet).
+   * .letter-attach-page so it starts on its own sheet). Rendered after
+   * .letter-page, so the footer stays pinned to the letter's own page.
    */
   attachment?: React.ReactNode;
 }
@@ -89,57 +93,59 @@ export default function OfficeLetterheadSheet({
 
   return (
     <div className="letter-sheet">
-      <header className="letter-masthead">
-        {branding.logoUrl !== '' ? (
-          <img className="letter-logo" src={branding.logoUrl} alt={practiceName} />
-        ) : (
-          <div className="letter-masthead-name">{practiceName}</div>
+      <div className="letter-page">
+        <header className="letter-masthead">
+          {branding.logoUrl !== '' ? (
+            <img className="letter-logo" src={branding.logoUrl} alt={practiceName} />
+          ) : (
+            <div className="letter-masthead-name">{practiceName}</div>
+          )}
+        </header>
+
+        <div className="letter-dateline">{dateText}</div>
+
+        {addressLines.length > 0 && (
+          <div className="letter-recipient">
+            {addressLines.map((line, i) => (
+              <div key={i}>{line}</div>
+            ))}
+          </div>
         )}
-      </header>
 
-      <div className="letter-dateline">{dateText}</div>
+        {subject && subject.trim() !== '' && (
+          <div className="letter-subject">RE: {subject.trim()}</div>
+        )}
 
-      {addressLines.length > 0 && (
-        <div className="letter-recipient">
-          {addressLines.map((line, i) => (
-            <div key={i}>{line}</div>
-          ))}
+        {salutation && salutation.trim() !== '' && (
+          <p className="letter-salutation">{salutation.trim()}</p>
+        )}
+
+        <div className="letter-body">{body}</div>
+
+        <div className="letter-closing">
+          <div className="letter-closing-phrase">{signer.closing.trim() || 'Sincerely,'}</div>
+          {hasInk && (
+            // The stored asset is pre-normalized (cropped, transparent); the
+            // CSS bounds below keep every signature at the same footprint.
+            <img className="letter-ink" src={signer.signatureDataUrl!} alt="" />
+          )}
+          <div className={hasInk ? 'letter-signer-name' : 'letter-signer-name letter-signer-name--typed'}>
+            {signer.name.trim() || practiceName}
+          </div>
+          {signer.title.trim() !== '' && (
+            <div className="letter-signer-title">{signer.title.trim()}</div>
+          )}
         </div>
-      )}
 
-      {subject && subject.trim() !== '' && (
-        <div className="letter-subject">RE: {subject.trim()}</div>
-      )}
-
-      {salutation && salutation.trim() !== '' && (
-        <p className="letter-salutation">{salutation.trim()}</p>
-      )}
-
-      <div className="letter-body">{body}</div>
-
-      <div className="letter-closing">
-        <div className="letter-closing-phrase">{signer.closing.trim() || 'Sincerely,'}</div>
-        {hasInk && (
-          // The stored asset is pre-normalized (cropped, transparent); the
-          // CSS bounds below keep every signature at the same footprint.
-          <img className="letter-ink" src={signer.signatureDataUrl!} alt="" />
+        {enclosure && enclosure.trim() !== '' && (
+          <div className="letter-enclosure">{enclosure.trim()}</div>
         )}
-        <div className={hasInk ? 'letter-signer-name' : 'letter-signer-name letter-signer-name--typed'}>
-          {signer.name.trim() || practiceName}
-        </div>
-        {signer.title.trim() !== '' && (
-          <div className="letter-signer-title">{signer.title.trim()}</div>
-        )}
+
+        <footer className="letter-foot">
+          <div className="letter-foot-name">{practiceName}</div>
+          {footParts.length > 0 && <div className="letter-foot-meta">{footParts.join(' • ')}</div>}
+        </footer>
       </div>
-
-      {enclosure && enclosure.trim() !== '' && (
-        <div className="letter-enclosure">{enclosure.trim()}</div>
-      )}
-
-      <footer className="letter-foot">
-        <div className="letter-foot-name">{practiceName}</div>
-        {footParts.length > 0 && <div className="letter-foot-meta">{footParts.join(' • ')}</div>}
-      </footer>
 
       {attachment}
     </div>

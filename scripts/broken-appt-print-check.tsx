@@ -13,6 +13,9 @@
  *   - Address Line 2 prints when present and leaves no gap when absent,
  *   - long names/addresses and a long checklist still fit their pages,
  *   - the shared-signature ink variant prints without a phantom page,
+ *   - the identity footer sits at the very bottom of the letter's page on
+ *     every letter — the OFFICE COPY / attachment pages that follow it in
+ *     the same job never pull it up the page,
  *   - no letter carries an unresolved {{merge_field}}.
  *
  * Run:  npx vite-node scripts/broken-appt-print-check.tsx
@@ -309,6 +312,8 @@ function pdfPageCount(buf: Buffer): number {
   return m ? Number(m[1]) : (s.match(/\/Type\s*\/Page[^s]/g) || []).length;
 }
 
+const SHEET_MIN_PX = 9.95 * 96; // .letter-page minimum height (--letter-page-min) at 96dpi
+
 const chromium = await loadChromium();
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium',
@@ -321,10 +326,17 @@ for (const v of VARIANTS) {
   await page.emulateMedia({ media: 'print' });
   const info = await page.evaluate(() => {
     const letter = document.querySelector('.letter-sheet');
+    const letterPage = document.querySelector('.letter-page');
+    const foot = document.querySelector('.letter-foot');
+    const after = document.querySelector('.letter-attach-page, .ba-office-sheet--break');
     return {
       text: letter?.textContent ?? '',
       hasAttachment: !!document.querySelector('.letter-attach-page'),
       hasInlineNote: (letter?.textContent ?? '').includes('A full appointment list is attached'),
+      hasLetter: !!letterPage,
+      pageBottom: letterPage ? letterPage.getBoundingClientRect().bottom : -1,
+      footBottom: foot ? foot.getBoundingClientRect().bottom : -1,
+      afterTop: after ? after.getBoundingClientRect().top : null,
     };
   });
   const pdf = await page.pdf({ format: 'Letter', printBackground: true, preferCSSPageSize: true });
@@ -340,6 +352,23 @@ for (const v of VARIANTS) {
   if (v.expectAttachment && !info.hasInlineNote)
     problems.push('letter body missing the "full appointment list is attached" note');
   if (info.text.includes('{{')) problems.push('unresolved merge field in rendered letter');
+  if (info.hasLetter) {
+    // Every shipped letter is one page: its footer must close the page box
+    // and that box must be a full sheet tall, so the footer prints at the
+    // bottom of page 1 whatever pages follow it.
+    if (Math.abs(info.pageBottom - info.footBottom) > 0.5)
+      problems.push(
+        `footer does not close the letter page (footer bottom ${info.footBottom}px, page bottom ${info.pageBottom}px)`
+      );
+    if (info.footBottom < SHEET_MIN_PX - 0.5)
+      problems.push(
+        `footer is not pinned to the page bottom (footer bottom ${info.footBottom}px < ${SHEET_MIN_PX}px)`
+      );
+    if (info.afterTop !== null && info.afterTop < info.footBottom - 0.5)
+      problems.push(
+        `attachment/office copy starts above the footer (${info.afterTop}px < ${info.footBottom}px)`
+      );
+  }
   for (const t of v.expectTexts ?? []) {
     if (!info.text.includes(t)) problems.push(`missing expected text: ${t}`);
   }
