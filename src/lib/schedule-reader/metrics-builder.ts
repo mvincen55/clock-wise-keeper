@@ -143,6 +143,13 @@ export interface ProviderBuildInput {
   layoutConfidence: number; // 0–1
   /** Minutes from midnight of row 0; without it the observed day stays null. */
   dayStartMinutes?: number;
+  /**
+   * Events the office logged in the notes columns beside the chair, when the
+   * layout has them: each is a cancellation or no-show without notice, whether
+   * its slot stayed open or was refilled. Recovered minutes are the boxes
+   * booked into refilled slots.
+   */
+  sideEvents?: { cancellations: number; noShows: number; recoveredMinutes: number };
 }
 
 /**
@@ -275,8 +282,13 @@ export function buildProviderMetrics(input: ProviderBuildInput): ProviderDayMetr
   const trueOpen = cancellationOpen + noShowOpen + otherOpen;
   const unclassified = unmatched + unexplainedBlocked;
 
-  const cancellationCount = runs(input.rows, 'cancelled').length;
-  const noShowCount = runs(input.rows, 'no_show').length;
+  // Open runs are the events still visible as holes; the side columns count
+  // the ones that were refilled too.
+  const cancellationCount = Math.max(runs(input.rows, 'cancelled').length, input.sideEvents?.cancellations ?? 0);
+  const noShowCount = Math.max(runs(input.rows, 'no_show').length, input.sideEvents?.noShows ?? 0);
+  const recoveredMinutes = input.sideEvents ? Math.min(input.sideEvents.recoveredMinutes, scheduled) : null;
+  const recoveredDenominator = recoveredMinutes === null ? 0 : recoveredMinutes + cancellationOpen + noShowOpen;
+  const recoveredOpenPct = recoveredMinutes === null || recoveredDenominator === 0 ? null : round4(recoveredMinutes / recoveredDenominator);
 
   const scheduledRuns = runs(
     input.rows.map(r => ({ category: r.category === 'completed' ? 'scheduled' : r.category })),
@@ -324,8 +336,8 @@ export function buildProviderMetrics(input: ProviderBuildInput): ProviderDayMetr
     otherOpenMinutes: otherOpen,
     unclassifiedMinutes: unclassified,
 
-    recoveredMinutes: null,
-    recoveredOpenPct: null,
+    recoveredMinutes,
+    recoveredOpenPct,
     sameDayAdditions: null,
     overlapMinutes: overlap,
     longestBookedStretchMinutes: longestStretch,

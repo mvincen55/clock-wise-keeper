@@ -33,6 +33,7 @@ const BLUE: [number, number, number] = [133, 173, 214], GRAY: [number, number, n
 const visit: OcrBox = { x0: 0, y0: 40, x1: 100, y1: 70 };   // rows 2-4
 const hold: OcrBox = { x0: 0, y0: 90, x1: 100, y1: 100 };   // row 7
 const inBox = (b: OcrBox, x: number, y: number) => x >= b.x0 && x < b.x1 && y >= b.y0 && y < b.y1;
+const noteWords = (text: string, y: number) => text.split(' ').map((t, i) => say(t, 6 + i * 15, y));
 
 /** Rows 0-1 blue, 2-4 a visit, 5-6 open (pale or blue), 7 a hold, 8-9 blue; a grid line on every row. */
 function frameWith(openColor: [number, number, number]): CaptureFrame {
@@ -46,12 +47,12 @@ function frameWith(openColor: [number, number, number]): CaptureFrame {
 }
 const say = (text: string, x: number, y: number): OcrWord => ({ text, confidence: 95, bbox: { x0: x, x1: x + 18, y0: y, y1: y + 8 } });
 
-async function analyze(openColor: [number, number, number], col: LayoutColumn) {
-  state.words = [say('DR02', 42, 44), say('NP', 42, 91)];
+async function analyze(openColor: [number, number, number], col: LayoutColumn, note = 'Lunch', extraWords: OcrWord[] = [], columns: LayoutColumn[] = [col]) {
+  state.words = [say('DR02', 42, 44), ...noteWords(note, 91), ...extraWords];
   state.regions = [visit, hold];
   return processScheduleFrame(frameWith(openColor), {
     profile: profile(col), businessDate: '2026-09-21', knownStaffNames: [doctor.displayName], phraseRules: [], providers: [doctor],
-    reviewColumns: async () => [col],
+    reviewColumns: async () => columns,
   });
 }
 
@@ -67,8 +68,8 @@ describe('a grid that paints its open slots', () => {
     expect(p.netBookableMinutes).toBe(50);
     expect(result.availabilityConflicts).toEqual([]);
     expect(result.blocks).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: 'PROVIDER_OFF', minutes: 40, userConfirmed: true }),
-      expect.objectContaining({ code: 'OTHER_OPERATIONAL_BLOCK', minutes: 10 }),
+      expect.objectContaining({ code: 'PROVIDER_OFF', minutes: 40, userConfirmed: true, source: 'grid' }),
+      expect.objectContaining({ code: 'LUNCH_BLOCK', minutes: 10 }),
     ]));
     // The observed day: first patient 8:20, available 8:20 to 9:10, nothing before or after.
     expect(p.firstPatientMinute).toBe(500);
@@ -76,9 +77,46 @@ describe('a grid that paints its open slots', () => {
     expect(p.availableEndMinute).toBe(550);
   });
 
-  it('a hold in its own box is as long as the box, not the closed rows beside it', async () => {
+  it('a note in its own box is as long as the box, not the closed rows beside it', async () => {
     const result = await analyze(PALE, column());
-    expect(result.blocks.find(b => b.code === 'OTHER_OPERATIONAL_BLOCK')?.minutes).toBe(10);
+    expect(result.blocks.find(b => b.code === 'LUNCH_BLOCK')?.minutes).toBe(10);
+  });
+
+  it('an "NP" box in the chair is the patient, seen', async () => {
+    const result = await analyze(PALE, column(), 'NP');
+    expect(result.providers[0].scheduledMinutes).toBe(40);
+    expect(result.blocks.some(b => b.code === 'OTHER_OPERATIONAL_BLOCK')).toBe(false);
+  });
+
+  it('a provider away at the end of the day left early; at the start, came late', async () => {
+    // The note box sits at row 7, after the last patient and the open slots: left early.
+    const late = await analyze(PALE, column(), 'Molly NOT here--No Pts');
+    expect(late.blocks.find(b => b.minutes === 10)?.code).toBe('PROVIDER_OUT_EARLY');
+    // The same words in a box before the first patient: came late.
+    state.words = [say('DR02', 42, 44), ...noteWords('DO NOT BOOK - LUCY OUT', 21)];
+    state.regions = [visit, { x0: 0, y0: 20, x1: 100, y1: 40 }];
+    const early = await processScheduleFrame(frameWith(PALE), {
+      profile: profile(column()), businessDate: '2026-09-21', knownStaffNames: [doctor.displayName], phraseRules: [], providers: [doctor], reviewColumns: async () => [column()],
+    });
+    expect(early.blocks.find(b => b.minutes === 20)?.code).toBe('PROVIDER_STARTS_LATE');
+  });
+
+  it('reads the side column\'s "CX >>" as a cancellation whose open time follows in the chair', async () => {
+    const notes: LayoutColumn = { xStart: 1 / 3, xEnd: 2 / 3, kind: 'non_clinical', providerLabel: null, providerRole: null, department: null, employeeId: null };
+    // The bar sits at row 5 in the notes column, pointing left at the chair's two open rows.
+    const result = await analyze(PALE, column(), 'Lunch', [say('<--', 142, 71), say('CX', 160, 71)], [column(), notes]);
+    const p = result.providers[0];
+    expect(result.eventsFromNotes).toBe(true);
+    expect(p.cancellationCount).toBe(1);
+    expect(p.cancellationOpenMinutes).toBe(20);
+    expect(p.trueOpenMinutes).toBe(20);
+    expect(p.recoveredMinutes).toBe(0);
+    // Pointed at the visit instead, the slot was refilled: counted, recovered, no open time.
+    const refilled = await analyze(PALE, column(), 'Lunch', [say('<--', 142, 51), say('NS', 160, 51)], [column(), notes]);
+    expect(refilled.providers[0].noShowCount).toBe(1);
+    expect(refilled.providers[0].noShowOpenMinutes).toBe(0);
+    expect(refilled.providers[0].recoveredMinutes).toBe(30);
+    expect(refilled.providers[0].recoveredOpenPct).toBe(1);
   });
 
   it('a grid with no tinted slot keeps blank grid as open time and applies the saved hours', async () => {

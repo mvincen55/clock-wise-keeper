@@ -237,6 +237,8 @@ export interface ClassifiedBlock {
   /** 0–1 classifier confidence. */
   confidence: number;
   userConfirmed: boolean;
+  /** 'grid' when the block is the closed time the grid itself paints, not a note. */
+  source?: 'grid';
 }
 
 /** A manager-configured phrase rule: short generic office phrase → code. */
@@ -384,6 +386,12 @@ export interface ScheduleAnalysis {
   dayStartMinutes?: number;
   /** Set when any provider is below the confidence threshold. */
   needsReview: boolean;
+  /**
+   * True when the layout has notes columns beside the chairs: the office logs
+   * each cancellation ("CX >>") and no-show ("NS") there, so the counts are
+   * read, and zero means none was logged.
+   */
+  eventsFromNotes?: boolean;
 }
 
 // ---------------------------------------------------------------------------

@@ -100,8 +100,8 @@ const LEXICON: LexiconEntry[] = [
   },
   {
     code: 'OTHER_OPERATIONAL_BLOCK',
-    // "NP" on its own is a slot held for a new patient.
-    patterns: [/\bblocked\b/, /\bblock\b/, /\bhold\b/, /\bbuffer\b/, /\bdo not book\b/, /\bdnb\b/, /^(?:np|n p)$/, /\b(?:np|new (?:pt|patient)) (?:hold|block|slot|reserv\w*)\b/],
+    // "NP hold" is a slot held for a new patient; "NP" alone in a chair is the patient, seen.
+    patterns: [/\bblocked\b/, /\bblock\b/, /\bhold\b/, /\bbuffer\b/, /\bdo not book\b/, /\bdnb\b/, /\b(?:np|new (?:pt|patient)) (?:hold|block|slot|reserv\w*)\b/],
   },
 ];
 

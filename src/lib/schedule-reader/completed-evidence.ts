@@ -19,9 +19,13 @@ export function applyCompletedEvidence(statuses: Array<ScheduleStatus | null>, r
     const note=classifyNote(text,rules);
     const operational=note.code!=='UNCLASSIFIED' && note.confidence>=.8;
     // The provider code proves a visit; so does the shape of a posted
-    // appointment box when the engine misread the code.
+    // appointment box when the engine misread the code. A box reading "NP"
+    // in a provider's chair is a new patient seen there (the office logs
+    // the patient in the side column and asks them in early), not a hold;
+    // a hold says so.
     const coded=col.providerCode ? inside.some(w=>w.confidence>=40 && providerCodeCandidate(w.text)===col.providerCode) : readProviderCodes(inside).length===1;
-    const appointment=coded || looksLikeAppointment(text);
+    const newPatient=/^(?:np|n\/p)\b/i.test(text.trim()) && !/\b(?:hold|block|slot|reserv\w*)\b/i.test(text);
+    const appointment=coded || looksLikeAppointment(text) || newPatient;
     if(appointment && !operational) return 'completed';
     if(operational && !appointment) return 'blocked';
     return null;

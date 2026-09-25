@@ -60,3 +60,11 @@ it('reads blank blue grid as closed time when told the grid paints its open slot
  const grazing=[{x0:0,x1:100,y0:0,y1:44}];
  expect(postedColumnStatuses({width,height,data},col,rows,grazing,[words[0]],[])[2]).toBe('open');
 });
+
+it('reads an "NP" box in a chair as the new patient seen there, and an "NP hold" as a hold', () => {
+ const col:LayoutColumn & {pxStart:number;pxEnd:number}={xStart:0,xEnd:1,pxStart:0,pxEnd:100,kind:'provider',providerCode:'DR05',providerLabel:'Dr. Jennie',providerRole:'dentist',department:'doctor',employeeId:null};
+ const rows=Array.from({length:2},(_,i)=>({yTop:i*20,yBottom:(i+1)*20}));
+ const regions=rows.map(r=>({x0:0,x1:100,y0:r.yTop,y1:r.yBottom}));
+ const words:OcrWord[]=[{text:'NP',confidence:95,bbox:{x0:5,x1:20,y0:2,y1:10}},{text:'NP',confidence:95,bbox:{x0:5,x1:20,y0:22,y1:30}},{text:'hold',confidence:95,bbox:{x0:24,x1:50,y0:22,y1:30}}];
+ expect(applyCompletedEvidence(['completed','completed'],rows,regions,words,col,[])).toEqual(['completed','blocked']);
+});

@@ -131,6 +131,9 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
   const profileRow = profiles?.find(p => p.is_default) ?? profiles?.[0];
   const visibleStatuses = profileRow ? toLayoutProfile(profileRow)?.statusLegend ?? [] : [];
   const eventHistoryVisible = visibleStatuses.some(s => s.status === 'cancelled') && visibleStatuses.some(s => s.status === 'no_show');
+  // Cancellations and no-shows are known from a status legend, or from the
+  // notes columns beside the chairs where the office logs each one.
+  const eventsKnown = eventHistoryVisible || !!analysis?.eventsFromNotes;
 
   // Whatever happens — navigation, unmount, cancel — the frame dies.
   useEffect(() => {
@@ -268,10 +271,10 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
         providers,
         blocks: analysis.blocks,
         captureConfidence: analysis.layoutConfidence,
-        needsReview: !eventHistoryVisible || providers.some(p => p.unclassifiedMinutes > 0) || !!analysis.availabilityConflicts?.length || analysis.blocks.some(b => b.code === 'UNCLASSIFIED' && !b.userConfirmed),
+        needsReview: !eventsKnown || providers.some(p => p.unclassifiedMinutes > 0) || !!analysis.availabilityConflicts?.length || analysis.blocks.some(b => b.code === 'UNCLASSIFIED' && !b.userConfirmed),
       });
       const r = analysis.rollup.byDepartment;
-      if (eventHistoryVisible) onVitalsFromSchedule?.({
+      if (eventsKnown) onVitalsFromSchedule?.({
         hygieneCancellations: r.hygiene.cancellationCount,
         hygieneNoShows: r.hygiene.noShowCount,
         doctorCancellations: r.doctor.cancellationCount,
@@ -471,7 +474,8 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
               )}
             </div>
 
-            {!eventHistoryVisible && <p className="text-sm text-muted-foreground">This posted view does not distinguish cancellations and no-shows. Those counts remain for manual review, and your Practice Vitals answers will not be overwritten.</p>}
+            {!eventsKnown && <p className="text-sm text-muted-foreground">This posted view does not distinguish cancellations and no-shows. Those counts remain for manual review, and your Practice Vitals answers will not be overwritten.</p>}
+            {!eventHistoryVisible && analysis.eventsFromNotes && <p className="text-sm text-muted-foreground">Cancellations and no-shows were read from the notes columns beside each chair (CX, NS), so a zero means none was logged there.</p>}
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
@@ -495,10 +499,10 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
                       <td className="py-1.5 pr-2">{fmtMin(p.scheduledMinutes)}</td>
                       <td className="py-1.5 pr-2">{fmtMin(p.trueOpenMinutes)}</td>
                       <td className="py-1.5 pr-2">
-                        {eventHistoryVisible ? `${p.cancellationCount} (${fmtMin(p.cancellationOpenMinutes)})` : 'Not distinguishable'}
+                        {eventsKnown ? `${p.cancellationCount} (${fmtMin(p.cancellationOpenMinutes)})` : 'Not distinguishable'}
                       </td>
                       <td className="py-1.5 pr-2">
-                        {eventHistoryVisible ? `${p.noShowCount} (${fmtMin(p.noShowOpenMinutes)})` : 'Not distinguishable'}
+                        {eventsKnown ? `${p.noShowCount} (${fmtMin(p.noShowOpenMinutes)})` : 'Not distinguishable'}
                       </td>
                       <td className="py-1.5 pr-2">
                         {p.unclassifiedMinutes > 0 ? (
@@ -538,7 +542,7 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
                       </Select>
                     ) : (
                       <Badge variant={b.userConfirmed ? 'secondary' : 'outline'} className="text-[10px]">
-                        {BLOCK_LABELS[b.code]}
+                        {b.source === 'grid' ? 'Closed on the grid' : BLOCK_LABELS[b.code]}
                         {b.userConfirmed ? ' ✓' : ''}
                       </Badge>
                     )}
@@ -570,7 +574,7 @@ export default function PrivacyViewCapture({ closeoutId, date, onVitalsFromSched
               <p>Schedule metrics saved for {date}.</p>
               <p className="text-xs text-muted-foreground">
                 The captured image was destroyed after processing — it was never saved or
-                uploaded. {eventHistoryVisible ? 'Practice Vitals were prefilled from the confirmed numbers; correct them in Step 2 if the schedule missed something.' : 'Practice Vitals were preserved. Review cancellation and no-show counts in Step 2 because this posted view does not distinguish them.'}
+                uploaded. {eventsKnown ? 'Practice Vitals were prefilled from the confirmed numbers; correct them in Step 2 if the schedule missed something.' : 'Practice Vitals were preserved. Review cancellation and no-show counts in Step 2 because this posted view does not distinguish them.'}
               </p>
             </div>
           </div>
