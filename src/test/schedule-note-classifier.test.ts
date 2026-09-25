@@ -44,6 +44,15 @@ describe('note classifier', () => {
     expect(result.confidence).toBeGreaterThan(0.8);
   });
 
+  it('knows the office\'s own phrasing for a provider who is not here and a slot held for a new patient', () => {
+    expect(classifyNote("Molly NOT here--No Pts sch'ld").code).toBe('PROVIDER_OFF');
+    expect(classifyNote('No pts today').code).toBe('PROVIDER_OFF');
+    expect(classifyNote('DO NOT BOOK - LUCY OUT').code).toBe('STAFFING_LIMITATION');
+    expect(classifyNote('NP').code).toBe('OTHER_OPERATIONAL_BLOCK');
+    expect(classifyNote('NP hold').code).toBe('OTHER_OPERATIONAL_BLOCK');
+    expect(classifyNote('HP - DR05').code).toBe('UNCLASSIFIED');
+  });
+
   it('returns UNCLASSIFIED with zero confidence for unknown notes', () => {
     expect(classifyNote('crown seat follow up')).toEqual({ code: 'UNCLASSIFIED', confidence: 0 });
     expect(classifyNote('')).toEqual({ code: 'UNCLASSIFIED', confidence: 0 });

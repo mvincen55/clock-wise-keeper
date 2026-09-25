@@ -3,45 +3,74 @@ import { looksLikeAppointment, providerCodeCandidate, readProviderCodes } from '
 
 type Pixels = { width: number; height: number; data: ArrayLike<number> };
 
+/** What an empty cell is painted with: blank blue grid, or the pale tint of an unbooked slot inside the provider's hours. */
+export type OpenSlotKind = 'blue' | 'tint';
+
 /**
- * Share of a cell that is empty background, or null when any pixel is
- * something else (text, a gray block, an unfamiliar shade). Blue grid always
- * counts; a uniform light tint counts only when the caller allows it.
+ * What one cell is made of: the share that is blank blue grid and the share
+ * that is pale tint, or null when anything else is drawn on it (dark text,
+ * a gray block, an outline, an unfamiliar shade), because such a cell is
+ * never assumed open. The grid's own lines — a full-width row of one
+ * neutral gray or white, a few of them per cell (the ten-minute line, the
+ * hour line's white-and-gray pair) — are part of every blank cell and are
+ * ignored; a neutral fill is not a line, and some software shades
+ * unavailable time that way, so more than a quarter of the cell in lines
+ * stays for review.
  */
-function emptyShare(image: Pixels, col: Pick<LayoutColumn,'xStart'|'xEnd'>, yStart: number, yEnd: number, allowTint: boolean): number | null {
+function cellShares(image: Pixels, col: Pick<LayoutColumn,'xStart'|'xEnd'>, yStart: number, yEnd: number, allowTint: boolean): { blue: number; tint: number } | null {
   const left=Math.max(0,Math.ceil(col.xStart*image.width)+3), right=Math.min(image.width,Math.floor(col.xEnd*image.width)-3);
   const top=Math.max(0,Math.ceil(yStart*image.height)), bottom=Math.min(image.height,Math.floor(yEnd*image.height));
   if(right-left<10 || bottom-top<1) return null;
-  let empty=0,total=0;
-  for(let y=top;y<bottom;y++)for(let x=left;x<right;x++) {
-    const i=(y*image.width+x)*4,r=image.data[i],g=image.data[i+1],b=image.data[i+2];
-    const background=b-r>=20 && b-g>=8 && g-r>=8 && r>=65;
-    // A pale tint (Dentrix shades an unbooked slot inside the provider's
-    // hours this way) is light on every channel but not neutral.
-    const lo=Math.min(r,g,b), hi=Math.max(r,g,b);
-    const tint=allowTint && lo>=200 && hi-lo>=6;
-    // Bright neutral grid lines are harmless; dark text or gray blocks are not.
-    const gridLine=r>=220 && g>=220 && b>=220 && hi-lo<6;
-    if(!background && !tint && !gridLine) return null;
-    empty+=Number(background||tint); total++;
+  let blue=0,tint=0,lineRows=0,total=0;
+  const isBackground=(r:number,g:number,b:number)=>b-r>=20 && b-g>=8 && g-r>=8 && r>=65;
+  const isPale=(r:number,g:number,b:number)=>{ const lo=Math.min(r,g,b), hi=Math.max(r,g,b); return lo>=200 && hi-lo>=6; };
+  for(let y=top;y<bottom;y++) {
+    const i0=(y*image.width+left)*4, r0=image.data[i0], g0=image.data[i0+1], b0=image.data[i0+2];
+    if(!isBackground(r0,g0,b0) && !isPale(r0,g0,b0)) {
+      // A row of one color the whole cell width is a line — the grid's, the
+      // hour's, a box border — whatever its shade; the cap below keeps a fill out.
+      let uniform=true;
+      for(let x=left+1;x<right;x++) { const i=(y*image.width+x)*4; if(Math.abs(image.data[i]-r0)>3 || Math.abs(image.data[i+1]-g0)>3 || Math.abs(image.data[i+2]-b0)>3) { uniform=false; break; } }
+      if(uniform) { lineRows++; continue; }
+    }
+    for(let x=left;x<right;x++) {
+      const i=(y*image.width+x)*4,r=image.data[i],g=image.data[i+1],b=image.data[i+2];
+      // A pale tint (Dentrix shades an unbooked slot inside the provider's
+      // hours this way) is light on every channel but not neutral.
+      if(isBackground(r,g,b)) blue++;
+      else if(isPale(r,g,b) && allowTint) tint++;
+      else return null;
+      total++;
+    }
   }
-  return total>0 ? empty/total : null;
+  if(total===0 || lineRows/(bottom-top) > .25) return null;
+  return { blue: blue/total, tint: tint/total };
 }
 
 /** A uniform blue grid contains neither text nor appointment blocks. Unfamiliar pixels stay for review. */
 export function isEmptyBlueGridColumn(image: Pixels, col: Pick<LayoutColumn,'xStart'|'xEnd'>, yStart=0, yEnd=1): boolean {
-  return (emptyShare(image, col, yStart, yEnd, false) ?? 0) > .7;
+  return (cellShares(image, col, yStart, yEnd, false)?.blue ?? 0) > .7;
 }
 
 /**
- * One grid cell that is an open slot: blank blue grid, or a uniform pale
- * tint with nothing drawn on it. A neutral light gray is not assumed open —
- * some practice software shades unavailable time that way — and stays for
- * review. Lane omission keeps the stricter blue-only test above: a column
- * tinted all day is a provider with nothing booked, not an empty lane.
+ * Which kind of empty cell this is: blank blue grid, a uniform pale tint,
+ * or null when something is drawn on it or the shade is unfamiliar. A
+ * neutral light gray is not assumed open — some practice software shades
+ * unavailable time that way — and stays for review. Lane omission keeps the
+ * stricter blue-only test above: a column tinted all day is a provider with
+ * nothing booked, not an empty lane.
  */
+export function openSlotKind(image: Pixels, col: Pick<LayoutColumn,'xStart'|'xEnd'>, yStart: number, yEnd: number): OpenSlotKind | null {
+  const shares = cellShares(image, col, yStart, yEnd, true);
+  if (!shares) return null;
+  if (shares.tint > .7) return 'tint';
+  if (shares.blue > .7) return 'blue';
+  return null;
+}
+
+/** One grid cell that is an open slot of either kind, with nothing drawn on it. */
 export function isOpenSlotCell(image: Pixels, col: Pick<LayoutColumn,'xStart'|'xEnd'>, yStart: number, yEnd: number): boolean {
-  return (emptyShare(image, col, yStart, yEnd, true) ?? 0) > .7;
+  return openSlotKind(image, col, yStart, yEnd) !== null;
 }
 
 /** Neutral appointment backgrounds in blue-grid schedules. Other themes fall back to layout OCR. */
@@ -86,21 +115,29 @@ const RESERVES_TIME = /\b(?:hold|holds|arriv\w*|asap|reserved?|early)\b/i;
 
 /**
  * A column whose boxes are all notes — "NO MORE CROWNS", "Moved down 1
- * unit", "sent blast" — is not a provider's chair. When appointment boxes
- * elsewhere on this grid carry provider codes, a box with no code and no
- * hold wording is a note, whatever it says; when no code is visible anywhere
- * (a view that hides them), only positive note wording counts, because the
- * absence of a code alone proves nothing.
+ * unit", "sent blast" — is not a provider's chair. A one-line bar, a box no
+ * taller than a line and a half of the grid's text, is a note whatever it
+ * says ("Aware Early", "<-- CAN NOT COME IN EARLIER"): nothing is booked in
+ * a row that thin unless it prints as an appointment. Taller boxes are read
+ * by their words: when appointment boxes elsewhere on this grid carry
+ * provider codes, a box with no code and no hold wording is a note, whatever
+ * it says; when no code is visible anywhere (a view that hides them), only
+ * positive note wording counts, because the absence of a code alone proves
+ * nothing.
  */
 export function isNotesOnlyColumn(words: OcrWord[], regions: OcrBox[], column: Pick<LayoutColumn,'xStart'|'xEnd'>, width: number): boolean {
   const boxes = regions.filter(b => b.x0 >= column.xStart * width - 4 && b.x1 <= column.xEnd * width + 4);
   if (!boxes.length) return false;
   const codesVisibleOnGrid = readProviderCodes(words).length > 0;
+  const heights = words.filter(w => w.confidence >= 60 && w.text.length >= 3).map(w => w.bbox.y1 - w.bbox.y0).sort((a, b) => a - b);
+  const lineHeight = heights.length ? heights[Math.floor(heights.length / 2)] : 0;
+  const isBar = (b: OcrBox) => lineHeight > 0 && b.y1 - b.y0 <= lineHeight * 1.8;
   return boxes.every(b => {
     const inside = words.filter(w => w.bbox.x0 >= b.x0-2 && w.bbox.x1 <= b.x1+2 && w.bbox.y0 >= b.y0-2 && w.bbox.y1 <= b.y1+2);
     const text = inside.map(w => w.text).join(' ');
     if (/\b(?:DR|HY|HYG)\s*\d{1,4}\b/i.test(text) || inside.some(w => w.confidence >= 40 && providerCodeCandidate(w.text))) return false;
     if (looksLikeAppointment(text)) return false; // an appointment whose code the engine misread is still an appointment
+    if (isBar(b)) return true;
     if (RESERVES_TIME.test(text)) return false;
     return codesVisibleOnGrid || /\b(?:sent|call|question|reminder|memo|notes?)\b/i.test(text);
   });
