@@ -94,7 +94,8 @@ describe('a posted day with the provider out', () => {
   });
 
   it('a chair-level hold in one chair leaves the other chair open', async () => {
-    const [dr] = (await analyze(['Do', 'NOT', 'Book'])).providers;
+    // The second chair is painted as open slots; on this grid blank blue would be closed time.
+    const [dr] = (await analyze(['Do', 'NOT', 'Book'], PALE)).providers;
     expect(dr.intentionalUnavailableMinutes).toBe(20); // the rows the second chair's own note occupies
     expect(dr.trueOpenMinutes).toBe(60);
     expect(dr.netBookableMinutes).toBe(60);

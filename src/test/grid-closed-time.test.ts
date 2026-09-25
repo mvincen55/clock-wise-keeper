@@ -22,8 +22,8 @@ const W = 300, H = 120;
 // Ten rows of ten minutes from y=20: 8:00 to 9:40.
 const timeGrid = { minutesPerRow: 10, dayStartMinutes: 480, dayEndMinutes: 580, yStart: 20 / H, yEnd: 1 };
 const column = (workingHours?: LayoutColumn['workingHours']): LayoutColumn => ({ xStart: 0, xEnd: 1 / 3, kind: 'provider', ...providerColumn(doctor), workingHours });
-const profile = (col: LayoutColumn): LayoutProfile => ({
-  id: 'layout', name: 'Office', pmsName: 'Dentrix', statusLegend: [],
+const profile = (col: LayoutColumn, pmsName = 'Dentrix'): LayoutProfile => ({
+  id: 'layout', name: 'Office', pmsName, statusLegend: [],
   signature: { captureMode: 'posted', columns: [col], timeGrid, cancelledRemainVisible: false, blockStyle: 'mixed' },
 });
 const state = vi.hoisted(() => ({ words: [] as OcrWord[], regions: [] as OcrBox[] }));
@@ -47,11 +47,11 @@ function frameWith(openColor: [number, number, number]): CaptureFrame {
 }
 const say = (text: string, x: number, y: number): OcrWord => ({ text, confidence: 95, bbox: { x0: x, x1: x + 18, y0: y, y1: y + 8 } });
 
-async function analyze(openColor: [number, number, number], col: LayoutColumn, note = 'Lunch', extraWords: OcrWord[] = [], columns: LayoutColumn[] = [col]) {
+async function analyze(openColor: [number, number, number], col: LayoutColumn, note = 'Lunch', extraWords: OcrWord[] = [], columns: LayoutColumn[] = [col], pmsName = 'Dentrix') {
   state.words = [say('DR02', 42, 44), ...noteWords(note, 91), ...extraWords];
   state.regions = [visit, hold];
   return processScheduleFrame(frameWith(openColor), {
-    profile: profile(col), businessDate: '2026-09-21', knownStaffNames: [doctor.displayName], phraseRules: [], providers: [doctor],
+    profile: profile(col, pmsName), businessDate: '2026-09-21', knownStaffNames: [doctor.displayName], phraseRules: [], providers: [doctor],
     reviewColumns: async () => columns,
   });
 }
@@ -119,8 +119,18 @@ describe('a grid that paints its open slots', () => {
     expect(refilled.providers[0].recoveredOpenPct).toBe(1);
   });
 
-  it('a grid with no tinted slot keeps blank grid as open time and applies the saved hours', async () => {
-    const result = await analyze(BLUE, column([{ weekday: 1, startMinutes: 500, endMinutes: 560 }]));
+  it('on a Dentrix grid, blue is not patient time even on a day with no open slot to show it', async () => {
+    // Nothing pale anywhere: the whole day is booked or closed, and blue still reads closed.
+    const result = await analyze(BLUE, column());
+    const p = result.providers[0];
+    expect(p.scheduledMinutes).toBe(30);
+    expect(p.trueOpenMinutes).toBe(0);
+    expect(p.unclassifiedMinutes).toBe(0);
+    expect(result.blocks).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'PROVIDER_OFF', minutes: 60, userConfirmed: true, source: 'grid' })]));
+  });
+
+  it('another PMS with no tinted slot keeps blank grid as open time and applies the saved hours', async () => {
+    const result = await analyze(BLUE, column([{ weekday: 1, startMinutes: 500, endMinutes: 560 }]), 'Lunch', [], undefined, 'Other');
     const p = result.providers[0];
     expect(p.scheduledMinutes).toBe(30);
     // Rows 0-1 and 8-9 are open on the grid but outside the saved hours: off duty.
