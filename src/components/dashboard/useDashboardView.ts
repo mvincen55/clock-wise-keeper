@@ -15,23 +15,28 @@ import { useMissingShifts } from '@/hooks/useMissingShifts';
 import { useTodayEntry } from '@/hooks/useTimeEntries';
 import { useAttentionItems } from '@/hooks/useAttentionItems';
 import { useMessagesCloseout } from '@/hooks/useMessagesCloseout';
-import { buildHomeBrief } from '@/lib/home-brief';
+import { usePracticeReportImports } from '@/hooks/usePracticeReportImports';
+import { useMissedAppointmentEvents } from '@/hooks/useMissedAppointmentEvents';
+import { buildHomeBrief, needsYou } from '@/lib/home-brief';
+import type { PerformanceRaw } from '@/lib/home-performance';
+import type { SourceState } from '@/lib/performance-series';
+import type { AttentionSummary } from '@/lib/home-insights';
+import { performanceBlockFrom } from './performance/block';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyOperationalRoles } from '@/hooks/useMyOperationalRoles';
 import { useMyPermissionGrants } from '@/hooks/useEmployeePermissions';
 import { shortcutsFor, roleLabel as opRoleLabel, roleMission } from './opRoles';
 import { getClockStatus, getRunningMinutes } from '@/lib/clock-status';
-import { formatDate, formatTime, getToday, minutesToHHMM } from '@/lib/time-utils';
+import { daysBetween, formatDate, formatTime, getToday, minutesToHHMM } from '@/lib/time-utils';
 import { staffingSummary } from './staffing';
 import {
-  buildDailyBrief, buildGoalBrief, buildMonthDetail, dailySummary, monthPaceLines,
-  ownerRecommendation, type OwnerPulseInput,
+  buildDailyBrief, buildGoalBrief, dailySummary, monthPaceLines, type OwnerPulseInput,
 } from '@/lib/owner-pulse';
 import { closeDayStatus } from '@/lib/manager-pulse';
-import { memberOfficeLines, rolePulseItems } from '@/lib/member-pulse';
+import { rolePulseItems } from '@/lib/member-pulse';
 import type {
   DashboardHeader, DashboardView, Figure, ManagerView, MemberView, OwnerView,
-  PermissionTier, RoleContext, RoleLane, Signal,
+  PerformanceState, PermissionTier, RoleContext, RoleLane, Signal,
 } from './types';
 
 /**
@@ -75,8 +80,14 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
   // Shared / admin sources (each hook disables itself when the role is wrong).
   const snapshotQuery = useOrgAttendanceSnapshot();
   const snapshot = snapshotQuery.data ?? [];
-  const { data: vitals } = usePracticeVitals();
+  const vitalsQuery = usePracticeVitals();
+  const vitals = vitalsQuery.data;
   const today = getToday();
+  const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
+  // Report history and the Dentrix postings are admin sources; the hooks stay
+  // disabled for members, and the builder refuses them for members anyway.
+  const reportImports = usePracticeReportImports();
+  const missedEvents = useMissedAppointmentEvents(isAdmin);
   const { data: todayLog } = useDepositLog(today);
   const { data: recentLogs } = useRecentDepositLogs(14);
   const { data: sprintData } = useTeamGoals();
@@ -199,34 +210,64 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
 
     const goal = buildGoalBrief(sprints, today);
 
+    /* --------------------------- performance --------------------------- */
+    // The rows behind the chart, the strip, the goal meters, and the
+    // observations — built once, through the same function the design
+    // fixtures use. Rows from another office never pass the builder.
+    const queryState = (q: { isError: boolean; data: unknown }, fallback: SourceState): SourceState =>
+      q.isError ? 'error' : q.data === undefined ? fallback : 'ok';
+    const performanceState: PerformanceState = vitalsQuery.isError ? 'error' : vitals === undefined ? 'loading' : 'ok';
+    const raw: PerformanceRaw | null = vitals
+      ? {
+          orgId: vitals.orgId,
+          viewerOrgId: ctx.org_id,
+          today,
+          role: ctx.role,
+          days: vitals.days,
+          closeoutsState: 'ok',
+          reports: reportImports.data ?? null,
+          reportState: isAdmin ? queryState(reportImports, 'loading') : 'unauthorized',
+          missedEvents: missedEvents.data
+            ? missedEvents.data.map(e => ({ business_date: e.business_date, code: e.code, department: e.department }))
+            : null,
+          missedState: isAdmin ? queryState(missedEvents, 'loading') : 'unauthorized',
+          visibility: vitals.visibility,
+          thisMonth: vitals.thisMonth,
+          targets: vitals.targets,
+          monthElapsed: vitals.monthElapsed,
+        }
+      : null;
+    const attentionSummary: AttentionSummary | null = isAdmin
+      ? {
+          enabled: attention.enabled,
+          needsNow: attention.counts.needsNow,
+          waiting: attention.counts.waiting,
+          oldestHours: attention.needsNow.reduce<number | null>((m, i) => (i.ageHours === null ? m : Math.max(m ?? 0, i.ageHours)), null),
+          payroll: attention.payrollPeriod?.dueDate && attention.payrollPeriod.dueLabel
+            ? { label: attention.payrollPeriod.dueLabel, days: Math.max(0, daysBetween(today, attention.payrollPeriod.dueDate)) }
+            : null,
+          degraded: attention.degradedSources.length > 0,
+        }
+      : null;
+    const block = performanceBlockFrom({ raw, state: performanceState, pulse: pulseInput, attention: attentionSummary });
+
     /* ------------------------------ owner ------------------------------ */
     if (ctx.role === 'owner') {
       // Owners are already excluded from `snapshot` at the hook boundary —
       // an owner without punches can never appear absent or out.
       // Decisions are the same list Attention shows, top three, one
-      // navigation action each. No count is computed here.
+      // navigation action each — the rows Manager Home shares.
       const decisionCount = attention.counts.needsNow;
-      const decisions: Signal[] = attention.needsNow.slice(0, 3).map(i => ({
-        id: i.key,
-        label: `${i.subject.name ? `${i.subject.name} · ` : ''}${i.label}`,
-        detail: i.deadline ? i.deadline.label : i.verb === 'decide' ? 'Waiting on your decision' : i.verb === 'fix' ? 'A record to fix' : 'Follow-up the office rule asks for',
-        value: '',
-        href: `/management?item=${i.key}`,
-        tone: i.coverage ? 'urgent' : 'attention',
-      }));
+      const needs = needsYou(attention);
 
       // The daily pulse is a pure function of recorded vitals. While the
       // query is in flight everything stays null — the hero renders a quiet
       // loading line instead of fabricated zeros.
       let summary: string | null = null;
       let brief: OwnerView['brief'] = null;
-      let lookAt: OwnerView['lookAt'] = null;
-      let month: OwnerView['month'] = null;
       if (pulseInput && vitals) {
         brief = buildDailyBrief(pulseInput);
-        lookAt = ownerRecommendation(pulseInput, sprints);
         summary = dailySummary(pulseInput, brief, decisionCount);
-        month = buildMonthDetail(pulseInput, vitals.months);
       }
 
       // Operational exceptions: only real, unresolved signals. A zero here is
@@ -251,13 +292,12 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         office: staffing.office,
         summary,
         brief,
-        lookAt,
         decisionCount,
-        decisions,
+        needs,
         goal,
-        month,
         staffing,
         exceptions,
+        ...block,
       };
       return { view: owner, isLoading: false };
     }
@@ -302,6 +342,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         office: staffing.office,
         home,
         mine,
+        ...block,
       };
       return { view: manager, isLoading: false };
     }
@@ -417,13 +458,13 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
     // instead of five rows of zeros saying it five times.
     const mine = mineAll.filter(s => s.value !== '0');
 
-    // Our Office Pulse: the canonical month lines, filtered per-metric by the
-    // office's visibility settings. A hidden metric simply is not here.
-    const officePulse =
-      pulseInput && vitals ? memberOfficeLines(pulseInput, vitals.visibility) : [];
+    // Our office pulse: the same rows the owner reads, limited by each
+    // metric's own visibility setting (applied by the strip and the meters).
+    // A hidden metric simply is not there.
+    const sharesAnything = !!vitals && (vitals.visibility.production || vitals.visibility.collections || vitals.visibility.newPatients);
     const workingPhases = ['before_open', 'open', 'unknown_hours'];
     const officePulseNote =
-      officePulse.length === 0
+      !sharesAnything || !vitals || vitals.days.length === 0
         ? null
         : workingPhases.includes(staffing.office.phase)
           ? 'Financial figures update after Close the Day — they are not live during the day.'
@@ -463,18 +504,19 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
       roleContext,
       lanes,
       next,
-      officePulse,
       officePulseNote,
       rolePulse,
       mine,
       goal,
       status,
       utilities,
+      ...block,
     };
     return { view: member, isLoading: false };
   }, [
     ctx, ctxLoading, profile, now, today, snapshot, vitals, todayLog, sprintData,
     bypasses, myReports, myAcks, assignments, pto, todayEntry,
     missingDays, user, ops, grants, attention, recentLogs, messagesCloseout, snapshotQuery.isError, snapshotQuery.data,
+    vitalsQuery.isError, reportImports, missedEvents, isAdmin,
   ]);
 }

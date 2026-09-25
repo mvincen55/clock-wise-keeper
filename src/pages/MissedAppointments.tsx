@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, CalendarX2, Loader2, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -37,7 +37,15 @@ const LIST_PREVIEW = 60;
 export default function MissedAppointments() {
   const { data: ctx, isLoading } = useOrgContext();
   const today = getToday();
-  const [range, setRange] = useState(() => defaultMissedAppointmentRange(today));
+  // Home's missed-appointment tiles and trend hand over their period as
+  // ?start=&end=; a valid pair seeds the range, anything else falls back.
+  const [params] = useSearchParams();
+  const [range, setRange] = useState(() => {
+    const start = params.get('start');
+    const end = params.get('end');
+    const isDate = (v: string | null): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+    return isDate(start) && isDate(end) && start <= end ? { start, end } : defaultMissedAppointmentRange(today);
+  });
   const [importOpen, setImportOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<MissedAppointmentEvent | null>(null);

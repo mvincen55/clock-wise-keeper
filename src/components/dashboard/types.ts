@@ -14,13 +14,36 @@ import type {
 } from '@/lib/owner-pulse';
 import type { CloseDayStatus } from '@/lib/manager-pulse';
 import type { RolePulseItem } from '@/lib/member-pulse';
-import type { HomeBrief } from '@/lib/home-brief';
+import type { HomeBrief, NeedsYou } from '@/lib/home-brief';
+import type { PerformanceData } from '@/lib/home-performance';
+import type { GoalMeter } from '@/lib/goal-progress';
+import type { HomeInsight } from '@/lib/home-insights';
 
 export type { OfficeStatus, StaffingSummary };
 export type {
   DailyBrief, GoalBrief, MissedMonth, MonthDetail, MonthPaceLine, OwnerRecommendation, PulseFact,
 };
-export type { CloseDayStatus, RolePulseItem, HomeBrief };
+export type { CloseDayStatus, RolePulseItem, HomeBrief, NeedsYou };
+export type { PerformanceData, GoalMeter, HomeInsight };
+
+/** Whether the performance rows are in hand, still loading, or failed to read. */
+export type PerformanceState = 'loading' | 'ok' | 'error';
+
+/**
+ * The shared performance surfaces every role renders through the same
+ * components: the rows behind the chart and strip, the month's goal meters,
+ * and the observations. A member view carries only what the office shares.
+ */
+export type PerformanceBlock = {
+  performance: PerformanceData | null;
+  performanceState: PerformanceState;
+  /** Production and collections against their own targets; null while loading. */
+  goalMeters: GoalMeter[] | null;
+  /** At most three observations; null while loading; absent for members. */
+  insights: HomeInsight[] | null;
+  /** Frequent tools near the top (admins). */
+  tools: Shortcut[];
+};
 
 export type Tone = 'urgent' | 'attention' | 'steady' | 'calm';
 
@@ -147,7 +170,7 @@ export type DashboardHeader = {
   timeLabel: string;
 };
 
-export type OwnerView = {
+export type OwnerView = PerformanceBlock & {
   kind: 'owner';
   header: DashboardHeader;
   roleContext: RoleContext;
@@ -162,26 +185,19 @@ export type OwnerView = {
   summary: string | null;
   /** TODAY block of the pulse: honest day scope, facts, and time semantics. */
   brief: DailyBrief | null;
-  /** One grounded recommendation with receipts, or null while loading. */
-  lookAt: OwnerRecommendation | null;
   /** Everything waiting on owner authority, resolved to one number. */
   decisionCount: number;
-  /** The decision lines behind that number (component renders open ones). */
-  decisions: Signal[];
-  /** The office goal the hero shows; moreCount collapses the rest. */
+  /** The same top-three Attention items Manager Home shows, one navigation action each. */
+  needs: NeedsYou;
+  /** The office challenge, shown once; moreCount collapses the rest. */
   goal: GoalBrief | null;
-  /**
-   * Month in progress — the three pace lines (production, collections, new
-   * patients seen), missed MTD, compact trend. The month numbers' one home.
-   */
-  month: MonthDetail | null;
   /** Phase-aware staffing. Attendance surfaces here ONLY as a real exception. */
   staffing: StaffingSummary;
   /** Real, unresolved operational exceptions (notes, attendance review). */
   exceptions: Signal[];
 };
 
-export type ManagerView = {
+export type ManagerView = PerformanceBlock & {
   kind: 'manager';
   header: DashboardHeader;
   roleContext: RoleContext;
@@ -199,7 +215,7 @@ export type ManagerView = {
   mine: Signal[];
 };
 
-export type MemberView = {
+export type MemberView = PerformanceBlock & {
   kind: 'member';
   header: DashboardHeader;
   roleContext: RoleContext;
@@ -208,11 +224,10 @@ export type MemberView = {
   /** A — the single next action ("My Next Move"). */
   next: { title: string; detail: string; href: string; cta: string } | null;
   /**
-   * B — Our Office Pulse: the same canonical month lines the owner reads,
-   * filtered by each metric's own visibility setting. A hidden metric is
-   * omitted entirely — no locked teaser.
+   * B — Our office pulse: the same rows and calculations the owner reads,
+   * limited to the metrics whose visibility setting is "everyone". A hidden
+   * metric is omitted entirely — no locked teaser. Carried in `performance`.
    */
-  officePulse: MonthPaceLine[];
   /** Honest time-semantics line for the pulse (e.g. updates after closeout). */
   officePulseNote: string | null;
   /** C — office facts relevant to this member's operational role. */

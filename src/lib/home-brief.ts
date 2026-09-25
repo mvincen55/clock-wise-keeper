@@ -236,6 +236,18 @@ export function stateSentence(input: {
   return parts;
 }
 
+/** The first three Attention items and the counts behind "n more" — shared by Owner and Manager Home. */
+export function needsYou(attention: Pick<AttentionResult, 'needsNow' | 'waiting' | 'deferred' | 'degradedSources'> & { enabled: boolean }): NeedsYou {
+  return {
+    top: attention.needsNow.slice(0, 3),
+    more: Math.max(0, attention.needsNow.length - 3),
+    waiting: attention.waiting.length,
+    deferred: attention.deferred.length,
+    degraded: attention.degradedSources.length > 0,
+    enabled: attention.enabled,
+  };
+}
+
 export function buildHomeBrief(input: {
   attention: Pick<AttentionResult, 'needsNow' | 'waiting' | 'deferred' | 'degradedSources'> & { enabled: boolean };
   summary: StaffingSummary;
@@ -251,14 +263,7 @@ export function buildHomeBrief(input: {
   inbox: { outstanding: number; label: string } | null;
   asOf?: string | null;
 }): HomeBrief {
-  const needs: NeedsYou = {
-    top: input.attention.needsNow.slice(0, 3),
-    more: Math.max(0, input.attention.needsNow.length - 3),
-    waiting: input.attention.waiting.length,
-    deferred: input.attention.deferred.length,
-    degraded: input.attention.degradedSources.length > 0,
-    enabled: input.attention.enabled,
-  };
+  const needs = needsYou(input.attention);
   const today = todayBand({ summary: input.summary, snapshot: input.snapshot, now: input.now, needsNow: input.attention.needsNow, asOf: input.asOf });
   const phase = input.summary.office.phase;
   const wrapUp = phase === 'after_close';

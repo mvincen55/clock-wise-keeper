@@ -1,18 +1,25 @@
 import type { OperationalRole } from '@/lib/schedule-reader/types';
-import type { DayVitals, VitalsSummary, VitalsVisibility } from '@/hooks/usePracticeVitals';
+import { summarizeVitals, type DayVitals, type VitalsSummary, type VitalsTargets, type VitalsVisibility } from '@/hooks/usePracticeVitals';
 import type { DepositLog } from '@/hooks/useDepositLog';
 import {
-  buildDailyBrief, buildGoalBrief, buildMonthDetail, dailySummary, monthPaceLines,
-  ownerRecommendation, type GoalLike, type OwnerPulseInput,
+  buildDailyBrief, buildGoalBrief, dailySummary, monthPaceLines, type GoalLike, type OwnerPulseInput,
 } from '@/lib/owner-pulse';
 import { closeDayStatus } from '@/lib/manager-pulse';
-import { buildHomeBrief } from '@/lib/home-brief';
+import { buildHomeBrief, needsYou } from '@/lib/home-brief';
 import { compareByConsequence, type AttentionItem } from '@/lib/attention';
 import type { EmployeeSnapshot } from '@/hooks/useOrgAttendanceSnapshot';
-import { memberOfficeLines, rolePulseItems } from '@/lib/member-pulse';
+import { rolePulseItems } from '@/lib/member-pulse';
+import type { PreparedReport } from '@/lib/prepared-report';
+import type { ReportImportRow } from '@/lib/report-history';
+import type { MissedEventLite } from '@/lib/missed-trend';
+import type { PerformanceRaw } from '@/lib/home-performance';
+import type { AttentionSummary } from '@/lib/home-insights';
+import { daysInMonthOf, weeklyPaceForMonth } from '@/lib/metric-pace';
+import { mondayOf } from '@/lib/time-utils';
 import { shortcutsFor, roleLabel, roleMission } from './opRoles';
+import { performanceBlockFrom } from './performance/block';
 import type {
-  ManagerView, MemberView, OwnerView, PermissionTier, RoleContext, RoleLane, Signal,
+  ManagerView, MemberView, OwnerView, PerformanceBlock, PermissionTier, RoleContext, RoleLane, Signal,
   StaffingSummary,
 } from './types';
 
@@ -150,6 +157,14 @@ const staffingNewOffice: StaffingSummary = {
 };
 
 /* --------------------------- recorded inputs --------------------------- */
+//
+// FICTIONAL closeout history. One deterministic generator produces the
+// office days every fixture reads, so the strip, the chart, the meters, the
+// observations, and the briefing sentence all agree with each other — and
+// disagree with any real office, which is the point of a fixture.
+
+const FX_TODAY = '2026-03-03';
+const ALL_VISIBLE: VitalsVisibility = { production: true, collections: true, newPatients: true };
 
 const fxDay = (date: string, over: Partial<DayVitals> = {}): DayVitals => ({
   date,
@@ -161,24 +176,107 @@ const fxDay = (date: string, over: Partial<DayVitals> = {}): DayVitals => ({
   hygieneNoShows: 0,
   doctorCancellations: 0,
   doctorNoShows: 1,
+  sealedAt: `${date}T22:30:00Z`,
   ...over,
 });
 
-const fxSummary = (over: Partial<VitalsSummary> = {}): VitalsSummary => ({
-  productionCents: 1_390_000,
-  collectedCents: 900_000,
-  newPatientsScheduled: 5,
-  newPatientsSeen: 4,
-  newPatientsScheduledRecordedDays: 2,
-  newPatientsSeenRecordedDays: 2,
-  hygieneCancellations: 3,
-  hygieneNoShows: 0,
-  doctorCancellations: 0,
-  doctorNoShows: 1,
-  disruptions: 4,
-  days: 2,
-  ...over,
-});
+/** The weekdays between two dates, with a handful deliberately unrecorded. */
+export function fxCloseoutHistory(from: string, to: string): DayVitals[] {
+  const days: DayVitals[] = [];
+  let i = 0;
+  for (let d = new Date(`${from}T12:00:00Z`); d.toISOString().slice(0, 10) <= to; d.setUTCDate(d.getUTCDate() + 1)) {
+    const date = d.toISOString().slice(0, 10);
+    const dow = d.getUTCDay();
+    if (dow === 0 || dow === 6) continue; // the office is closed on weekends
+    i += 1;
+    if (i % 9 === 4) continue; // an unrecorded weekday now and then — a gap, never a zero
+    const production = 560_000 + ((i * 37) % 11) * 42_000 + (dow === 5 ? -80_000 : 0);
+    const collected = Math.round(production * (0.66 + ((i * 13) % 7) / 20));
+    days.push(fxDay(date, {
+      productionCents: production,
+      collectedCents: collected,
+      newPatientsScheduled: (i * 7) % 4,
+      newPatientsSeen: (i * 5) % 3,
+      hygieneCancellations: (i * 3) % 3,
+      hygieneNoShows: i % 4 === 0 ? 1 : 0,
+      doctorCancellations: (i * 5) % 2,
+      doctorNoShows: (i * 7) % 5 === 0 ? 1 : 0,
+    }));
+  }
+  return days;
+}
+
+/** Yesterday's closeout exactly as the tests have always known it. */
+const fxYesterday = fxDay('2026-03-02');
+
+/** Oct 1, 2025 through yesterday, the last day saved but not yet sealed. */
+const fxHistory: DayVitals[] = [
+  ...fxCloseoutHistory('2025-10-01', '2026-02-27'),
+  { ...fxYesterday, sealedAt: null },
+];
+
+/** Fictional Dentrix postings: one row per 9100 / 9101, some unassigned. */
+export function fxMissedPostings(days: DayVitals[]): MissedEventLite[] {
+  const events: MissedEventLite[] = [];
+  days.forEach((d, i) => {
+    if (i % 3 === 0) events.push({ business_date: d.date, code: '9101', department: 'hygiene' });
+    if (i % 5 === 0) events.push({ business_date: d.date, code: '9100', department: 'doctor' });
+    if (i % 4 === 1) events.push({ business_date: d.date, code: '9101', department: 'doctor' });
+    if (i % 11 === 7) events.push({ business_date: d.date, code: '9100', department: 'other' });
+  });
+  return events;
+}
+
+/** A fictional loaded report package: posted charges and receipts by posting date. */
+export function fxReportPackage(start: string, end: string, importedAt: string): ReportImportRow {
+  const rows: { date: string; posted_charges_cents: number; recorded_payments_cents: number; credit_adjustments_cents: number; charge_adjustments_cents: number }[] = [];
+  let i = 0;
+  for (let d = new Date(`${start}T12:00:00Z`); d.toISOString().slice(0, 10) <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+    const dow = d.getUTCDay();
+    if (dow === 0 || dow === 6) continue;
+    i += 1;
+    const charges = 610_000 + ((i * 29) % 9) * 38_000;
+    rows.push({ date: d.toISOString().slice(0, 10), posted_charges_cents: charges, recorded_payments_cents: Math.round(charges * (0.7 + ((i * 11) % 5) / 25)), credit_adjustments_cents: 0, charge_adjustments_cents: 0 });
+  }
+  const payload = {
+    schema_version: 'purple-envelope-prepared-report-package-v1',
+    target_org_id: 'fx-office',
+    report_start: start,
+    report_end: end,
+    daily_financials_by_entry_date: rows,
+    monthly_financials_by_entry_date: [],
+  } as unknown as PreparedReport;
+  return { id: `fx-pkg-${start}`, report_start: start, report_end: end, imported_at: importedAt, payload };
+}
+
+const monthKey = (date: string) => date.slice(0, 7);
+
+/**
+ * The pulse input, derived from the fictional days the same way the live
+ * hook derives it from deposit_logs — nothing here is typed by hand.
+ */
+function pulseFromDays(days: DayVitals[], today: string, targets: VitalsTargets, officePhase: OwnerPulseInput['officePhase']): OwnerPulseInput {
+  const thisMonthDays = days.filter(d => monthKey(d.date) === monthKey(today));
+  const [y, m, dayOfMonth] = today.split('-').map(Number);
+  const prevKey = new Date(Date.UTC(y, m - 2, 1, 12)).toISOString().slice(0, 7);
+  const prevDays = days.filter(d => monthKey(d.date) === prevKey);
+  const daysInMonth = daysInMonthOf(today);
+  const weekStart = mondayOf(today);
+  const weekDays = days.filter(d => d.date >= weekStart && d.date <= today);
+  return {
+    today,
+    todayVitals: days.find(d => d.date === today) ?? null,
+    latest: days.length ? days[days.length - 1] : null,
+    thisMonth: summarizeVitals(thisMonthDays),
+    prevMonth: prevDays.length ? { month: prevKey, ...summarizeVitals(prevDays) } : null,
+    monthElapsed: dayOfMonth / daysInMonth,
+    targets,
+    weeklyNewPatientPace: weeklyPaceForMonth(targets.newPatientsSeen, daysInMonth),
+    scheduledThisWeek: weekDays.reduce((a, d) => a + (d.newPatientsScheduled ?? 0), 0),
+    scheduledThisWeekRecordedDays: weekDays.filter(d => d.newPatientsScheduled !== null).length,
+    officePhase,
+  };
+}
 
 const fxGoals: GoalLike[] = [
   {
@@ -191,51 +289,53 @@ const fxGoals: GoalLike[] = [
   },
 ];
 
-const fxMonths = [
-  { month: '2025-10', productionCents: 12_100_000, disruptions: 24 },
-  { month: '2025-11', productionCents: 11_400_000, disruptions: 19 },
-  { month: '2025-12', productionCents: 9_800_000, disruptions: 28 },
-  { month: '2026-01', productionCents: 13_200_000, disruptions: 22 },
-  { month: '2026-02', productionCents: 14_800_000, disruptions: 21 },
-  { month: '2026-03', productionCents: 1_390_000, disruptions: 4 },
-];
-
-const fxPrevMonth: VitalsSummary & { month: string } = {
-  month: '2026-02',
-  productionCents: 14_800_000,
-  collectedCents: 14_100_000,
-  newPatientsScheduled: 31,
-  newPatientsSeen: 26,
-  newPatientsScheduledRecordedDays: 19,
-  newPatientsSeenRecordedDays: 19,
-  hygieneCancellations: 12,
-  hygieneNoShows: 4,
-  doctorCancellations: 3,
-  doctorNoShows: 2,
-  disruptions: 21,
-  days: 19,
-};
-
-const fxTargets = {
+const fxTargets: VitalsTargets = {
   productionCents: 16_000_000,
   collectionsCents: 15_000_000,
   newPatientsSeen: 40,
 };
 
+const NO_TARGETS: VitalsTargets = { productionCents: 0, collectionsCents: 0, newPatientsSeen: 0 };
+
+/**
+ * The performance block for a fixture, through the SAME composer the live
+ * hook uses: raw rows in, chart / meters / observations out.
+ */
+export function fxPerformance(args: {
+  role: 'owner' | 'manager' | 'employee';
+  days: DayVitals[];
+  targets: VitalsTargets;
+  officePhase: OwnerPulseInput['officePhase'];
+  visibility?: VitalsVisibility;
+  reports?: ReportImportRow[];
+  events?: MissedEventLite[] | null;
+  attention?: AttentionSummary | null;
+  today?: string;
+}): { block: PerformanceBlock; pulse: OwnerPulseInput } {
+  const today = args.today ?? FX_TODAY;
+  const pulse = pulseFromDays(args.days, today, args.targets, args.officePhase);
+  const admin = args.role !== 'employee';
+  const raw: PerformanceRaw = {
+    orgId: 'fx-office',
+    viewerOrgId: 'fx-office',
+    today,
+    role: args.role,
+    days: args.days,
+    closeoutsState: 'ok',
+    reports: admin ? (args.reports ?? []) : null,
+    reportState: admin ? 'ok' : 'unauthorized',
+    missedEvents: admin ? (args.events === undefined ? fxMissedPostings(args.days) : args.events) : null,
+    missedState: admin ? 'ok' : 'unauthorized',
+    visibility: args.visibility ?? ALL_VISIBLE,
+    thisMonth: pulse.thisMonth,
+    targets: args.targets,
+    monthElapsed: pulse.monthElapsed,
+  };
+  return { block: performanceBlockFrom({ raw, state: 'ok', pulse, attention: args.attention ?? null }), pulse };
+}
+
 /** Mid-morning, Tue Mar 3: yesterday closed out, today's closeout still ahead. */
-const openPulseInput: OwnerPulseInput = {
-  today: '2026-03-03',
-  todayVitals: null,
-  latest: fxDay('2026-03-02'),
-  thisMonth: fxSummary(),
-  prevMonth: fxPrevMonth,
-  monthElapsed: 3 / 31,
-  targets: fxTargets,
-  weeklyNewPatientPace: 10, // = ceil(40 / (31/7)), matching weeklyPaceForMonth
-  scheduledThisWeek: 5,
-  scheduledThisWeekRecordedDays: 2,
-  officePhase: 'open',
-};
+const openPulseInput: OwnerPulseInput = pulseFromDays(fxHistory, FX_TODAY, fxTargets, 'open');
 
 /** A fake saved deposit_logs row — only the fields the pure helpers read. */
 const fxTodayLog = (over: Partial<DepositLog> = {}): DepositLog =>
@@ -256,6 +356,44 @@ const fxTodayLog = (over: Partial<DepositLog> = {}): DepositLog =>
 
 const ownerContext = context('owner', 'Owner', 'dentist');
 
+/** A recorded Attention item, in the shape deriveAttention() returns. */
+const fxItem = (over: Partial<AttentionItem> & Pick<AttentionItem, 'key' | 'kind' | 'verb' | 'label'>): AttentionItem => ({
+  recordTable: over.key.split(':')[0], recordId: over.key.split(':')[1],
+  subject: { employeeId: null, userId: null, name: null }, detail: '', why: '', occurredAt: null, ageHours: null,
+  deadline: null, coverage: false, payroll: false, href: `/management?item=${over.key}`,
+  work: 'needs_action', waitingOn: null, parkedUntil: null, snoozedUntil: null,
+  ...over,
+});
+
+/** What waits on the owner's authority, Tue Mar 3. */
+const ownerItems: AttentionItem[] = [
+  fxItem({
+    key: 'record_signoff:r1', kind: 'record_signoff', verb: 'follow_up', label: 'Record awaiting your sign-off · attendance',
+    subject: { employeeId: '3', userId: 'u3', name: 'Priya S.' }, detail: 'Manager review is done; the record needs your signature', ageHours: 30,
+    payroll: true, deadline: { label: 'payroll Thu', date: '2026-03-05', days: 2 },
+  }),
+  fxItem({
+    key: 'pto_request:p1', kind: 'pto_request', verb: 'decide', label: 'PTO request · 2026-03-09 – 2026-03-10 (16h)',
+    subject: { employeeId: '3', userId: 'u3', name: 'Priya S.' }, detail: '2 of 3 hygienists would be off that Monday', ageHours: 50,
+  }),
+  fxItem({
+    key: 'content_review:v4', kind: 'content_review', verb: 'decide', label: 'Sterilization log · version 4 in review',
+    detail: 'Submitted by Dana R.', ageHours: 20,
+  }),
+  fxItem({
+    key: 'incident_countersign:i2', kind: 'incident_countersign', verb: 'decide', label: 'Incident report awaiting countersignature',
+    subject: { employeeId: '2', userId: 'u2', name: 'Marcus T.' }, detail: 'Sharps exposure, first aid given', ageHours: 6,
+  }),
+  fxItem({
+    key: 'challenge_verify:g2', kind: 'challenge_verify', verb: 'decide', label: 'Challenge result to verify',
+    detail: 'Morning huddle on time — 10 of 10 claimed', ageHours: 3,
+  }),
+].sort(compareByConsequence);
+
+const ownerAttention = { needsNow: ownerItems, waiting: [] as AttentionItem[], deferred: [] as AttentionItem[], degradedSources: [], enabled: true };
+const ownerAttentionSummary: AttentionSummary = { enabled: true, needsNow: ownerItems.length, waiting: 0, oldestHours: 50, payroll: { label: 'payroll Thu', days: 2 }, degraded: false };
+
+const openPerformance = fxPerformance({ role: 'owner', days: fxHistory, targets: fxTargets, officePhase: 'open', attention: ownerAttentionSummary });
 const openBrief = buildDailyBrief(openPulseInput);
 
 /** Established office, mid-morning, with real activity. */
@@ -265,55 +403,31 @@ export const ownerFixture: OwnerView = {
   roleContext: ownerContext,
   lanes: lanesFor(ownerContext),
   office: staffingOpen.office,
-  summary: dailySummary(openPulseInput, openBrief, 7),
+  summary: dailySummary(openPulseInput, openBrief, ownerItems.length),
   brief: openBrief,
-  lookAt: ownerRecommendation(openPulseInput, fxGoals),
-  decisionCount: 5,
-  decisions: [
-    { id: 'record_signoff:r1', label: 'Priya S. · Record awaiting your sign-off · attendance', detail: 'payroll Thu', value: '', href: '/management?item=record_signoff:r1', tone: 'attention' },
-    { id: 'pto_request:p1', label: 'Priya S. · PTO request · 2026-03-09 – 2026-03-10 (16h)', detail: 'Waiting on your decision', value: '', href: '/management?item=pto_request:p1', tone: 'attention' },
-    { id: 'content_review:v4', label: 'Sterilization log · version 4 in review', detail: 'Waiting on your decision', value: '', href: '/management?item=content_review:v4', tone: 'attention' },
-  ],
-  goal: buildGoalBrief(fxGoals, '2026-03-03'),
-  month: buildMonthDetail(openPulseInput, fxMonths),
+  decisionCount: ownerItems.length,
+  needs: needsYou(ownerAttention),
+  goal: buildGoalBrief(fxGoals, FX_TODAY),
   staffing: staffingOpen,
   exceptions: [
     { id: 'p1', label: 'Unresolved office notes', detail: 'Notes Purple Envelope flagged, still open.', value: '3', href: '/inbox', tone: 'attention' },
     { id: 'p2', label: '1 attendance item needs review', detail: '1 unreviewed late arrival', value: '1', href: '/management/people', tone: 'attention' },
   ],
+  ...openPerformance.block,
 };
 
 /** The same office at 10:32 PM — today closed out clean, decisions clear. */
-const closedPulseInput: OwnerPulseInput = {
-  ...openPulseInput,
-  todayVitals: fxDay('2026-03-03', {
-    productionCents: 815_000,
-    collectedCents: 790_000,
-    newPatientsScheduled: 4,
-    newPatientsSeen: 3,
-    hygieneCancellations: 0,
-    doctorNoShows: 0,
-  }),
-  latest: fxDay('2026-03-03', {
-    productionCents: 815_000,
-    collectedCents: 790_000,
-    newPatientsScheduled: 4,
-    newPatientsSeen: 3,
-    hygieneCancellations: 0,
-    doctorNoShows: 0,
-  }),
-  thisMonth: fxSummary({
-    productionCents: 2_205_000,
-    collectedCents: 1_690_000,
-    newPatientsScheduled: 9,
-    newPatientsSeen: 7,
-    newPatientsScheduledRecordedDays: 3,
-    newPatientsSeenRecordedDays: 3,
-    days: 3,
-  }),
-  officePhase: 'after_close',
-};
-
+const fxTodayClosed = fxDay(FX_TODAY, {
+  productionCents: 815_000,
+  collectedCents: 790_000,
+  newPatientsScheduled: 4,
+  newPatientsSeen: 3,
+  hygieneCancellations: 0,
+  doctorNoShows: 0,
+});
+const closedHistory: DayVitals[] = [...fxHistory.slice(0, -1), fxYesterday, fxTodayClosed];
+const closedPerformance = fxPerformance({ role: 'owner', days: closedHistory, targets: fxTargets, officePhase: 'after_close' });
+const closedPulseInput: OwnerPulseInput = closedPerformance.pulse;
 const closedBrief = buildDailyBrief(closedPulseInput);
 
 export const ownerClosedFixture: OwnerView = {
@@ -322,34 +436,16 @@ export const ownerClosedFixture: OwnerView = {
   office: staffingClosed.office,
   summary: dailySummary(closedPulseInput, closedBrief, 0),
   brief: closedBrief,
-  lookAt: ownerRecommendation(closedPulseInput, fxGoals),
   decisionCount: 0,
-  decisions: [],
-  month: buildMonthDetail(closedPulseInput, fxMonths),
+  needs: needsYou({ ...ownerAttention, needsNow: [] }),
   staffing: staffingClosed,
   exceptions: [],
+  ...closedPerformance.block,
 };
 
 /** A brand-new office: setup guidance, not a wall of zeros. */
-const newPulseInput: OwnerPulseInput = {
-  today: '2026-03-03',
-  todayVitals: null,
-  latest: null,
-  thisMonth: fxSummary({
-    productionCents: 0, collectedCents: 0, newPatientsScheduled: 0, newPatientsSeen: 0,
-    newPatientsScheduledRecordedDays: 0, newPatientsSeenRecordedDays: 0,
-    hygieneCancellations: 0, hygieneNoShows: 0, doctorCancellations: 0, doctorNoShows: 0,
-    disruptions: 0, days: 0,
-  }),
-  prevMonth: null,
-  monthElapsed: 3 / 31,
-  targets: { productionCents: 0, collectionsCents: 0, newPatientsSeen: 0 },
-  weeklyNewPatientPace: null,
-  scheduledThisWeek: 0,
-  scheduledThisWeekRecordedDays: 0,
-  officePhase: 'no_schedule',
-};
-
+const newPerformance = fxPerformance({ role: 'owner', days: [], targets: NO_TARGETS, officePhase: 'no_schedule', events: [] });
+const newPulseInput: OwnerPulseInput = newPerformance.pulse;
 const newBrief = buildDailyBrief(newPulseInput);
 
 export const ownerNewFixture: OwnerView = {
@@ -360,25 +456,37 @@ export const ownerNewFixture: OwnerView = {
   office: staffingNewOffice.office,
   summary: dailySummary(newPulseInput, newBrief, 0),
   brief: newBrief,
-  lookAt: ownerRecommendation(newPulseInput, []),
   decisionCount: 0,
-  decisions: [],
+  needs: needsYou({ ...ownerAttention, needsNow: [] }),
   goal: null,
-  month: buildMonthDetail(newPulseInput, []),
   staffing: staffingNewOffice,
   exceptions: [],
+  ...newPerformance.block,
+};
+
+/**
+ * Incomplete history: closeouts began on Feb 16, a loaded report package
+ * covers Nov through January by posting date, and no goals are configured.
+ * The chart shows gaps as gaps and offers the report view separately.
+ */
+const incompleteHistory: DayVitals[] = fxCloseoutHistory('2026-02-16', '2026-03-02');
+const incompletePerformance = fxPerformance({
+  role: 'owner', days: incompleteHistory, targets: NO_TARGETS, officePhase: 'open',
+  reports: [fxReportPackage('2025-11-01', '2026-01-31', '2026-02-20T15:00:00Z')],
+  attention: ownerAttentionSummary,
+});
+const incompleteBrief = buildDailyBrief(incompletePerformance.pulse);
+
+export const ownerIncompleteFixture: OwnerView = {
+  ...ownerFixture,
+  summary: dailySummary(incompletePerformance.pulse, incompleteBrief, 2),
+  brief: incompleteBrief,
+  decisionCount: 2,
+  needs: needsYou({ ...ownerAttention, needsNow: ownerItems.slice(0, 2) }),
+  ...incompletePerformance.block,
 };
 
 /* ------------------------------ manager ------------------------------- */
-
-/** A recorded Attention item, in the shape deriveAttention() returns. */
-const fxItem = (over: Partial<AttentionItem> & Pick<AttentionItem, 'key' | 'kind' | 'verb' | 'label'>): AttentionItem => ({
-  recordTable: over.key.split(':')[0], recordId: over.key.split(':')[1],
-  subject: { employeeId: null, userId: null, name: null }, detail: '', why: '', occurredAt: null, ageHours: null,
-  deadline: null, coverage: false, payroll: false, href: `/management?item=${over.key}`,
-  work: 'needs_action', waitingOn: null, parkedUntil: null, snoozedUntil: null,
-  ...over,
-});
 
 /** Tue Mar 3, mid-morning: five things need the manager, one is waiting on a person. */
 const openItems: AttentionItem[] = [
@@ -429,7 +537,12 @@ const closedSnapshot: EmployeeSnapshot[] = [
 
 type ManagerScenarioArgs = {
   ctx: RoleContext;
-  input: OwnerPulseInput;
+  /** The fictional closeouts the scenario reads; the pulse and the block derive from them. */
+  days: DayVitals[];
+  targets?: VitalsTargets;
+  /** The scenario's calendar date, when it is not Tue Mar 3. */
+  today?: string;
+  dateLabel?: string;
   staffing: StaffingSummary;
   snapshot?: EmployeeSnapshot[];
   now: Date;
@@ -453,8 +566,21 @@ type ManagerScenarioArgs = {
  * computed by home-brief.ts and attention/, never typed.
  */
 function makeManager(args: ManagerScenarioArgs): ManagerView {
-  const { ctx, input, staffing, todayLog } = args;
+  const { ctx, staffing, todayLog } = args;
   const goals = args.goals ?? fxGoals;
+  const needsNow = args.needsNow ?? [];
+  const attentionSummary: AttentionSummary = {
+    enabled: true,
+    needsNow: needsNow.length,
+    waiting: (args.waiting ?? []).length,
+    oldestHours: needsNow.reduce<number | null>((m, i) => (i.ageHours === null ? m : Math.max(m ?? 0, i.ageHours)), null),
+    payroll: args.payroll?.dueDate ? { label: args.payroll.dueLabel ?? 'payroll', days: 2 } : null,
+    degraded: false,
+  };
+  const { block, pulse: input } = fxPerformance({
+    role: 'manager', days: args.days, targets: args.targets ?? fxTargets, officePhase: staffing.office.phase,
+    attention: attentionSummary, events: args.days.length ? undefined : [], today: args.today,
+  });
   const closeDay = closeDayStatus(todayLog, staffing.office.phase);
   const home = buildHomeBrief({
     attention: { needsNow: args.needsNow ?? [], waiting: args.waiting ?? [], deferred: args.deferred ?? [], degradedSources: [], enabled: true },
@@ -472,12 +598,13 @@ function makeManager(args: ManagerScenarioArgs): ManagerView {
   });
   return {
     kind: 'manager',
-    header: header('Practice manager', args.personName ?? 'Good morning, Sofia', args.timeLabel),
+    header: { ...header('Practice manager', args.personName ?? 'Good morning, Sofia', args.timeLabel), ...(args.dateLabel ? { dateLabel: args.dateLabel } : {}) },
     roleContext: ctx,
     lanes: lanesFor(ctx, args.urgent ?? []),
     office: staffing.office,
     home,
     mine: args.mine ?? [],
+    ...block,
   };
 }
 
@@ -493,7 +620,7 @@ const openCloseouts = [
 /** Open office, mid-morning: yesterday saved but unsealed, five items need the manager. */
 export const managerFixture = makeManager({
   ctx: context('manager', 'Practice manager', 'office_manager'),
-  input: openPulseInput,
+  days: fxHistory,
   staffing: staffingOpen,
   now: openNow,
   todayLog: null,
@@ -509,7 +636,7 @@ export const managerFixture = makeManager({
 /** Same office after close: today saved but not yet sealed, one person still clocked in. */
 export const managerClosedFixture = makeManager({
   ctx: context('manager', 'Practice manager', 'office_manager'),
-  input: closedPulseInput,
+  days: closedHistory,
   staffing: staffingClosed,
   snapshot: closedSnapshot,
   now: closedNow,
@@ -524,21 +651,21 @@ export const managerClosedFixture = makeManager({
   timeLabel: '10:32 PM',
 });
 
-/** Performance materially off pace, and a challenge that is off track too. */
+/**
+ * Performance materially off pace on Mar 10, and a challenge that is off
+ * track too: eight closed-out days whose collections lag a goal the office
+ * set high, so the meters read behind and the observations say so.
+ */
+const offPaceHistory: DayVitals[] = [
+  ...fxCloseoutHistory('2025-10-01', '2026-02-27'),
+  ...fxCloseoutHistory('2026-03-02', '2026-03-09').map(d => ({ ...d, productionCents: 450_000, collectedCents: 225_000 })),
+];
 export const managerOffPaceFixture = makeManager({
   ctx: context('manager', 'Practice manager', 'office_manager'),
-  input: {
-    ...openPulseInput,
-    thisMonth: fxSummary({
-      days: 8,
-      productionCents: 3_600_000,
-      collectedCents: 1_800_000,
-      newPatientsSeen: 5,
-      newPatientsSeenRecordedDays: 8,
-      newPatientsScheduledRecordedDays: 8,
-    }),
-    monthElapsed: 10 / 31,
-  },
+  days: offPaceHistory,
+  targets: { productionCents: 18_000_000, collectionsCents: 16_000_000, newPatientsSeen: 40 },
+  today: '2026-03-10',
+  dateLabel: 'Tue, Mar 10, 2026',
   staffing: staffingOpen,
   now: openNow,
   todayLog: null,
@@ -553,7 +680,7 @@ export const managerOffPaceFixture = makeManager({
 /** Manager who also covers the front desk — personal lane stays compact. */
 export const managerFrontDeskFixture = makeManager({
   ctx: context('manager', 'Practice manager', 'front_desk', ['office_manager'], ['office_manager']),
-  input: openPulseInput,
+  days: fxHistory,
   staffing: staffingOpen,
   now: openNow,
   todayLog: null,
@@ -567,7 +694,8 @@ export const managerFrontDeskFixture = makeManager({
 /** A new office from the manager's chair: nothing recorded, nothing invented. */
 export const managerNewFixture = makeManager({
   ctx: context('manager', 'Practice manager', 'office_manager'),
-  input: newPulseInput,
+  days: [],
+  targets: NO_TARGETS,
   staffing: staffingNewOffice,
   now: openNow,
   todayLog: null,
@@ -576,7 +704,6 @@ export const managerNewFixture = makeManager({
 
 /* ------------------------------- member ------------------------------- */
 
-const ALL_VISIBLE: VitalsVisibility = { production: true, collections: true, newPatients: true };
 const FINANCIALS_HIDDEN: VitalsVisibility = {
   production: false,
   collections: false,
@@ -587,18 +714,20 @@ type MemberScenarioArgs = {
   name: string;
   ctx: RoleContext;
   visibility?: VitalsVisibility;
-  input?: OwnerPulseInput;
+  days?: DayVitals[];
+  targets?: VitalsTargets;
   goals?: GoalLike[];
   overrides?: Partial<MemberView>;
 };
 
 /**
- * Member fixtures run the REAL member-pulse filters: which metrics appear is
- * decided by memberOfficeLines/rolePulseItems, never hand-picked here.
+ * Member fixtures run the REAL visibility filters: which metrics appear is
+ * decided by the performance block and rolePulseItems, never hand-picked.
  */
 function makeMember(args: MemberScenarioArgs): MemberView {
-  const input = args.input ?? openPulseInput;
   const visibility = args.visibility ?? ALL_VISIBLE;
+  const days = args.days ?? fxHistory;
+  const { block, pulse: input } = fxPerformance({ role: 'employee', days, targets: args.targets ?? fxTargets, officePhase: 'open', visibility });
   return {
     kind: 'member',
     header: header('Team member', `Good morning, ${args.name}`),
@@ -610,7 +739,6 @@ function makeMember(args: MemberScenarioArgs): MemberView {
       href: '/playbook',
       cta: 'Open playbook',
     },
-    officePulse: memberOfficeLines(input, visibility),
     officePulseNote: 'Financial figures update after Close the Day — they are not live during the day.',
     rolePulse: rolePulseItems(args.ctx.primary, input, visibility),
     mine: [
@@ -619,6 +747,7 @@ function makeMember(args: MemberScenarioArgs): MemberView {
       { id: '3', label: 'Bypass reasons owed', detail: 'Never blocks you — just needs a sentence.', value: '1', href: '/checklists', tone: 'attention' },
     ],
     goal: buildGoalBrief(args.goals ?? fxGoals, input.today),
+    ...block,
     status: {
       label: 'On the clock',
       detail: '2h 14m recorded today. Clock out from the bar when you finish.',
@@ -702,7 +831,8 @@ export const memberClearFixture = makeMember({
 export const memberNewFixture = makeMember({
   name: 'Priya',
   ctx: context('member', 'Team member', 'hygienist'),
-  input: newPulseInput,
+  days: [],
+  targets: NO_TARGETS,
   goals: [],
   overrides: {
     next: null,
