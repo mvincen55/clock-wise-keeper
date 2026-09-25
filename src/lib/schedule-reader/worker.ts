@@ -164,8 +164,11 @@ export async function processScheduleFrame(
     // Privacy gate FIRST. Failing it stops everything.
     const privacy = checkPrivacy(words, buildKnownNames(options.knownStaffNames), regions);
     if (!privacy.passed) {
+      // Kinds and counts only, so the refusal can say what it looked like.
+      // The matched text never leaves the detector.
       throw new ScheduleReaderError('PRIVACY_CHECK_FAILED', {
         violationKinds: privacy.violations.length,
+        kinds: privacy.violations.map(v => `${v.kind}:${v.count}`).join(','),
       });
     }
 
