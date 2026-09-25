@@ -218,12 +218,15 @@ export async function processScheduleFrame(
     const postedImage = options.profile.signature.captureMode === 'posted' ? ctx.getImageData(0, 0, frame.width, frame.height) : null;
     const headerBottomPx = rows[0].yTop;
     const providerColumns = match.frameColumns.filter(c => c.kind !== 'non_clinical');
-    // When the grid paints an unbooked slot inside a provider's hours in a
-    // pale tint, blank blue grid is closed time — before the first patient,
-    // at lunch, after the last — and the grid itself is the office's record
-    // of the day's hours, so saved hours are not applied over it.
+    // Blank blue grid is not patient time: only the pale slot the software
+    // paints inside a provider's hours is open. That is how Dentrix's privacy
+    // view paints every day, whether or not this one has an open slot to
+    // show it, and how any grid that paints a pale slot reads. Blue is then
+    // closed time — before the first patient, at lunch, after the last — and
+    // the grid itself is the office's record of the day's hours, so saved
+    // hours are not applied over it.
     const slotKind = (col: { xStart: number; xEnd: number }, i: number) => postedImage ? openSlotKind(postedImage, col, rows[i].yTop / frame.height, rows[i].yBottom / frame.height) : null;
-    const blankGridIsClosed = !!postedImage && providerColumns.some(col => rows.some((_, i) => slotKind(col, i) === 'tint'));
+    const blankGridIsClosed = !!postedImage && (/dentrix/i.test(options.profile.pmsName ?? '') || providerColumns.some(col => rows.some((_, i) => slotKind(col, i) === 'tint')));
     // The notes columns beside the chairs log each cancellation and no-show.
     const sideEvents = readSideEvents(words, match.frameColumns, rows, headerBottomPx,
       inkArrowHint(regions, box => ctx.getImageData?.(box.x0, box.y0, box.x1 - box.x0, box.y1 - box.y0) ?? null), regions);
