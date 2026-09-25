@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+import { looksLikeAppointment } from '@/lib/schedule-reader/provider-codes';
 import { detectAppointmentRegions, columnsFromRegions, isNotesOnlyColumn } from '@/lib/schedule-reader/appointment-regions';
 import { readProviderCodes } from '@/lib/schedule-reader/provider-codes';
 import { suggestDailyColumns } from '@/lib/schedule-reader/provider-mapping';
@@ -57,4 +58,14 @@ it('keeps a coded hold with the same doctor and does not use another doctor from
   expect(uncoded[1].providerId).toBeFalsy();
   const coded=suggestDailyColumns([...words,word('DR02',100,99,300)],columns,500,240,providers);
   expect(coded.map(c=>c.providerId)).toEqual(['scott','scott']);
+});
+
+it('a box too short to print its number is still an appointment when it prints its type; a note or a hold never is', () => {
+  expect(looksLikeAppointment('ResCmP1s#31 Primary')).toBe(true);
+  expect(looksLikeAppointment('PostOp')).toBe(true);
+  expect(looksLikeAppointment('SrgImpEnd# 3 General')).toBe(true);
+  expect(looksLikeAppointment('Aware Early')).toBe(false);
+  expect(looksLikeAppointment('NP')).toBe(false);
+  expect(looksLikeAppointment('General hold')).toBe(false);
+  expect(looksLikeAppointment('Lunch approved by lab')).toBe(false);
 });

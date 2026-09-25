@@ -38,8 +38,10 @@ export function readProviderCodes(words: OcrWord[]): string[] {
  */
 export function looksLikeAppointment(text: string): boolean {
   if (/\b(?:hold|holds|do not book|dnb)\b/i.test(text)) return false;
-  if (text.trim().split(/\s+/).length < 3) return false;
-  return /(?<![\d/:.#-])\b\d{4}\b(?![\d/:.-])/.test(text);
+  if (text.trim().split(/\s+/).length >= 3 && /(?<![\d/:.#-])\b\d{4}\b(?![\d/:.-])/.test(text)) return true;
+  // A box too short to print its number still prints the appointment type
+  // (General, Primary, Non) or a visit type (PostOp); a note never does.
+  return /\b(?:general|primary|secondary|non|post-?op)\b/i.test(text) && !/\b(?:sent|call|memo|notes?|out|off)\b/i.test(text);
 }
 
 export type WorkDepartment = 'doctor' | 'hygiene';

@@ -39,6 +39,11 @@ const LEXICON: LexiconEntry[] = [
       /\bday off\b/,
       /\btime off\b/,
       /\bnot in today\b/,
+      // "Molly NOT here--No Pts sch'ld": the provider is not here, nobody is booked.
+      /\bnot here\b/,
+      /\bnot in\b/,
+      /\bno pts?\b/,
+      /\bno patients\b/,
       /\bvacation\b/,
       /\bpto\b/,
       /\bout of office\b/,
@@ -81,11 +86,12 @@ const LEXICON: LexiconEntry[] = [
       /\bshort staffed\b/,
       /\bno hygienist\b/,
       /\bno front desk\b/,
-      // "JB Out", "GC OFF", "Megan out (in 10ish)": a team member named by
-      // initials or a single first name is out. Role words keep their own
-      // codes; "pt"/"patient", "call", "hold", "block", "time" and the like
-      // are about something else and stay unclassified here.
-      /^(?!(?:doctor|dr|doc|dentist|provider|hygienist|hyg|day|time|no|not|op|out|pt|pts|patient|call|check|hold|block|blocked|move|moved|sent|room)\b)[a-z]{1,12}\.? (?:is )?(?:out|off)\b(?! early| late| at \d| of)/,
+      // "JB Out", "GC OFF", "Megan out (in 10ish)", "DO NOT BOOK - LUCY OUT":
+      // a team member named by initials or a single first name is out, at
+      // the start of the note or after a dash or colon. Role words keep their
+      // own codes; "pt"/"patient", "call", "hold", "block", "time" and the
+      // like are about something else and stay unclassified here.
+      /(?:^|[-:.]\s*)(?!(?:doctor|dr|doc|dentist|provider|hygienist|hyg|day|time|no|not|op|out|pt|pts|patient|call|check|hold|block|blocked|move|moved|sent|room)\b)[a-z]{1,12}\.? (?:is )?(?:out|off)\b(?! early| late| at \d| of)/,
     ],
   },
   {
@@ -94,7 +100,8 @@ const LEXICON: LexiconEntry[] = [
   },
   {
     code: 'OTHER_OPERATIONAL_BLOCK',
-    patterns: [/\bblocked\b/, /\bblock\b/, /\bhold\b/, /\bbuffer\b/, /\bdo not book\b/, /\bdnb\b/],
+    // "NP" on its own is a slot held for a new patient.
+    patterns: [/\bblocked\b/, /\bblock\b/, /\bhold\b/, /\bbuffer\b/, /\bdo not book\b/, /\bdnb\b/, /^(?:np|n p)$/, /\b(?:np|new (?:pt|patient)) (?:hold|block|slot|reserv\w*)\b/],
   },
 ];
 

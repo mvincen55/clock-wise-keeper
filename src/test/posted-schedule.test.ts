@@ -46,3 +46,17 @@ it('counts a pale-tinted unbooked slot as open on a posted day', () => {
  const words:OcrWord[]=['HY14','Lunch'].map((text,i)=>({text,confidence:99,bbox:{x0:5,x1:40,y0:i*20+2,y1:i*20+10}}));
  expect(postedColumnStatuses({width,height,data},col,rows,regions,words,[])).toEqual(['completed','blocked','open','open',null]);
 });
+
+it('reads blank blue grid as closed time when told the grid paints its open slots, and a grazed row by its majority', () => {
+ const width=100,height=100,data=new Uint8ClampedArray(width*height*4);
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++)data.set(y<40?[128,128,128,255]:y<60?[223,238,225,255]:[133,173,214,255],(y*width+x)*4);
+ const col:LayoutColumn & {pxStart:number;pxEnd:number}={xStart:0,xEnd:1,pxStart:0,pxEnd:100,kind:'provider',providerCode:'HY14',providerLabel:'Cori',providerRole:'hygienist',department:'hygiene',employeeId:null};
+ const rows=Array.from({length:5},(_,i)=>({yTop:i*20,yBottom:(i+1)*20}));
+ const regions=rows.slice(0,2).map(r=>({x0:0,x1:100,y0:r.yTop,y1:r.yBottom}));
+ const words:OcrWord[]=['HY14','Lunch'].map((text,i)=>({text,confidence:99,bbox:{x0:5,x1:40,y0:i*20+2,y1:i*20+10}}));
+ expect(postedColumnStatuses({width,height,data},col,rows,regions,words,[],true)).toEqual(['completed','blocked','open','blocked','blocked']);
+ expect(postedColumnStatuses({width,height,data},col,rows,regions,words,[])).toEqual(['completed','blocked','open','open','open']);
+ // A box edge grazing the next row does not make that row a block.
+ const grazing=[{x0:0,x1:100,y0:0,y1:44}];
+ expect(postedColumnStatuses({width,height,data},col,rows,grazing,[words[0]],[])[2]).toBe('open');
+});
