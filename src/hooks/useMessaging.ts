@@ -449,6 +449,7 @@ export function useEnsureDm() {
 
 export function useEnsureAiConversation() {
   const qc = useQueryClient();
+  const { toast } = useToast();
   return useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.rpc('ensure_ai_conversation');
@@ -456,5 +457,8 @@ export function useEnsureAiConversation() {
       return data as string;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['conversations'] }),
+    // Failing silently here read as "there is no AI to talk to".
+    onError: (e: Error) =>
+      toast({ title: 'Could not open Office AI', description: e.message, variant: 'destructive' }),
   });
 }

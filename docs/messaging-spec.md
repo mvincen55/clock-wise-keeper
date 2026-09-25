@@ -112,3 +112,12 @@ unread — and `useMarkConversationRead` settles both stores in one pass.
   per-message read receipts in v1.
 - **employees.team backfill.** Existing employees start unset → 'all' only;
   manager sets teams from the Team page.
+- **The roster is not the employees table.** RLS on `employees` shows an owner or
+  manager the whole office but an employee only their own row, so a roster read
+  from it left a signed-in employee with nobody under New chat and every DM titled
+  "Direct message" (found 2026-09-24). The chat surfaces take names and the
+  New-chat roster from `org_staff_directory` — the SECURITY DEFINER RPC any
+  active member may call, names and status only — via `useChatDirectory`
+  (`src/lib/chat-directory.ts`). Readable `employees` rows still supply
+  preferred names. The Messages list also offers Office AI until the member's
+  channel exists; before, it lived only behind a header button.
