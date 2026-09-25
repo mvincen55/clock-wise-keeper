@@ -47,6 +47,25 @@ export function applyProviderWideBlocks(rows: ReducedRow[], placed: PlacedBlock[
   return changed ? result : rows;
 }
 
+const BOOKABLE: ReadonlySet<ReducedRow['category']> = new Set(['scheduled', 'completed', 'open', 'cancelled', 'no_show', 'moved']);
+
+/**
+ * A note that the provider is away says more by where it sits: with nothing
+ * bookable before it in the day, the provider came late; with nothing
+ * bookable after it, the provider left early. In the middle of the day it
+ * stays what it was. The office writes "Molly NOT here" at the end of her
+ * column and "DO NOT BOOK - LUCY OUT" at the start of hers.
+ */
+export function refineProviderAway(placed: PlacedBlock[], rows: ReducedRow[]): void {
+  for (const p of placed) {
+    if (p.rowStart < 0 || (p.block.code !== 'PROVIDER_OFF' && p.block.code !== 'STAFFING_LIMITATION')) continue;
+    const before = rows.slice(0, p.rowStart).some(r => BOOKABLE.has(r.category));
+    const after = rows.slice(p.rowEnd + 1).some(r => BOOKABLE.has(r.category));
+    if (before && !after) p.block.code = 'PROVIDER_OUT_EARLY';
+    else if (!before && after) p.block.code = 'PROVIDER_STARTS_LATE';
+  }
+}
+
 /** Confirmed working hours explain empty off-duty rows, never hide appointments. */
 export function applyProviderHours(rows: ReducedRow[], hours: LayoutColumn['workingHours'], date: string, startMinutes: number, minutesPerRow: number) {
   const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();

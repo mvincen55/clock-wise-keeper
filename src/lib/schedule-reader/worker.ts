@@ -20,10 +20,11 @@ import { recognizeFrame } from './ocr';
 import { suggestDailyColumns, type ScheduleProvider } from './provider-mapping';
 
 import type { LayoutColumn } from './types';
-import { applyProviderHours, applyProviderWideBlocks, type PlacedBlock } from './provider-hours';
+import { applyProviderHours, applyProviderWideBlocks, type PlacedBlock, refineProviderAway } from './provider-hours';
 import { postedColumnStatuses } from './posted-statuses';
 import { applyCompletedEvidence } from './completed-evidence';
 import { isEmptyBlueGridColumn, openSlotKind } from './appointment-regions';
+import { applySideEvents, inkArrowHint, readSideEvents } from './side-events';
 import { buildKnownNames, checkPrivacy, groupWordsIntoLines } from './privacy-detector';
 import { detectTimeRail, matchLayout, wordsInColumn, type TimeRail } from './layout-detector';
 import { classifyNote } from './note-classifier';
@@ -223,6 +224,10 @@ export async function processScheduleFrame(
     // of the day's hours, so saved hours are not applied over it.
     const slotKind = (col: { xStart: number; xEnd: number }, i: number) => postedImage ? openSlotKind(postedImage, col, rows[i].yTop / frame.height, rows[i].yBottom / frame.height) : null;
     const blankGridIsClosed = !!postedImage && providerColumns.some(col => rows.some((_, i) => slotKind(col, i) === 'tint'));
+    // The notes columns beside the chairs log each cancellation and no-show.
+    const sideEvents = readSideEvents(words, match.frameColumns, rows, headerBottomPx,
+      inkArrowHint(regions, box => ctx.getImageData?.(box.x0, box.y0, box.x1 - box.x0, box.y1 - box.y0) ?? null), regions);
+    const eventsFromNotes = match.frameColumns.some(c => c.kind === 'non_clinical');
 
     // Group columns by provider label (overflow columns share the label).
     const byProvider = new Map<string, typeof providerColumns>();
@@ -237,8 +242,14 @@ export async function processScheduleFrame(
     const availabilityConflicts: string[] = [];
     const providerRows: Record<string, Array<ReturnType<typeof reduceRow>>> = {};
     const providers = [...byProvider.entries()].map(([label, cols]) => {
-      const perColumnStatuses = cols.map(col =>
-        postedImage ? postedColumnStatuses(postedImage, col, rows, regions, words, options.phraseRules, blankGridIsClosed) : applyCompletedEvidence(sampleColumnStatuses(ctx, col, rows, options.profile.statusLegend), rows, regions, words, col, options.phraseRules)
+      const perColumn = cols.map(col => applySideEvents(
+        postedImage ? postedColumnStatuses(postedImage, col, rows, regions, words, options.phraseRules, blankGridIsClosed) : applyCompletedEvidence(sampleColumnStatuses(ctx, col, rows, options.profile.statusLegend), rows, regions, words, col, options.phraseRules),
+        sideEvents, col, rows, regions,
+      ));
+      const perColumnStatuses = perColumn.map(o => o.statuses);
+      const sideTotals = perColumn.reduce(
+        (a, o) => ({ cancellations: a.cancellations + o.counts.cancelled, noShows: a.noShows + o.counts.no_show, recoveredRows: a.recoveredRows + o.recoveredRows }),
+        { cancellations: 0, noShows: 0, recoveredRows: 0 },
       );
       const placed = cols.flatMap((col, c) =>
         classifyColumnNotes(
@@ -257,7 +268,9 @@ export async function processScheduleFrame(
       // Reduce the provider's chairs to one row per slot; a provider-wide
       // block read in any chair (off, lunch, meeting) then covers that span
       // in every chair, and the saved working hours block off-duty time.
-      const withWideBlocks = applyProviderWideBlocks(rows.map((_, i) => reduceRow(perColumnStatuses.map(s => s[i]))), placed);
+      const reducedRows = rows.map((_, i) => reduceRow(perColumnStatuses.map(s => s[i])));
+      refineProviderAway(placed, reducedRows);
+      const withWideBlocks = applyProviderWideBlocks(reducedRows, placed);
       const availability = blankGridIsClosed
         ? {
             rows: withWideBlocks,
@@ -273,6 +286,7 @@ export async function processScheduleFrame(
         code: 'PROVIDER_OFF', minutes: availability.offDutyMinutes,
         providerLabel: label, department: cols[0].department,
         confidence: 1, userConfirmed: true,
+        ...(blankGridIsClosed ? { source: 'grid' as const } : {}),
       });
       allBlocks.push(...blocks);
 
@@ -290,6 +304,7 @@ export async function processScheduleFrame(
         ocrConfidence,
         layoutConfidence: match.confidence,
         dayStartMinutes: grid.dayStartMinutes,
+        sideEvents: eventsFromNotes ? { cancellations: sideTotals.cancellations, noShows: sideTotals.noShows, recoveredMinutes: sideTotals.recoveredRows * grid.minutesPerRow } : undefined,
       });
       if (availability.conflict) availabilityConflicts.push(label);
       return availability.conflict ? { ...metrics, reviewStatus: 'needs_review' as const } : metrics;
@@ -317,6 +332,7 @@ export async function processScheduleFrame(
       dayStartMinutes: grid.dayStartMinutes,
       needsReview:
         match.needsColumnConfirmation || providers.some(p => p.reviewStatus === 'needs_review'),
+      eventsFromNotes,
     };
   } finally {
     // Raw OCR text dies here on every path. Only structured metrics leave.

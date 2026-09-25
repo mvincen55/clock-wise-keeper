@@ -48,7 +48,7 @@ describe('note classifier', () => {
     expect(classifyNote("Molly NOT here--No Pts sch'ld").code).toBe('PROVIDER_OFF');
     expect(classifyNote('No pts today').code).toBe('PROVIDER_OFF');
     expect(classifyNote('DO NOT BOOK - LUCY OUT').code).toBe('STAFFING_LIMITATION');
-    expect(classifyNote('NP').code).toBe('OTHER_OPERATIONAL_BLOCK');
+    expect(classifyNote('NP').code).toBe('UNCLASSIFIED'); // in a chair, "NP" is the patient, read by the evidence rule
     expect(classifyNote('NP hold').code).toBe('OTHER_OPERATIONAL_BLOCK');
     expect(classifyNote('HP - DR05').code).toBe('UNCLASSIFIED');
   });
