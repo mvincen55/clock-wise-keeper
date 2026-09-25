@@ -143,13 +143,6 @@ export interface ProviderBuildInput {
   layoutConfidence: number; // 0–1
   /** Minutes from midnight of row 0; without it the observed day stays null. */
   dayStartMinutes?: number;
-  /**
-   * Events the office logged in the notes columns beside the chair, when the
-   * layout has them: each is a cancellation or no-show without notice, whether
-   * its slot stayed open or was refilled. Recovered minutes are the boxes
-   * booked into refilled slots.
-   */
-  sideEvents?: { cancellations: number; noShows: number; recoveredMinutes: number };
 }
 
 /**
@@ -282,13 +275,14 @@ export function buildProviderMetrics(input: ProviderBuildInput): ProviderDayMetr
   const trueOpen = cancellationOpen + noShowOpen + otherOpen;
   const unclassified = unmatched + unexplainedBlocked;
 
-  // Open runs are the events still visible as holes; the side columns count
-  // the ones that were refilled too.
-  const cancellationCount = Math.max(runs(input.rows, 'cancelled').length, input.sideEvents?.cancellations ?? 0);
-  const noShowCount = Math.max(runs(input.rows, 'no_show').length, input.sideEvents?.noShows ?? 0);
-  const recoveredMinutes = input.sideEvents ? Math.min(input.sideEvents.recoveredMinutes, scheduled) : null;
-  const recoveredDenominator = recoveredMinutes === null ? 0 : recoveredMinutes + cancellationOpen + noShowOpen;
-  const recoveredOpenPct = recoveredMinutes === null || recoveredDenominator === 0 ? null : round4(recoveredMinutes / recoveredDenominator);
+  // Cancellations and no-shows are counted only where the grid paints them
+  // (a legend with those colors). A posted view has none: the team enters
+  // them, and nothing here is inferred from the notes beside a chair.
+  const cancellationCount = runs(input.rows, 'cancelled').length;
+  const noShowCount = runs(input.rows, 'no_show').length;
+  // Recovered time is never inferred here; the builder always emits null.
+  const recoveredMinutes = null;
+  const recoveredOpenPct = null;
 
   const scheduledRuns = runs(
     input.rows.map(r => ({ category: r.category === 'completed' ? 'scheduled' : r.category })),

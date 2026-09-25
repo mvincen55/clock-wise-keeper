@@ -24,7 +24,8 @@ describe('note classifier', () => {
     ['equipment unavailable', 'EQUIPMENT_UNAVAILABLE'],
     ['office closed', 'OFFICE_CLOSED'],
     ['blocked', 'OTHER_OPERATIONAL_BLOCK'],
-    ['do not book', 'OTHER_OPERATIONAL_BLOCK'],
+    ['do not book', 'PROVIDER_OFF'],
+    ['DNB', 'PROVIDER_OFF'],
     // How offices actually write it on the grid.
     ['No Doctor - Yom Kippur', 'PROVIDER_OFF'],
     ['no dr today', 'PROVIDER_OFF'],
@@ -37,7 +38,8 @@ describe('note classifier', () => {
     ['JC Out', 'STAFFING_LIMITATION'],
     ['GC OFF', 'STAFFING_LIMITATION'],
     ['Megan out', 'STAFFING_LIMITATION'],
-    ['Do NOT Book--pt moved up', 'OTHER_OPERATIONAL_BLOCK'],
+    ['Do NOT Book--pt moved up', 'PROVIDER_OFF'],
+    ['Dr out early - JB out', 'PROVIDER_OUT_EARLY'],
   ])('classifies "%s" as %s', (note, code) => {
     const result = classifyNote(note);
     expect(result.code).toBe(code);
@@ -47,8 +49,8 @@ describe('note classifier', () => {
   it('knows the office\'s own phrasing for a provider who is not here and a slot held for a new patient', () => {
     expect(classifyNote("Molly NOT here--No Pts sch'ld").code).toBe('PROVIDER_OFF');
     expect(classifyNote('No pts today').code).toBe('PROVIDER_OFF');
-    expect(classifyNote('DO NOT BOOK - LUCY OUT').code).toBe('STAFFING_LIMITATION');
-    expect(classifyNote('NP').code).toBe('UNCLASSIFIED'); // in a chair, "NP" is the patient, read by the evidence rule
+    expect(classifyNote('DO NOT BOOK - LUCY OUT').code).toBe('STAFFING_LIMITATION'); // the named team member out is the reason; position says late or early
+    expect(classifyNote('NP').code).toBe('UNCLASSIFIED'); // in a chair, "NP" is the patient, booked time by the evidence rule
     expect(classifyNote('NP hold').code).toBe('OTHER_OPERATIONAL_BLOCK');
     expect(classifyNote('HP - DR05').code).toBe('UNCLASSIFIED');
   });

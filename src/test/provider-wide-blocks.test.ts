@@ -95,14 +95,20 @@ describe('a posted day with the provider out', () => {
 
   it('a chair-level hold in one chair leaves the other chair open', async () => {
     // The second chair is painted as open slots; on this grid blank blue would be closed time.
-    const [dr] = (await analyze(['Do', 'NOT', 'Book'], PALE)).providers;
+    const [dr] = (await analyze(['NP', 'hold'], PALE)).providers;
     expect(dr.intentionalUnavailableMinutes).toBe(20); // the rows the second chair's own note occupies
     expect(dr.trueOpenMinutes).toBe(60);
     expect(dr.netBookableMinutes).toBe(60);
   });
 
+  it('"Do NOT Book" in one chair is the provider not here, so the other chair closes with it', async () => {
+    const [dr] = (await analyze(['Do', 'NOT', 'Book'], PALE)).providers;
+    expect(dr.intentionalUnavailableMinutes).toBe(80);
+    expect(dr.trueOpenMinutes).toBe(0);
+  });
+
   it('a pale-tinted second chair reads as open, not unclassified', async () => {
-    const result = await analyze(['Do', 'NOT', 'Book'], PALE);
+    const result = await analyze(['NP', 'hold'], PALE);
     const [dr] = result.providers;
     expect(dr.trueOpenMinutes).toBe(60);
     expect(dr.unclassifiedMinutes).toBe(0);
