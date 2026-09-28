@@ -37,8 +37,8 @@ export type PerformanceSectionProps = {
 const controlClass =
   'inline-flex min-h-8 shrink-0 items-center rounded-full px-3 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 
-function coverageText(recorded: number, days: number, source: SeriesSource | null): string {
-  return `${recorded} of ${days} ${source === 'report_history' ? 'posting day' : 'day'}${days === 1 ? '' : 's'} recorded`;
+function coverageText(recorded: number, days: number, source: SeriesSource | null, sourceDates = false): string {
+  return `${recorded} of ${days} ${sourceDates ? 'source date' : source === 'report_history' ? 'posting day' : 'day'}${days === 1 ? '' : 's'} recorded`;
 }
 
 /** The strip's tiles for a period, from the window and the closeout-only counts. Pure, so tests can pin it. */
@@ -70,7 +70,7 @@ export function stripTiles(args: {
       } else {
         lines.push({ text: `No comparison: ${c.reason ?? 'not comparable'}` });
       }
-      lines.push({ text: coverageText(recorded, w.totals.days, w.source) });
+      lines.push({ text: coverageText(recorded, w.totals.days, w.source, w.definitions.dateBasis === 'date printed on source') });
     } else {
       lines.push({ text: choice.reason });
     }
