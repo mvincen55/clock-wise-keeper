@@ -26,7 +26,6 @@ import type { Database as Generated } from './types';
  *   20260922160000_office_pto_policy      org_pto_policy; pto_settings.policy_override;
  *                                         set_org_pto_policy
  *   20260929120000_pto_balance_guard      pto_available_hours, pto_allows_negative
- *   20260930120000_office_open_days       office_open_days
  *
  * Same idea as ./knowledge-client.ts, generalised: one module, one merge.
  */
@@ -139,44 +138,9 @@ export type OrgPtoPolicyTable = {
   ];
 };
 
-/** 20260930120000_office_open_days.sql */
-export type OfficeOpenDaysTable = {
-  Row: {
-    created_at: string;
-    created_by: string | null;
-    id: string;
-    open_date: string;
-    org_id: string;
-  };
-  Insert: {
-    created_at?: string;
-    created_by?: string | null;
-    id?: string;
-    open_date: string;
-    org_id: string;
-  };
-  Update: {
-    created_at?: string;
-    created_by?: string | null;
-    id?: string;
-    open_date?: string;
-    org_id?: string;
-  };
-  Relationships: [
-    {
-      foreignKeyName: 'office_open_days_org_id_fkey';
-      columns: ['org_id'];
-      isOneToOne: false;
-      referencedRelation: 'orgs';
-      referencedColumns: ['id'];
-    },
-  ];
-};
-
 type PendingTables = {
   manager_followups: ManagerFollowupsTable;
   org_pto_policy: OrgPtoPolicyTable;
-  office_open_days: OfficeOpenDaysTable;
 };
 
 /** Columns added to tables the generated file already has. */
