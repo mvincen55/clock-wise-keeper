@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useTimeEntries, TimeEntryRow, PunchRow } from '@/hooks/useTimeEntries';
 import { useDaysOff } from '@/hooks/useDaysOff';
 import { useTardies, TardyRow } from '@/hooks/useTardies';
+import { EXCUSE_LABELS, countsTowardThreshold, excuseState, isLiveLateArrival } from '@/lib/late-arrivals';
 import { useAttendanceExceptions } from '@/hooks/useAttendanceExceptions';
 import { useAttendanceDayStatus } from '@/hooks/useAttendanceDayStatus';
 import { useWorkedHourAdjustments, type WorkedHourAdjustmentRow } from '@/hooks/useWorkedHourAdjustments';
@@ -264,8 +265,8 @@ export default function Reports() {
   (tardies || []).forEach(t => tardyMap.set(tardyKey(t.employee_id, t.entry_date), t));
   const tardyFor = (e: TimeEntryRow) => tardyMap.get(tardyKey(e.employee_id, e.entry_date));
 
-  const activeTardies = (tardies || []).filter(t => !t.resolved);
-  const trackedTardies = activeTardies.filter(t => t.approval_status !== 'approved');
+  const activeTardies = (tardies || []).filter(isLiveLateArrival);
+  const trackedTardies = activeTardies.filter(countsTowardThreshold);
   const totalMinutesLate = activeTardies.reduce((s, t) => s + t.minutes_late, 0);
   const totalDays = entries?.length || 0;
   const editedDays = entries?.filter(e => e.punches.some(p => p.is_edited)).length || 0;
@@ -550,14 +551,15 @@ export default function Reports() {
 
     // Tardy CSV
     if (reportType === 'tardy') {
-      const header = ['Date', 'Expected Start', 'Actual Start', 'Minutes Late', 'Reason', 'Status'];
+      const header = ['Date', 'Expected Start', 'Actual Start', 'Minutes Late', 'Explanation', 'Status', 'Acknowledged'];
       const rows = activeTardies.map(t => [
         formatDate(t.entry_date),
         formatClock(t.expected_start_time, ''),
         formatTime(t.actual_start_time),
         String(t.minutes_late),
         t.reason_text || '',
-        t.approval_status,
+        EXCUSE_LABELS[excuseState(t)],
+        t.acknowledged_at ? formatDate(t.acknowledged_at) : '',
       ].map(escapeCsv).join(','));
       const csv = [header.join(','), ...rows].join('\n');
       downloadCsvBlob(csv, `tardy_${startDate}_${endDate}.csv`);
@@ -947,7 +949,7 @@ export default function Reports() {
                     </div>
                     <div className="p-4 text-center">
                       <p className="text-2xl font-bold text-warning">{trackedTardies.length}</p>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Tracked</p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Counting toward the rule</p>
                     </div>
                     <div className="p-4 text-center">
                       <p className="text-2xl font-bold text-destructive">{totalMinutesLate}</p>
@@ -964,10 +966,10 @@ export default function Reports() {
                         <span className="font-bold text-destructive">{t.minutes_late}m</span>
                         <span className="text-xs text-muted-foreground truncate">{t.reason_text || '—'}</span>
                         <Badge
-                          variant={t.approval_status === 'approved' ? 'default' : 'secondary'}
-                          className="text-[10px] px-1.5 py-0 w-fit capitalize"
+                          variant={excuseState(t) === 'excused' ? 'default' : 'secondary'}
+                          className="text-[10px] px-1.5 py-0 w-fit"
                         >
-                          {t.approval_status}
+                          {EXCUSE_LABELS[excuseState(t)]}
                         </Badge>
                       </div>
                     ))}
@@ -1047,7 +1049,7 @@ export default function Reports() {
                             <span className="font-medium">{formatDate(t.entry_date)}</span>
                             <span className="font-bold text-destructive">{t.minutes_late}m</span>
                             <span className="text-xs text-muted-foreground">{t.reason_text || '—'}</span>
-                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 w-fit capitalize">{t.approval_status}</Badge>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 w-fit">{EXCUSE_LABELS[excuseState(t)]}</Badge>
                           </div>
                         ))}
                       </div>

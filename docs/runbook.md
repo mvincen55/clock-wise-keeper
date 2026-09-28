@@ -133,8 +133,9 @@ Exact model in README §Checklist data model and migration
   from it).
 - Location-verified clock-in: `useGeoTracking` + `process-location-event` +
   `LocationStatusPanel`; zones are managed at `/work-zones`.
-- Tardiness has its own objects (`useTardies`, `TardyReasonModal`) — don't fold it
-  into punch editing.
+- Late arrivals have their own objects (`useTardies`, `LateArrivalPrompt`,
+  `LateArrivalReviewModal`, `src/lib/late-arrivals.ts`) — don't fold them into
+  punch editing. See §11 for the threshold and the attendance report.
 - Someone reads as absent who never punches (a doctor on Team for the schedule
   reader): their roster record should say so. Owners are off the clock by role
   (`roleClocksIn`); anyone else by `employees.clocks_in = false`, set from the
@@ -186,6 +187,46 @@ Exact model in README §Checklist data model and migration
 - **HIPAA tripwire:** staff free text must never reach the AI gateway. The invariant
   is `safeProcedureLabel` (derived from CDT codes only, no overrides argument) and
   it's asserted in tests. If you're tempted to pass overrides into AI context, stop.
+
+## 11. Late arrivals, excuse requests, and attendance incident reports
+
+Design: README §Late arrivals and `docs/late-arrivals-spec.md`. Everything is
+in the database (`20260928120000_late_arrival_workflow.sql`); the app only
+calls functions and reads rows.
+
+- **The prompt keeps coming back / "nothing to acknowledge":** the prompt
+  shows only for a live, undecided, unrequested, unacknowledged row
+  (`awaitsEmployeeAnswer`). Check the `tardies` row: `acknowledged_at`,
+  `excuse_requested_at`, `approval_status`, `resolved`, `timezone_suspect`.
+- **An excuse request did not reach the manager:** the queue is derived from
+  `tardies` where `approval_status = 'unreviewed' AND excuse_requested_at IS
+  NOT NULL` (Attention kind `excuse_request`); the managers' notifications
+  are `tardy_excuse_requested`. A request on a day a correction has since
+  made on time is `resolved` and is not an item.
+- **"You cannot decide your own late arrival" / 42501:** intended — nobody
+  decides their own row, whatever their role. Another admin decides it.
+- **No report opened after three late arrivals:** run the predicate on the
+  rows — `SELECT entry_date, public.late_arrival_counts(t) FROM public.tardies t
+  WHERE user_id = '<uid>'` — then check `attendance_incident_events` for dates
+  already linked (a linked date never counts again) and legacy
+  `accountability_reports.facts->'events'` for the same dates. The rule row:
+  `SELECT * FROM public.escalation_policies WHERE kind = 'tardy_threshold'`
+  (`is_active`, count, window). Evaluation runs from the trigger on
+  `tardies`; `SELECT public.evaluate_late_arrival_threshold('<org>', '<uid>')`
+  as postgres re-runs it by hand and is idempotent.
+- **A second report for the same dates:** cannot happen while one is open
+  (partial unique index on open attendance reports per employee; later
+  arrivals attach as `follow_up`). After closure, only a fresh set of
+  unlinked dates inside the window opens the next one.
+- **Signing refused:** the meeting must be on record first
+  (`meeting_recorded_at`); the subject signs as employee, an owner/manager
+  countersigns (an owner for a manager's report); a closed report signs
+  nothing. Amendments (`incident_report_amendments`) clear both signatures.
+- **Direct UPDATE/DELETE on an attendance report is refused:** by design;
+  use `record_attendance_meeting`, `comment_attendance_report`, and the sign
+  functions.
+- **Probes:** `supabase/tests/late_arrival_probes.sql` in a disposable
+  database (the release gate replays it on every migration change).
 
 ---
 

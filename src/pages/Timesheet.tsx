@@ -1,57 +1,42 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useTimeEntries, useUpdateEntry, TimeEntryRow } from '@/hooks/useTimeEntries';
 import { useNavigate } from 'react-router-dom';
-import { useWorkSchedule, getScheduleForWeekday } from '@/hooks/useWorkSchedule';
-import { useTardies, useUpsertTardy, useUpdateTardy, TardyRow } from '@/hooks/useTardies';
+import { useTardies, TardyRow } from '@/hooks/useTardies';
 import { useAuth } from '@/hooks/useAuth';
-import { useOfficeClosures } from '@/hooks/useOfficeClosures';
 import { useMissingShifts } from '@/hooks/useMissingShifts';
-import { useAttendanceDayStatus, useRecomputeAttendance } from '@/hooks/useAttendanceDayStatus';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { MissingShiftBanner } from '@/components/MissingShiftBanner';
-import { minutesToHHMM, formatTime, formatDate, easternWallMinutes } from '@/lib/time-utils';
+import { LateArrivalNotice } from '@/components/LateArrivalNotice';
+import { LateArrivalPrompt } from '@/components/LateArrivalPrompt';
+import { minutesToHHMM, formatTime, formatDate } from '@/lib/time-utils';
+import { EXCUSE_CLASSES, EXCUSE_LABELS, awaitsEmployeeAnswer, countsTowardThreshold, excuseState, isLiveLateArrival } from '@/lib/late-arrivals';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table2, ChevronDown, ChevronRight, Loader2, MapPin, Save, AlertTriangle, Filter, Pencil, ArrowUpDown, Download } from 'lucide-react';
-import { EditAuditDialog } from '@/components/EditAuditDialog';
-import { TardyReasonModal } from '@/components/TardyReasonModal';
+import { ChevronDown, ChevronRight, Loader2, MapPin, Save, AlertTriangle, Pencil, ArrowUpDown, Download } from 'lucide-react';
 import { PunchEditorModal } from '@/components/PunchEditorModal';
 import { AuditHistoryModal } from '@/components/AuditHistoryModal';
 import { CorrectionRequestModal } from '@/components/CorrectionRequestModal';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useToast } from '@/hooks/use-toast';
 
-function computeLateInfo(entry: TimeEntryRow, schedule: ReturnType<typeof useWorkSchedule>['data']) {
-  if (!schedule?.length) return null;
-  const sched = getScheduleForWeekday(schedule, entry.entry_date);
-  if (!sched || !sched.enabled) return null;
-  if (entry.is_remote && !sched.apply_to_remote) return null;
-
-  const punches = entry.punches || [];
-  const firstIn = punches.find(p => p.punch_type === 'in');
-  if (!firstIn) return null;
-
-  // Compare in Eastern wall-clock minutes-since-midnight.
-  const arrivalMin = easternWallMinutes(firstIn.punch_time);
-  const [sh, sm] = sched.start_time.split(':').map(Number);
-  const expectedMin = sh * 60 + sm + sched.grace_minutes;
-  const diffMin = arrivalMin - expectedMin;
-
-  if (diffMin >= sched.threshold_minutes) {
-    return { minutesLate: diffMin, expectedStart: sched.start_time, actualStart: firstIn.punch_time };
-  }
-  return null;
+/**
+ * Lateness is the attendance engine's to decide (it writes the `tardies`
+ * row from the schedule, the office grace period, and the first punch of
+ * the day); this page only reads it. A row that a correction made on time,
+ * or whose clock looks mis-zoned, is not a late arrival here either.
+ */
+function lateArrivalFor(tardy: TardyRow | undefined) {
+  return tardy && isLiveLateArrival(tardy) ? tardy : null;
 }
 
-function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
+function EntryRow({ entry, tardy, onAnswer }: {
   entry: TimeEntryRow;
-  schedule: ReturnType<typeof useWorkSchedule>['data'];
   tardy?: TardyRow;
-  onTardyPrompt: (entry: TimeEntryRow, info: { minutesLate: number; expectedStart: string; actualStart: string }) => void;
+  onAnswer: (tardy: TardyRow) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [punchEditorOpen, setPunchEditorOpen] = useState(false);
@@ -67,9 +52,9 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
   const [commentDirty, setCommentDirty] = useState(false);
 
   const punches = entry.punches || [];
-  const lateInfo = computeLateInfo(entry, schedule);
-  const isLate = !!lateInfo;
-  const needsReason = isLate && tardy && !tardy.reason_text && !tardy.resolved;
+  const late = lateArrivalFor(tardy);
+  const isLate = !!late;
+  const awaitsAnswer = !!late && awaitsEmployeeAnswer(late);
   const isIncomplete = punches.length > 0 && punches[punches.length - 1].punch_type === 'in';
   const isAbsent = punches.length === 0;
 
@@ -105,9 +90,9 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
             </span>
             {isAbsent && <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">Absent</span>}
             {isIncomplete && <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning font-medium">Incomplete</span>}
-            {isLate && (
+            {late && (
               <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive font-medium">
-                <AlertTriangle className="h-3 w-3" />{lateInfo.minutesLate}m late
+                <AlertTriangle className="h-3 w-3" />{late.minutes_late}m late
               </span>
             )}
             {hasEditedPunches && (
@@ -126,10 +111,10 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
           <td colSpan={5} className="bg-muted/30 px-8 py-3">
             <div className="space-y-3">
               {/* Resolve in Attendance banner */}
-              {(isAbsent || isIncomplete || (isLate && needsReason)) && (
+              {(isAbsent || isIncomplete) && (
                 <div className="flex items-center justify-between p-2 rounded bg-warning/10 border border-warning/20">
                   <span className="text-xs text-warning font-medium">
-                    {isAbsent ? 'Missing punches' : isIncomplete ? 'Incomplete punches' : 'Unreviewed tardy'} — resolve in Attendance
+                    {isAbsent ? 'Missing punches' : 'Incomplete punches'} — resolve in Attendance
                   </span>
                   <Button size="sm" variant="outline" className="h-6 text-xs" onClick={e => { e.stopPropagation(); navigate(`/days-off?date=${entry.entry_date}`); }}>
                     Resolve in Attendance
@@ -161,18 +146,24 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
                   </div>
                 );
               })}
-              {isLate && tardy && (
+              {late && (
                 <div className="pt-2 border-t border-border space-y-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <AlertTriangle className="h-4 w-4 text-destructive" />
-                    <span className="text-sm font-medium text-destructive">{lateInfo!.minutesLate} minutes late</span>
-                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${tardy.approval_status === 'approved' ? 'bg-success/20 text-success' : tardy.approval_status === 'unapproved' ? 'bg-destructive/20 text-destructive' : 'bg-warning/20 text-warning'}`}>
-                      {tardy.approval_status}
+                    <span className="text-sm font-medium text-destructive">{late.minutes_late} minutes late</span>
+                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${EXCUSE_CLASSES[excuseState(late)]}`}>
+                      {EXCUSE_LABELS[excuseState(late)]}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {late.acknowledged_at ? `Acknowledged ${formatDate(late.acknowledged_at)}` : excuseState(late) === 'pending' ? 'Waiting on your manager' : awaitsAnswer ? 'Waiting on your answer' : ''}
                     </span>
                   </div>
-                  {tardy.reason_text && <p className="text-sm text-muted-foreground italic">Reason: {tardy.reason_text}</p>}
-                  {needsReason && (
-                    <Button size="sm" variant="destructive" onClick={e => { e.stopPropagation(); onTardyPrompt(entry, lateInfo!); }}>Add Reason</Button>
+                  {late.reason_text && <p className="text-sm text-muted-foreground italic">Your explanation: {late.reason_text}</p>}
+                  {late.manager_note && <p className="text-sm text-muted-foreground">Manager note: {late.manager_note}</p>}
+                  {awaitsAnswer && (
+                    <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); onAnswer(late); }}>
+                      Acknowledge, request excused, or report incorrect time
+                    </Button>
                   )}
                 </div>
               )}
@@ -216,11 +207,11 @@ function EntryRow({ entry, schedule, tardy, onTardyPrompt }: {
 }
 
 type SortMode = 'attention' | 'chronological';
-type FilterMode = 'all' | 'absent' | 'late' | 'incomplete' | 'edited' | 'unapproved';
+type FilterMode = 'all' | 'absent' | 'late' | 'incomplete' | 'edited' | 'awaiting';
 type RemoteFilter = 'all' | 'onsite' | 'remote';
 
 async function exportToExcel(
-  sortedEntries: { entry: TimeEntryRow; isAbsent: boolean; isIncomplete: boolean; isLate: boolean; minutesLate: number; hasEdits: boolean; tardyApproval: string }[],
+  sortedEntries: { entry: TimeEntryRow; isAbsent: boolean; isIncomplete: boolean; isLate: boolean; minutesLate: number; hasEdits: boolean; excuse: string }[],
   tardyMap: Map<string, TardyRow>,
 ) {
   const XLSX = await import('xlsx');
@@ -234,8 +225,8 @@ async function exportToExcel(
       const totalHrs = entry.total_minutes != null ? Number((entry.total_minutes / 60).toFixed(2)) : '';
       const location = entry.location_status === 'remote' ? 'Remote' : entry.location_status === 'onsite' ? 'On-site' : 'Location unavailable';
       const status = isAbsent ? 'Absent' : isIncomplete ? 'Missing clock-out' : isLate ? 'Late' : 'Arrived';
-      const tardy = tardyMap.get(entry.entry_date);
-      const tardyStatus = tardy ? tardy.approval_status : '';
+      const late = lateArrivalFor(tardyMap.get(entry.entry_date));
+      const excuse = late ? EXCUSE_LABELS[excuseState(late)] : '';
       const comment = entry.entry_comment || '';
 
       const punches = (entry.punches || []).sort((a, b) => new Date(a.punch_time).getTime() - new Date(b.punch_time).getTime());
@@ -253,7 +244,7 @@ async function exportToExcel(
         Location: location,
         Status: status,
         'Minutes Late': isLate ? minutesLate : '',
-        'Tardy Status': tardyStatus,
+        'Late Arrival': excuse,
         Comment: comment,
         ...punchCols,
       };
@@ -274,8 +265,6 @@ async function exportToExcel(
 export default function Timesheet() {
   const { user } = useAuth();
   const { data: payrollSettings } = usePayrollSettings();
-  
-  // Default date range to current pay period
   const weekStartDay = payrollSettings?.week_start_day ?? 1;
   const nowDate = new Date();
   const dayOfWeek = nowDate.getDay();
@@ -289,63 +278,41 @@ export default function Timesheet() {
   const [endDate, setEndDate] = useState(defaultEnd.toISOString().split('T')[0]);
   const [sortMode, setSortMode] = useState<SortMode>('attention');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
-  const [approvalFilter, setApprovalFilter] = useState<string>('all');
+  const [excuseFilter, setExcuseFilter] = useState<string>('all');
   const [remoteFilter, setRemoteFilter] = useState<RemoteFilter>('all');
 
   const { data: entries, isLoading } = useTimeEntries(startDate || undefined, endDate || undefined);
-  const { data: schedule } = useWorkSchedule();
   const { data: tardies } = useTardies(startDate || undefined, endDate || undefined);
-  const currentYear = new Date().getFullYear();
-  const { data: closures } = useOfficeClosures(currentYear);
-  const closureDateSet = useMemo(() => new Set((closures || []).map(c => c.closure_date)), [closures]);
   const missingDays = useMissingShifts(startDate || undefined, endDate || undefined);
-  const upsertTardy = useUpsertTardy();
-  const updateTardy = useUpdateTardy();
-  const { toast } = useToast();
 
-  const [tardyModal, setTardyModal] = useState<{ entry: TimeEntryRow; minutesLate: number; expectedStart: string; actualStart: string } | null>(null);
+  const [promptTardy, setPromptTardy] = useState<TardyRow | null>(null);
 
   // This page is one person's record. A manager's read returns the whole
-  // office's tardies, so keep only the signed-in person's before keying by date.
+  // office's late arrivals, so keep only the signed-in person's before
+  // keying by date.
   const tardyMap = useMemo(() => {
     const map = new Map<string, TardyRow>();
     (tardies || []).filter(t => t.user_id === user?.id).forEach(t => map.set(t.entry_date, t));
     return map;
   }, [tardies, user?.id]);
 
-  // Auto-detect tardies. Only INSERT when no tardy row exists yet — existing
-  // rows are owned by the server-side recompute (and employees cannot update
-  // them beyond reason_text, so an upsert here would throw for non-admins).
-  useEffect(() => {
-    if (!entries?.length || !schedule?.length || !user) return;
-    entries.forEach(entry => {
-      const info = computeLateInfo(entry, schedule);
-      if (info && !tardyMap.has(entry.entry_date)) {
-        upsertTardy.mutate({
-          time_entry_id: entry.id, entry_date: entry.entry_date,
-          expected_start_time: info.expectedStart, actual_start_time: info.actualStart, minutes_late: info.minutesLate,
-        });
-      }
-    });
-  }, [entries, schedule, tardyMap]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Compute status flags for each entry
   const entriesWithStatus = useMemo(() => {
     return (entries || []).map(entry => {
       const punches = entry.punches || [];
-      const lateInfo = computeLateInfo(entry, schedule);
-      const tardy = tardyMap.get(entry.entry_date);
+      const late = lateArrivalFor(tardyMap.get(entry.entry_date));
       return {
         entry,
         isAbsent: punches.length === 0,
         isIncomplete: punches.length > 0 && punches[punches.length - 1].punch_type === 'in',
-        isLate: !!lateInfo,
-        minutesLate: lateInfo?.minutesLate || 0,
+        isLate: !!late,
+        minutesLate: late?.minutes_late || 0,
         hasEdits: punches.some((p: any) => p.is_edited),
-        tardyApproval: tardy?.approval_status || 'none',
+        excuse: late ? excuseState(late) : 'none',
+        awaitsAnswer: !!late && awaitsEmployeeAnswer(late),
       };
     });
-  }, [entries, schedule, tardyMap]);
+  }, [entries, tardyMap]);
 
   // Filter
   const filteredEntries = useMemo(() => {
@@ -353,19 +320,19 @@ export default function Timesheet() {
     // Remote filter
     if (remoteFilter === 'remote') list = list.filter(e => e.entry.location_status === 'remote');
     else if (remoteFilter === 'onsite') list = list.filter(e => e.entry.location_status === 'onsite');
-    
+
     switch (filterMode) {
       case 'absent': list = list.filter(e => e.isAbsent); break;
       case 'late': list = list.filter(e => e.isLate); break;
       case 'incomplete': list = list.filter(e => e.isIncomplete); break;
       case 'edited': list = list.filter(e => e.hasEdits); break;
-      case 'unapproved': list = list.filter(e => e.tardyApproval === 'unreviewed' || e.tardyApproval === 'unapproved'); break;
+      case 'awaiting': list = list.filter(e => e.awaitsAnswer); break;
     }
-    if (approvalFilter !== 'all') {
-      list = list.filter(e => e.tardyApproval === approvalFilter);
+    if (excuseFilter !== 'all') {
+      list = list.filter(e => e.excuse === excuseFilter);
     }
     return list;
-  }, [entriesWithStatus, filterMode, approvalFilter, remoteFilter]);
+  }, [entriesWithStatus, filterMode, excuseFilter, remoteFilter]);
 
   // Sort
   const sortedEntries = useMemo(() => {
@@ -376,9 +343,10 @@ export default function Timesheet() {
     const priority = (e: typeof filteredEntries[0]) => {
       if (e.isAbsent) return 0;
       if (e.isIncomplete) return 1;
-      if (e.isLate) return 2;
-      if (e.hasEdits) return 3;
-      return 4;
+      if (e.awaitsAnswer) return 2;
+      if (e.isLate) return 3;
+      if (e.hasEdits) return 4;
+      return 5;
     };
     return [...filteredEntries].sort((a, b) => {
       const pa = priority(a);
@@ -390,31 +358,17 @@ export default function Timesheet() {
 
   const totalMinutes = sortedEntries.reduce((sum, e) => sum + (e.entry.total_minutes || 0), 0);
 
-  const lateDays = (tardies || []).filter(t => !t.resolved).length;
-  const trackedTardies = (tardies || []).filter(t => t.approval_status !== 'approved' && !t.resolved).length;
-  const totalMinutesLate = (tardies || []).filter(t => !t.resolved).reduce((s, t) => s + t.minutes_late, 0);
-
-  const handleTardyReason = async (reason: string) => {
-    if (!tardyModal || !user) return;
-    const existing = tardyMap.get(tardyModal.entry.entry_date);
-    if (existing) {
-      await updateTardy.mutateAsync({ id: existing.id, updates: { reason_text: reason } });
-    } else {
-      await upsertTardy.mutateAsync({
-        time_entry_id: tardyModal.entry.id, entry_date: tardyModal.entry.entry_date,
-        expected_start_time: tardyModal.expectedStart, actual_start_time: tardyModal.actualStart,
-        minutes_late: tardyModal.minutesLate, reason_text: reason,
-      });
-    }
-    toast({ title: 'Tardy reason saved' });
-    setTardyModal(null);
-  };
+  const myLateArrivals = useMemo(() => [...tardyMap.values()].filter(isLiveLateArrival), [tardyMap]);
+  const lateDays = myLateArrivals.length;
+  const countingTardies = myLateArrivals.filter(countsTowardThreshold).length;
+  const totalMinutesLate = myLateArrivals.reduce((s, t) => s + t.minutes_late, 0);
 
   // Count badges for filters
   const absentCount = entriesWithStatus.filter(e => e.isAbsent).length + missingDays.length;
   const lateCount = entriesWithStatus.filter(e => e.isLate).length;
   const incompleteCount = entriesWithStatus.filter(e => e.isIncomplete).length;
   const editedCount = entriesWithStatus.filter(e => e.hasEdits).length;
+  const awaitingCount = entriesWithStatus.filter(e => e.awaitsAnswer).length;
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
@@ -425,15 +379,17 @@ export default function Timesheet() {
 
       {missingDays.length > 0 && <MissingShiftBanner missingDays={missingDays} />}
 
-      {(tardies?.length ?? 0) > 0 && (
+      <LateArrivalNotice />
+
+      {lateDays > 0 && (
         <div className="flex flex-wrap gap-3">
           <div className="px-4 py-2 bg-destructive/10 rounded-lg">
             <span className="text-xs text-muted-foreground">Late Days: </span>
             <span className="font-semibold text-destructive">{lateDays}</span>
           </div>
-          <div className="px-4 py-2 bg-warning/10 rounded-lg">
-            <span className="text-xs text-muted-foreground">Tracked: </span>
-            <span className="font-semibold text-warning">{trackedTardies}</span>
+          <div className="px-4 py-2 bg-warning/10 rounded-lg" title="Unexcused late arrivals that count toward the office's late-arrival rule">
+            <span className="text-xs text-muted-foreground">Counting toward the rule: </span>
+            <span className="font-semibold text-warning">{countingTardies}</span>
           </div>
           <div className="px-4 py-2 bg-destructive/10 rounded-lg">
             <span className="text-xs text-muted-foreground">Total Min Late: </span>
@@ -456,14 +412,14 @@ export default function Timesheet() {
             <div className="space-y-1">
               <Label className="text-xs">Filter</Label>
               <Select value={filterMode} onValueChange={v => setFilterMode(v as FilterMode)}>
-                <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
                   <SelectItem value="absent">Absent ({absentCount})</SelectItem>
                   <SelectItem value="late">Late ({lateCount})</SelectItem>
+                  <SelectItem value="awaiting">Waiting on my answer ({awaitingCount})</SelectItem>
                   <SelectItem value="incomplete">Incomplete ({incompleteCount})</SelectItem>
                   <SelectItem value="edited">Edited ({editedCount})</SelectItem>
-                  <SelectItem value="unapproved">Unapproved Tardies</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -479,14 +435,14 @@ export default function Timesheet() {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Approval</Label>
-              <Select value={approvalFilter} onValueChange={setApprovalFilter}>
-                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+              <Label className="text-xs">Late arrivals</Label>
+              <Select value={excuseFilter} onValueChange={setExcuseFilter}>
+                <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="unreviewed">Unreviewed</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="unapproved">Unapproved</SelectItem>
+                  <SelectItem value="pending">Pending review</SelectItem>
+                  <SelectItem value="unexcused">Unexcused</SelectItem>
+                  <SelectItem value="excused">Excused</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -528,7 +484,7 @@ export default function Timesheet() {
                 <tr><td colSpan={5} className="py-12 text-center text-muted-foreground">No entries found</td></tr>
               ) : (
                 sortedEntries.map(({ entry }) => (
-                  <EntryRow key={entry.id} entry={entry} schedule={schedule} tardy={tardyMap.get(entry.entry_date)} onTardyPrompt={(e, info) => setTardyModal({ entry: e, ...info })} />
+                  <EntryRow key={entry.id} entry={entry} tardy={tardyMap.get(entry.entry_date)} onAnswer={setPromptTardy} />
                 ))
               )}
             </tbody>
@@ -536,10 +492,7 @@ export default function Timesheet() {
         </div>
       </Card>
 
-      {tardyModal && (
-        <TardyReasonModal open minutesLate={tardyModal.minutesLate} entryDate={formatDate(tardyModal.entry.entry_date)} onSubmit={handleTardyReason} onDismiss={() => setTardyModal(null)} />
-      )}
+      <LateArrivalPrompt open={!!promptTardy} tardy={promptTardy} onClose={() => setPromptTardy(null)} />
     </div>
   );
 }
-

@@ -6,8 +6,8 @@ import { formatDate, formatTime } from '@/lib/time-utils';
 import type { AttentionItem } from '@/lib/attention';
 import { BringBackButton } from './FollowupActions';
 import {
-  AttendanceDayActions, BypassActions, ChallengeVerifyActions, ChangeRequestActions, CloseoutActions, ContentReviewActions,
-  CorrectionRequestActions, IncidentActions, LinkOnlyActions, OpenRecordLink, PtoRequestActions, RecordSignoffActions, TardyActions,
+  AttendanceDayActions, AttendanceMeetingActions, BypassActions, ChallengeVerifyActions, ChangeRequestActions, CloseoutActions, ContentReviewActions,
+  CorrectionRequestActions, ExcuseRequestActions, IncidentActions, LinkOnlyActions, OpenRecordLink, PtoRequestActions, RecordSignoffActions,
   type Done, type Reversal,
 } from './AttentionKindActions';
 
@@ -42,7 +42,8 @@ function KindActions({ item, onDone }: { item: AttentionItem; onDone: (d: Done) 
     case 'unpaired_punches':
     case 'time_suspect':
     case 'clocked_in_after_close': return <AttendanceDayActions item={item} onDone={onDone} />;
-    case 'tardy_unreviewed': return <TardyActions item={item} onDone={onDone} />;
+    case 'excuse_request': return <ExcuseRequestActions item={item} onDone={onDone} />;
+    case 'attendance_meeting': return <AttendanceMeetingActions item={item} onDone={onDone} />;
     case 'record_signoff': return <RecordSignoffActions item={item} onDone={onDone} />;
     case 'staffing_answer':
     case 'close_day_unsealed':

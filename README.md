@@ -114,8 +114,8 @@ Navigation is a compact destination list; every feature below keeps its own rout
 ### Time & attendance
 | Route | Page | What it does |
 |---|---|---|
-| `/timesheet` | Timesheet | Clock in/out, punch history, manager punch editing (`PunchEditorModal`), tardy reasons (`TardyReasonModal`, `TardyReviewModal`) |
-| `/days-off` | DaysOff (**Attendance**) | Everyone's own attendance, managers included (`AttendanceWorkspace mode="personal"`): own rows with every punch of the day, days off, tardies, missing shifts, closures, My Calendar; Request Time Off for employees, own-row punch editing for managers. `?date=` (from the Timesheet) widens the range to that day |
+| `/timesheet` | Timesheet | Clock in/out, punch history, manager punch editing (`PunchEditorModal`), and the late-arrival answer (`LateArrivalNotice` → `LateArrivalPrompt`: acknowledge as unexcused, request excused, or report incorrect time — never a mandatory explanation) |
+| `/days-off` | DaysOff (**Attendance**) | Everyone's own attendance, managers included (`AttendanceWorkspace mode="personal"`): own rows with every punch of the day, days off, late arrivals (with the office rule and the person's standing against it), missing shifts, closures, My Calendar; Request Time Off for employees, own-row punch editing for managers. `?date=` (from the Timesheet) widens the range to that day; `?tardy=` (from a notification) opens the Late arrivals tab on that row |
 | `/work-zones` | WorkZones | Redirects to `/settings/office#work-zones`: geofenced zones for location-verified clock-in are a card in Office Settings (`WorkZonesCard`; `useGeoTracking`, `LocationStatusPanel`, `process-location-event`) |
 | `/reports` | Reports | Payroll/attendance reporting and exports (built in the browser). Timesheet reports print every clock-in/out of the day with breaks and the worked-hour adjustments (`worked_hour_adjustments`, "Offset hours" on the Team page) dated in the range — listed with their reason and counted in the employee, weekly/OT, and report totals and the CSV |
 
@@ -140,7 +140,7 @@ Navigation is a compact destination list; every feature below keeps its own rout
 | `/office-calendar` | OfficeCalendar | Shared calendar, office closures (`useOfficeClosures`), Google Calendar events (`google-calendar-events`) |
 | `/checklists` | Checklists | Recurring office checklists — see Checklist data model |
 | `/deposit-log` | DepositLog | **Close the Day**: the deposit log + branded print sheet, grown into the five-step closeout (money, vitals, local-only Privacy View Capture, staffing reality, seal) — see `docs/close-the-day-spec.md` |
-| `/incident-reports` | IncidentReports | Incident reports with signature/review workflow + print sheet |
+| `/incident-reports` | IncidentReports | Incident reports with signature/review workflow + print sheet. Safety reports are filed by hand; **attendance reports** (category `attendance`) are opened by the late-arrival rule and close only after a recorded meeting and both signatures (see Late arrivals) |
 | `/important-numbers` | ImportantNumbers | Office contact directory with tabs |
 | `/handbook` | OfficeHandbook | Office Handbook reader (Workplace policies + HR) over the shared `DocumentLibraryReader`; `/policy-manual` redirects here. Deep links `?doc=<id>&section=<block>`; code tables quote the live office fee schedule |
 | `/insurance-desk` | InsuranceDesk | Insurance Desk reader (carrier manuals, Practice Playbook) over the same `DocumentLibraryReader` (`ingest-doc` indexes uploads) |
@@ -234,6 +234,18 @@ Dispatcher behavior: `MAX_RETRIES = 5`, message TTL, rate-limit aware, dead-lett
 
 **Hard dependency:** if the `process-email-queue` cron is not running, *no email of any kind sends*. Queue entries just accumulate.
 
+## Late arrivals (exact — migration `20260928120000_late_arrival_workflow.sql`)
+
+The attendance engine writes a `tardies` row when a clock-in lands past the scheduled start plus the office grace period (`office_attendance_settings.grace_minutes`, unchanged). What the office does with it is three separate things, and the code keeps them apart (`src/lib/late-arrivals.ts` is the vocabulary):
+
+- **Acknowledgment** (`acknowledged_at/by`): the employee's receipt, via `acknowledge_tardy()`. No reason, no signature, no manager task. **Not a gate** — an unacknowledged late arrival counts the same; dismissing the prompt records nothing and erases nothing.
+- **Excuse status** (`approval_status` + `excuse_requested_at`, `excuse_decided_at/by`, `manager_note`): unexcused unless a manager says otherwise. `request_tardy_excuse()` files a pending request (a **Decide** item in Attention at once, managers notified); `decide_tardy_excuse()` makes it excused (`approved`) or unexcused (`unapproved`), note optional, never by the person it is about (the guard trigger refuses even an admin's own row). `reason_text` is the employee's explanation, never required.
+- **The rule** (`escalation_policies`, kind `tardy_threshold`, `threshold_count` within a rolling `threshold_window_days`; default 3 in 30, seeded for every office and for new ones by trigger; edited on Office settings → Attendance, `LateArrivalRuleCard`). `late_arrival_counts()` is the one predicate: minutes past grace, clock trusted, not corrected away (`resolved`), not excused, not pending. `evaluate_late_arrival_threshold()` runs from triggers on `tardies` and on the rule — never from a button — slides the window over the person's unconsumed qualifying dates (office-local `entry_date`), and on the first date whose trailing window meets the count opens **one** `incident_reports` row (category `attendance`, status `meeting_required`, `reported_by` null, the rule/period/totals in `rule_*`, `period_*`, `occurrence_count`, `total_minutes_late`) with every event linked in `attendance_incident_events` (`UNIQUE (user_id, entry_date)`: a linked date never counts again). While a report is open, later qualifying arrivals attach as `follow_up` rows without a new report or alert; after closure a fresh set inside the window is needed. Events already in a legacy `accountability_reports` record never open a second workflow, and the `accountability-engine` scan no longer opens late-arrival records.
+- **Closing the report**: `meeting_required → meeting_completed → awaiting_signatures → closed`. `record_attendance_meeting()` (a manager, never the subject: date, summary, next steps) → the existing `sign_incident_report_employee()` / `countersign_incident_report()` (refused before the meeting; the second signature closes and stamps `closed_at`) → `comment_attendance_report()` for the team member's own words. Recording the meeting again, or changing the comment after a signature, is an **amendment** (`incident_report_amendments`) that clears both signatures. Direct edits and deletes of an attendance report are refused by trigger; nobody files one by hand.
+- **Corrections**: the engine keeps an acknowledged, requested, or decided late arrival that a correction made on time and marks it `resolved` (never counts); an untouched one is withdrawn.
+
+Probes: `supabase/tests/late_arrival_probes.sql` (run by the release gate). Enabling the workflow evaluates nobody: the migration seeds the rule and backfills columns only, so no backlog of reports appears from history.
+
 ## Checklist data model (exact — the upcoming bypass feature builds on this)
 
 Migration `20260723200000_checklists.sql`:
@@ -291,6 +303,7 @@ Org identity in every function comes from `org_members` for the verified caller;
 - [`docs/close-the-day-spec.md`](docs/close-the-day-spec.md) — Close the Day + Schedule Intelligence: the three-layer architecture (local-only Schedule Reader / deterministic Metrics Referee / Office Coach), the Privacy View Capture boundary, and the metric vocabulary. **Built.** OCR assets are vendored at build time (`scripts/vendor-tesseract.mjs`, `public/tesseract/` gitignored).
 - [`docs/goals-and-bypass-spec.md`](docs/goals-and-bypass-spec.md) — Goals page ("Pathfinder" AI breakdown, team + private goals, AI-drafted meeting updates) and the checklist-bypass accountability loop. **Being built in Lovable now.**
 - [`docs/team-onboarding.md`](docs/team-onboarding.md) — Team onboarding feature list (next major build after Goals), including the stealth work-style questions that feed Pathfinder.
+- [`docs/late-arrivals-spec.md`](docs/late-arrivals-spec.md) — Late arrivals without the busywork: acknowledge / request excused / report incorrect time, the rolling threshold, and the attendance incident report with its meeting-and-signatures closure. **Built; deployment steps in the spec.**
 
 ## Local development
 

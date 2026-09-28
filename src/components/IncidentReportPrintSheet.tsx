@@ -1,5 +1,5 @@
 import type { OrgBranding } from '@/hooks/useOrgBranding';
-import type { IncidentReport } from '@/hooks/useIncidentReports';
+import type { AttendanceIncidentEvent, IncidentReport } from '@/hooks/useIncidentReports';
 import {
   CATEGORY_LABELS,
   PPE_LABELS,
@@ -8,8 +8,10 @@ import {
   TREATMENT_LABELS,
   formatClockTime,
   formatSignedAt,
+  isAttendanceReport,
   labelFor,
 } from '@/lib/incidents';
+import { ruleClause } from '@/lib/late-arrivals';
 
 /**
  * Printable Incident Report — one letter page in the practice's document
@@ -26,6 +28,8 @@ export interface IncidentPrintProps {
     OrgBranding,
     'displayName' | 'legalName' | 'addressLine1' | 'addressLine2' | 'phone' | 'website' | 'logoUrl'
   >;
+  /** Attendance reports only: the late arrivals the report is about. Ignored by the safety sheet. */
+  events?: AttendanceIncidentEvent[];
 }
 
 const longDate = (iso: string): string => {
@@ -95,7 +99,138 @@ function Signature({
   );
 }
 
-export default function IncidentReportPrintSheet({
+/** A punch time as it reads on paper, in the office's clock. */
+const clockOf = (iso: string | null): string => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' });
+};
+
+/**
+ * The attendance report on paper: the rule, the period, every late
+ * arrival with its date and minutes, the totals, the meeting record, the
+ * team member's comment, and both signatures. Same letterhead and print
+ * language as the safety sheet; none of the safety fields.
+ */
+function AttendancePrintSheet({ report, employeeName, branding, events = [] }: IncidentPrintProps) {
+  const rule = report.rule_threshold_count && report.rule_window_days
+    ? ruleClause({ threshold_count: report.rule_threshold_count, threshold_window_days: report.rule_window_days, is_active: true })
+    : 'the office late-arrival rule';
+  const period = report.period_start && report.period_end
+    ? `${longDate(report.period_start)} – ${longDate(report.period_end)}`
+    : longDate(report.incident_date);
+  const qualifying = events.filter(e => e.role === 'qualifying');
+  const followUps = events.filter(e => e.role === 'follow_up');
+  const eventLine = (e: AttendanceIncidentEvent) =>
+    `${e.minutes_late} min late · scheduled ${formatClockTime(e.expected_start_time)}${e.actual_start_time ? `, arrived ${clockOf(e.actual_start_time)}` : ''}`;
+
+  return (
+    <div className="inc-sheet">
+      <header className="inc-head">
+        {branding.logoUrl ? (
+          <img src={branding.logoUrl} alt={branding.displayName} className="inc-logo" />
+        ) : (
+          <p className="inc-practice">{branding.displayName || branding.legalName}</p>
+        )}
+        <div className="inc-head-meta">
+          <p className="inc-title">Attendance Incident Report</p>
+          <div className="inc-meta-item">
+            <span className="inc-meta-key">Team member</span>
+            <span className="inc-meta-value">{employeeName}</span>
+          </div>
+          <div className="inc-meta-item">
+            <span className="inc-meta-key">Period</span>
+            <span className="inc-meta-value">{period}</span>
+          </div>
+          <div className="inc-meta-item">
+            <span className="inc-meta-key">Status</span>
+            <span className="inc-meta-value">{labelFor(STATUS_LABELS, report.status)}</span>
+          </div>
+        </div>
+      </header>
+
+      <div className="inc-grid">
+        <Field label="Rule" value={rule} />
+        <Field label="Late arrivals" value={String(report.occurrence_count ?? qualifying.length)} />
+        <Field label="Total minutes late" value={String(report.total_minutes_late ?? 0)} />
+        <Field label="Opened" value={formatSignedAt(report.created_at)} />
+      </div>
+
+      <Block label="Summary" value={report.description} />
+
+      <div className="inc-block">
+        <p className="inc-block-label">Late arrivals in this report</p>
+        <div className="inc-grid inc-grid-tight">
+          {qualifying.map(e => (
+            <Field key={e.id} label={longDate(e.entry_date)} value={eventLine(e)} />
+          ))}
+          {qualifying.length === 0 && <Field label="Records" value="—" />}
+        </div>
+        {followUps.length > 0 && (
+          <>
+            <p className="inc-block-label">Later late arrivals while the report was open (linked, not counted above)</p>
+            <div className="inc-grid inc-grid-tight">
+              {followUps.map(e => (
+                <Field key={e.id} label={longDate(e.entry_date)} value={eventLine(e)} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="inc-review">
+        <p className="inc-block-label">Meeting</p>
+        <div className="inc-grid inc-grid-tight">
+          <Field label="Meeting date" value={report.meeting_date ? longDate(report.meeting_date) : 'Not recorded'} />
+          <Field label="Recorded by" value={report.meeting_recorded_at ? report.reviewed_by_name : ''} />
+        </div>
+        <p className="inc-block-value">{report.meeting_summary || '—'}</p>
+        {report.meeting_next_steps && (
+          <p className="inc-block-value">Next steps: {report.meeting_next_steps}</p>
+        )}
+      </div>
+
+      <Block label="Team member comment" value={report.employee_comment} />
+
+      <div className="inc-signatures">
+        <Signature
+          label="Team member signature / date — confirms the discussion and receipt, not agreement with every statement"
+          name={report.employee_signature}
+          signedAt={report.employee_signed_at}
+        />
+        <Signature
+          label={report.countersign_role === 'owner' ? 'Owner signature / date' : 'Manager signature / date'}
+          name={report.manager_signature}
+          signedAt={report.manager_signed_at}
+          note={report.manager_signed_role ? roleWord(report.manager_signed_role) : ''}
+        />
+      </div>
+
+      <p className="inc-foot">
+        Opened automatically by the office late-arrival rule · {branding.legalName || branding.displayName}
+        {' · '}Attendance record — documents a threshold crossing; it is not a disciplinary decision.
+      </p>
+
+      <footer className="inc-footer">
+        {(branding.addressLine1 || branding.addressLine2) && (
+          <span className="inc-footer-item">
+            {[branding.addressLine1, branding.addressLine2].filter(Boolean).join(', ')}
+          </span>
+        )}
+        {branding.phone && <span className="inc-footer-item">{branding.phone}</span>}
+        {branding.website && <span className="inc-footer-item">{branding.website}</span>}
+      </footer>
+    </div>
+  );
+}
+
+export default function IncidentReportPrintSheet(props: IncidentPrintProps) {
+  if (isAttendanceReport(props.report)) return <AttendancePrintSheet {...props} />;
+  return <SafetyPrintSheet {...props} />;
+}
+
+function SafetyPrintSheet({
   report,
   employeeName,
   branding,

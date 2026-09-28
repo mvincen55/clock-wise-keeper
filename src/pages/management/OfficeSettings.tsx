@@ -14,6 +14,7 @@ import ProviderRegistryCard from '@/components/settings/ProviderRegistryCard';
 import PayrollSettingsCard from '@/components/settings/PayrollSettingsCard';
 import OfficeClosuresCard from '@/components/settings/OfficeClosuresCard';
 import AttendanceGraceSettingsCard from '@/components/settings/AttendanceGraceSettingsCard';
+import LateArrivalRuleCard from '@/components/settings/LateArrivalRuleCard';
 import PtoPolicySettingsCard from '@/components/settings/PtoPolicySettingsCard';
 import WorkZonesCard from '@/components/settings/WorkZonesCard';
 
@@ -85,7 +86,7 @@ export default function OfficeSettings() {
         <Block id="identity" title="Identity & brand"><OrgBrandingCard isManager /><PracticeSettingsCard /></Block>
         <Block id="hours" title="Hours & closures"><div id="office-closures"><OfficeClosuresCard isManager /></div></Block>
         <Block id="payroll" title="Payroll"><PayrollSettingsCard /></Block>
-        <Block id="attendance" title="Attendance"><AttendanceGraceSettingsCard /></Block>
+        <Block id="attendance" title="Attendance"><AttendanceGraceSettingsCard /><LateArrivalRuleCard /></Block>
         <Block id="pto" title="PTO policy"><PtoPolicySettingsCard /></Block>
         <Block id="people-policies" title="Escalation & acknowledgments"><EscalationPoliciesCard /><AcknowledgmentEscalationSettingsCard /></Block>
         <Block id="permissions" title="Roles & permissions"><EmployeePermissionsCard /></Block>

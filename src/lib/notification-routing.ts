@@ -76,6 +76,21 @@ const incidentReport: RouteBuilder = n => ({
   exact: !!n.related_id,
 });
 
+/**
+ * An attendance incident report: a manager works it from the Attention
+ * item ("Meet with team member"); the team member reads and signs it in
+ * Incident Reports, which lists their own record.
+ */
+const attendanceIncident: RouteBuilder = (n, ctx) =>
+  isAdmin(ctx.role) ? attentionItem('attendance_meeting', 'Attendance meeting')(n, ctx) : incidentReport(n, ctx);
+
+/** The employee's own late arrivals live on Workplace → Attendance. */
+const myLateArrival: RouteBuilder = n => ({
+  to: withParam('/days-off', 'tardy', n.related_id),
+  label: 'Attendance · Late arrivals',
+  exact: !!n.related_id,
+});
+
 const acknowledgment: RouteBuilder = n => ({
   to: withParam('/management/office/acknowledgments', 'assignment', n.related_id),
   label: 'Office · Acknowledgments',
@@ -173,6 +188,19 @@ const NOTIFICATION_ROUTES: Record<string, RouteBuilder> = {
   incident_report_signature_needed: incidentReport,
   incident_report_signed: incidentReport,
   incident_report_closed: incidentReport,
+
+  // ── Late arrivals ────────────────────────────────────────────────────
+  /** An employee asked for a late arrival to be excused: a Decide item. */
+  tardy_excuse_requested: (n, ctx) =>
+    isAdmin(ctx.role) ? attentionItem('excuse_request', 'Excuse requests')(n, ctx) : myLateArrival(n, ctx),
+  tardy_excuse_approved: myLateArrival,
+  tardy_excuse_declined: myLateArrival,
+  /** The office rule opened an attendance incident report. */
+  attendance_incident_opened: attendanceIncident,
+  attendance_incident_meeting: attendanceIncident,
+  attendance_incident_signature_needed: attendanceIncident,
+  attendance_incident_amended: attendanceIncident,
+  attendance_incident_closed: attendanceIncident,
 
   // ── Training ─────────────────────────────────────────────────────────
   // New assignments historically carried the module id; reminders carry the
@@ -286,6 +314,8 @@ const TABLE_ROUTES: Record<string, RouteBuilder> = {
       ? attentionItem('change_request', 'Change requests')(n, ctx)
       : { to: withParam('/my-requests', 'request', n.related_id), label: 'My Requests', exact: !!n.related_id },
   incident_reports: incidentReport,
+  tardies: (n, ctx) =>
+    isAdmin(ctx.role) ? attentionItem('excuse_request', 'Excuse requests')(n, ctx) : myLateArrival(n, ctx),
   training_assignments: trainingAssignment,
   training_modules: n => ({
     to: withParam('/training', 'module', n.related_id, 'tab=mine'),

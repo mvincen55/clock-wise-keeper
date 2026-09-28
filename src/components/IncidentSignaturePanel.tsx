@@ -16,8 +16,10 @@ import {
 import {
   SIGNATURE_CLASSES,
   SIGNATURE_LABELS,
+  attendanceWaitingOn,
   countersignEligibility,
   formatSignedAt,
+  isAttendanceReport,
   signatureState,
 } from '@/lib/incidents';
 
@@ -116,6 +118,11 @@ export default function IncidentSignaturePanel({ report, employeeName }: Props) 
   const countersign = useCountersignIncidentReport();
 
   const state = signatureState(report);
+  // An attendance report signs only after the meeting is on record, and
+  // both signatures are required: the second one closes it.
+  const attendance = isAttendanceReport(report);
+  const meetingRecorded = !!report.meeting_recorded_at;
+  const closed = report.status === 'closed';
   const viewerIsSubject = !!ctx && report.employee_id === ctx.employee_id;
   const subjectUserId =
     employees?.find(e => e.id === report.employee_id)?.user_id ??
@@ -131,6 +138,7 @@ export default function IncidentSignaturePanel({ report, employeeName }: Props) 
     viewerIsSubject,
     alreadySigned: !!report.manager_signed_at,
     otherOwnerCount,
+    attendance: attendance ? { meetingRecorded, closed } : undefined,
   });
 
   const signOffLabel =
@@ -143,7 +151,7 @@ export default function IncidentSignaturePanel({ report, employeeName }: Props) 
         <span
           className={`rounded px-2 py-0.5 text-xs font-medium ${SIGNATURE_CLASSES[state]}`}
         >
-          {SIGNATURE_LABELS[state]}
+          {attendance ? attendanceWaitingOn(report) : SIGNATURE_LABELS[state]}
         </span>
       </div>
 
@@ -154,10 +162,16 @@ export default function IncidentSignaturePanel({ report, employeeName }: Props) 
         </p>
         {report.employee_signed_at ? (
           <SignedLine name={report.employee_signature} at={report.employee_signed_at} />
+        ) : attendance && !meetingRecorded ? (
+          <p className="text-xs text-muted-foreground">
+            Signatures follow the meeting. Once a manager records it, {viewerIsSubject ? 'you sign here' : `${employeeName} signs here`} to confirm the discussion and receipt.
+          </p>
         ) : viewerIsSubject ? (
           <SignBox
             idPrefix="ir-employee"
-            attestation="I confirm this is an accurate account of what happened, and that I reported it."
+            attestation={attendance
+              ? 'I confirm that this meeting took place and that I received this report. Signing does not mean I agree with every statement in it.'
+              : 'I confirm this is an accurate account of what happened, and that I reported it.'}
             buttonLabel="Sign"
             pending={sign.isPending}
             onSign={typedName => sign.mutate({ id: report.id, typedName })}
@@ -182,14 +196,17 @@ export default function IncidentSignaturePanel({ report, employeeName }: Props) 
           <>
             {!report.employee_signed_at && (
               <p className="text-xs text-muted-foreground">
-                {employeeName} has not signed yet. You can still sign off — the report
-                records that their signature was never given.
+                {attendance
+                  ? `${employeeName} has not signed yet. Both signatures are required; the report closes when the second one lands.`
+                  : `${employeeName} has not signed yet. You can still sign off — the report records that their signature was never given.`}
               </p>
             )}
             <SignBox
               idPrefix="ir-manager"
-              attestation="I have reviewed this report and sign off on it."
-              buttonLabel="Sign Off"
+              attestation={attendance
+                ? 'I confirm that this meeting took place as recorded and sign this report.'
+                : 'I have reviewed this report and sign off on it.'}
+              buttonLabel={attendance ? 'Sign' : 'Sign Off'}
               pending={countersign.isPending}
               onSign={typedName => countersign.mutate({ id: report.id, typedName })}
             />

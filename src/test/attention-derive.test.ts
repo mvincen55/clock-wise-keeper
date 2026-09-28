@@ -40,7 +40,7 @@ const src = (over: Partial<AttentionSources> = {}): AttentionSources => ({
   today: TODAY, nowIso: NOW, nowMinutes: 8 * 60 + 24, bufferMinutes: 60, officePhase: 'open',
   viewer: { userId: 'mgr', role: 'manager' }, employees, ownerUserIds: new Set(['owner']),
   payrollPeriod: { start: '2026-09-07', end: '2026-09-20', dueDate: '2026-09-24', dueLabel: 'payroll Thu' },
-  rules: { reviewTardies: true, bypassReasonHours: 24, ackManagerLevel: 2 },
+  rules: { bypassReasonHours: 24, ackManagerLevel: 2 },
   dayStatuses: [], entries: [], daysOff: [], closures: [], exceptions: [], tardies: [], ptoRequests: [], corrections: [],
   changeRequests: [], closeouts: { today: null, latestSealedDate: '2026-09-18', officeDaysSinceSeal: 0, unsealedPast: [] }, bypasses: [], accountability: [],
   acks: [], training: [], incidents: [], versionsInReview: [], challenges: [], followups: [], ...over,
@@ -73,8 +73,11 @@ const change = (over: Partial<ChangeRequestRow> = {}): ChangeRequestRow => ({
 const tardy = (over: Partial<TardyRow> = {}): TardyRow => ({
   id: 't1', user_id: 'u2', employee_id: 'e2', time_entry_id: null, entry_date: '2026-09-17', expected_start_time: '08:00:00',
   actual_start_time: '08:22:00', minutes_late: 22, reason_text: null, approval_status: 'unreviewed', approved_by: null,
-  approved_at: null, resolved: false, timezone_suspect: false, created_at: '2026-09-17T12:22:00Z', updated_at: '', ...over,
+  approved_at: null, resolved: false, timezone_suspect: false, acknowledged_at: null, acknowledged_by: null, excuse_requested_at: null,
+  excuse_decided_at: null, excuse_decided_by: null, manager_note: '', created_at: '2026-09-17T12:22:00Z', updated_at: '', ...over,
 });
+/** The same late arrival with an excuse request waiting on a manager. */
+const pendingTardy = (over: Partial<TardyRow> = {}): TardyRow => tardy({ excuse_requested_at: '2026-09-18T08:00:00Z', reason_text: 'Traffic on the bridge', ...over });
 const training = (over: Partial<TrainingAssignment> = {}): TrainingAssignment => ({
   id: 'ta1', org_id: 'o', module_id: 'm1', assigned_to: 'u3', assigned_by: 'mgr', due_date: '2026-09-15', status: 'assigned' as never,
   completed_at: null, created_at: '', ...over,
@@ -213,12 +216,43 @@ describe('deriveAttention · admission', () => {
     expect(review.unresolved.map(i => i.kind)).toEqual(['close_day_review']);
   });
 
-  it('tardies are follow-ups only when the office reviews them', () => {
-    const on = deriveAttention(src({ tardies: [tardy(), tardy({ id: 't2', approval_status: 'approved' })] }));
-    expect(on.unresolved.map(i => i.key)).toEqual(['tardy_unreviewed:t1']);
-    expect(on.unresolved[0].verb).toBe('follow_up');
-    const off = deriveAttention(src({ rules: { reviewTardies: false, bypassReasonHours: 24, ackManagerLevel: 2 }, tardies: [tardy()] }));
-    expect(off.unresolved).toEqual([]);
+  it('a routine late arrival is never an item; an excuse request is a decision the moment it is filed', () => {
+    const asked = '2026-09-18T08:00:00Z';
+    const r = deriveAttention(src({ tardies: [
+      tardy(),                                                                       // unexcused, unacknowledged: routine
+      tardy({ id: 't2', excuse_requested_at: asked, reason_text: 'Flat tire' }),      // pending: a decision
+      tardy({ id: 't3', excuse_requested_at: asked, approval_status: 'approved' }),   // decided
+      tardy({ id: 't4', excuse_requested_at: asked, resolved: true }),                // corrected away
+      tardy({ id: 't5', acknowledged_at: asked }),                                    // acknowledged: still routine
+    ] }));
+    expect(r.unresolved.map(i => i.key)).toEqual(['excuse_request:t2']);
+    expect(r.unresolved[0].verb).toBe('decide');
+    expect(r.unresolved[0].label).toBe('Excuse requested: pending review · 2026-09-17');
+    expect(r.unresolved[0].detail).toBe('“Flat tire”');
+    expect(r.unresolved[0].subject.name).toBe('Sam O.');
+  });
+
+  it('an open attendance report follows the responsible manager until it closes, and never doubles as a countersign item', () => {
+    const att = (over: Record<string, unknown> = {}) => incident({
+      id: 'att1', category: 'attendance', status: 'meeting_required', countersign_role: 'manager', employee_signed_at: null,
+      rule_threshold_count: 3, rule_window_days: 30, period_start: '2026-08-20', period_end: '2026-09-18', occurrence_count: 3, total_minutes_late: 41,
+      meeting_recorded_at: null, created_at: '2026-09-18T20:00:00Z', ...over,
+    });
+    const r = deriveAttention(src({ incidents: [att(), att({ id: 'att2', status: 'closed' })] }));
+    expect(r.unresolved.map(i => i.key)).toEqual(['attendance_meeting:att1']);
+    expect(r.unresolved[0].verb).toBe('follow_up');
+    expect(r.unresolved[0].label).toBe('Meet with team member · attendance report');
+    expect(r.unresolved[0].detail).toBe('3 unexcused late arrivals between 2026-08-20 and 2026-09-18 · 41 minutes late in total');
+    expect(r.unresolved[0].why).toContain('3 unexcused late arrivals within a rolling 30-day period');
+    // After the meeting the item stays, saying what is outstanding.
+    const signing = deriveAttention(src({ incidents: [att({ status: 'meeting_completed', meeting_recorded_at: '2026-09-19T10:00:00Z' })] }));
+    expect(signing.unresolved[0].label).toBe('Attendance report · awaiting team member signature and manager signature');
+    const half = deriveAttention(src({ incidents: [att({ status: 'awaiting_signatures', meeting_recorded_at: '2026-09-19T10:00:00Z', employee_signed_at: '2026-09-19T11:00:00Z' })] }));
+    expect(half.unresolved.map(i => `${i.kind}:${i.label}`)).toEqual(['attendance_meeting:Attendance report · awaiting manager signature']);
+    // Never the subject; a report about a manager or an owner goes to an owner.
+    expect(deriveAttention(src({ viewer: { userId: 'u2', role: 'manager' }, incidents: [att()] })).unresolved).toEqual([]);
+    expect(deriveAttention(src({ incidents: [att({ countersign_role: 'owner' })] })).unresolved).toEqual([]);
+    expect(deriveAttention(src({ viewer: { userId: 'owner', role: 'owner' }, incidents: [att({ countersign_role: 'owner' })] })).unresolved.map(i => i.key)).toEqual(['attendance_meeting:att1']);
   });
 
   it('a bypass reason owed is admitted once the office rule is reached and drops once followed up', () => {
@@ -259,7 +293,7 @@ describe('deriveAttention · order and dedup', () => {
       officePhase: 'after_close', nowMinutes: 17 * 60 + 30,
       closeouts: { today: log({ sealed_at: '2026-09-21T21:30:00Z' }), latestSealedDate: TODAY, officeDaysSinceSeal: 0, unsealedPast: [] },
       dayStatuses: [day({ id: 'ds-t', entry_date: TODAY, is_incomplete: true }), day({ id: 'ds-old', entry_date: '2026-09-10', is_incomplete: true })],
-      tardies: [tardy()],
+      tardies: [pendingTardy()],
       accountability: [record()],
       changeRequests: [change()],
       ptoRequests: [pto({ start_date: '2026-10-05', end_date: '2026-10-05', created_at: '2026-09-10T10:00:00Z' })],
@@ -270,9 +304,9 @@ describe('deriveAttention · order and dedup', () => {
       'record_signoff:ar1',            // due in 2 days
       'missing_clock_out:ds-old',      // payroll in 3 days
       'pto_request:p1',                // no deadline · decide · oldest decision
+      'excuse_request:t1',             // no deadline · decide · asked Sep 18
       'change_request:ch1',            // no deadline · decide
       'training_overdue:ta1',          // no deadline · follow-up · overdue since Sep 15
-      'tardy_unreviewed:t1',           // no deadline · follow-up · from Sep 17
     ]);
   });
 
@@ -294,15 +328,15 @@ describe('deriveAttention · work and presentation', () => {
   });
 
   it('parking (a date) or snoozing (a time) defers; a park reached today is no park', () => {
-    const parked = deriveAttention(src({ tardies: [tardy()], followups: [followup({ item_key: 'tardy_unreviewed:t1', parked_until: '2026-09-25' })] }));
+    const parked = deriveAttention(src({ tardies: [pendingTardy()], followups: [followup({ item_key: 'excuse_request:t1', parked_until: '2026-09-25' })] }));
     expect(parked.counts).toMatchObject({ unresolved: 1, needsNow: 0, deferred: 1 });
     expect(parked.deferred[0].parkedUntil).toBe('2026-09-25');
-    const backToday = deriveAttention(src({ tardies: [tardy()], followups: [followup({ item_key: 'tardy_unreviewed:t1', parked_until: TODAY })] }));
+    const backToday = deriveAttention(src({ tardies: [pendingTardy()], followups: [followup({ item_key: 'excuse_request:t1', parked_until: TODAY })] }));
     expect(backToday.counts).toMatchObject({ unresolved: 1, needsNow: 1, deferred: 0 });
     expect(backToday.needsNow[0].parkedUntil).toBeNull();
-    const snoozed = deriveAttention(src({ tardies: [tardy()], followups: [followup({ item_key: 'tardy_unreviewed:t1', snoozed_until: '2026-09-21T14:00:00Z' })] }));
+    const snoozed = deriveAttention(src({ tardies: [pendingTardy()], followups: [followup({ item_key: 'excuse_request:t1', snoozed_until: '2026-09-21T14:00:00Z' })] }));
     expect(snoozed.counts).toMatchObject({ needsNow: 0, deferred: 1 });
-    const snoozeOver = deriveAttention(src({ tardies: [tardy()], followups: [followup({ item_key: 'tardy_unreviewed:t1', snoozed_until: '2026-09-21T12:00:00Z' })] }));
+    const snoozeOver = deriveAttention(src({ tardies: [pendingTardy()], followups: [followup({ item_key: 'excuse_request:t1', snoozed_until: '2026-09-21T12:00:00Z' })] }));
     expect(snoozeOver.counts).toMatchObject({ needsNow: 1, deferred: 0 });
   });
 
@@ -316,33 +350,33 @@ describe('deriveAttention · work and presentation', () => {
     const closeouts = { today: log({ staffing_assessment: 'unsafe' }), latestSealedDate: '2026-09-18', officeDaysSinceSeal: 0, unsealedPast: [] };
     const noted = deriveAttention(src({ closeouts, followups: [followup({ item_key: 'staffing_answer:dl-today', work_state: 'followed_up', note: 'Talked to Dana; two hygienists out, covered by Thursday.' })] }));
     expect(noted.unresolved).toEqual([]);
-    const tardyNoted = deriveAttention(src({ tardies: [tardy()], followups: [followup({ item_key: 'tardy_unreviewed:t1', work_state: 'followed_up' })] }));
-    expect(tardyNoted.counts).toMatchObject({ unresolved: 1, needsNow: 0, waiting: 1 });
+    const excuseNoted = deriveAttention(src({ tardies: [pendingTardy()], followups: [followup({ item_key: 'excuse_request:t1', work_state: 'followed_up' })] }));
+    expect(excuseNoted.counts).toMatchObject({ unresolved: 1, needsNow: 0, waiting: 1 });
   });
 
   it('a follow-up never admits an item whose record is resolved', () => {
-    const r = deriveAttention(src({ tardies: [tardy({ approval_status: 'approved' })], followups: [followup({ item_key: 'tardy_unreviewed:t1', work_state: 'waiting_on_employee' })] }));
+    const r = deriveAttention(src({ tardies: [pendingTardy({ approval_status: 'approved' })], followups: [followup({ item_key: 'excuse_request:t1', work_state: 'waiting_on_employee' })] }));
     expect(r.unresolved).toEqual([]);
   });
 
   it('the three lists partition unresolved and byVerb counts only needsNow', () => {
     const r = deriveAttention(src({
-      tardies: [tardy(), tardy({ id: 't2', entry_date: '2026-09-18', user_id: 'u3', employee_id: 'e3' })],
+      tardies: [pendingTardy(), pendingTardy({ id: 't2', entry_date: '2026-09-18', user_id: 'u3', employee_id: 'e3' })],
       ptoRequests: [pto()],
       changeRequests: [change()],
-      followups: [followup({ item_key: 'tardy_unreviewed:t1', work_state: 'waiting_on_employee' }), followup({ item_key: 'pto_request:p1', snoozed_until: '2026-09-21T15:00:00Z' })],
+      followups: [followup({ item_key: 'excuse_request:t1', work_state: 'waiting_on_employee' }), followup({ item_key: 'pto_request:p1', snoozed_until: '2026-09-21T15:00:00Z' })],
     }));
     expect(r.counts.unresolved).toBe(r.counts.needsNow + r.counts.waiting + r.counts.deferred);
-    expect(r.counts).toMatchObject({ unresolved: 4, needsNow: 2, waiting: 1, deferred: 1, byVerb: { decide: 1, fix: 0, follow_up: 1 } });
+    expect(r.counts).toMatchObject({ unresolved: 4, needsNow: 2, waiting: 1, deferred: 1, byVerb: { decide: 2, fix: 0, follow_up: 0 } });
   });
 });
 
 describe('deriveAttention · sources', () => {
   it('a missing source is degraded, other sources still report, and nothing pretends to be clean', () => {
-    const r = deriveAttention(src({ dayStatuses: undefined, tardies: [tardy()] }));
+    const r = deriveAttention(src({ dayStatuses: undefined, tardies: [pendingTardy()] }));
     expect(r.degradedSources.map(d => d.name)).toEqual(['dayStatuses']);
     expect(r.degradedSources[0].status.state).toBe('loading');
-    expect(r.unresolved.map(i => i.kind)).toEqual(['tardy_unreviewed']);
+    expect(r.unresolved.map(i => i.kind)).toEqual(['excuse_request']);
   });
 
   it('a reported stale or failed source is degraded even when rows are present', () => {
@@ -380,9 +414,9 @@ describe('deriveAttention · roster', () => {
   it('keeps the same records for someone on the roster', () => {
     const r = deriveAttention(src({
       dayStatuses: [day({ id: 'ds-here', entry_date: '2026-09-15', has_punches: false, is_absent: true, status_code: 'absent' })],
-      tardies: [tardy()],
+      tardies: [pendingTardy()],
     }));
     expect(kinds(r)).toContain('missing_day');
-    expect(kinds(r)).toContain('tardy_unreviewed');
+    expect(kinds(r)).toContain('excuse_request');
   });
 });

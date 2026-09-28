@@ -12,18 +12,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ScrollText, Loader2, RefreshCw } from 'lucide-react';
+import { ScrollText, Loader2 } from 'lucide-react';
 import {
   useEscalationPolicies,
   useSavePolicy,
-  useRunAccountabilityEngine,
   chainLabel,
   POLICY_LABELS,
   type EscalationPolicy,
   type PolicyKind,
 } from '@/hooks/useAccountability';
 
-const KINDS: PolicyKind[] = ['tardy_threshold', 'bypass_unresolved', 'checklist_gap', 'goal_stall'];
+/**
+ * Late arrivals (tardy_threshold) are not here: that rule opens an
+ * attendance incident report and lives on the Attendance card
+ * (LateArrivalRuleCard). These kinds keep the signed-record chain.
+ */
+const KINDS: PolicyKind[] = ['bypass_unresolved', 'checklist_gap', 'goal_stall'];
 
 const DEFAULTS: Omit<EscalationPolicy, 'id' | 'org_id' | 'kind'> = {
   threshold_count: 3,
@@ -147,33 +151,17 @@ function PolicyRow({ kind, existing }: { kind: PolicyKind; existing?: Escalation
 
 export default function EscalationPoliciesCard() {
   const { data: policies = [], isLoading } = useEscalationPolicies();
-  const run = useRunAccountabilityEngine();
 
   return (
     <Card className="card-elevated">
       <CardHeader className="border-b">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="flex items-center gap-2">
-            <ScrollText className="h-5 w-5" />
-            Accountability chains
-          </CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => run.mutate('scan')}
-            disabled={run.isPending}
-          >
-            {run.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-2 h-4 w-4" />
-            )}
-            Check now
-          </Button>
-        </div>
+        <CardTitle className="flex items-center gap-2">
+          <ScrollText className="h-5 w-5" />
+          Accountability chains
+        </CardTitle>
         <p className="pt-1 text-xs text-muted-foreground">
-          These rules turn patterns into a signed record. Documentation, not punishment — sometimes
-          it's school, sometimes it's traffic; the record just says what happened.
+          These rules turn patterns into a signed record. Documentation, not punishment; the record
+          just says what happened. Late arrivals are handled by the late-arrival rule under Attendance.
         </p>
       </CardHeader>
       <CardContent className="space-y-3 p-4">

@@ -36,10 +36,11 @@ describe('todayBand', () => {
   it('lists exceptions only, attention first, opening the attendance item over any other item; the count line names who is in and who comes later', () => {
     const t = todayBand({ summary: open, now, needsNow: [
       item({ key: 'correction_request:c9', kind: 'correction_request', verb: 'decide', subject: { employeeId: 'e2', userId: 'u2', name: 'Marcus T.' } }),
-      item({ key: 'tardy_unreviewed:t1', kind: 'tardy_unreviewed', verb: 'follow_up', subject: { employeeId: 'e2', userId: 'u2', name: 'Marcus T.' } }),
+      item({ key: 'excuse_request:t1', kind: 'excuse_request', verb: 'decide', subject: { employeeId: 'e2', userId: 'u2', name: 'Marcus T.' } }),
     ] });
     expect(t.exceptions.map(e => e.name)).toEqual(['Marcus T.', 'Ken W.', 'Jo B.']);
-    expect(t.exceptions[0]).toMatchObject({ href: '/management?item=tardy_unreviewed:t1', action: 'Open' });
+    // An excuse request is a decision, so the row offers Review.
+    expect(t.exceptions[0]).toMatchObject({ href: '/management?item=excuse_request:t1', action: 'Review' });
     // No attendance item for Ken: his row opens his record in People instead.
     expect(t.exceptions[1]).toMatchObject({ href: '/management/people/e4', action: 'Open' });
     expect(t.countLine).toBe('3 in · Sam K. at 1:00 PM');

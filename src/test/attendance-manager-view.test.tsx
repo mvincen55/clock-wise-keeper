@@ -79,9 +79,15 @@ vi.mock('@/hooks/useDaysOff', () => ({
 }));
 vi.mock('@/hooks/useTardies', () => ({
   useTardies: () => ({ data: [
-    { id: 'tardy-jane', user_id: 'manager-login', employee_id: 'emp-jane', time_entry_id: 'entry-jane-0922', entry_date: '2026-09-22', expected_start_time: '08:25:00', actual_start_time: '2026-09-22T12:50:00Z', minutes_late: 25, reason_text: null, approval_status: 'unreviewed', approved_by: null, approved_at: null, resolved: false, timezone_suspect: false, created_at: '', updated_at: '' },
+    // Rick asked for this one to be excused: a pending request the manager decides.
+    { id: 'tardy-rick', user_id: 'rick-login', employee_id: 'emp-rick', time_entry_id: 'entry-rick-0922', entry_date: '2026-09-22', expected_start_time: '08:25:00', actual_start_time: '2026-09-22T12:50:00Z', minutes_late: 25, reason_text: 'Traffic on 95', approval_status: 'unreviewed', approved_by: null, approved_at: null, resolved: false, timezone_suspect: false, acknowledged_at: null, acknowledged_by: null, excuse_requested_at: '2026-09-22T13:00:00Z', excuse_decided_at: null, excuse_decided_by: null, manager_note: '', created_at: '', updated_at: '' },
   ], isLoading: false }),
-  useUpdateTardy: () => ({ mutateAsync: vi.fn() }),
+  useDecideTardyExcuse: () => ({ mutateAsync: vi.fn() }),
+  useAcknowledgeTardy: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useRequestTardyExcuse: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
+vi.mock('@/hooks/useLateArrivalRule', () => ({
+  useLateArrivalRule: () => ({ data: { threshold_count: 3, threshold_window_days: 30, is_active: true } }),
 }));
 vi.mock('@/hooks/useOfficeClosures', () => ({ useOfficeClosures: () => ({ data: [] }) }));
 vi.mock('@/hooks/useTimeEntries', () => ({
@@ -214,13 +220,19 @@ describe('Team Attendance (Management)', () => {
     expect(screen.getByText('Vacation')).toBeInTheDocument();
   });
 
-  it('the tardy review says whose tardy it is', async () => {
+  it('an excuse request is a pending decision that names whose late arrival it is', async () => {
     mount();
-    fireEvent.click(screen.getByRole('button', { name: '1 Unreviewed tardy' }));
-    const tardyRow = (await screen.findByText('Review')).closest('tr')!;
-    expect(within(tardyRow).getByText('Doe, Jane')).toBeInTheDocument();
-    fireEvent.click(within(tardyRow).getByText('Review'));
-    expect(await screen.findByText(/Review Tardy — Doe, Jane — /)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '1 Excuse request pending review' }));
+    const tardyRow = (await screen.findByText('Decide')).closest('tr')!;
+    expect(within(tardyRow).getByText('Roe, Rick')).toBeInTheDocument();
+    expect(within(tardyRow).getByText('Excuse requested: pending review')).toBeInTheDocument();
+    expect(within(tardyRow).getByText('Traffic on 95')).toBeInTheDocument();
+    fireEvent.click(within(tardyRow).getByText('Decide'));
+    expect(await screen.findByText(/Late arrival — Roe, Rick — /)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Excused' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Unexcused' })).toBeInTheDocument();
+    // No reason is demanded of anyone: the note is optional.
+    expect(screen.getByLabelText('Note (optional)')).toBeInTheDocument();
   });
 
   it('Recompute covers everyone in the office when no one is focused', async () => {

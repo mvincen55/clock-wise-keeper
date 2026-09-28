@@ -42,8 +42,6 @@ export const ATTENTION_WINDOW_DAYS = 30;
  * each is the rule the product already runs on, written down once here.
  */
 export const ATTENTION_RULES = {
-  /** Tardies past grace are created by the recompute and reviewed by a manager. */
-  reviewTardies: true,
   /** A checklist bypass with no reason after one working day needs manager follow-up. */
   bypassReasonHours: 24,
   /** knowledge_acknowledgments.escalation_level once the manager step has been sent. */
@@ -88,6 +86,8 @@ export function useAttentionItems(): AttentionItemsResult {
   // Every closure, not one year's: the window can straddle New Year.
   const closures = useOfficeClosures();
   const exceptions = useOrgAttendanceExceptions(windowStart, today, enabled);
+  // Late arrivals reach Attention only as excuse requests (a decision) and,
+  // through incidents, as the attendance report the rule opens.
   const tardies = useTardies(windowStart, today);
   const ptoRequests = useOrgPtoRequests('pending');
   const corrections = useOrgCorrectionRequests('pending');

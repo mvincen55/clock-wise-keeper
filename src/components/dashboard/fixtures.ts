@@ -123,7 +123,7 @@ const staffingOpen: StaffingSummary = {
     { id: '8', name: 'Rita M.', status: 'Clocked out', tone: 'calm' },
   ],
   reviewCount: 1,
-  reviewDetail: '1 unreviewed late arrival',
+  reviewDetail: '1 no-punch day',
 };
 
 const staffingClosed: StaffingSummary = {
@@ -508,8 +508,8 @@ const openItems: AttentionItem[] = [
     detail: 'The record is filled in but unsealed', ageHours: 14,
   }),
   fxItem({
-    key: 'tardy_unreviewed:t1', kind: 'tardy_unreviewed', verb: 'follow_up', label: 'Late 12 min · 2026-03-03 · unreviewed',
-    subject: { employeeId: '2', userId: 'u2', name: 'Marcus T.' }, detail: 'No reason given yet', ageHours: 1,
+    key: 'excuse_request:t1', kind: 'excuse_request', verb: 'decide', label: 'Excuse requested: pending review · 2026-03-03',
+    subject: { employeeId: '2', userId: 'u2', name: 'Marcus T.' }, detail: '“School drop-off ran long”', ageHours: 1,
   }),
 ].sort(compareByConsequence);
 

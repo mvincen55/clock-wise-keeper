@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, type PendingTablesRow } from '@/integrations/supabase/pending-schema';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { createNotification } from '@/hooks/useNotifications';
-import type { Tables } from '@/integrations/supabase/types';
+import { isAttendanceReport } from '@/lib/incidents';
 
 /**
  * Incident reports — the office injury / exposure log.
@@ -18,7 +18,13 @@ import type { Tables } from '@/integrations/supabase/types';
  * owners and managers file for anyone on the team.
  */
 
-export type IncidentReport = Tables<'incident_reports'>;
+export type IncidentReport = PendingTablesRow<'incident_reports'>;
+
+/** One late arrival linked to an attendance report, as the report keeps it. */
+export type AttendanceIncidentEvent = PendingTablesRow<'attendance_incident_events'>;
+
+/** A change to signed content, with what it was and what it became. */
+export type IncidentReportAmendment = PendingTablesRow<'incident_report_amendments'>;
 
 /** An active owner or manager — the pool a report can be signed off from. */
 export type OrgAdmin = { user_id: string; role: 'owner' | 'manager' };
@@ -91,6 +97,85 @@ export function useEmployeeIncidentReports(employeeId: string | undefined) {
       if (error) throw error;
       return data || [];
     },
+  });
+}
+
+/** The late arrivals an attendance report is about: the qualifying set, then follow-ups. */
+export function useAttendanceIncidentEvents(reportId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['incident-reports', 'events', reportId],
+    enabled: !!reportId,
+    queryFn: async (): Promise<AttendanceIncidentEvent[]> => {
+      const { data, error } = await supabase
+        .from('attendance_incident_events')
+        .select('*')
+        .eq('incident_report_id', reportId!)
+        .order('entry_date', { ascending: true });
+      if (error) throw error;
+      return (data || []) as AttendanceIncidentEvent[];
+    },
+  });
+}
+
+/** The amendment log of one report, oldest first. */
+export function useIncidentReportAmendments(reportId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['incident-reports', 'amendments', reportId],
+    enabled: !!reportId,
+    queryFn: async (): Promise<IncidentReportAmendment[]> => {
+      const { data, error } = await supabase
+        .from('incident_report_amendments')
+        .select('*')
+        .eq('incident_report_id', reportId!)
+        .order('amended_at', { ascending: true });
+      if (error) throw error;
+      return (data || []) as IncidentReportAmendment[];
+    },
+  });
+}
+
+/**
+ * A manager records the meeting (date, brief summary, agreed next steps).
+ * Recording it again is an amendment: it needs a reason and, when anything
+ * had been signed, both signatures are given again. The database notifies
+ * the team member either way.
+ */
+export function useRecordAttendanceMeeting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; meetingDate: string; summary: string; nextSteps: string; amendmentReason?: string }) => {
+      const { data, error } = await supabase.rpc('record_attendance_meeting', {
+        p_report_id: input.id,
+        p_meeting_date: input.meetingDate,
+        p_summary: input.summary,
+        p_next_steps: input.nextSteps,
+        p_amendment_reason: input.amendmentReason ?? '',
+      });
+      if (error) throw error;
+      return signedRow(data);
+    },
+    onSuccess: (_row, input) => {
+      qc.invalidateQueries({ queryKey: ['incident-reports'] });
+      toast.success(input.amendmentReason ? 'Meeting record amended' : 'Meeting recorded');
+    },
+    onError: (e: Error) => toast.error(e.message || 'Could not record the meeting'),
+  });
+}
+
+/** The team member's own comment on their attendance report, any time before it closes. */
+export function useCommentAttendanceReport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; comment: string }) => {
+      const { data, error } = await supabase.rpc('comment_attendance_report', { p_report_id: input.id, p_comment: input.comment });
+      if (error) throw error;
+      return signedRow(data);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['incident-reports'] });
+      toast.success('Comment saved');
+    },
+    onError: (e: Error) => toast.error(e.message || 'Could not save the comment'),
   });
 }
 
@@ -369,21 +454,25 @@ export function useSignIncidentReport() {
       if (error) throw error;
       const signed = signedRow(data);
 
-      await notifyCountersigners({
-        orgId: ctx.org_id,
-        actorUserId: user.id,
-        reportId: signed.id,
-        countersignRole: signed.countersign_role,
-        subjectUserId: user.id,
-        subjectName: signed.employee_signature,
-        incidentDate: signed.incident_date,
-      });
+      // An attendance report tells its managers itself (and closes itself
+      // on the second signature); safety reports notify from here.
+      if (!isAttendanceReport(signed)) {
+        await notifyCountersigners({
+          orgId: ctx.org_id,
+          actorUserId: user.id,
+          reportId: signed.id,
+          countersignRole: signed.countersign_role,
+          subjectUserId: user.id,
+          subjectName: signed.employee_signature,
+          incidentDate: signed.incident_date,
+        });
+      }
 
       return signed;
     },
-    onSuccess: () => {
+    onSuccess: signed => {
       qc.invalidateQueries({ queryKey: ['incident-reports'] });
-      toast.success('Signed — your managers have been notified');
+      toast.success(signed.status === 'closed' ? 'Signed — both signatures are on the report and it is closed' : 'Signed — your managers have been notified');
     },
     onError: (e: Error) => toast.error(e.message || 'Could not sign the report'),
   });
@@ -410,6 +499,9 @@ export function useCountersignIncidentReport() {
       if (error) throw error;
       const signed = signedRow(data);
 
+      // An attendance report tells its team member itself.
+      if (isAttendanceReport(signed)) return signed;
+
       // The person it happened to hears that the loop is closed.
       const { data: subject } = await supabase
         .from('employees')
@@ -432,9 +524,9 @@ export function useCountersignIncidentReport() {
 
       return signed;
     },
-    onSuccess: () => {
+    onSuccess: signed => {
       qc.invalidateQueries({ queryKey: ['incident-reports'] });
-      toast.success('Signed off');
+      toast.success(signed.status === 'closed' ? 'Signed — both signatures are on the report and it is closed' : 'Signed off');
     },
     onError: (e: Error) => toast.error(e.message || 'Could not sign the report'),
   });

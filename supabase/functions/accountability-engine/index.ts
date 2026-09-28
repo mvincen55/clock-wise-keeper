@@ -3,87 +3,25 @@
 // Actions:
 //   scan   — evaluate active escalation policies, open records when a threshold
 //            is crossed, and ask the member for their reason + signature.
+//            Late arrivals are NOT scanned here any more: the database opens
+//            an attendance incident report itself when the office's rule is
+//            met (see 20260928120000_late_arrival_workflow.sql), so this scan
+//            only covers kinds that have no engine yet, i.e. nothing today.
 //   sweep  — remind whoever is holding a review, then push idle reviews up the
-//            chain (that hop is invisible to the member).
+//            chain (that hop is invisible to the member). Still runs for
+//            accountability records opened before the attendance workflow.
 //
 // Tone: documentation, not punishment. The record says what happened; it never
 // characterizes the person.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
-
-import { scrubMessages } from "../_shared/ai-safe.ts";
-const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const MODEL = "google/gemini-3.6-flash";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-
-type Tardy = { user_id: string; entry_date: string; minutes_late: number };
-
-/** Deterministic fallback — real numbers, zero judgment. */
-function plainSummary(kind: string, rows: Tardy[], windowDays: number): string {
-  if (kind !== "tardy_threshold") {
-    return `${rows.length} recorded events in the last ${windowDays} days.`;
-  }
-  const mins = rows.map((r) => `${r.minutes_late}`).join(", ");
-  const dates = rows.map((r) => r.entry_date).join(", ");
-  return `${rows.length} tardies in ${windowDays} days: ${mins} minutes late, on ${dates}.`;
-}
-
-async function draftSummary(
-  apiKey: string | undefined,
-  kind: string,
-  rows: Tardy[],
-  windowDays: number,
-): Promise<string> {
-  const fallback = plainSummary(kind, rows, windowDays);
-  if (!apiKey) return fallback;
-
-  const facts = rows
-    .map((r) => `${r.entry_date}: ${r.minutes_late} minutes late`)
-    .join("\n");
-
-  const prompt =
-    `Write the factual summary line for an attendance record. This is record-keeping, not discipline.\n\n` +
-    `RULES:\n` +
-    `- State only the numbers and dates below. Nothing else.\n` +
-    `- No judgment, no adjectives about the person, no advice, no encouragement, no consequences.\n` +
-    `- Two sentences maximum. Sometimes it's school, sometimes it's traffic — the record just says what happened.\n\n` +
-    `Threshold crossed: ${rows.length} occurrences within ${windowDays} days.\n` +
-    `Events:\n${facts}`;
-
-  try {
-    const res = await fetch(GATEWAY_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: scrubMessages([
-          { role: "system", content: OFFICE_DOCTRINE },
-          { role: "user", content: prompt },
-        ], "accountability-engine"),
-      }),
-    });
-    if (!res.ok) {
-      console.error(`AI summary failed [${res.status}]: ${await res.text()}`);
-      return fallback;
-    }
-    const data = await res.json();
-    const text = data?.choices?.[0]?.message?.content?.trim();
-    return text && text.length > 10 ? text : fallback;
-  } catch (e) {
-    console.error("AI summary error:", (e as Error).message);
-    return fallback;
-  }
-}
 
 /**
  * The org-scoped twin of the `sweep_accountability_escalations` database
@@ -158,7 +96,6 @@ Deno.serve(async (req) => {
   if (!url || !serviceKey) return json({ error: "Backend not configured" }, 500);
 
   const admin = createClient(url, serviceKey);
-  const aiKey = Deno.env.get("LOVABLE_API_KEY");
 
   let body: { action?: string; org_id?: string } = {};
   try {
@@ -272,85 +209,18 @@ Deno.serve(async (req) => {
     const { data: policies, error: polErr } = await policyQuery;
     if (polErr) throw polErr;
 
-    let created = 0;
-
-    for (const p of policies ?? []) {
-      if (p.kind !== "tardy_threshold") continue; // other kinds ride the same engine as they land
-
-      const since = new Date();
-      since.setDate(since.getDate() - (p.threshold_window_days as number));
-      const sinceStr = since.toISOString().slice(0, 10);
-
-      const { data: tardies } = await admin
-        .from("tardies")
-        .select("user_id, employee_id, entry_date, minutes_late")
-        .eq("org_id", p.org_id)
-        .gte("entry_date", sinceStr)
-        .order("entry_date", { ascending: true });
-
-      const byUser = new Map<string, Tardy[]>();
-      const empByUser = new Map<string, string>();
-      for (const t of tardies ?? []) {
-        const uid = t.user_id as string;
-        byUser.set(uid, [...(byUser.get(uid) ?? []), t as unknown as Tardy]);
-        if (t.employee_id) empByUser.set(uid, t.employee_id as string);
-      }
-
-      for (const [uid, rows] of byUser) {
-        if (rows.length < (p.threshold_count as number)) continue;
-
-        // One open record at a time, and no re-opening the same window.
-        const { data: recent } = await admin
-          .from("accountability_reports")
-          .select("id, status, created_at")
-          .eq("org_id", p.org_id)
-          .eq("kind", p.kind)
-          .eq("subject_user_id", uid)
-          .gte("created_at", since.toISOString())
-          .limit(1);
-        if ((recent ?? []).length > 0) continue;
-
-        const summary = await draftSummary(
-          aiKey,
-          p.kind as string,
-          rows,
-          p.threshold_window_days as number,
-        );
-
-        const { data: inserted, error: insErr } = await admin
-          .from("accountability_reports")
-          .insert({
-            org_id: p.org_id,
-            policy_id: p.id,
-            kind: p.kind,
-            subject_user_id: uid,
-            subject_employee_id: empByUser.get(uid) ?? null,
-            period_start: sinceStr,
-            period_end: new Date().toISOString().slice(0, 10),
-            summary,
-            facts: { events: rows },
-            status: "awaiting_member",
-          })
-          .select("id")
-          .single();
-        if (insErr) {
-          console.error("report insert failed:", insErr.message);
-          continue;
-        }
-
-        await admin.from("notifications").insert({
-          org_id: p.org_id,
-          recipient_user_id: uid,
-          notification_type: "accountability_record",
-          title: "A record needs your note",
-          message:
-            "Nothing to worry about — this is record-keeping. Add what happened in your own words and sign it, then it goes to your manager for review.",
-          related_table: "accountability_reports",
-          related_id: inserted.id,
-        });
-
-        created += 1;
-      }
+    // Late arrivals no longer open accountability records here. The
+    // tardy_threshold rule is evaluated by the database the moment a late
+    // arrival, an excuse decision, or a correction lands, and a crossing
+    // opens an attendance incident report (migration 20260928120000) with
+    // its own meeting-and-signatures workflow. Scanning it here again would
+    // open a second, parallel record for the same events. Records already
+    // open keep moving through `sweep` until they are signed off. No other
+    // kind has an engine yet, so a scan opens nothing today.
+    const skipped = (policies ?? []).filter((p) => p.kind === "tardy_threshold").length;
+    const created = 0;
+    if (skipped > 0) {
+      console.log(`scan: ${skipped} late-arrival rule(s) left to the attendance incident workflow`);
     }
 
     return json({ ok: true, created });

@@ -76,7 +76,8 @@ DECLARE
     'create_knowledge_acknowledgment_assignments(uuid,uuid)',
     'knowledge_user_work_context(uuid,uuid,date)',
     'knowledge_add_working_days(uuid,uuid,timestamptz,integer,time)',
-    'knowledge_routine_notice_window(uuid,uuid,timestamptz)'
+    'knowledge_routine_notice_window(uuid,uuid,timestamptz)',
+    'evaluate_late_arrival_threshold(uuid,uuid)'
   ];
 BEGIN
   FOREACH v_signature IN ARRAY v_private_functions LOOP
