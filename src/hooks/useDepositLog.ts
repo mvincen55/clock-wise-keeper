@@ -76,6 +76,36 @@ export function useRecentDepositLogs(days = 14) {
   });
 }
 
+/**
+ * Every date the office holds a closeout record for. Close the Day keeps such
+ * a day reachable even when the office calendar says closed: a record is
+ * never hidden behind the calendar.
+ */
+export function useDepositLogDates() {
+  const { user } = useAuth();
+  const { data: ctx } = useOrgContext();
+
+  return useQuery({
+    queryKey: ['deposit-log-dates', ctx?.org_id],
+    enabled: !!user && !!ctx,
+    queryFn: async (): Promise<ReadonlySet<string>> => {
+      const dates: string[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const { data, error } = await supabase
+          .from('deposit_logs')
+          .select('deposit_date')
+          .eq('org_id', ctx!.org_id)
+          .order('deposit_date')
+          .range(offset, offset + 499);
+        if (error) throw error;
+        dates.push(...(data ?? []).map(row => row.deposit_date));
+        if ((data ?? []).length < 500) break;
+      }
+      return new Set(dates);
+    },
+  });
+}
+
 export interface DepositLogSave {
   depositDate: string;
   cashCents: number;
@@ -154,6 +184,7 @@ export function useSaveDepositLog() {
     onSuccess: (_, input) => {
       qc.invalidateQueries({ queryKey: ['deposit-log', ctx?.org_id, input.depositDate] });
       qc.invalidateQueries({ queryKey: ['deposit-logs-recent'] });
+      qc.invalidateQueries({ queryKey: ['deposit-log-dates'] });
       qc.invalidateQueries({ queryKey: ['practice-vitals'] });
     },
   });

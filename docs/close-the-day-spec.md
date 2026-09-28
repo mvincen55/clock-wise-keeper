@@ -111,6 +111,43 @@ print sheets, snapshots, audit trigger) is unchanged.
    spin today's lost minutes into a measurable team goal (reuses
    `team_goals` sprints; the referee's `goalProgress` validates the spec).
 
+## Office days (which dates the closeout offers)
+
+Close the Day offers office days only. The office's own calendar decides
+(`src/lib/office-days.ts`, one rule shared with the Office Calendar):
+
+- a full-day closure (`office_closures.is_full_day`, generated holidays and
+  custom closures) closes the day;
+- Sundays are closed;
+- a Saturday is closed unless the office marked that date open
+  (`office_open_days`, org-scoped, members read, owners and managers write;
+  the Office Calendar's "Open Saturdays" dialog manages it — it used to keep
+  the list in the manager's browser, and a manager's first visit moves any
+  dates still there into the table);
+- every other day is open. The weekly pattern is a parameter of the rule
+  with a Monday–Friday default, so an office that opens on other days can
+  say so without a new rule.
+
+A date that already holds a closeout record is always reachable, whatever
+the calendar says: a record is never hidden. The previous/next arrows step
+from office day to office day (never past today), and a closed date that
+arrives by URL, or today when today is closed, lands on the office day
+before it with the step preserved. When today is not an office day the page
+says so and points a manager at the Office Calendar (mark the Saturday open)
+or Office settings (remove the closure); members are told to ask. If the
+calendar cannot be loaded the arrows step plain days and the page says
+closed days are not being skipped, rather than guessing.
+
+Attention's "office days since the last seal" reads a different source
+(attendance: someone who clocks was scheduled and no closure covered the
+day) because it answers a different question — whether a day that needed
+closing was skipped; both agree that a closure or a weekend nobody works is
+not an office day.
+
+Tests: `src/test/office-days.test.ts` (the rule), `src/test/office-open-days.test.tsx`
+(the reads, the write, the browser-to-table move), and the office-days
+cases in `src/test/close-day-navigation.test.tsx` (the page).
+
 ## Setup (owner or manager, Settings → Schedule Intelligence)
 
 The unconfigured Schedule step links directly to Schedule Intelligence setup. Pending edits save before navigation; a failed save keeps the closer on the day. The selected date and Schedule step are retained in the return URL. Members must ask an owner or manager to configure it.
@@ -127,6 +164,13 @@ and save), staffing expectations, phrase shorthand, mobile fallback toggle.
   redeploy all three functions (README "How code changes ship").
 - OCR assets must be vendored at build time (`predev`/`prebuild` run
   `scripts/vendor-tesseract.mjs`; `public/tesseract/` is gitignored).
+- Office days: apply `20260930120000_office_open_days.sql` (the
+  `office_open_days` table) before deploying this version; until Lovable
+  regenerates the types from it, the table is declared in
+  `src/integrations/supabase/pending-schema.ts`. Without the table the
+  office-days read fails and Close the Day falls back to plain day stepping
+  (it says so on the page), and the Office Calendar cannot save open
+  Saturdays.
 - Existing members predate role-carrying invites, so they start with no
   operational role — managers backfill from the Team page.
 - Color-legend matching assumes solid status blocks; offices with heavy

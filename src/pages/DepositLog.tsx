@@ -9,7 +9,7 @@
  * Money rules are unchanged: amounts only, no payer names, printing always
  * comes from the saved record.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { closingDate, scheduleSetupUrl } from '@/lib/close-day-navigation';
 import { createPortal } from 'react-dom';
@@ -37,11 +37,12 @@ import {
 } from 'lucide-react';
 import DepositPrintSheet from '@/components/DepositPrintSheet';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
-import { getToday, shiftDate } from '@/lib/time-utils';
+import { daysBetween, getToday, shiftDate } from '@/lib/time-utils';
 import { formatCents, parseCurrencyInput } from '@/lib/money';
 import {
   depositChecks,
   useDepositLog,
+  useDepositLogDates,
   useSaveDepositLog,
   type StaffingAssessment,
 } from '@/hooks/useDepositLog';
@@ -56,6 +57,8 @@ import SealDayCard from '@/components/close-day/SealDayCard';
 import CloseDayCoachCard from '@/components/close-day/CloseDayCoachCard';
 import { useProviderDayMetrics } from '@/hooks/useScheduleIntelligence';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import { useOfficeDays } from '@/hooks/useOfficeDays';
+import { adjacentDay, isOfficeDay } from '@/lib/office-days';
 
 function dateLabel(date: string): string {
   if (date === getToday()) return 'Today';
@@ -117,6 +120,28 @@ export default function DepositLog() {
   const { data: orgCtx } = useOrgContext();
   const { data: metrics } = useProviderDayMetrics(log?.id ?? null);
   const isManager = orgCtx?.role === 'owner' || orgCtx?.role === 'manager';
+
+  // The days Close the Day offers: office days by the office's own calendar
+  // (no Sundays, no full-day closures, Saturdays only when marked open) plus
+  // any day that already holds a record — a record is never hidden. Until
+  // the calendar has loaded the arrows step plain days; once it has, a day
+  // that turns out to be closed moves to the office day before it.
+  const { data: officeCalendar, isError: calendarUnavailable } = useOfficeDays();
+  const { data: recordDates, isError: recordDatesUnavailable } = useDepositLogDates();
+  const today = getToday();
+  const calendarReady = officeCalendar !== undefined && (recordDates !== undefined || recordDatesUnavailable);
+  const isOpenDay = useCallback(
+    (d: string) => (officeCalendar ? isOfficeDay(d, officeCalendar) : true) || !!recordDates?.has(d),
+    [officeCalendar, recordDates],
+  );
+  const snapTo = calendarReady && !isOpenDay(date) ? adjacentDay(date, -1, isOpenDay) : null;
+  useEffect(() => {
+    if (snapTo) setParams({ date: snapTo, step: String(step) }, { replace: true });
+  }, [snapTo, step, setParams]);
+  const previousDate = (calendarReady ? adjacentDay(date, -1, isOpenDay) : null) ?? shiftDate(date, -1);
+  const nextDate = calendarReady
+    ? adjacentDay(date, 1, isOpenDay, daysBetween(date, today))
+    : date < today ? shiftDate(date, 1) : null;
 
   const [form, setForm] = useState<FormState | null>(null);
   // Unsaved edits block printing: the printed sheets always come from the
@@ -259,7 +284,7 @@ export default function DepositLog() {
           </p>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" onClick={() => setDate(shiftDate(date, -1))}>
+          <Button variant="ghost" size="icon" aria-label="Previous office day" onClick={() => setDate(previousDate)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="text-sm font-medium min-w-36 text-center">
@@ -269,13 +294,35 @@ export default function DepositLog() {
           <Button
             variant="ghost"
             size="icon"
-            disabled={date >= getToday()}
-            onClick={() => setDate(shiftDate(date, 1))}
+            aria-label="Next office day"
+            disabled={!nextDate}
+            onClick={() => nextDate && setDate(nextDate)}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </div>
+
+      {calendarReady && !isOpenDay(today) && (
+        <p className="text-xs text-muted-foreground">
+          Today isn't an office day on the office calendar, so it isn't offered here.{' '}
+          {isManager ? (
+            <>
+              If the office worked today, mark the Saturday open on the{' '}
+              <Link to="/office-calendar" className="text-primary underline-offset-2 hover:underline">Office Calendar</Link>
+              {' '}or remove the closure in{' '}
+              <Link to="/management/office/settings#office-closures" className="text-primary underline-offset-2 hover:underline">Office settings</Link>.
+            </>
+          ) : (
+            'If the office worked today, ask an owner or manager to mark it open.'
+          )}
+        </p>
+      )}
+      {calendarUnavailable && (
+        <p role="status" className="text-xs text-muted-foreground">
+          The office calendar could not be loaded, so closed days are not being skipped.
+        </p>
+      )}
 
       <div className="flex flex-wrap gap-1.5">
         {STEPS.map((s, i) => (

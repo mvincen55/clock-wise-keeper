@@ -13,6 +13,8 @@ import { useOrgEmployees } from '@/hooks/useEmployees';
 import { useOrgStaff } from '@/hooks/useStaffCodes';
 import { staffCodeLabel } from '@/lib/staff-code';
 import { useOfficeClosures, useAddClosure } from '@/hooks/useOfficeClosures';
+import { useAddOfficeOpenDay, useMoveLegacyOpenSaturdays, useOfficeOpenDays, useRemoveOfficeOpenDay } from '@/hooks/useOfficeDays';
+import { isOfficeDay, weekdayOf, type OfficeDayCalendar } from '@/lib/office-days';
 import { useOfficeEvents } from '@/hooks/useOfficeEvents';
 import TeamMeetingsCard from '@/components/calendar/TeamMeetingsCard';
 import { useAuth } from '@/hooks/useAuth';
@@ -64,16 +66,6 @@ type CalendarEvent = {
   notes?: string | null;
   closureName?: string;
 };
-
-function getOpenSaturdays(orgId: string): string[] {
-  try {
-    return JSON.parse(localStorage.getItem(`open-saturdays-${orgId}`) || '[]');
-  } catch { return []; }
-}
-
-function setOpenSaturdays(orgId: string, dates: string[]) {
-  localStorage.setItem(`open-saturdays-${orgId}`, JSON.stringify(dates));
-}
 
 const actionLabels: Record<string, string> = {
   calendar_add_day_off: 'Added Day Off',
@@ -353,7 +345,20 @@ export default function OfficeCalendar() {
     return map;
   }, [orgStaff]);
 
-  const openSaturdays = useMemo(() => ctx ? getOpenSaturdays(ctx.org_id) : [], [ctx, saturdayDialogOpen]);
+  // Open Saturdays are office data (office_open_days), shared with Close the
+  // Day, which skips the days this calendar shows closed. Dates a manager
+  // saved in this browser before the table existed move over on first visit.
+  const { data: openDayRows } = useOfficeOpenDays();
+  const addOpenDay = useAddOfficeOpenDay();
+  const removeOpenDay = useRemoveOfficeOpenDay();
+  useMoveLegacyOpenSaturdays(isManager, openDayRows, moved =>
+    toast({ title: `Moved ${moved} open Saturday${moved === 1 ? '' : 's'} from this browser to the office calendar` }),
+  );
+  const openSaturdays = useMemo(() => (openDayRows ?? []).map(r => r.open_date), [openDayRows]);
+  const officeCalendar = useMemo<OfficeDayCalendar>(() => ({
+    closedDates: new Set((closures ?? []).filter(c => c.is_full_day).map(c => c.closure_date)),
+    openDates: new Set(openSaturdays),
+  }), [closures, openSaturdays]);
 
   const eventsMap = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
@@ -444,11 +449,7 @@ export default function OfficeCalendar() {
       }
     } else if (eventType === 'open_saturday') {
       if (!form.date_start || !ctx) return;
-      const current = getOpenSaturdays(ctx.org_id);
-      if (!current.includes(form.date_start)) {
-        setOpenSaturdays(ctx.org_id, [...current, form.date_start]);
-      }
-      toast({ title: 'Saturday marked as open' });
+      if (!(await markSaturdayOpen(form.date_start))) return;
     } else {
       if (!form.date_start || !form.date_end || !selectedEmployee) return;
       const emp = (employees || []).find(e => e.id === selectedEmployee);
@@ -482,34 +483,43 @@ export default function OfficeCalendar() {
     setForm({ type: 'scheduled_with_notice', date_start: '', date_end: '', hours: '0', notes: '', closure_name: '' });
   };
 
-  const handleAddOpenSaturday = () => {
-    if (!newSaturdayDate || !ctx) return;
-    const d = new Date(newSaturdayDate + 'T00:00:00');
-    if (d.getDay() !== 6) {
+  const markSaturdayOpen = async (dateStr: string): Promise<boolean> => {
+    if (weekdayOf(dateStr) !== 6) {
       toast({ title: 'Error', description: 'Selected date must be a Saturday', variant: 'destructive' });
-      return;
+      return false;
     }
-    const current = getOpenSaturdays(ctx.org_id);
-    if (!current.includes(newSaturdayDate)) {
-      setOpenSaturdays(ctx.org_id, [...current, newSaturdayDate]);
+    try {
+      await addOpenDay.mutateAsync({ open_date: dateStr });
+      toast({ title: 'Saturday marked as open' });
+      return true;
+    } catch (err) {
+      toast({ title: 'Error', description: (err as Error).message, variant: 'destructive' });
+      return false;
     }
-    setNewSaturdayDate('');
-    toast({ title: 'Saturday marked as open' });
   };
 
-  const handleRemoveOpenSaturday = (dateStr: string) => {
-    if (!ctx) return;
-    const current = getOpenSaturdays(ctx.org_id);
-    setOpenSaturdays(ctx.org_id, current.filter(d => d !== dateStr));
-    toast({ title: 'Saturday removed from open list' });
+  const handleAddOpenSaturday = async () => {
+    if (!newSaturdayDate || !ctx) return;
+    if (await markSaturdayOpen(newSaturdayDate)) setNewSaturdayDate('');
   };
 
-  const isClosedDay = (dateStr: string, dayOfWeek: number): { closed: boolean; closureName?: string } => {
-    if (dayOfWeek === 0) return { closed: true, closureName: 'Closed' };
-    if (dayOfWeek === 6 && !openSaturdays.includes(dateStr)) return { closed: true, closureName: 'Closed' };
+  const handleRemoveOpenSaturday = async (dateStr: string) => {
+    const row = (openDayRows ?? []).find(r => r.open_date === dateStr);
+    if (!row) return;
+    try {
+      await removeOpenDay.mutateAsync(row.id);
+      toast({ title: 'Saturday removed from open list' });
+    } catch (err) {
+      toast({ title: 'Error', description: (err as Error).message, variant: 'destructive' });
+    }
+  };
+
+  // The same office-day rule Close the Day applies: a closure, a Sunday, or a
+  // Saturday not marked open is a closed day.
+  const isClosedDay = (dateStr: string): { closed: boolean; closureName?: string } => {
     const closureEvents = (eventsMap.get(dateStr) || []).filter(e => e.colorKey === 'closure');
     if (closureEvents.length > 0) return { closed: true, closureName: closureEvents[0].label };
-    return { closed: false };
+    return isOfficeDay(dateStr, officeCalendar) ? { closed: false } : { closed: true, closureName: 'Closed' };
   };
 
   // Manager/owner can click any event to view/edit/delete
@@ -582,6 +592,7 @@ export default function OfficeCalendar() {
       toast({ title: 'Event deleted' });
       qc.invalidateQueries({ queryKey: ['org-days-off'] });
       qc.invalidateQueries({ queryKey: ['office-closures'] });
+      qc.invalidateQueries({ queryKey: ['office-days'] });
       qc.invalidateQueries({ queryKey: ['days-off'] });
       qc.invalidateQueries({ queryKey: ['calendar-audit'] });
     } catch (err: any) {
@@ -630,6 +641,7 @@ export default function OfficeCalendar() {
       toast({ title: 'Event updated' });
       qc.invalidateQueries({ queryKey: ['org-days-off'] });
       qc.invalidateQueries({ queryKey: ['office-closures'] });
+      qc.invalidateQueries({ queryKey: ['office-days'] });
       qc.invalidateQueries({ queryKey: ['days-off'] });
       qc.invalidateQueries({ queryKey: ['calendar-audit'] });
     } catch (err: any) {
@@ -731,11 +743,13 @@ export default function OfficeCalendar() {
                 const events = (eventsMap.get(dateStr) || []).filter(e => e.colorKey !== 'closure');
                 const namedClosures = (eventsMap.get(dateStr) || []).filter(e => e.colorKey === 'closure');
                 const isToday = dateStr === todayStr;
+                const closedDay = isClosedDay(dateStr).closed;
 
                 return (
                   <div
                     key={di}
-                    className={`min-h-[100px] border-r last:border-r-0 p-1 ${isManager ? 'cursor-pointer hover:bg-muted/20' : ''}`}
+                    data-closed={closedDay || undefined}
+                    className={`min-h-[100px] border-r last:border-r-0 p-1 ${closedDay ? 'bg-muted/10' : ''} ${isManager ? 'cursor-pointer hover:bg-muted/20' : ''}`}
                     onClick={isManager ? () => openCreateGcal(dateStr) : undefined}
                   >
                     <div className="flex items-center justify-between mb-0.5">
@@ -757,6 +771,14 @@ export default function OfficeCalendar() {
                             {e.category === 'team_meeting' ? '👥 ' : ''}{e.title}
                           </div>
                         ))}
+                      {officeCalendar.openDates.has(dateStr) && (
+                        <div
+                          className="truncate rounded border border-success/40 bg-success/10 px-1 py-0.5 text-[10px] font-medium leading-tight text-success"
+                          title="Open Saturday"
+                        >
+                          Open
+                        </div>
+                      )}
                       {namedClosures.map((evt, ei) => (
                         <div
                           key={`c-${ei}`}
@@ -825,6 +847,10 @@ export default function OfficeCalendar() {
         <div className="flex items-center gap-1.5">
           <div className={`w-3 h-3 rounded border ${eventColors.closure}`} />
           <span className="text-muted-foreground">Office Closed</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded border border-success/40 bg-success/10" />
+          <span className="text-muted-foreground">Open Saturday</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className={`w-3 h-3 rounded border ${eventColors.gcal}`} />
@@ -1295,7 +1321,7 @@ export default function OfficeCalendar() {
             </div>
             {openSaturdays.length > 0 ? (
               <div className="space-y-1 max-h-48 overflow-y-auto">
-                {openSaturdays.sort().map(d => (
+                {openSaturdays.map(d => (
                   <div key={d} className="flex items-center justify-between px-3 py-2 bg-muted/30 rounded text-sm">
                     <span>{new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}</span>
                     <Button variant="ghost" size="sm" className="h-6 text-xs text-destructive" onClick={() => handleRemoveOpenSaturday(d)}>

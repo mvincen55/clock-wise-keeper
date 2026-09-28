@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useOfficeClosures, useGenerateClosures, useAddClosure, useDeleteClosure } from '@/hooks/useOfficeClosures';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -62,6 +63,11 @@ export default function OfficeClosuresCard({ isManager }: { isManager: boolean }
         </div>
       </CardHeader>
       <CardContent className="p-4 space-y-4">
+        <p className="text-xs text-muted-foreground">
+          Sundays are closed, and Saturdays are closed unless marked open on the{' '}
+          <Link to="/office-calendar" className="text-primary underline-offset-2 hover:underline">Office Calendar</Link>.
+          Close the Day offers office days only.
+        </p>
         {isManager && (
         <div className="flex flex-wrap gap-2">
           <Button onClick={handleGenerate} disabled={generateClosures.isPending} variant="secondary">
