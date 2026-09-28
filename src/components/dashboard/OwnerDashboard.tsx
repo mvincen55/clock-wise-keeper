@@ -1,166 +1,160 @@
-import { Link } from 'react-router-dom';
-import { ArrowUpRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { OwnerView } from './types';
 import {
-  Band, CompactMasthead, DashboardShell, EmptyState, Lanes, MicroLabel, PersonRow, SignalRow, StatusDot, ViewContext,
+  ActionLink, DashboardShell, EmptyState, HomeHeader, Lanes, Panel, PersonRow, SignalRow, ToolsPanel, ViewContext, toneText,
 } from './kit';
-import { NeedsYouRows } from './NeedsYou';
+import { NeedsYouPanel } from './NeedsYou';
+import { MyWorkPanel } from './MyWork';
+import { SummaryPanel } from './Summary';
 import { PerformanceSection } from './performance/PerformanceSection';
 import { GoalMeters } from './performance/GoalMeters';
 import { Noticing } from './performance/Noticing';
-import { QuickTools } from './performance/QuickTools';
 import { MissedTrend } from './performance/MissedTrend';
 import { ChallengeCard } from './ChallengeCard';
 
 /**
- * OWNER — "how is my office performing, what changed, and what needs me?"
+ * OWNER — "what needs my decision, how is the office performing, what
+ * changed, and where do I go next?"
  *
- *   1  compact masthead: office, date, role context, the frequent tools
- *   2  the day's briefing sentence with the closed-out day's facts inline
- *   3  the performance block: one period row, the strip, the chart beside
- *      the month's goal meters and the observations, the missed-appointment
- *      trend underneath
- *   4  Needs you (the first three Attention items) and the office challenge
- *   5  staffing only as a live question or a real exception; the owner's lane
+ *   1  header: greeting, office state, role context, the primary actions
+ *   2  the short summary: the state and at most three priorities
+ *   3  Needs you (grouped, actionable) beside the latest closeout and
+ *      staffing — status, not tasks
+ *   4  the performance block: one period row, the strip, the chart beside
+ *      the month's goal meters, then what is worth a look
+ *   5  the missed-appointment trend, the office challenge, the owner's own
+ *      items when there are any
+ *   6  the tools area
  *
- * Every number keeps one home: the day's facts in the sentence line, period
- * totals in the strip, month progress in the meters. Missing data is
- * narrated, never rendered as $0.
+ * Every number keeps one home: the closed-out day's facts in the status
+ * panel, period totals in the strip, month progress in the meters. Missing
+ * data is narrated, never rendered as $0.
  */
 export default function OwnerDashboard({ view, chartWidth }: { view: OwnerView; chartWidth?: number }) {
   const {
-    header, office, summary, brief, decisionCount, needs, goal, staffing, exceptions, lanes, roleContext,
+    header, office, summary, brief, decisionCount, needs, mine, goal, staffing, exceptions, lanes, roleContext, toolGroups,
     performance, performanceState, goalMeters, insights, tools,
   } = view;
   const liveRoster = staffing.rows.length > 0;
-  const nowCount = needs.top.length + needs.more;
+  const closeAction = tools.find(t => t.id === 'close');
 
   return (
     <DashboardShell>
-      <CompactMasthead
+      <HomeHeader
+        greeting={header.personName}
         officeName={header.officeName}
-        roleLabel={header.roleLabel}
-        title={header.personName}
         dateLabel={header.dateLabel}
         timeLabel={header.timeLabel}
-        context={
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              <StatusDot tone={office.phase === 'open' ? 'steady' : 'calm'} />
-              {office.headline}
-            </span>
-            <ViewContext context={roleContext} />
-          </div>
-        }
-        tools={<QuickTools tools={tools} />}
-        right={
-          <Link
-            to="/management"
-            className="group inline-flex min-h-8 items-center gap-1.5 rounded-full bg-primary px-3.5 text-[12.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            Management{decisionCount > 0 ? ` · ${decisionCount}` : ''}
-            <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:-translate-y-0.5" />
-          </Link>
+        state={{ text: office.headline, tone: summary.tone }}
+        context={<ViewContext context={roleContext} />}
+        actions={
+          <>
+            {closeAction && <ActionLink to={closeAction.to} variant="secondary">{closeAction.label}</ActionLink>}
+            <ActionLink to="/management" variant="primary">
+              Attention{decisionCount > 0 ? ` · ${decisionCount}` : ''}
+            </ActionLink>
+          </>
         }
       />
 
-      {/* 2 — the day's briefing: one sentence from recorded facts. */}
-      <section className="mt-4 rounded-2xl border border-border bg-card px-5 py-4 sm:px-6">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <MicroLabel className="text-primary">Today&rsquo;s office pulse</MicroLabel>
-          {brief && brief.scope !== 'none' && <MicroLabel>{brief.dayLabel}</MicroLabel>}
-        </div>
-        {summary ? (
-          <p className="mt-2 max-w-[72ch] font-display text-[clamp(1.1rem,2.4vw,1.45rem)] font-bold leading-snug tracking-[-0.015em]">
-            {summary}
-          </p>
-        ) : (
-          <p className="mt-2 text-[14px] text-muted-foreground">Reading the day&rsquo;s numbers…</p>
-        )}
-        {brief?.note && <p className="mt-1.5 text-[12.5px] text-muted-foreground">{brief.note}</p>}
-        {brief && brief.scope !== 'none' && brief.facts.length > 0 && (
-          <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 border-t border-border pt-3">
-            {brief.facts.map(f => (
-              <div key={f.id} className="flex items-baseline gap-1.5 text-[12.5px]">
-                <dt className="text-muted-foreground">{f.label}</dt>
-                <dd className={cn('font-semibold tabular-nums', f.tone === 'attention' && 'text-warning', f.tone === 'urgent' && 'text-destructive')}>{f.value}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
-        {brief && brief.scope === 'none' && (
-          <EmptyState
-            tone="setup"
-            title="No days have been closed out yet."
-            detail="The pulse reads production, collections, and missed appointments straight off the deposit log."
-            action={{ label: 'Open the deposit log', to: '/deposit-log' }}
-          />
-        )}
-      </section>
-
-      {/* 3 — the performance block. */}
-      <div className="mt-6">
-        <PerformanceSection
-          data={performance}
-          state={performanceState}
-          chartWidth={chartWidth}
-          aside={
-            <div className="space-y-6">
-              <Band title="Goals this month" action={{ label: 'Goals', to: '/goals' }}>
-                <GoalMeters meters={goalMeters} canSetGoals loading={performanceState === 'loading'} />
-              </Band>
-              <Band title="What I’m noticing">
-                <Noticing insights={insights} loading={performanceState === 'loading'} />
-              </Band>
-            </div>
-          }
-          supporting={(period, data) => (
-            <Band title="Cancellations and no-shows" action={{ label: 'Missed appointments', to: '/management/missed-appointments' }}>
-              <div className="pt-3">
-                <MissedTrend period={period} data={data} width={chartWidth} />
-              </div>
-            </Band>
-          )}
-        />
+      <div className="mt-5">
+        <SummaryPanel summary={summary} title="Right now" />
       </div>
 
-      <div className="mt-8 grid gap-8 [&>*]:min-w-0 lg:grid-cols-[1.35fr_1fr] lg:gap-10">
-        {/* 4 — Needs you, and the office challenge once. */}
-        <div className="space-y-8">
-          <Band title="Needs you" count={nowCount > 0 ? `${decisionCount} now` : undefined} action={{ label: 'Attention', to: '/management' }}>
-            <NeedsYouRows needs={needs} emptyTitle="No owner decisions are waiting." emptyDetail="Approvals, reviews, and sign-offs are clear." />
-          </Band>
+      <div className="mt-4 grid gap-4 [&>*]:min-w-0 lg:grid-cols-[minmax(0,1.5fr)_minmax(20rem,1fr)] lg:items-start">
+        <div className="space-y-4">
+          <NeedsYouPanel needs={needs} emptyTitle="No owner decisions are waiting." emptyDetail="Approvals, reviews, and sign-offs are clear." />
+          {(mine.now.length > 0 || mine.waiting.length > 0) && (
+            <MyWorkPanel work={mine} title="Mine" emptyTitle="Nothing is assigned to you personally." emptyDetail="" id="mine" />
+          )}
+        </div>
 
-          <Band title="Office challenge" action={{ label: 'Goals', to: '/goals' }}>
+        <div className="space-y-4">
+          <Panel
+            title={brief && brief.scope !== 'none' ? brief.dayLabel : 'Latest closeout'}
+            action={{ label: 'Close the Day', to: '/deposit-log' }}
+            description={brief?.note ?? undefined}
+          >
+            {!brief ? (
+              <p className="py-2 text-[14px] text-muted-foreground" aria-busy="true">Reading the day’s numbers…</p>
+            ) : brief.scope === 'none' ? (
+              <EmptyState
+                tone="setup"
+                title="No days have been closed out yet."
+                detail="Production, collections, and missed appointments read straight off the deposit log."
+                action={{ label: 'Open the deposit log', to: '/deposit-log' }}
+                compact
+              />
+            ) : (
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+                {brief.facts.filter(f => f.id !== 'np-scheduled').map(f => (
+                  <div key={f.id} className="min-w-0">
+                    <dt className="text-[13px] font-semibold text-muted-foreground">{f.label}</dt>
+                    <dd className={cn('mt-0.5 font-display text-[1.35rem] font-bold leading-none tabular-nums tracking-[-0.02em]', f.tone === 'attention' ? toneText.attention : f.tone === 'urgent' ? toneText.urgent : 'text-foreground')}>{f.value}</dd>
+                    {f.detail && <dd className="mt-1 text-[12.5px] leading-snug text-muted-foreground">{f.detail}</dd>}
+                  </div>
+                ))}
+              </dl>
+            )}
+          </Panel>
+
+          <Panel title="Office challenge" action={{ label: 'Goals', to: '/goals' }}>
             {goal ? (
-              <ChallengeCard goal={goal} />
+              <ChallengeCard goal={goal} compact />
             ) : (
               <EmptyState
                 tone="setup"
                 title="No office goal is running."
                 detail="Pick one shared number the office can rally around — the Sprint Builder can scope it."
                 action={{ label: 'Choose a goal', to: '/goals' }}
+                compact
               />
             )}
-          </Band>
-        </div>
+          </Panel>
 
-        {/* 5 — staffing only when it is a live question or a real exception. */}
-        <div className="space-y-8">
           {(liveRoster || exceptions.length > 0) && (
-            <Band
+            <Panel
               title="Staffing today"
-              count={liveRoster ? `${staffing.rows.length}` : undefined}
+              count={liveRoster ? staffing.rows.length : undefined}
+              countTone="calm"
               action={{ label: 'Attendance', to: '/management/attendance' }}
             >
               {exceptions.map(s => <SignalRow key={s.id} signal={s} />)}
               {liveRoster && staffing.rows.map(p => <PersonRow key={p.id} person={p} />)}
-            </Band>
+            </Panel>
           )}
-          <Lanes lanes={lanes} />
         </div>
       </div>
+
+      {/* 4 — the performance block. */}
+      <div className="mt-6">
+        <PerformanceSection
+          data={performance}
+          state={performanceState}
+          chartWidth={chartWidth}
+          aside={
+            <Panel title="Goals this month" action={{ label: 'Goals', to: '/goals' }} className="h-full">
+              <GoalMeters meters={goalMeters} canSetGoals loading={performanceState === 'loading'} />
+            </Panel>
+          }
+          supporting={(period, data) => (
+            <div className="space-y-4">
+              <Panel title="Worth a look" description="What only a comparison over the recorded days can show. Observed, not predicted.">
+                <Noticing insights={insights} loading={performanceState === 'loading'} />
+              </Panel>
+              <Panel title="Cancellations and no-shows" action={{ label: 'Missed appointments', to: '/management/missed-appointments' }}>
+                <MissedTrend period={period} data={data} width={chartWidth} />
+              </Panel>
+            </div>
+          )}
+        />
+      </div>
+
+      <div className="mt-4 space-y-4">
+        <Lanes lanes={lanes} />
+        <ToolsPanel groups={toolGroups} />
+      </div>
+
     </DashboardShell>
   );
 }

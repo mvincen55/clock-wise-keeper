@@ -9,7 +9,8 @@
  */
 import type { DayVitals, VitalsSummary, VitalsTargets, VitalsVisibility } from '@/hooks/usePracticeVitals';
 import type { ReportImportRow } from '@/lib/report-history';
-import { reportDaysFrom, reportPackagesFrom, type ReportPackage } from '@/lib/report-history';
+import { reportDaysFrom, reportMonthsFrom, reportPackagesFrom, type ReportPackage } from '@/lib/report-history';
+import type { OfficeDayCalendar } from '@/lib/office-days';
 import {
   availablePresets, earliestRecordedDay, type CloseoutDay, type PeriodPreset, type PerformanceSources, type SourceState,
 } from '@/lib/performance-series';
@@ -35,6 +36,8 @@ export type PerformanceData = {
   thisMonth: VitalsSummary;
   targets: VitalsTargets;
   monthElapsed: number;
+  /** The office calendar (closures, open Saturdays); null when it could not be read. */
+  calendar: OfficeDayCalendar | null;
 };
 
 export type PerformanceRaw = {
@@ -53,6 +56,8 @@ export type PerformanceRaw = {
   thisMonth: VitalsSummary;
   targets: VitalsTargets;
   monthElapsed: number;
+  /** The office calendar; omitted or null when it is not in hand. */
+  calendar?: OfficeDayCalendar | null;
 };
 
 export function closeoutDaysFrom(days: DayVitals[]): CloseoutDay[] {
@@ -89,6 +94,7 @@ export function performanceDataFrom(raw: PerformanceRaw): PerformanceData | null
     closeoutsState: raw.closeoutsState,
     reportDays: reportDaysFrom(reports),
     reportState: admin ? raw.reportState : 'unauthorized',
+    reportMonths: reportMonthsFrom(reports),
   };
   const earliest = earliestRecordedDay(sources);
   return {
@@ -107,5 +113,6 @@ export function performanceDataFrom(raw: PerformanceRaw): PerformanceData | null
     thisMonth: raw.thisMonth,
     targets: raw.targets,
     monthElapsed: raw.monthElapsed,
+    calendar: raw.calendar ?? null,
   };
 }

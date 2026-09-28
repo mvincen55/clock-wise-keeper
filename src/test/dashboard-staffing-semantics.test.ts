@@ -166,7 +166,7 @@ describe('phase-aware person status (nobody is "Out" for being off-shift)', () =
     expect(p.tone).toBe('attention');
   });
 
-  it('clocked in mid-shift reads as In (late arrivals stay flagged)', () => {
+  it('clocked in mid-shift reads as In (a late arrival is routine status, never an alert)', () => {
     const inNow = snap({
       is_scheduled_day: true, has_punches: true, is_incomplete: true,
       schedule_expected_start: '08:30:00', schedule_expected_end: '17:00:00',
@@ -174,7 +174,7 @@ describe('phase-aware person status (nobody is "Out" for being off-shift)', () =
     expect(personStatusAt(inNow, at(10, 0)).status).toBe('In');
     const late = personStatusAt({ ...inNow, is_late: true, minutes_late: 12 }, at(10, 0));
     expect(late.status).toBe('In · late 12m');
-    expect(late.tone).toBe('attention');
+    expect(late.tone).toBe('calm');
   });
 
   it('no status ever says the bare word "Out"', () => {

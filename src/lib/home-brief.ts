@@ -1,11 +1,16 @@
 /**
- * The manager Home briefing (design §3.3): one sentence of state built from
- * recorded facts, the top three Attention items with one navigation action
- * each, today's exceptions and a count line, two status lines, the
- * challenge only when noteworthy, and a wrap-up state after close.
+ * The manager Home briefing: a short, readable summary of genuine
+ * priorities (never a crowded sentence), the Needs you queue, today's
+ * exceptions and a count line, the last closeout, the challenge only when
+ * noteworthy, and a wrap-up state after close.
  *
  * Pure: every input is a recorded fact or a derived state some other module
  * owns. Nothing here decides anything; every row navigates.
+ *
+ * Routine operational status (someone arrived late, someone starts later)
+ * is displayed calmly. Only genuine exceptions — a scheduled day with no
+ * punches after its end, someone still clocked in after close, a source that
+ * could not be read — carry an attention tone.
  */
 import type { AttentionItem, AttentionResult } from '@/lib/attention';
 import type { EmployeeSnapshot } from '@/hooks/useOrgAttendanceSnapshot';
@@ -17,13 +22,29 @@ import type { GoalBrief, MonthPaceLine } from '@/lib/owner-pulse';
 import { closeoutDayLabel } from '@/lib/owner-pulse';
 import { daysBetween, formatDate } from '@/lib/time-utils';
 
-export type SentencePart = { text: string; href?: string; tone?: Tone };
+export type SummaryLine = { id: string; text: string; href?: string; tone: Tone };
+
+/** The short summary at the top of Home: the office state and at most three priorities. */
+export type HomeSummary = {
+  /** "Open · 4 of 8 in", "Closed for the day", "Not open yet". */
+  headline: string;
+  /** One supporting clause: the workday's end, who starts later, the closure. */
+  detail: string;
+  tone: Tone;
+  lines: SummaryLine[];
+};
 
 export type NeedsYou = {
   /** The first three of the same list Attention shows. */
   top: AttentionItem[];
   /** How many more need the manager now. */
   more: number;
+  /** Every item that needs the manager now, in consequence order. */
+  now: AttentionItem[];
+  /** Open items waiting on someone else, still counted as unresolved. */
+  waitingItems: AttentionItem[];
+  /** Open items parked or snoozed, still open, still due. */
+  deferredItems: AttentionItem[];
   waiting: number;
   deferred: number;
   /** A source could not be read; the list is not "nothing to report". */
@@ -57,7 +78,7 @@ export type PaceLine = {
 export type Spotlight = { goal: GoalBrief; reason: string };
 
 export type HomeBrief = {
-  sentence: SentencePart[];
+  summary: HomeSummary;
   /** After close: Needs you becomes Before you leave. */
   wrapUp: boolean;
   needs: NeedsYou;
@@ -70,15 +91,21 @@ export type HomeBrief = {
 
 export type CloseoutFact = { id: string; deposit_date: string; sealed_at: string | null; needs_manager_review: boolean };
 
-/** The kinds that are about a person's day; an exception row opens that item first. */
+/** The kinds that are about a person's time; an exception row opens that item first. */
 const ATTENDANCE_KINDS = new Set<AttentionItem['kind']>([
-  'clocked_in_after_close', 'missing_clock_out', 'missing_day', 'unpaired_punches', 'time_suspect', 'excuse_request',
+  'clocked_in_after_close', 'missing_clock_out', 'missing_day', 'unpaired_punches', 'time_suspect', 'excuse_request', 'correction_request',
 ]);
+
+/** Routine status on a live roster: in (late or not), starts later, done. Never an exception. */
+function isRoutine(p: PersonStatus): boolean {
+  return p.status.startsWith('In') || p.status.startsWith('Starts ') || p.status.startsWith('Done') || p.status === 'Clocked out' || p.status === 'Scheduled today';
+}
 
 /**
  * The exceptions Home names: anyone who needs a look, and anyone off. A row
  * opens the person's attendance item when one exists, else their record in
- * People — one navigation action either way.
+ * People — one navigation action either way. A late arrival that is simply
+ * "in" is routine and stays off this list.
  */
 export function todayBand(input: {
   summary: StaffingSummary;
@@ -95,7 +122,7 @@ export function todayBand(input: {
     : (snapshot ?? []).filter(r => r.is_scheduled_day && !r.office_closed && !r.has_day_off).map(r => personStatusAt(r, now));
   const itemFor = (employeeId: string) => needsNow.find(i => i.subject.employeeId === employeeId && ATTENDANCE_KINDS.has(i.kind));
   const exceptions: TodayException[] = rows
-    .filter(p => p.tone === 'attention' || p.tone === 'urgent' || p.status === 'Approved off')
+    .filter(p => !isRoutine(p) && (p.tone === 'attention' || p.tone === 'urgent' || p.status === 'Approved off'))
     .sort((a, b) => (a.tone === 'calm' ? 1 : 0) - (b.tone === 'calm' ? 1 : 0))
     .map(p => {
       const item = itemFor(p.id);
@@ -181,66 +208,106 @@ export function spotlight(goal: GoalBrief | null): Spotlight | null {
   return null;
 }
 
-/** "Open, 6 of 8 in. Ken W. isn't in yet. Saturday's closeout still needs its seal, and payroll hours are due Thursday." */
-export function stateSentence(input: {
+export const MAX_SUMMARY_LINES = 3;
+
+/**
+ * The summary: the office state as a headline, then at most three
+ * priorities, each one linked. What needs the manager is counted by the
+ * Needs you queue itself, and the closeout's state sits in the queue and
+ * the status list, so neither is repeated here; routine status (someone
+ * arrived late, someone not in yet, someone starting at 1:00) belongs to
+ * the Today panel and stays calm.
+ */
+export function stateSummary(input: {
   office: OfficeStatus;
   today: TodayBand;
   needs: NeedsYou;
   lastDay: StatusLine | null;
   payroll: { dueDate: string | null; dueLabel: string | null } | null;
+  /** Open items that make the pay period questionable; shown with the payroll deadline. */
+  payrollItems?: number;
+  inbox?: StatusLine | null;
   todayDate: string;
-}): SentencePart[] {
-  const { office, today, needs, lastDay, payroll, todayDate } = input;
-  const parts: SentencePart[] = [];
+}): HomeSummary {
+  const { office, today, needs, lastDay, payroll, inbox, todayDate } = input;
   const phase = office.phase;
-  const attention = today.exceptions.filter(e => e.tone !== 'calm');
-  const describe = (e: TodayException): string => {
-    const s = e.status;
-    if (s === 'Not in yet') return `${e.name} isn't in yet`;
-    if (s.startsWith('Still clocked in')) return `${e.name} is still clocked in`;
-    if (s.startsWith('In') && s.includes('late')) return `${e.name} came in late`;
-    if (s === 'Absent') return `${e.name} is absent today`;
-    return `${e.name}: ${s.toLowerCase()}`;
-  };
+  const lines: SummaryLine[] = [];
+  const push = (l: SummaryLine) => { if (lines.length < MAX_SUMMARY_LINES) lines.push(l); };
 
-  if (today.asOf) {
-    parts.push({ text: today.asOf === 'loading' ? "Reading today's roster. " : "Today's roster could not be read, so nobody is marked in or out. ", href: today.asOf === 'loading' ? undefined : '/management/people', tone: today.asOf === 'loading' ? undefined : 'attention' });
+  let headline: string;
+  let detail = office.detail;
+  let tone: Tone = 'calm';
+  if (today.asOf === 'loading') {
+    headline = 'Reading today’s roster';
+    detail = 'Nobody is marked in or out yet.';
+  } else if (today.asOf) {
+    headline = 'Roster unavailable';
+    detail = 'Today’s roster could not be read, so nobody is marked in or out.';
+    tone = 'attention';
+    push({ id: 'roster', text: 'Today’s roster could not be read. Nothing about attendance is confirmed.', href: '/management/people', tone: 'attention' });
+  } else if (phase === 'open' || phase === 'unknown_hours') {
+    headline = phase === 'open' ? `Open · ${today.inNow ?? 0} of ${today.scheduled} in` : `Scheduled today · ${today.inNow ?? 0} in`;
+    tone = 'steady';
+    const later = today.countLine.includes(' · ') ? today.countLine.split(' · ').slice(1).join(' · ') : '';
+    detail = later ? `${office.detail.replace(/\.$/, '')} · ${later}.` : office.detail;
+  } else if (phase === 'before_open') {
+    headline = 'Not open yet';
   } else if (phase === 'after_close') {
-    const stillIn = attention.filter(e => e.status.startsWith('Still clocked in'));
-    parts.push({ text: 'Closing. ' });
-    if (stillIn.length) parts.push({ text: stillIn.map(e => e.name).join(' and ') + (stillIn.length === 1 ? ' is' : ' are') + ' still clocked in', href: stillIn[0].href ?? '/management/people', tone: 'attention' });
-    else parts.push({ text: 'Everyone is clocked out' });
-    if (lastDay) parts.push({ text: `, and today's closeout is ${lastDay.text.toLowerCase()}.`, href: lastDay.action ? lastDay.href : undefined, tone: lastDay.tone === 'attention' ? 'attention' : undefined });
-    else parts.push({ text: '.' });
-    return parts;
-  } else if (phase === 'closed_today') parts.push({ text: `${office.headline}. ` });
-  else if (phase === 'no_schedule') parts.push({ text: 'No one is scheduled today. ' });
-  else if (phase === 'before_open') parts.push({ text: `Not open yet. ${office.detail} ` });
-  else {
-    parts.push({ text: 'Open, ' }, { text: `${today.inNow ?? 0} of ${today.scheduled} in`, href: '/management/people' }, { text: '. ' });
-    if (attention.length) parts.push({ text: `${describe(attention[0])}.`, href: attention[0].href ?? '/management/people', tone: 'attention' }, { text: ' ' });
+    headline = 'Closed for the day';
+  } else {
+    headline = office.headline;
   }
-  if (lastDay && (today.asOf || (phase !== 'closed_today' && phase !== 'no_schedule'))) {
-    if (lastDay.action) parts.push({ text: `${lastDay.label} is ${lastDay.text}`, href: lastDay.href, tone: 'attention' });
-    else parts.push({ text: `${lastDay.label.replace(/'s closeout$/, '')} closed clean` });
-    const due = payroll?.dueDate && daysBetween(todayDate, payroll.dueDate) <= 7 ? payroll.dueDate : null;
-    if (due) parts.push({ text: `, and payroll hours are due ${formatDate(due).split(',')[0]}. `, href: '/management/payroll' });
-    else parts.push({ text: '. ' });
+
+  if (needs.degraded) {
+    push({ id: 'degraded', text: 'Some records could not be read; the queue may be missing items.', href: '/management', tone: 'attention' });
   }
-  if (needs.enabled) {
-    const n = needs.top.length + needs.more;
-    parts.push(n > 0
-      ? { text: `${n} thing${n === 1 ? '' : 's'} need${n === 1 ? 's' : ''} you.`, href: '/management', tone: 'attention' }
-      : { text: needs.degraded ? 'Some sources are still loading.' : 'Nothing needs you.' });
+
+  // Genuine attendance exceptions, one line each, most consequential first.
+  // After close the Before you leave list carries who is still clocked in
+  // and the inbox, so the summary does not repeat them.
+  const wrapUp = phase === 'after_close';
+  const stillIn = today.exceptions.filter(e => e.status === 'Still clocked in');
+  if (stillIn.length && !wrapUp) {
+    push({ id: 'still-in', text: `${stillIn.map(e => e.name).join(' and ')} ${stillIn.length === 1 ? 'is' : 'are'} still clocked in after close.`, href: stillIn[0].href ?? '/management/people', tone: 'attention' });
   }
-  return parts;
+  const absent = today.exceptions.filter(e => e.status === 'Absent');
+  if (absent.length) {
+    push({ id: 'absent', text: `${absent.map(e => e.name).join(' and ')} ${absent.length === 1 ? 'has' : 'have'} no time recorded today.`, href: absent[0].href ?? '/management/people', tone: 'attention' });
+  }
+
+  // The closeout's state lives in the queue (an unsealed day is an item) and
+  // in the status list; the summary names it only when nothing is on record
+  // at all, which no queue item says.
+  if (lastDay?.action && lastDay.text.startsWith('none on record')) {
+    push({ id: 'closeout', text: 'No closeout is on record in the last two weeks.', href: lastDay.href, tone: 'attention' });
+  }
+
+  const due = payroll?.dueDate && daysBetween(todayDate, payroll.dueDate) <= 7 ? payroll.dueDate : null;
+  if (due) {
+    const n = input.payrollItems ?? 0;
+    push({
+      id: 'payroll',
+      text: `Payroll hours are due ${formatDate(due).split(',')[0]}${n > 0 ? ` · ${n} open time record${n === 1 ? '' : 's'}` : ''}.`,
+      href: '/management/payroll',
+      tone: n > 0 ? 'attention' : 'calm',
+    });
+  }
+
+  if (inbox && !wrapUp) push({ id: 'inbox', text: `${inbox.text.charAt(0).toUpperCase()}${inbox.text.slice(1)}.`, href: inbox.href, tone: 'attention' });
+
+  // Routine status (someone not in yet, someone starting later) belongs to
+  // the Today panel, calmly; it is not a priority and is not repeated here.
+  return { headline, detail, tone, lines };
 }
 
-/** The first three Attention items and the counts behind "n more" — shared by Owner and Manager Home. */
+/** The Attention lists behind Needs you — shared by Owner and Manager Home. */
 export function needsYou(attention: Pick<AttentionResult, 'needsNow' | 'waiting' | 'deferred' | 'degradedSources'> & { enabled: boolean }): NeedsYou {
   return {
     top: attention.needsNow.slice(0, 3),
     more: Math.max(0, attention.needsNow.length - 3),
+    now: attention.needsNow,
+    waitingItems: attention.waiting,
+    deferredItems: attention.deferred,
     waiting: attention.waiting.length,
     deferred: attention.deferred.length,
     degraded: attention.degradedSources.length > 0,
@@ -272,8 +339,9 @@ export function buildHomeBrief(input: {
   const inbox = wrapUp && input.inbox && input.inbox.outstanding > 0
     ? { id: 'inbox', label: 'Inbox', text: `${input.inbox.outstanding} ${input.inbox.label} still need${input.inbox.outstanding === 1 ? 's' : ''} a reply before closeout`, tone: 'attention' as Tone, href: '/inbox/requests', action: 'Open' }
     : null;
+  const payrollItems = input.attention.needsNow.filter(i => i.payroll).length;
   return {
-    sentence: stateSentence({ office: input.summary.office, today, needs, lastDay, payroll: input.payroll, todayDate: input.today }),
+    summary: stateSummary({ office: input.summary.office, today, needs, lastDay, payroll: input.payroll, payrollItems, inbox, todayDate: input.today }),
     wrapUp,
     needs,
     today,

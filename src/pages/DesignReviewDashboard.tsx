@@ -26,55 +26,54 @@ export default function DesignReviewDashboard() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="border-b border-border bg-muted/40 px-4 py-3 sm:px-6 md:px-8">
+      <div className="border-b border-border bg-muted/40 px-4 py-3 sm:px-6 md:px-8" data-review-notes>
         <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-x-6 gap-y-2">
           <div className="min-w-0">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            <p className="text-[12.5px] font-semibold uppercase tracking-wide text-muted-foreground">
               Preview · fixture data · no session, no queries
             </p>
-            <p className="mt-1 truncate text-sm font-semibold">{scenario.title}</p>
-            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+            <p className="mt-1 truncate text-[15px] font-semibold">{scenario.title}</p>
+            <p className="text-[13px] text-muted-foreground">
               Tier: {scenario.tier} · Primary: {scenario.primary} · Backup: {scenario.secondary}
             </p>
           </div>
-          <Link
-            to="/design-review"
-            className="font-mono text-[10px] uppercase tracking-[0.14em] text-primary hover:underline"
-          >
+          <Link to="/design-review" className="text-[13.5px] font-medium text-primary hover:underline">
             Back to index
           </Link>
         </div>
       </div>
 
-      {view.kind === 'owner' ? (
-        <OwnerDashboard view={view} />
-      ) : view.kind === 'manager' ? (
-        <ManagerDashboard view={view} />
-      ) : (
-        <MemberDashboard view={view} />
-      )}
+      <div data-review-root>
+        {view.kind === 'owner' ? (
+          <OwnerDashboard view={view} />
+        ) : view.kind === 'manager' ? (
+          <ManagerDashboard view={view} />
+        ) : (
+          <MemberDashboard view={view} />
+        )}
+      </div>
 
       {/* Review notes — never part of the real dashboard. */}
-      <div className="border-t-2 border-foreground bg-muted/30 px-4 py-8 sm:px-6 md:px-8">
+      <div className="border-t border-border bg-muted/30 px-4 py-8 sm:px-6 md:px-8" data-review-notes>
         <div className="mx-auto grid max-w-[1400px] gap-8 md:grid-cols-2">
           <div>
-            <p className="border-b border-foreground pb-2 font-mono text-[10px] uppercase tracking-[0.18em]">
+            <p className="border-b border-border pb-2 text-[13px] font-semibold uppercase tracking-wide text-muted-foreground">
               Real data source behind each widget
             </p>
-            <dl className="mt-3 space-y-2 text-[13px]">
+            <dl className="mt-3 space-y-2 text-[13.5px]">
               {scenario.sources.map(([widget, source]) => (
                 <div key={widget} className="flex flex-wrap gap-x-2">
                   <dt className="font-medium">{widget}</dt>
-                  <dd className="font-mono text-[11px] text-muted-foreground">{source}</dd>
+                  <dd className="text-[13px] text-muted-foreground">{source}</dd>
                 </div>
               ))}
             </dl>
           </div>
           <div>
-            <p className="border-b border-foreground pb-2 font-mono text-[10px] uppercase tracking-[0.18em]">
+            <p className="border-b border-border pb-2 text-[13px] font-semibold uppercase tracking-wide text-muted-foreground">
               Intentionally omitted — no trustworthy data
             </p>
-            <ul className="mt-3 space-y-2 text-[13px] text-muted-foreground">
+            <ul className="mt-3 space-y-2 text-[13.5px] text-muted-foreground">
               {scenario.omitted.map((o) => (
                 <li key={o}>{o}</li>
               ))}

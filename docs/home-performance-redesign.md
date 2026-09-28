@@ -1,9 +1,12 @@
 # Home performance redesign — source map and decisions
 
-Status: built on branch `claude/clever-bell-5kjcj3`. Home (`/`) is the
-briefing; Management stays the workbench. This document is the map every
-chart and observation on Home was built against, in the order the brief asked
-for: source first, then the experience.
+Status: built on branch `claude/clever-bell-5kjcj3`; revised on
+`claude/sweet-cerf-l3m0cz` (office-day pacing, per-metric completeness,
+observed vs estimate, the grouped Needs you queue and the member's own work —
+`DESIGN_REVIEW.md`, pass 7). Home (`/`) is the briefing; Management stays the
+workbench. This document is the map every chart and observation on Home was
+built against, in the order the brief asked for: source first, then the
+experience.
 
 ## 1. Sources (what exists, who can read it, what each row means)
 
@@ -15,7 +18,10 @@ for: source first, then the experience.
 | **Targets and visibility** | `org_practice_settings` via `usePracticeSettings` | members read; admins write | month | monthly production / collections / new-patients-seen goals (0 = no goal) and per-metric visibility (`everyone` / `admin_only`) | no goal → "No goal set" with a setup action for admins, never an invented target |
 | **Attention** | `useAttentionItems` → `deriveAttention` | owners and managers (empty for members) | now | open items in consequence order with age, deadline, waiting / parked state and the exact `/management?item=` destination | a degraded source is named, never read as "nothing" |
 | **Office challenge** | `team_goals` via `useTeamGoals` → `buildGoalBrief` | whatever RLS lets the member see | sprint window | the primary live sprint | — |
-| **Staffing** | `attendance_day_status` via `useOrgAttendanceSnapshot` → `staffing.ts` | admins | today | phase, exceptions | a closed office never produces exceptions |
+| **Staffing** | `attendance_day_status` via `useOrgAttendanceSnapshot` → `staffing.ts` | admins | today | phase, exceptions | a closed office never produces exceptions; a late arrival that is in reads "In · late 12m", calm — routine, never an exception |
+| **Office calendar** | `office_closures` + open Saturdays via `useOfficeDays` → `office-days.ts` (`isOfficeDay`, `countOfficeDays`) | every active member | office days | which calendar days the office works: Mon–Fri less closures, plus open Saturdays | the calendar is the pacing basis; when it has not loaded, pace falls back to calendar days and is labeled an estimate |
+| **Late arrivals (own)** | `tardies` via `useTardies`, `escalation_policies` (`tardy_threshold`) via `useLateArrivalRule` → `late-arrivals.ts` | the person (RLS); admins for the team | entry date | one late arrival: acknowledged, excuse requested (pending / approved / declined), or unanswered; the rule is N unexcused in a window | an unanswered arrival is the person's item; a pending excuse waits on a manager; the count against the rule is a count, never a verdict |
+| **Own work** | `checklist` gating, `acknowledgment_assignments`, `training_assignments`, `incident_reports` (attendance reports), `pto_requests`, `correction_requests`, office requests → `my-work.ts` | the person | now | what the person owes (now), what waits on someone else (waiting), and the single next move | a backup role adds nothing; a role covered today does |
 
 Nothing on Home names a patient. No source above holds one.
 
@@ -57,10 +63,23 @@ count, so it is not shown as a daily series.
 - **Posted charges / Receipts (report history)** — posting-date figures from
   the loaded package. Refunds are already inside charge adjustments; the
   office fee comparison difference is not a write-off. Neither is charted.
-- **Pace** — `metricPace` (shared): target × calendar days elapsed ÷ days in
-  month, ±2% on-pace band. Labeled "calendar-day pace" everywhere; the
-  office's working-day calendar is not verified, so no working-day pace and no
-  "you need $X per remaining day" projection is shown.
+- **Pace** — `goalMeters` over `metricPace` (shared): target × office days
+  elapsed ÷ office days in the month, ±2% on-pace band. The office days come
+  from the office calendar (`countOfficeDays`: Mon–Fri less closures, plus open
+  Saturdays); today counts as elapsed only once its closeout is recorded. The
+  basis is printed with every verdict ("office day 5 of 22"). When the calendar
+  has not loaded, the meter falls back to calendar days and says so ("Below
+  calendar pace (estimate)"). No "you need $X per remaining day" projection is
+  shown.
+- **Completeness** — every money figure carries the number of office days
+  recorded against the office days expected through its cutoff. Cutoff is
+  yesterday until today's closeout exists, then today. `complete` (every
+  expected day recorded), `partial` (N office days not recorded — the label
+  names N and links Close the Day to complete the records), `unknown` (no
+  calendar). A partial month never earns a "behind" verdict: the meter reads
+  "Partial data" and pace is not judged. A whole month covered by a loaded
+  report package uses the package's monthly summary as the authoritative total
+  ("Complete month · report package summary") rather than summing its days.
 - **Partial periods** — This week, This month and Last 3 months are partial
   and say so ("through Sep 24"). Comparisons use the same elapsed span of the
   prior period (days 1–24 of last month against days 1–24 of this month), and
@@ -74,9 +93,11 @@ count, so it is not shown as a daily series.
 |---|---|
 | Loading | "Reading…" with the frame held; no zeros |
 | Failed | "Could not read closeouts" + retry-by-refresh copy; the chart never falls back to another source silently |
-| Not recorded (no closeout row) | gap in the bars, "Not recorded" in the tooltip and the table; cumulative view steps flat across the gap and the coverage line counts it |
+| Not recorded (no closeout row) | gap in the bars, "Not recorded" in the tooltip and the table; cumulative view steps flat across the gap and the coverage line counts it as an office day not recorded (a closure or weekend is not a gap) |
+| Partial period (office days missing) | "Partial data · N office days not recorded" on the tile, "N of M office days recorded · through <cutoff> · k not sealed" in the information control, the meter's verdict withheld; the fix is a link to Close the Day |
+| Complete month from a report package | the package's monthly summary is the total; the information control says so |
 | Recorded zero (a closeout with $0 collected) | a real 0 bar with "Sealed" / "Saved, not sealed" status |
-| Stale (last closeout days ago) | "Data through <date>" in the strip; the closeout-gap observation fires at 4+ days |
+| Stale (last closeout days ago) | "through <date>" in the strip and the information control; the closeout-gap observation fires at 4+ office days |
 | Hidden by visibility | omitted from the member view entirely — no teaser |
 
 ## 5. Drilldowns (destinations that actually read the parameters)
@@ -87,22 +108,38 @@ count, so it is not shown as a daily series.
 | a report-history day or the series | `/report-history?start=&end=&tab=daily` | new: picks the package covering the range, opens the tab, filters daily rows to the range with a visible "clear" chip |
 | the missed-appointments trend | `/management/missed-appointments?start=&end=` | new: the page initializes its range from the query |
 | Needs you rows | `/management?item=<kind>:<id>` | existing Attention deep link |
+| a Needs you group ("Open all") | `/management?kind=<kind>` | new: the Attention room filters to that kind and says so ("Showing: Closeouts to seal · 3", "Show everything") |
+| a member's own row | the exact record: `/days-off?tardy=<id>`, `/incident-reports?report=<id>`, `/?record=<id>`, `/management/office/acknowledgments?assignment=<id>`, `/training?assignment=<id>&tab=mine`, `/checklists`, `/inbox/requests`, `/my-requests` | existing pages; every href is pinned by `my-work.test.ts` |
 | goals with no target (admins) | `/management/office/settings#office-goals` | new anchor on the goals section of Practice settings |
 
 ## 6. Roles
 
-- **Owner** — summary sentence, performance strip, chart beside goals and
-  observations, Needs you (top three Attention items), the challenge once,
-  missed-appointment trend, staffing exceptions.
-- **Manager** — the state sentence, the same strip / chart / goals /
-  observations, quick tools (Create FOF, Fee schedules, Close the Day, Report
-  history), Needs you, Today, Mine (the manager's own commitments), the
-  challenge when noteworthy, the missed-appointment trend, and the manager's
-  own accountability record below (deep link `?record=` preserved).
-- **Team member** — My next move, a lighter office scoreboard (only metrics
-  whose visibility is `everyone`), the shared challenge, my open work, role
-  lanes, time and PTO utilities. No Attention, no observations about staff, no
-  report history, no rankings.
+Every role reads the same order: what needs my action → status → trends →
+tools.
+
+- **Owner** — header (state chip, role context, Close the Day, Attention · n),
+  "Right now" (headline plus at most three genuine priorities: a degraded
+  source, someone absent after their shift, no closeout on record, payroll due
+  within a week, the inbox), Needs you (unique actionable items, repeated
+  kinds folded into expandable groups that still open each record, waiting
+  and parked apart) with Mine (the owner's own items) beneath, the latest
+  closeout's facts, the challenge, staffing exceptions, the performance block
+  with goal meters, Worth a look, the cancellation trend, one tools area.
+- **Manager** — the same, with Today (exceptions only, one count line) and a
+  daily brief; routine lateness never headlines: attendance reaches the queue
+  only as an excuse request (decide) or an attendance report (meet and sign).
+  The manager's own accountability record stays below (deep link `?record=`
+  preserved).
+- **Team member** — My next move, My work (now / waiting on someone else),
+  For my role, the office goal, My time & PTO with the late-arrival standing
+  line ("2 of 3 unexcused late arrivals in the last 30 days · 1 excuse request
+  pending", a count against the office rule, never a verdict), Our office
+  pulse (only metrics whose visibility is `everyone`), tools. No Attention, no
+  observations about staff, no report history, no rankings.
+- **Tools** — one area for every role: the assigned role first, roles covered
+  today, management (members only through a grant, and only the granted
+  tools), backup roles ("Backup — can cover, not assigned today") behind "More
+  tools · n", then everyone's essentials. A destination appears once.
 
 One calculation layer (`metric-pace`, `performance-series`, `goal-progress`,
 `home-insights`) feeds all three; the role only changes emphasis and access.
@@ -111,30 +148,35 @@ One calculation layer (`metric-pace`, `performance-series`, `goal-progress`,
 
 Chair utilization, treatment acceptance, payroll cost, revenue-loss
 estimates, collection rate, per-patient anything, per-person rankings,
-working-day pace, projections from partial months.
+projections from partial months, a "behind" verdict on partial data, routine
+late arrivals as manager alerts.
 
-## 8. Verification (this branch, run in the review sandbox)
+## 8. Verification (pass 7, run in the review sandbox)
 
 | Check | Command | Result |
 |---|---|---|
-| Typecheck | `npx tsc --noEmit -p tsconfig.app.json` | clean |
-| Unit and component tests | `npx vitest run` | 2398 passed, 53 skipped, **1 failed**: `fof-builder-grouping.test.tsx` "groups untyped lines by their suggested visit" — a 5 s timeout on the FOF builder that fails on `main` in this sandbox too (baseline run: 2319 passed, the same single failure) and passes when the file runs alone (7 of 7); unrelated to Home |
-| Lint | `npx eslint .` | 210 errors / 51 warnings repo-wide, every one pre-existing (edge functions, `tailwind.config.ts`, older pages). Zero errors in the files this branch adds; every file it modifies has the same error count before and after (checked per file against `HEAD`) |
-| Production build | `npx vite build` | built in 55 s (the existing chunk-size warning only) |
-| Rendered review | `node scripts/design-review-capture.mjs` against `npx vite` | 16 scenarios × 2 widths, no page errors, no horizontal overflow — `design-review/*-{desktop,mobile}.png` |
+| Typecheck | `npx tsc --noEmit -p tsconfig.app.json` | clean (app and tests) |
+| Unit and component tests | `npx vitest run` | 2513 passed, 53 skipped, 0 failed (245 files) |
+| Lint | `npx eslint <the 52 changed files>` | 0 errors, 9 warnings — every warning is `react-refresh/only-export-components` on the kit's style tokens and the chart files; the count across the changed files equals `HEAD` (two token exports added to the kit, one pre-existing warning removed from `NeedsYou.tsx` and one from `useDashboardView.ts`) |
+| Production build | `npx vite build` | built (the existing chunk-size warning only) |
+| Rendered review | `node scripts/design-review-capture.mjs` against `npx vite` | 20 scenarios × 3 widths (1440×1000, 834×1112, 390×844): 60 of 60 captured, no page errors, no horizontal overflow, smallest rendered text 12.5px (the review notes; the dashboard itself is 13px and up) — `design-review/*-{desktop,tablet,mobile}.png` |
 
-New test files and what they pin:
+Test files and what they pin (this pass and pass 6):
 
 | File | Pins |
 |---|---|
-| `performance-series.test.ts` | period presets and partial flags; comparable prior spans; source precedence and the report-history fallback as a separate view; missing vs zero (null gaps, recorded $0, not-in-package); cumulative over recorded days; date-range filtering; weekly buckets; per-recorded-day comparisons and when they are withheld; the coverage line; overlapping packages never double-count; the opening preset |
+| `attention-groups.test.ts` | repeated kinds fold into one group at two or more, singletons stay rows, order is preserved, the count is the unique items, group destinations are `/management?kind=` |
+| `my-work.test.ts` | the member's own items in priority order (attendance report, time record, incident signature, late arrival, reply, bypass, acknowledgment, training, checklist, missing day), waiting items apart (PTO, correction, excuse), every href to the exact record, a backup role adds nothing |
+| `performance-completeness.test.ts` | office-day counting around closures and open Saturdays, the cutoff rule (yesterday until today is recorded), partial vs complete vs unknown, the authoritative monthly total from a report package, the coverage label |
+| `home-tools.test.ts` | tools order (assigned → covering today → management → backup → everyone), one destination once, members reach management tools only through a grant and only the granted ones, the backup note |
+| `goal-progress.test.ts` | each metric against its own target; office-day basis and its label; partial data withholds "behind"; the calendar-day fallback is an estimate; reached / ahead / on pace; no goal / no data |
+| `home-insights.test.ts` | data sufficiency first; no meter verdicts; collections per recorded day vs the same days last month, both directions, withheld when thin; cancellations rising / falling; records incomplete; the calendar estimate note; observed vs estimate; the three-item cap |
+| `home-brief.test.ts` | the summary's headline and its at-most-three priorities (degraded source, absent after shift, no closeout on record, payroll within a week, inbox before close); routine rows never exceptions; the wrap-up state |
+| `performance-series.test.ts` | period presets and partial flags; comparable prior spans; source precedence and the report-history fallback as a separate view; missing vs zero; cumulative over recorded days; weekly buckets; overlapping packages never double-count |
 | `missed-trend.test.ts` | postings-first precedence, closeout counts only on recorded days, unassigned kept apart, bucket granularity, gaps as gaps, comparison rules |
-| `goal-progress.test.ts` | each metric against its own target, no cross-wiring, no goal / no data / over-goal states, the calendar-day label |
-| `home-insights.test.ts` | data sufficiency first, collections vs the same days last month (per recorded day, both directions, withheld when thin), behind pace, goal reached, cancellations rising / falling, work waiting (manager only), the three-item cap, the steady case |
 | `home-performance.test.ts` | rows from another office never build a view; members never receive report history or postings; meters follow visibility |
-| `performance-chart.test.tsx` | the period row scopes strip and chart; series switches; cumulative view; the table twin with links; the `0` baseline; drilldown destinations; the missed tile and trend hand over the period; report history as a separate view; loading and error states; no source switch for members; partial labels |
-| `home-drilldown-destinations.test.tsx` | Missed appointments seeds its range from the query; Report history opens the covering package on the requested tab, narrowed to the range, and widens again on the same package |
+| `performance-chart.test.tsx` | the period row scopes strip and chart; series switches; cumulative view; the table twin with links; the `0` baseline; drilldown destinations; office-day coverage labels; loading and error states; no source switch for members |
+| `home-drilldown-destinations.test.tsx` | Missed appointments seeds its range from the query; Report history opens the covering package on the requested tab, narrowed to the range |
+| `owner-home`, `manager-home`, `member-home` (`.test.tsx`) | the composition per role: hierarchy, header, summary, the grouped queue and its count, Today, status, meters, Worth a look, the challenge, lanes, tools, after-close, brand-new office, hidden financials, backup vs covering |
 
-Existing dashboard tests (`owner-home`, `manager-home`, `member-home`,
-`dashboard-empty-states`) were rewritten for the new composition; the intentional
-changes are listed in `DESIGN_REVIEW.md` (pass 6).
+The intentional test changes are listed in `DESIGN_REVIEW.md` (pass 7).

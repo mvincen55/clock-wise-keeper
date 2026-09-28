@@ -9,7 +9,7 @@
  * Nothing is added together across packages.
  */
 import type { PreparedReport } from '@/lib/prepared-report';
-import type { ReportDay } from '@/lib/performance-series';
+import type { ReportDay, ReportMonth } from '@/lib/performance-series';
 
 export type ReportImportRow = {
   id: string;
@@ -54,6 +54,33 @@ export function reportDaysFrom(imports: ReportImportRow[]): ReportDay[] {
     }
   }
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * The monthly summary rows across the loaded packages, newest import
+ * winning a month. A `full` month is that package's complete total for the
+ * month — the daily rows under it may be thinner without the total being.
+ */
+export function reportMonthsFrom(imports: ReportImportRow[]): ReportMonth[] {
+  const ordered = [...imports].sort((a, b) => b.imported_at.localeCompare(a.imported_at));
+  const byMonth = new Map<string, ReportMonth>();
+  for (const imp of ordered) {
+    const rows = Array.isArray(imp.payload?.monthly_financials_by_entry_date) ? imp.payload.monthly_financials_by_entry_date : [];
+    for (const r of rows) {
+      const month = typeof r.month === 'string' ? r.month.slice(0, 7) : null;
+      if (!month || !/^\d{4}-\d{2}$/.test(month)) continue;
+      if (!isCents(r.posted_charges_cents) || !isCents(r.recorded_payments_cents)) continue;
+      if (byMonth.has(month)) continue;
+      byMonth.set(month, {
+        month,
+        coverage: r.coverage === 'full' ? 'full' : 'partial',
+        postedChargesCents: r.posted_charges_cents,
+        receiptsCents: r.recorded_payments_cents,
+        importedAt: imp.imported_at,
+      });
+    }
+  }
+  return [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month));
 }
 
 export function reportPackagesFrom(imports: ReportImportRow[]): ReportPackage[] {

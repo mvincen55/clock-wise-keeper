@@ -186,8 +186,10 @@ export function personStatusAt(row: EmployeeSnapshot, now: Date): PersonStatus {
   if (isClockedInNow(row)) {
     if (shiftEnded) return { ...base, status: 'Still clocked in', tone: 'attention' };
     const label = row.is_remote ? 'In — remote' : 'In';
+    // A late arrival is the person's to answer and the rule's to count; on
+    // a live roster it is routine status, never an alert.
     return row.is_late
-      ? { ...base, status: `${label} · late ${row.minutes_late}m`, tone: 'attention' }
+      ? { ...base, status: `${label} · late ${row.minutes_late}m`, tone: 'calm' }
       : { ...base, status: label, tone: 'steady' };
   }
 

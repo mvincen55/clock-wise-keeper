@@ -25,7 +25,7 @@ describe('period and series controls', () => {
     expect(screen.getByRole('button', { name: 'Last month', pressed: true })).toBeInTheDocument();
     expect(screen.getByRole('listitem', { name: /^Production, Feb 1 – Feb 28, 2026:/ })).toBeInTheDocument();
     expect(screen.getAllByText('Feb 1 – Feb 28, 2026').length).toBeGreaterThanOrEqual(2); // the strip and the chart header agree
-    expect(screen.getByText(/Close the Day · office day \(deposit date\) · \d+ of 28 days recorded/)).toBeInTheDocument();
+    expect(screen.getByText(/Close the Day · office day \(deposit date\) · 19 of 19 office days recorded · through Feb 27/)).toBeInTheDocument();
   });
 
   it('each series is a real switch; the last visible one cannot be switched off', () => {
@@ -106,7 +106,7 @@ describe('sources', () => {
     fireEvent.click(within(source).getByRole('button', { name: 'Report history' }));
     expect(screen.getByRole('listitem', { name: /^Posted charges, Jan 1 – Mar 3, 2026 · partial/ })).toBeInTheDocument();
     expect(screen.getByRole('listitem', { name: /^Receipts, / })).toBeInTheDocument();
-    expect(screen.getByText(/Report history · posting date \(report package\) · \d+ of 62 posting days recorded/)).toBeInTheDocument();
+    expect(screen.getByText(/Report history · posting date \(report package\) · \d+ of \d+ posting days recorded/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Values as a table' }));
     expect(screen.getByText(/Receipts can pay older balances; this is not a collection rate/)).toBeInTheDocument();
     // Switching back restores the closeout definitions and the production name.

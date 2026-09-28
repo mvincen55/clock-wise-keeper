@@ -8,6 +8,7 @@ import { missedSeries, type MissedBucket, type MissedSeries } from '@/lib/missed
 import type { PerformanceData } from '@/lib/home-performance';
 import type { Period } from '@/lib/performance-series';
 import { AXIS_TEXT, GRID_STROKE, SERIES_COLOR, useMeasuredWidth } from './chart-theme';
+import { focusRing, interactive } from '../kit';
 
 /**
  * Cancellations and no-shows over the selected period, stacked by kind or
@@ -49,8 +50,8 @@ function Tip({ active, payload, split }: { active?: boolean; payload?: { payload
   const r = payload[0].payload;
   const list = split === 'kind' ? KIND_SERIES : DEPT_SERIES;
   return (
-    <div className="max-w-[15rem] rounded-lg border border-border bg-card px-3 py-2.5 text-[12px] shadow-md">
-      <p className="font-mono text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground">{r.label}{r.current ? ' · partial' : ''}</p>
+    <div className="max-w-[16rem] rounded-lg border border-border bg-card px-3 py-2.5 text-[13px] shadow-md">
+      <p className="text-[12.5px] font-semibold text-muted-foreground">{r.label}{r.current ? ' · partial' : ''}</p>
       {r.recorded ? (
         <dl className="mt-1.5 space-y-1">
           {list.map(s => (
@@ -64,7 +65,7 @@ function Tip({ active, payload, split }: { active?: boolean; payload?: { payload
       ) : (
         <p className="mt-1.5 text-muted-foreground">Not recorded</p>
       )}
-      <p className="mt-1 text-[11px] text-primary">Click to open</p>
+      <p className="mt-1 text-[12.5px] font-medium text-primary">Click to open</p>
     </div>
   );
 }
@@ -92,12 +93,12 @@ export function MissedTrend({ data, period, width: fixedWidth }: { data: Perform
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-3" aria-label="Legend">
           {shownList.map(s => (
-            <span key={s.key} className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
+            <span key={s.key} className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground">
               <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-[2px]" style={{ background: s.color }} />{s.label}
             </span>
           ))}
         </div>
-        <div className="flex items-center gap-1 rounded-full border border-border p-0.5" role="group" aria-label="Split">
+        <div className="flex items-center gap-1 rounded-full border border-border bg-card p-0.5" role="group" aria-label="Split">
           {(['kind', 'department'] as MissedSplit[]).map(v => (
             <button
               key={v}
@@ -105,7 +106,7 @@ export function MissedTrend({ data, period, width: fixedWidth }: { data: Perform
               data-home-control="split"
               aria-pressed={split === v}
               onClick={() => setSplit(v)}
-              className={cn('min-h-7 rounded-full px-3 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', split === v ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
+              className={cn('min-h-8 rounded-full px-3.5 text-[13.5px] font-medium', interactive, focusRing, split === v ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
             >
               {v === 'kind' ? 'By kind' : 'By department'}
             </button>
@@ -114,13 +115,18 @@ export function MissedTrend({ data, period, width: fixedWidth }: { data: Perform
       </div>
 
       <div className="mt-3" style={{ minHeight: 180 }}>
-        {state === 'loading' && !series && <p className="py-10 text-center text-[13px] text-muted-foreground">Reading postings…</p>}
-        {state === 'error' && <p className="py-10 text-center text-[13px]">Missed-appointment records could not be read.</p>}
+        {state === 'loading' && !series && <p className="py-10 text-center text-[14px] text-muted-foreground" aria-busy="true">Reading postings…</p>}
+        {state === 'error' && (
+          <div className="flex min-h-[180px] flex-col items-center justify-center rounded-lg border border-warning/40 bg-warning/[0.06] px-5 text-center">
+            <p className="text-[15px] font-semibold">Missed-appointment records could not be read.</p>
+            <p className="mt-1 text-[13.5px] text-muted-foreground">Nothing here is confirmed. Refresh to try again.</p>
+          </div>
+        )}
         {state !== 'loading' && state !== 'error' && !series && (
-          <div className="flex min-h-[180px] flex-col items-center justify-center rounded-xl border border-border bg-muted/40 px-5 text-center">
-            <p className="text-[14px] font-semibold">No cancellations or no-shows recorded for this period.</p>
-            <p className="mt-1 max-w-[44ch] text-[12.5px] text-muted-foreground">Postings arrive from the Dentrix import; daily counts arrive with Close the Day.</p>
-            <Link to="/management/missed-appointments" className="mt-3 inline-flex items-center gap-1 font-mono text-[10.5px] uppercase tracking-[0.12em] text-primary hover:underline">Import from Dentrix<ArrowUpRight className="h-3 w-3" /></Link>
+          <div className="flex min-h-[180px] flex-col items-center justify-center rounded-lg border border-border bg-muted/40 px-5 text-center">
+            <p className="text-[15px] font-semibold">No cancellations or no-shows recorded for this period.</p>
+            <p className="mt-1 max-w-[44ch] text-[13.5px] text-muted-foreground">Postings arrive from the Dentrix import; daily counts arrive with Close the Day.</p>
+            <Link to="/management/missed-appointments" className="mt-3 inline-flex items-center gap-1 text-[13.5px] font-medium text-primary hover:underline">Import from Dentrix<ArrowUpRight className="h-3.5 w-3.5" /></Link>
           </div>
         )}
         {series && (
@@ -139,8 +145,8 @@ export function MissedTrend({ data, period, width: fixedWidth }: { data: Perform
               className="cursor-pointer [&_.recharts-surface]:outline-none [&_.recharts-surface:focus-visible]:outline [&_.recharts-surface:focus-visible]:outline-2 [&_.recharts-surface:focus-visible]:outline-ring"
             >
               <CartesianGrid vertical={false} stroke={GRID_STROKE} />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} stroke={AXIS_TEXT} interval="preserveStartEnd" minTickGap={24} />
-              <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} stroke={AXIS_TEXT} width={28} />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} stroke={AXIS_TEXT} interval="preserveStartEnd" minTickGap={24} />
+              <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={12} stroke={AXIS_TEXT} width={28} />
               <Tooltip cursor={{ fill: 'hsl(var(--muted))', fillOpacity: 0.6 }} content={<Tip split={split} />} isAnimationActive={false} />
               {shownList.map((s, i) => (
                 <Bar key={s.key} dataKey={s.key} name={s.label} stackId="m" fill={s.color} maxBarSize={22} radius={i === shownList.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]} isAnimationActive={!reduced} animationDuration={300} />
@@ -152,14 +158,14 @@ export function MissedTrend({ data, period, width: fixedWidth }: { data: Perform
 
       {series && (
         <figcaption className="mt-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <p className="text-[11.5px] text-muted-foreground">
+          <p className="text-[13px] text-muted-foreground">
             {series.sourceLabel} · {series.totals.total} in {series.period.rangeLabel}
             {series.source === 'closeouts' ? ` · ${series.recordedDays} of ${series.days} days recorded` : recordedBuckets < rows.length ? ` · ${recordedBuckets} of ${rows.length} ${series.granularity === 'day' ? 'days' : series.granularity + 's'} with postings` : ''}
             {hasUnassigned ? ` · ${series.totals.unassigned} unassigned` : ''}
           </p>
           <span className="flex items-center gap-3">
-            <Link to={missedHref(period)} className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-primary hover:underline">Missed appointments<ArrowUpRight className="h-3 w-3" /></Link>
-            <button type="button" data-home-control="table" aria-expanded={tableOpen} onClick={() => setTableOpen(o => !o)} className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Link to={missedHref(period)} className="inline-flex items-center gap-1 text-[13px] font-medium text-primary hover:underline">Missed appointments<ArrowUpRight className="h-3.5 w-3.5" /></Link>
+            <button type="button" data-home-control="table" aria-expanded={tableOpen} onClick={() => setTableOpen(o => !o)} className={cn('text-[13px] font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline', focusRing)}>
               {tableOpen ? 'Hide table' : 'Values as a table'}
             </button>
           </span>
@@ -167,7 +173,7 @@ export function MissedTrend({ data, period, width: fixedWidth }: { data: Perform
       )}
       {series && tableOpen && (
         <div className="mt-3 max-h-64 overflow-auto rounded-lg border border-border">
-          <table className="w-full text-[12.5px]">
+          <table className="w-full text-[13.5px]">
             <caption className="sr-only">Cancellations and no-shows by {series.granularity}, {series.period.rangeLabel}</caption>
             <thead className="sticky top-0 bg-muted text-left"><tr>
               <th scope="col" className="px-3 py-2 font-medium">Period</th>
@@ -193,12 +199,12 @@ export function MissedTrend({ data, period, width: fixedWidth }: { data: Perform
                   ) : (
                     <td colSpan={5} className="px-3 py-1.5 text-muted-foreground">Not recorded</td>
                   )}
-                  <td className="px-3 py-1.5 text-right"><Link to={missedHref(r)} className="font-mono text-[10px] uppercase tracking-[0.1em] text-primary hover:underline">Open</Link></td>
+                  <td className="px-3 py-1.5 text-right"><Link to={missedHref(r)} className="text-[13px] font-medium text-primary hover:underline">Open</Link></td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <p className="px-3 py-2 text-[11px] text-muted-foreground">{series.definition}</p>
+          <p className="px-3 py-2 text-[13px] text-muted-foreground">{series.definition}</p>
         </div>
       )}
     </figure>

@@ -85,3 +85,29 @@ export function daysInMonthOf(date: string): number {
   const [y, m] = date.split('-').map(Number);
   return new Date(Date.UTC(y, m, 0)).getUTCDate();
 }
+
+/* ------------------------------ pace basis ------------------------------ */
+
+/**
+ * What "elapsed" means for a month's pace. Office days come from the
+ * office's own calendar (closures, open Saturdays, the weekly pattern) and
+ * are the fair basis for a practice that does not work every calendar day.
+ * Calendar days are the fallback when that calendar could not be read; a
+ * verdict on that basis is an estimate and is labeled as one.
+ */
+export type PaceBasis =
+  | { kind: 'office_days'; elapsed: number; total: number }
+  | { kind: 'calendar_days'; elapsed: number; total: number };
+
+/** The fraction of the month elapsed on a basis, clamped to 0–1. */
+export function paceFraction(basis: PaceBasis): number {
+  if (basis.total <= 0) return 0;
+  return Math.min(1, Math.max(0, basis.elapsed / basis.total));
+}
+
+/** "office day 5 of 22" / "day 3 of 31" — the basis in the words a caption uses. */
+export function paceBasisClause(basis: PaceBasis): string {
+  return basis.kind === 'office_days'
+    ? `office day ${basis.elapsed} of ${basis.total}`
+    : `day ${basis.elapsed} of ${basis.total}`;
+}

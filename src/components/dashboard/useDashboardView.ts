@@ -2,14 +2,14 @@ import { useMemo } from 'react';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useMyProfile } from '@/hooks/useMyProfile';
 import { useTick } from '@/hooks/useTick';
-import { useOrgAttendanceSnapshot } from '@/hooks/useOrgAttendanceSnapshot';
+import { useOrgAttendanceSnapshot, type EmployeeSnapshot } from '@/hooks/useOrgAttendanceSnapshot';
 import { usePracticeVitals } from '@/hooks/usePracticeVitals';
 import { useDepositLog, useRecentDepositLogs } from '@/hooks/useDepositLog';
 import { useTeamGoals, type TeamGoal } from '@/hooks/useTeamGoals';
 import { useUnresolvedBypasses } from '@/hooks/useChecklistBypasses';
 import { useMyAccountabilityReports } from '@/hooks/useAccountability';
 import { useMyKnowledgeAcknowledgments } from '@/hooks/useKnowledgeAcknowledgments';
-import { useTrainingAssignments } from '@/hooks/useTraining';
+import { useTrainingAssignments, useTrainingModules } from '@/hooks/useTraining';
 import { useCurrentPtoBalance } from '@/hooks/usePtoEngine';
 import { useMissingShifts } from '@/hooks/useMissingShifts';
 import { useTodayEntry } from '@/hooks/useTimeEntries';
@@ -17,7 +17,16 @@ import { useAttentionItems } from '@/hooks/useAttentionItems';
 import { useMessagesCloseout } from '@/hooks/useMessagesCloseout';
 import { usePracticeReportImports } from '@/hooks/usePracticeReportImports';
 import { useMissedAppointmentEvents } from '@/hooks/useMissedAppointmentEvents';
-import { buildHomeBrief, needsYou } from '@/lib/home-brief';
+import { useOfficeDays } from '@/hooks/useOfficeDays';
+import { useTardies } from '@/hooks/useTardies';
+import { useIncidentReports } from '@/hooks/useIncidentReports';
+import { useMyPtoRequests } from '@/hooks/usePtoRequests';
+import { useMyCorrectionRequests } from '@/hooks/useCorrectionRequests';
+import { useChecklistGating } from '@/hooks/useChecklistGating';
+import { useLateArrivalRule } from '@/hooks/useLateArrivalRule';
+import { buildHomeBrief, needsYou, stateSummary, todayBand, lastDayLine } from '@/lib/home-brief';
+import { buildMyWork } from '@/lib/my-work';
+import { isLiveLateArrival, standingSentence, standingToday } from '@/lib/late-arrivals';
 import type { PerformanceRaw } from '@/lib/home-performance';
 import type { SourceState } from '@/lib/performance-series';
 import type { AttentionSummary } from '@/lib/home-insights';
@@ -26,11 +35,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMyOperationalRoles } from '@/hooks/useMyOperationalRoles';
 import { useMyPermissionGrants } from '@/hooks/useEmployeePermissions';
 import { shortcutsFor, roleLabel as opRoleLabel, roleMission } from './opRoles';
+import { buildToolGroups } from './tools';
 import { getClockStatus, getRunningMinutes } from '@/lib/clock-status';
-import { daysBetween, formatDate, formatTime, getToday, minutesToHHMM } from '@/lib/time-utils';
+import { daysBetween, formatDate, formatTime, getToday, minutesToHHMM, shiftDate } from '@/lib/time-utils';
 import { staffingSummary } from './staffing';
 import {
-  buildDailyBrief, buildGoalBrief, dailySummary, monthPaceLines, type OwnerPulseInput,
+  buildDailyBrief, buildGoalBrief, monthPaceLines, type OwnerPulseInput,
 } from '@/lib/owner-pulse';
 import { closeDayStatus } from '@/lib/manager-pulse';
 import { rolePulseItems } from '@/lib/member-pulse';
@@ -38,6 +48,7 @@ import type {
   DashboardHeader, DashboardView, Figure, ManagerView, MemberView, OwnerView,
   PerformanceState, PermissionTier, RoleContext, RoleLane, Signal,
 } from './types';
+import { LATE_ARRIVAL_NOTICE_DAYS } from '@/components/LateArrivalNotice';
 
 /**
  * Composes the EXISTING product hooks into the three role view models.
@@ -45,8 +56,9 @@ import type {
  * This file adds no queries beyond the product's own hooks, no tables, and no
  * business rules — the pulse math lives in the shared deterministic layer
  * (owner-pulse.ts / manager-pulse.ts / member-pulse.ts on top of
- * metric-pace.ts), so Owner, Manager, and Team read the SAME calculations.
- * Anything Purple Envelope cannot verify from real records is not rendered.
+ * metric-pace.ts), the queue in attention/, a person's own items in
+ * my-work.ts. Anything Purple Envelope cannot verify from real records is
+ * not rendered.
  *
  * Time semantics live in `staffing.ts`: "scheduled sometime today" is never
  * presented as "expected to be working right now", and a closed office never
@@ -71,6 +83,9 @@ const TIER_OF: Record<'owner' | 'manager' | 'employee', PermissionTier> = {
   employee: 'member',
 };
 
+/** A stable empty roster, so a loading snapshot never invalidates the view memo. */
+const NO_ROWS: EmployeeSnapshot[] = [];
+
 export function useDashboardView(): { view: DashboardView | null; isLoading: boolean } {
   const now = useTick(60_000);
   const { user } = useAuth();
@@ -79,7 +94,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
 
   // Shared / admin sources (each hook disables itself when the role is wrong).
   const snapshotQuery = useOrgAttendanceSnapshot();
-  const snapshot = snapshotQuery.data ?? [];
+  const snapshot = snapshotQuery.data ?? NO_ROWS;
   const vitalsQuery = usePracticeVitals();
   const vitals = vitalsQuery.data;
   const today = getToday();
@@ -88,6 +103,9 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
   // disabled for members, and the builder refuses them for members anyway.
   const reportImports = usePracticeReportImports();
   const missedEvents = useMissedAppointmentEvents(isAdmin);
+  // The office calendar: closures and open Saturdays, readable by everyone.
+  // A failed read is null — the meters then say they are on calendar days.
+  const officeDays = useOfficeDays();
   const { data: todayLog } = useDepositLog(today);
   const { data: recentLogs } = useRecentDepositLogs(14);
   const { data: sprintData } = useTeamGoals();
@@ -101,8 +119,16 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
   const { data: myReports = [] } = useMyAccountabilityReports();
   const { data: myAcks = [] } = useMyKnowledgeAcknowledgments();
   const { data: assignments = [] } = useTrainingAssignments();
+  const { data: modules } = useTrainingModules();
   const pto = useCurrentPtoBalance();
   const { data: todayEntry } = useTodayEntry();
+  // A person's own late arrivals, attendance reports, and requests.
+  const { data: tardies } = useTardies(shiftDate(today, -LATE_ARRIVAL_NOTICE_DAYS), today);
+  const { data: incidents } = useIncidentReports();
+  const { data: myPto } = useMyPtoRequests();
+  const { data: myCorrections } = useMyCorrectionRequests();
+  const { data: gating } = useChecklistGating();
+  const { data: lateRule } = useLateArrivalRule();
 
   const ops = useMyOperationalRoles();
   // Per-employee grants unlock tier-gated shortcuts (RLS enforces server-side).
@@ -139,11 +165,9 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
     };
 
     /**
-     * Operational-role lanes. The primary role gets a full lane; backup roles
-     * get a compact "Also covering" strip, and only contribute time-sensitive
-     * items when they are actually covering that function today. A secondary
-     * role never merges a second whole dashboard in, and never widens
-     * permission — `shortcutsFor` filters by tier.
+     * Operational-role lanes. A role the person is covering today may
+     * contribute time-sensitive items; a backup capability never does, and
+     * never widens permission — `shortcutsFor` filters by tier.
      */
     const laneUrgent = (role: typeof ops.primary): Signal[] => {
       if (!role) return [];
@@ -169,8 +193,6 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         kind: 'primary',
         mission: roleMission(ops.primary),
         shortcuts: shortcutsFor(ops.primary, tier, grants),
-        // The primary lane never repeats a line already shown above in the
-        // member's own open-items list — one item, one place.
         urgent: [],
       });
     }
@@ -187,6 +209,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         note: covering ? 'Also covering today' : 'Backup — can cover, not assigned',
       });
     }
+    const toolGroups = buildToolGroups({ tier, grants, primary: ops.primary, secondary: ops.secondary, coveringToday: ops.coveringToday });
 
     const staffing = staffingSummary(snapshot, now);
 
@@ -209,6 +232,27 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
       : null;
 
     const goal = buildGoalBrief(sprints, today);
+
+    /* ------------------------------ my work ------------------------------ */
+    // A person's own open items, from the records they are party to. The
+    // same builder serves the member Home and the admin "Mine" panel.
+    const moduleTitles = new Map((modules ?? []).map(m => [m.id, m.title]));
+    const mine = buildMyWork({
+      today,
+      userId: user?.id ?? null,
+      employeeId: ctx.employee_id,
+      tardies: tardies ?? [],
+      incidents: incidents ?? [],
+      records: myReports.map(r => ({ id: r.id, status: r.status, kind: r.kind, created_at: r.created_at })),
+      bypasses,
+      acknowledgments: myAcks,
+      training: assignments.map(a => ({ ...a, title: moduleTitles.get(a.module_id) })),
+      missingDays: ctx.role === 'owner' ? [] : missingDays,
+      openChecklistItems: gating?.incompleteCount ?? 0,
+      repliesOwed: messagesCloseout.applies ? messagesCloseout.outstanding.filter(o => o.needs_reply).length : 0,
+      ptoRequests: myPto ?? [],
+      corrections: (myCorrections ?? []).map(c => ({ id: c.id, status: c.status, created_at: c.created_at, entry_date: typeof c.proposed_change?.entry_date === 'string' ? c.proposed_change.entry_date : null })),
+    });
 
     /* --------------------------- performance --------------------------- */
     // The rows behind the chart, the strip, the goal meters, and the
@@ -235,6 +279,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
           thisMonth: vitals.thisMonth,
           targets: vitals.targets,
           monthElapsed: vitals.monthElapsed,
+          calendar: officeDays.data ?? null,
         }
       : null;
     const attentionSummary: AttentionSummary | null = isAdmin
@@ -255,20 +300,10 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
     if (ctx.role === 'owner') {
       // Owners are already excluded from `snapshot` at the hook boundary —
       // an owner without punches can never appear absent or out.
-      // Decisions are the same list Attention shows, top three, one
-      // navigation action each — the rows Manager Home shares.
+      // Decisions are the same list Attention shows — the rows Manager Home shares.
       const decisionCount = attention.counts.needsNow;
       const needs = needsYou(attention);
-
-      // The daily pulse is a pure function of recorded vitals. While the
-      // query is in flight everything stays null — the hero renders a quiet
-      // loading line instead of fabricated zeros.
-      let summary: string | null = null;
-      let brief: OwnerView['brief'] = null;
-      if (pulseInput && vitals) {
-        brief = buildDailyBrief(pulseInput);
-        summary = dailySummary(pulseInput, brief, decisionCount);
-      }
+      const brief = pulseInput ? buildDailyBrief(pulseInput) : null;
 
       // Operational exceptions: only real, unresolved signals. A zero here is
       // silence, not a row — normal staffing mostly disappears.
@@ -284,16 +319,30 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         });
       }
 
+      const today_ = todayBand({ summary: staffing, snapshot, now, needsNow: attention.needsNow, asOf: snapshotQuery.isError ? 'unavailable' : snapshotQuery.data === undefined ? 'loading' : null });
+      const lastDay = lastDayLine({
+        closeouts: (recentLogs ?? []).map(l => ({ id: l.id, deposit_date: l.deposit_date, sealed_at: l.sealed_at, needs_manager_review: l.needs_manager_review })),
+        today, phase: staffing.office.phase, closeDay: closeDayStatus(todayLog ?? null, staffing.office.phase),
+      });
+      const summary = stateSummary({
+        office: staffing.office, today: today_, needs, lastDay,
+        payroll: attention.payrollPeriod ? { dueDate: attention.payrollPeriod.dueDate, dueLabel: attention.payrollPeriod.dueLabel } : null,
+        payrollItems: attention.needsNow.filter(i => i.payroll).length,
+        todayDate: today,
+      });
+
       const owner: OwnerView = {
         kind: 'owner',
         header,
         roleContext,
         lanes,
+        toolGroups,
         office: staffing.office,
         summary,
         brief,
         decisionCount,
         needs,
+        mine,
         goal,
         staffing,
         exceptions,
@@ -307,16 +356,6 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
       const closeDay = closeDayStatus(todayLog ?? null, staffing.office.phase);
       // The pace receipts come from the same layer Owner Home reads.
       const performance = pulseInput && vitals ? monthPaceLines(pulseInput) : null;
-      // What needs the manager personally, never the office's work.
-      const myOpenAcks = myAcks.filter(a => !a.acknowledged_at);
-      const myOpenReports = myReports.filter(r => r.status === 'awaiting_member');
-      const mineAll: Signal[] = [
-        { id: 'acks', label: 'Policies to sign', detail: 'Signing means you read that exact version.', value: String(myOpenAcks.length), href: '/playbook', tone: 'attention' },
-        { id: 'missing', label: 'My absences to explain, last 14 days', detail: 'Scheduled days with no time recorded.', value: String(missingDays.length), href: '/timesheet', tone: 'attention' },
-        { id: 'bypasses', label: 'Bypass reasons I owe', detail: 'Never blocks you — just needs a sentence.', value: String(bypasses.length), href: '/checklists', tone: 'attention' },
-        { id: 'records', label: 'Records awaiting my response', detail: 'You always get to add your side.', value: String(myOpenReports.length), href: '/', tone: 'urgent' },
-      ];
-      const mine = mineAll.filter(s => s.value !== '0');
 
       const home = buildHomeBrief({
         attention,
@@ -339,8 +378,10 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         header,
         roleContext,
         lanes,
+        toolGroups,
         office: staffing.office,
         home,
+        brief: pulseInput ? buildDailyBrief(pulseInput) : null,
         mine,
         ...block,
       };
@@ -351,9 +392,6 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
     const punches = todayEntry?.punches ?? [];
     const clockState = getClockStatus(punches);
     const runningMinutes = getRunningMinutes(punches);
-    const openTraining = assignments.filter(a => a.assigned_to === user?.id && a.status !== 'completed');
-    const openAcks = myAcks.filter(a => !a.acknowledged_at);
-    const openReports = myReports.filter(r => r.status === 'awaiting_member');
 
     const status =
       clockState === 'clocked_in'
@@ -374,90 +412,6 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
               tone: 'calm' as const,
             };
 
-    const next =
-      openReports.length > 0
-        ? {
-            title: 'Sign your record',
-            detail: 'A record is waiting on your response before it moves on.',
-            href: '/',
-            cta: 'Open record',
-          }
-        : bypasses.length > 0
-          ? {
-              title: 'Add a bypass reason',
-              detail: 'You clocked out past a checklist. A short reason closes it.',
-              href: '/checklists',
-              cta: 'Add reason',
-            }
-          : openAcks.length > 0
-            ? {
-                title: 'Read and sign a policy',
-                detail: 'A published version is assigned to you.',
-                href: '/playbook',
-                cta: 'Open playbook',
-              }
-            : openTraining.length > 0
-              ? {
-                  title: 'Finish your training',
-                  detail: `${openTraining.length} module${openTraining.length === 1 ? '' : 's'} assigned to you.`,
-                  href: '/training',
-                  cta: 'Open training',
-                }
-              : missingDays.length > 0
-                ? {
-                    title: 'Explain an absence',
-                    detail: `${missingDays.length} scheduled day${missingDays.length === 1 ? '' : 's'} with no time recorded.`,
-                    href: '/timesheet',
-                    cta: 'Review time',
-                  }
-                : null;
-
-    const mineAll: Signal[] = [
-      {
-        id: 'training',
-        label: 'Training assigned to me',
-        detail: 'Modules not yet completed.',
-        value: String(openTraining.length),
-        href: '/training',
-        tone: 'attention',
-      },
-      {
-        id: 'acks',
-        label: 'Policies to sign',
-        detail: 'Signing means you read that exact version.',
-        value: String(openAcks.length),
-        href: '/playbook',
-        tone: 'attention',
-      },
-      {
-        id: 'bypasses',
-        label: 'Bypass reasons owed',
-        detail: 'Never blocks you — just needs a sentence.',
-        value: String(bypasses.length),
-        href: '/checklists',
-        tone: 'attention',
-      },
-      {
-        id: 'missing',
-        label: 'Absences to explain, last 14 days',
-        detail: 'Scheduled days with no time recorded.',
-        value: String(missingDays.length),
-        href: '/timesheet',
-        tone: 'attention',
-      },
-      {
-        id: 'records',
-        label: 'Records awaiting my response',
-        detail: 'You always get to add your side.',
-        value: String(openReports.length),
-        href: '/',
-        tone: 'urgent',
-      },
-    ];
-    // A zero is not an open item. The empty state says "you're clear" once,
-    // instead of five rows of zeros saying it five times.
-    const mine = mineAll.filter(s => s.value !== '0');
-
     // Our office pulse: the same rows the owner reads, limited by each
     // metric's own visibility setting (applied by the strip and the meters).
     // A hidden metric simply is not there.
@@ -472,6 +426,20 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
 
     const rolePulse =
       pulseInput && vitals ? rolePulseItems(ops.primary, pulseInput, vitals.visibility) : [];
+
+    // Where the person stands against the office's late-arrival rule: shown
+    // only once a late arrival is on record, and read as "in the last N
+    // days", never as a verdict.
+    const myLate = (tardies ?? []).filter(t => t.user_id === user?.id && isLiveLateArrival(t));
+    let attendanceStanding: MemberView['attendanceStanding'] = null;
+    if (lateRule && lateRule.is_active && myLate.length > 0) {
+      const standing = standingToday(myLate, lateRule, today);
+      attendanceStanding = {
+        text: `Late arrivals: ${standingSentence(standing, lateRule)}.`,
+        tone: standing.remaining === 0 ? 'attention' : 'calm',
+        href: '/days-off',
+      };
+    }
 
     // Personal utilities — real, useful, and deliberately not the headline.
     const utilities: Figure[] = [
@@ -490,11 +458,11 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         href: '/pto',
       },
       {
-        id: 'timesheet',
-        value: '→',
-        label: 'Timesheet',
-        detail: 'Punches, corrections, week totals',
-        href: '/timesheet',
+        id: 'requests',
+        value: String(mine.waiting.length),
+        label: 'Requests pending',
+        detail: mine.waiting.length === 1 ? 'Waiting on a manager' : 'Waiting on a manager',
+        href: '/my-requests',
       },
     ];
 
@@ -503,20 +471,21 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
       header,
       roleContext,
       lanes,
-      next,
+      toolGroups,
+      work: mine,
       officePulseNote,
       rolePulse,
-      mine,
       goal,
       status,
       utilities,
+      attendanceStanding,
       ...block,
     };
     return { view: member, isLoading: false };
   }, [
     ctx, ctxLoading, profile, now, today, snapshot, vitals, todayLog, sprintData,
-    bypasses, myReports, myAcks, assignments, pto, todayEntry,
+    bypasses, myReports, myAcks, assignments, modules, pto, todayEntry,
     missingDays, user, ops, grants, attention, recentLogs, messagesCloseout, snapshotQuery.isError, snapshotQuery.data,
-    vitalsQuery.isError, reportImports, missedEvents, isAdmin,
+    vitalsQuery.isError, reportImports, missedEvents, isAdmin, officeDays.data, tardies, incidents, myPto, myCorrections, gating, lateRule,
   ]);
 }

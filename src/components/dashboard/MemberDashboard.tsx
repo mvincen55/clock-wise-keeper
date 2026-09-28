@@ -1,140 +1,145 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { MemberView } from './types';
 import {
-  Band, CompactMasthead, DashboardShell, EmptyState, FigureStrip, Lanes, MicroLabel, SignalRow, StatusDot, ViewContext,
+  ActionLink, DashboardShell, EmptyState, FigureStrip, HomeHeader, Lanes, Panel, SignalRow, StatusDot, ToolsPanel, ViewContext, focusRing, interactive,
 } from './kit';
+import { MyWorkPanel } from './MyWork';
 import { PerformanceSection } from './performance/PerformanceSection';
 import { GoalMeters } from './performance/GoalMeters';
 import { ChallengeCard } from './ChallengeCard';
 
 /**
- * TEAM MEMBER — "what should I do next, and how is our office doing?"
+ * TEAM MEMBER — "what needs me, how is my work going, and how is our office
+ * doing?"
  *
- *   A  My next move — the one highest-priority assigned item (or "clear")
- *   B  Our office pulse — the same rows, the same chart, the same goal
- *      meters the owner reads, limited to the metrics the office shares.
- *      Office-level only: no rankings, no personal attribution, no peer
- *      comparisons, no management detail.
- *   C  role-relevant pulse + the operational-role lanes
- *   D  my open work
- *   E  the shared office challenge
- *   F  personal utilities — recorded time, PTO, timesheet links. Useful, but
- *      deliberately at the bottom: Purple Envelope is not a time clock.
+ *   1  header: greeting, clock status, role context
+ *   2  My next move — the one highest-priority item, or a genuine all-clear
+ *   3  Needs you (my own items, exact records) beside my role's slice of the
+ *      office, the shared challenge, and my time & PTO
+ *   4  Our office pulse — the same rows, chart, and goal meters the owner
+ *      reads, limited to the metrics the office shares; office-level only
+ *   5  coverage today, then the tools area
  *
- * Clocking stays in the shell's compact GlobalTimeControl / sticky mobile
- * bar. Time analytics live on the Timesheet page, not here.
+ * Clocking stays in the shell's GlobalTimeControl / sticky mobile bar.
  */
 export default function MemberDashboard({ view, chartWidth }: { view: MemberView; chartWidth?: number }) {
   const {
-    header, next, officePulseNote, rolePulse, mine, goal, status, utilities, lanes, roleContext,
+    header, work, officePulseNote, rolePulse, goal, status, utilities, lanes, roleContext, toolGroups, attendanceStanding,
     performance, performanceState, goalMeters,
   } = view;
   const sharesAnything = !!performance && (performance.visibility.production || performance.visibility.collections || performance.visibility.newPatients);
   const hasRecorded = !!performance && performance.sources.closeouts.length > 0;
   const showPulse = performanceState !== 'error' && sharesAnything && (hasRecorded || performanceState === 'loading');
+  const next = work.next;
 
   return (
     <DashboardShell>
-      <CompactMasthead
+      <HomeHeader
+        greeting={header.personName}
         officeName={header.officeName}
-        roleLabel={header.roleLabel}
-        title={header.personName}
         dateLabel={header.dateLabel}
         timeLabel={header.timeLabel}
+        state={{ text: status.label, tone: status.tone }}
         context={<ViewContext context={roleContext} />}
+        actions={<ActionLink to="/timesheet" variant="secondary">Timesheet</ActionLink>}
       />
 
-      {/* A — MY NEXT MOVE. One action, or a genuine all-clear. */}
-      <section className="mt-4 overflow-hidden rounded-2xl bg-primary px-5 py-5 text-primary-foreground sm:px-6">
-        <MicroLabel className="text-primary-foreground/70">My next move</MicroLabel>
+      {/* 2 — MY NEXT MOVE. One action, or a genuine all-clear. */}
+      <section aria-label="My next move" className="mt-5 overflow-hidden rounded-xl bg-primary px-5 py-5 text-primary-foreground sm:px-6">
+        <p className="text-[13px] font-semibold text-primary-foreground/75">My next move</p>
         {next ? (
-          <div className="mt-2 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+          <div className="mt-1.5 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
             <div className="min-w-0">
-              <p className="font-display text-[clamp(1.25rem,3vw,1.7rem)] font-extrabold leading-[1] tracking-[-0.02em]">{next.title}</p>
-              <p className="mt-1.5 max-w-[52ch] text-[13px] leading-snug text-primary-foreground/75">{next.detail}</p>
+              <p className="text-[clamp(1.25rem,2.6vw,1.6rem)] font-bold leading-tight tracking-[-0.01em]">{next.title}</p>
+              <p className="mt-1.5 max-w-[60ch] text-[14px] leading-snug text-primary-foreground/80">{next.detail}</p>
             </div>
             <Link
               to={next.href}
-              className="group inline-flex min-h-9 items-center gap-2 rounded-full border border-primary-foreground/70 px-4 font-mono text-[11px] uppercase tracking-[0.12em] transition-colors hover:bg-primary-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground"
+              className={cn('group inline-flex min-h-11 items-center gap-2 rounded-full bg-primary-foreground px-5 text-[14.5px] font-semibold text-primary hover:bg-primary-foreground/90', interactive, 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-primary')}
             >
-              {next.cta}
-              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+              {next.action}
+              <ArrowRight className="h-4 w-4 transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden />
             </Link>
           </div>
         ) : (
-          <p className="mt-2 max-w-[48ch] font-display text-[clamp(1.1rem,2.6vw,1.45rem)] font-bold leading-snug tracking-[-0.02em]">
-            You&rsquo;re clear. Nothing is assigned to you right now.
+          <p className="mt-1.5 max-w-[50ch] text-[clamp(1.15rem,2.4vw,1.4rem)] font-bold leading-snug tracking-[-0.01em]">
+            You’re clear. Nothing is assigned to you right now.
           </p>
         )}
       </section>
 
-      {/* B — OUR OFFICE PULSE. Real values when the office shares them; a
-          hidden metric is simply absent — no locked teaser. */}
-      {showPulse && (
-        <div className="mt-6">
-          <Band title="Our office pulse" action={{ label: 'Close the Day', to: '/deposit-log' }}>
-            <div className="pt-3">
-              <PerformanceSection
-                data={performance}
-                state={performanceState}
-                compact
-                chartWidth={chartWidth}
-                aside={
-                  goalMeters && goalMeters.length > 0 ? (
-                    <Band title="Goals this month" action={{ label: 'Goals', to: '/goals' }}>
-                      <GoalMeters meters={goalMeters} canSetGoals={false} loading={performanceState === 'loading'} />
-                    </Band>
-                  ) : undefined
-                }
-              />
-            </div>
-            {officePulseNote && <p className="mt-3 text-[11.5px] text-muted-foreground">{officePulseNote}</p>}
-            <p className="mt-1 text-[11.5px] text-muted-foreground">
-              Office totals only — this is a shared scoreboard, never an individual one.
-            </p>
-          </Band>
-        </div>
-      )}
+      <div className="mt-4 grid gap-4 [&>*]:min-w-0 lg:grid-cols-[minmax(0,1.4fr)_minmax(20rem,1fr)] lg:items-start">
+        <MyWorkPanel
+          work={work}
+          emptyTitle="You’re clear."
+          emptyDetail="Nothing is assigned to you. Anything new will land here and in your inbox."
+          description="Each row opens the exact record. Nothing here is a task for anyone else."
+        />
 
-      <div className="mt-8 grid gap-8 [&>*]:min-w-0 lg:grid-cols-[1.3fr_1fr] lg:gap-10">
-        {/* Left: my role's slice of the office, and my lanes. */}
-        <div className="space-y-8">
+        <div className="space-y-4">
           {rolePulse.length > 0 && (
-            <Band title="For my role">
+            <Panel title="For my role" description="Office-level facts your role acts on. Never an individual score.">
               {rolePulse.map(item => <SignalRow key={item.id} signal={item} />)}
-            </Band>
+            </Panel>
           )}
-          <Lanes lanes={lanes} />
-        </div>
 
-        {/* Right: my open work, the shared goal, my utilities. */}
-        <div className="space-y-8">
-          <Band title="My open work" count={`${mine.length}`} action={{ label: 'Workplace', to: '/workplace' }}>
-            {mine.length === 0 ? (
-              <EmptyState tone="good" title="You're clear." detail="Nothing is assigned to you. Anything new will land here and in your inbox." />
-            ) : (
-              mine.map(s => <SignalRow key={s.id} signal={s} />)
-            )}
-          </Band>
-
-          <Band title="Office goal" action={{ label: 'Goals', to: '/goals' }}>
+          <Panel title="Office goal" action={{ label: 'Goals', to: '/goals' }}>
             {goal ? (
               <ChallengeCard goal={goal} compact />
             ) : (
-              <EmptyState tone="neutral" title="No office goal is running." detail="When the office starts a sprint, its shared progress lives here." />
+              <EmptyState tone="neutral" title="No office goal is running." detail="When the office starts a sprint, its shared progress lives here." compact />
             )}
-          </Band>
+          </Panel>
 
-          <Band title="My time & PTO" action={{ label: 'Timesheet', to: '/timesheet' }}>
-            <div className="flex items-center gap-2.5 border-b border-border py-3">
+          <Panel title="My time & PTO" action={{ label: 'Timesheet', to: '/timesheet' }}>
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pb-3">
               <StatusDot tone={status.tone} />
-              <p className="text-[13.5px] font-medium">{status.label}</p>
-              <p className="min-w-0 flex-1 truncate text-right text-[12px] text-muted-foreground">{status.detail}</p>
+              <p className="text-[15px] font-medium">{status.label}</p>
+              <p className="min-w-0 flex-1 text-[13px] text-muted-foreground">{status.detail}</p>
             </div>
             <FigureStrip figures={utilities} />
-          </Band>
+            {attendanceStanding && (
+              <Link to={attendanceStanding.href} className={cn('mt-3 flex items-center gap-2 rounded-md text-[13.5px] text-muted-foreground hover:text-foreground', interactive, focusRing)}>
+                <StatusDot tone={attendanceStanding.tone} />
+                {attendanceStanding.text}
+              </Link>
+            )}
+          </Panel>
         </div>
+      </div>
+
+      {/* 4 — OUR OFFICE PULSE. Real values when the office shares them; a
+          hidden metric is simply absent — no locked teaser. */}
+      {showPulse && (
+        <section className="mt-6" aria-labelledby="office-pulse-title">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pb-3">
+            <h2 id="office-pulse-title" className="text-[16px] font-semibold">Our office pulse</h2>
+            <ActionLink to="/deposit-log" variant="text" size="sm">Close the Day</ActionLink>
+          </div>
+          <PerformanceSection
+            data={performance}
+            state={performanceState}
+            compact
+            chartWidth={chartWidth}
+            aside={
+              goalMeters && goalMeters.length > 0 ? (
+                <Panel title="Goals this month" action={{ label: 'Goals', to: '/goals' }} className="h-full">
+                  <GoalMeters meters={goalMeters} canSetGoals={false} loading={performanceState === 'loading'} />
+                </Panel>
+              ) : undefined
+            }
+          />
+          <p className="mt-3 text-[13px] text-muted-foreground">
+            {officePulseNote ? `${officePulseNote} ` : ''}Office totals only — this is a shared scoreboard, never an individual one.
+          </p>
+        </section>
+      )}
+
+      <div className="mt-4 space-y-4">
+        <Lanes lanes={lanes} />
+        <ToolsPanel groups={toolGroups} />
       </div>
     </DashboardShell>
   );

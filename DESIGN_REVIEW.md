@@ -444,3 +444,76 @@ Nov–Jan report package, no goals), `manager`, `manager-closed`, `manager-off-p
 — each `-desktop.png` and `-mobile.png`. The stale tablet captures and the legacy
 `team-*` captures were removed. No horizontal overflow at either width; no page
 errors in any capture.
+
+---
+
+## Pass 7 — Role homes: what needs me first, honest numbers, one tools area
+
+Authenticated Home only (`/`), all three roles, plus the Attention room's
+`?kind=` filter and the Management shell's switcher. Fixture previews at
+`/design-review/dashboard/<slug>`; **fixture data is fictional** (Sample Family
+Dental, invented names and figures), no session, no queries, refused on
+production hosts. Production was **not** published. Settings stays
+authoritative: goals, visibility, the late-arrival rule and the office calendar
+are read, never written. Source map, definitions and rules:
+`docs/home-performance-redesign.md`; the attendance behaviour on Home:
+`docs/late-arrivals-spec.md` ("What Home shows").
+
+### What changed
+
+| Surface | Before | After |
+| --- | --- | --- |
+| Visual system | Compact masthead, 11–12px uppercase micro-labels with wide tracking, tinted cards, empty gray cells in the tool grids | Neutral page, white panels with a 1px border and one soft shadow, 15px body, 13–13.5px sentence-case labels, prominent figures, purple only for links and the primary action, amber and red only where something needs attention; the two-column rows are `1.5fr / 1fr` aligned to the start so a short panel never stretches beside a tall one; no empty cells; hover and disclosure transitions honour `prefers-reduced-motion` |
+| Header | Greeting and one pill | Greeting; office · date · time; the office state chip ("Open · 4 of 8 in", "Closed for the day", the clock state for members); role context chips (tier, assigned role, "Covering today", "Backup"); the primary actions visible at laptop width (Close the Day and Attention · n for admins, Timesheet for members) |
+| "Right now" | One sentence packed with counts | A headline (the office state) and at most three genuine priorities, each linked: a source that could not be read, someone absent after their shift, no closeout on record, payroll due within seven days, the inbox before close. Routine status — someone not in yet, a saved closeout the queue already carries — is not a priority. After close the panel is "Wrap-up" |
+| Needs you | The top three Attention items as links | Every actionable item in consequence order: title, age or date, the next step ("Seal the day", "Approve or decline"), "Why it's yours" on request, and one action to the exact record. Repeated kinds (two or more) fold into an expandable group — "Closeouts awaiting seal · 3" with each date beneath, still its own record — and "Open all" opens Attention filtered to that kind (`/management?kind=`). Waiting on others and Parked are counted apart and collapsed. The header count is the unique items that need the person now: the Management badge's number |
+| Mine / My work | Mixed into the queue (managers); a plain "my open work" list (members) | Mine (admins) and My work (members): now, waiting and the single next move, from the person's own records — an attendance report to sign, a time record to answer, an incident signature, a late arrival to answer, an office request to reply to, a bypass reason, a policy to acknowledge, a training module, today's checklist, a missing day; pending PTO, correction and excuse requests wait on a manager. Each row opens its exact record; members lead with "My next move" |
+| Attendance | Late arrivals headlined the manager sentence and Today; the roster read "Late 12m" in amber | A late arrival that is in reads "In · late 12m", calm — routine, never an exception. Attendance reaches the queue only as an excuse request (Decide) or an open attendance report (Meet with team member). Employees see an unanswered arrival in My work (acknowledge without a reason, or request an excuse), a pending excuse under "Waiting on someone else", and the standing line "2 of 3 unexcused late arrivals in the last 30 days · 1 excuse request pending" from the Settings rule. Records, reports and Team attendance are untouched |
+| Financial trust | Calendar-day pace; a partially recorded month could read "behind" | Office-day pace from the office calendar (closures, open Saturdays), today elapsed only once its closeout exists, the basis printed with every verdict ("on pace by office day 5 of 22"); every tile's information control lists range, cutoff, source, date basis and completeness ("16 of 18 office days recorded · through Mar 11 · 1 not sealed"); "Partial data · N office days not recorded" with "Complete the records" → Close the Day; a partial month's verdict is "Partial data", never behind; no calendar → "Below calendar pace (estimate)"; a whole month covered by a report package uses the package's monthly summary |
+| Worth a look | Up to three notes, including behind-pace and goal-reached — repeats of the meters | At most three observations that never repeat a meter: closeouts unreadable, none recorded, a closeout gap, records incomplete, collections per recorded day vs the same days last month, cancellations rising or falling, the calendar estimate; each marked Observed or Estimate, with the comparison, its meaning and one next step |
+| Tools | A quick-tools row, role modules, and backup-role menus repeated | One Tools panel: assigned role → Covering today → Management (members only through a grant, and only the granted tools) → "More tools · n" revealing backup roles ("Backup — can cover, not assigned today") and everyone's essentials; a destination appears once; plain-language labels with one line of detail |
+| Attention room | `?kind=` accepted only the verbs | Accepts a kind: "Showing: Closeouts to seal · 3" with "Show everything"; rows carry the next step; the shell's switcher restyled; hub tiles at 15px |
+
+### Files added
+- `src/lib/attention/groups.ts` (grouping, next steps, group destinations), `src/lib/my-work.ts` (the person's own work), `src/components/dashboard/MyWork.tsx`, `src/components/dashboard/Summary.tsx`
+- Tests: `attention-groups.test.ts`, `my-work.test.ts`, `performance-completeness.test.ts`, `home-tools.test.ts`
+- Captures: every scenario at 834×1112 (tablet), and the new scenarios `owner-partial`, `manager-attendance`, `member-late-arrival`, `front-desk-backup-only` at all three widths
+
+### Files changed
+- `src/lib/office-days.ts` (`countOfficeDays`, `listOfficeDays`), `src/lib/metric-pace.ts` (`PaceBasis`, `paceFraction`, `paceBasisClause`), `src/lib/goal-progress.ts` (rewritten: basis, completeness, verdicts), `src/lib/performance-series.ts` (cutoff, completeness, authoritative month totals, the coverage label), `src/lib/report-history.ts` (`reportMonthsFrom`), `src/lib/home-performance.ts` (calendar), `src/lib/home-insights.ts` (rewritten), `src/lib/home-brief.ts` (rewritten summary; routine rows out of Today; a time correction counts as a person's item)
+- `src/components/dashboard/kit.tsx` (rewritten kit), `OwnerDashboard.tsx`, `ManagerDashboard.tsx`, `MemberDashboard.tsx`, `NeedsYou.tsx`, `ChallengeCard.tsx`, `types.ts`, `tools.ts`, `staffing.ts`, `useDashboardView.ts`, `performance/block.ts`, `fixtures.ts`, `scenarios.ts`; `performance/QuickTools.tsx` removed (the tools panel replaces it)
+- `src/pages/Dashboard.tsx`, `src/pages/DesignReviewDashboard.tsx`, `src/components/management/AttentionRoom.tsx`, `src/components/management/ManagementShell.tsx`, `src/components/HubLinkGrid.tsx`, `src/components/nudges/HomeNudges.tsx`
+- `scripts/design-review-capture.mjs` (three widths, an overflow and smallest-font report per capture), `README.md`, `docs/home-performance-redesign.md`, `docs/late-arrivals-spec.md`
+
+### Rules the surfaces enforce (each pinned by a test)
+- The queue count is the unique items that need the person now; folding never changes it (`attention-groups`, `manager-home`, `owner-home`).
+- Every queue and work row opens its exact record or a filtered list; Home takes no consequential action — its buttons are period, series, view, disclosure and information controls (`my-work`, `owner-home`, `manager-home`, `member-home`).
+- A backup role adds no tasks and no repeated menu; a role covered today adds its urgent work and its tools (`home-tools`, `member-home`, `manager-home`).
+- Routine lateness is never a headline, an alert or an exception; an excuse request and an attendance report are (`home-brief`, `manager-home`, `member-home`, `dashboard-staffing-semantics`).
+- Pace is on office days when the calendar is present; partial data withholds "behind"; a missing day is never zero; the basis is printed (`goal-progress`, `performance-completeness`, `performance-chart`).
+- An observation never repeats a meter's verdict and states whether it is observed or an estimate (`home-insights`).
+- Members receive only "everyone" metrics, no Attention, no report history, no rankings (`member-home`, `home-performance`).
+
+### Intentional test changes
+- `owner-home`, `manager-home`, `member-home`, `home-brief`, `goal-progress`, `home-insights` — rewritten for the new composition and rules (the grouped queue, the summary lines, office-day pacing, completeness, observed vs estimate, Mine / My work, the tools panel).
+- `dashboard-empty-states` — the copy sweep covers the new files; `performance-chart` — the coverage line reads office days; `dashboard-staffing-semantics` — a late arrival that is in is calm ("In · late 12m"), not amber.
+
+### Verification run
+
+| Check | Result |
+| --- | --- |
+| Typecheck (`tsc --noEmit -p tsconfig.app.json`, app and tests) | clean |
+| Full test suite (`vitest run`) | 2513 passed / 53 skipped / 0 failed (245 files) |
+| Lint (`eslint` on the 52 changed files) | 0 errors, 9 warnings — every warning is `react-refresh/only-export-components` on the kit's style tokens and the chart files; the count across the changed files equals `HEAD` (two token exports added to the kit; one pre-existing warning removed from `NeedsYou.tsx` and one from `useDashboardView.ts`) |
+| Production build (`vite build`) | built in 27 s (the existing chunk-size warning only) |
+| Captures | 20 scenarios × 3 widths (1440×1000, 834×1112, 390×844): 60 of 60 captured, no page errors, no horizontal overflow, smallest rendered text 12.5px (the review notes under each preview; the dashboard itself is 13px and up) |
+| Production publish | **not** performed |
+
+### Screenshots (`design-review/`, full page, `-desktop`, `-tablet`, `-mobile`)
+`owner`, `owner-closed`, `owner-incomplete`, `owner-partial` (two office days without a closeout: partial-data labels, no behind verdict, the closeouts group), `owner-new`, `manager`, `manager-attendance` (an excuse request, an attendance report, three closeouts to seal folded into one group, a missing clock-out, a PTO request), `manager-closed`, `manager-off-pace`, `manager-new`, `manager-front-desk`, `front-desk`, `hygienist`, `dental-assistant`, `member-late-arrival` (an unanswered arrival, a pending excuse, a report to sign, the standing line), `member-hidden-financials`, `member-clear`, `member-new`, `front-desk-backup-assistant`, `front-desk-backup-only` (a backup role: no tasks, tools behind "More tools").
+
+### Limitations
+- Fixture previews and component tests only: the sandbox has no Supabase session, so the live hooks (`useTardies`, `useIncidentReports`, `useOfficeDays`, the request hooks) were exercised through the builder with fixture rows, not against a database.
+- The late-arrival threshold, the automatic attendance report and the two signatures are the existing database workflow from the late-arrivals pass; this pass reads them onto Home and changes none of it.
+- Office-day pacing depends on the office calendar being maintained (closures, open Saturdays); without it the meter labels its calendar-day estimate. Per-person schedules are not used for pacing.
+- Attention item titles keep the ISO dates the Attention room already prints; the queue adds the age and next step beside them rather than reformatting the shared labels.

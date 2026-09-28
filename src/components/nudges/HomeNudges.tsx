@@ -1,6 +1,6 @@
 import { useOfficeNudges } from '@/hooks/useOfficeNudges';
 import NudgeCard from '@/components/nudges/NudgeCard';
-import { MicroLabel } from '@/components/dashboard/kit';
+import { SectionLabel } from '@/components/dashboard/kit';
 
 /** Kinds another card already owns: the sprint idea renders on the sprint card. */
 const OWNED_ELSEWHERE = new Set(['sprint_suggestion']);
@@ -17,9 +17,9 @@ export default function HomeNudges() {
   if (mine.length === 0) return null;
   return (
     <section className="space-y-4" aria-labelledby="home-nudges">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t-2 border-foreground pt-4">
-        <MicroLabel><span id="home-nudges">Nudges</span></MicroLabel>
-        <p className="text-[12.5px] text-muted-foreground">Quiet notes from the office assistant, each showing the recorded data behind it.</p>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <SectionLabel as="h2" className="text-[16px] text-foreground"><span id="home-nudges">Nudges</span></SectionLabel>
+        <p className="text-[13.5px] text-muted-foreground">Quiet notes from the office assistant, each showing the recorded data behind it.</p>
       </div>
       <div className="space-y-3">
         {mine.map(n => <NudgeCard key={n.id} nudge={n} />)}
