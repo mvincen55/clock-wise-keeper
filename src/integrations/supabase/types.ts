@@ -612,6 +612,80 @@ export type Database = {
           },
         ]
       }
+      attendance_incident_events: {
+        Row: {
+          actual_start_time: string | null
+          employee_id: string
+          entry_date: string
+          expected_start_time: string | null
+          id: string
+          incident_report_id: string
+          linked_at: string
+          minutes_late: number
+          org_id: string
+          role: string
+          tardy_id: string | null
+          user_id: string
+        }
+        Insert: {
+          actual_start_time?: string | null
+          employee_id: string
+          entry_date: string
+          expected_start_time?: string | null
+          id?: string
+          incident_report_id: string
+          linked_at?: string
+          minutes_late?: number
+          org_id: string
+          role?: string
+          tardy_id?: string | null
+          user_id: string
+        }
+        Update: {
+          actual_start_time?: string | null
+          employee_id?: string
+          entry_date?: string
+          expected_start_time?: string | null
+          id?: string
+          incident_report_id?: string
+          linked_at?: string
+          minutes_late?: number
+          org_id?: string
+          role?: string
+          tardy_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_incident_events_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_incident_events_incident_report_id_fkey"
+            columns: ["incident_report_id"]
+            isOneToOne: false
+            referencedRelation: "incident_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_incident_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_incident_events_tardy_id_fkey"
+            columns: ["tardy_id"]
+            isOneToOne: false
+            referencedRelation: "tardies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendance_sweep_log: {
         Row: {
           employees_failed: number
@@ -3361,15 +3435,75 @@ export type Database = {
           },
         ]
       }
+      incident_report_amendments: {
+        Row: {
+          after_json: Json | null
+          amended_at: string
+          amended_by: string
+          amended_by_name: string
+          before_json: Json | null
+          id: string
+          incident_report_id: string
+          kind: string
+          org_id: string
+          reason: string
+          signatures_reset: boolean
+        }
+        Insert: {
+          after_json?: Json | null
+          amended_at?: string
+          amended_by: string
+          amended_by_name?: string
+          before_json?: Json | null
+          id?: string
+          incident_report_id: string
+          kind: string
+          org_id: string
+          reason?: string
+          signatures_reset?: boolean
+        }
+        Update: {
+          after_json?: Json | null
+          amended_at?: string
+          amended_by?: string
+          amended_by_name?: string
+          before_json?: Json | null
+          id?: string
+          incident_report_id?: string
+          kind?: string
+          org_id?: string
+          reason?: string
+          signatures_reset?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "incident_report_amendments_incident_report_id_fkey"
+            columns: ["incident_report_id"]
+            isOneToOne: false
+            referencedRelation: "incident_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "incident_report_amendments_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       incident_reports: {
         Row: {
           body_part: string
           category: string
+          closed_at: string | null
           countersign_role: string
           created_at: string
           days_away: number
           description: string
           device_involved: string
+          employee_comment: string
+          employee_comment_at: string | null
           employee_id: string
           employee_signature: string
           employee_signed_at: string | null
@@ -3386,17 +3520,28 @@ export type Database = {
           manager_signed_by: string | null
           manager_signed_role: string
           medical_treatment: string
+          meeting_date: string | null
+          meeting_next_steps: string
+          meeting_recorded_at: string | null
+          meeting_recorded_by: string | null
+          meeting_summary: string
+          occurrence_count: number | null
           org_id: string
+          period_end: string | null
+          period_start: string | null
           ppe_worn: string
-          reported_by: string
+          reported_by: string | null
           reported_by_employee_id: string | null
           reported_by_name: string
           review_notes: string
           reviewed_at: string | null
           reviewed_by: string | null
           reviewed_by_name: string
+          rule_threshold_count: number | null
+          rule_window_days: number | null
           severity: string
           status: string
+          total_minutes_late: number | null
           updated_at: string
           witnesses: string
           work_related: boolean
@@ -3404,11 +3549,14 @@ export type Database = {
         Insert: {
           body_part?: string
           category?: string
+          closed_at?: string | null
           countersign_role?: string
           created_at?: string
           days_away?: number
           description: string
           device_involved?: string
+          employee_comment?: string
+          employee_comment_at?: string | null
           employee_id: string
           employee_signature?: string
           employee_signed_at?: string | null
@@ -3425,17 +3573,28 @@ export type Database = {
           manager_signed_by?: string | null
           manager_signed_role?: string
           medical_treatment?: string
+          meeting_date?: string | null
+          meeting_next_steps?: string
+          meeting_recorded_at?: string | null
+          meeting_recorded_by?: string | null
+          meeting_summary?: string
+          occurrence_count?: number | null
           org_id: string
+          period_end?: string | null
+          period_start?: string | null
           ppe_worn?: string
-          reported_by: string
+          reported_by?: string | null
           reported_by_employee_id?: string | null
           reported_by_name?: string
           review_notes?: string
           reviewed_at?: string | null
           reviewed_by?: string | null
           reviewed_by_name?: string
+          rule_threshold_count?: number | null
+          rule_window_days?: number | null
           severity?: string
           status?: string
+          total_minutes_late?: number | null
           updated_at?: string
           witnesses?: string
           work_related?: boolean
@@ -3443,11 +3602,14 @@ export type Database = {
         Update: {
           body_part?: string
           category?: string
+          closed_at?: string | null
           countersign_role?: string
           created_at?: string
           days_away?: number
           description?: string
           device_involved?: string
+          employee_comment?: string
+          employee_comment_at?: string | null
           employee_id?: string
           employee_signature?: string
           employee_signed_at?: string | null
@@ -3464,17 +3626,28 @@ export type Database = {
           manager_signed_by?: string | null
           manager_signed_role?: string
           medical_treatment?: string
+          meeting_date?: string | null
+          meeting_next_steps?: string
+          meeting_recorded_at?: string | null
+          meeting_recorded_by?: string | null
+          meeting_summary?: string
+          occurrence_count?: number | null
           org_id?: string
+          period_end?: string | null
+          period_start?: string | null
           ppe_worn?: string
-          reported_by?: string
+          reported_by?: string | null
           reported_by_employee_id?: string | null
           reported_by_name?: string
           review_notes?: string
           reviewed_at?: string | null
           reviewed_by?: string | null
           reviewed_by_name?: string
+          rule_threshold_count?: number | null
+          rule_window_days?: number | null
           severity?: string
           status?: string
+          total_minutes_late?: number | null
           updated_at?: string
           witnesses?: string
           work_related?: boolean
@@ -7822,6 +7995,8 @@ export type Database = {
       }
       tardies: {
         Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
           actual_start_time: string
           approval_status: string
           approved_at: string | null
@@ -7829,8 +8004,12 @@ export type Database = {
           created_at: string
           employee_id: string
           entry_date: string
+          excuse_decided_at: string | null
+          excuse_decided_by: string | null
+          excuse_requested_at: string | null
           expected_start_time: string
           id: string
+          manager_note: string
           minutes_late: number
           org_id: string
           reason_text: string | null
@@ -7841,6 +8020,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
           actual_start_time: string
           approval_status?: string
           approved_at?: string | null
@@ -7848,8 +8029,12 @@ export type Database = {
           created_at?: string
           employee_id: string
           entry_date: string
+          excuse_decided_at?: string | null
+          excuse_decided_by?: string | null
+          excuse_requested_at?: string | null
           expected_start_time: string
           id?: string
+          manager_note?: string
           minutes_late?: number
           org_id: string
           reason_text?: string | null
@@ -7860,6 +8045,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
           actual_start_time?: string
           approval_status?: string
           approved_at?: string | null
@@ -7867,8 +8054,12 @@ export type Database = {
           created_at?: string
           employee_id?: string
           entry_date?: string
+          excuse_decided_at?: string | null
+          excuse_decided_by?: string | null
+          excuse_requested_at?: string | null
           expected_start_time?: string
           id?: string
+          manager_note?: string
           minutes_late?: number
           org_id?: string
           reason_text?: string | null
@@ -8890,6 +9081,40 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      acknowledge_tardy: {
+        Args: { p_tardy_id: string }
+        Returns: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          actual_start_time: string
+          approval_status: string
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          employee_id: string
+          entry_date: string
+          excuse_decided_at: string | null
+          excuse_decided_by: string | null
+          excuse_requested_at: string | null
+          expected_start_time: string
+          id: string
+          manager_note: string
+          minutes_late: number
+          org_id: string
+          reason_text: string | null
+          resolved: boolean
+          time_entry_id: string | null
+          timezone_suspect: boolean
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "tardies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       add_worked_hour_adjustment: {
         Args: {
           p_employee_id: string
@@ -8942,6 +9167,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      attendance_report_reviewers: {
+        Args: {
+          p_countersign_role: string
+          p_org_id: string
+          p_subject_user: string
+        }
+        Returns: string[]
       }
       block_knowledge_acknowledgment: {
         Args: {
@@ -9076,6 +9309,68 @@ export type Database = {
         Returns: string
       }
       cleanup_team_moments: { Args: never; Returns: number }
+      comment_attendance_report: {
+        Args: { p_comment: string; p_report_id: string }
+        Returns: {
+          body_part: string
+          category: string
+          closed_at: string | null
+          countersign_role: string
+          created_at: string
+          days_away: number
+          description: string
+          device_involved: string
+          employee_comment: string
+          employee_comment_at: string | null
+          employee_id: string
+          employee_signature: string
+          employee_signed_at: string | null
+          employee_signed_by: string | null
+          follow_up_notes: string
+          follow_up_required: boolean
+          id: string
+          immediate_action: string
+          incident_date: string
+          incident_time: string | null
+          location: string
+          manager_signature: string
+          manager_signed_at: string | null
+          manager_signed_by: string | null
+          manager_signed_role: string
+          medical_treatment: string
+          meeting_date: string | null
+          meeting_next_steps: string
+          meeting_recorded_at: string | null
+          meeting_recorded_by: string | null
+          meeting_summary: string
+          occurrence_count: number | null
+          org_id: string
+          period_end: string | null
+          period_start: string | null
+          ppe_worn: string
+          reported_by: string | null
+          reported_by_employee_id: string | null
+          reported_by_name: string
+          review_notes: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_by_name: string
+          rule_threshold_count: number | null
+          rule_window_days: number | null
+          severity: string
+          status: string
+          total_minutes_late: number | null
+          updated_at: string
+          witnesses: string
+          work_related: boolean
+        }
+        SetofOptions: {
+          from: "*"
+          to: "incident_reports"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       configure_knowledge_acknowledgment: {
         Args: {
           p_due_days?: number
@@ -9184,11 +9479,14 @@ export type Database = {
         Returns: {
           body_part: string
           category: string
+          closed_at: string | null
           countersign_role: string
           created_at: string
           days_away: number
           description: string
           device_involved: string
+          employee_comment: string
+          employee_comment_at: string | null
           employee_id: string
           employee_signature: string
           employee_signed_at: string | null
@@ -9205,17 +9503,28 @@ export type Database = {
           manager_signed_by: string | null
           manager_signed_role: string
           medical_treatment: string
+          meeting_date: string | null
+          meeting_next_steps: string
+          meeting_recorded_at: string | null
+          meeting_recorded_by: string | null
+          meeting_summary: string
+          occurrence_count: number | null
           org_id: string
+          period_end: string | null
+          period_start: string | null
           ppe_worn: string
-          reported_by: string
+          reported_by: string | null
           reported_by_employee_id: string | null
           reported_by_name: string
           review_notes: string
           reviewed_at: string | null
           reviewed_by: string | null
           reviewed_by_name: string
+          rule_threshold_count: number | null
+          rule_window_days: number | null
           severity: string
           status: string
+          total_minutes_late: number | null
           updated_at: string
           witnesses: string
           work_related: boolean
@@ -9273,6 +9582,40 @@ export type Database = {
         Args: { p_item_id: string }
         Returns: string
       }
+      decide_tardy_excuse: {
+        Args: { p_decision: string; p_note?: string; p_tardy_id: string }
+        Returns: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          actual_start_time: string
+          approval_status: string
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          employee_id: string
+          entry_date: string
+          excuse_decided_at: string | null
+          excuse_decided_by: string | null
+          excuse_requested_at: string | null
+          expected_start_time: string
+          id: string
+          manager_note: string
+          minutes_late: number
+          org_id: string
+          reason_text: string | null
+          resolved: boolean
+          time_entry_id: string | null
+          timezone_suspect: boolean
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "tardies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -9315,6 +9658,10 @@ export type Database = {
         }
       }
       ensure_dm: { Args: { _other_user: string }; Returns: string }
+      evaluate_late_arrival_threshold: {
+        Args: { p_org_id: string; p_user_id: string }
+        Returns: number
+      }
       get_employee_timezone: {
         Args: { p_employee_id: string }
         Returns: string
@@ -9473,6 +9820,27 @@ export type Database = {
         Args: { p_blocks: Json }
         Returns: undefined
       }
+      late_arrival_counts: {
+        Args: { t: Database["public"]["Tables"]["tardies"]["Row"] }
+        Returns: boolean
+      }
+      late_arrival_notify: {
+        Args: {
+          p_actor: string
+          p_id: string
+          p_message: string
+          p_org_id: string
+          p_recipient: string
+          p_table: string
+          p_title: string
+          p_type: string
+        }
+        Returns: undefined
+      }
+      late_arrival_person_name: {
+        Args: { p_employee_id: string }
+        Returns: string
+      }
       mark_conversation_read: { Args: { _conv: string }; Returns: undefined }
       mark_knowledge_acknowledgment_viewed: {
         Args: { p_assignment_id: string }
@@ -9629,6 +9997,74 @@ export type Database = {
         Args: { p_end_date: string; p_start_date: string; p_user_id: string }
         Returns: number
       }
+      record_attendance_meeting: {
+        Args: {
+          p_amendment_reason?: string
+          p_meeting_date: string
+          p_next_steps?: string
+          p_report_id: string
+          p_summary: string
+        }
+        Returns: {
+          body_part: string
+          category: string
+          closed_at: string | null
+          countersign_role: string
+          created_at: string
+          days_away: number
+          description: string
+          device_involved: string
+          employee_comment: string
+          employee_comment_at: string | null
+          employee_id: string
+          employee_signature: string
+          employee_signed_at: string | null
+          employee_signed_by: string | null
+          follow_up_notes: string
+          follow_up_required: boolean
+          id: string
+          immediate_action: string
+          incident_date: string
+          incident_time: string | null
+          location: string
+          manager_signature: string
+          manager_signed_at: string | null
+          manager_signed_by: string | null
+          manager_signed_role: string
+          medical_treatment: string
+          meeting_date: string | null
+          meeting_next_steps: string
+          meeting_recorded_at: string | null
+          meeting_recorded_by: string | null
+          meeting_summary: string
+          occurrence_count: number | null
+          org_id: string
+          period_end: string | null
+          period_start: string | null
+          ppe_worn: string
+          reported_by: string | null
+          reported_by_employee_id: string | null
+          reported_by_name: string
+          review_notes: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_by_name: string
+          rule_threshold_count: number | null
+          rule_window_days: number | null
+          severity: string
+          status: string
+          total_minutes_late: number | null
+          updated_at: string
+          witnesses: string
+          work_related: boolean
+        }
+        SetofOptions: {
+          from: "*"
+          to: "incident_reports"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       record_punch: { Args: { p_action: string }; Returns: Json }
       record_punch_with_location: {
         Args: {
@@ -9654,6 +10090,40 @@ export type Database = {
       request_attendance_recompute: {
         Args: { p_end_date: string; p_start_date: string; p_user_id: string }
         Returns: number
+      }
+      request_tardy_excuse: {
+        Args: { p_explanation: string; p_tardy_id: string }
+        Returns: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          actual_start_time: string
+          approval_status: string
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          employee_id: string
+          entry_date: string
+          excuse_decided_at: string | null
+          excuse_decided_by: string | null
+          excuse_requested_at: string | null
+          expected_start_time: string
+          id: string
+          manager_note: string
+          minutes_late: number
+          org_id: string
+          reason_text: string | null
+          resolved: boolean
+          time_entry_id: string | null
+          timezone_suspect: boolean
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "tardies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       resolve_knowledge_acknowledgment_question: {
         Args: { p_assignment_id: string; p_resolution: string }
@@ -10065,11 +10535,14 @@ export type Database = {
         Returns: {
           body_part: string
           category: string
+          closed_at: string | null
           countersign_role: string
           created_at: string
           days_away: number
           description: string
           device_involved: string
+          employee_comment: string
+          employee_comment_at: string | null
           employee_id: string
           employee_signature: string
           employee_signed_at: string | null
@@ -10086,17 +10559,28 @@ export type Database = {
           manager_signed_by: string | null
           manager_signed_role: string
           medical_treatment: string
+          meeting_date: string | null
+          meeting_next_steps: string
+          meeting_recorded_at: string | null
+          meeting_recorded_by: string | null
+          meeting_summary: string
+          occurrence_count: number | null
           org_id: string
+          period_end: string | null
+          period_start: string | null
           ppe_worn: string
-          reported_by: string
+          reported_by: string | null
           reported_by_employee_id: string | null
           reported_by_name: string
           review_notes: string
           reviewed_at: string | null
           reviewed_by: string | null
           reviewed_by_name: string
+          rule_threshold_count: number | null
+          rule_window_days: number | null
           severity: string
           status: string
+          total_minutes_late: number | null
           updated_at: string
           witnesses: string
           work_related: boolean
@@ -10339,12 +10823,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10368,11 +10852,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10393,11 +10877,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10418,11 +10902,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10435,11 +10919,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10483,3 +10967,4 @@ export const Constants = {
     },
   },
 } as const
+
