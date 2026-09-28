@@ -1,7 +1,8 @@
 # Late arrivals without the busywork
 
-Status: **built** (migration `20260928120000_late_arrival_workflow.sql`; not yet
-applied live at the time of writing — see Deployment).
+Status: **live** since 2026-09-28 (migration `20260928120000_late_arrival_workflow.sql`
+applied; `accountability-engine`, `kimi-agent` and `office-ai-chat` redeployed;
+types regenerated; frontend published — see Deployment).
 
 ## Purpose
 
@@ -142,11 +143,10 @@ incidents appear from historical data. Reports open only as new records land.
 2. Deploy `accountability-engine` (it no longer opens late-arrival records)
    and `_shared/office-knowledge.ts` consumers (`kimi-agent`, `office-ai-chat`)
    if the office AI should describe the new rule.
-3. Publish the frontend. Until Lovable regenerates
-   `src/integrations/supabase/types.ts` from the live database, the new
-   columns, tables, and functions are declared in
-   `src/integrations/supabase/pending-schema.ts`; delete those entries once the
-   types are regenerated.
+3. Publish the frontend. The new columns, tables, and functions were declared
+   in `src/integrations/supabase/pending-schema.ts` until Lovable regenerated
+   `src/integrations/supabase/types.ts` from the live database; those entries
+   were removed once the regenerated types carried them.
 4. The release gate replays `supabase/tests/late_arrival_probes.sql`; it can
    also be run by hand in the SQL editor (one transaction, rolled back).
 

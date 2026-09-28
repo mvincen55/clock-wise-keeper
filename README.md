@@ -303,7 +303,7 @@ Org identity in every function comes from `org_members` for the verified caller;
 - [`docs/close-the-day-spec.md`](docs/close-the-day-spec.md) — Close the Day + Schedule Intelligence: the three-layer architecture (local-only Schedule Reader / deterministic Metrics Referee / Office Coach), the Privacy View Capture boundary, and the metric vocabulary. **Built.** OCR assets are vendored at build time (`scripts/vendor-tesseract.mjs`, `public/tesseract/` gitignored).
 - [`docs/goals-and-bypass-spec.md`](docs/goals-and-bypass-spec.md) — Goals page ("Pathfinder" AI breakdown, team + private goals, AI-drafted meeting updates) and the checklist-bypass accountability loop. **Being built in Lovable now.**
 - [`docs/team-onboarding.md`](docs/team-onboarding.md) — Team onboarding feature list (next major build after Goals), including the stealth work-style questions that feed Pathfinder.
-- [`docs/late-arrivals-spec.md`](docs/late-arrivals-spec.md) — Late arrivals without the busywork: acknowledge / request excused / report incorrect time, the rolling threshold, and the attendance incident report with its meeting-and-signatures closure. **Built; deployment steps in the spec.**
+- [`docs/late-arrivals-spec.md`](docs/late-arrivals-spec.md) — Late arrivals without the busywork: acknowledge / request excused / report incorrect time, the rolling threshold, and the attendance incident report with its meeting-and-signatures closure. **Live since 2026-09-28.**
 
 ## Local development
 
