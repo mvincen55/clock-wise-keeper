@@ -9947,6 +9947,8 @@ export type Database = {
           reason: string
         }[]
       }
+      pto_allows_negative: { Args: { p_employee_id: string }; Returns: boolean }
+      pto_available_hours: { Args: { p_employee_id: string }; Returns: number }
       publish_knowledge_version: {
         Args: { p_version_id: string }
         Returns: {
