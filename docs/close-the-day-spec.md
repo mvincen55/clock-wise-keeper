@@ -128,8 +128,14 @@ Close the Day offers office days only. The office's own calendar decides
   with a Monday–Friday default, so an office that opens on other days can
   say so without a new rule.
 
-A date that already holds a closeout record is always reachable, whatever
-the calendar says: a record is never hidden. The previous/next arrows step
+A date that already holds a closeout with content is always reachable,
+whatever the calendar says: a closeout someone made is never hidden.
+Content means money, production, a missed-appointment or new-patient count,
+a staffing answer, or counts confirmed as recorded (`closeoutHasContent` in
+`useDepositLog.ts`); a report importer's placeholder row with nothing in it
+(the office has one on every calendar day, Sundays included, counts marked
+not recorded) does not make a Sunday an office day, and neither does a seal,
+because placeholders get sealed with everything else. The previous/next arrows step
 from office day to office day (never past today), and a closed date that
 arrives by URL, or today when today is closed, lands on the office day
 before it with the step preserved. When today is not an office day the page

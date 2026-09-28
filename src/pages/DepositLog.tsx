@@ -123,9 +123,10 @@ export default function DepositLog() {
 
   // The days Close the Day offers: office days by the office's own calendar
   // (no Sundays, no full-day closures, Saturdays only when marked open) plus
-  // any day that already holds a record — a record is never hidden. Until
-  // the calendar has loaded the arrows step plain days; once it has, a day
-  // that turns out to be closed moves to the office day before it.
+  // any day that already holds a closeout with content — a closeout someone
+  // made is never hidden, an importer's empty placeholder changes nothing.
+  // Until the calendar has loaded the arrows step plain days; once it has, a
+  // day that turns out to be closed moves to the office day before it.
   const { data: officeCalendar, isError: calendarUnavailable } = useOfficeDays();
   const { data: recordDates, isError: recordDatesUnavailable } = useDepositLogDates();
   const today = getToday();
