@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useEffect, useMemo } from 'react';
 import { getToday } from '@/lib/time-utils';
+import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 
 /* ───────── Office PTO Policy ─────────
    Accrual tiers are still hardcoded office policy; they move to
@@ -255,5 +256,93 @@ export function useCurrentPtoBalance() {
       lastWeek: prev,
     };
   }, [ledger, snapshots, settings]);
+}
+
+/* ───────── Owners and managers: every team member's bank ───────── */
+
+export type TeamPtoBalance = {
+  employeeId: string;
+  userId: string | null;
+  displayName: string;
+  /** "Last, First" for sorting and labels. */
+  sortName: string;
+  code: string | null;
+  /** The date the tier reads from (employment start, else the join date). */
+  tenureDate: string | null;
+  joinDate: string | null;
+  tier: (typeof PTO_TIERS)[number] | null;
+  /** The live balance today; null when no starting balance is on file. */
+  balance: number | null;
+  /** Balance minus time off already booked after today: what can still be given. */
+  available: number | null;
+  bookedAhead: number;
+  allowNegative: boolean;
+  policyOverride: boolean;
+  currentWeek: PtoLedgerWeek | null;
+};
+
+/**
+ * The PTO bank of every active team member who accrues PTO, read the way
+ * the PTO page reads one person's: the live ledger per person, and the
+ * server's own "available" reading (`pto_available_hours`), which is also
+ * what the bank guard enforces. Owners and managers only.
+ */
+export function useTeamPtoBalances() {
+  const { data: ctx } = useOrgContext();
+  const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
+  return useQuery({
+    queryKey: ['team-pto-balances', ctx?.org_id],
+    enabled: !!ctx && isAdmin,
+    refetchInterval: 60_000,
+    queryFn: async (): Promise<TeamPtoBalance[]> => {
+      const today = getToday();
+      const [employees, settings, policy, booked] = await Promise.all([
+        supabase.from('employees').select('id, user_id, display_name, tag, hire_date, real_hire_date, pto_eligible')
+          .eq('org_id', ctx!.org_id).eq('employment_status', 'active'),
+        supabase.from('pto_settings').select('employee_id, allow_negative, policy_override, hire_date').eq('org_id', ctx!.org_id),
+        supabase.from('org_pto_policy').select('allow_negative').eq('org_id', ctx!.org_id).maybeSingle(),
+        supabase.from('days_off').select('employee_id, hours').eq('org_id', ctx!.org_id).gt('date_start', today).neq('type', 'office_closed'),
+      ]);
+      if (employees.error) throw employees.error;
+      if (settings.error) throw settings.error;
+      if (policy.error) throw policy.error;
+      if (booked.error) throw booked.error;
+      const eligible = (employees.data ?? []).filter(e => e.pto_eligible !== false);
+      const settingsBy = new Map((settings.data ?? []).map(s => [s.employee_id, s]));
+      const bookedBy = new Map<string, number>();
+      for (const d of booked.data ?? []) bookedBy.set(d.employee_id, (bookedBy.get(d.employee_id) ?? 0) + Number(d.hours ?? 0));
+      const orgAllowsNegative = policy.data?.allow_negative ?? false;
+      return Promise.all(eligible.map(async (e): Promise<TeamPtoBalance> => {
+        const [ledger, available] = await Promise.all([
+          supabase.rpc('get_live_pto_ledger', { p_employee_id: e.id }),
+          supabase.rpc('pto_available_hours', { p_employee_id: e.id }),
+        ]);
+        if (ledger.error) throw ledger.error;
+        if (available.error) throw available.error;
+        const weeks = (ledger.data ?? []) as PtoLedgerWeek[];
+        const last = weeks.length ? weeks[weeks.length - 1] : null;
+        const s = settingsBy.get(e.id);
+        const tenureDate = e.real_hire_date ?? e.hire_date ?? s?.hire_date ?? null;
+        const bookedAhead = bookedBy.get(e.id) ?? 0;
+        const availableHours = available.data == null ? null : Number(available.data);
+        return {
+          employeeId: e.id,
+          userId: e.user_id,
+          displayName: e.display_name,
+          sortName: formatEmployeeNameLastFirst(e.display_name),
+          code: e.tag,
+          tenureDate,
+          joinDate: e.hire_date,
+          tier: tenureDate ? getTierForDate(tenureDate, today) : null,
+          balance: last ? last.running_balance : availableHours == null ? null : Math.round((availableHours + bookedAhead) * 100) / 100,
+          available: availableHours,
+          bookedAhead,
+          allowNegative: s?.policy_override ? !!s.allow_negative : orgAllowsNegative,
+          policyOverride: !!s?.policy_override,
+          currentWeek: last,
+        };
+      }));
+    },
+  });
 }
 

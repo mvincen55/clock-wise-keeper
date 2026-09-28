@@ -77,7 +77,8 @@ DECLARE
     'knowledge_user_work_context(uuid,uuid,date)',
     'knowledge_add_working_days(uuid,uuid,timestamptz,integer,time)',
     'knowledge_routine_notice_window(uuid,uuid,timestamptz)',
-    'evaluate_late_arrival_threshold(uuid,uuid)'
+    'evaluate_late_arrival_threshold(uuid,uuid)',
+    'guard_pto_balance()'
   ];
 BEGIN
   FOREACH v_signature IN ARRAY v_private_functions LOOP

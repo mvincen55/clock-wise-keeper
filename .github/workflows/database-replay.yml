@@ -80,6 +80,9 @@ jobs:
       - name: Verify the late-arrival workflow against the replayed schema
         run: psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' -v ON_ERROR_STOP=1 -f supabase/tests/late_arrival_probes.sql
 
+      - name: Verify the PTO bank guard against the replayed schema
+        run: psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' -v ON_ERROR_STOP=1 -f supabase/tests/pto_balance_probes.sql
+
       - name: Verify generated insurance database types
         run: |
           supabase gen types typescript --local --schema public > /tmp/insurance-database-types.ts

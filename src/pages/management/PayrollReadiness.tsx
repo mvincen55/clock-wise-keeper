@@ -6,6 +6,7 @@ import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { useReadiness } from '@/hooks/useReadiness';
 import { Button } from '@/components/ui/button';
 import { lastCompletedPayPeriod, type PayPeriod } from '@/lib/attention';
+import { formatDecimalHours } from '@/lib/payroll-utils';
 import { daysBetween, formatDate, getToday, shiftDate } from '@/lib/time-utils';
 
 /**
@@ -134,7 +135,7 @@ export default function PayrollReadiness() {
           <dl className="grid gap-3 sm:grid-cols-5">
             <div className="rounded-lg border p-3"><dt className="text-xs text-muted-foreground">People</dt><dd className="text-sm font-medium">{result.summary.people}</dd></div>
             <div className="rounded-lg border p-3"><dt className="text-xs text-muted-foreground">Shifts recorded</dt><dd className="text-sm font-medium">{result.summary.shifts}</dd></div>
-            <div className="rounded-lg border p-3"><dt className="text-xs text-muted-foreground">Hours recorded</dt><dd className="text-sm font-medium">{(result.summary.minutesRecorded / 60).toFixed(1)}</dd></div>
+            <div className="rounded-lg border p-3"><dt className="text-xs text-muted-foreground">Hours recorded</dt><dd className="text-sm font-medium">{formatDecimalHours(result.summary.minutesRecorded)}</dd></div>
             <div className="rounded-lg border p-3"><dt className="text-xs text-muted-foreground">Approved time off</dt><dd className="text-sm font-medium">{result.summary.approvedPtoDays} {result.summary.approvedPtoDays === 1 ? 'entry' : 'entries'}</dd></div>
             <div className="rounded-lg border p-3"><dt className="text-xs text-muted-foreground">Closures</dt><dd className="text-sm font-medium">{result.summary.closures}</dd></div>
           </dl>

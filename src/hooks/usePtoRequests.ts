@@ -264,49 +264,43 @@ export function useReviewPtoRequest() {
         .single();
       if (fetchErr) throw fetchErr;
 
-      // Update the request
-      const { error } = await supabase
-        .from('pto_requests')
-        .update({
-          status: input.status as any,
-          reviewed_by: user.id,
-          reviewed_at: new Date().toISOString(),
-          manager_note: input.manager_note || null,
-        })
-        .eq('id', input.id);
-      if (error) throw error;
-
       if (input.status === 'approved') {
-        // Get the employee's user_id for days_off
-        const { data: emp } = await supabase
+        // The time off is recorded before the decision is written: the PTO
+        // bank guard refuses hours the bank cannot cover, and a refused
+        // approval must leave the request pending — never approved with
+        // nothing recorded. The record belongs to the employee whether or
+        // not they have a login.
+        const { data: emp, error: empErr } = await supabase
           .from('employees')
           .select('user_id')
           .eq('id', request.employee_id)
           .single();
+        if (empErr) throw empErr;
 
-        if (emp?.user_id) {
-          const dayOffType = request.pto_type === 'sick' ? 'medical_leave' : 'scheduled_with_notice';
+        const dayOffType = request.pto_type === 'sick' ? 'medical_leave' : 'scheduled_with_notice';
 
-          // A day off does not imply eight paid PTO hours. Preserve unknown and
-          // explicit zero separately; unpaid leave never deducts the PTO bank.
-          const totalHours = request.pto_type === 'unpaid' ? 0 : request.hours_requested;
+        // A day off does not imply eight paid PTO hours. Preserve unknown and
+        // explicit zero separately; unpaid leave never deducts the PTO bank.
+        const totalHours = request.pto_type === 'unpaid' ? 0 : request.hours_requested;
 
-          await supabase.from('days_off').insert({
-            org_id: ctx.org_id,
-            employee_id: request.employee_id,
-            user_id: emp.user_id,
-            date_start: request.start_date,
-            date_end: request.end_date,
-            type: dayOffType,
-            hours: totalHours,
-            notes: `PTO Request: ${request.note}`,
-            created_by: user.id,
-            source: 'pto_request',
-            request_id: request.id,
-          });
+        const { error: dayOffErr } = await supabase.from('days_off').insert({
+          org_id: ctx.org_id,
+          employee_id: request.employee_id,
+          user_id: emp?.user_id ?? null,
+          date_start: request.start_date,
+          date_end: request.end_date,
+          type: dayOffType,
+          hours: totalHours,
+          notes: `PTO Request: ${request.note}`,
+          created_by: user.id,
+          source: 'pto_request',
+          request_id: request.id,
+        });
+        if (dayOffErr) throw dayOffErr;
 
-          // Create PTO transaction (deduction)
-          if (totalHours != null && totalHours > 0) await supabase.from('pto_transactions').insert({
+        // Create PTO transaction (deduction)
+        if (totalHours != null && totalHours > 0) {
+          const { error: txErr } = await supabase.from('pto_transactions').insert({
             org_id: ctx.org_id,
             employee_id: request.employee_id,
             transaction_date: request.start_date,
@@ -317,8 +311,11 @@ export function useReviewPtoRequest() {
             reason: request.note,
             created_by: user.id,
           });
+          if (txErr) throw txErr;
+        }
 
-          // Recompute attendance (authorized entry point: approver must be an org admin)
+        // Recompute attendance (authorized entry point: approver must be an org admin)
+        if (emp?.user_id) {
           await supabase.rpc('request_attendance_recompute', {
             p_user_id: emp.user_id,
             p_start_date: request.start_date,
@@ -326,6 +323,18 @@ export function useReviewPtoRequest() {
           });
         }
       }
+
+      // The decision itself.
+      const { error } = await supabase
+        .from('pto_requests')
+        .update({
+          status: input.status as any,
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString(),
+          manager_note: input.manager_note || null,
+        })
+        .eq('id', input.id);
+      if (error) throw error;
 
       // Write audit event
       await supabase.from('audit_events').insert({

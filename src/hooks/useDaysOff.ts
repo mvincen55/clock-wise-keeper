@@ -74,8 +74,12 @@ export function useAddDayOff() {
       if (!user) throw new Error('Not authenticated — please log in');
       if (!ctx) throw new Error('Organization not found — make sure you have an org set up');
       const { target, ...fields } = input;
+      // A day off belongs to its employee record. A team member without a
+      // login has no user id, and the row must not borrow the manager's:
+      // the attendance engine matches days off by user id, so that would
+      // put the manager off for the day instead.
       const { error } = await supabase.from('days_off').insert({
-        user_id: target?.user_id ?? user.id,
+        user_id: target ? target.user_id : user.id,
         org_id: ctx.org_id,
         employee_id: target?.employee_id ?? ctx.employee_id,
         created_by: user.id,

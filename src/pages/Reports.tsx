@@ -14,7 +14,7 @@ import { useOwnerUserIds } from '@/hooks/useOrgAttendanceSnapshot';
 import { nonClockingEmployeeIds, rowClocksIn } from '@/lib/clocking';
 import { minutesToHHMM, formatTime, formatClock, formatDate, getToday } from '@/lib/time-utils';
 import {
-  adjustmentMinutes, computeWeeklyTotals, detectDayIssue, formatBreak, formatHoursMinutes, formatOtFlag,
+  adjustmentMinutes, computeWeeklyTotals, detectDayIssue, formatBreak, formatDecimalHours, formatHoursMinutes, formatOtFlag,
   formatSignedHours, punchSegments, weekStartOf, type TimeStatus, type WeeklyTotalRow,
 } from '@/lib/payroll-utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -293,10 +293,13 @@ export default function Reports() {
 
   // Missing-time flags. Missing days come from attendance_day_status —
   // the same schedule resolution the recompute engine maintains — so a
-  // day only counts as missing when it was scheduled with no punches,
-  // no day-off coverage, and no office closure. Owners and roster members
-  // off the clock never punch, so their rows are excluded. Unpaired
-  // sequences and pairing anomalies come from the entries' live punches.
+  // day only counts as missing when it was scheduled with no punches and
+  // no office closure. A day the office already recorded as time off or a
+  // callout (any days_off type, hours or not) is explained, not missing:
+  // the engine marks a callout absent for attendance, but payroll has
+  // nothing to chase. Owners and roster members off the clock never
+  // punch, so their rows are excluded. Unpaired sequences and pairing
+  // anomalies come from the entries' live punches.
   const dayIssueByEntry = new Map<string, Exclude<TimeStatus, 'OK' | 'MISSING DAY'>>();
   for (const e of entries || []) {
     const issue = detectDayIssue(e.punches, e.total_minutes, e.entry_date, today);
@@ -304,11 +307,12 @@ export default function Reports() {
   }
   const offClock = nonClockingEmployeeIds(orgEmployees || [], ownerUserIds ?? new Set<string>());
   const missingDays = (dayStatus || []).filter(r =>
-    r.is_absent && r.entry_date < today && rowClocksIn(r, ownerUserIds ?? new Set<string>(), offClock),
+    r.is_absent && !r.has_day_off && r.entry_date < today && rowClocksIn(r, ownerUserIds ?? new Set<string>(), offClock),
   );
-  type TimeFlag = { employeeLabel: string; date: string; kind: TimeStatus };
+  type TimeFlag = { employeeId: string | null; employeeLabel: string; date: string; kind: TimeStatus };
   const timeFlags: TimeFlag[] = [
     ...missingDays.map(r => ({
+      employeeId: r.employee_id,
       employeeLabel: employeeName(r.employee_id),
       date: r.entry_date,
       kind: 'MISSING DAY' as TimeStatus,
@@ -316,11 +320,15 @@ export default function Reports() {
     ...(entries || [])
       .filter(e => dayIssueByEntry.has(e.id))
       .map(e => ({
+        employeeId: e.employee_id,
         employeeLabel: employeeName(e.employee_id),
         date: e.entry_date,
         kind: dayIssueByEntry.get(e.id)! as TimeStatus,
       })),
   ].sort((a, b) => a.date.localeCompare(b.date) || a.employeeLabel.localeCompare(b.employeeLabel));
+  // Each flag opens that person's day on Team Attendance, where the fix is made.
+  const attendanceLinkFor = (f: TimeFlag) =>
+    f.employeeId ? `/management/attendance?employee=${f.employeeId}&date=${f.date}` : `/management/attendance?date=${f.date}`;
   const flaggedEmployeeCount = new Set(timeFlags.map(f => f.employeeLabel)).size;
 
   const timeStatusFor = (e: TimeEntryRow): TimeStatus => dayIssueByEntry.get(e.id) ?? 'OK';
@@ -483,13 +491,14 @@ export default function Reports() {
     }
 
     // Timesheet CSV — built from already-loaded entries (same data shown
-    // on screen). Weekly Total / OT Hours flag the payroll week; this
-    // system does not compute overtime pay — it flags so the payroll
-    // operator cannot miss it. MISSING DAY rows are appended after the
-    // dailies so a day with no entry still reaches the CSV.
+    // on screen). Hours are decimal hours (hundredths), the form payroll
+    // takes. Weekly Total / OT Hours flag the payroll week; this system
+    // does not compute overtime pay — it flags so the payroll operator
+    // cannot miss it. MISSING DAY rows are appended after the dailies so
+    // a day with no entry still reaches the CSV.
     const isTimesheet = ['weekly', 'pay_period', 'monthly'].includes(reportType);
     if (isTimesheet) {
-      const header = ['Employee', 'Date', 'Punches', 'First In', 'First In Source', 'Last Out', 'Last Out Source', 'Total', 'Minutes Late', 'Status', 'Remote', 'Edited', 'Comment', 'Weekly Total', 'OT Hours', 'Time Status'];
+      const header = ['Employee', 'Date', 'Punches', 'First In', 'First In Source', 'Last Out', 'Last Out Source', 'Total Hours', 'Minutes Late', 'Status', 'Remote', 'Edited', 'Comment', 'Weekly Total Hours', 'OT Hours', 'Time Status'];
       const sourceLabel = (s: string) => s === 'auto_location' ? 'GPS' : s === 'system_adjustment' ? 'System' : s === 'import' ? 'Import' : 'Manual';
       const weeklyAt = (employeeId: string | null, date: string) =>
         employeeId ? weeklyByKey.get(`${employeeId}|${weekStartOf(date, weekStartDay)}`) : undefined;
@@ -508,14 +517,14 @@ export default function Reports() {
           firstIn ? sourceLabel(firstIn.source) : '',
           lastOut ? formatTime(lastOut.punch_time) : '',
           lastOut ? sourceLabel(lastOut.source) : '',
-          e.total_minutes != null ? minutesToHHMM(e.total_minutes) : '',
+          e.total_minutes != null ? formatDecimalHours(e.total_minutes) : '',
           tardy && !tardy.resolved ? String(tardy.minutes_late) : '',
           tardy && !tardy.resolved ? `${tardy.minutes_late}m late` : '',
           e.is_remote ? 'Yes' : '',
           hasEdits ? 'Yes' : '',
           e.entry_comment || '',
-          weekly ? minutesToHHMM(weekly.total_minutes) : '',
-          weekly && weekly.ot_minutes > 0 ? formatHoursMinutes(weekly.ot_minutes) : '',
+          weekly ? formatDecimalHours(weekly.total_minutes) : '',
+          weekly && weekly.ot_minutes > 0 ? formatDecimalHours(weekly.ot_minutes) : '',
           timeStatusFor(e),
         ] };
       });
@@ -525,13 +534,13 @@ export default function Reports() {
           employeeName(a.employee_id),
           formatDate(a.entry_date),
           '', '', '', '', '',
-          minutesToHHMM(adjustmentMinutes(a.hours_delta)),
+          formatDecimalHours(adjustmentMinutes(a.hours_delta)),
           '',
           `Hours adjustment ${formatSignedHours(a.hours_delta)}`,
           '', '',
           a.reason,
-          weekly ? minutesToHHMM(weekly.total_minutes) : '',
-          weekly && weekly.ot_minutes > 0 ? formatHoursMinutes(weekly.ot_minutes) : '',
+          weekly ? formatDecimalHours(weekly.total_minutes) : '',
+          weekly && weekly.ot_minutes > 0 ? formatDecimalHours(weekly.ot_minutes) : '',
           'HOURS ADJUSTMENT',
         ] });
       }
@@ -543,7 +552,7 @@ export default function Reports() {
         '', '', '', '', '', '', '', '', '', '', '', '', '',
         'MISSING DAY',
       ].map(escapeCsv).join(','));
-      const totalRow = ['Total', '', '', '', '', '', '', minutesToHHMM(payrollMinutes), '', '', '', '', '', '', '', ''].join(',');
+      const totalRow = ['Total', '', '', '', '', '', '', formatDecimalHours(payrollMinutes), '', '', '', '', '', '', '', ''].join(',');
       const csv = [header.join(','), ...rows, ...missingRows, totalRow].join('\n');
       downloadCsvBlob(csv, `timesheet_${startDate}_${endDate}.csv`);
       return;
@@ -661,9 +670,9 @@ export default function Reports() {
             <DayPunchList punches={e.punches} />
           </div>
 
-          {/* Total */}
-          <div className="text-sm font-mono font-semibold">
-            {e.total_minutes != null ? minutesToHHMM(e.total_minutes) : '—'}
+          {/* Total, as payroll hours (hundredths); h:mm on hover */}
+          <div className="text-sm font-mono font-semibold" title={e.total_minutes != null ? minutesToHHMM(e.total_minutes) : undefined}>
+            {e.total_minutes != null ? formatDecimalHours(e.total_minutes) : '—'}
           </div>
 
           {/* Late flag */}
@@ -790,21 +799,27 @@ export default function Reports() {
               </p>
               <ul className="text-sm space-y-1">
                 {timeFlags.map((f, i) => (
-                  <li key={i} className="flex items-center gap-2">
-                    <span className="font-medium">{f.employeeLabel}</span>
-                    <span className="text-muted-foreground">{formatDate(f.date)}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                      f.kind === 'MISSING DAY' ? 'bg-destructive/20 text-destructive'
-                      : f.kind === 'MISSING PUNCH' ? 'bg-warning/20 text-warning'
-                      : 'bg-destructive/20 text-destructive'
-                    }`}>{f.kind}</span>
+                  <li key={i}>
+                    <Link
+                      to={attendanceLinkFor(f)}
+                      title="Open this day on Team Attendance"
+                      className="-mx-1 flex w-fit items-center gap-2 rounded px-1 hover:bg-destructive/10"
+                    >
+                      <span className="font-medium underline decoration-dotted underline-offset-2">{f.employeeLabel}</span>
+                      <span className="text-muted-foreground">{formatDate(f.date)}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                        f.kind === 'MISSING DAY' ? 'bg-destructive/20 text-destructive'
+                        : f.kind === 'MISSING PUNCH' ? 'bg-warning/20 text-warning'
+                        : 'bg-destructive/20 text-destructive'
+                      }`}>{f.kind}</span>
+                    </Link>
                   </li>
                 ))}
               </ul>
               <p className="text-xs text-muted-foreground">
-                Fix these from the{' '}
+                Each line opens that person's day on the{' '}
                 <Link to="/management/attendance" className="underline font-medium">Team Attendance page</Link>
-                {' '}before sending hours to payroll. The report stays available either way.
+                {' '}so it can be fixed before hours go to payroll. The report stays available either way.
               </p>
             </div>
           )}
@@ -848,11 +863,12 @@ export default function Reports() {
                   {/* Summary strip */}
                   <div className="grid grid-cols-4 gap-0 border-b divide-x">
                     <div className="p-3 text-center">
-                      <p className="text-xl font-bold font-mono">{minutesToHHMM(payrollMinutes)}</p>
+                      {/* Payroll hours: hundredths of an hour, the form payroll takes (1:20 → 1.33). h:mm on hover. */}
+                      <p className="text-xl font-bold font-mono" title={minutesToHHMM(payrollMinutes)}>{formatDecimalHours(payrollMinutes)}</p>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Hours</p>
                       {adjustmentRows.length > 0 && (
                         <p className="text-[10px] text-muted-foreground font-mono">
-                          {minutesToHHMM(totalMinutes)} recorded {adjustmentTotalMinutes < 0 ? '−' : '+'} {minutesToHHMM(Math.abs(adjustmentTotalMinutes))} adjustments
+                          {formatDecimalHours(totalMinutes)} recorded {adjustmentTotalMinutes < 0 ? '−' : '+'} {formatDecimalHours(Math.abs(adjustmentTotalMinutes))} adjustments
                         </p>
                       )}
                     </div>
@@ -887,10 +903,10 @@ export default function Reports() {
                           <div key={`${w.employee_id}|${w.week_start}`} className="grid grid-cols-[1.2fr_120px_80px_1fr] items-center gap-2 px-4 py-2 text-sm">
                             <span className="font-medium">{employeeName(w.employee_id)}</span>
                             <span className="text-muted-foreground text-xs">Week of {formatDate(w.week_start)}</span>
-                            <span className="font-mono font-semibold">
-                              {minutesToHHMM(w.total_minutes)}
+                            <span className="font-mono font-semibold" title={minutesToHHMM(w.total_minutes)}>
+                              {formatDecimalHours(w.total_minutes)}
                               {w.adjustment_minutes !== 0 && (
-                                <span className="ml-1 text-[10px] font-sans font-normal text-muted-foreground" title={`${minutesToHHMM(w.worked_minutes)} recorded plus adjustments`}>
+                                <span className="ml-1 text-[10px] font-sans font-normal text-muted-foreground" title={`${formatDecimalHours(w.worked_minutes)} recorded plus adjustments`}>
                                   incl. {formatSignedHours(w.adjustment_minutes / 60)} adj.
                                 </span>
                               )}
@@ -922,7 +938,7 @@ export default function Reports() {
                     <div key={group.label}>
                       <div className="px-4 py-1.5 bg-muted/30 border-b text-xs font-semibold flex justify-between">
                         <span>{group.label}</span>
-                        <span className="font-mono">{minutesToHHMM(group.minutes)}</span>
+                        <span className="font-mono" title={minutesToHHMM(group.minutes)}>{formatDecimalHours(group.minutes)}</span>
                       </div>
                       {group.items.map(item => item.kind === 'entry' ? renderTimesheetRow(item.entry) : renderAdjustmentRow(item.adjustment))}
                     </div>
@@ -932,7 +948,7 @@ export default function Reports() {
                   <div className={`${DAY_ROW_GRID} gap-2 px-4 py-3 bg-muted/30 border-t-2 font-bold text-sm`}>
                     <span className="text-right">Total</span>
                     <span></span>
-                    <span className="font-mono">{minutesToHHMM(payrollMinutes)}</span>
+                    <span className="font-mono" title={minutesToHHMM(payrollMinutes)}>{formatDecimalHours(payrollMinutes)}</span>
                     <span></span>
                     <span></span>
                   </div>

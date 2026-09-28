@@ -77,7 +77,8 @@ describe('payroll print sheet', () => {
     for (const text of [
       'Northfield Dental Group', 'Payroll records', 'Weekly Timesheet', 'Sun, Sep 13, 2026 – Sat, Sep 19, 2026',
       'Prepared by Vincent, Megan · MG07',
-      '40:01', '47:18 recorded −07:17 adjustments',
+      // Payroll hours in hundredths: 2401 minutes → 40.02, 2838 → 47.30, 437 → 7.28.
+      '40.02', '47.30 recorded −7.28 adjustments',
       'Doe, Jane · JD01', '08:29 AM', '12:01 PM', '12:31 PM', '06:27 PM', '30m break', '45m break',
       'Hours adjustment', 'Scheduled installment 2 of 2', '-7.28h',
       'Yu, Sam · SY03', '2h 0m over', 'MISSING DAY', 'Missing or incomplete time',
@@ -91,6 +92,18 @@ describe('payroll print sheet', () => {
     expect(html).toContain('(Import)');
     expect(html).toContain('(GPS)');
     expect(html).not.toContain('(Manual)');
+    // Nothing prints as h:mm any more.
+    expect(html).not.toContain('40:01');
+    // The practice is named once up top (the logo carries it) and once in
+    // the page footer — never a name line under the logo repeating it.
+    expect(html.match(/Northfield Dental Group/g)).toHaveLength(2);
+    expect(html).not.toContain('pay-practice');
     expect(html).toMatchSnapshot();
+  });
+
+  it('names the practice in text only when there is no logo', () => {
+    const html = renderToStaticMarkup(<PayrollPrintSheet {...props} branding={{ ...props.branding, logoUrl: '' }} />);
+    expect(html).toContain('<div class="pay-practice">Northfield Dental Group, LLC</div>');
+    expect(html.match(/Northfield Dental Group/g)).toHaveLength(2);
   });
 });

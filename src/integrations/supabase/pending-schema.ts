@@ -25,6 +25,7 @@ import type { Database as Generated } from './types';
  *                                         withdraw_knowledge_approval
  *   20260922160000_office_pto_policy      org_pto_policy; pto_settings.policy_override;
  *                                         set_org_pto_policy
+ *   20260929120000_pto_balance_guard      pto_available_hours, pto_allows_negative
  *
  * Same idea as ./knowledge-client.ts, generalised: one module, one merge.
  */
@@ -175,6 +176,15 @@ type PendingFunctions = {
   set_org_pto_policy: {
     Args: { p_org_id: string; p_cap: number; p_max: number; p_allow_negative: boolean };
     Returns: OrgPtoPolicyTable['Row'];
+  };
+  /** 20260929120000_pto_balance_guard.sql */
+  pto_available_hours: {
+    Args: { p_employee_id: string };
+    Returns: number | null;
+  };
+  pto_allows_negative: {
+    Args: { p_employee_id: string };
+    Returns: boolean;
   };
 };
 

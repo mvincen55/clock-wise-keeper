@@ -145,6 +145,16 @@ export function punchSegments<P extends PunchLike>(punches: P[]): PunchSegment<P
   return segments;
 }
 
+/**
+ * Minutes as payroll hours: hundredths of an hour, the form every payroll
+ * system takes (80 minutes → "1.33", never "1:20"). Rounded to the nearest
+ * hundredth; negative minutes keep their sign.
+ */
+export function formatDecimalHours(minutes: number): string {
+  const hours = Math.round((Math.abs(minutes) / 60) * 100) / 100;
+  return `${minutes < 0 ? '-' : ''}${hours.toFixed(2)}`;
+}
+
 /** "3h 15m" for a minute count. */
 export function formatHoursMinutes(minutes: number): string {
   const h = Math.floor(minutes / 60);

@@ -1,6 +1,6 @@
 import type { OrgBranding } from '@/hooks/useOrgBranding';
-import { formatDate, minutesToHHMM } from '@/lib/time-utils';
-import { formatBreak, formatHoursMinutes, formatSignedHours } from '@/lib/payroll-utils';
+import { formatDate } from '@/lib/time-utils';
+import { formatBreak, formatDecimalHours, formatHoursMinutes, formatSignedHours } from '@/lib/payroll-utils';
 
 /**
  * Printable payroll timesheet — the office's payroll record as a designed
@@ -9,7 +9,10 @@ import { formatBreak, formatHoursMinutes, formatSignedHours } from '@/lib/payrol
  * Every clock-in and clock-out of every day, with breaks; hour
  * adjustments where they are paid, with their reason; weekly totals with
  * the over-40 flag; missing or incomplete time called out before anything
- * is sent; a signature block. Pure props → JSX; rendered via portal only
+ * is sent; a signature block. Hours print as payroll hours (hundredths:
+ * 1:20 → 1.33), the form payroll takes. The practice is named once at the
+ * top — the logo when there is one, otherwise the legal name — and once
+ * in every page's footer. Pure props → JSX; rendered via portal only
  * while printing (.payroll-print-root in index.css). Names are the
  * office's own team, never patients.
  */
@@ -122,21 +125,19 @@ export default function PayrollPrintSheet({
   title, periodStart, periodEnd, generatedAt, preparedBy, branding, totals, weeks, employees, flags,
 }: PayrollPrintProps) {
   const period = `${formatDate(periodStart)} – ${formatDate(periodEnd)}`;
-  const signedMinutes = (m: number) => `${m < 0 ? '−' : '+'}${minutesToHHMM(Math.abs(m))}`;
+  const signedHours = (m: number) => `${m < 0 ? '−' : '+'}${formatDecimalHours(Math.abs(m))}`;
+  const practiceName = branding.legalName.trim() || branding.displayName.trim();
 
   return (
     <div className="pay-sheet">
       <header className="pay-head">
         <div className="pay-brand">
-          {branding.logoUrl !== '' && (
-            <img className="pay-logo" src={branding.logoUrl} alt={branding.displayName} />
+          {/* Named once up top: the logo carries the name when there is one. */}
+          {branding.logoUrl !== '' ? (
+            <img className="pay-logo" src={branding.logoUrl} alt={practiceName} />
+          ) : (
+            <div className="pay-practice">{practiceName}</div>
           )}
-          <div>
-            <div className="pay-practice">{branding.displayName}</div>
-            {branding.legalName !== '' && branding.legalName !== branding.displayName && (
-              <div className="pay-legal">{branding.legalName}</div>
-            )}
-          </div>
         </div>
         <div className="pay-head-meta">
           <div className="pay-kicker">Payroll records</div>
@@ -148,10 +149,10 @@ export default function PayrollPrintSheet({
 
       <section className="pay-summary">
         <div className="pay-box">
-          <div className="pay-box-value">{minutesToHHMM(totals.payrollMinutes)}</div>
+          <div className="pay-box-value">{formatDecimalHours(totals.payrollMinutes)}</div>
           <div className="pay-box-label">Paid hours</div>
           {totals.adjustmentMinutes !== 0 && (
-            <div className="pay-box-note">{minutesToHHMM(totals.recordedMinutes)} recorded {signedMinutes(totals.adjustmentMinutes)} adjustments</div>
+            <div className="pay-box-note">{formatDecimalHours(totals.recordedMinutes)} recorded {signedHours(totals.adjustmentMinutes)} adjustments</div>
           )}
         </div>
         <div className="pay-box">
@@ -205,9 +206,9 @@ export default function PayrollPrintSheet({
                 <tr key={`${w.label}|${w.weekStart}`}>
                   <td>{w.label}</td>
                   <td>{formatDate(w.weekStart)}</td>
-                  <td className="pay-num">{minutesToHHMM(w.workedMinutes)}</td>
-                  <td className="pay-num">{w.adjustmentMinutes === 0 ? '' : signedMinutes(w.adjustmentMinutes)}</td>
-                  <td className="pay-num pay-strong">{minutesToHHMM(w.totalMinutes)}</td>
+                  <td className="pay-num">{formatDecimalHours(w.workedMinutes)}</td>
+                  <td className="pay-num">{w.adjustmentMinutes === 0 ? '' : signedHours(w.adjustmentMinutes)}</td>
+                  <td className="pay-num pay-strong">{formatDecimalHours(w.totalMinutes)}</td>
                   <td className="pay-flag">{w.otMinutes > 0 ? `${formatHoursMinutes(w.otMinutes)} over` : ''}</td>
                 </tr>
               ))}
@@ -221,7 +222,7 @@ export default function PayrollPrintSheet({
         <section className="pay-employee" key={emp.label}>
           <div className="pay-employee-head">
             <span>{emp.label}</span>
-            <span className="pay-num">{minutesToHHMM(emp.totalMinutes)} paid</span>
+            <span className="pay-num">{formatDecimalHours(emp.totalMinutes)} paid</span>
           </div>
           <table className="pay-table pay-days">
             <thead>
@@ -239,7 +240,7 @@ export default function PayrollPrintSheet({
                   <tr key={`d-${item.date}-${i}`}>
                     <td className="pay-date">{formatDate(item.date)}</td>
                     <td><Stretches segments={item.segments} /></td>
-                    <td className="pay-num">{item.totalMinutes != null ? minutesToHHMM(item.totalMinutes) : '—'}</td>
+                    <td className="pay-num">{item.totalMinutes != null ? formatDecimalHours(item.totalMinutes) : '—'}</td>
                     <td className="pay-flag">{item.minutesLate > 0 ? `${item.minutesLate}m late` : ''}</td>
                     <td className="pay-notes"><DayNotes item={item} /></td>
                   </tr>
@@ -261,10 +262,10 @@ export default function PayrollPrintSheet({
               <tr>
                 <td colSpan={2} className="pay-foot-label">
                   {emp.adjustmentMinutes !== 0
-                    ? `${minutesToHHMM(emp.recordedMinutes)} recorded ${signedMinutes(emp.adjustmentMinutes)} adjustments`
+                    ? `${formatDecimalHours(emp.recordedMinutes)} recorded ${signedHours(emp.adjustmentMinutes)} adjustments`
                     : 'Total'}
                 </td>
-                <td className="pay-num pay-strong">{minutesToHHMM(emp.totalMinutes)}</td>
+                <td className="pay-num pay-strong">{formatDecimalHours(emp.totalMinutes)}</td>
                 <td colSpan={2}></td>
               </tr>
             </tfoot>

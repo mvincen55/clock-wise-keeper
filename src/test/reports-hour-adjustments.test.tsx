@@ -63,8 +63,8 @@ describe('payroll report', () => {
     }
     expect(screen.getAllByText('30m break').length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText('HOURS ADJUSTMENT')).toBeNull();
-    // Recorded time alone: 568 minutes.
-    expect(screen.getAllByText('09:28').length).toBeGreaterThanOrEqual(3);
+    // Recorded time alone: 568 minutes, as payroll hours (hundredths).
+    expect(screen.getAllByText('9.47').length).toBeGreaterThanOrEqual(3);
   });
 
   it('prints an hour adjustment with its reason and counts it in every total', () => {
@@ -78,11 +78,11 @@ describe('payroll report', () => {
     expect(screen.getAllByText(/Scheduled installment 2 of 2/).length).toBeGreaterThanOrEqual(2);
     // The row itself, and the weekly total's note.
     expect(screen.getAllByText(/-7\.28h/).length).toBeGreaterThanOrEqual(2);
-    // 568 recorded − 437 adjusted = 131 minutes, in the summary, the
-    // employee's group, the weekly total, and the footer.
-    expect(screen.getAllByText('02:11').length).toBeGreaterThanOrEqual(4);
-    expect(screen.getByText('09:28 recorded − 07:17 adjustments')).toBeInTheDocument();
-    expect(screen.getAllByText('09:28 recorded −07:17 adjustments').length).toBeGreaterThanOrEqual(2);
+    // 568 recorded − 437 adjusted = 131 minutes = 2.18 hours, in the
+    // summary, the employee's group, the weekly total, and the footer.
+    expect(screen.getAllByText('2.18').length).toBeGreaterThanOrEqual(4);
+    expect(screen.getByText('9.47 recorded − 7.28 adjustments')).toBeInTheDocument();
+    expect(screen.getAllByText('9.47 recorded −7.28 adjustments').length).toBeGreaterThanOrEqual(2);
     // It sits under the employee's name and staff code (group header and
     // weekly total on screen, plus the printed sheet), dated where it is paid.
     expect(screen.getAllByText('Doe, Jane · JD01').length).toBeGreaterThanOrEqual(2);
