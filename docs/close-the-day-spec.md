@@ -170,12 +170,12 @@ and save), staffing expectations, phrase shorthand, mobile fallback toggle.
   redeploy all three functions (README "How code changes ship").
 - OCR assets must be vendored at build time (`predev`/`prebuild` run
   `scripts/vendor-tesseract.mjs`; `public/tesseract/` is gitignored).
-- Office days: apply `20260930120000_office_open_days.sql` (the
-  `office_open_days` table) before deploying this version; until Lovable
-  regenerates the types from it, the table is declared in
-  `src/integrations/supabase/pending-schema.ts`. Without the table the
-  office-days read fails and Close the Day falls back to plain day stepping
-  (it says so on the page), and the Office Calendar cannot save open
+- Office days: `20260930120000_office_open_days.sql` (the `office_open_days`
+  table) was applied live through Lovable on 2026-09-28 and the generated
+  types carry the table, so nothing about it remains in
+  `src/integrations/supabase/pending-schema.ts`. If an environment lacks the
+  table, the office-days read fails and Close the Day falls back to plain day
+  stepping (it says so on the page), and the Office Calendar cannot save open
   Saturdays.
 - Existing members predate role-carrying invites, so they start with no
   operational role — managers backfill from the Team page.
