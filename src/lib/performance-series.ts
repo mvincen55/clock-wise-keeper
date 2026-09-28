@@ -203,6 +203,7 @@ export type ReportDay = {
   packageStart: string;
   packageEnd: string;
   importedAt: string;
+  dateBasis?: 'entry_date' | 'source_date';
 };
 
 export type PerformanceSources = {
@@ -588,17 +589,24 @@ export function buildWindow(args: {
   const granularity = granularityFor(period);
   const points = dayPoints(period, source, sources);
   const totals = totalsOf(points);
+  const sourceDates = source === 'report_history' && sources.reportDays.some(d => d.date >= period.start && d.date <= period.end && d.dateBasis === 'source_date');
   return {
     period,
     source,
     choice,
-    definitions: DEFINITIONS[source],
+    definitions: sourceDates ? {
+      ...DEFINITIONS.report_history,
+      primaryLabel: 'Charges',
+      primaryDefinition: 'Charges by the date printed on the source. Entry date versus procedure date is unconfirmed for some reports.',
+      secondaryDefinition: 'Receipts by the date printed on the source. Receipts can pay older balances.',
+      dateBasis: 'date printed on source',
+    } : DEFINITIONS[source],
     granularity,
     points,
     buckets: bucketize(points, granularity, today, period.partial),
     totals,
     comparison: compare(period, source, sources, totals),
-    coverageLabel: coverageLabel(totals, source),
+    coverageLabel: sourceDates ? coverageLabel(totals, source).replace('posting days','source dates') : coverageLabel(totals, source),
   };
 }
 
