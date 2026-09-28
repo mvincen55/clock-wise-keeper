@@ -15,6 +15,7 @@ import { useDaysOff, useUpdateDayOffHours } from '@/hooks/useDaysOff';
 import { useMyPtoRequests, useCancelPtoRequest, PtoRequest } from '@/hooks/usePtoRequests';
 import { PtoRequestModal } from '@/components/PtoRequestModal';
 import { PtoCorrectionModal } from '@/components/PtoCorrectionModal';
+import TeamPtoBalances from '@/components/pto/TeamPtoBalances';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
@@ -158,6 +159,7 @@ export default function PTO() {
           <TabsTrigger value="requests">My Requests</TabsTrigger>
           <TabsTrigger value="ledger">Weekly Ledger</TabsTrigger>
           <TabsTrigger value="usage">PTO Usage</TabsTrigger>
+          {isAdmin && <TabsTrigger value="team">Team balances</TabsTrigger>}
           {isAdmin && <TabsTrigger value="settings">Settings</TabsTrigger>}
         </TabsList>
 
@@ -416,6 +418,14 @@ export default function PTO() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Every team member's bank, with record-time-off and offset-hours
+            actions, for owners and managers. */}
+        {isAdmin && (
+          <TabsContent value="team">
+            <TeamPtoBalances />
+          </TabsContent>
+        )}
 
         {/* PTO policy now lives in Settings -> People & policies with every
             other office policy; admins get a direct link. */}

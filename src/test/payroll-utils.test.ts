@@ -11,8 +11,22 @@ import { describe, it, expect } from 'vitest';
 import {
   OT_WEEK_MINUTES, weekStartOf, computeWeeklyTotals,
   formatHoursMinutes, formatOtFlag, detectDayIssue, accrualBasisWorkedHours,
-  adjustmentMinutes, formatSignedHours, punchSegments, formatBreak,
+  adjustmentMinutes, formatSignedHours, punchSegments, formatBreak, formatDecimalHours,
 } from '@/lib/payroll-utils';
+
+describe('formatDecimalHours', () => {
+  it('prints payroll hours in hundredths, the way payroll takes them', () => {
+    expect(formatDecimalHours(80)).toBe('1.33'); // 1:20
+    expect(formatDecimalHours(568)).toBe('9.47');
+    expect(formatDecimalHours(1286)).toBe('21.43'); // 21:26
+    expect(formatDecimalHours(7964)).toBe('132.73'); // 132:44
+    expect(formatDecimalHours(2400)).toBe('40.00');
+    expect(formatDecimalHours(0)).toBe('0.00');
+  });
+  it('keeps the sign of a deduction', () => {
+    expect(formatDecimalHours(-437)).toBe('-7.28');
+  });
+});
 
 describe('weekStartOf', () => {
   it('follows week_start_day', () => {
