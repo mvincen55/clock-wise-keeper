@@ -5371,6 +5371,38 @@ export type Database = {
           },
         ]
       }
+      office_open_days: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          open_date: string
+          org_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          open_date: string
+          org_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          open_date?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "office_open_days_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       office_request_replies: {
         Row: {
           body: string
