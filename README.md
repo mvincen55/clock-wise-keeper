@@ -137,9 +137,9 @@ Navigation is a compact destination list; every feature below keeps its own rout
 ### Office operations
 | Route | Page | What it does |
 |---|---|---|
-| `/office-calendar` | OfficeCalendar | Shared calendar, office closures (`useOfficeClosures`), Google Calendar events (`google-calendar-events`) |
+| `/office-calendar` | OfficeCalendar | Shared calendar, office closures (`useOfficeClosures`), open Saturdays (`office_open_days`, `useOfficeDays`), Google Calendar events (`google-calendar-events`) |
 | `/checklists` | Checklists | Recurring office checklists — see Checklist data model |
-| `/deposit-log` | DepositLog | **Close the Day**: the deposit log + branded print sheet, grown into the five-step closeout (money, vitals, local-only Privacy View Capture, staffing reality, seal) — see `docs/close-the-day-spec.md` |
+| `/deposit-log` | DepositLog | **Close the Day**: the deposit log + branded print sheet, grown into the five-step closeout (money, vitals, local-only Privacy View Capture, staffing reality, seal); offers office days only (no Sundays, closures, or unmarked Saturdays — `src/lib/office-days.ts` — plus any day with a closeout that has content) — see `docs/close-the-day-spec.md` |
 | `/incident-reports` | IncidentReports | Incident reports with signature/review workflow + print sheet. Safety reports are filed by hand; **attendance reports** (category `attendance`) are opened by the late-arrival rule and close only after a recorded meeting and both signatures (see Late arrivals) |
 | `/important-numbers` | ImportantNumbers | Office contact directory with tabs |
 | `/handbook` | OfficeHandbook | Office Handbook reader (Workplace policies + HR) over the shared `DocumentLibraryReader`; `/policy-manual` redirects here. Deep links `?doc=<id>&section=<block>`; code tables quote the live office fee schedule |

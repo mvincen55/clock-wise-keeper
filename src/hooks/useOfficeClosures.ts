@@ -144,7 +144,7 @@ export function useGenerateClosures() {
       if (error) throw error;
     },
     onSuccess: async () => {
-      await Promise.all([qc.invalidateQueries({ queryKey: ['office-closures'] }), qc.invalidateQueries({ queryKey: ['broken-appt-settings'] })]);
+      await Promise.all([qc.invalidateQueries({ queryKey: ['office-closures'] }), qc.invalidateQueries({ queryKey: ['broken-appt-settings'] }), qc.invalidateQueries({ queryKey: ['office-days'] })]);
     },
   });
 }
@@ -167,7 +167,7 @@ export function useAddClosure() {
       if (error) throw error;
     },
     onSuccess: async () => {
-      await Promise.all([qc.invalidateQueries({ queryKey: ['office-closures'] }), qc.invalidateQueries({ queryKey: ['broken-appt-settings'] })]);
+      await Promise.all([qc.invalidateQueries({ queryKey: ['office-closures'] }), qc.invalidateQueries({ queryKey: ['broken-appt-settings'] }), qc.invalidateQueries({ queryKey: ['office-days'] })]);
     },
   });
 }
@@ -181,7 +181,7 @@ export function useDeleteClosure() {
       if (error) throw error;
     },
     onSuccess: async () => {
-      await Promise.all([qc.invalidateQueries({ queryKey: ['office-closures'] }), qc.invalidateQueries({ queryKey: ['broken-appt-settings'] })]);
+      await Promise.all([qc.invalidateQueries({ queryKey: ['office-closures'] }), qc.invalidateQueries({ queryKey: ['broken-appt-settings'] }), qc.invalidateQueries({ queryKey: ['office-days'] })]);
     },
   });
 }
