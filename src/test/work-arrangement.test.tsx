@@ -91,7 +91,7 @@ const employees = [{ id: 'e-doc', user_id: 'doc-login', display_name: 'Dr. Lin' 
 const attention = (over: Partial<AttentionSources> = {}): AttentionSources => ({
   today: TODAY, nowIso: '2026-09-21T12:24:00Z', nowMinutes: 8 * 60 + 24, bufferMinutes: 60, officePhase: 'open',
   viewer: { userId: 'mgr', role: 'manager' }, employees, ownerUserIds: new Set(), nonClockingEmployeeIds: new Set(['e-doc']),
-  payrollPeriod: null, rules: { reviewTardies: true, bypassReasonHours: 24, ackManagerLevel: 2 },
+  payrollPeriod: null, rules: { bypassReasonHours: 24, ackManagerLevel: 2 },
   dayStatuses: [], entries: [], daysOff: [], closures: [], exceptions: [], tardies: [], ptoRequests: [], corrections: [],
   changeRequests: [], closeouts: { today: null, latestSealedDate: null, officeDaysSinceSeal: 0, unsealedPast: [] }, bypasses: [], accountability: [],
   acks: [], training: [], incidents: [], versionsInReview: [], challenges: [], followups: [], ...over,

@@ -35,7 +35,7 @@ describe('the sentence', () => {
     expect(screen.getByRole('link', { name: "Yesterday's closeout is saved, not sealed" }))
       .toHaveAttribute('href', '/management?item=close_day_unsealed:log-0302');
     expect(screen.getByRole('link', { name: '5 things need you.' })).toHaveAttribute('href', '/management');
-    expect(screen.getByRole('link', { name: 'Marcus T. came in late.' })).toHaveAttribute('href', '/management?item=tardy_unreviewed:t1');
+    expect(screen.getByRole('link', { name: 'Marcus T. came in late.' })).toHaveAttribute('href', '/management?item=excuse_request:t1');
   });
 
   it('never renders a missing closeout as zeros', () => {
@@ -127,7 +127,7 @@ describe('today', () => {
     expect(screen.getByText('8 scheduled')).toBeInTheDocument();
     // Marcus has a tardy item and Ken a missing clock-out: each row opens that
     // item. Jo is off with no item: her row opens her record in People.
-    expect(screen.getByText('Marcus T.').closest('a')).toHaveAttribute('href', '/management?item=tardy_unreviewed:t1');
+    expect(screen.getByText('Marcus T.').closest('a')).toHaveAttribute('href', '/management?item=excuse_request:t1');
     expect(screen.getByText('Ken W.').closest('a')).toHaveAttribute('href', '/management?item=missing_clock_out:d1');
     expect(screen.getByText('Jo B.').closest('a')).toHaveAttribute('href', '/management/people/4');
   });

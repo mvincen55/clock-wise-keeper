@@ -4,13 +4,12 @@ import { toast } from 'sonner';
 import { ExternalLink, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
 import { useOrgEmployees } from '@/hooks/useEmployees';
 import { useOrgPtoRequests, useReviewPtoRequest } from '@/hooks/usePtoRequests';
 import { useOrgCorrectionRequests, useReviewCorrectionRequest, useMarkCorrectionApplied } from '@/hooks/useCorrectionRequests';
 import { useOrgChangeRequests, useReviewChangeRequest } from '@/hooks/useChangeRequests';
 import { useAttendanceDayStatus } from '@/hooks/useAttendanceDayStatus';
-import { useTardies, useUpdateTardy } from '@/hooks/useTardies';
+import { useDecideTardyExcuse, useTardies } from '@/hooks/useTardies';
 import { useOrgAccountabilityReports } from '@/hooks/useAccountability';
 import { useIncidentReports } from '@/hooks/useIncidentReports';
 import { useKnowledgeWorkspace } from '@/hooks/useKnowledge';
@@ -20,14 +19,14 @@ import { ATTENTION_WINDOW_DAYS } from '@/hooks/useAttentionItems';
 import type { PunchRow } from '@/hooks/useTimeEntries';
 import { PunchEditorModal } from '@/components/PunchEditorModal';
 import { AttendanceActions } from '@/components/AttendanceActions';
-import { TardyReviewModal } from '@/components/TardyReviewModal';
 import { AccountabilitySignoffForm } from '@/components/accountability/AccountabilityReviewQueue';
 import AccountabilityAuditTimeline from '@/components/accountability/AccountabilityAuditTimeline';
 import IncidentReportDetail from '@/components/IncidentReportDetail';
 import KnowledgeReviewDialog from '@/components/knowledge/KnowledgeReviewDialog';
 import SprintVerifyDialog from '@/components/SprintVerifyDialog';
-import { signatureState } from '@/lib/incidents';
-import { formatClockRange, formatDate, formatTime, getToday, shiftDate } from '@/lib/time-utils';
+import { attendanceWaitingOn, signatureState } from '@/lib/incidents';
+import { excuseState, ruleClause } from '@/lib/late-arrivals';
+import { formatClock, formatClockRange, formatDate, formatTime, getToday, shiftDate } from '@/lib/time-utils';
 import type { AttentionItem } from '@/lib/attention';
 import ConfirmStep, { Receipts } from './ConfirmStep';
 import { AskEmployeeButton, NoteButton, ParkButton, SnoozeButton } from './FollowupActions';
@@ -361,34 +360,87 @@ export function AttendanceDayActions({ item }: KindProps) {
   );
 }
 
-/* --------------------------------------------------------------- tardies */
-export function TardyActions({ item, onDone }: KindProps) {
-  const { user } = useAuth();
+/* ------------------------------------------------------- excuse requests */
+export function ExcuseRequestActions({ item, onDone }: KindProps) {
   const today = getToday();
   const { data: tardies } = useTardies(shiftDate(today, -ATTENTION_WINDOW_DAYS), today);
-  const update = useUpdateTardy();
-  const [open, setOpen] = useState(false);
+  const decide = useDecideTardyExcuse();
+  const [step, setStep] = useState<'idle' | 'approve' | 'decline'>('idle');
   const tardy = tardies?.find(t => t.id === item.recordId) ?? null;
   if (!tardies) return <Loading />;
-  if (!tardy) return <p className="text-sm text-muted-foreground">This late arrival has been reviewed.</p>;
+  if (!tardy || excuseState(tardy) !== 'pending') return <p className="text-sm text-muted-foreground">This excuse request has been decided.</p>;
+  const run = async (decision: 'excused' | 'unexcused', note: string) => {
+    try {
+      await decide.mutateAsync({ tardyId: tardy.id, decision, note });
+      onDone({ text: decision === 'excused' ? `Excused · ${first(item)} notified · never counts toward the rule` : `Declined · unexcused · ${first(item)} notified · counts toward the rule`, reversal: { kind: 'none', label: 'Change the decision from Team Attendance' } });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not record the decision');
+    }
+  };
   return (
     <div className="space-y-3">
-      <Receipts rows={[['Expected', tardy.expected_start_time.slice(0, 5), 'schedule'], ['Arrived', formatTime(tardy.actual_start_time), 'punches'], ['Late', `${tardy.minutes_late} min`, 'attendance recompute'], ['Reason', tardy.reason_text ? `“${tardy.reason_text}”` : 'none given yet', `from ${item.subject.name ?? 'the person'}`]]} />
+      <Receipts rows={[
+        ['Date', formatDate(tardy.entry_date), 'attendance record'],
+        ['Scheduled arrival', formatClock(tardy.expected_start_time), 'schedule'],
+        ['Actual arrival', formatTime(tardy.actual_start_time), 'punches'],
+        ['Minutes late', `${tardy.minutes_late} min`, 'attendance recompute'],
+        ['Explanation', tardy.reason_text ? `“${tardy.reason_text}”` : '—', `from ${item.subject.name ?? 'the person'}`],
+        ['Status', 'Excuse requested: pending review', 'late arrival'],
+      ]} />
+      {step === 'idle' && (
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => setStep('approve')}>Approve excuse</Button>
+          <Button size="sm" variant="outline" onClick={() => setStep('decline')}>Decline excuse</Button>
+          <OpenRecordLink to={`/management/attendance?employee=${tardy.employee_id}&date=${tardy.entry_date}`} label="Open in Team Attendance" />
+        </div>
+      )}
+      {step === 'approve' && (
+        <ConfirmStep sentence={`Excuse ${first(item)}’s late arrival on ${formatDate(tardy.entry_date)}? It is recorded as excused, never counts toward the late-arrival rule, and ${first(item)} is notified.`}
+          confirmLabel="Confirm: excused" pending={decide.isPending}
+          reason={{ label: 'Note (optional)', min: 0, optional: true }} onConfirm={note => run('excused', note)} onCancel={() => setStep('idle')} />
+      )}
+      {step === 'decline' && (
+        <ConfirmStep sentence={`Decline the excuse for ${formatDate(tardy.entry_date)}? The late arrival is recorded as unexcused, counts toward the late-arrival rule, and ${first(item)} is notified.`}
+          confirmLabel="Confirm: unexcused" destructive pending={decide.isPending}
+          reason={{ label: `Note (optional · ${first(item)} will see it)`, min: 0, optional: true }} onConfirm={note => run('unexcused', note)} onCancel={() => setStep('idle')} />
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------- attendance meeting */
+export function AttendanceMeetingActions({ item, onDone }: KindProps) {
+  const { data: reports } = useIncidentReports();
+  const [open, setOpen] = useState(false);
+  const report = reports?.find(r => r.id === item.recordId) ?? null;
+  const reported = useRef(false);
+  useEffect(() => {
+    if (!report || reported.current || report.status !== 'closed') return;
+    reported.current = true;
+    onDone({ text: 'Meeting recorded and both signatures on the report · closed' });
+  }, [report, onDone]);
+  if (!reports) return <Loading />;
+  if (!report) return <p className="text-sm text-muted-foreground">This report is no longer open to you.</p>;
+  const rule = report.rule_threshold_count && report.rule_window_days
+    ? ruleClause({ threshold_count: report.rule_threshold_count, threshold_window_days: report.rule_window_days, is_active: true })
+    : 'the late-arrival rule';
+  const waiting = attendanceWaitingOn(report);
+  const primary = !report.meeting_recorded_at ? 'Meet with team member · record the meeting' : !report.manager_signed_at ? 'Open and sign' : 'Open the report';
+  return (
+    <div className="space-y-3">
+      <Receipts rows={[
+        ['Rule', rule, 'office setting'],
+        ['Period', report.period_start && report.period_end ? `${formatDate(report.period_start)} – ${formatDate(report.period_end)}` : '—', 'attendance report'],
+        ['Late arrivals', `${report.occurrence_count ?? 0} · ${report.total_minutes_late ?? 0} minutes in total`, 'attendance records'],
+        ['Status', waiting, 'attendance report'],
+      ]} />
+      <p className="text-sm text-muted-foreground">The report documents the threshold crossing. Record the meeting date, a brief summary, and any agreed next steps; then both of you sign.</p>
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" onClick={() => setOpen(true)}>Review</Button>
+        <Button size="sm" onClick={() => setOpen(true)}>{primary}</Button>
         <ParkButton item={item} />
-        <OpenRecordLink to={item.href} label="Open in Team Attendance" />
+        <OpenRecordLink to={`/incident-reports?report=${report.id}`} label="Incident reports" />
       </div>
-      <TardyReviewModal
-        open={open}
-        tardy={tardy}
-        employeeName={item.subject.name ?? undefined}
-        onClose={() => setOpen(false)}
-        onSubmit={async (id, status, reason) => {
-          await update.mutateAsync({ id, updates: { approval_status: status, reason_text: reason, approved_by: status === 'approved' ? user?.id ?? null : null, approved_at: status === 'approved' ? new Date().toISOString() : null } });
-          onDone({ text: `Reviewed · ${status} · reason on record`, reversal: { kind: 'none', label: 'Change the review from Team Attendance' } });
-        }}
-      />
+      <IncidentReportDetail report={open ? report : null} employeeName={item.subject.name ?? 'Team member'} onClose={() => setOpen(false)} />
     </div>
   );
 }

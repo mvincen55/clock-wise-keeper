@@ -39,7 +39,9 @@ import {
   STATUSES,
   STATUS_CLASSES,
   STATUS_LABELS,
+  attendanceWaitingOn,
   formatClockTime,
+  isAttendanceReport,
   labelFor,
   signatureState,
   type IncidentSeverity,
@@ -129,8 +131,8 @@ export default function IncidentReports() {
           <h1 className="text-2xl md:text-3xl font-bold">Incident Reports</h1>
           <p className="text-muted-foreground">
             {isManager
-              ? 'Injuries, exposures, and safety events across the office. Each report files to the employee it happened to.'
-              : 'Injuries, exposures, and safety events. Your reports save to your record — your managers and owners can read them.'}
+              ? 'Injuries, exposures, and safety events across the office, plus attendance reports the late-arrival rule opens. Each report files to the team member it is about.'
+              : 'Injuries, exposures, and safety events, plus any attendance report the office late-arrival rule opens in your record. Your managers and owners can read them.'}
           </p>
         </div>
         <Button onClick={startNew}>
@@ -250,14 +252,16 @@ export default function IncidentReports() {
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded font-medium ${
-                            SEVERITY_CLASSES[report.severity as IncidentSeverity] ??
-                            'bg-muted text-muted-foreground'
-                          }`}
-                        >
-                          {labelFor(SEVERITY_LABELS, report.severity)}
-                        </span>
+                        {!isAttendanceReport(report) && (
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded font-medium ${
+                              SEVERITY_CLASSES[report.severity as IncidentSeverity] ??
+                              'bg-muted text-muted-foreground'
+                            }`}
+                          >
+                            {labelFor(SEVERITY_LABELS, report.severity)}
+                          </span>
+                        )}
                         <span
                           className={`text-xs px-2 py-0.5 rounded font-medium ${
                             STATUS_CLASSES[report.status as IncidentStatus] ??
@@ -272,7 +276,7 @@ export default function IncidentReports() {
                             SIGNATURE_CLASSES[signatureState(report)]
                           }`}
                         >
-                          {SIGNATURE_LABELS[signatureState(report)]}
+                          {isAttendanceReport(report) ? attendanceWaitingOn(report) : SIGNATURE_LABELS[signatureState(report)]}
                         </span>
                       </div>
                     </div>
@@ -280,7 +284,9 @@ export default function IncidentReports() {
                       <span className="text-foreground">
                         {labelFor(CATEGORY_LABELS, report.category)}
                       </span>
-                      {report.location ? ` · ${report.location}` : ''} — {report.description}
+                      {report.location ? ` · ${report.location}` : ''} — {isAttendanceReport(report) && report.period_start && report.period_end
+                        ? `${report.occurrence_count ?? 0} unexcused late arrivals between ${formatDate(report.period_start)} and ${formatDate(report.period_end)} · ${report.total_minutes_late ?? 0} minutes in total`
+                        : report.description}
                     </p>
                   </button>
                 );

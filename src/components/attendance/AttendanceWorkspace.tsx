@@ -2,20 +2,24 @@ import { useState, useMemo, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDaysOff, useOrgDaysOff, useAddDayOff, useDeleteDayOff, DayOffRow } from '@/hooks/useDaysOff';
 import { PtoRequestModal } from '@/components/PtoRequestModal';
-import { useTardies, useUpdateTardy, TardyRow } from '@/hooks/useTardies';
-import { TardyReviewModal } from '@/components/TardyReviewModal';
+import { useTardies, useDecideTardyExcuse, TardyRow } from '@/hooks/useTardies';
+import { LateArrivalReviewModal } from '@/components/LateArrivalReviewModal';
+import { LateArrivalPrompt } from '@/components/LateArrivalPrompt';
+import { LateArrivalNotice } from '@/components/LateArrivalNotice';
+import { useLateArrivalRule } from '@/hooks/useLateArrivalRule';
+import { EXCUSE_CLASSES, EXCUSE_LABELS, awaitsEmployeeAnswer, countsTowardThreshold, excuseState, ruleSentence, standingSentence, standingToday, windowStart } from '@/lib/late-arrivals';
 import { AttendanceActions } from '@/components/AttendanceActions';
 import { useAttendanceDayStatus, useRecomputeAttendance, AttendanceDayStatusRow } from '@/hooks/useAttendanceDayStatus';
 import { useOfficeClosures } from '@/hooks/useOfficeClosures';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useOrgStaff, type OrgStaffMember } from '@/hooks/useStaffCodes';
 import { useTimeEntries, TimeEntryRow } from '@/hooks/useTimeEntries';
-import { useConsumedSearchParam } from '@/hooks/useDeepLink';
+import { DEEP_LINK_HIGHLIGHT, useConsumedSearchParam, useScrollIntoView } from '@/hooks/useDeepLink';
 import ReturnPill from '@/components/management/ReturnPill';
 import PersonalCalendar from '@/components/PersonalCalendar';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { useAuth } from '@/hooks/useAuth';
-import { formatDate, formatTime, formatClock, formatClockRange, minutesToHHMM } from '@/lib/time-utils';
+import { formatDate, formatTime, formatClock, formatClockRange, getToday, minutesToHHMM } from '@/lib/time-utils';
 import { DAY_OFF_LABELS, DAY_TONE_CLASS, EXPLAINED_DAY_OFF_TYPES, dayWord, isAbsence, isMissingClockOut } from '@/lib/attendance-day';
 import { useDayClock } from '@/hooks/useDayClock';
 import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
@@ -177,6 +181,14 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
   // Both are read once, then dropped from the address bar.
   const linkedDate = useConsumedSearchParam('date');
   const linkedEmployee = useConsumedSearchParam('employee');
+  // A notification about one late arrival lands on that row.
+  const linkedTardy = useConsumedSearchParam('tardy');
+  const linkedTardyRef = useScrollIntoView<HTMLTableRowElement>(linkedTardy);
+  const { data: lateRule } = useLateArrivalRule();
+  // The person's standing against the rule reads the rule's own window,
+  // whatever date range the page is showing.
+  const today = getToday();
+  const { data: standingTardies } = useTardies(lateRule ? windowStart(today, lateRule.threshold_window_days) : today, today);
 
   // The personal view: the Workplace page for everyone, managers included.
   // Only the Management page shows the team, and only to managers.
@@ -270,17 +282,18 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
   const recompute = useRecomputeAttendance();
   const addDayOff = useAddDayOff();
   const deleteDayOff = useDeleteDayOff();
-  const updateTardy = useUpdateTardy();
+  const decideTardy = useDecideTardyExcuse();
 
   const [open, setOpen] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
-  const [tab, setTab] = useState('status');
+  const [tab, setTab] = useState(linkedTardy ? 'tardies' : 'status');
   const [attendanceFilter, setAttendanceFilter] = useState<AttendanceFilter>('all');
   const [daysOffFilter, setDaysOffFilter] = useState<DaysOffFilter>('all');
   const [approvalFilter, setApprovalFilter] = useState('all');
   const [showOnlyTracked, setShowOnlyTracked] = useState(false);
   const [debugRow, setDebugRow] = useState<AttendanceDayStatusRow | null>(null);
   const [reviewTardy, setReviewTardy] = useState<TardyRow | null>(null);
+  const [promptTardy, setPromptTardy] = useState<TardyRow | null>(null);
 
   const requiresNotes = (type: string) => type === 'medical_leave';
 
@@ -338,18 +351,10 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
     }
   };
 
-  const handleTardyReview = async (id: string, status: 'approved' | 'unapproved', reason: string) => {
+  const handleTardyReview = async (id: string, decision: 'excused' | 'unexcused', note: string) => {
     try {
-      await updateTardy.mutateAsync({
-        id,
-        updates: {
-          approval_status: status,
-          reason_text: reason,
-          approved_by: status === 'approved' ? user?.id : null,
-          approved_at: status === 'approved' ? new Date().toISOString() : null,
-        },
-      });
-      toast({ title: `Tardy marked as ${status}` });
+      await decideTardy.mutateAsync({ tardyId: id, decision, note });
+      toast({ title: decision === 'excused' ? 'Late arrival excused' : 'Late arrival marked unexcused' });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     }
@@ -464,12 +469,13 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
       closures: closuresCount,
       remote: rows.filter(r => r.is_remote).length,
       edited: rows.filter(r => r.has_edits).length,
-      unreviewedTardies: visibleTardies.filter(t => t.approval_status === 'unreviewed' && !t.resolved).length,
+      pendingExcuses: visibleTardies.filter(t => !t.resolved && excuseState(t) === 'pending').length,
+      awaitingAnswer: personal ? visibleTardies.filter(t => t.user_id === user?.id && awaitsEmployeeAnswer(t)).length : 0,
       needsTimeFix: rows.filter(r => r.timezone_suspect).length,
       missingShifts: absentCount,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleRows, visibleTardies, daysOffByKey, clock]);
+  }, [visibleRows, visibleTardies, daysOffByKey, clock, personal, user?.id]);
 
   // Filtered + sorted status rows
   const filteredStatus = useMemo(() => {
@@ -524,12 +530,12 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
 
   const filteredTardies = useMemo(() => {
     let list = activeTardies;
-    if (showOnlyTracked) list = list.filter(t => t.approval_status !== 'approved');
-    if (approvalFilter !== 'all') list = list.filter(t => t.approval_status === approvalFilter);
+    if (showOnlyTracked) list = list.filter(countsTowardThreshold);
+    if (approvalFilter !== 'all') list = list.filter(t => excuseState(t) === approvalFilter);
     return [...list].sort((a, b) => {
       if (sortMode === 'attention') {
-        const ua = a.approval_status === 'unreviewed' ? 0 : 1;
-        const ub = b.approval_status === 'unreviewed' ? 0 : 1;
+        const ua = excuseState(a) === 'pending' ? 0 : 1;
+        const ub = excuseState(b) === 'pending' ? 0 : 1;
         if (ua !== ub) return ua - ub;
       }
       return sortMode === 'employee' ? byPerson(a, b) || byDateDesc(a, b) : byDateDesc(a, b) || byPerson(a, b);
@@ -743,15 +749,17 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
         </Card>
       </div>
 
+      {personal && <LateArrivalNotice />}
+
       {/* Unreviewed Queue */}
-      {(summary.unreviewedTardies > 0 || summary.missingShifts > 0 || summary.incomplete > 0 || summary.needsTimeFix > 0) && (
+      {(summary.pendingExcuses > 0 || summary.missingShifts > 0 || summary.incomplete > 0 || summary.needsTimeFix > 0) && (
         <Card className="card-elevated border-warning/40">
           <CardContent className="p-3">
             <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Unreviewed Items{focusedName ? ` — ${focusedName}` : ''}</p>
             <div className="flex flex-wrap gap-2">
-              {summary.unreviewedTardies > 0 && (
-                <button onClick={() => { setTab('tardies'); setApprovalFilter('unreviewed'); }} className="text-xs px-3 py-1.5 rounded-full bg-destructive/10 text-destructive font-medium hover:bg-destructive/20 transition-colors">
-                  {summary.unreviewedTardies} Unreviewed {summary.unreviewedTardies === 1 ? 'tardy' : 'tardies'}
+              {summary.pendingExcuses > 0 && (
+                <button onClick={() => { setTab('tardies'); setApprovalFilter('pending'); }} className="text-xs px-3 py-1.5 rounded-full bg-warning/10 text-warning font-medium hover:bg-warning/20 transition-colors">
+                  {summary.pendingExcuses} Excuse {summary.pendingExcuses === 1 ? 'request' : 'requests'} pending review
                 </button>
               )}
               {summary.missingShifts > 0 && (
@@ -780,7 +788,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
           <TabsTrigger value="status">Attendance Status</TabsTrigger>
           <TabsTrigger value="days_off">Time off &amp; callouts</TabsTrigger>
           <TabsTrigger value="tardies">
-            Tardies
+            Late arrivals
             {activeTardies.length > 0 && (
               <span className="ml-1.5 text-xs bg-destructive/20 text-destructive px-1.5 py-0.5 rounded-full">{activeTardies.length}</span>
             )}
@@ -957,20 +965,31 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
           </Card>
         </TabsContent>
 
-        {/* TARDIES TAB */}
+        {/* LATE ARRIVALS TAB */}
         <TabsContent value="tardies">
+          {lateRule && (
+            <div className="mb-4 rounded-md border bg-muted/30 p-3 text-sm">
+              <p className="font-medium">{ruleSentence(lateRule)}</p>
+              <p className="text-xs text-muted-foreground">
+                Acknowledging a late arrival is a receipt, not an excuse: it counts the same either way. An approved excuse never counts; a pending request waits for the decision; a corrected time never counts.
+                {personal && lateRule.is_active && (
+                  <> Your standing: {standingSentence(standingToday((standingTardies ?? []).filter(t => t.user_id === user?.id), lateRule, today), lateRule)}.</>
+                )}
+              </p>
+            </div>
+          )}
           <div className="flex flex-wrap gap-4 items-center mb-4">
             <div className="flex items-center gap-2">
               <Switch checked={showOnlyTracked} onCheckedChange={setShowOnlyTracked} />
-              <Label className="text-xs">Tracked only</Label>
+              <Label className="text-xs">Counting toward the rule only</Label>
             </div>
             <Select value={approvalFilter} onValueChange={setApprovalFilter}>
-              <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
-                <SelectItem value="unreviewed">Unreviewed</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="unapproved">Unapproved</SelectItem>
+                <SelectItem value="pending">Pending review</SelectItem>
+                <SelectItem value="unexcused">Unexcused</SelectItem>
+                <SelectItem value="excused">Excused</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -984,7 +1003,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Expected</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Actual</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Minutes Late</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Reason</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Explanation</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Actions</th>
                   </tr>
@@ -993,49 +1012,56 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
                   {tardiesLoading ? (
                     <tr><td colSpan={8} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></td></tr>
                   ) : !filteredTardies.length ? (
-                    <tr><td colSpan={8} className="py-12 text-center text-muted-foreground">No tardies recorded</td></tr>
+                    <tr><td colSpan={8} className="py-12 text-center text-muted-foreground">No late arrivals recorded</td></tr>
                   ) : (
-                    withPersonHeaders(filteredTardies, 8, t => (
-                      <tr key={t.id} className={t.timezone_suspect ? 'bg-warning/5' : ''}>
-                        <td className="px-4 py-3 font-medium">
-                          {formatDate(t.entry_date)}
-                          {t.timezone_suspect && (
-                            <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning font-medium" title="This punch time looks off. Edit the punches (managers) or submit a correction request.">⚠ Time Looks Off</span>
-                          )}
-                        </td>
-                        {showEmployeeColumn && <td className="px-4 py-3 font-medium">{nameOf(t.employee_id)}</td>}
-                        <td className="px-4 py-3 time-display text-sm">{formatClock(t.expected_start_time)}</td>
-                        <td className="px-4 py-3 time-display text-sm">
-                          {t.timezone_suspect ? (
-                            <span className="text-warning italic">—</span>
-                          ) : (
-                            formatTime(t.actual_start_time)
-                          )}
-                        </td>
-                        <td className="px-4 py-3 font-semibold text-destructive">
-                          {t.timezone_suspect ? '—' : t.minutes_late}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground max-w-[200px] truncate">{t.reason_text || '—'}</td>
-                        <td className="px-4 py-3">
-                          <span className={`text-xs px-2 py-0.5 rounded font-medium ${
-                            t.approval_status === 'approved' ? 'bg-success/20 text-success' :
-                            t.approval_status === 'unapproved' ? 'bg-destructive/20 text-destructive' :
-                            'bg-warning/20 text-warning'
-                          }`}>{t.approval_status}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          {/* Approving/editing tardies is manager-only; employees
-                              add their reason from the Timesheet prompt */}
-                          {isManager ? (
-                            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setReviewTardy(t)}>
-                              {t.approval_status === 'unreviewed' ? 'Review' : 'Edit'}
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
+                    withPersonHeaders(filteredTardies, 8, t => {
+                      const state = excuseState(t);
+                      const mine = t.user_id === user?.id;
+                      const linked = t.id === linkedTardy;
+                      return (
+                        <tr key={t.id} ref={linked ? linkedTardyRef : undefined} className={`${t.timezone_suspect ? 'bg-warning/5' : ''} ${linked ? DEEP_LINK_HIGHLIGHT : ''}`}>
+                          <td className="px-4 py-3 font-medium">
+                            {formatDate(t.entry_date)}
+                            {t.timezone_suspect && (
+                              <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded bg-warning/20 text-warning font-medium" title="This punch time looks off. Edit the punches (managers) or submit a correction request.">⚠ Time Looks Off</span>
+                            )}
+                          </td>
+                          {showEmployeeColumn && <td className="px-4 py-3 font-medium">{nameOf(t.employee_id)}</td>}
+                          <td className="px-4 py-3 time-display text-sm">{formatClock(t.expected_start_time)}</td>
+                          <td className="px-4 py-3 time-display text-sm">
+                            {t.timezone_suspect ? (
+                              <span className="text-warning italic">—</span>
+                            ) : (
+                              formatTime(t.actual_start_time)
+                            )}
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-destructive">
+                            {t.timezone_suspect ? '—' : t.minutes_late}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground max-w-[200px] truncate" title={t.reason_text || ''}>{t.reason_text || '—'}</td>
+                          <td className="px-4 py-3">
+                            <span className={`text-xs px-2 py-0.5 rounded font-medium ${EXCUSE_CLASSES[state]}`}>{EXCUSE_LABELS[state]}</span>
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                              {t.acknowledged_at ? `Acknowledged ${formatDate(t.acknowledged_at)}` : state === 'pending' ? 'Waiting on a manager' : 'Not acknowledged'}
+                              {t.manager_note ? ` · ${t.manager_note}` : ''}
+                            </p>
+                          </td>
+                          <td className="px-4 py-3">
+                            {/* A manager decides anyone's (never their own — the server refuses);
+                                the person answers their own. */}
+                            {isManager && !mine ? (
+                              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setReviewTardy(t)}>
+                                {state === 'pending' ? 'Decide' : 'Review'}
+                              </Button>
+                            ) : mine && awaitsEmployeeAnswer(t) ? (
+                              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setPromptTardy(t)}>Answer</Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
                 {filteredTardies.length > 0 && (
@@ -1051,13 +1077,14 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
             </div>
           </Card>
 
-          <TardyReviewModal
+          <LateArrivalReviewModal
             open={!!reviewTardy}
             tardy={reviewTardy}
             employeeName={isManager && reviewTardy ? nameOf(reviewTardy.employee_id) : undefined}
             onSubmit={handleTardyReview}
             onClose={() => setReviewTardy(null)}
           />
+          <LateArrivalPrompt open={!!promptTardy} tardy={promptTardy} onClose={() => setPromptTardy(null)} />
         </TabsContent>
 
         {/* MISSING SHIFTS TAB — truly absent, not closures, not scheduled/medical/other day off */}

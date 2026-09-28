@@ -220,7 +220,9 @@ export async function loadOfficeProfile(
   push(
     "ACCOUNTABILITY POLICIES",
     ((escalation ?? []) as Record<string, unknown>[]).map((p) =>
-      `${one(p.kind, 40)}: ${p.threshold_count} in ${p.threshold_window_days} days opens a record for the ${one(p.reviewer_role, 20)} (review due in ${p.review_due_days} days; escalates to ${one(p.escalate_to, 20) || "owner"} after ${p.escalate_after_days} more)`
+      one(p.kind, 40) === "tardy_threshold"
+        ? `Late arrivals: ${p.threshold_count} unexcused late arrivals within a rolling ${p.threshold_window_days}-day period open an attendance incident report automatically (approved excuses and pending excuse requests do not count; the report closes only after a meeting with the team member and both signatures)`
+        : `${one(p.kind, 40)}: ${p.threshold_count} in ${p.threshold_window_days} days opens a record for the ${one(p.reviewer_role, 20)} (review due in ${p.review_due_days} days; escalates to ${one(p.escalate_to, 20) || "owner"} after ${p.escalate_after_days} more)`
     ),
   );
 

@@ -3,8 +3,11 @@
  * employee record, and the printed sheet all read from, so one wording
  * change lands everywhere.
  *
- * Workplace safety only: sharps sticks, exposures, falls, chemical and
- * equipment events. No patient identifiers belong in an incident report.
+ * Workplace safety (sharps sticks, exposures, falls, chemical and
+ * equipment events) plus one category the office never files by hand:
+ * `attendance`, opened by the late-arrival rule when a team member's
+ * unexcused late arrivals meet the office threshold. No patient
+ * identifiers belong in any incident report.
  */
 
 export const INCIDENT_CATEGORIES = [
@@ -17,8 +20,15 @@ export const INCIDENT_CATEGORIES = [
   'ergonomic_strain',
   'illness',
   'other',
+  'attendance',
 ] as const;
 export type IncidentCategory = (typeof INCIDENT_CATEGORIES)[number];
+
+/** Opened by the late-arrival rule, never chosen on the form. */
+export const ATTENDANCE_CATEGORY: IncidentCategory = 'attendance';
+
+/** The categories a person can file: everything but the automatic one. */
+export const FILEABLE_CATEGORIES: IncidentCategory[] = INCIDENT_CATEGORIES.filter(c => c !== ATTENDANCE_CATEGORY);
 
 export const CATEGORY_LABELS: Record<IncidentCategory, string> = {
   sharps_injury: 'Sharps / needlestick',
@@ -30,7 +40,12 @@ export const CATEGORY_LABELS: Record<IncidentCategory, string> = {
   ergonomic_strain: 'Strain or ergonomic injury',
   illness: 'Illness',
   other: 'Other',
+  attendance: 'Attendance',
 };
+
+export function isAttendanceReport(report: { category: string }): boolean {
+  return report.category === ATTENDANCE_CATEGORY;
+}
 
 /** Categories where the device/instrument line is the point of the record. */
 export const DEVICE_CATEGORIES: IncidentCategory[] = [
@@ -84,20 +99,101 @@ export const TREATMENT_LABELS: Record<MedicalTreatment, string> = {
   pending: 'Still to be arranged',
 };
 
-export const STATUSES = ['open', 'under_review', 'closed'] as const;
+export const STATUSES = [
+  'open',
+  'under_review',
+  'closed',
+  // the attendance workflow, in order
+  'meeting_required',
+  'meeting_completed',
+  'awaiting_signatures',
+] as const;
 export type IncidentStatus = (typeof STATUSES)[number];
+
+/** The statuses a manager sets by hand on a safety report. */
+export const SAFETY_STATUSES: IncidentStatus[] = ['open', 'under_review', 'closed'];
+
+/** Meeting required → Meeting completed → Awaiting signatures → Closed. */
+export const ATTENDANCE_STATUSES: IncidentStatus[] = ['meeting_required', 'meeting_completed', 'awaiting_signatures', 'closed'];
 
 export const STATUS_LABELS: Record<IncidentStatus, string> = {
   open: 'Open',
   under_review: 'Under review',
   closed: 'Closed',
+  meeting_required: 'Meeting required',
+  meeting_completed: 'Meeting completed',
+  awaiting_signatures: 'Awaiting signatures',
 };
 
 export const STATUS_CLASSES: Record<IncidentStatus, string> = {
   open: 'bg-warning/20 text-warning',
   under_review: 'bg-accent/20 text-accent',
   closed: 'bg-success/20 text-success',
+  meeting_required: 'bg-warning/20 text-warning',
+  meeting_completed: 'bg-accent/20 text-accent',
+  awaiting_signatures: 'bg-accent/20 text-accent',
 };
+
+/**
+ * What still stands between an attendance report and closure, and whose
+ * it is. Every step shows to both people; `mine` says which ones the
+ * viewer can do something about. The order is the workflow's order.
+ */
+export type AttendanceStep = {
+  key: 'meeting' | 'employee_signature' | 'manager_signature' | 'closed';
+  label: string;
+  done: boolean;
+  owner: 'manager' | 'employee' | 'system';
+  mine: boolean;
+  /** When it is not done yet, why the viewer cannot do it right now (empty when they can). */
+  blocked: string;
+};
+
+export type AttendanceReportLike = {
+  status: string;
+  meeting_recorded_at: string | null;
+  employee_signed_at: string | null;
+  manager_signed_at: string | null;
+  closed_at?: string | null;
+};
+
+export function attendanceSteps(
+  report: AttendanceReportLike,
+  viewer: { isSubject: boolean; canManage: boolean }
+): AttendanceStep[] {
+  const meeting = !!report.meeting_recorded_at;
+  const employee = !!report.employee_signed_at;
+  const manager = !!report.manager_signed_at;
+  const closed = report.status === 'closed';
+  return [
+    {
+      key: 'meeting', label: 'Meeting recorded by a manager', done: meeting, owner: 'manager',
+      mine: !meeting && viewer.canManage, blocked: '',
+    },
+    {
+      key: 'employee_signature', label: 'Team member signature', done: employee, owner: 'employee',
+      mine: !employee && viewer.isSubject,
+      blocked: employee ? '' : meeting ? '' : 'after the meeting is recorded',
+    },
+    {
+      key: 'manager_signature', label: 'Manager signature', done: manager, owner: 'manager',
+      mine: !manager && viewer.canManage,
+      blocked: manager ? '' : meeting ? '' : 'after the meeting is recorded',
+    },
+    { key: 'closed', label: 'Closed', done: closed, owner: 'system', mine: false, blocked: closed ? '' : 'once both signatures are on the report' },
+  ];
+}
+
+/** The one line the queue and the list show: what the report waits on. */
+export function attendanceWaitingOn(report: AttendanceReportLike): string {
+  if (report.status === 'closed') return 'Closed';
+  if (!report.meeting_recorded_at) return 'Meeting required';
+  const outstanding = [
+    !report.employee_signed_at ? 'team member signature' : null,
+    !report.manager_signed_at ? 'manager signature' : null,
+  ].filter(Boolean);
+  return outstanding.length ? `Awaiting ${outstanding.join(' and ')}` : 'Closing';
+}
 
 /**
  * Signatures. A report is signed twice: the employee it happened to
@@ -156,6 +252,8 @@ export interface CountersignContext {
   alreadySigned: boolean;
   /** Active owners in the org other than the report's subject. */
   otherOwnerCount: number;
+  /** Attendance reports only: the meeting must be on record and the report open. */
+  attendance?: { meetingRecorded: boolean; closed: boolean };
 }
 
 export interface CountersignVerdict {
@@ -171,6 +269,7 @@ export interface CountersignVerdict {
  */
 export function countersignEligibility(ctx: CountersignContext): CountersignVerdict {
   if (ctx.alreadySigned) return { canSign: false, reason: 'Already signed off.' };
+  if (ctx.attendance?.closed) return { canSign: false, reason: 'This report is closed.' };
 
   if (ctx.viewerRole !== 'owner' && ctx.viewerRole !== 'manager') {
     return { canSign: false, reason: 'An owner or manager signs off on incident reports.' };
@@ -191,6 +290,10 @@ export function countersignEligibility(ctx: CountersignContext): CountersignVerd
       canSign: false,
       reason: 'This report is about a manager or an owner — an owner has to sign it off.',
     };
+  }
+
+  if (ctx.attendance && !ctx.attendance.meetingRecorded) {
+    return { canSign: false, reason: 'Record the meeting first; signatures follow it.' };
   }
 
   return { canSign: true, reason: '' };

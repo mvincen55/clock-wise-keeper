@@ -34,7 +34,8 @@ import type { TrainingAssignment } from '@/hooks/useTraining';
 import type { AccountabilityReport } from '@/hooks/useAccountability';
 import type { OfficePhase } from '@/components/dashboard/staffing';
 import { parseClockMinutes } from '@/components/dashboard/staffing';
-import { signatureState } from '@/lib/incidents';
+import { attendanceWaitingOn, isAttendanceReport, signatureState } from '@/lib/incidents';
+import { excuseState, isLiveLateArrival, ruleClause } from '@/lib/late-arrivals';
 import { daysBetween } from '@/lib/time-utils';
 import { missingTimeConditions } from './missing-time';
 import { correctionEntryDate } from './records';
@@ -68,7 +69,7 @@ export type AttentionSources = {
    */
   payrollPeriod: { start: string; end: string; dueDate: string | null; dueLabel: string | null } | null;
   /** Office rules that admit follow-ups. */
-  rules: { reviewTardies: boolean; bypassReasonHours: number; ackManagerLevel: number };
+  rules: { bypassReasonHours: number; ackManagerLevel: number };
   dayStatuses?: AttendanceDayStatusRow[];
   entries?: TimeEntryRow[];
   daysOff?: DayOffRow[];
@@ -103,10 +104,10 @@ const VERB_RANK: Record<AttentionVerb, number> = { decide: 0, fix: 1, follow_up:
 export const KIND_VERB: Record<AttentionKind, AttentionVerb> = {
   staffing_answer: 'fix', clocked_in_after_close: 'fix',
   pto_request: 'decide', correction_request: 'decide', change_request: 'decide', content_review: 'decide',
-  challenge_verify: 'decide', incident_countersign: 'decide',
+  challenge_verify: 'decide', incident_countersign: 'decide', excuse_request: 'decide',
   missing_clock_out: 'fix', missing_day: 'fix', unpaired_punches: 'fix', time_suspect: 'fix',
   close_day_unsealed: 'fix', close_day_behind: 'fix', close_day_review: 'fix',
-  tardy_unreviewed: 'follow_up', bypass_followup: 'follow_up', record_signoff: 'follow_up', ack_escalated: 'follow_up',
+  attendance_meeting: 'follow_up', bypass_followup: 'follow_up', record_signoff: 'follow_up', ack_escalated: 'follow_up',
   training_overdue: 'follow_up', incident_followup: 'follow_up',
 };
 
@@ -221,6 +222,17 @@ export function deriveAttention(src: AttentionSources): AttentionResult {
       label: `Change request · ${c.request_type.replace('_', ' ')}`, detail: String(c.payload?.description ?? ''), why: 'A change request is waiting on a manager decision.',
       occurredAt: c.created_at, deadline: null, coverage: false, payroll: false, href: `/management?item=${itemKey('change_request', c.id)}` });
   }
+  // An excuse request is a decision the moment it is filed, whatever the
+  // person's standing against the rule. Routine late arrivals never appear:
+  // they are acknowledged by the person and counted by the database.
+  if (sourceOk('tardies', src.tardies)) for (const t of src.tardies!) {
+    if (excuseState(t) !== 'pending' || !isLiveLateArrival(t)) continue;
+    if (!onRoster(t.employee_id, t.user_id)) continue;
+    add({ kind: 'excuse_request', recordTable: 'tardies', recordId: t.id, subject: subjectOf(t.employee_id, t.user_id),
+      label: `Excuse requested: pending review · ${t.entry_date}`, detail: t.reason_text ? `“${t.reason_text}”` : '',
+      why: 'The person asked for this late arrival to be excused. It waits on a manager decision and does not count toward the late-arrival rule until decided.',
+      occurredAt: t.excuse_requested_at ?? t.created_at, deadline: null, coverage: false, payroll: false, href: `/management?item=${itemKey('excuse_request', t.id)}` });
+  }
   if (sourceOk('versionsInReview', src.versionsInReview)) for (const v of src.versionsInReview!) {
     if (v.submitted_by === viewer.userId) continue; // nobody reviews their own submission
     add({ kind: 'content_review', recordTable: 'knowledge_versions', recordId: v.id, subject: { employeeId: null, userId: v.submitted_by, name: nameOf(null, v.submitted_by) },
@@ -235,8 +247,26 @@ export function deriveAttention(src: AttentionSources): AttentionResult {
   }
   if (sourceOk('incidents', src.incidents)) for (const r of src.incidents!) {
     const sig = signatureState({ employee_signed_at: r.employee_signed_at, manager_signed_at: r.manager_signed_at });
-    const mayCountersign = r.countersign_role === 'owner' ? viewer.role === 'owner' : true;
-    const isSubject = r.employee_id && employees.find(e => e.id === r.employee_id)?.user_id === viewer.userId;
+    const subjectUserId = r.employee_id ? employees.find(e => e.id === r.employee_id)?.user_id ?? null : null;
+    const isSubject = !!subjectUserId && subjectUserId === viewer.userId;
+    // A report about a manager or an owner is an owner's to sign; when no
+    // other owner exists it falls to any admin (the countersign rule).
+    const otherOwners = [...ownerUserIds].filter(id => id !== subjectUserId).length;
+    const mayCountersign = r.countersign_role === 'owner' ? viewer.role === 'owner' || otherOwners === 0 : true;
+    if (isAttendanceReport(r)) {
+      // The late-arrival rule opened this: it stays with the responsible
+      // manager until the meeting is recorded and both signatures are on it.
+      if (r.status === 'closed' || !mayCountersign || isSubject) continue;
+      const rule = r.rule_threshold_count && r.rule_window_days
+        ? ruleClause({ threshold_count: r.rule_threshold_count, threshold_window_days: r.rule_window_days, is_active: true })
+        : 'the late-arrival rule';
+      add({ kind: 'attendance_meeting', recordTable: 'incident_reports', recordId: r.id, subject: subjectOf(r.employee_id),
+        label: r.meeting_recorded_at ? `Attendance report · ${attendanceWaitingOn(r).toLowerCase()}` : 'Meet with team member · attendance report',
+        detail: `${r.occurrence_count ?? 0} unexcused late arrivals${r.period_start && r.period_end ? ` between ${r.period_start} and ${r.period_end}` : ''} · ${r.total_minutes_late ?? 0} minutes late in total`,
+        why: `Office rule: ${rule} open an attendance incident report. It stays open until the meeting is recorded and both of you have signed.`,
+        occurredAt: r.created_at, deadline: null, coverage: false, payroll: false, href: `/management?item=${itemKey('attendance_meeting', r.id)}` });
+      continue;
+    }
     if (sig === 'awaiting_countersign' && r.status !== 'closed' && mayCountersign && !isSubject) {
       add({ kind: 'incident_countersign', recordTable: 'incident_reports', recordId: r.id, subject: subjectOf(r.employee_id),
         label: `Incident report awaiting your countersign · ${r.incident_date}`, detail: r.category, why: 'A signed incident report needs a countersignature to close the loop.',
@@ -321,14 +351,6 @@ export function deriveAttention(src: AttentionSources): AttentionResult {
   }
 
   /* ---- 4. follow-through the office's rules ask for ---- */
-  if (rules.reviewTardies && sourceOk('tardies', src.tardies)) for (const t of src.tardies!) {
-    if (t.approval_status !== 'unreviewed') continue;
-    if (!onRoster(t.employee_id, t.user_id)) continue;
-    add({ kind: 'tardy_unreviewed', recordTable: 'tardies', recordId: t.id, subject: subjectOf(t.employee_id, t.user_id),
-      label: `Late ${t.minutes_late} min · ${t.entry_date} · unreviewed`, detail: t.reason_text ? `Reason given: “${t.reason_text}”` : 'No reason given yet',
-      why: 'Office rule: late arrivals past grace are reviewed by a manager.', occurredAt: t.created_at, deadline: null, coverage: false, payroll: false,
-      href: `/management/attendance?employee=${t.employee_id}&date=${t.entry_date}` });
-  }
   if (sourceOk('bypasses', src.bypasses)) for (const b of src.bypasses!) {
     if (b.resolved) continue;
     if (!onRoster(b.employee_id, b.user_id)) continue;

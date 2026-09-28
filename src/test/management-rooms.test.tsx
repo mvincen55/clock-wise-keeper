@@ -105,7 +105,7 @@ describe('AttentionRoom', () => {
     const now1 = item({ key: 'clocked_in_after_close:ds-t', kind: 'clocked_in_after_close', verb: 'fix', recordId: 'ds-t', label: 'Still clocked in', subject: { employeeId: 'e2', userId: 'u2', name: 'Sam K.' }, coverage: true, deadline: { label: 'tonight', date: '2026-09-21', days: 0 } });
     const now2 = item({});
     const waiting = item({ key: 'missing_clock_out:ds-1', kind: 'missing_clock_out', verb: 'fix', recordId: 'ds-1', label: 'No clock-out · 2026-09-18', work: 'waiting_on_employee', waitingOn: { ownerUserId: 'u1', requestedAt: '2026-09-21T12:31:00Z', dueAt: '2026-09-23' }, payroll: true });
-    const later = item({ key: 'tardy_unreviewed:t1', kind: 'tardy_unreviewed', verb: 'follow_up', recordId: 't1', label: 'Late 12 min', parkedUntil: '2026-09-25' });
+    const later = item({ key: 'attendance_meeting:t1', kind: 'attendance_meeting', verb: 'follow_up', recordId: 't1', label: 'Late 12 min', parkedUntil: '2026-09-25' });
     state.attention = { ...base(), unresolved: [now1, now2, waiting, later], needsNow: [now1, now2], waiting: [waiting], deferred: [later], counts: counts(2, 1, 1, { decide: 1, fix: 1, follow_up: 0 }) };
     mount();
     expect(screen.getByText('2 need you now · 1 waiting on others · 1 later')).toBeInTheDocument();

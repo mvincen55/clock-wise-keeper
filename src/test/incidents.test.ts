@@ -16,9 +16,16 @@ import {
   STATUS_LABELS,
   TREATMENTS,
   TREATMENT_LABELS,
+  ATTENDANCE_CATEGORY,
+  ATTENDANCE_STATUSES,
+  FILEABLE_CATEGORIES,
+  SAFETY_STATUSES,
+  attendanceSteps,
+  attendanceWaitingOn,
   countersignEligibility,
   formatClockTime,
   formatSignedAt,
+  isAttendanceReport,
   labelFor,
   signatureState,
   yesterdayKey,
@@ -179,5 +186,64 @@ describe("yesterdayKey", () => {
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
     const gap = (Date.parse(`${today}T12:00:00Z`) - Date.parse(`${key}T12:00:00Z`)) / 86_400_000;
     expect(gap).toBe(1);
+  });
+});
+
+describe("the attendance category", () => {
+  it("is never on the form but always labelled", () => {
+    expect(INCIDENT_CATEGORIES).toContain(ATTENDANCE_CATEGORY);
+    expect(FILEABLE_CATEGORIES).not.toContain(ATTENDANCE_CATEGORY);
+    expect(FILEABLE_CATEGORIES.length).toBe(INCIDENT_CATEGORIES.length - 1);
+    expect(CATEGORY_LABELS.attendance).toBe("Attendance");
+    expect(isAttendanceReport({ category: "attendance" })).toBe(true);
+    expect(isAttendanceReport({ category: "sharps_injury" })).toBe(false);
+  });
+  it("keeps the safety statuses for the review select and the workflow statuses in order", () => {
+    expect(SAFETY_STATUSES).toEqual(["open", "under_review", "closed"]);
+    expect(ATTENDANCE_STATUSES).toEqual(["meeting_required", "meeting_completed", "awaiting_signatures", "closed"]);
+    for (const st of ATTENDANCE_STATUSES) expect(STATUSES).toContain(st);
+    expect(STATUS_LABELS.meeting_required).toBe("Meeting required");
+  });
+});
+
+describe("attendance workflow: what is outstanding", () => {
+  const base = { status: "meeting_required", meeting_recorded_at: null, employee_signed_at: null, manager_signed_at: null, closed_at: null };
+  it("names the meeting first, then both signatures, then closure", () => {
+    expect(attendanceWaitingOn(base)).toBe("Meeting required");
+    expect(attendanceWaitingOn({ ...base, status: "meeting_completed", meeting_recorded_at: "x" })).toBe("Awaiting team member signature and manager signature");
+    expect(attendanceWaitingOn({ ...base, status: "awaiting_signatures", meeting_recorded_at: "x", manager_signed_at: "x" })).toBe("Awaiting team member signature");
+    expect(attendanceWaitingOn({ ...base, status: "awaiting_signatures", meeting_recorded_at: "x", employee_signed_at: "x" })).toBe("Awaiting manager signature");
+    expect(attendanceWaitingOn({ ...base, status: "closed", meeting_recorded_at: "x", employee_signed_at: "x", manager_signed_at: "x", closed_at: "x" })).toBe("Closed");
+  });
+  it("tells each person what is theirs and what is blocked until the meeting", () => {
+    const manager = attendanceSteps(base, { isSubject: false, canManage: true });
+    expect(manager.map(s => [s.key, s.done, s.mine])).toEqual([
+      ["meeting", false, true], ["employee_signature", false, false], ["manager_signature", false, true], ["closed", false, false],
+    ]);
+    expect(manager[1].blocked).toBe("after the meeting is recorded");
+    const employee = attendanceSteps({ ...base, status: "meeting_completed", meeting_recorded_at: "x" }, { isSubject: true, canManage: false });
+    expect(employee.map(s => [s.key, s.done, s.mine])).toEqual([
+      ["meeting", true, false], ["employee_signature", false, true], ["manager_signature", false, false], ["closed", false, false],
+    ]);
+    expect(employee[1].blocked).toBe("");
+    // The subject who is also a manager is never the manager of their own report.
+    const subjectManager = attendanceSteps(base, { isSubject: true, canManage: false });
+    expect(subjectManager[0].mine).toBe(false);
+  });
+});
+
+describe("countersignEligibility on an attendance report", () => {
+  const ctx = (over: Partial<CountersignContext> = {}): CountersignContext => ({
+    countersignRole: "manager", viewerRole: "manager", viewerIsSubject: false, alreadySigned: false, otherOwnerCount: 1, ...over,
+  });
+  it("refuses until the meeting is recorded, and once closed", () => {
+    expect(countersignEligibility(ctx({ attendance: { meetingRecorded: false, closed: false } })).reason).toContain("Record the meeting first");
+    expect(countersignEligibility(ctx({ attendance: { meetingRecorded: true, closed: true } })).reason).toBe("This report is closed.");
+    expect(countersignEligibility(ctx({ attendance: { meetingRecorded: true, closed: false } })).canSign).toBe(true);
+  });
+  it("keeps the role rules: never the subject, an owner for a manager's report", () => {
+    expect(countersignEligibility(ctx({ viewerIsSubject: true, attendance: { meetingRecorded: true, closed: false } })).canSign).toBe(false);
+    expect(countersignEligibility(ctx({ countersignRole: "owner", attendance: { meetingRecorded: true, closed: false } })).canSign).toBe(false);
+    expect(countersignEligibility(ctx({ countersignRole: "owner", viewerRole: "owner", attendance: { meetingRecorded: true, closed: false } })).canSign).toBe(true);
   });
 });

@@ -34,7 +34,10 @@ export type AttentionKind =
   | 'close_day_unsealed'
   | 'close_day_behind'
   | 'close_day_review'
-  | 'tardy_unreviewed'
+  /** an employee asked for a late arrival to be excused; a manager decides */
+  | 'excuse_request'
+  /** the late-arrival rule opened an attendance incident report: meet, then both sign */
+  | 'attendance_meeting'
   | 'bypass_followup'
   | 'record_signoff'
   | 'ack_escalated'

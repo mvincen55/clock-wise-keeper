@@ -33,7 +33,7 @@ import { getToday } from '@/lib/time-utils';
 import {
   CATEGORY_LABELS,
   DEVICE_CATEGORIES,
-  INCIDENT_CATEGORIES,
+  FILEABLE_CATEGORIES,
   PPE_LABELS,
   PPE_OPTIONS,
   SEVERITIES,
@@ -228,7 +228,7 @@ export default function IncidentReportModal({
               <Select value={form.category} onValueChange={v => set('category', v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {INCIDENT_CATEGORIES.map(c => (
+                  {FILEABLE_CATEGORIES.map(c => (
                     <SelectItem key={c} value={c}>{CATEGORY_LABELS[c]}</SelectItem>
                   ))}
                 </SelectContent>

@@ -303,4 +303,92 @@ describe('print invariant — reference output must never change', () => {
     );
     expect(html).toMatchSnapshot();
   });
+
+  it('Attendance incident report sheet renders byte-for-byte identically', () => {
+    // The report the late-arrival rule opens: rule, period, every late
+    // arrival with its date and minutes, the totals, the meeting record,
+    // the team member's comment, and both signatures. None of the safety
+    // fields. Any diff here changed what goes in the attendance record.
+    const report = {
+      id: 'attendance-fixture',
+      org_id: 'org',
+      employee_id: 'emp',
+      reported_by: null,
+      reported_by_employee_id: null,
+      reported_by_name: 'Late-arrival rule (automatic)',
+      incident_date: '2026-09-18',
+      incident_time: null,
+      category: 'attendance',
+      severity: 'minor',
+      location: '',
+      description: 'Attendance threshold reached: 3 unexcused late arrivals within a rolling 30-day period. Between Aug 20, 2026 and Sep 18, 2026, 3 late arrivals were recorded, 41 minutes late in total. This report was opened automatically by the office\'s late-arrival rule. It documents the threshold crossing; a meeting with the team member and both signatures are required to close it.',
+      body_part: '',
+      device_involved: '',
+      ppe_worn: 'na',
+      witnesses: '',
+      immediate_action: '',
+      medical_treatment: 'none',
+      follow_up_required: false,
+      follow_up_notes: '',
+      work_related: true,
+      days_away: 0,
+      status: 'closed',
+      reviewed_by: 'mgr',
+      reviewed_by_name: 'Jordan Rivera',
+      reviewed_at: '2026-09-21T15:00:00Z',
+      review_notes: '',
+      employee_signature: 'Test Employee',
+      employee_signed_at: '2026-09-21T16:00:00Z',
+      manager_signature: 'Jordan Rivera',
+      manager_signed_at: '2026-09-21T16:30:00Z',
+      manager_signed_role: 'manager',
+      countersign_role: 'manager',
+      rule_threshold_count: 3,
+      rule_window_days: 30,
+      period_start: '2026-08-20',
+      period_end: '2026-09-18',
+      occurrence_count: 3,
+      total_minutes_late: 41,
+      meeting_date: '2026-09-21',
+      meeting_summary: 'Reviewed the three dates and the office rule. Test Employee will leave 15 minutes earlier on school days.',
+      meeting_next_steps: 'Check in again in two weeks.',
+      meeting_recorded_at: '2026-09-21T15:00:00Z',
+      meeting_recorded_by: 'mgr',
+      employee_comment: 'The Sep 8 arrival was after a school drop-off I had told the office about.',
+      employee_comment_at: '2026-09-21T15:30:00Z',
+      closed_at: '2026-09-21T16:30:00Z',
+      created_at: '2026-09-18T21:05:00Z',
+      updated_at: '2026-09-21T16:30:00Z',
+    } as never;
+    const event = (id: string, entry_date: string, minutes_late: number, role: 'qualifying' | 'follow_up', actual: string) => ({
+      id, org_id: 'org', incident_report_id: 'attendance-fixture', tardy_id: `t-${id}`, user_id: 'u', employee_id: 'emp', entry_date,
+      expected_start_time: '08:00:00', actual_start_time: actual, minutes_late, role, linked_at: '2026-09-18T21:05:00Z',
+    });
+    const html = renderToStaticMarkup(
+      <IncidentReportPrintSheet
+        report={report}
+        employeeName="Test Employee"
+        branding={{
+          displayName: 'Northfield Dental Group',
+          legalName: 'Northfield Dental Group, LLC',
+          addressLine1: '41 Northfield Avenue',
+          addressLine2: 'Springvale, MA 02100',
+          phone: '(555) 010-0142',
+          website: 'northfielddentalgroup.example',
+          logoUrl: 'https://example.invalid/logo.png',
+        }}
+        events={[
+          event('e1', '2026-08-24', 12, 'qualifying', '2026-08-24T12:17:00Z'),
+          event('e2', '2026-09-08', 8, 'qualifying', '2026-09-08T12:13:00Z'),
+          event('e3', '2026-09-18', 21, 'qualifying', '2026-09-18T12:26:00Z'),
+          event('e4', '2026-09-20', 6, 'follow_up', '2026-09-20T12:11:00Z'),
+        ]}
+      />
+    );
+    expect(html).toContain('Attendance Incident Report');
+    expect(html).toContain('3 unexcused late arrivals within a rolling 30-day period');
+    expect(html).toContain('12 min late');
+    expect(html).not.toContain('Instrument / device');
+    expect(html).toMatchSnapshot();
+  });
 });

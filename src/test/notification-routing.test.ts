@@ -67,6 +67,33 @@ describe('notification routing — every current type has a destination', () => 
     }
   });
 
+  it('routes late arrivals: an excuse request is a manager decision, decisions land on the employee’s attendance page', () => {
+    expect(resolveNotificationDestination(n('tardy_excuse_requested', 'tardies', 't-1'), asManager).to)
+      .toBe('/management?item=excuse_request:t-1');
+    expect(resolveNotificationDestination(n('tardy_excuse_requested', 'tardies', 't-1'), asEmployee).to)
+      .toBe('/days-off?tardy=t-1');
+    expect(resolveNotificationDestination(n('tardy_excuse_approved', 'tardies', 't-2'), asEmployee).to).toBe('/days-off?tardy=t-2');
+    expect(resolveNotificationDestination(n('tardy_excuse_declined', 'tardies', 't-3'), asEmployee).to).toBe('/days-off?tardy=t-3');
+  });
+
+  it('routes an attendance incident report to the Attention item for managers and to the report for the team member', () => {
+    for (const type of [
+      'attendance_incident_opened',
+      'attendance_incident_meeting',
+      'attendance_incident_signature_needed',
+      'attendance_incident_amended',
+      'attendance_incident_closed',
+    ]) {
+      const manager = resolveNotificationDestination(n(type, 'incident_reports', 'rep-7'), asManager);
+      expect(manager.to, type).toBe('/management?item=attendance_meeting:rep-7');
+      expect(manager.exact).toBe(true);
+      const employee = resolveNotificationDestination(n(type, 'incident_reports', 'rep-7'), asEmployee);
+      expect(employee.to, type).toBe('/incident-reports?report=rep-7');
+      expect(employee.exact).toBe(true);
+    }
+    expect(isKnownNotificationType('attendance_incident_meeting')).toBe(true);
+  });
+
   it('routes training to the exact assignment, including the legacy module shape', () => {
     // Canonical shape: the person’s own assignment row.
     expect(resolveNotificationDestination(n('training_assigned', 'training_assignments', 'as-1'), asEmployee).to)

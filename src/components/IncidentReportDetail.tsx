@@ -32,11 +32,13 @@ import { ChevronDown, Loader2, Pencil, Printer, Trash2 } from 'lucide-react';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
 import IncidentReportPrintSheet from '@/components/IncidentReportPrintSheet';
 import IncidentSignaturePanel from '@/components/IncidentSignaturePanel';
+import AttendanceIncidentPanel from '@/components/AttendanceIncidentPanel';
 import ScaledPrintPreview from '@/components/ScaledPrintPreview';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useOrgBranding } from '@/hooks/useOrgBranding';
 import {
+  useAttendanceIncidentEvents,
   useDeleteIncidentReport,
   useReviewIncidentReport,
   type IncidentReport,
@@ -45,15 +47,17 @@ import { formatDate } from '@/lib/time-utils';
 import {
   CATEGORY_LABELS,
   PPE_LABELS,
+  SAFETY_STATUSES,
   SEVERITY_CLASSES,
   SEVERITY_LABELS,
-  STATUSES,
   STATUS_CLASSES,
   STATUS_LABELS,
   SIGNATURE_CLASSES,
   SIGNATURE_LABELS,
   TREATMENT_LABELS,
+  attendanceWaitingOn,
   formatClockTime,
+  isAttendanceReport,
   labelFor,
   signatureState,
   type IncidentSeverity,
@@ -98,9 +102,15 @@ export default function IncidentReportDetail({
   const remove = useDeleteIncidentReport();
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
+  // An attendance report was written by the late-arrival rule: its facts
+  // are frozen, it is never edited or deleted, and its own panel carries
+  // the meeting, the comment, and the signatures.
+  const attendance = !!report && isAttendanceReport(report);
+  // The safety print sheet ignores these; the attendance sheet lists them.
+  const { data: attendanceEvents } = useAttendanceIncidentEvents(attendance ? report!.id : null);
   // The author may keep correcting their own account while it is open.
   const canEdit =
-    !!report && (isManager || (report.reported_by === user?.id && report.status === 'open'));
+    !!report && !attendance && (isManager || (report.reported_by === user?.id && report.status === 'open'));
 
   const [status, setStatus] = useState<string>('open');
   const [reviewNotes, setReviewNotes] = useState('');
@@ -142,15 +152,17 @@ export default function IncidentReportDetail({
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex flex-wrap items-center gap-2">
-              {labelFor(CATEGORY_LABELS, report.category)}
-              <span
-                className={`text-xs px-2 py-0.5 rounded font-medium ${
-                  SEVERITY_CLASSES[report.severity as IncidentSeverity] ??
-                  'bg-muted text-muted-foreground'
-                }`}
-              >
-                {labelFor(SEVERITY_LABELS, report.severity)}
-              </span>
+              {attendance ? 'Attendance incident report' : labelFor(CATEGORY_LABELS, report.category)}
+              {!attendance && (
+                <span
+                  className={`text-xs px-2 py-0.5 rounded font-medium ${
+                    SEVERITY_CLASSES[report.severity as IncidentSeverity] ??
+                    'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {labelFor(SEVERITY_LABELS, report.severity)}
+                </span>
+              )}
               <span
                 className={`text-xs px-2 py-0.5 rounded font-medium ${
                   STATUS_CLASSES[report.status as IncidentStatus] ??
@@ -164,16 +176,20 @@ export default function IncidentReportDetail({
                   SIGNATURE_CLASSES[signatureState(report)]
                 }`}
               >
-                {SIGNATURE_LABELS[signatureState(report)]}
+                {attendance ? attendanceWaitingOn(report) : SIGNATURE_LABELS[signatureState(report)]}
               </span>
             </DialogTitle>
             <DialogDescription>
-              {employeeName} · {formatDate(report.incident_date)}
-              {time ? ` at ${time}` : ''} · filed by {report.reported_by_name || '—'}
+              {attendance
+                ? `${employeeName} · opened ${formatDate(report.created_at)} by the office late-arrival rule`
+                : `${employeeName} · ${formatDate(report.incident_date)}${time ? ` at ${time}` : ''} · filed by ${report.reported_by_name || '—'}`}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          {attendance && <AttendanceIncidentPanel report={report} employeeName={employeeName} />}
+
+          <div className={attendance ? 'space-y-4' : 'space-y-4'}>
+            {!attendance && (<>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <Row label="Location" value={report.location} />
               <Row label="Body part" value={report.body_part} />
@@ -224,7 +240,7 @@ export default function IncidentReportDetail({
                       <Select value={status} onValueChange={setStatus}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          {STATUSES.map(s => (
+                          {SAFETY_STATUSES.map(s => (
                             <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>
                           ))}
                         </SelectContent>
@@ -300,6 +316,7 @@ export default function IncidentReportDetail({
                 </div>
               )}
             </div>
+            </>)}
 
             {/* The printed page, on screen. Same component the printer
                 gets, so the preview cannot drift from the paper. */}
@@ -323,6 +340,7 @@ export default function IncidentReportDetail({
                       report={report}
                       employeeName={employeeName}
                       branding={branding}
+                      events={attendanceEvents}
                     />
                   </ScaledPrintPreview>
                 </div>
@@ -338,7 +356,7 @@ export default function IncidentReportDetail({
                   <Pencil className="mr-2 h-4 w-4" /> Edit
                 </Button>
               )}
-              {isManager && (
+              {isManager && !attendance && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -388,6 +406,7 @@ export default function IncidentReportDetail({
               report={report}
               employeeName={employeeName}
               branding={branding}
+              events={attendanceEvents}
             />
           </div>,
           document.body

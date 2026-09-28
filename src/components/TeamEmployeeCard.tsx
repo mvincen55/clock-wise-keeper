@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useResolvedEmployeeAttendance, useDerivedEmployeeAttendance } from '@/hooks/useAttendanceFallback';
 import { derivedTardies } from '@/lib/attendance-derive';
+import { EXCUSE_CLASSES, EXCUSE_LABELS, excuseState } from '@/lib/late-arrivals';
 import { useEmployeeTardies, useEmployeeDaysOff } from '@/hooks/useEmployeeSchedules';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -290,17 +291,13 @@ function TardiesTab({ employeeId, range }: { employeeId: string; range: { start:
   if (isLoading || derivedLoading) return <LoadingSpinner />;
   if (!tardies?.length) return <EmptyState text="No tardies in last 30 days. 🎉" />;
 
-  const approvalBadge: Record<string, { label: string; className: string }> = {
-    unreviewed: { label: 'Unreviewed', className: 'bg-muted text-muted-foreground' },
-    pending: { label: 'Unreviewed', className: 'bg-muted text-muted-foreground' },
-    approved: { label: 'Approved', className: 'bg-success/20 text-success' },
-    unapproved: { label: 'Unapproved', className: 'bg-destructive/20 text-destructive' },
-  };
-
   return (
     <div className="divide-y rounded-lg border max-h-80 overflow-y-auto">
       {tardies.map((t: any) => {
-        const ab = approvalBadge[t.approval_status] || approvalBadge.unreviewed;
+        // A derived row (no login yet) has no excuse state: it is simply late.
+        const ab = t.derived
+          ? { label: 'Late', className: 'bg-muted text-muted-foreground' }
+          : { label: EXCUSE_LABELS[excuseState(t)], className: EXCUSE_CLASSES[excuseState(t)] };
         return (
           <div key={t.id} className="px-3 py-2 text-sm">
             <div className="flex items-center justify-between">

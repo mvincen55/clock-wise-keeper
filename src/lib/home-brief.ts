@@ -72,7 +72,7 @@ export type CloseoutFact = { id: string; deposit_date: string; sealed_at: string
 
 /** The kinds that are about a person's day; an exception row opens that item first. */
 const ATTENDANCE_KINDS = new Set<AttentionItem['kind']>([
-  'clocked_in_after_close', 'missing_clock_out', 'missing_day', 'unpaired_punches', 'time_suspect', 'tardy_unreviewed',
+  'clocked_in_after_close', 'missing_clock_out', 'missing_day', 'unpaired_punches', 'time_suspect', 'excuse_request',
 ]);
 
 /**

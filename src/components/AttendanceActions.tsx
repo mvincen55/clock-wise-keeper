@@ -133,7 +133,9 @@ export function AttendanceActions({ row, alwaysShow = false, editButton = false,
   // Ignore form
   const [ignoreReason, setIgnoreReason] = useState('');
 
-  const hasIssue = row.is_absent || row.is_incomplete || (row.is_late && row.tardy_approval_status === 'unreviewed') || row.timezone_suspect;
+  // A late arrival is not an issue to fix here: it is the person's to
+  // acknowledge and the office rule's to count.
+  const hasIssue = row.is_absent || row.is_incomplete || row.timezone_suspect;
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
   if (!isManager) return null;

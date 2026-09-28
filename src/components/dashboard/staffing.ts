@@ -210,25 +210,24 @@ export function personStatusAt(row: EmployeeSnapshot, now: Date): PersonStatus {
 /**
  * Count only attendance facts already true and worth a human look.
  * Off-hours quiet is NOT an exception; a scheduled day that ended with no
- * punches, an unreviewed tardy, or a missing clock-out after shift end is.
+ * punches or a missing clock-out after shift end is. A late arrival is not:
+ * it is the person's to acknowledge, and the database counts it against the
+ * office rule (an excuse request reaches Attention as a decision).
  */
 export function attendanceReview(rows: EmployeeSnapshot[], now: Date): { count: number; detail: string } {
   const nowMin = minutesOfDay(now);
   let absences = 0;
-  let tardies = 0;
   let missingOut = 0;
   for (const r of workingRows(rows)) {
     const end = parseClockMinutes(r.schedule_expected_end);
     const shiftEnded = end !== null && nowMin > end;
     if (!r.has_punches && shiftEnded) absences += 1;
-    if (r.is_late && r.tardy_approval_status === 'unreviewed') tardies += 1;
     if (r.has_punches && r.is_incomplete && shiftEnded) missingOut += 1;
   }
   const parts: string[] = [];
   if (absences) parts.push(`${absences} no-punch day${absences === 1 ? '' : 's'}`);
-  if (tardies) parts.push(`${tardies} unreviewed lat${tardies === 1 ? 'e arrival' : 'e arrivals'}`);
   if (missingOut) parts.push(`${missingOut} missing clock-out${missingOut === 1 ? '' : 's'}`);
-  return { count: absences + tardies + missingOut, detail: parts.join(' · ') };
+  return { count: absences + missingOut, detail: parts.join(' · ') };
 }
 
 /** The full staffing read for a management dashboard. */
