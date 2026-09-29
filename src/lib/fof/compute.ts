@@ -34,10 +34,14 @@ export function computeFof(
   const autoDiscount = amounts.autoDiscount?.cents ?? 0;
   const membershipCovered = amounts.membershipCoveredCents ?? 0;
 
-  const computedPortion = Math.max(
-    0,
-    total - officeDiscount - patientCredit - autoDiscount - membershipCovered - insurance - writeOff
-  );
+  // The raw balance can go negative when discounts, credits and insurance
+  // exceed the total. That is never silently clamped away: the portion
+  // shown is zero and the shortfall is reported so the builder can block
+  // printing until staff correct the credit or discount.
+  const rawPortion =
+    total - officeDiscount - patientCredit - autoDiscount - membershipCovered - insurance - writeOff;
+  const computedPortion = Math.max(0, rawPortion);
+  const imbalanceCents = rawPortion < 0 ? -rawPortion : 0;
   const effectivePortion = overrides.patientPortionCents ?? computedPortion;
 
   const computedDiscount = percentOfCents(
@@ -77,6 +81,7 @@ export function computeFof(
     computed,
     effective,
     installmentLabels,
+    imbalanceCents,
     overridden: {
       patientPortion: overrides.patientPortionCents !== undefined,
       discount: overrides.discountCents !== undefined,

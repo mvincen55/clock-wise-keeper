@@ -7,6 +7,11 @@
  * staff-typed descriptions, patient fields, and edited labels cannot leak
  * in by construction. Slot labels passed in must themselves come from the
  * code-derived safe labels (see visitWork's safeLabel in FofBuilder).
+ *
+ * The code field itself is an allowlist, not a passthrough: only text
+ * shaped like a CDT code or an office procedure code is ever forwarded. A
+ * typed name, narrative, dollar amount or malformed code fails the pattern
+ * and the line is dropped from the request.
  */
 import { friendlyCdtName } from './cdt-names';
 
@@ -18,14 +23,36 @@ export interface NameVisitsPayload {
 /** A visit entry: bare code, or code + tooth (tooth is validated below). */
 export type NameVisitsEntry = string | { code: string; tooth: string };
 
+// A CDT code, optionally with the office's 1-3 letter/period variant
+// suffix (D2740C, D9215A, D2752.).
+const CDT_CODE = /^D\d{4}(?:[A-Z.]{1,3})?$/;
+// The office's own codes: bare numbers (2014, 15010) or one/two letters
+// followed by digits with an optional trailing letter (N100, XX232, D001).
+const OFFICE_CODE = /^(?:\d{1,6}|[A-Z]{1,2}\d{2,5}[A-Z]?)$/;
+const MAX_CODE_LENGTH = 8;
+
+/**
+ * True when the text is shaped like a procedure code the office could
+ * bill. Whitespace, currency, punctuation other than a CDT suffix period,
+ * and anything without digits (a name, a word) is rejected.
+ */
+export function isVettedProcedureCode(code: string): boolean {
+  const key = code.trim().toUpperCase();
+  if (!key || key.length > MAX_CODE_LENGTH) return false;
+  // Anything that starts like a CDT code must BE a CDT code (D27400X is not).
+  if (/^D\d/.test(key)) return CDT_CODE.test(key);
+  return OFFICE_CODE.test(key);
+}
+
 /**
  * De-identified wording for a procedure: the friendly CDT name when one
- * exists, otherwise the bare code. Never staff-typed text; a code-less
- * line has no safe wording and returns null (dropped from AI payloads).
+ * exists, otherwise the bare vetted code. Never staff-typed text; a
+ * code-less line, or text that is not shaped like a code, has no safe
+ * wording and returns null (dropped from AI payloads).
  */
 export function safeProcedureLabel(code: string): string | null {
   const trimmed = code.trim();
-  if (!trimmed) return null;
+  if (!trimmed || !isVettedProcedureCode(trimmed)) return null;
   return friendlyCdtName(trimmed) || trimmed.toUpperCase();
 }
 
@@ -40,6 +67,9 @@ const TOOTH_RE = new RegExp(`^${TOOTH_TOKEN}([*-]${TOOTH_TOKEN})?$`);
 export function safeToothSuffix(tooth: string): string | null {
   const trimmed = tooth.trim();
   if (!trimmed || !TOOTH_RE.test(trimmed)) return null;
+  const [first, second] = trimmed.toUpperCase().split(/[*-]/);
+  const inRange = (token: string) => /^[A-T]$/.test(token) || (Number(token) >= 1 && Number(token) <= 32);
+  if (!inRange(first) || (second !== undefined && !inRange(second))) return null;
   return `(tooth #${trimmed.toUpperCase()})`;
 }
 

@@ -28,7 +28,7 @@ import {
  */
 
 export interface ConsentPrintSheetProps {
-  form: Pick<ConsentForm, 'id' | 'name' | 'isSample' | 'isFinancial' | 'currentVersion'>;
+  form: Pick<ConsentForm, 'id' | 'name' | 'isSample' | 'isFinancial' | 'currentVersion'> & Partial<Pick<ConsentForm, 'procedureCodes'>>;
   content: ConsentTemplateContent;
   branding: Pick<OrgBranding, 'displayName' | 'legalName' | 'addressLine1' | 'addressLine2' | 'phone' | 'website' | 'logoUrl'>;
   fill?: PacketFill | null;
@@ -127,16 +127,30 @@ function FeeTable({ fill }: { fill: PacketFill }) {
   );
 }
 
+/**
+ * The packet procedures a connected consent is about: only the codes the
+ * template is linked to, at the amounts the packet will actually charge
+ * (overridden unit fee × quantity). A template with no linked codes is a
+ * general form and shows the whole packet.
+ */
+export function coveredProcedures(fill: PacketFill, procedureCodes: string[] | undefined): PacketFill['procedures'] {
+  const linked = new Set((procedureCodes ?? []).map(code => code.trim().toUpperCase()).filter(Boolean));
+  if (linked.size === 0) return fill.procedures;
+  return fill.procedures.filter(p => linked.has(p.code.trim().toUpperCase()));
+}
+
 function BlockView({
   block,
   formId,
   fill,
   isFinancial,
+  procedureCodes,
 }: {
   block: ConsentBlock;
   formId: string;
   fill: PacketFill | null;
   isFinancial: boolean;
+  procedureCodes?: string[];
 }) {
   const answer = fill?.answers[answerKey(formId, block.id)] ?? '';
 
@@ -207,7 +221,8 @@ function BlockView({
         </p>
       );
     case 'procedure': {
-      const procedures = fill?.procedures.map(p => p.description || p.code).join(', ');
+      // A connected consent names only the procedures it covers.
+      const procedures = fill ? coveredProcedures(fill, isFinancial ? undefined : procedureCodes).map(p => p.description || p.code).join(', ') : undefined;
       return (
         <p className="cf-field cf-keep">
           <span className="cf-field-label">{block.label || 'Procedure'}:</span>{' '}
@@ -233,8 +248,16 @@ function BlockView({
       // Only forms designed with a cost block ever show money. The financial
       // agreement gets the full fee table; a consent shows the total line.
       if (isFinancial && fill) return <FeeTable fill={fill} />;
-      const total = fill && fill.procedures.length > 0
-        ? formatCents(packetTotals(fill).totalCents)
+      // A connected consent shows the cost of ITS procedures only, at the
+      // final (overridden) unit fee × quantity; a general consent shows the
+      // packet total after the packet discount.
+      const covered = fill ? coveredProcedures(fill, procedureCodes) : [];
+      const total = fill && covered.length > 0
+        ? formatCents(
+            (procedureCodes ?? []).length > 0
+              ? covered.reduce((sum, p) => sum + (packetLineTotal(p) ?? 0), 0)
+              : packetTotals(fill).totalCents
+          )
         : undefined;
       return (
         <p className="cf-field cf-keep">
@@ -417,6 +440,7 @@ export default function ConsentPrintSheet({
                 formId={form.id}
                 fill={fill}
                 isFinancial={form.isFinancial}
+                procedureCodes={form.procedureCodes}
               />
             ))}
           </main>

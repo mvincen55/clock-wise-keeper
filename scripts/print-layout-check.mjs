@@ -9,7 +9,10 @@
  *     is at most 945px, keeping ~1.5% slack for machine font-metric
  *     differences — the signature block carries page-break-inside:
  *     avoid, so any overflow throws it alone onto a second page,
- *   - the office-copy page is present (never silently dropped).
+ *   - the office-copy page is present (never silently dropped),
+ *   - a long plan (long-*.html) paginates its office copy over as many
+ *     Letter pages as it needs: the table header repeats on every office
+ *     page, no row is split across pages, and the last line is printed.
  *
  * Run:  node scripts/print-layout-check.mjs
  * Needs a Playwright install (local dep or global); the browser path
@@ -31,6 +34,17 @@ async function loadChromium() {
     }
   }
   throw new Error('playwright not found — npm i -D playwright (or install globally)');
+}
+
+async function pdfPageTexts(buf) {
+  const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const doc = await getDocument({ data: new Uint8Array(buf), disableFontFace: true, verbosity: 0 }).promise;
+  const texts = [];
+  for (let i = 1; i <= doc.numPages; i++) {
+    const content = await (await doc.getPage(i)).getTextContent();
+    texts.push(content.items.map(item => item.str).join(' '));
+  }
+  return texts;
 }
 
 function pdfPageCount(buf) {
@@ -78,9 +92,31 @@ for (const f of files) {
   });
   const pdf = await page.pdf({ format: 'Letter', printBackground: true, preferCSSPageSize: true });
   const pages = pdfPageCount(pdf);
+  const isLong = f.startsWith('long-');
 
   const problems = [];
-  if (pages !== 2) problems.push(`expected 2 PDF pages (patient + office copy), got ${pages}`);
+  if (isLong) {
+    // The office copy of a long plan legitimately runs past one page; what
+    // must hold is that nothing is lost or torn across a page boundary.
+    if (pages < 3) problems.push(`expected a multi-page office copy for a long plan, got ${pages} page(s)`);
+    const texts = await pdfPageTexts(pdf);
+    const officePages = texts.slice(1);
+    const rowCount = await page.evaluate(() => document.querySelectorAll('.fof-office-page tbody tr:not(.fof-office-line-notes)').length);
+    const printedRows = officePages.reduce((n, t) => n + (t.match(/\bD\d{4}\b/g) ?? []).length, 0);
+    if (printedRows < rowCount) problems.push(`office copy printed ${printedRows} code cells for ${rowCount} rows — rows were dropped`);
+    if (!officePages.at(-1).includes('D9999') && !officePages.at(-2)?.includes('D9999')) problems.push('the last office line (D9999) is missing from the office copy');
+    // The table header is printed in small caps, so match it case-insensitively.
+    const headerPages = officePages.filter(t => /CODE\s+TH\s+VISIT\s+CATEGORY/i.test(t)).length;
+    const tablePages = officePages.filter(t => /\bD\d{4}\b/.test(t)).length;
+    if (headerPages < tablePages) problems.push(`office table header repeats on ${headerPages} of ${tablePages} table pages`);
+    // A row torn across pages leaves a page that ends with a code but no amount after it.
+    for (const [i, t] of officePages.entries()) {
+      const tail = t.trim().slice(-120);
+      if (/\bD\d{4}\b[^$]*$/.test(tail) && !/\$[\d,]+\.\d{2}\s*$/.test(tail) && !tail.includes('not for distribution') && !tail.endsWith('—')) {
+        problems.push(`office page ${i + 2} ends mid-row: "…${tail.slice(-60)}"`);
+      }
+    }
+  } else if (pages !== 2) problems.push(`expected 2 PDF pages (patient + office copy), got ${pages}`);
   if (!info.officeCopy) problems.push('office-copy page missing');
   if (info.sheetCount !== 2) problems.push(`expected 2 sheets, got ${info.sheetCount}`);
   if (info.fitted > PAGE_PX + 0.5)
@@ -102,4 +138,4 @@ if (failures) {
   console.error(`\n${failures} variant(s) failed the print layout check`);
   process.exit(1);
 }
-console.log(`\nall ${files.length} variants fit: one patient page + one office copy`);
+console.log(`\nall ${files.length} variants fit: one patient page + a complete office copy (long plans paginate)`);

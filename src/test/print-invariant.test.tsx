@@ -122,6 +122,7 @@ const COMPUTATION: FofComputation = {
     installmentsCents: [94_000, 110_000, 110_000],
   },
   installmentLabels: ['Upon Scheduling', 'At Crown Prep', 'On Crown Delivery'],
+  imbalanceCents: 0,
   overridden: {
     patientPortion: false,
     discount: false,

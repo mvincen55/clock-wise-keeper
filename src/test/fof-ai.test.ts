@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildNameVisitsPayload, safeProcedureLabel, safeToothSuffix } from '@/lib/fof/ai';
+import { buildNameVisitsPayload, isVettedProcedureCode, safeProcedureLabel, safeToothSuffix } from '@/lib/fof/ai';
 
 // HIPAA regression tests: the name-visits request must be de-identified by
 // construction. The builder takes CDT codes only, so staff-typed
@@ -26,7 +26,7 @@ describe('buildNameVisitsPayload', () => {
   it('builds procedures from codes only and drops code-less entries', () => {
     const payload = buildNameVisitsPayload(
       [
-        ['D7140', 'ZZ-CUSTOM'],
+        ['D7140', '2014'],
         ['', 'D9110'],
       ],
       ['Upon Scheduling', 'Surgery', 'Delivery']
@@ -34,10 +34,27 @@ describe('buildNameVisitsPayload', () => {
     expect(payload).toEqual({
       slots: ['Upon Scheduling', 'Surgery', 'Delivery'],
       visits: [
-        { procedures: ['Tooth Extraction', 'ZZ-CUSTOM'] },
+        { procedures: ['Tooth Extraction', 'Preliminary Impression'] },
         { procedures: ['Emergency Pain Treatment'] },
       ],
     });
+  });
+
+  it('drops anything not shaped like a procedure code — names, narratives, amounts, malformed codes', () => {
+    const payload = buildNameVisitsPayload(
+      [[
+        'Jane Doe', 'crown for tooth 8', '$1,500.00', 'D27400X', 'ZZ-CUSTOM', 'D2740; drop table', 'D2740',
+      ]],
+      ['Upon Scheduling']
+    );
+    expect(payload.visits[0].procedures).toEqual(['Porcelain Crown']);
+    expect(JSON.stringify(payload)).not.toMatch(/Jane|crown for|1,500|drop table|ZZ/);
+    expect(isVettedProcedureCode('D2740')).toBe(true);
+    expect(isVettedProcedureCode('D2740C')).toBe(true);
+    expect(isVettedProcedureCode('2014')).toBe(true);
+    expect(isVettedProcedureCode('XX232')).toBe(true);
+    expect(isVettedProcedureCode('Jane')).toBe(false);
+    expect(isVettedProcedureCode('D2740 8')).toBe(false);
   });
 
   it('cannot leak text that is not derived from a code', () => {

@@ -193,10 +193,20 @@ export function suggestVisitStage(code: string): number {
  * with no prepay (e.g. the surgical guide D5982) — they're excluded from
  * the ahead-shifting and added flat to that visit's payment.
  */
+export interface VisitScheduleOptions {
+  /** Office setting: first-visit portions under this are collected at the visit. */
+  dayOfServiceThresholdCents?: Cents;
+  /** Office setting: payments under this fold into the previous payment. */
+  minStandalonePaymentCents?: Cents;
+}
+
 export function buildVisitSchedule(
   portionCents: Cents,
-  allVisits: { label: string; feeCents: Cents; dueAtVisitCents?: Cents }[]
+  allVisits: { label: string; feeCents: Cents; dueAtVisitCents?: Cents }[],
+  options: VisitScheduleOptions = {}
 ): VisitPlan | null {
+  const dayOfServiceThreshold = options.dayOfServiceThresholdCents ?? DAY_OF_SERVICE_THRESHOLD_CENTS;
+  const minStandalone = options.minStandalonePaymentCents ?? MIN_STANDALONE_PAYMENT_CENTS;
   // Zero-fee visits (e.g. a no-charge seat appointment) create no payment.
   const visits = allVisits.filter(v => v.feeCents > 0);
   if (visits.length === 0) return null;
@@ -223,7 +233,7 @@ export function buildVisitSchedule(
   // Office policy: a first visit under the day-of-service threshold needs
   // no payment before it — that money is simply collected at the visit,
   // and "Upon Scheduling" (for the rest of the treatment) moves after it.
-  if (ahead[0] > 0 && ahead[0] < DAY_OF_SERVICE_THRESHOLD_CENTS) {
+  if (ahead[0] > 0 && ahead[0] < dayOfServiceThreshold) {
     dueAt[0] += ahead[0];
     ahead[0] = 0;
   }
@@ -269,8 +279,13 @@ export function buildVisitSchedule(
   // accumulates into the earliest real one). The freed slot shows $0.00 —
   // "nothing due that day" — unless the zero-slot filter drops it below.
   for (let i = 1; i < payments.length; i++) {
-    if (payments[i] > 0 && payments[i] < MIN_STANDALONE_PAYMENT_CENTS) {
-      payments[i - 1] += payments[i];
+    if (payments[i] > 0 && payments[i] < minStandalone) {
+      // Fold into the nearest EARLIER payment that still carries money, so
+      // a run of tiny payments lands in one real payment rather than in a
+      // slot that was itself just emptied.
+      let target = i - 1;
+      while (target > 0 && payments[target] === 0) target -= 1;
+      payments[target] += payments[i];
       payments[i] = 0;
     }
   }

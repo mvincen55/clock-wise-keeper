@@ -257,3 +257,39 @@ describe('conditional blocks', () => {
     expect(blank).toContain('IV-only instructions');
   });
 });
+
+describe('a connected consent shows only the procedures it covers, at the final amounts', () => {
+  const COST_BLOCKS: ConsentBlock[] = [
+    { id: 't1', type: 'title', label: 'Bone Graft Consent' },
+    { id: 'pr', type: 'procedure', label: 'Procedure' },
+    { id: 'c1', type: 'cost', label: 'Treatment Cost' },
+  ];
+  it('lists and totals the linked codes only, using the overridden fee × quantity', () => {
+    const html = render({
+      form: { ...FORM, procedureCodes: ['D7953'] },
+      content: { blocks: COST_BLOCKS },
+      branding: BRANDING,
+      fill: { ...filled(), procedures: [
+        { code: 'D7140', description: 'Extraction, erupted tooth', officeFeeCents: 25000, feeCents: 25000, overridden: false, quantity: 1 },
+        { code: 'D7953', description: 'Bone graft', officeFeeCents: 60000, feeCents: 45000, overridden: true, quantity: 2 },
+      ] },
+      versionDate: '2026-07-01',
+    });
+    expect(html).toContain('Bone graft');
+    expect(html).not.toContain('Extraction, erupted tooth');
+    expect(html).toContain('$900.00'); // 2 × $450 overridden
+    expect(html).not.toContain('$1,150.00');
+    expect(html).not.toContain('$1,400.00');
+  });
+  it('a general consent with no linked codes still shows the whole packet total', () => {
+    const html = render({
+      form: { ...FORM, procedureCodes: [] },
+      content: { blocks: COST_BLOCKS },
+      branding: BRANDING,
+      fill: filled(),
+      versionDate: '2026-07-01',
+    });
+    expect(html).toContain('Extraction, erupted tooth');
+    expect(html).toContain('$650.00'); // 250 + 450 − 50 packet discount
+  });
+});

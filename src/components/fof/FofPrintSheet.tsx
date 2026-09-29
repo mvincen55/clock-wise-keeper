@@ -21,6 +21,9 @@ import AdaptivePatientPages from './AdaptivePatientPages';
  * index.css (pt/in units, one letter page).
  */
 
+/** Which pages a print job carries. The office copy never rides along by accident. */
+export type FofPrintMode = 'patient' | 'office' | 'both';
+
 interface FofPrintSheetProps {
   practice: FofPracticeInfo;
   template: FofTemplate;
@@ -39,6 +42,19 @@ interface FofPrintSheetProps {
   doctorName?: string;
   /** Marked on the office copy when rows came from a PMS screenshot import. */
   importedFromScreenshot?: boolean;
+  /** 'patient' = patient pages only, 'office' = office copy only, 'both' (default). */
+  printMode?: FofPrintMode;
+  /** The office has no saved payment policy: the legacy visit schedule was used. */
+  legacyPolicy?: boolean;
+  /** Global manual insurance/write-off overrides reconciled to the line totals. */
+  reconciliation?: {
+    lineInsuranceCents: number;
+    printedInsuranceCents: number;
+    lineWriteOffCents: number;
+    printedWriteOffCents: number;
+  };
+  /** How the benefits on this form were arrived at (office copy only). */
+  benefitsNote?: string;
 }
 
 const membershipRowLabel = (practice: FofPracticeInfo): string =>
@@ -167,8 +183,16 @@ export default function FofPrintSheet({
   createdBy,
   doctorName,
   importedFromScreenshot,
+  printMode = 'both',
+  legacyPolicy,
+  reconciliation,
+  benefitsNote,
 }: FofPrintSheetProps) {
   const { effective } = computation;
+  const showPatient = printMode !== 'office';
+  const showOffice = printMode !== 'patient';
+  const hasNotes = (officeLines ?? []).some(l => l.notes && l.notes.length > 0);
+  const hasBasis = (officeLines ?? []).some(l => l.allowableBasis);
   const schedule = computation.paymentSchedule;
   const remainingCents = schedule?.remainingCents ?? effective.patientPortionCents;
   // Browser Print cannot bypass the same review gate used by the editor.
@@ -243,7 +267,7 @@ export default function FofPrintSheet({
   const PatientPages = schedule ? AdaptivePatientPages : Fragment;
   return (
     <>
-    <PatientPages>
+    {showPatient && <PatientPages>
     <div className={`fof-sheet${densityClass}${schedule ? ' fof-policy-sheet' : ''}`}>
       <header className="fof-head">
         {practice.logoUrl !== '' ? (
@@ -556,12 +580,14 @@ export default function FofPrintSheet({
       </footer>
     </div>
 
-    </PatientPages>
-    {/* OFFICE COPY — auto-printed second page recording exactly what was
-        behind this FOF (codes, fees, insurance math). Never persisted;
-        filed on paper with the signed form. Always printed — a form with
-        no line detail states so explicitly rather than dropping the page. */}
-    {(
+    </PatientPages>}
+    {/* OFFICE COPY — the page recording exactly what was behind this FOF
+        (codes, fees, insurance math, provenance). Never persisted; filed on
+        paper with the signed form, never handed to the patient. Printed with
+        the patient form by default (a form with no line detail states so
+        explicitly rather than dropping the page); a patient-only print job
+        leaves it out on purpose. */}
+    {showOffice && (
       <div className="fof-sheet fof-office-page">
         <div className="fof-office-head">
           <div>
@@ -575,14 +601,16 @@ export default function FofPrintSheet({
                 <>
                   <br />
                   Created by {createdBy} on {formatNow()}
-                  {importedFromScreenshot ? ' · Procedures imported from a PMS screenshot' : ''}
+                  {importedFromScreenshot ? ' · Procedures imported from a treatment plan read on this device' : ''}
                 </>
               ) : importedFromScreenshot ? (
                 <>
                   <br />
-                  Procedures imported from a PMS screenshot
+                  Procedures imported from a treatment plan read on this device
                 </>
               ) : null}
+              {legacyPolicy && <><br />No office payment policy configured — legacy visit-based schedule in use.</>}
+              {benefitsNote && <><br />{benefitsNote}</>}
             </div>
           </div>
           <div className="fof-office-stamp">Office Use Only</div>
@@ -606,20 +634,31 @@ export default function FofPrintSheet({
           </thead>
           <tbody>
             {officeLines.map((l, i) => (
-              <tr key={i}>
+              <Fragment key={i}>
+              <tr>
                 <td>{l.code || '—'}</td>
                 <td>{l.tooth || ''}</td>
                 <td>{l.visit}</td>
                 <td>{l.category}</td>
                 <td>{l.description}</td>
                 {officeLines.some(x => x.entryDate) && <td>{l.entryDate}</td>}
-                <td className="num">{formatCents(l.officeFeeCents)}</td>
+                <td className="num">
+                  {formatCents(l.officeFeeCents)}
+                  {l.feeSource && l.feeSource !== 'office' && <span className="fof-office-basis"> {l.feeSource}</span>}
+                </td>
                 <td className="num">
                   {l.allowableCents !== null ? formatCents(l.allowableCents) : '—'}
+                  {hasBasis && l.allowableBasis && <span className="fof-office-basis"> {l.allowableBasis}</span>}
                 </td>
                 <td className="num">{l.insPaysCents > 0 ? formatCents(l.insPaysCents) : '—'}</td>
                 <td className="num">{l.writeOffCents > 0 ? formatCents(l.writeOffCents) : '—'}</td>
               </tr>
+              {hasNotes && l.notes && l.notes.length > 0 && (
+                <tr className="fof-office-line-notes">
+                  <td colSpan={officeLines.some(x => x.entryDate) ? 10 : 9}>{l.notes.join(' ')}</td>
+                </tr>
+              )}
+              </Fragment>
             ))}
             <tr className="fof-office-totals">
               <td colSpan={officeLines.some(l => l.entryDate) ? 6 : 5}>Totals</td>
@@ -709,6 +748,17 @@ export default function FofPrintSheet({
             </div>
           )}
         </div>
+
+        {reconciliation && (reconciliation.lineInsuranceCents !== reconciliation.printedInsuranceCents || reconciliation.lineWriteOffCents !== reconciliation.printedWriteOffCents) && (
+          <section className="fof-payment-allocations" data-testid="fof-reconciliation">
+            <div className="fof-card-title">Manual insurance adjustments reconciled to line totals</div>
+            <p>
+              Line estimates: insurance {formatCents(reconciliation.lineInsuranceCents)}, write-off {formatCents(reconciliation.lineWriteOffCents)}.
+              {' '}Printed: insurance {formatCents(reconciliation.printedInsuranceCents)}, write-off {formatCents(reconciliation.printedWriteOffCents)}.
+              {' '}Difference applied to the patient portion: {formatCents((reconciliation.printedInsuranceCents - reconciliation.lineInsuranceCents) + (reconciliation.printedWriteOffCents - reconciliation.lineWriteOffCents))} (manual global override by staff).
+            </p>
+          </section>
+        )}
 
         {schedule && <section className="fof-payment-allocations"><div className="fof-card-title">Payment allocations & reconciliation</div>
           <p>Full obligation {formatCents(schedule.obligationCents)} · Prior payments {formatCents(schedule.paidCents)} · Remaining {formatCents(schedule.remainingCents)}</p>

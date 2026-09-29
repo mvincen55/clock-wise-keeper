@@ -55,11 +55,22 @@ export interface FofLine {
    */
   inRenewalYear?: boolean;
   /**
-   * Staff wrote the insurance payment for this line: use it verbatim
-   * (no deductible/percentage math), still bounded by the remaining max
-   * so the rest of the estimate stays consistent.
+   * Staff wrote the insurance payment for this line: use it in place of the
+   * deductible/percentage math, bounded by what the plan could actually pay
+   * for the line (the payable basis) and by the remaining annual max so the
+   * rest of the estimate stays consistent.
    */
   insurancePaysOverrideCents?: Cents | null;
+  /**
+   * Explicit exception: the office knows this plan pays more than the
+   * line's payable basis (a carrier paying above the allowed fee, or a
+   * code the plan covers although the office category says otherwise).
+   * Lifts the basis bound only; the remaining max still applies and
+   * work-up lines stay uncovered.
+   */
+  insurancePaysOverrideException?: boolean;
+  /** Where the allowed fee came from, for the office copy's provenance column. */
+  allowedSource?: 'carrier' | 'manual' | null;
 }
 
 export interface PlanRules {
@@ -94,12 +105,37 @@ export interface PatientBenefits {
   renewal?: { annualMaxCents: Cents; deductibleCents: Cents } | null;
 }
 
+/** Which figure the insurance math for a line was actually based on. */
+export type AllowedBasis =
+  /** The selected carrier's contracted rate. */
+  | 'carrier'
+  /** A manually typed allowable. */
+  | 'manual'
+  /** No contracted rate on file: the office fee stood in. */
+  | 'office'
+  /** Alternate benefit: paid from the amalgam rate, patient owes up to the office fee. */
+  | 'downgrade'
+  /** Annual max exhausted on a plan that reverts to office fees. */
+  | 'after-max'
+  /** Not a covered line: the office fee applies, no allowable. */
+  | 'uncovered';
+
 export interface LineEstimate {
   officeFeeCents: Cents;
+  /** The allowed fee the calculation actually used (office fee when no allowable applies). */
   allowedCents: Cents;
   writeOffCents: Cents;
   deductibleAppliedCents: Cents;
   insurancePaysCents: Cents;
+  /** Provenance of allowedCents. */
+  allowedBasis: AllowedBasis;
+  /** Alternate-benefit basis the payment was computed from, when downgraded. */
+  benefitBasisCents: Cents | null;
+  /**
+   * Set when a typed insurance-payment override was reduced: the typed
+   * amount and why it could not stand as written.
+   */
+  overrideBounded?: { typedCents: Cents; reason: 'basis' | 'max' | 'workup' };
 }
 
 export interface InsuranceEstimate {
@@ -162,10 +198,12 @@ export function estimateInsurance(
       renewalPaysCents: 0,
       perLine: lines.map(line => ({
         officeFeeCents: line.officeFeeCents,
-        allowedCents: line.allowedCents ?? line.officeFeeCents,
+        allowedCents: line.officeFeeCents,
         writeOffCents: 0,
         deductibleAppliedCents: 0,
         insurancePaysCents: 0,
+        allowedBasis: 'uncovered' as const,
+        benefitBasisCents: null,
       })),
     };
   }
@@ -217,17 +255,33 @@ export function estimateInsurance(
     let deductibleApplied = 0;
     let insurancePays = 0;
     const payOverride = line.insurancePaysOverrideCents ?? null;
+    // Downgraded lines pay benefits from the alternate (e.g. amalgam)
+    // fee even though the patient is charged for the actual procedure.
+    const benefitBasis = Math.min(line.benefitBasisCents ?? allowed, allowed);
+    let overrideBounded: LineEstimate['overrideBounded'];
 
-    if (payOverride !== null && line.category !== 'workup') {
-      insurancePays = Math.max(0, payOverride);
+    if (payOverride !== null && line.category === 'workup') {
+      // Office policy: work-up is never insurance-covered, not even by hand.
+      overrideBounded = { typedCents: Math.max(0, payOverride), reason: 'workup' };
+    } else if (payOverride !== null) {
+      const typed = Math.max(0, payOverride);
+      insurancePays = typed;
+      // The most a plan can pay for the line is its payable basis: the
+      // benefit basis of a covered line, nothing for an uncovered one. An
+      // explicit exception lifts that bound; the annual max never lifts.
+      const payableBasis = covered ? benefitBasis : 0;
+      if (!line.insurancePaysOverrideException && insurancePays > payableBasis) {
+        insurancePays = payableBasis;
+        overrideBounded = { typedCents: typed, reason: 'basis' };
+      }
       if (!exemptFromMax) {
-        insurancePays = Math.min(insurancePays, remainingMax);
+        if (insurancePays > remainingMax) {
+          insurancePays = remainingMax;
+          overrideBounded = { typedCents: typed, reason: overrideBounded?.reason ?? 'max' };
+        }
         remainingMax -= insurancePays;
       }
     } else if (covered) {
-      // Downgraded lines pay benefits from the alternate (e.g. amalgam)
-      // fee even though the patient is charged for the actual procedure.
-      const benefitBasis = Math.min(line.benefitBasisCents ?? allowed, allowed);
       const deductibleWaived = line.category === 'preventive' && plan.deductibleWaivedPreventive;
       if (!deductibleWaived && remainingDeductible > 0) {
         deductibleApplied = Math.min(remainingDeductible, benefitBasis);
@@ -247,6 +301,17 @@ export function estimateInsurance(
 
     if (inNewYear) renewalPays += insurancePays;
 
+    const allowedBasis: AllowedBasis = !covered
+      ? revertedToOfficeFee
+        ? 'after-max'
+        : 'uncovered'
+      : downgraded
+        ? 'downgrade'
+        : line.allowedCents === null
+          ? 'office'
+          : line.allowedSource === 'manual'
+            ? 'manual'
+            : 'carrier';
     perLine.push({
       officeFeeCents: line.officeFeeCents,
       // Uncovered lines (and lines reverted after the max) fall back to
@@ -256,6 +321,9 @@ export function estimateInsurance(
       writeOffCents: writeOff,
       deductibleAppliedCents: deductibleApplied,
       insurancePaysCents: insurancePays,
+      allowedBasis,
+      benefitBasisCents: covered && downgraded ? benefitBasis : null,
+      ...(overrideBounded ? { overrideBounded } : {}),
     });
   }
 
