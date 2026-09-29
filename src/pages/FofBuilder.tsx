@@ -2466,6 +2466,7 @@ export default function FofBuilder() {
                       <div className="flex gap-1.5 items-center">
                         <Input
                           placeholder="D2740 / crown"
+                            aria-label={`Procedure code, line ${i + 1}`}
                           autoComplete="off"
                           className="font-mono w-28 shrink-0"
                           value={line.code}
@@ -2473,6 +2474,7 @@ export default function FofBuilder() {
                         />
                         <Input
                           placeholder="Description"
+                            aria-label={`Description for ${lineCode || `line ${i + 1}`}`}
                           autoComplete="off"
                           className="flex-1 min-w-0"
                           value={line.description}
@@ -2522,6 +2524,7 @@ export default function FofBuilder() {
                           <span className={microLabel}>Tooth</span>
                           <Input
                             placeholder="#"
+                            aria-label={`Tooth for ${lineCode || `line ${i + 1}`}`}
                             autoComplete="off"
                             className="text-center"
                             value={line.tooth}
@@ -2568,6 +2571,7 @@ export default function FofBuilder() {
                             inputMode="decimal"
                             autoComplete="off"
                             placeholder="$0.00"
+                            aria-label={`Office fee for ${lineCode || `line ${i + 1}`}`}
                             className="text-right"
                             aria-invalid={invalidMoney(line.feeInput) || (line.feeInput.trim() === '' && lineCode !== '')}
                             value={line.feeInput}
@@ -2588,6 +2592,7 @@ export default function FofBuilder() {
                                     ? 'office fee'
                                     : 'auto'
                                 }
+                                aria-label={`Allowable for ${lineCode || `line ${i + 1}`}`}
                                 className="text-right"
                                 value={
                                   line.allowedInput !== ''
@@ -2605,6 +2610,7 @@ export default function FofBuilder() {
                                 inputMode="decimal"
                                 autoComplete="off"
                                 placeholder="$0.00"
+                                aria-label={`Insurance payment for ${lineCode || `line ${i + 1}`}`}
                                 className="text-right"
                                 aria-invalid={invalidMoney(line.insPayInput)}
                                 value={
