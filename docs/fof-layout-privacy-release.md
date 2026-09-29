@@ -63,15 +63,12 @@ with no model request, chat persistence or live carrier eligibility lookup. Unsu
 questions say what can be answered. General Office knowledge uses the remote model,
 with separate history; only that channel supports explicitly enabled Training.
 
-Screenshot import reads the cropped image with the `parse-treatment` vision endpoint
-again (in memory, never stored; only code/tooth/fee/visit rows come back), because the
-in-browser Tesseract read rejected ordinary-resolution PMS screenshots whenever any
-cell fell under its confidence floor. The browser OCR remains the fallback when the
-endpoint is unavailable. Staff still compare the extracted rows with the local
-screenshot before import, the no-patient-information reminder still precedes every
-upload, Fee and Office columns remain distinct, the existing office-fee precedence
-still applies, and names/form changes and reset invalidate pending imports. Deploy
-`parse-treatment` with the frontend.
+Screenshot import (superseded, see `docs/fof-workflow-repair.md`): this release read the
+cropped image with the `parse-treatment` vision endpoint. That path was retired in the
+FOF workflow repair because a raw PMS screenshot can carry patient identifiers. Import now
+runs the vendored Tesseract build on the device, every extracted row goes through a review
+screen, and there is no network fallback. `parse-treatment` no longer exists in this
+repository.
 
 Validation: application TypeScript, production build, changed Deno endpoint check,
 FOF grouping/layout/browser-privacy tests, and actual endpoint tests for role,
@@ -83,6 +80,8 @@ Chromium PDF checks cover one-page short/standard plans,
 two-page plans with 8 and 16 independent groups and long treatment wording, and an
 oversized 32-group plan that requests review. Fresh CI must pass before merge.
 
-Release: deploy `fof-office-guidance`, `name-visits`, `parse-treatment`, and
+Release (as of this follow-up): deploy `fof-office-guidance`, `name-visits`, `parse-treatment`, and
 `kimi-agent` with their shared modules from the merged revision, then publish the
 frontend. No migrations are needed. Use the existing practice logo configuration.
+The later FOF workflow repair removes `parse-treatment` from the deployment set; follow
+`docs/fof-workflow-repair.md` for the current release order.
