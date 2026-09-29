@@ -152,6 +152,8 @@ interface Variant {
   template: FofTemplate;
   filled?: boolean;
   extreme?: boolean;
+  /** Long dense plan: the office copy must paginate cleanly over several Letter pages. */
+  long?: boolean;
 }
 
 // Extreme dense-path case modeled on a real large treatment plan: a
@@ -216,6 +218,53 @@ const EXTREME_LINES = [
   writeOffCents: 0,
 }));
 
+
+// Long-plan case: a full-mouth plan whose office copy cannot fit on one
+// page. The patient page must still fit on one sheet; the office copy may
+// take as many pages as it needs, repeating its table header and never
+// splitting a row or dropping the last line (checked by print-layout-check).
+const LONG_TEMPLATE: FofTemplate = { ...LIVE_TEMPLATES[1] }; // In-Network
+const LONG_PATIENT = {
+  patientName: 'Long Plan Layout Case',
+  dateISO: '2026-09-29',
+  treatment:
+    'Dr. Scott will complete a full-mouth restorative plan: crowns on the upper and lower molars, composite fillings on the anterior teeth, and periodontal maintenance between phases.',
+};
+const LONG_AMOUNTS: FofAmounts = { ...BLANK_AMOUNTS, totalCents: 3_981_400, insuranceCents: 150_000, writeOffCents: 612_300 };
+const LONG_COMPUTATION: FofComputation = {
+  ...BLANK_COMPUTATION,
+  computed: { patientPortionCents: 3_219_100, discountCents: 0, prepayTotalCents: 3_219_100, installmentsCents: [1_073_034, 1_073_033, 1_073_033] },
+  effective: { patientPortionCents: 3_219_100, discountCents: 0, prepayTotalCents: 3_219_100, installmentsCents: [1_073_034, 1_073_033, 1_073_033] },
+  installmentLabels: ['Upon Scheduling', 'At the Preparation Visit', 'At Delivery'],
+};
+const LONG_CODES: Array<[string, string, string, number, number | null, string, string]> = [];
+const LONG_TEETH = ['2', '3', '4', '5', '12', '13', '14', '15', '18', '19', '20', '21', '28', '29', '30', '31'];
+LONG_TEETH.forEach((tooth, i) => {
+  LONG_CODES.push(['D2740', tooth, String(1 + (i % 3)), 156_900, 126_167, 'Major', 'Porcelain Crown']);
+});
+['6', '7', '8', '9', '10', '11', '22', '23', '24', '25', '26', '27'].forEach((tooth, i) => {
+  LONG_CODES.push(['D2392', tooth, String(1 + (i % 3)), 33_500, 20_069, 'Basic', 'Composite Filling']);
+});
+LONG_CODES.push(['D4910', '', '1', 18_500, 12_000, 'Basic', 'Periodontal Maintenance']);
+LONG_CODES.push(['D4910', '', '2', 18_500, 12_000, 'Basic', 'Periodontal Maintenance']);
+LONG_CODES.push(['D0367', '', '1', 52_000, null, 'No Coverage', 'CT Scan']);
+LONG_CODES.push(['D9999', '', '3', 0, null, 'No Coverage', 'Office Adjustment']);
+const LONG_LINES = LONG_CODES.map(([code, tooth, visit, fee, allowable, category, description], i) => ({
+  code,
+  tooth,
+  visit,
+  category,
+  description,
+  entryDate: '',
+  officeFeeCents: fee,
+  allowableCents: allowable ?? fee,
+  allowableBasis: allowable == null ? 'not covered — office fee' : 'carrier rate',
+  insPaysCents: allowable == null ? 0 : Math.round(allowable * (category === 'Major' ? 0.5 : 0.8)),
+  writeOffCents: allowable == null ? 0 : fee - allowable,
+  feeSource: fee === 0 ? 'missing' : 'office',
+  notes: i % 5 === 0 ? [`Code changed from D2750: cleared insurance payment $600.00. Restore only if it still applies.`] : undefined,
+}));
+
 const variants: Variant[] = [
   ...LIVE_TEMPLATES.flatMap(t => [
     { name: `blank-${t.id}-default-brand`, logoUrl: wideLogo, template: t },
@@ -231,6 +280,7 @@ const variants: Variant[] = [
     filled: true,
     extreme: true,
   },
+  { name: 'long-in-network-default-brand', logoUrl: wideLogo, template: LONG_TEMPLATE, filled: true, long: true },
 ];
 
 for (const v of variants) {
@@ -239,13 +289,16 @@ for (const v of variants) {
     <FofPrintSheet
       practice={practice}
       template={v.template}
-      patient={v.extreme ? EXTREME_PATIENT : v.filled ? FILLED_PATIENT : BLANK_PATIENT}
-      amounts={v.extreme ? EXTREME_AMOUNTS : v.filled ? FILLED_AMOUNTS : BLANK_AMOUNTS}
-      computation={v.extreme ? EXTREME_COMPUTATION : v.filled ? FILLED_COMPUTATION : BLANK_COMPUTATION}
-      officeLines={v.extreme ? EXTREME_LINES : v.filled ? FILLED_LINES : []}
+      patient={v.long ? LONG_PATIENT : v.extreme ? EXTREME_PATIENT : v.filled ? FILLED_PATIENT : BLANK_PATIENT}
+      amounts={v.long ? LONG_AMOUNTS : v.extreme ? EXTREME_AMOUNTS : v.filled ? FILLED_AMOUNTS : BLANK_AMOUNTS}
+      computation={v.long ? LONG_COMPUTATION : v.extreme ? EXTREME_COMPUTATION : v.filled ? FILLED_COMPUTATION : BLANK_COMPUTATION}
+      officeLines={v.long ? LONG_LINES : v.extreme ? EXTREME_LINES : v.filled ? FILLED_LINES : []}
       createdBy="Megan Vincent"
       doctorName={v.filled ? 'Dr. Scott' : ''}
       importedFromScreenshot={v.extreme}
+      printMode="both"
+      reconciliation={v.long ? { lineInsuranceCents: 1_529_540, printedInsuranceCents: 150_000, lineWriteOffCents: 612_300, printedWriteOffCents: 612_300 } : undefined}
+      benefitsNote={v.long ? 'Benefits confirmed by staff for this form (source: saved plan DD MA 100/80/50 defaults, reviewed). Estimate only.' : undefined}
     />
   );
   const body = renderToStaticMarkup(

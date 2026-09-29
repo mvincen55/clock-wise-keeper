@@ -106,16 +106,22 @@ export function formatCodeNote(note: CodeNote): string {
 export async function loadProcedureNotes(
   supabase: { from: (table: string) => any },
   maxEntries = 40,
-  maxChars = 300
+  maxChars = 300,
+  orgId?: string
 ): Promise<string[]> {
   try {
-    const { data } = await supabase
+    // RLS already limits rows to the caller's offices; the org filter keeps
+    // a multi-office caller's other offices out of this office's prompt.
+    let query = supabase
       .from("fee_schedule_items")
-      .select("code, description, notes, fee_schedules!inner(kind)")
+      .select("code, description, notes, fee_schedules!inner(kind, org_id, is_active)")
       .eq("fee_schedules.kind", "office")
+      .eq("fee_schedules.is_active", true)
       .neq("notes", "")
       .order("code")
       .limit(maxEntries);
+    if (orgId) query = query.eq("fee_schedules.org_id", orgId);
+    const { data } = await query;
     return ((data ?? []) as RawRow[])
       .map((row) => {
         const code = text(row.code, 12);

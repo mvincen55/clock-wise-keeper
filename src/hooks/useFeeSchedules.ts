@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/pending-schema';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import type { Tables } from '@/integrations/supabase/types';
@@ -9,6 +9,11 @@ import { OFFICE_FEE_LOOKUP_KEY } from '@/hooks/useOfficeFeeLookup';
 
 // Fee schedules, items, and insurance plans — de-identified configuration
 // only. No patient data flows through these hooks.
+//
+// Reads are reads: nothing in a query function writes. First-use seeding is
+// an explicit owner/manager action (useSeedFeeSchedules) so an ordinary
+// staff member's first visit never attempts an admin-only insert and never
+// fails a page load on a 42501.
 
 /** 'payment' = a plan payment table: the set amounts a plan pays per code. */
 export type FeeScheduleKind = 'office' | 'carrier' | 'payment';
@@ -51,6 +56,9 @@ export interface InsurancePlan extends PlanRules {
   /** In-network plans apply write-offs and offer NO additional prepay discount. */
   isInNetwork: boolean;
   isActive: boolean;
+  sortOrder: number;
+  /** null = follow the office FOF setting; true/false = this plan's own downgrade rule. */
+  alternateBenefitDowngrade: boolean | null;
 }
 
 function mapSchedule(row: Tables<'fee_schedules'> & { fee_schedule_items?: { count: number }[] }): FeeSchedule {
@@ -78,7 +86,9 @@ function mapItem(row: Tables<'fee_schedule_items'>): FeeScheduleItem {
   };
 }
 
-function mapPlan(row: Tables<'insurance_plans'>): InsurancePlan {
+type PlanRow = Tables<'insurance_plans'> & { alternate_benefit_downgrade?: boolean | null };
+
+function mapPlan(row: PlanRow): InsurancePlan {
   return {
     id: row.id,
     name: row.name,
@@ -93,15 +103,22 @@ function mapPlan(row: Tables<'insurance_plans'>): InsurancePlan {
     officeFeesAfterMax: row.office_fees_after_max,
     isInNetwork: row.is_in_network,
     isActive: row.is_active,
+    sortOrder: row.sort_order,
+    alternateBenefitDowngrade: row.alternate_benefit_downgrade ?? null,
   };
 }
 
+export const FEE_SCHEDULES_KEY = 'fee-schedules';
+export const FEE_SCHEDULE_ITEMS_KEY = 'fee-schedule-items';
+export const INSURANCE_PLANS_KEY = 'insurance-plans';
+
+/** Every schedule in the office (active and inactive). Pure read. */
 export function useFeeSchedules() {
   const { user } = useAuth();
   const { data: ctx } = useOrgContext();
 
   return useQuery({
-    queryKey: ['fee-schedules', ctx?.org_id],
+    queryKey: [FEE_SCHEDULES_KEY, ctx?.org_id],
     enabled: !!user && !!ctx,
     queryFn: async (): Promise<FeeSchedule[]> => {
       if (!ctx) return [];
@@ -112,58 +129,72 @@ export function useFeeSchedules() {
         .order('sort_order')
         .order('name');
       if (error) throw error;
-
-      if (!data || data.length === 0) {
-        // First use: seed the office schedule plus Delta Dental MA with a
-        // default plan; managers refine from there.
-        const { data: seeded, error: seedError } = await supabase
-          .from('fee_schedules')
-          .insert([
-            { org_id: ctx.org_id, name: 'Office Fee Schedule', kind: 'office', sort_order: 0 },
-            { org_id: ctx.org_id, name: 'Delta Dental MA', kind: 'carrier', sort_order: 1 },
-          ])
-          .select('*');
-        if (seedError) throw seedError;
-        const carrier = seeded?.find(s => s.kind === 'carrier');
-        if (carrier) {
-          await supabase.from('insurance_plans').insert({
-            org_id: ctx.org_id,
-            name: 'Delta Dental MA',
-            fee_schedule_id: carrier.id,
-          });
-        }
-        return (seeded ?? []).map(s => mapSchedule(s));
-      }
-      return data.map(mapSchedule);
+      return (data ?? []).map(mapSchedule);
     },
   });
+}
+
+/**
+ * First use for an office with no schedules at all: create the office fee
+ * schedule (and nothing else). Owners and managers only — it is a write.
+ */
+export function useSeedFeeSchedules() {
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      if (!ctx) throw new Error('Not authenticated');
+      if (!['owner', 'manager'].includes(ctx.role)) throw new Error('Owner or manager access required');
+      const { data: existing, error: readError } = await supabase
+        .from('fee_schedules')
+        .select('id')
+        .eq('org_id', ctx.org_id)
+        .eq('kind', 'office')
+        .limit(1);
+      if (readError) throw readError;
+      if (existing && existing.length > 0) return { created: false };
+      const { error } = await supabase
+        .from('fee_schedules')
+        .insert({ org_id: ctx.org_id, name: 'Office Fee Schedule', kind: 'office', sort_order: 0 });
+      if (error) throw error;
+      return { created: true };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [FEE_SCHEDULES_KEY] });
+      qc.invalidateQueries({ queryKey: [OFFICE_FEE_LOOKUP_KEY] });
+    },
+  });
+}
+
+/** Rows of one schedule, paged past PostgREST's 1,000-row response cap. */
+export async function fetchFeeScheduleItems(scheduleId: string): Promise<FeeScheduleItem[]> {
+  // A full office schedule runs past the 1,000-row response cap, which
+  // silently dropped every code after the cap in code order (D9xxx never
+  // reached the FOF builder). Page until a short page comes back.
+  const PAGE = 1000;
+  const rows: FeeScheduleItem[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('fee_schedule_items')
+      .select('*')
+      .eq('schedule_id', scheduleId)
+      .order('code')
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    for (const row of data ?? []) rows.push(mapItem(row));
+    if (!data || data.length < PAGE) break;
+  }
+  return rows;
 }
 
 export function useFeeScheduleItems(scheduleId: string | null) {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['fee-schedule-items', scheduleId],
+    queryKey: [FEE_SCHEDULE_ITEMS_KEY, scheduleId],
     enabled: !!user && !!scheduleId,
-    queryFn: async (): Promise<FeeScheduleItem[]> => {
-      // A full office schedule runs past the 1,000-row response cap, which
-      // silently dropped every code after the cap in code order (D9xxx never
-      // reached the FOF builder). Page until a short page comes back.
-      const PAGE = 1000;
-      const rows: FeeScheduleItem[] = [];
-      for (let from = 0; ; from += PAGE) {
-        const { data, error } = await supabase
-          .from('fee_schedule_items')
-          .select('*')
-          .eq('schedule_id', scheduleId!)
-          .order('code')
-          .range(from, from + PAGE - 1);
-        if (error) throw error;
-        for (const row of data ?? []) rows.push(mapItem(row));
-        if (!data || data.length < PAGE) break;
-      }
-      return rows;
-    },
+    queryFn: () => fetchFeeScheduleItems(scheduleId!),
   });
 }
 
@@ -186,7 +217,7 @@ export function useUpsertFeeSchedule() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['fee-schedules'] });
+      qc.invalidateQueries({ queryKey: [FEE_SCHEDULES_KEY] });
       qc.invalidateQueries({ queryKey: [OFFICE_FEE_LOOKUP_KEY] });
     },
   });
@@ -201,8 +232,8 @@ export function useDeleteFeeSchedule() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['fee-schedules'] });
-      qc.invalidateQueries({ queryKey: ['insurance-plans'] });
+      qc.invalidateQueries({ queryKey: [FEE_SCHEDULES_KEY] });
+      qc.invalidateQueries({ queryKey: [INSURANCE_PLANS_KEY] });
       qc.invalidateQueries({ queryKey: [OFFICE_FEE_LOOKUP_KEY] });
     },
   });
@@ -217,16 +248,52 @@ export interface ImportRow {
   isOfficeFee?: boolean;
 }
 
-/** Bulk upsert of imported/edited rows into a schedule (matched on code). */
+export interface ImportResult {
+  /** Rows the database now holds exactly as sent (verified by reading back). */
+  imported: number;
+  /** Codes that were on the schedule before and were updated. */
+  updated: number;
+  /** Codes that were new to the schedule. */
+  added: number;
+}
+
+/** Thrown when a batch failed: says what happened to the schedule. */
+export class FeeImportError extends Error {
+  constructor(message: string, readonly rolledBack: boolean, readonly appliedRows: number) {
+    super(message);
+    this.name = 'FeeImportError';
+  }
+}
+
+const CHUNK = 500;
+
+/**
+ * Bulk upsert of imported/edited rows into a schedule (matched on code).
+ *
+ * The write runs in chunks, so a late chunk can fail after earlier ones
+ * landed. To keep the schedule as it was, the rows the import touches are
+ * snapshotted first; on any failure the touched codes are put back (updated
+ * rows restored, newly added codes removed) before the error is reported.
+ * After a successful write every row is read back and compared, so
+ * "imported" is only ever said about rows the database actually holds.
+ */
 export function useImportFeeScheduleItems() {
   const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ scheduleId, rows }: { scheduleId: string; rows: ImportRow[] }) => {
+    mutationFn: async ({ scheduleId, rows }: { scheduleId: string; rows: ImportRow[] }): Promise<ImportResult> => {
       if (!ctx) throw new Error('Not authenticated');
+      if (!['owner', 'manager'].includes(ctx.role)) throw new Error('Owner or manager access required');
       if (rows.length === 0) throw new Error('No rows to import');
-      const payload = rows.map(row => ({
+      // The last occurrence of a duplicated code wins, matching the upsert.
+      const byCode = new Map<string, ImportRow>();
+      for (const row of rows) byCode.set(row.code.trim().toUpperCase(), { ...row, code: row.code.trim().toUpperCase() });
+      const unique = [...byCode.values()];
+
+      const before = await fetchFeeScheduleItems(scheduleId);
+      const beforeByCode = new Map(before.map(item => [item.code.toUpperCase(), item]));
+      const payload = unique.map(row => ({
         schedule_id: scheduleId,
         org_id: ctx.org_id,
         code: row.code,
@@ -235,17 +302,66 @@ export function useImportFeeScheduleItems() {
         category: row.category ?? 'other',
         is_office_fee: row.isOfficeFee ?? false,
       }));
-      // Chunk inserts to stay under request limits on big schedules.
-      for (let i = 0; i < payload.length; i += 500) {
-        const { error } = await supabase
-          .from('fee_schedule_items')
-          .upsert(payload.slice(i, i + 500), { onConflict: 'schedule_id,code' });
-        if (error) throw error;
+
+      let applied = 0;
+      try {
+        for (let i = 0; i < payload.length; i += CHUNK) {
+          const chunk = payload.slice(i, i + CHUNK);
+          const { error } = await supabase
+            .from('fee_schedule_items')
+            .upsert(chunk, { onConflict: 'schedule_id,code' });
+          if (error) throw error;
+          applied += chunk.length;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'The import failed.';
+        if (applied === 0) throw new FeeImportError(`Import failed before any row was written: ${message}. The schedule is unchanged.`, true, 0);
+        // Put the touched codes back the way they were.
+        const touched = payload.slice(0, applied);
+        const restore = touched
+          .filter(row => beforeByCode.has(row.code))
+          .map(row => {
+            const prev = beforeByCode.get(row.code)!;
+            return {
+              schedule_id: scheduleId, org_id: ctx.org_id, code: prev.code, description: prev.description,
+              fee_cents: prev.feeCents, category: prev.category, is_office_fee: prev.isOfficeFee, notes: prev.notes,
+            };
+          });
+        const remove = touched.filter(row => !beforeByCode.has(row.code)).map(row => row.code);
+        let rolledBack = true;
+        for (let i = 0; i < restore.length; i += CHUNK) {
+          const { error: restoreError } = await supabase.from('fee_schedule_items').upsert(restore.slice(i, i + CHUNK), { onConflict: 'schedule_id,code' });
+          if (restoreError) rolledBack = false;
+        }
+        for (let i = 0; i < remove.length; i += CHUNK) {
+          const { error: removeError } = await supabase.from('fee_schedule_items').delete().eq('schedule_id', scheduleId).in('code', remove.slice(i, i + CHUNK));
+          if (removeError) rolledBack = false;
+        }
+        throw new FeeImportError(
+          rolledBack
+            ? `Import failed part-way (${message}). The ${applied} rows already written were put back to their previous values, so the schedule is unchanged.`
+            : `Import failed part-way (${message}) and ${applied} rows could not all be restored. Re-import the full file to bring the schedule back in line.`,
+          rolledBack,
+          applied,
+        );
       }
-      return { imported: rows.length };
+
+      // Verify: every sent row must now be on the schedule with the sent values.
+      const after = await fetchFeeScheduleItems(scheduleId);
+      const afterByCode = new Map(after.map(item => [item.code.toUpperCase(), item]));
+      const missing = payload.filter(row => {
+        const saved = afterByCode.get(row.code);
+        return !saved || saved.feeCents !== row.fee_cents || saved.isOfficeFee !== row.is_office_fee || saved.category !== row.category;
+      });
+      if (missing.length > 0) {
+        throw new FeeImportError(`${missing.length} of ${payload.length} rows did not verify after the write (first: ${missing[0].code}). Re-import the file.`, false, applied);
+      }
+      const added = payload.filter(row => !beforeByCode.has(row.code)).length;
+      return { imported: payload.length, updated: payload.length - added, added };
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['fee-schedule-items'] });
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: [FEE_SCHEDULE_ITEMS_KEY] });
+      qc.invalidateQueries({ queryKey: [FEE_SCHEDULES_KEY] });
       qc.invalidateQueries({ queryKey: [OFFICE_FEE_LOOKUP_KEY] });
     },
   });
@@ -277,7 +393,8 @@ export function useUpsertFeeScheduleItem() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['fee-schedule-items'] });
+      qc.invalidateQueries({ queryKey: [FEE_SCHEDULE_ITEMS_KEY] });
+      qc.invalidateQueries({ queryKey: [FEE_SCHEDULES_KEY] });
       qc.invalidateQueries({ queryKey: [OFFICE_FEE_LOOKUP_KEY] });
     },
   });
@@ -292,7 +409,8 @@ export function useDeleteFeeScheduleItem() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['fee-schedule-items'] });
+      qc.invalidateQueries({ queryKey: [FEE_SCHEDULE_ITEMS_KEY] });
+      qc.invalidateQueries({ queryKey: [FEE_SCHEDULES_KEY] });
       qc.invalidateQueries({ queryKey: [OFFICE_FEE_LOOKUP_KEY] });
     },
   });
@@ -303,7 +421,7 @@ export function useInsurancePlans() {
   const { data: ctx } = useOrgContext();
 
   return useQuery({
-    queryKey: ['insurance-plans', ctx?.org_id],
+    queryKey: [INSURANCE_PLANS_KEY, ctx?.org_id],
     enabled: !!user && !!ctx,
     queryFn: async (): Promise<InsurancePlan[]> => {
       if (!ctx) return [];
@@ -314,37 +432,52 @@ export function useInsurancePlans() {
         .order('sort_order')
         .order('name');
       if (error) throw error;
-      return (data ?? []).map(mapPlan);
+      return (data ?? []).map(row => mapPlan(row as PlanRow));
     },
   });
 }
+
+export type InsurancePlanInput = Omit<InsurancePlan, 'id' | 'sortOrder'> & { id?: string; sortOrder?: number };
 
 export function useUpsertInsurancePlan() {
   const { data: ctx } = useOrgContext();
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (plan: Partial<InsurancePlan> & { name: string }) => {
+    mutationFn: async (plan: InsurancePlanInput) => {
       if (!ctx) throw new Error('Not authenticated');
+      if (!['owner', 'manager'].includes(ctx.role)) throw new Error('Owner or manager access required');
+      const name = plan.name.trim();
+      if (!name) throw new Error('Give the plan a name');
+      const pct = (value: number, label: string) => {
+        if (!Number.isInteger(value) || value < 0 || value > 100) throw new Error(`${label} coverage must be a whole number from 0 to 100`);
+        return value;
+      };
+      const cents = (value: number, label: string) => {
+        if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${label} must be a dollar amount of $0.00 or more`);
+        return value;
+      };
       const { error } = await supabase.from('insurance_plans').upsert({
         ...(plan.id ? { id: plan.id } : {}),
         org_id: ctx.org_id,
-        name: plan.name,
+        name,
         fee_schedule_id: plan.feeScheduleId ?? null,
-        preventive_pct: plan.preventivePct ?? 100,
-        basic_pct: plan.basicPct ?? 80,
-        major_pct: plan.majorPct ?? 50,
-        deductible_cents: plan.deductibleCents ?? 5000,
-        deductible_waived_preventive: plan.deductibleWaivedPreventive ?? true,
-        annual_max_cents: plan.annualMaxCents ?? 150000,
-        writeoff_applies: plan.writeoffApplies ?? true,
+        preventive_pct: pct(plan.preventivePct, 'Preventive'),
+        basic_pct: pct(plan.basicPct, 'Basic'),
+        major_pct: pct(plan.majorPct, 'Major'),
+        deductible_cents: cents(plan.deductibleCents, 'Deductible'),
+        deductible_waived_preventive: plan.deductibleWaivedPreventive,
+        annual_max_cents: cents(plan.annualMaxCents, 'Annual maximum'),
+        writeoff_applies: plan.writeoffApplies,
         office_fees_after_max: plan.officeFeesAfterMax ?? false,
-        is_in_network: plan.isInNetwork ?? true,
-        is_active: plan.isActive ?? true,
+        is_in_network: plan.isInNetwork,
+        is_active: plan.isActive,
+        sort_order: plan.sortOrder ?? 0,
+        alternate_benefit_downgrade: plan.alternateBenefitDowngrade ?? null,
       });
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['insurance-plans'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [INSURANCE_PLANS_KEY] }),
   });
 }
 
@@ -356,7 +489,7 @@ export function useDeleteInsurancePlan() {
       const { error } = await supabase.from('insurance_plans').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['insurance-plans'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [INSURANCE_PLANS_KEY] }),
   });
 }
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,22 +22,28 @@ import { Loader2 } from 'lucide-react';
 import { parseScheduleFee, formatCents, type ScheduleFee } from '@/lib/fof/money';
 import { categorizeCdtCode } from '@/lib/fof/cdt';
 import type { FeeCategory } from '@/lib/fof/insurance';
-import { useImportFeeScheduleItems, type ImportRow } from '@/hooks/useFeeSchedules';
+import { FeeImportError, useImportFeeScheduleItems, type ImportRow } from '@/hooks/useFeeSchedules';
 
 // Spreadsheet import for fee schedules: parse CSV/XLSX in the browser,
-// map columns, preview, bulk upsert. Fee schedules are de-identified
-// configuration (codes + fees) — no patient data.
+// map columns, preview every outcome (valid / skipped / duplicate /
+// unmatched), then write. Fee schedules are de-identified configuration
+// (codes + fees) — no patient data.
 
 interface FeeImportDialogProps {
   open: boolean;
   scheduleId: string | null;
   scheduleName: string;
+  /** 'office' schedules have no "unmatched" concept; carrier/payment tables do. */
+  scheduleKind?: 'office' | 'carrier' | 'payment';
+  /** Codes on the office schedule, for the carrier "unmatched" count. */
+  officeCodes?: ReadonlySet<string>;
   onClose: () => void;
 }
 
 type Grid = (string | number | null)[][];
 
 const NONE = '__none__';
+const ALL_SHEETS = '__all__';
 
 function cellString(value: string | number | null | undefined): string {
   return value === null || value === undefined ? '' : String(value).trim();
@@ -56,14 +62,14 @@ function cellString(value: string | number | null | undefined): string {
  * Zero-padding is always safe on a code column. Adding the D is the
  * caller's call, since custom office codes are genuinely bare numbers.
  */
-function cellCode(value: string | number | null | undefined, cdtPrefix: boolean): string {
+export function cellCode(value: string | number | null | undefined, cdtPrefix: boolean): string {
   const numeric =
     typeof value === 'number' && isFinite(value) && Number.isInteger(value) && value > 0 && value < 10000;
   const text = numeric ? String(value).padStart(4, '0') : cellString(value).toUpperCase();
   return cdtPrefix && /^\d{4}$/.test(text) ? `D${text}` : text;
 }
 
-function cellFee(value: string | number | null | undefined): ScheduleFee | null {
+export function cellFee(value: string | number | null | undefined): ScheduleFee | null {
   // A numeric cell can't carry the asterisk, so it is always a real fee.
   if (typeof value === 'number' && isFinite(value)) {
     return { cents: Math.round(value * 100), isOfficeFee: false };
@@ -81,43 +87,110 @@ function detectCategory(value: string): FeeCategory | undefined {
   return 'other';
 }
 
-export default function FeeImportDialog({ open, scheduleId, scheduleName, onClose }: FeeImportDialogProps) {
+export interface MappedImport {
+  rows: ImportRow[];
+  /** Rows with a code but no readable fee, or a fee but no code. */
+  skipped: { row: number; reason: string }[];
+  /** Codes that appear more than once (the last occurrence wins). */
+  duplicates: string[];
+  /** Carrier/payment tables: codes not on the office schedule. */
+  unmatched: string[];
+}
+
+/** Pure mapping of a data grid to import rows and their outcomes. */
+export function mapImportRows(
+  dataRows: Grid,
+  columns: { code: string; fee: string; desc: string; cat: string },
+  cdtPrefix: boolean,
+  officeCodes: ReadonlySet<string> | undefined,
+  checkUnmatched: boolean
+): MappedImport {
+  const rows: ImportRow[] = [];
+  const skipped: MappedImport['skipped'] = [];
+  const seen = new Map<string, number>();
+  if (columns.code === NONE || columns.fee === NONE) return { rows, skipped, duplicates: [], unmatched: [] };
+  dataRows.forEach((row, index) => {
+    const code = cellCode(row[Number(columns.code)], cdtPrefix);
+    const feeCell = row[Number(columns.fee)];
+    const fee = cellFee(feeCell);
+    if (!code && fee === null) return; // a blank line, not a skipped row
+    if (!code) { skipped.push({ row: index + 1, reason: 'no code' }); return; }
+    if (fee === null) { skipped.push({ row: index + 1, reason: cellString(feeCell) ? `fee "${cellString(feeCell)}" is not an amount` : 'no fee' }); return; }
+    seen.set(code, (seen.get(code) ?? 0) + 1);
+    rows.push({
+      code,
+      description: columns.desc !== NONE ? cellString(row[Number(columns.desc)]) : '',
+      feeCents: fee.cents,
+      isOfficeFee: fee.isOfficeFee,
+      // Explicit category column wins; otherwise auto-categorize from the
+      // CDT code range (consistent across carriers).
+      category:
+        (columns.cat !== NONE ? detectCategory(cellString(row[Number(columns.cat)])) : undefined) ??
+        categorizeCdtCode(code),
+    });
+  });
+  const duplicates = [...seen.entries()].filter(([, count]) => count > 1).map(([code]) => code);
+  const unmatched = checkUnmatched && officeCodes
+    ? [...new Set(rows.map(r => r.code))].filter(code => !officeCodes.has(code))
+    : [];
+  return { rows, skipped, duplicates, unmatched };
+}
+
+const EMPTY_MAPPING = { code: NONE, desc: NONE, fee: NONE, cat: NONE };
+
+export default function FeeImportDialog({ open, scheduleId, scheduleName, scheduleKind = 'carrier', officeCodes, onClose }: FeeImportDialogProps) {
   const importItems = useImportFeeScheduleItems();
-  const [grid, setGrid] = useState<Grid>([]);
+  const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
+  const [sheet, setSheet] = useState<string>(ALL_SHEETS);
   const [fileName, setFileName] = useState('');
-  const [codeCol, setCodeCol] = useState<string>(NONE);
-  const [descCol, setDescCol] = useState<string>(NONE);
-  const [feeCol, setFeeCol] = useState<string>(NONE);
-  const [catCol, setCatCol] = useState<string>(NONE);
+  const [mapping, setMapping] = useState(EMPTY_MAPPING);
   const [hasHeader, setHasHeader] = useState(true);
   // Turned on automatically when a file's codes arrive as bare numbers.
   const [cdtPrefix, setCdtPrefix] = useState(false);
+  const [failure, setFailure] = useState<string>('');
 
+  // Every per-import option starts fresh for every import: a previous
+  // file's column mapping, sheet, header flag or D-prefix choice never
+  // carries into the next one (nor into another schedule).
   const reset = () => {
-    setGrid([]);
+    setWorkbook(null);
+    setSheet(ALL_SHEETS);
     setFileName('');
-    setCodeCol(NONE);
-    setDescCol(NONE);
-    setFeeCol(NONE);
-    setCatCol(NONE);
+    setMapping(EMPTY_MAPPING);
     setHasHeader(true);
+    setCdtPrefix(false);
+    setFailure('');
   };
+  useEffect(() => { if (open) reset(); }, [open, scheduleId]);
+
+  const sheetNames = useMemo(() => workbook?.SheetNames ?? [], [workbook]);
+  const grid = useMemo<Grid>(() => {
+    if (!workbook) return [];
+    const names = sheet === ALL_SHEETS ? sheetNames : [sheet];
+    const out: Grid = [];
+    names.forEach((name, i) => {
+      const rows = XLSX.utils.sheet_to_json<(string | number | null)[]>(workbook.Sheets[name], { header: 1, defval: null }) as Grid;
+      const nonEmpty = rows.filter(r => r.some(c => cellString(c) !== ''));
+      // Later worksheets repeat the header row; drop it so it is not read as a code.
+      out.push(...(i > 0 && hasHeader ? nonEmpty.slice(1) : nonEmpty));
+    });
+    return out;
+  }, [workbook, sheet, sheetNames, hasHeader]);
 
   const handleFile = async (file: File) => {
     try {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json<(string | number | null)[]>(sheet, {
-        header: 1,
-        defval: null,
-      }) as Grid;
+      const book = XLSX.read(buffer, { type: 'array' });
+      const first = book.Sheets[book.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<(string | number | null)[]>(first, { header: 1, defval: null }) as Grid;
       const nonEmpty = rows.filter(r => r.some(c => cellString(c) !== ''));
       if (nonEmpty.length === 0) {
         toast.error('That file looks empty');
         return;
       }
-      setGrid(nonEmpty);
+      reset();
+      setWorkbook(book);
+      setSheet(book.SheetNames.length > 1 ? ALL_SHEETS : book.SheetNames[0]);
       setFileName(file.name);
 
       // Auto-map: code column = first column whose values look like D-codes;
@@ -134,16 +207,12 @@ export default function FeeImportDialog({ open, scheduleId, scheduleName, onClos
         else if (fee === NONE && fees > values.length / 2) fee = String(c);
         else if (desc === NONE && dCodes === 0 && fees < values.length / 2) desc = String(c);
       }
-      setCodeCol(code);
-      setDescCol(desc);
-      setFeeCol(fee);
+      setMapping({ code, desc, fee, cat: NONE });
       // If the code column came through as bare numbers, this file lost
       // its D prefixes on the way out of Excel. Offer to put them back.
       if (code !== NONE) {
         const codes = sample.map(r => r[Number(code)]).filter(v => v !== null && v !== undefined && v !== '');
-        const bare = codes.filter(
-          v => typeof v === 'number' || /^\d{1,4}$/.test(cellString(v))
-        ).length;
+        const bare = codes.filter(v => typeof v === 'number' || /^\d{1,4}$/.test(cellString(v))).length;
         setCdtPrefix(codes.length > 0 && bare > codes.length * 0.8);
       }
     } catch (error) {
@@ -160,39 +229,31 @@ export default function FeeImportDialog({ open, scheduleId, scheduleName, onClos
     label: headerRow ? `${cellString(headerRow[i]) || `Column ${i + 1}`}` : `Column ${i + 1}`,
   }));
 
-  const mappedRows: ImportRow[] = useMemo(() => {
-    if (codeCol === NONE || feeCol === NONE) return [];
-    const rows: ImportRow[] = [];
-    for (const row of dataRows) {
-      const code = cellCode(row[Number(codeCol)], cdtPrefix);
-      const fee = cellFee(row[Number(feeCol)]);
-      if (!code || fee === null) continue;
-      rows.push({
-        code,
-        description: descCol !== NONE ? cellString(row[Number(descCol)]) : '',
-        feeCents: fee.cents,
-        isOfficeFee: fee.isOfficeFee,
-        // Explicit category column wins; otherwise auto-categorize from the
-        // CDT code range (consistent across carriers).
-        category:
-          (catCol !== NONE ? detectCategory(cellString(row[Number(catCol)])) : undefined) ??
-          categorizeCdtCode(code),
-      });
-    }
-    return rows;
-  }, [dataRows, codeCol, descCol, feeCol, catCol, cdtPrefix]);
+  const mapped = useMemo(
+    () => mapImportRows(dataRows, mapping, cdtPrefix, officeCodes, scheduleKind !== 'office'),
+    [dataRows, mapping, cdtPrefix, officeCodes, scheduleKind]
+  );
+  const uniqueCount = new Set(mapped.rows.map(r => r.code)).size;
 
   const submit = () => {
     if (!scheduleId) return;
+    setFailure('');
     importItems.mutate(
-      { scheduleId, rows: mappedRows },
+      { scheduleId, rows: mapped.rows },
       {
         onSuccess: result => {
-          toast.success(`Imported ${result.imported} codes into ${scheduleName}`);
+          // Only rows the database verified after the write count as imported.
+          toast.success(`Imported ${result.imported} codes into ${scheduleName} (${result.added} new, ${result.updated} updated) — verified on the schedule`);
           reset();
           onClose();
         },
-        onError: err => toast.error(`Import failed: ${err.message}`),
+        onError: err => {
+          const message = err instanceof FeeImportError
+            ? err.message
+            : `Import failed: ${err.message}. The schedule was not changed.`;
+          setFailure(message);
+          toast.error(message);
+        },
       }
     );
   };
@@ -218,18 +279,30 @@ export default function FeeImportDialog({ open, scheduleId, scheduleName, onClos
             />
             {fileName && (
               <p className="text-xs text-muted-foreground">
-                {fileName} — {dataRows.length} rows
+                {fileName} — {dataRows.length} rows{sheetNames.length > 1 ? ` across ${sheet === ALL_SHEETS ? sheetNames.length : 1} of ${sheetNames.length} worksheets` : ''}
               </p>
             )}
           </div>
 
-          {grid.length > 0 && (
+          {workbook && (
             <>
+              {sheetNames.length > 1 && (
+                <div className="space-y-1.5">
+                  <Label>Worksheet</Label>
+                  <Select value={sheet} onValueChange={setSheet}>
+                    <SelectTrigger aria-label="Worksheet"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL_SHEETS}>All worksheets ({sheetNames.length})</SelectItem>
+                      {sheetNames.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Procedure Code column</Label>
-                  <Select value={codeCol} onValueChange={setCodeCol}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Select value={mapping.code} onValueChange={v => setMapping({ ...mapping, code: v })}>
+                    <SelectTrigger aria-label="Procedure Code column"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value={NONE}>— choose —</SelectItem>
                       {colOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -238,8 +311,8 @@ export default function FeeImportDialog({ open, scheduleId, scheduleName, onClos
                 </div>
                 <div className="space-y-1.5">
                   <Label>Fee column</Label>
-                  <Select value={feeCol} onValueChange={setFeeCol}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Select value={mapping.fee} onValueChange={v => setMapping({ ...mapping, fee: v })}>
+                    <SelectTrigger aria-label="Fee column"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value={NONE}>— choose —</SelectItem>
                       {colOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -248,8 +321,8 @@ export default function FeeImportDialog({ open, scheduleId, scheduleName, onClos
                 </div>
                 <div className="space-y-1.5">
                   <Label>Description column (optional)</Label>
-                  <Select value={descCol} onValueChange={setDescCol}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Select value={mapping.desc} onValueChange={v => setMapping({ ...mapping, desc: v })}>
+                    <SelectTrigger aria-label="Description column"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value={NONE}>None</SelectItem>
                       {colOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -258,8 +331,8 @@ export default function FeeImportDialog({ open, scheduleId, scheduleName, onClos
                 </div>
                 <div className="space-y-1.5">
                   <Label>Category column (optional)</Label>
-                  <Select value={catCol} onValueChange={setCatCol}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Select value={mapping.cat} onValueChange={v => setMapping({ ...mapping, cat: v })}>
+                    <SelectTrigger aria-label="Category column"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value={NONE}>None</SelectItem>
                       {colOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -297,49 +370,75 @@ export default function FeeImportDialog({ open, scheduleId, scheduleName, onClos
                 </Label>
               </div>
 
-              {mappedRows.length > 0 ? (
-                <div className="rounded-md border overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/50">
-                        <th className="text-left p-2">Code</th>
-                        <th className="text-left p-2">Description</th>
-                        <th className="text-right p-2">Fee</th>
-                        <th className="text-left p-2">Source</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {mappedRows.slice(0, 5).map((row, i) => (
-                        <tr key={i} className="border-b last:border-0">
-                          <td className="p-2 font-mono">{row.code}</td>
-                          <td className="p-2 truncate max-w-52">{row.description}</td>
-                          <td className="p-2 text-right">{formatCents(row.feeCents)}</td>
-                          <td className="p-2 text-xs text-muted-foreground">
-                            {row.isOfficeFee ? 'Office fee (*)' : 'Contracted'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <p className="p-2 text-xs text-muted-foreground">
-                    Preview of {Math.min(5, mappedRows.length)} of {mappedRows.length} rows that will
-                    be imported. Existing codes are updated, new codes added.
-                  </p>
+              {mapping.code !== NONE && mapping.fee !== NONE ? (
+                <div className="space-y-2">
+                  <div className="grid gap-2 text-xs sm:grid-cols-4" data-testid="import-counts">
+                    <div className="rounded-md border p-2"><div className="text-lg font-semibold">{uniqueCount}</div>valid code{uniqueCount === 1 ? '' : 's'} to write</div>
+                    <div className="rounded-md border p-2"><div className="text-lg font-semibold">{mapped.skipped.length}</div>skipped (no code or unreadable fee)</div>
+                    <div className="rounded-md border p-2"><div className="text-lg font-semibold">{mapped.duplicates.length}</div>duplicate code{mapped.duplicates.length === 1 ? '' : 's'} (last row wins)</div>
+                    <div className="rounded-md border p-2"><div className="text-lg font-semibold">{scheduleKind === 'office' ? '—' : mapped.unmatched.length}</div>{scheduleKind === 'office' ? 'unmatched: n/a for the office schedule' : 'not on the office schedule'}</div>
+                  </div>
+                  {mapped.skipped.length > 0 && (
+                    <p className="text-xs text-amber-700">
+                      Skipped rows: {mapped.skipped.slice(0, 8).map(s => `row ${s.row} (${s.reason})`).join(', ')}{mapped.skipped.length > 8 ? ` and ${mapped.skipped.length - 8} more` : ''}. They will not be written.
+                    </p>
+                  )}
+                  {mapped.duplicates.length > 0 && (
+                    <p className="text-xs text-amber-700">Duplicate codes: {mapped.duplicates.slice(0, 12).join(', ')}{mapped.duplicates.length > 12 ? '…' : ''}. The last row for each code is the one saved.</p>
+                  )}
+                  {mapped.unmatched.length > 0 && (
+                    <p className="text-xs text-amber-700">
+                      {mapped.unmatched.length} code{mapped.unmatched.length === 1 ? ' is' : 's are'} not on the office fee schedule (for example {mapped.unmatched.slice(0, 6).join(', ')}). They are saved on this table but will never match a form line until the office schedule carries them.
+                    </p>
+                  )}
+                  {mapped.rows.length > 0 ? (
+                    <div className="rounded-md border overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/50">
+                            <th className="text-left p-2">Code</th>
+                            <th className="text-left p-2">Description</th>
+                            <th className="text-right p-2">Fee</th>
+                            <th className="text-left p-2">Source</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {mapped.rows.slice(0, 5).map((row, i) => (
+                            <tr key={i} className="border-b last:border-0">
+                              <td className="p-2 font-mono">{row.code}</td>
+                              <td className="p-2 truncate max-w-52">{row.description}</td>
+                              <td className="p-2 text-right">{formatCents(row.feeCents)}</td>
+                              <td className="p-2 text-xs text-muted-foreground">
+                                {row.isOfficeFee ? 'Office fee (*)' : 'Contracted'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p className="p-2 text-xs text-muted-foreground">
+                        Preview of {Math.min(5, mapped.rows.length)} of {uniqueCount} codes that will
+                        be written. Existing codes are updated, new codes added; rows are verified after the write.
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No rows carry both a code and a readable fee with this mapping.</p>
+                  )}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
                   Pick the code and fee columns to see a preview.
                 </p>
               )}
+              {failure && <p role="alert" className="text-sm text-destructive">{failure}</p>}
             </>
           )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => { reset(); onClose(); }}>Cancel</Button>
-          <Button onClick={submit} disabled={mappedRows.length === 0 || importItems.isPending}>
+          <Button onClick={submit} disabled={mapped.rows.length === 0 || importItems.isPending}>
             {importItems.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Import {mappedRows.length > 0 ? `${mappedRows.length} codes` : ''}
+            Import {mapped.rows.length > 0 ? `${uniqueCount} codes` : ''}
           </Button>
         </DialogFooter>
       </DialogContent>

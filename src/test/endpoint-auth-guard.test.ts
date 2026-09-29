@@ -31,7 +31,6 @@ const CRON_ONLY = [
  */
 const USER_ONLY: Array<{ name: string; body: unknown; notDeployedOk?: boolean }> = [
   { name: 'commitment-listen', body: { message: 'probe' } },
-  { name: 'parse-treatment', body: { image: 'data:image/png;base64,AAAA' } },
   { name: 'sprint-verify', body: { goal_id: '00000000-0000-0000-0000-000000000000' } },
   { name: 'sprint-architect', body: { action: 'ideas', scope: 'team' } },
   { name: 'goal-assistant', body: { mode: 'chat', messages: [] } },

@@ -7,8 +7,8 @@ const recipe={sourceId:source.id,title:'Implant Crown',summary:'Prepare and deli
 function setup(options: {member?:boolean;notes?:string;recipes?:unknown[];finish?:string;legacy?:boolean;content?:unknown}={}) {
   const filters=vi.fn(); const writes=vi.fn();
   const from=(table:string)=>{
-    const result=()=>({data:table==='org_members'?(options.member===false?null:{org_id:orgId}):table==='fee_schedule_items'?[{...source,notes:options.notes??source.notes}]:[],error:null});
-    const builder:Record<string,any>={then:(fn:(v:unknown)=>unknown)=>Promise.resolve(result()).then(fn),maybeSingle:async()=>result()};
+    const result=(list=false)=>({data:table==='org_members'?(options.member===false?(list?[]:null):(list?[{org_id:orgId}]:{org_id:orgId})):table==='fee_schedule_items'?[{...source,notes:options.notes??source.notes}]:[],error:null});
+    const builder:Record<string,any>={then:(fn:(v:unknown)=>unknown)=>Promise.resolve(result(true)).then(fn),maybeSingle:async()=>result()};
     for(const method of ['select','eq','neq','order','limit'])builder[method]=(...args:unknown[])=>{filters(table,method,...args);return builder;};
     for(const method of ['insert','upsert','update','delete'])builder[method]=(...args:unknown[])=>{writes(...args);return builder;};
     return builder;
@@ -60,5 +60,48 @@ describe('office-only AI guidance endpoint',()=>{
   it('the visit-naming endpoint refuses nonmembers and malformed slot lists before using paid AI',async()=>{
     const nonmember=setup({legacy:true,member:false});expect((await nonmember.run({slots:['Payment 1'],visits:[]})).status).toBe(403);expect(nonmember.gateway).not.toHaveBeenCalled();
     const empty=setup({legacy:true});expect((await empty.run({slots:[],visits:[]})).status).toBe(400);expect(empty.gateway).not.toHaveBeenCalled();
+  });
+});
+
+describe('visit-naming endpoint office scoping', () => {
+  const otherOrg='22222222-2222-4222-8222-222222222222';
+  function multi(options:{orgs:string[];requested?:string;content?:unknown}) {
+    const filters=vi.fn();
+    const from=(table:string)=>{
+      const rows=table==='org_members'?options.orgs.map(org_id=>({org_id})):[];
+      const builder:Record<string,any>={then:(fn:(v:unknown)=>unknown)=>Promise.resolve({data:rows,error:null}).then(fn),maybeSingle:async()=>({data:rows[0]??null,error:null})};
+      for(const method of ['select','eq','neq','order','limit'])builder[method]=(...args:unknown[])=>{filters(table,method,...args);return builder;};
+      return builder;
+    };
+    const gateway=vi.fn().mockResolvedValue(new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:JSON.stringify(options.content??{names:['At the Records Visit'],treatment:'We will take records.'})}}]})));
+    const client={from,rpc:async()=>({data:true}),auth:{getUser:async()=>({data:{user:{id:'staff'}}})}};
+    const edge=loadEdge('supabase/functions/name-visits/index.ts',{'https://esm.sh/@supabase/supabase-js@2':{createClient:()=>client}},gateway);
+    const run=(body:unknown)=>edge.handle(new Request('https://example.test',{method:'POST',headers:{Authorization:'Bearer synthetic'},body:JSON.stringify(body)}));
+    return {run,gateway,filters};
+  }
+  const request={slots:['Payment 1'],visits:[{procedures:['CT Scan']}],wantTreatment:false};
+  it('a multi-office caller must name the office; the first membership is never assumed',async()=>{
+    const test=multi({orgs:[orgId,otherOrg]});
+    const response=await test.run(request);
+    expect(response.status).toBe(400);expect((await response.json()).code).toBe('OFFICE_REQUIRED');expect(test.gateway).not.toHaveBeenCalled();
+  });
+  it('scopes wording rules and code notes to the named office when the caller belongs to it',async()=>{
+    const test=multi({orgs:[orgId,otherOrg]});
+    const response=await test.run({...request,orgId:otherOrg});
+    expect(response.status).toBe(200);
+    expect(test.filters).toHaveBeenCalledWith('fof_ai_guidance','eq','org_id',otherOrg);
+    expect(test.filters).toHaveBeenCalledWith('fee_schedule_items','eq','fee_schedules.org_id',otherOrg);
+    expect(test.filters).not.toHaveBeenCalledWith('fof_ai_guidance','eq','org_id',orgId);
+  });
+  it('refuses an office the caller is not a member of, and a malformed office id',async()=>{
+    const test=multi({orgs:[orgId]});
+    expect((await test.run({...request,orgId:otherOrg})).status).toBe(403);
+    expect((await test.run({...request,orgId:'not-a-uuid'})).status).toBe(400);
+    expect(test.gateway).not.toHaveBeenCalled();
+  });
+  it('a single-office caller without an office id still works, scoped to that office',async()=>{
+    const test=multi({orgs:[orgId]});
+    expect((await test.run(request)).status).toBe(200);
+    expect(test.filters).toHaveBeenCalledWith('fof_ai_guidance','eq','org_id',orgId);
   });
 });

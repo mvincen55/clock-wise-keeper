@@ -71,6 +71,7 @@ export const BLANK_COMPUTATION: FofComputation = {
     installmentsCents: [0, 0, 0],
   },
   installmentLabels: ['Visit 1 (Upon scheduling)', 'Visit 2 (Prep date)', 'Visit 3 (On delivery)'],
+  imbalanceCents: 0,
   overridden: {
     patientPortion: false,
     discount: false,

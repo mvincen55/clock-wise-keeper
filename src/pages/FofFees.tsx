@@ -31,6 +31,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { ArrowLeft, Copy, Download, Eye, FileSpreadsheet, Loader2, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import FeeImportDialog from '@/components/fof/FeeImportDialog';
+import InsurancePlansCard from '@/components/fof/InsurancePlansCard';
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
 import { categorizeCdtCode } from '@/lib/fof/cdt';
 import { friendlyCdtName, resolvePatientName } from '@/lib/fof/cdt-names';
@@ -44,6 +45,7 @@ import {
   useFeeScheduleItems,
   useFeeSchedules,
   useCodeNames,
+  useSeedFeeSchedules,
   useUpsertCodeName,
   useUpsertFeeSchedule,
   useUpsertFeeScheduleItem,
@@ -505,10 +507,11 @@ function ScheduleItemsCard({ schedule, isManager }: { schedule: FeeSchedule; isM
 }
 
 export default function FofFees() {
-  const { data: schedules, isLoading } = useFeeSchedules();
+  const { data: schedules, isLoading, error: schedulesError, refetch } = useFeeSchedules();
   const { data: ctx } = useOrgContext();
   const upsertSchedule = useUpsertFeeSchedule();
   const deleteSchedule = useDeleteFeeSchedule();
+  const seed = useSeedFeeSchedules();
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
 
@@ -516,6 +519,11 @@ export default function FofFees() {
   const [importFor, setImportFor] = useState<FeeSchedule | null>(null);
   const [newScheduleName, setNewScheduleName] = useState('');
   const [newScheduleKind, setNewScheduleKind] = useState<'carrier' | 'payment'>('carrier');
+  const officeSchedule = (schedules ?? []).find(s => s.kind === 'office' && s.isActive) ?? (schedules ?? []).find(s => s.kind === 'office') ?? null;
+  // The office codes a carrier import is matched against (for the "not on
+  // the office schedule" count in the import preview).
+  const { data: officeItems } = useFeeScheduleItems(officeSchedule?.id ?? null);
+  const officeCodes = useMemo(() => new Set((officeItems ?? []).map(i => i.code.toUpperCase())), [officeItems]);
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
@@ -523,13 +531,38 @@ export default function FofFees() {
         <Button variant="ghost" size="icon" asChild>
           <Link to="/fof"><ArrowLeft className="h-4 w-4" /></Link>
         </Button>
-        <h1 className="text-2xl font-bold">Fee Schedules</h1>
+        <h1 className="text-2xl font-bold">Fees &amp; Plans</h1>
       </div>
 
       {isLoading ? (
         <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+      ) : schedulesError ? (
+        <Card>
+          <CardContent className="space-y-2 py-8 text-center">
+            <p role="alert" className="text-sm text-destructive">The fee schedules could not be loaded: {schedulesError.message}</p>
+            <Button variant="outline" onClick={() => refetch()}>Try again</Button>
+          </CardContent>
+        </Card>
       ) : (
         <>
+          {!officeSchedule && (
+            <Card>
+              <CardContent className="space-y-2 py-6 text-center text-sm">
+                <p className="font-medium">This office has no fee schedule yet.</p>
+                {isManager ? (
+                  <>
+                    <p className="text-muted-foreground">Create the office fee schedule, then import the office fees. Forms cannot calculate until it exists.</p>
+                    <Button onClick={() => seed.mutate(undefined, { onSuccess: () => toast.success('Office fee schedule created'), onError: err => toast.error(err.message) })} disabled={seed.isPending}>
+                      {seed.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      Create the office fee schedule
+                    </Button>
+                  </>
+                ) : (
+                  <p className="text-muted-foreground">Ask an owner or manager to create the office fee schedule and import the office fees. Forms cannot calculate until then.</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Fee Schedules</CardTitle>
@@ -555,6 +588,23 @@ export default function FofFees() {
                     <span className="text-xs text-muted-foreground">
                       {schedule.itemCount ?? 0} codes
                     </span>
+                    {!schedule.isActive && <Badge variant="outline">Inactive — not offered on forms</Badge>}
+                    <div className="flex items-center gap-1.5 pl-2">
+                      <Switch
+                        id={`active-${schedule.id}`}
+                        disabled={!isManager || upsertSchedule.isPending}
+                        checked={schedule.isActive}
+                        onCheckedChange={v =>
+                          upsertSchedule.mutate(
+                            { ...schedule, isActive: v },
+                            { onError: err => toast.error(err.message) }
+                          )
+                        }
+                      />
+                      <Label htmlFor={`active-${schedule.id}`} className="text-xs text-muted-foreground font-normal">
+                        Active
+                      </Label>
+                    </div>
                     {schedule.kind === 'carrier' && (
                       <div className="flex items-center gap-1.5 pl-2">
                         <Switch
@@ -664,10 +714,14 @@ export default function FofFees() {
         </>
       )}
 
+      {!isLoading && !schedulesError && <InsurancePlansCard schedules={schedules ?? []} isManager={isManager} />}
+
       <FeeImportDialog
         open={!!importFor}
         scheduleId={importFor?.id ?? null}
         scheduleName={importFor?.name ?? ''}
+        scheduleKind={importFor?.kind}
+        officeCodes={officeCodes}
         onClose={() => setImportFor(null)}
       />
     </div>

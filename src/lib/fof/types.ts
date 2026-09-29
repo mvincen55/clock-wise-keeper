@@ -105,9 +105,16 @@ export interface FofOfficeLine {
   /** PMS entry date carried over from an imported screenshot, if any. */
   entryDate: string;
   officeFeeCents: Cents;
+  /** The allowed fee the insurance calculation actually used (null = no insurance on the form). */
   allowableCents: Cents | null;
+  /** Provenance of allowableCents, printed beside it on the office copy. */
+  allowableBasis?: string;
   insPaysCents: Cents;
   writeOffCents: Cents;
+  /** Where the office fee came from (schedule, import, manual, missing). */
+  feeSource?: string;
+  /** Review notes for the line (cleared overrides, missing fees, bounded overrides). */
+  notes?: string[];
 }
 
 /** Manual overrides of computed values. Memory-only — never persisted. */
@@ -131,6 +138,12 @@ export interface FofComputation {
   effective: FofComputedValues;
   /** Labels for the installment rows actually computed (visit plan aware). */
   installmentLabels: string[];
+  /**
+   * Cents by which discounts, credits and insurance exceed the total. Zero
+   * on a balanced form; anything else is a review error that blocks
+   * printing rather than a portion silently clamped to $0.
+   */
+  imbalanceCents: Cents;
   overridden: {
     patientPortion: boolean;
     discount: boolean;

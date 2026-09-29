@@ -13,7 +13,18 @@ export interface PaymentGroup {
 }
 export interface PaymentAllocation { groupId: string; procedureId: string; milestone: MilestoneKind; cents: number }
 export interface PaymentRow { id: string; label: string; cents: number; allocations: PaymentAllocation[]; appointmentId?: string }
-export interface PaymentOverride { cents?: number; label?: string; basis: string; allocations?: PaymentAllocation[] }
+export interface PaymentOverride {
+  cents?: number;
+  label?: string;
+  basis: string;
+  allocations?: PaymentAllocation[];
+  /** The label came from automatic naming: replaced by the next suggestion, dropped with its event, never a review blocker. Staff wording clears it. */
+  suggestedLabel?: boolean;
+}
+
+/** A label-only suggestion carries no staff decision, so it neither blocks printing nor survives a change to its event. */
+export const isSuggestionOnly = (override: PaymentOverride): boolean =>
+  override.suggestedLabel === true && override.cents === undefined && override.allocations === undefined;
 export interface PaymentSchedule {
   rows: PaymentRow[]; issues: string[]; obligationCents: number; paidCents: number; remainingCents: number;
   signature: string; priorPayments: { procedureId: string; groupId: string; cents: number }[];
@@ -29,13 +40,24 @@ export interface PaymentInput {
 const centsOK = (n: number) => Number.isSafeInteger(n) && n >= 0;
 const sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0);
 
-/** Naming suggestions can only add labels; staff edits and allocation bases survive. */
+/**
+ * Naming suggestions only add or refresh suggested labels; staff wording,
+ * staff amounts and their bases survive. Suggestions left over from events
+ * that no longer exist are dropped here rather than lingering as overrides.
+ */
 export function suggestedPaymentLabels(schedule: PaymentSchedule, overrides: Record<string, PaymentOverride>, names: string[]): Record<string, PaymentOverride> {
   if (names.length !== schedule.rows.length || names.some(name => typeof name !== 'string' || !name.trim())) throw new Error('Invalid payment names');
-  const next = { ...overrides };
+  const next: Record<string, PaymentOverride> = {};
+  const live = new Set(schedule.rows.map(row => row.id));
+  for (const [id, override] of Object.entries(overrides)) {
+    if (isSuggestionOnly(override) && !live.has(id)) continue;
+    next[id] = override;
+  }
   schedule.rows.forEach((row, i) => {
-    if (next[row.id]?.label) return;
-    next[row.id] = { ...next[row.id], basis: next[row.id]?.basis ?? schedule.signature, label: names[i] };
+    const existing = next[row.id];
+    if (existing?.label && !existing.suggestedLabel) return;
+    // A fresh suggestion is a suggestion for THIS plan; a staff amount keeps the basis it was decided on.
+    next[row.id] = { ...existing, basis: existing && !isSuggestionOnly(existing) ? existing.basis : schedule.signature, label: names[i], suggestedLabel: true };
   });
   return next;
 }
@@ -160,8 +182,10 @@ export function buildPaymentSchedule(input: PaymentInput): PaymentSchedule {
   }
   for (const [id, override] of Object.entries(overrides)) {
     const row = result.rows.find(r => r.id === id);
-    if (!row) { issues.push('An overridden payment event was removed. Review or clear its override.'); continue; }
-    if (override.basis !== signature) issues.push('A payment override is stale. Review and confirm it against the current plan.');
+    // A suggested label records no staff decision: it goes with its event and
+    // is never stale, so it cannot hold up printing the way a staff change does.
+    if (!row) { if (!isSuggestionOnly(override)) issues.push('An overridden payment event was removed. Review or clear its override.'); continue; }
+    if (override.basis !== signature && !isSuggestionOnly(override)) issues.push('A payment override is stale. Review and confirm it against the current plan.');
     if (override.label !== undefined) row.label = override.label;
     if (override.allocations !== undefined) {
       const allowed = allowedAllocations.get(id) ?? [];
