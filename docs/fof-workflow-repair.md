@@ -98,7 +98,9 @@ how it was proven, and what a human still has to do to release it.
 - `supabase/migrations/20260930150000_insurance_plan_alternate_benefit.sql` adds
   `insurance_plans.alternate_benefit_downgrade boolean` (nullable, `IF NOT EXISTS`).
   `src/integrations/supabase/pending-schema.ts` carries the column until the generated
-  types catch up. The column was applied to the live database on 2026-09-29 through the
+  types catch up. Lovable regenerated the types with the column on 2026-09-29 and the
+  pending-schema entry was removed the same day. The column was applied to the live
+  database on 2026-09-29 through the
   Lovable database query tool; the migration file is idempotent, so the normal migration
   run is a no-op for it.
 
