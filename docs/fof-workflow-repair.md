@@ -104,6 +104,25 @@ how it was proven, and what a human still has to do to release it.
   Lovable database query tool; the migration file is idempotent, so the normal migration
   run is a no-op for it.
 
+### Follow-up 2026-09-29: PMS screenshot reads and patient wording
+
+A real PMS capture (1,118 × 265 px, 9–11 px type) read at native size gave 4 of 8 codes,
+no amounts and no dates, with flags that only said "low confidence". The on-device read
+now enlarges the capture (2×, 3× for small captures, within a 12 MP budget) and flattens
+it to grayscale before recognition: on that capture every code, amount and date reads at
+91–96 %. The parser also takes the first data row that sits directly under the header,
+reads "Visit1"-style section headings (and leaves "Visit Not Set" open), ignores icon
+glyphs beside cells, prefers the "Entry Date" column over "Proc Date"/"Appt Date", and
+corrects letter-for-digit confusions in codes, amounts, teeth and dates while saying so.
+Every review flag now quotes what was read and at what confidence ("The code D6057 was
+read at 39% confidence (below 65%)"). The capture's OCR words are a fixture
+(`src/test/fixtures/pms-plan-ocr-words.json`; codes, teeth, dates and fees only).
+
+Wording: the built-in names for D6056/D6057 are "Implant connector (standard/custom
+abutment)" and D6011 "Implant uncovering (second stage)", and the visit-naming prompt now
+requires everyday words ("implant connector", never "abutment"; "crown", never
+"porc/cer crn"; no surface or lab shorthand). Office overrides on Fees & Plans still win.
+
 ## Policies the numbers follow
 
 - **Harelick payment policy** (`fof_settings.payment_policy`, `harelickPolicyTemplate`):
