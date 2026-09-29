@@ -175,6 +175,9 @@ const MEMBERSHIP_INCLUDED = new Set([
   'D1206', 'D1208', 'D1351', // fluoride + sealant (child plan)
 ]);
 
+/** Printed beside a $0 office-schedule row so nobody mistakes a no-charge line for a missing fee. */
+const NO_CHARGE_FLAG = 'No charge — $0.00 on the office fee schedule.';
+
 const CATEGORY_SHORT: Record<FeeCategory, string> = {
   preventive: 'Preventive',
   basic: 'Basic',
@@ -725,14 +728,19 @@ export default function FofBuilder() {
     const eligible = insuranceActive && !!DOWNGRADE_MAP[key];
     const downgrade = eligible && downgradeOn ? 'yes' : '';
     if (match) {
-      const noFee = match.feeCents <= 0;
+      // A $0 row on the office schedule is a real office decision (post-ops,
+      // inserts, adjustments): the line is a no-charge line, says so, and
+      // never blocks the print. Only a code the schedule does not carry is
+      // "no fee on file".
+      const noCharge = match.feeCents <= 0;
       return {
         code: match.code,
         // Auto-fill with the patient-friendly wording that prints on
         // the form (schedule description as fallback).
         description: resolvePatientName(match.code, codeNames) || match.description,
-        feeInput: noFee ? '' : formatCents(match.feeCents),
-        feeSource: noFee ? 'missing' : 'office',
+        feeInput: formatCents(Math.max(0, match.feeCents)),
+        feeSource: 'office',
+        feeFlag: noCharge ? NO_CHARGE_FLAG : '',
         downgrade,
         ...resolveCategory(categorizeCdtCode(match.code) === 'workup' ? 'workup' : match.category),
       };
@@ -788,7 +796,7 @@ export default function FofBuilder() {
         allowedInput: '',
         insPayInput: '',
         insPayException: '',
-        feeFlag: '',
+        feeFlag: fields.feeFlag ?? '',
         entryDate: '',
         membershipFree: '',
         // Dentures carry the arch in their name; a tooth number is noise.
@@ -1666,7 +1674,8 @@ export default function FofBuilder() {
       const resolved = resolveImportedFee({
         code,
         pmsOfficeFeeCents: r.officeFee !== null ? Math.round(r.officeFee * 100) : null,
-        onFileFeeCents: onFile && onFile.feeCents > 0 ? onFile.feeCents : null,
+        // A $0 row on our schedule is a no-charge fee, not a missing one.
+        onFileFeeCents: onFile ? Math.max(0, onFile.feeCents) : null,
         contractedFeeCents: r.fee !== null ? Math.round(r.fee * 100) : null,
       });
       if (resolved.unpriced) unpriced++;
@@ -1681,7 +1690,7 @@ export default function FofBuilder() {
         entryDate: r.entryDate,
         visit:
           r.visit !== null && minVisit !== null ? String(r.visit - minVisit + 1) : base.visit,
-        feeFlag: resolved.flag,
+        feeFlag: [resolved.flag, onFile && onFile.feeCents <= 0 && feeCents === 0 ? NO_CHARGE_FLAG : ''].filter(Boolean).join(' '),
         notes: r.issues.length ? `Imported with review notes: ${r.issues.join(' ')}` : '',
       };
     });
@@ -3184,7 +3193,7 @@ export default function FofBuilder() {
         source={importReview?.source ?? 'screenshot'}
         result={importReview?.result ?? null}
         previewUrl={importReview?.previewUrl}
-        officeFeeFor={code => { const item = officeByCode.get(normalizeCode(code)); return item && item.feeCents > 0 ? item.feeCents : null; }}
+        officeFeeFor={code => { const item = officeByCode.get(normalizeCode(code)); return item ? Math.max(0, item.feeCents) : null; }}
         onCancel={closeImportReview}
         onImport={rows => {
           const scope = importReview?.scope;

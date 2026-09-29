@@ -191,7 +191,7 @@ describe('fees load before anything is trusted', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Try loading again' }));
     expect(mocks.items.office.refetch).toHaveBeenCalled();
   });
-  it('an inactive office schedule is not used; a $0 office fee is a review error, not a free procedure', async () => {
+  it('an inactive office schedule is not used; a $0 office fee is a no-charge line that says so and never blocks the print', async () => {
     mocks.schedules.data = [schedule('office', 'office', 'Office Fee Schedule', false, false)];
     mocks.templates = [LIVE_TEMPLATES[0]];
     mount();
@@ -200,9 +200,20 @@ describe('fees load before anything is trusted', () => {
     expect(feeInput('D2740')).toHaveValue('');
     cleanup(); resetOffice(); mocks.templates = [LIVE_TEMPLATES[0]];
     mount();
-    typeCode(0, 'D9999');
-    expect(chips('D9999')).toContain('missing');
-    expect(screen.getByText(/D9999 has no office fee: the office schedule has no fee on file/)).toBeTruthy();
+    typeCode(0, 'D2740');
+    fireEvent.click(screen.getByRole('button', { name: /Add Procedure/ }));
+    typeCode(1, 'D9999');
+    // Office decision: a $0 row (post-ops, inserts, adjustments) is a real no-charge fee.
+    expect(feeInput('D9999')).toHaveValue('$0.00');
+    expect(chips('D9999')).toContain('office');
+    expect(chips('D9999')).not.toContain('missing');
+    expect(screen.getAllByText(/No charge — \$0.00 on the office fee schedule/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/D9999 has no office fee/)).toBeNull();
+    expect(printButton()).toBeEnabled();
+    // A code the schedule does not carry is still "no fee on file" and blocks until staff type one.
+    typeCode(1, 'D8888');
+    expect(chips('D8888')).toContain('missing');
+    expect(screen.getByText(/D8888 has no office fee: the office schedule has no fee on file/)).toBeTruthy();
     expect(printButton()).toBeDisabled();
   });
   it('a missing practice identity blocks the print instead of printing a blank header', () => {

@@ -19,9 +19,9 @@ how it was proven, and what a human still has to do to release it.
      produced an empty code map, a `$0.00` fee, a carrier fallback to the office fee and a
      blank practice header on the printed form.
    - Fee item reads were capped at 1,000 rows (the live office schedule has 1,174).
-   - 507 CDT rows on the live office schedule carry a `$0` fee and 248 carrier rows are
-     flagged `is_office_fee`; both were treated as real amounts (a free procedure, or a
-     100 % write-off).
+   - 248 carrier rows are flagged `is_office_fee` or carry a `$0` rate and were treated
+     as contracted rates (a 100 % write-off). The 507 `$0` rows on the office schedule
+     are, by office decision, genuine no-charge lines (see Human decisions).
 2. **Stale values survived a changed code or carrier.** Fee, description, allowable,
    insurance payment, downgrade, tooth and category kept the old code's values and
    overrides; a carrier change kept carrier-derived estimates.
@@ -192,13 +192,19 @@ office; no real patient data).
 
 ## Human decisions
 
-- Whether the 507 `$0` CDT rows on the live office schedule should be given fees or
-  removed: the builder now treats them as "no fee on file" (review error), not free.
+- Decided 2026-09-29: the 507 `$0` CDT rows on the live office schedule (post-ops,
+  inserts and similar) are real no-charge fees. A `$0` office-schedule row fills the line
+  with `$0.00`, prints "No charge — $0.00 on the office fee schedule." beside it on the
+  office copy, and never blocks the print. Only a code the schedule does not carry is
+  "no fee on file" and blocks until staff type a fee.
 - Whether the `E2E Synthetic Test Office` rows (org `e2e00000-0000-4000-8000-000000000001`)
   should be kept for future verification; they are removed once the run is recorded
   below, and the SQL to recreate them is in the session record.
-- Benefits confirmation is a per-form checkbox action; if the office prefers a softer
-  reminder instead of a print block, change `readinessIssues` in `FofBuilder.tsx`.
+- Decided 2026-09-29: benefits confirmation stays a per-form print block (one click);
+  a softer reminder would mean changing `readinessIssues` in `FofBuilder.tsx`.
+- Decided 2026-09-29: the deployed `parse-treatment` function is deleted during the
+  release, and the Lovable deployment and publish steps are run from this session after
+  the merge.
 
 ## End-to-end evidence
 
