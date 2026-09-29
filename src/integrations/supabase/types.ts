@@ -3754,6 +3754,7 @@ export type Database = {
       }
       insurance_plans: {
         Row: {
+          alternate_benefit_downgrade: boolean | null
           annual_max_cents: number
           basic_pct: number
           created_at: string
@@ -3773,6 +3774,7 @@ export type Database = {
           writeoff_applies: boolean
         }
         Insert: {
+          alternate_benefit_downgrade?: boolean | null
           annual_max_cents?: number
           basic_pct?: number
           created_at?: string
@@ -3792,6 +3794,7 @@ export type Database = {
           writeoff_applies?: boolean
         }
         Update: {
+          alternate_benefit_downgrade?: boolean | null
           annual_max_cents?: number
           basic_pct?: number
           created_at?: string
