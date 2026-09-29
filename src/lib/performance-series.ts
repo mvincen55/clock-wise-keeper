@@ -204,6 +204,7 @@ export type ReportDay = {
   packageStart: string;
   packageEnd: string;
   importedAt: string;
+  dateBasis?: 'entry_date' | 'source_date';
 };
 
 /**
@@ -211,13 +212,18 @@ export type ReportDay = {
  * package's own authoritative total for that month: when the daily rows
  * under it are thin, the month total is still complete.
  */
+/**
+ * A whole-month total from a loaded report package, as report-history's
+ * `reportMonthsFrom` selects it (newest import wins a month; explicit
+ * comparison rows keep their approved source). Structural, so that richer
+ * row fits without a copy.
+ */
 export type ReportMonth = {
   /** YYYY-MM */
   month: string;
-  coverage: 'full' | 'partial';
-  postedChargesCents: number;
-  receiptsCents: number;
-  importedAt: string;
+  coverage: 'full_calendar_month' | 'partial';
+  production_cents: number;
+  collections_cents: number;
 };
 
 export type PerformanceSources = {
@@ -554,14 +560,12 @@ export function authoritativeTotals(period: { start: string; end: string }, mont
   const keys = wholeMonthsOf(period);
   if (keys.length === 0 || !months?.length) return null;
   const byMonth = new Map<string, ReportMonth>();
-  for (const m of [...months].sort((a, b) => b.importedAt.localeCompare(a.importedAt))) {
-    if (!byMonth.has(m.month)) byMonth.set(m.month, m);
-  }
+  for (const m of months) if (!byMonth.has(m.month)) byMonth.set(m.month, m); // already one row per month, first wins
   const rows = keys.map(k => byMonth.get(k));
-  if (rows.some(r => !r || r.coverage !== 'full')) return null;
+  if (rows.some(r => !r || r.coverage !== 'full_calendar_month')) return null;
   return {
-    primaryCents: rows.reduce((s, r) => s + (r as ReportMonth).postedChargesCents, 0),
-    secondaryCents: rows.reduce((s, r) => s + (r as ReportMonth).receiptsCents, 0),
+    primaryCents: rows.reduce((s, r) => s + (r as ReportMonth).production_cents, 0),
+    secondaryCents: rows.reduce((s, r) => s + (r as ReportMonth).collections_cents, 0),
   };
 }
 
@@ -660,17 +664,18 @@ export type PerformanceWindow = {
  * calendar-day count when the office calendar is unavailable, or "complete
  * month · report package summary" when the package's own total stands.
  */
-export function coverageLabel(totals: WindowTotals, source: SeriesSource): string {
+export function coverageLabel(totals: WindowTotals, source: SeriesSource, sourceDates = false): string {
   if (totals.authoritative) {
     return `Complete month · report package summary${totals.lastRecorded ? ` · through ${fmtDay(totals.lastRecorded)}` : ''}`;
   }
   const recorded = Math.max(totals.primaryRecordedDays, totals.secondaryRecordedDays);
   const parts: string[] = [];
+  const reportUnit = sourceDates ? 'source date' : 'posting day';
   if (totals.expectedDays !== null) {
-    const unit = source === 'closeouts' ? 'office day' : 'posting day';
+    const unit = source === 'closeouts' ? 'office day' : reportUnit;
     parts.push(`${recorded} of ${totals.expectedDays} ${unit}${totals.expectedDays === 1 ? '' : 's'} recorded`);
   } else {
-    const unit = source === 'closeouts' ? 'day' : 'posting day';
+    const unit = source === 'closeouts' ? 'day' : reportUnit;
     parts.push(`${recorded} of ${totals.days} ${unit}s recorded`);
   }
   if (totals.lastRecorded) parts.push(`through ${fmtDay(totals.lastRecorded)}`);
@@ -712,17 +717,26 @@ export function buildWindow(args: {
     const summary = authoritativeTotals(period, sources.reportMonths);
     if (summary) totals = { ...totals, ...summary, authoritative: true, completeness: 'complete' };
   }
+  // Some packages carry the date printed on the source rather than an entry
+  // date; the labels say so instead of calling those posting days.
+  const sourceDates = source === 'report_history' && sources.reportDays.some(d => d.date >= period.start && d.date <= period.end && d.dateBasis === 'source_date');
   return {
     period,
     source,
     choice,
-    definitions: DEFINITIONS[source],
+    definitions: sourceDates ? {
+      ...DEFINITIONS.report_history,
+      primaryLabel: 'Charges',
+      primaryDefinition: 'Charges by the date printed on the source. Entry date versus procedure date is unconfirmed for some reports.',
+      secondaryDefinition: 'Receipts by the date printed on the source. Receipts can pay older balances.',
+      dateBasis: 'date printed on source',
+    } : DEFINITIONS[source],
     granularity,
     points,
     buckets: bucketize(points, granularity, today, period.partial),
     totals,
     comparison: compare(period, source, sources, totals),
-    coverageLabel: coverageLabel(totals, source),
+    coverageLabel: coverageLabel(totals, source, sourceDates),
   };
 }
 

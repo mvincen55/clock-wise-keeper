@@ -42,6 +42,11 @@ const controlClass = cn(
 
 const fmtDay = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
+/** The unit the completeness row counts: office days, posting days, or the dates printed on the source. */
+function dayUnit(source: SeriesSource, dateBasis: string): string {
+  return source === 'closeouts' ? 'office days' : dateBasis === 'date printed on source' ? 'source dates' : 'posting days';
+}
+
 /** The strip's tiles for a period, from the window and the closeout-only counts. Pure, so tests can pin it. */
 export function stripTiles(args: {
   data: PerformanceData;
@@ -78,7 +83,7 @@ export function stripTiles(args: {
       info.push(
         { label: 'Through', value: cutoff },
         { label: 'Source', value: `${w.definitions.sourceLabel} · ${w.definitions.dateBasis}` },
-        { label: 'Completeness', value: w.totals.authoritative ? 'Complete month from the package summary' : w.totals.expectedDays !== null ? `${recorded} of ${w.totals.expectedDays} ${w.source === 'closeouts' ? 'office' : 'posting'} days recorded through ${fmtDay(w.totals.cutoff)}` : `${recorded} of ${w.totals.days} calendar days recorded (office calendar unavailable)` },
+        { label: 'Completeness', value: w.totals.authoritative ? 'Complete month from the package summary' : w.totals.expectedDays !== null ? `${recorded} of ${w.totals.expectedDays} ${dayUnit(w.source, w.definitions.dateBasis)} recorded through ${fmtDay(w.totals.cutoff)}` : `${recorded} of ${w.totals.days} calendar days recorded (office calendar unavailable)` },
         { label: 'Comparison', value: c.comparable ? `Per recorded day against the same span of the prior period (${c.rangeLabel})` : `Withheld: ${c.reason ?? 'not comparable'}` },
         { label: 'Definition', value: key === 'primary' ? w.definitions.primaryDefinition : w.definitions.secondaryDefinition },
       );

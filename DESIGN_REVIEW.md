@@ -503,11 +503,11 @@ are read, never written. Source map, definitions and rules:
 | Check | Result |
 | --- | --- |
 | Typecheck (`tsc --noEmit -p tsconfig.app.json`, app and tests) | clean |
-| Full test suite (`vitest run`) | 2513 passed / 53 skipped / 0 failed (245 files) |
+| Full test suite (`vitest run`) | 2519 passed / 53 skipped / 0 failed (246 files, after merging main) |
 | Lint (`eslint` on the 52 changed files) | 0 errors, 9 warnings — every warning is `react-refresh/only-export-components` on the kit's style tokens and the chart files; the count across the changed files equals `HEAD` (two token exports added to the kit; one pre-existing warning removed from `NeedsYou.tsx` and one from `useDashboardView.ts`) |
 | Production build (`vite build`) | built in 27 s (the existing chunk-size warning only) |
 | Captures | 20 scenarios × 3 widths (1440×1000, 834×1112, 390×844): 60 of 60 captured, no page errors, no horizontal overflow, smallest rendered text 12.5px (the review notes under each preview; the dashboard itself is 13px and up) |
-| Production publish | **not** performed |
+| Production publish | not part of the sandbox verification — the frontend is published from `main` through Lovable after the merge (README, Deployment) |
 
 ### Screenshots (`design-review/`, full page, `-desktop`, `-tablet`, `-mobile`)
 `owner`, `owner-closed`, `owner-incomplete`, `owner-partial` (two office days without a closeout: partial-data labels, no behind verdict, the closeouts group), `owner-new`, `manager`, `manager-attendance` (an excuse request, an attendance report, three closeouts to seal folded into one group, a missing clock-out, a PTO request), `manager-closed`, `manager-off-pace`, `manager-new`, `manager-front-desk`, `front-desk`, `hygienist`, `dental-assistant`, `member-late-arrival` (an unanswered arrival, a pending excuse, a report to sign, the standing line), `member-hidden-financials`, `member-clear`, `member-new`, `front-desk-backup-assistant`, `front-desk-backup-only` (a backup role: no tasks, tools behind "More tools").

@@ -61,7 +61,7 @@ describe('cutoff and coverage', () => {
 });
 
 describe('a complete monthly summary is authoritative', () => {
-  const month = (over: Partial<ReportMonth> = {}): ReportMonth => ({ month: '2026-08', coverage: 'full', postedChargesCents: 12_000_000, receiptsCents: 9_500_000, importedAt: '2026-09-01T00:00:00Z', ...over });
+  const month = (over: Partial<ReportMonth> = {}): ReportMonth => ({ month: '2026-08', coverage: 'full_calendar_month', production_cents: 12_000_000, collections_cents: 9_500_000, ...over });
   it('applies only to whole calendar months every one of which has a full row', () => {
     expect(wholeMonthsOf({ start: '2026-08-01', end: '2026-08-31' })).toEqual(['2026-08']);
     expect(wholeMonthsOf({ start: '2026-07-01', end: '2026-08-31' })).toEqual(['2026-07', '2026-08']);
@@ -72,9 +72,9 @@ describe('a complete monthly summary is authoritative', () => {
     expect(authoritativeTotals({ start: '2026-08-01', end: '2026-08-30' }, [month()])).toBeNull();
     expect(authoritativeTotals({ start: '2026-08-01', end: '2026-08-31' }, undefined)).toBeNull();
   });
-  it('the newest import wins a month', () => {
-    const rows = [month({ postedChargesCents: 1, importedAt: '2026-09-01T00:00:00Z' }), month({ postedChargesCents: 2, importedAt: '2026-09-05T00:00:00Z' })];
-    expect(authoritativeTotals({ start: '2026-08-01', end: '2026-08-31' }, rows)?.primaryCents).toBe(2);
+  it('takes the one row report-history selected for a month; a duplicate row never adds to it', () => {
+    const range = { start: '2026-08-01', end: '2026-08-31' };
+    expect(authoritativeTotals(range, [month({ production_cents: 2, collections_cents: 2 }), month()])).toEqual({ primaryCents: 2, secondaryCents: 2 });
   });
   it('a window on report history with thin daily rows still reads as a complete month total', () => {
     const day: ReportDay = { date: '2026-08-04', postedChargesCents: 500_000, receiptsCents: 400_000, packageStart: '2026-08-01', packageEnd: '2026-08-31', importedAt: '2026-09-01T00:00:00Z' };
@@ -86,12 +86,16 @@ describe('a complete monthly summary is authoritative', () => {
     // The daily points underneath keep their gaps: a missing day is not a zero.
     expect(w.points.filter(p => p.status === 'not_in_package').length).toBeGreaterThan(0);
   });
-  it('reportMonthsFrom reads the package rows, newest import first, and drops malformed rows', () => {
-    const imp = (id: string, importedAt: string, rows: unknown[]): ReportImportRow => ({ id, report_start: '2026-08-01', report_end: '2026-08-31', imported_at: importedAt, payload: { monthly_financials_by_entry_date: rows, daily_financials_by_entry_date: [] } as unknown as PreparedReport });
+  it('the rows report-history selects feed the authoritative total: newest import wins a month, a partial month withholds it', () => {
+    const imp = (id: string, importedAt: string, rows: unknown[]): ReportImportRow => ({ id, report_start: '2026-07-01', report_end: '2026-08-31', imported_at: importedAt, payload: { monthly_financials_by_entry_date: rows, daily_financials_by_entry_date: [] } as unknown as PreparedReport });
     const months = reportMonthsFrom([
-      imp('old', '2026-09-01T00:00:00Z', [{ month: '2026-08', coverage: 'full', posted_charges_cents: 1, recorded_payments_cents: 1 }]),
-      imp('new', '2026-09-05T00:00:00Z', [{ month: '2026-08-01', coverage: 'partial', posted_charges_cents: 2, recorded_payments_cents: 2 }, { month: 'bad', coverage: 'full', posted_charges_cents: 3, recorded_payments_cents: 3 }, { month: '2026-07', coverage: 'full', posted_charges_cents: 'x', recorded_payments_cents: 3 }]),
+      imp('old', '2026-09-01T00:00:00Z', [{ month: '2026-08', coverage: 'full_calendar_month', posted_charges_cents: 1, recorded_payments_cents: 1 }, { month: '2026-07', coverage: 'full_calendar_month', posted_charges_cents: 700, recorded_payments_cents: 400 }]),
+      imp('new', '2026-09-05T00:00:00Z', [{ month: '2026-08', coverage: 'full_calendar_month', posted_charges_cents: 2, recorded_payments_cents: 2 }, { month: 'bad', coverage: 'full_calendar_month', posted_charges_cents: 3, recorded_payments_cents: 3 }, { month: '2026-06', coverage: 'full_calendar_month', posted_charges_cents: 9, recorded_payments_cents: 9 }]),
     ]);
-    expect(months).toEqual([{ month: '2026-08', coverage: 'partial', postedChargesCents: 2, receiptsCents: 2, importedAt: '2026-09-05T00:00:00Z' }]);
+    expect(months.map(m => [m.month, m.production_cents, m.coverage])).toEqual([['2026-07', 700, 'full_calendar_month'], ['2026-08', 2, 'full_calendar_month']]);
+    expect(authoritativeTotals({ start: '2026-08-01', end: '2026-08-31' }, months)).toEqual({ primaryCents: 2, secondaryCents: 2 });
+    expect(authoritativeTotals({ start: '2026-07-01', end: '2026-08-31' }, months)).toEqual({ primaryCents: 702, secondaryCents: 402 });
+    const partial = reportMonthsFrom([imp('p', '2026-09-06T00:00:00Z', [{ month: '2026-08', coverage: 'partial', posted_charges_cents: 5, recorded_payments_cents: 5 }])]);
+    expect(authoritativeTotals({ start: '2026-08-01', end: '2026-08-31' }, partial)).toBeNull();
   });
 });

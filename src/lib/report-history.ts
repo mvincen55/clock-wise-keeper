@@ -8,8 +8,8 @@
  * recently imported package wins that day and the other is ignored for it.
  * Nothing is added together across packages.
  */
-import type { PreparedReport } from '@/lib/prepared-report';
-import type { ReportDay, ReportMonth } from '@/lib/performance-series';
+import type { ComparisonMonth, PreparedReport } from '@/lib/prepared-report';
+import type { ReportDay } from '@/lib/performance-series';
 
 export type ReportImportRow = {
   id: string;
@@ -38,57 +38,34 @@ export function reportDaysFrom(imports: ReportImportRow[]): ReportDay[] {
   const ordered = [...imports].sort((a, b) => b.imported_at.localeCompare(a.imported_at));
   const byDate = new Map<string, ReportDay>();
   for (const imp of ordered) {
+    const start = imp.payload?.daily_report_range?.start ?? imp.report_start;
+    const end = imp.payload?.daily_report_range?.end ?? imp.report_end;
     const rows = Array.isArray(imp.payload?.daily_financials_by_entry_date) ? imp.payload.daily_financials_by_entry_date : [];
     for (const r of rows) {
       if (!isDate(r.date) || !isCents(r.posted_charges_cents) || !isCents(r.recorded_payments_cents)) continue;
       if (r.date < imp.report_start || r.date > imp.report_end) continue;
+      if (r.date < start || r.date > end) continue;
       if (byDate.has(r.date)) continue; // an older package never overrides a newer one
       byDate.set(r.date, {
         date: r.date,
         postedChargesCents: r.posted_charges_cents,
         receiptsCents: r.recorded_payments_cents,
-        packageStart: imp.report_start,
-        packageEnd: imp.report_end,
+        packageStart: start,
+        packageEnd: end,
         importedAt: imp.imported_at,
+        dateBasis: imp.payload.financial_date_basis ?? 'entry_date',
       });
     }
   }
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/**
- * The monthly summary rows across the loaded packages, newest import
- * winning a month. A `full` month is that package's complete total for the
- * month — the daily rows under it may be thinner without the total being.
- */
-export function reportMonthsFrom(imports: ReportImportRow[]): ReportMonth[] {
-  const ordered = [...imports].sort((a, b) => b.imported_at.localeCompare(a.imported_at));
-  const byMonth = new Map<string, ReportMonth>();
-  for (const imp of ordered) {
-    const rows = Array.isArray(imp.payload?.monthly_financials_by_entry_date) ? imp.payload.monthly_financials_by_entry_date : [];
-    for (const r of rows) {
-      const month = typeof r.month === 'string' ? r.month.slice(0, 7) : null;
-      if (!month || !/^\d{4}-\d{2}$/.test(month)) continue;
-      if (!isCents(r.posted_charges_cents) || !isCents(r.recorded_payments_cents)) continue;
-      if (byMonth.has(month)) continue;
-      byMonth.set(month, {
-        month,
-        coverage: r.coverage === 'full' ? 'full' : 'partial',
-        postedChargesCents: r.posted_charges_cents,
-        receiptsCents: r.recorded_payments_cents,
-        importedAt: imp.imported_at,
-      });
-    }
-  }
-  return [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month));
-}
-
 export function reportPackagesFrom(imports: ReportImportRow[]): ReportPackage[] {
   return imports
     .map(imp => ({
       id: imp.id,
-      start: imp.report_start,
-      end: imp.report_end,
+      start: imp.payload.daily_report_range?.start ?? imp.report_start,
+      end: imp.payload.daily_report_range?.end ?? imp.report_end,
       importedAt: imp.imported_at,
       days: Array.isArray(imp.payload?.daily_financials_by_entry_date) ? imp.payload.daily_financials_by_entry_date.length : 0,
       partialMonths: (Array.isArray(imp.payload?.monthly_financials_by_entry_date) ? imp.payload.monthly_financials_by_entry_date : [])
@@ -96,6 +73,33 @@ export function reportPackagesFrom(imports: ReportImportRow[]): ReportPackage[] 
         .map(m => m.month as string),
     }))
     .sort((a, b) => b.end.localeCompare(a.end));
+}
+
+export type ReportMonth = ComparisonMonth & { packageId: string };
+
+/** Whole monthly observations are selected once, never added to daily totals.
+ * Explicit comparison rows retain their approved source choice. As with days,
+ * the newest import wins an overlapping month; other packages remain intact.
+ * Home reads these too: a `full_calendar_month` row is the authoritative
+ * total for that month (`authoritativeTotals` in performance-series).
+ */
+export function reportMonthsFrom(imports: ReportImportRow[]): ReportMonth[] {
+  const byMonth = new Map<string, ReportMonth>();
+  const ordered = [...imports].sort((a,b)=>b.imported_at.localeCompare(a.imported_at));
+  for (const imp of ordered) {
+    const rows: ComparisonMonth[] = imp.payload.monthly_comparison?.rows ?? (imp.payload.monthly_financials_by_entry_date ?? []).map(r=>({
+      month: r.month, production_cents: r.posted_charges_cents, collections_cents: r.recorded_payments_cents,
+      coverage: r.coverage, source_kind: 'daysheet', source_label: 'Daysheet report',
+      production_basis: imp.payload.financial_date_basis === 'source_date' ? 'Charges by date printed on the source' : 'Charges by entry date',
+      collections_basis: 'Recorded receipts', source_reference: `${imp.report_start} through ${imp.report_end}`,
+    }));
+    for (const row of rows) {
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(row.month) || !isCents(row.production_cents) || !isCents(row.collections_cents)) continue;
+      if (row.month < imp.report_start.slice(0,7) || row.month > imp.report_end.slice(0,7) || byMonth.has(row.month)) continue;
+      byMonth.set(row.month,{...row,packageId:imp.id});
+    }
+  }
+  return [...byMonth.values()].sort((a,b)=>a.month.localeCompare(b.month));
 }
 
 /** The package whose range best matches a requested range: covering first, else the largest overlap. */

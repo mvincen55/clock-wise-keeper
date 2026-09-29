@@ -156,7 +156,7 @@ late arrivals as manager alerts.
 | Check | Command | Result |
 |---|---|---|
 | Typecheck | `npx tsc --noEmit -p tsconfig.app.json` | clean (app and tests) |
-| Unit and component tests | `npx vitest run` | 2513 passed, 53 skipped, 0 failed (245 files) |
+| Unit and component tests | `npx vitest run` | 2519 passed, 53 skipped, 0 failed (246 files, after merging main) |
 | Lint | `npx eslint <the 52 changed files>` | 0 errors, 9 warnings — every warning is `react-refresh/only-export-components` on the kit's style tokens and the chart files; the count across the changed files equals `HEAD` (two token exports added to the kit, one pre-existing warning removed from `NeedsYou.tsx` and one from `useDashboardView.ts`) |
 | Production build | `npx vite build` | built (the existing chunk-size warning only) |
 | Rendered review | `node scripts/design-review-capture.mjs` against `npx vite` | 20 scenarios × 3 widths (1440×1000, 834×1112, 390×844): 60 of 60 captured, no page errors, no horizontal overflow, smallest rendered text 12.5px (the review notes; the dashboard itself is 13px and up) — `design-review/*-{desktop,tablet,mobile}.png` |

@@ -273,7 +273,7 @@ export function fxReportPackage(start: string, end: string, importedAt: string):
     report_start: start,
     report_end: end,
     daily_financials_by_entry_date: rows,
-    monthly_financials_by_entry_date: [...months.entries()].map(([month, m]) => ({ month, coverage: 'full', ...m, credit_adjustments_cents: 0, charge_adjustments_cents: 0 })),
+    monthly_financials_by_entry_date: [...months.entries()].map(([month, m]) => ({ month, coverage: 'full_calendar_month', ...m, credit_adjustments_cents: 0, charge_adjustments_cents: 0 })),
   } as unknown as PreparedReport;
   return { id: `fx-pkg-${start}`, report_start: start, report_end: end, imported_at: importedAt, payload };
 }
