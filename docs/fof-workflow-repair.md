@@ -202,5 +202,72 @@ office; no real patient data).
 
 ## End-to-end evidence
 
-The signed-in browser run is in progress; its results are appended here by the
-following commit.
+Signed-in run on 2026-09-29 (`.repro/e2e/run.mjs`, Chromium 141 through Playwright,
+the production bundle from this branch served locally, the **live** Supabase project
+`lfiplzmxpmybtbzhmnkp` with its currently deployed edge functions). The run signs in as
+the manager of a synthetic office and uses synthetic data only; every network request
+the browser made was recorded and swept for the patient name, the narrative marker and
+the typed amounts.
+
+Synthetic office (created through the public sign-up API plus SQL, removed at the end):
+`E2E Synthetic Test Office` (org `e2e00000-0000-4000-8000-000000000001`), one manager
+account, onboarding marked complete, a branding row for the header, and copies of the
+live office's data: the 1,174-row office schedule, the Delta and BCBS carrier schedules,
+one saved plan (`E2E DD MA 100/80/50`), five templates, 24 payment classifications,
+discount and code rules and the wording guidance, plus an empty `E2E Import Target`
+carrier and an inactive `E2E Retired Carrier`. Patient name used: `Synthetic Patient
+Zeta`. No real patient information was involved.
+
+Result: 16 steps, 0 failed (44 checks). In order:
+
+- **Fees page.** All schedules listed with their counts; the 1,174-code office schedule
+  reports every row (the read paged past 1,000); the retired carrier is marked
+  "Inactive — not offered on forms"; the saved plan is listed.
+- **Fee import.** A 7-row CSV (a duplicate code, a blank-code row, an unknown code, a
+  `$0` fee) previewed as "5 valid · 1 skipped · 1 duplicate (last row wins) · not on the
+  office schedule" before anything was written; the toast read "Imported 5 codes into E2E
+  Import Target (5 new, 0 updated) — verified on the schedule"; the row showed "5 codes";
+  the database holds exactly those five rows with the last duplicate's fee.
+- **Builder.** `D2740` typed while the schedule was still loading resolved to the office
+  fee (`$1,569.00`, "office" chip) 55 ms after the items arrived; `ZZZ1` stayed
+  unmatched with no fee. Choosing `E2E Delta Dental MA` hydrated `$50.00` / `$1,500.00`
+  and 100/80/50 with "plan default" chips and the "unverified estimate" wording; Print
+  stayed disabled until "Confirm benefits as entered".
+- **Overrides and changes.** Typing `$9,999.00` as the insurance payment produced the
+  bounded note ("the plan can pay at most …"). Changing `D2740` → `D2750` re-evaluated
+  the fee (`$1,569.00` → `$1,710.00`), switched the allowable to the carrier rate,
+  dropped the override and noted "Code changed from D2740: cleared insurance payment
+  $100.00"; Restore put it back on purpose. Changing the carrier to `E2E BCBS MA`
+  re-hydrated generic defaults and asked for confirmation again.
+- **Naming (live `name-visits`).** Status reached "done"; the single request carried
+  `slots`, `visits`, `wantTreatment`, `doctorName`, `orgId` only, with visits such as
+  `["CT Scan"]`, `["Dental Implant (tooth #30)"]`, `["Crown (tooth #3)"]` — no name, no
+  amount. The deployed function is the pre-release version, which ignores `orgId`.
+- **Local imports.** The synthetic screenshot produced "Review 4 extracted procedures —
+  read on this device"; low-confidence and unreadable-fee rows were flagged and had to be
+  acknowledged; no request at all left the browser during the read; the reviewed rows
+  were added (3 → 7 lines). Pasted text produced its own review and was added.
+- **Printing.** "Patient form only" printed one Letter page carrying the name and no
+  office copy; "Patient form + office copy" printed three pages (patient page, then the
+  office copy with the basis of every allowable and the codes); "Office copy only"
+  printed two pages with no patient page. Printing left the form intact; Clear emptied
+  it; a refresh started blank.
+- **Privacy.** Hosts contacted: the Supabase project and Google Fonts (the app's fonts).
+  Edge functions called: `fof-office-guidance` (`orgId` only) and `name-visits`.
+  `parse-treatment` was never called; nothing was written to Supabase storage; the only
+  table write was the fee import; browser storage held only the auth session and a
+  support-redaction flag. Database sweep after the run: no table in `public` or
+  `storage` contains the patient name or the narrative marker; no storage object was
+  created.
+
+Two live findings came out of the run and are fixed on this branch: names applied by
+automatic naming were stored as payment overrides and blocked printing after any later
+plan change (commit "Let suggested payment names follow the plan"); and a brand-new
+office without a branding row is correctly blocked from printing a blank header (the
+banner names the fix).
+
+Not covered by the browser run: a staff-role (employee) account's first use in the live
+app (unit-tested only), a phone-width viewport, keyboard-only navigation (unit tests
+drive the selects from the keyboard), and visual inspection of the PDFs (their text was
+inspected with pdf.js). Artifacts (PDFs, screenshots, `requests.json`, `console.log`,
+`summary.json`) are under the ignored `.repro/e2e/out/` directory of the session.
