@@ -80,6 +80,8 @@ export type ReportMonth = ComparisonMonth & { packageId: string };
 /** Whole monthly observations are selected once, never added to daily totals.
  * Explicit comparison rows retain their approved source choice. As with days,
  * the newest import wins an overlapping month; other packages remain intact.
+ * Home reads these too: a `full_calendar_month` row is the authoritative
+ * total for that month (`authoritativeTotals` in performance-series).
  */
 export function reportMonthsFrom(imports: ReportImportRow[]): ReportMonth[] {
   const byMonth = new Map<string, ReportMonth>();

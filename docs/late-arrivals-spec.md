@@ -124,6 +124,26 @@ report are refused; nobody files one by hand.
 - The old per-tardy Attention items and the mandatory reason prompt are gone
   from every surface.
 
+## What Home shows
+
+- **Manager and owner Home** never headline a routine late arrival. A person
+  who arrived late and is in reads "In · late 12m" on the live roster, calm,
+  and is not an exception in Today. Attendance reaches the Needs you queue in
+  two forms only: an excuse request (Decide) and an open attendance report
+  (Meet with team member / sign). The queue count is unique items; repeated
+  kinds fold into one expandable group whose rows still open their own
+  records. Team attendance (`/management/attendance`) and People keep every
+  record for inspection.
+- **Team member Home** lists an unanswered late arrival under My work with the
+  three answers one tap away (`/days-off?tardy=<id>`), an open attendance
+  report to read and sign (`/incident-reports?report=<id>`), and a pending
+  excuse request under "Waiting on someone else" — pending until a manager
+  decides, not counting toward the rule meanwhile. My time & PTO carries the
+  standing line: "N of M unexcused late arrivals in the last W days", a count
+  against the office rule from Settings, never a verdict.
+- Settings stays authoritative: Home reads the rule (`escalation_policies`,
+  kind `tardy_threshold`) and never writes it.
+
 ## Corrections
 
 The engine keeps an acknowledged, requested, or decided late arrival that a

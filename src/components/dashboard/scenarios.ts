@@ -1,9 +1,9 @@
 import type { ManagerView, MemberView, OwnerView } from './types';
 import {
-  assistantFixture, frontDeskBackupAssistFixture, frontDeskFixture, hygienistFixture,
-  managerClosedFixture, managerFixture, managerFrontDeskFixture, managerNewFixture,
-  managerOffPaceFixture, memberClearFixture, memberHiddenFinancialsFixture, memberNewFixture,
-  ownerClosedFixture, ownerFixture, ownerIncompleteFixture, ownerNewFixture,
+  assistantFixture, frontDeskBackupAssistFixture, frontDeskBackupOnlyFixture, frontDeskFixture, hygienistFixture,
+  managerAttendanceFixture, managerClosedFixture, managerFixture, managerFrontDeskFixture, managerNewFixture,
+  managerOffPaceFixture, memberClearFixture, memberHiddenFinancialsFixture, memberLateArrivalFixture, memberNewFixture,
+  ownerClosedFixture, ownerFixture, ownerIncompleteFixture, ownerNewFixture, ownerPartialFixture,
 } from './fixtures';
 
 /**
@@ -11,10 +11,12 @@ import {
  *
  * One entry per composition the owner asked to review — including the states
  * that matter most in production: closed office, brand-new office, metrics
- * off pace, hidden financial metrics, and brand-new employee. Each carries
- * the labels the review needs: permission tier, primary operational role,
- * backup roles, the real hook behind every widget, and what was deliberately
- * left out because Purple Envelope does not hold trustworthy data for it.
+ * off pace, a partially recorded month, attendance requests and reports in
+ * the queue, hidden financial metrics, backup roles, and a brand-new
+ * employee. Each carries the labels the review needs: permission tier,
+ * primary operational role, backup roles, the real hook behind every widget,
+ * and what was deliberately left out because Purple Envelope does not hold
+ * trustworthy data for it.
  */
 
 export type Scenario = {
@@ -36,41 +38,39 @@ const NO_CLINICAL = [
 ];
 
 const PULSE_SOURCES: [string, string][] = [
-  ['Daily pulse + summary sentence', 'usePracticeVitals (deposit_logs) → owner-pulse.ts, deterministic'],
-  ['Performance strip + chart', 'performance-series.ts over deposit_logs closeouts; report history (practice_report_imports, posting date) as a separate labeled view — never blended'],
-  ['Goal meters', 'goal-progress.ts → metric-pace.ts — each metric vs ONLY its own org-configured goal, calendar-day pace'],
-  ['What I’m noticing', 'home-insights.ts — fixed rules over the same rows, with receipts; extends owner-pulse ownerRecommendation'],
+  ['Latest closeout facts', 'usePracticeVitals (deposit_logs) → owner-pulse.ts buildDailyBrief, deterministic'],
+  ['Performance strip + chart', 'performance-series.ts over deposit_logs closeouts; report history (practice_report_imports, posting date) as a separate labeled view — never blended; completeness against the office calendar (useOfficeDays)'],
+  ['Goal meters', 'goal-progress.ts → metric-pace.ts — each metric vs ONLY its own org-configured goal, paced by office days from the office calendar; partial months suppress a behind verdict'],
+  ['Worth a look', 'home-insights.ts — fixed rules over the same rows, with receipts; never repeats a meter or the queue'],
   ['Cancellations and no-shows', 'missed-trend.ts — Dentrix postings (missed_appointment_events) first, Close the Day counts otherwise; unassigned kept apart'],
-  ['New-patient pipeline', 'deposit_logs new_patients_scheduled_count (never goal progress)'],
+  ['Tools', 'tools.ts buildToolGroups — assigned role first, coverage today, management, backup roles and the long tail on request; one destination once'],
 ];
 
 const MEMBER_SOURCES: [string, string][] = [
-  ['Next move', 'derived from the first open item across my assigned-work hooks'],
+  ['My next move + Needs you', 'my-work.ts buildMyWork over useTardies, useIncidentReports, useMyAccountabilityReports, useUnresolvedBypasses, useMyKnowledgeAcknowledgments, useTrainingAssignments, useMissingShifts, useChecklistGating, useMessagesCloseout, useMyPtoRequests, useMyCorrectionRequests'],
   ['Our office pulse', 'the same performance-series / goal-progress block the owner reads, limited to metrics whose visibility is "everyone"; no report history, no observations'],
   ['For my role', 'member-pulse.ts rolePulseItems — operational role, never permission tier'],
-  ['My open work', 'useMyTrainingAssignments, useMyAcknowledgments, useChecklistBypasses'],
   ['Office goal', 'useTeamGoals (shared sprints)'],
-  ['My time & PTO', 'useTodayEntry + useCurrentPtoBalance (analytics live on Timesheet)'],
-  ['Role lane shortcuts', 'useMyOperationalRoles + static route registry (opRoles.ts)'],
+  ['My time & PTO', 'useTodayEntry + useCurrentPtoBalance; late-arrival standing from useLateArrivalRule + late-arrivals.ts standingToday'],
+  ['Tools', 'useMyOperationalRoles + tools.ts buildToolGroups'],
 ];
 
 const MANAGER_SOURCES: [string, string][] = [
-  ['The sentence, Needs you, Today, status lines, spotlight', 'home-brief.ts buildHomeBrief — pure, from the sources below'],
+  ['Right now summary, Today, status lines, spotlight', 'home-brief.ts buildHomeBrief — pure, from the sources below; routine lateness is calm, never a headline'],
   ...PULSE_SOURCES.slice(1, 5),
-  ['Needs you (top three, "n more")', 'useAttentionItems → attention/deriveAttention — consequence order, one navigation action per row'],
+  ['Needs you (grouped)', 'useAttentionItems → attention/deriveAttention → attention/groups.ts — consequence order, repeated kinds folded into expandable categories, one navigation action per row'],
   ['Today exceptions + count line', 'useOrgAttendanceSnapshot + staffing.ts (owners excluded; phase-aware)'],
   ['Last closeout line', 'useRecentDepositLogs(14) + closeDayStatus (pure)'],
-  ['Pace line + Why? figures', 'metric-pace.ts — each metric vs ONLY its own org-configured goal'],
   ['Inbox line (wrap-up)', 'useMessagesCloseout'],
-  ['Mine', 'useMyKnowledgeAcknowledgments, useMissingShifts, useChecklistBypasses, useMyAccountabilityReports'],
+  ['Mine', 'my-work.ts buildMyWork over the manager’s own records'],
+  ...PULSE_SOURCES.slice(5),
 ];
 
 const ADMIN_SOURCES: [string, string][] = [
-  ['Office status + staffing', 'useOrgAttendanceSnapshot + staffing.ts (owners excluded; phase-aware)'],
-  ['Needs you', 'useAttentionItems → attention/deriveAttention (top three, one navigation action each)'],
+  ['Right now summary + staffing', 'home-brief.ts stateSummary + useOrgAttendanceSnapshot + staffing.ts (owners excluded; phase-aware)'],
+  ['Needs you (grouped)', 'useAttentionItems → attention/deriveAttention → attention/groups.ts'],
   ['Attendance to review', 'staffing.ts attendanceReview — only facts already true'],
-  ['Acknowledgments', 'useKnowledgeAcknowledgments'],
-  ['Training', 'useTrainingAssignments'],
+  ['Mine', 'my-work.ts buildMyWork over the owner’s own records'],
   ['Goals', 'useGoals / useTeamGoals'],
   ...PULSE_SOURCES,
 ];
@@ -83,11 +83,7 @@ export const SCENARIOS: Scenario[] = [
     primary: 'Dentist',
     secondary: 'None',
     view: ownerFixture,
-    sources: [
-      ...ADMIN_SOURCES,
-      ["What I'd look at", 'owner-pulse.ts ownerRecommendation — fixed-priority signals with receipts'],
-      ['Records at owner review', 'useAccountabilityReports'],
-    ],
+    sources: ADMIN_SOURCES,
     omitted: NO_CLINICAL,
   },
   {
@@ -105,7 +101,7 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     slug: 'owner-incomplete',
-    title: 'Owner — incomplete history: closeouts since Feb 16, a report package for Nov–Jan, no goals set',
+    title: 'Owner — incomplete history: closeouts since Feb 17, a report package for Nov–Jan, no goals set',
     tier: 'Owner',
     primary: 'Dentist',
     secondary: 'None',
@@ -115,6 +111,19 @@ export const SCENARIOS: Scenario[] = [
       ...NO_CLINICAL,
       'A blended production line across closeouts and the report package — the two are separate labeled views.',
       'A pace verdict — no goal is configured, so the meters say "No goal set" and offer the setup action.',
+    ],
+  },
+  {
+    slug: 'owner-partial',
+    title: 'Owner — partially recorded month: two office days have no closeout (Thu Mar 12)',
+    tier: 'Owner',
+    primary: 'Dentist',
+    secondary: 'None',
+    view: ownerPartialFixture,
+    sources: ADMIN_SOURCES,
+    omitted: [
+      ...NO_CLINICAL,
+      'A behind-pace verdict — two office days are unrecorded, so the meters show the totals with a partial-data label and the way to complete the records.',
     ],
   },
   {
@@ -139,6 +148,19 @@ export const SCENARIOS: Scenario[] = [
     view: managerFixture,
     sources: MANAGER_SOURCES,
     omitted: NO_CLINICAL,
+  },
+  {
+    slug: 'manager-attendance',
+    title: 'Manager — an excuse request, an attendance report to meet on, three closeouts awaiting seal',
+    tier: 'Manager',
+    primary: 'Office manager',
+    secondary: 'None',
+    view: managerAttendanceFixture,
+    sources: MANAGER_SOURCES,
+    omitted: [
+      ...NO_CLINICAL,
+      'A per-tardy alert — Marcus T. arrived late and acknowledged it; the rule counts it, Home does not headline it.',
+    ],
   },
   {
     slug: 'manager-closed',
@@ -180,7 +202,7 @@ export const SCENARIOS: Scenario[] = [
     primary: 'Front desk',
     secondary: 'Office manager (covering today)',
     view: managerFrontDeskFixture,
-    sources: [...MANAGER_SOURCES, ['Personal lane', 'useMyOperationalRoles + opRoles.ts']],
+    sources: MANAGER_SOURCES,
     omitted: NO_CLINICAL,
   },
   {
@@ -220,6 +242,19 @@ export const SCENARIOS: Scenario[] = [
     ],
   },
   {
+    slug: 'member-late-arrival',
+    title: 'Team member — a late arrival to answer, an attendance report to sign, a request pending',
+    tier: 'Team member',
+    primary: 'Hygienist',
+    secondary: 'None',
+    view: memberLateArrivalFixture,
+    sources: MEMBER_SOURCES,
+    omitted: [
+      ...NO_CLINICAL,
+      'A written explanation for the unexcused late arrival — acknowledging needs none; an excuse request is the person’s choice.',
+    ],
+  },
+  {
     slug: 'member-hidden-financials',
     title: 'Team member — production & collections set to admins only',
     tier: 'Team member',
@@ -254,16 +289,29 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     slug: 'front-desk-backup-assistant',
-    title: 'Front desk primary, dental assisting backup',
+    title: 'Front desk primary, dental assisting backup (covering today)',
     tier: 'Team member',
     primary: 'Front desk',
     secondary: 'Dental assistant (covering today)',
     view: frontDeskBackupAssistFixture,
     sources: [
       ...MEMBER_SOURCES,
-      ['Backup lane', 'employee_operational_roles.is_primary + starts_on/ends_on window'],
+      ['Covering today', 'employee_operational_roles.is_primary + starts_on/ends_on window'],
     ],
     omitted: NO_CLINICAL,
+  },
+  {
+    slug: 'front-desk-backup-only',
+    title: 'Front desk primary, dental assisting as a backup capability only',
+    tier: 'Team member',
+    primary: 'Front desk',
+    secondary: 'Dental assistant (backup, not assigned today)',
+    view: frontDeskBackupOnlyFixture,
+    sources: [
+      ...MEMBER_SOURCES,
+      ['Backup role', 'employee_operational_roles without a coverage window — tools on request, nothing in the queue'],
+    ],
+    omitted: [...NO_CLINICAL, 'Dental-assistant tasks in the queue — a backup capability is not an assignment.'],
   },
 ];
 

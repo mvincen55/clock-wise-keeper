@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { money } from '@/lib/owner-pulse';
-import { metricPace } from '@/lib/metric-pace';
+import { daysInMonthOf, metricPace, paceBasisClause, paceFraction, type PaceBasis } from '@/lib/metric-pace';
 import type { PerformanceData } from '@/lib/home-performance';
 import {
-  PRESET_LABELS, buildWindow, chooseSource, defaultPreset, formatDelta, periodFor,
+  PRESET_LABELS, buildWindow, chooseSource, defaultPreset, formatDelta, partialLabel, periodFor,
   type Period, type PeriodPreset, type PerformanceWindow, type SeriesSource, type SourceChoice,
 } from '@/lib/performance-series';
 import { missedSeries, type MissedSeries } from '@/lib/missed-trend';
-import { MicroLabel } from '../kit';
+import { SectionLabel, focusRing, interactive, panelClass } from '../kit';
 import type { Tone } from '../types';
 import { PerformanceChart, type ChartView } from './PerformanceChart';
 import { PerformanceStrip, type StripTile } from './PerformanceStrip';
 import { missedHref } from './MissedTrend';
+import { officeDaysForMonth } from './block';
+import { shiftDate } from '@/lib/time-utils';
 
 /**
  * The performance block: one period row that scopes everything under it,
@@ -25,7 +27,7 @@ export type PerformanceState = 'loading' | 'ok' | 'error';
 export type PerformanceSectionProps = {
   data: PerformanceData | null;
   state: PerformanceState;
-  /** The narrower goal / observation column beside the chart. */
+  /** The narrower goal column beside the chart. */
   aside?: ReactNode;
   /** Supporting operational visual under the chart, scoped to the same period. */
   supporting?: (period: Period, data: PerformanceData) => ReactNode;
@@ -34,11 +36,15 @@ export type PerformanceSectionProps = {
   chartWidth?: number;
 };
 
-const controlClass =
-  'inline-flex min-h-8 shrink-0 items-center rounded-full px-3 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
+const controlClass = cn(
+  'inline-flex min-h-9 shrink-0 items-center rounded-full px-3.5 text-[13.5px] font-medium', interactive, focusRing,
+);
 
-function coverageText(recorded: number, days: number, source: SeriesSource | null, sourceDates = false): string {
-  return `${recorded} of ${days} ${sourceDates ? 'source date' : source === 'report_history' ? 'posting day' : 'day'}${days === 1 ? '' : 's'} recorded`;
+const fmtDay = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+/** The unit the completeness row counts: office days, posting days, or the dates printed on the source. */
+function dayUnit(source: SeriesSource, dateBasis: string): string {
+  return source === 'closeouts' ? 'office days' : dateBasis === 'date printed on source' ? 'source dates' : 'posting days';
 }
 
 /** The strip's tiles for a period, from the window and the closeout-only counts. Pure, so tests can pin it. */
@@ -60,6 +66,8 @@ export function stripTiles(args: {
     const total = key === 'primary' ? w?.totals.primaryCents ?? null : w?.totals.secondaryCents ?? null;
     const recorded = key === 'primary' ? w?.totals.primaryRecordedDays ?? 0 : w?.totals.secondaryRecordedDays ?? 0;
     const lines: StripTile['lines'] = [];
+    const info: NonNullable<StripTile['info']> = [{ label: 'Period', value: periodLabel }];
+    let partial: string | null = null;
     if (w) {
       const c = w.comparison;
       const delta = key === 'primary' ? c.primaryDelta : c.secondaryDelta;
@@ -70,9 +78,18 @@ export function stripTiles(args: {
       } else {
         lines.push({ text: `No comparison: ${c.reason ?? 'not comparable'}` });
       }
-      lines.push({ text: coverageText(recorded, w.totals.days, w.source, w.definitions.dateBasis === 'date printed on source') });
+      partial = partialLabel(w.totals, w.source);
+      const cutoff = w.totals.lastRecorded ? fmtDay(w.totals.lastRecorded) : 'nothing recorded';
+      info.push(
+        { label: 'Through', value: cutoff },
+        { label: 'Source', value: `${w.definitions.sourceLabel} · ${w.definitions.dateBasis}` },
+        { label: 'Completeness', value: w.totals.authoritative ? 'Complete month from the package summary' : w.totals.expectedDays !== null ? `${recorded} of ${w.totals.expectedDays} ${dayUnit(w.source, w.definitions.dateBasis)} recorded through ${fmtDay(w.totals.cutoff)}` : `${recorded} of ${w.totals.days} calendar days recorded (office calendar unavailable)` },
+        { label: 'Comparison', value: c.comparable ? `Per recorded day against the same span of the prior period (${c.rangeLabel})` : `Withheld: ${c.reason ?? 'not comparable'}` },
+        { label: 'Definition', value: key === 'primary' ? w.definitions.primaryDefinition : w.definitions.secondaryDefinition },
+      );
     } else {
       lines.push({ text: choice.reason });
+      info.push({ label: 'Status', value: choice.reason });
     }
     return {
       id: key === 'primary' ? 'production' : 'collections',
@@ -80,7 +97,9 @@ export function stripTiles(args: {
       periodLabel,
       value: total === null ? 'Not recorded' : money(total),
       lines,
-      ariaLabel: `${label}, ${periodLabel}: ${total === null ? 'not recorded' : money(total)}. ${lines.map(l => l.text).join('. ')}`,
+      partial,
+      info,
+      ariaLabel: `${label}, ${periodLabel}: ${total === null ? 'not recorded' : money(total)}. ${lines.map(l => l.text).join('. ')}${partial ? `. ${partial}` : ''}`,
     };
   };
 
@@ -94,27 +113,52 @@ export function stripTiles(args: {
     const seen = seenDays.reduce((s, d) => s + (d.seen as number), 0);
     const scheduled = scheduledDays.reduce((s, d) => s + (d.scheduled as number), 0);
     const lines: StripTile['lines'] = [];
+    const info: NonNullable<StripTile['info']> = [
+      { label: 'Period', value: periodLabel },
+      { label: 'Source', value: 'Close the Day · completed first visits, entered at closeout' },
+      { label: 'Completeness', value: seenDays.length > 0 ? `Recorded on ${seenDays.length} of ${closeoutDaysInPeriod} closed-out day${closeoutDaysInPeriod === 1 ? '' : 's'}` : 'Nothing entered for this period' },
+    ];
+    let partial: string | null = null;
     if (period.preset === 'this_month' && data.targets.newPatientsSeen > 0) {
+      // The same basis and completeness rule as the goal meters: office days
+      // from the office calendar when it is in hand (today counts once its
+      // closeout exists), calendar days as a labeled estimate otherwise; and
+      // a month with office days missing is never judged behind.
+      const officeDays = officeDaysForMonth(data.today, data.calendar);
+      const todayRecorded = data.sources.closeouts.some(d => d.date === data.today);
+      const basis: PaceBasis = officeDays && officeDays.total > 0
+        ? { kind: 'office_days', elapsed: todayRecorded ? officeDays.throughToday : officeDays.throughYesterday, total: officeDays.total }
+        : { kind: 'calendar_days', elapsed: Math.round(data.monthElapsed * daysInMonthOf(data.today)), total: daysInMonthOf(data.today) };
+      const monthStart = `${data.today.slice(0, 7)}-01`;
+      const cutoff = todayRecorded ? data.today : shiftDate(data.today, -1);
+      const recordedOfficeDays = data.sources.closeouts.filter(d => d.date >= monthStart && d.date <= cutoff).length;
+      const missing = basis.kind === 'office_days' ? Math.max(0, basis.elapsed - recordedOfficeDays) : 0;
       const pace = metricPace({
         actual: data.thisMonth.newPatientsSeen,
         target: data.targets.newPatientsSeen,
-        monthElapsed: data.monthElapsed,
+        monthElapsed: basis.kind === 'office_days' ? paceFraction(basis) : data.monthElapsed,
         recordedDays: data.thisMonth.newPatientsSeenRecordedDays,
         onPaceBand: 1,
       });
-      if (pace) {
-        lines.push({
-          text: `of the ${pace.target} goal · ${pace.status === 'on_pace' ? 'on calendar pace' : `${Math.abs(pace.diff)} ${pace.status === 'ahead' ? 'ahead of' : 'behind'} calendar pace`}`,
-          tone: pace.status === 'behind' ? 'attention' : 'steady',
-        });
+      if (pace && missing > 0) {
+        partial = `Partial data · ${missing} office day${missing === 1 ? '' : 's'} not recorded`;
+        lines.push({ text: `of the ${pace.target} goal · pace is not judged until the records are complete` });
+        info.push({ label: 'Goal', value: `${pace.target} seen this month · ${missing} office day${missing === 1 ? '' : 's'} not recorded, so no pace verdict` });
+      } else if (pace && basis.kind === 'office_days') {
+        const verdict = pace.status === 'on_pace' ? 'on pace' : `${Math.abs(pace.diff)} ${pace.status === 'ahead' ? 'ahead of' : 'behind'} pace`;
+        lines.push({ text: `of the ${pace.target} goal · ${verdict} by ${paceBasisClause(basis)}`, tone: pace.status === 'behind' ? 'attention' : 'steady' });
+        info.push({ label: 'Goal', value: `${pace.target} seen this month · paced by office days from the office calendar (${paceBasisClause(basis)})` });
+      } else if (pace) {
+        const verdict = pace.status === 'on_pace' ? 'on calendar pace' : `${Math.abs(pace.diff)} ${pace.status === 'ahead' ? 'ahead of' : 'behind'} calendar pace`;
+        lines.push({ text: `of the ${pace.target} goal · ${verdict} (estimate)`, tone: pace.status === 'behind' ? 'attention' : 'steady' });
+        info.push({ label: 'Goal', value: `${pace.target} seen this month · paced by calendar days — an estimate, since the office calendar could not be read` });
       }
     }
-    if (scheduledDays.length > 0) lines.push({ text: `${scheduled} scheduled — the pipeline, not goal progress` });
-    lines.push({
-      text: seenDays.length > 0
-        ? `Recorded on ${seenDays.length} of ${closeoutDaysInPeriod} closed-out day${closeoutDaysInPeriod === 1 ? '' : 's'} · Close the Day`
-        : 'Recorded at Close the Day — nothing entered for this period',
-    });
+    if (scheduledDays.length > 0) {
+      lines.push({ text: `${scheduled} scheduled — the pipeline, not goal progress` });
+      info.push({ label: 'Scheduled', value: `${scheduled} on ${scheduledDays.length} day${scheduledDays.length === 1 ? '' : 's'} — a pipeline count, never goal progress` });
+    }
+    if (lines.length === 0) lines.push({ text: seenDays.length > 0 ? `Recorded on ${seenDays.length} of ${closeoutDaysInPeriod} closed-out day${closeoutDaysInPeriod === 1 ? '' : 's'}` : 'Nothing entered for this period' });
     const value = seenDays.length > 0 ? String(seen) : 'Not recorded';
     tiles.push({
       id: 'new_patients',
@@ -122,13 +166,16 @@ export function stripTiles(args: {
       periodLabel,
       value,
       lines,
+      partial,
+      info,
       href: '/deposit-log',
-      ariaLabel: `New patients seen, ${periodLabel}: ${value}. ${lines.map(l => l.text).join('. ')}`,
+      ariaLabel: `New patients seen, ${periodLabel}: ${value}. ${lines.map(l => l.text).join('. ')}${partial ? `. ${partial}` : ''}`,
     });
   }
 
   if (data.access === 'admin') {
     const lines: StripTile['lines'] = [];
+    const info: NonNullable<StripTile['info']> = [{ label: 'Period', value: periodLabel }];
     let value = 'Not recorded';
     let valueTone: Tone | undefined;
     if (missed) {
@@ -139,10 +186,12 @@ export function stripTiles(args: {
         const diff = missed.totals.total - c.totals.total;
         lines.push({ text: `${diff >= 0 ? '+' : '−'}${Math.abs(diff)} vs ${c.rangeLabel} (${c.totals.total})`, tone: diff > 0 ? 'attention' : 'steady' });
         if (diff > 0) valueTone = 'attention';
+        info.push({ label: 'Comparison', value: `Against ${c.rangeLabel}: ${c.totals.total}` });
       } else if (c.reason) {
-        lines.push({ text: `No comparison: ${c.reason}` });
+        info.push({ label: 'Comparison', value: `Withheld: ${c.reason}` });
       }
-      lines.push({ text: missed.sourceLabel });
+      info.push({ label: 'Source', value: missed.sourceLabel }, { label: 'Definition', value: missed.definition });
+      if (missed.source === 'closeouts') info.push({ label: 'Completeness', value: `${missed.recordedDays} of ${missed.days} days recorded` });
     } else {
       lines.push({ text: data.missedState === 'loading' ? 'Reading…' : 'No postings or Close the Day counts for this period' });
     }
@@ -153,6 +202,7 @@ export function stripTiles(args: {
       value,
       valueTone,
       lines,
+      info,
       href: missedHref(period),
       ariaLabel: `Missed appointments, ${periodLabel}: ${value}. ${lines.map(l => l.text).join('. ')}`,
     });
@@ -183,7 +233,7 @@ export function PerformanceSection(props: PerformanceSectionProps) {
     if (!data) return null;
     const period = periodFor(activePreset, data.today);
     const choice = chooseSource(period, data.sources);
-    const window = buildWindow({ period, today: data.today, sources: data.sources, preferredSource: preferred });
+    const window = buildWindow({ period, today: data.today, sources: data.sources, preferredSource: preferred, calendar: data.calendar });
     const missed = data.access === 'admin'
       ? missedSeries({ period, today: data.today, events: data.missedEvents, closeouts: data.missedCloseouts })
       : null;
@@ -197,7 +247,7 @@ export function PerformanceSection(props: PerformanceSectionProps) {
     <section className="min-w-0" aria-label="Office performance">
       {/* One period row scopes the strip, the chart, and the supporting trend. */}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <div className="-mx-1 flex max-w-full items-center gap-1 overflow-x-auto px-1 py-0.5" role="group" aria-label="Period">
+        <div className="-mx-1 flex max-w-full items-center gap-1.5 overflow-x-auto px-1 py-0.5" role="group" aria-label="Period">
           {presets.map(p => (
             <button
               key={p}
@@ -205,15 +255,15 @@ export function PerformanceSection(props: PerformanceSectionProps) {
               data-home-control="period"
               aria-pressed={activePreset === p}
               onClick={() => setPreset(p)}
-              className={cn(controlClass, activePreset === p ? 'bg-primary text-primary-foreground' : 'border border-border text-muted-foreground hover:text-foreground')}
+              className={cn(controlClass, activePreset === p ? 'bg-primary text-primary-foreground' : 'border border-border bg-card text-foreground/80 hover:border-primary/40 hover:text-foreground')}
             >
               {PRESET_LABELS[p]}
             </button>
           ))}
         </div>
         {model && model.choice.available.length > 1 && data?.access === 'admin' && (
-          <div className="flex items-center gap-1" role="group" aria-label="Source">
-            <MicroLabel className="mr-1">Source</MicroLabel>
+          <div className="flex items-center gap-1.5" role="group" aria-label="Source">
+            <SectionLabel as="span" className="mr-1">Source</SectionLabel>
             {model.choice.available.map(s => {
               const on = model.window?.source === s;
               return (
@@ -223,7 +273,7 @@ export function PerformanceSection(props: PerformanceSectionProps) {
                   data-home-control="source"
                   aria-pressed={on}
                   onClick={() => setPreferred(s)}
-                  className={cn(controlClass, 'border', on ? 'border-primary bg-primary/[0.08] text-primary' : 'border-border text-muted-foreground hover:text-foreground')}
+                  className={cn(controlClass, 'border', on ? 'border-primary bg-primary/[0.08] text-primary' : 'border-border bg-card text-foreground/80 hover:text-foreground')}
                 >
                   {s === 'closeouts' ? 'Close the Day' : 'Report history'}
                 </button>
@@ -237,12 +287,12 @@ export function PerformanceSection(props: PerformanceSectionProps) {
         <PerformanceStrip tiles={model?.tiles ?? []} loading={state === 'loading' || !model} />
       </div>
 
-      <div className={cn('mt-4 grid gap-6 [&>*]:min-w-0', aside && 'lg:grid-cols-[1.6fr_1fr] lg:items-start lg:gap-8')}>
+      <div className={cn('mt-4 grid gap-4 [&>*]:min-w-0', aside && 'lg:grid-cols-[minmax(0,1.7fr)_minmax(19rem,1fr)] lg:items-stretch')}>
         {chartVisible && (
-          <div className="rounded-2xl border border-border bg-card px-4 py-4 sm:px-5">
+          <div className={cn(panelClass, 'px-4 py-4 sm:px-5')}>
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-              <MicroLabel className="text-primary">{model?.window ? `${model.window.definitions.primaryLabel} and ${model.window.definitions.secondaryLabel}` : 'Production and collections'}</MicroLabel>
-              {model && <MicroLabel>{model.period.rangeLabel}</MicroLabel>}
+              <h2 className="text-[16px] font-semibold leading-snug">{model?.window ? `${model.window.definitions.primaryLabel} and ${model.window.definitions.secondaryLabel}` : 'Production and collections'}</h2>
+              {model && <span className="text-[13px] text-muted-foreground">{model.period.rangeLabel}</span>}
             </div>
             <div className="mt-3">
               <PerformanceChart
@@ -262,7 +312,7 @@ export function PerformanceSection(props: PerformanceSectionProps) {
         {aside}
       </div>
 
-      {supporting && data && model && <div className="mt-6">{supporting(model.period, data)}</div>}
+      {supporting && data && model && <div className="mt-4">{supporting(model.period, data)}</div>}
     </section>
   );
 }

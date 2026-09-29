@@ -14,16 +14,17 @@ import type {
 } from '@/lib/owner-pulse';
 import type { CloseDayStatus } from '@/lib/manager-pulse';
 import type { RolePulseItem } from '@/lib/member-pulse';
-import type { HomeBrief, NeedsYou } from '@/lib/home-brief';
+import type { HomeBrief, HomeSummary, NeedsYou } from '@/lib/home-brief';
 import type { PerformanceData } from '@/lib/home-performance';
 import type { GoalMeter } from '@/lib/goal-progress';
 import type { HomeInsight } from '@/lib/home-insights';
+import type { MyWork } from '@/lib/my-work';
 
 export type { OfficeStatus, StaffingSummary };
 export type {
   DailyBrief, GoalBrief, MissedMonth, MonthDetail, MonthPaceLine, OwnerRecommendation, PulseFact,
 };
-export type { CloseDayStatus, RolePulseItem, HomeBrief, NeedsYou };
+export type { CloseDayStatus, RolePulseItem, HomeBrief, HomeSummary, NeedsYou, MyWork };
 export type { PerformanceData, GoalMeter, HomeInsight };
 
 /** Whether the performance rows are in hand, still loading, or failed to read. */
@@ -41,7 +42,7 @@ export type PerformanceBlock = {
   goalMeters: GoalMeter[] | null;
   /** At most three observations; null while loading; absent for members. */
   insights: HomeInsight[] | null;
-  /** Frequent tools near the top (admins). */
+  /** The frequent tools that sit in the header as primary actions (admins). */
   tools: Shortcut[];
 };
 
@@ -65,6 +66,20 @@ export type Shortcut = {
 };
 
 /**
+ * One group in the tools area. `emphasis` decides whether the group is
+ * open by default: an assigned responsibility and today's coverage are;
+ * a backup capability and the long tail are revealed on request.
+ */
+export type ToolGroup = {
+  id: string;
+  label: string;
+  /** "Assigned", "Covering today", "Backup — can cover", "Management", "Everyone". */
+  note?: string;
+  emphasis: 'primary' | 'secondary';
+  tools: Shortcut[];
+};
+
+/**
  * The two personalization dimensions, resolved.
  * Permission tier decides the dashboard MISSION; operational roles decide the
  * daily WORK surfaced inside it. They are never conflated.
@@ -82,8 +97,9 @@ export type RoleContext = {
 };
 
 /**
- * One operational-role lane. The primary lane sets emphasis; backup lanes are
- * compact and sit lower unless the person is covering that role today.
+ * One operational-role lane: the assignment itself (primary) or a backup
+ * role, with the time-sensitive items it contributes today. Only a role the
+ * person is covering today elevates items; a backup capability never does.
  */
 export type RoleLane = {
   role: OperationalRole;
@@ -176,19 +192,20 @@ export type OwnerView = PerformanceBlock & {
   roleContext: RoleContext;
   /** Compact lane when the owner also works a chair or the desk. */
   lanes: RoleLane[];
+  /** The organized tools area: the owner's tools first, the rest on request. */
+  toolGroups: ToolGroup[];
   /** Current office state — open, closed, nobody scheduled. */
   office: OfficeStatus;
-  /**
-   * The 20-second briefing sentence, deterministically built from recorded
-   * facts. Null while vitals are still loading — never a fabricated line.
-   */
-  summary: string | null;
-  /** TODAY block of the pulse: honest day scope, facts, and time semantics. */
+  /** The short summary: the office state and at most three priorities. */
+  summary: HomeSummary;
+  /** The latest closed-out day's facts, honestly labeled. */
   brief: DailyBrief | null;
   /** Everything waiting on owner authority, resolved to one number. */
   decisionCount: number;
-  /** The same top-three Attention items Manager Home shows, one navigation action each. */
+  /** The same Attention lists Manager Home shows. */
   needs: NeedsYou;
+  /** The owner's own open items (a policy to sign, a module assigned). */
+  mine: MyWork;
   /** The office challenge, shown once; moreCount collapses the rest. */
   goal: GoalBrief | null;
   /** Phase-aware staffing. Attendance surfaces here ONLY as a real exception. */
@@ -203,42 +220,40 @@ export type ManagerView = PerformanceBlock & {
   roleContext: RoleContext;
   /** A compact personal-work lane; never displaces the briefing. */
   lanes: RoleLane[];
+  toolGroups: ToolGroup[];
   /** Current office state, kept calm and compact. */
   office: OfficeStatus;
   /**
-   * The briefing (design §3.3): the sentence, the top three Attention
-   * items, today's exceptions, the status lines, the spotlight, wrap-up.
-   * Everything Home renders is in here; every number has one home.
+   * The briefing: the summary, the Attention lists, today's exceptions,
+   * the status lines, the spotlight, wrap-up. Every number has one home.
    */
   home: HomeBrief;
-  /** What needs the manager personally; absent when there is nothing. */
-  mine: Signal[];
+  /** The latest closed-out day's facts, honestly labeled. */
+  brief: DailyBrief | null;
+  /** What needs the manager personally; empty when there is nothing. */
+  mine: MyWork;
 };
 
 export type MemberView = PerformanceBlock & {
   kind: 'member';
   header: DashboardHeader;
   roleContext: RoleContext;
-  /** C — primary role lane first, backup lanes compact underneath. */
+  /** Primary role lane first, backup lanes compact underneath. */
   lanes: RoleLane[];
-  /** A — the single next action ("My Next Move"). */
-  next: { title: string; detail: string; href: string; cta: string } | null;
-  /**
-   * B — Our office pulse: the same rows and calculations the owner reads,
-   * limited to the metrics whose visibility setting is "everyone". A hidden
-   * metric is omitted entirely — no locked teaser. Carried in `performance`.
-   */
+  toolGroups: ToolGroup[];
+  /** My open work: what needs me now, and what waits on someone else. */
+  work: MyWork;
   /** Honest time-semantics line for the pulse (e.g. updates after closeout). */
   officePulseNote: string | null;
-  /** C — office facts relevant to this member's operational role. */
+  /** Office facts relevant to this member's operational role. */
   rolePulse: RolePulseItem[];
-  /** D — my open work, compact. */
-  mine: Signal[];
-  /** E — the shared office goal (never personal blame for office results). */
+  /** The shared office goal (never personal blame for office results). */
   goal: GoalBrief | null;
-  /** F — personal utilities: today's recorded time, PTO, timesheet links. */
+  /** Personal utilities: today's recorded time, PTO, timesheet links. */
   status: { label: string; detail: string; tone: Tone };
   utilities: Figure[];
+  /** Where the person stands against the office's late-arrival rule, when it applies. */
+  attendanceStanding: { text: string; tone: Tone; href: string } | null;
 };
 
 export type DashboardView = OwnerView | ManagerView | MemberView;

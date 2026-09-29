@@ -63,3 +63,28 @@ export function adjacentDay(
   }
   return null;
 }
+
+/**
+ * How many office days fall in an inclusive date range, by the calendar
+ * above. Zero for an inverted range. This is the denominator behind
+ * office-day pacing and closeout completeness: a period with twenty office
+ * days and eighteen closeouts is two days short, whatever the weekends say.
+ */
+export function countOfficeDays(start: string, end: string, calendar: OfficeDayCalendar): number {
+  if (end < start) return 0;
+  let count = 0;
+  for (let cursor = start; cursor <= end; cursor = shiftDate(cursor, 1)) {
+    if (isOfficeDay(cursor, calendar)) count += 1;
+  }
+  return count;
+}
+
+/** The office days in an inclusive range, oldest first. */
+export function listOfficeDays(start: string, end: string, calendar: OfficeDayCalendar): string[] {
+  const out: string[] = [];
+  if (end < start) return out;
+  for (let cursor = start; cursor <= end; cursor = shiftDate(cursor, 1)) {
+    if (isOfficeDay(cursor, calendar)) out.push(cursor);
+  }
+  return out;
+}

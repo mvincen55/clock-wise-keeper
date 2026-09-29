@@ -2,25 +2,30 @@ import type { OperationalRole } from '@/lib/schedule-reader/types';
 import { summarizeVitals, type DayVitals, type VitalsSummary, type VitalsTargets, type VitalsVisibility } from '@/hooks/usePracticeVitals';
 import type { DepositLog } from '@/hooks/useDepositLog';
 import {
-  buildDailyBrief, buildGoalBrief, dailySummary, monthPaceLines, type GoalLike, type OwnerPulseInput,
+  buildDailyBrief, buildGoalBrief, monthPaceLines, type GoalLike, type OwnerPulseInput,
 } from '@/lib/owner-pulse';
 import { closeDayStatus } from '@/lib/manager-pulse';
-import { buildHomeBrief, needsYou } from '@/lib/home-brief';
+import { buildHomeBrief, lastDayLine, needsYou, stateSummary, todayBand } from '@/lib/home-brief';
 import { compareByConsequence, type AttentionItem } from '@/lib/attention';
 import type { EmployeeSnapshot } from '@/hooks/useOrgAttendanceSnapshot';
 import { rolePulseItems } from '@/lib/member-pulse';
+import { buildMyWork, type MyWork, type MyWorkInput } from '@/lib/my-work';
+import { DEFAULT_LATE_ARRIVAL_RULE, standingSentence, standingToday } from '@/lib/late-arrivals';
 import type { PreparedReport } from '@/lib/prepared-report';
 import type { ReportImportRow } from '@/lib/report-history';
 import type { MissedEventLite } from '@/lib/missed-trend';
 import type { PerformanceRaw } from '@/lib/home-performance';
 import type { AttentionSummary } from '@/lib/home-insights';
+import type { OfficeDayCalendar } from '@/lib/office-days';
+import { isOfficeDay } from '@/lib/office-days';
 import { daysInMonthOf, weeklyPaceForMonth } from '@/lib/metric-pace';
 import { mondayOf } from '@/lib/time-utils';
 import { shortcutsFor, roleLabel, roleMission } from './opRoles';
+import { buildToolGroups } from './tools';
 import { performanceBlockFrom } from './performance/block';
 import type {
   ManagerView, MemberView, OwnerView, PerformanceBlock, PermissionTier, RoleContext, RoleLane, Signal,
-  StaffingSummary,
+  StaffingSummary, ToolGroup,
 } from './types';
 
 /**
@@ -31,11 +36,11 @@ import type {
  * database. They are never imported by the authenticated app. The names are
  * obviously fictional so a fixture can never be mistaken for office data.
  *
- * Only RAW RECORDED INPUTS are invented here — every pace verdict, briefing
- * sentence, recommendation, item ordering, and visibility filter below is
- * computed by the same production functions the live dashboards call
- * (owner-pulse.ts, home-brief.ts, attention/, member-pulse.ts). Fixtures
- * must never reimplement or hard-code that business logic.
+ * Only RAW RECORDED INPUTS are invented here — every pace verdict, summary
+ * line, item ordering, visibility filter, and work item below is computed by
+ * the same production functions the live dashboards call (owner-pulse.ts,
+ * home-brief.ts, attention/, member-pulse.ts, my-work.ts, goal-progress.ts).
+ * Fixtures must never reimplement or hard-code that business logic.
  */
 
 const header = (roleLabel: string, personName: string, timeLabel = '9:42 AM') => ({
@@ -93,6 +98,10 @@ function lanesFor(ctx: RoleContext, urgent: Signal[] = []): RoleLane[] {
   return lanes;
 }
 
+function toolsFor(ctx: RoleContext): ToolGroup[] {
+  return buildToolGroups({ tier: ctx.tier, primary: ctx.primary, secondary: ctx.secondary, coveringToday: ctx.coveringToday });
+}
+
 const bypassUrgent: Signal[] = [
   {
     id: 'bypass',
@@ -114,7 +123,7 @@ const staffingOpen: StaffingSummary = {
   scheduledToday: 8,
   rows: [
     { id: '1', name: 'Dana R.', status: 'In', tone: 'steady' },
-    { id: '2', name: 'Marcus T.', status: 'In · late 12m', tone: 'attention' },
+    { id: '2', name: 'Marcus T.', status: 'In · late 12m', tone: 'calm' },
     { id: '3', name: 'Priya S.', status: 'In', tone: 'steady' },
     { id: '4', name: 'Jo B.', status: 'Approved off', tone: 'calm' },
     { id: '5', name: 'Ken W.', status: 'Not in yet', tone: 'attention' },
@@ -160,11 +169,21 @@ const staffingNewOffice: StaffingSummary = {
 //
 // FICTIONAL closeout history. One deterministic generator produces the
 // office days every fixture reads, so the strip, the chart, the meters, the
-// observations, and the briefing sentence all agree with each other — and
-// disagree with any real office, which is the point of a fixture.
+// observations, and the summary all agree with each other — and disagree
+// with any real office, which is the point of a fixture.
 
 const FX_TODAY = '2026-03-03';
 const ALL_VISIBLE: VitalsVisibility = { production: true, collections: true, newPatients: true };
+
+/**
+ * The fictional office calendar: Monday to Friday, closed for Thanksgiving,
+ * the New Year's week, and Presidents' Day. The generator below skips these
+ * dates, so a closure never carries a closeout.
+ */
+export const fxCalendar: OfficeDayCalendar = {
+  closedDates: new Set(['2025-11-27', '2025-11-28', '2025-12-25', '2025-12-29', '2025-12-30', '2025-12-31', '2026-01-01', '2026-01-02', '2026-02-16']),
+  openDates: new Set<string>(),
+};
 
 const fxDay = (date: string, over: Partial<DayVitals> = {}): DayVitals => ({
   date,
@@ -180,16 +199,19 @@ const fxDay = (date: string, over: Partial<DayVitals> = {}): DayVitals => ({
   ...over,
 });
 
-/** The weekdays between two dates, with a handful deliberately unrecorded. */
-export function fxCloseoutHistory(from: string, to: string): DayVitals[] {
+/**
+ * The office days between two dates, with a handful deliberately unrecorded
+ * unless `complete` is asked for. A gap is a gap, never a zero.
+ */
+export function fxCloseoutHistory(from: string, to: string, opts: { complete?: boolean } = {}): DayVitals[] {
   const days: DayVitals[] = [];
   let i = 0;
   for (let d = new Date(`${from}T12:00:00Z`); d.toISOString().slice(0, 10) <= to; d.setUTCDate(d.getUTCDate() + 1)) {
     const date = d.toISOString().slice(0, 10);
     const dow = d.getUTCDay();
-    if (dow === 0 || dow === 6) continue; // the office is closed on weekends
+    if (!isOfficeDay(date, fxCalendar)) continue; // weekends and closures
     i += 1;
-    if (i % 9 === 4) continue; // an unrecorded weekday now and then — a gap, never a zero
+    if (!opts.complete && i % 9 === 4) continue; // an unrecorded office day now and then — a gap, never a zero
     const production = 560_000 + ((i * 37) % 11) * 42_000 + (dow === 5 ? -80_000 : 0);
     const collected = Math.round(production * (0.66 + ((i * 13) % 7) / 20));
     days.push(fxDay(date, {
@@ -209,9 +231,9 @@ export function fxCloseoutHistory(from: string, to: string): DayVitals[] {
 /** Yesterday's closeout exactly as the tests have always known it. */
 const fxYesterday = fxDay('2026-03-02');
 
-/** Oct 1, 2025 through yesterday, the last day saved but not yet sealed. */
+/** Oct 1, 2025 through yesterday, every office day recorded, the last day saved but not yet sealed. */
 const fxHistory: DayVitals[] = [
-  ...fxCloseoutHistory('2025-10-01', '2026-02-27'),
+  ...fxCloseoutHistory('2025-10-01', '2026-02-27', { complete: true }),
   { ...fxYesterday, sealedAt: null },
 ];
 
@@ -227,7 +249,7 @@ export function fxMissedPostings(days: DayVitals[]): MissedEventLite[] {
   return events;
 }
 
-/** A fictional loaded report package: posted charges and receipts by posting date. */
+/** A fictional loaded report package: posted charges and receipts by posting date, with full monthly summaries. */
 export function fxReportPackage(start: string, end: string, importedAt: string): ReportImportRow {
   const rows: { date: string; posted_charges_cents: number; recorded_payments_cents: number; credit_adjustments_cents: number; charge_adjustments_cents: number }[] = [];
   let i = 0;
@@ -238,13 +260,20 @@ export function fxReportPackage(start: string, end: string, importedAt: string):
     const charges = 610_000 + ((i * 29) % 9) * 38_000;
     rows.push({ date: d.toISOString().slice(0, 10), posted_charges_cents: charges, recorded_payments_cents: Math.round(charges * (0.7 + ((i * 11) % 5) / 25)), credit_adjustments_cents: 0, charge_adjustments_cents: 0 });
   }
+  const months = new Map<string, { posted_charges_cents: number; recorded_payments_cents: number }>();
+  for (const r of rows) {
+    const m = months.get(r.date.slice(0, 7)) ?? { posted_charges_cents: 0, recorded_payments_cents: 0 };
+    m.posted_charges_cents += r.posted_charges_cents;
+    m.recorded_payments_cents += r.recorded_payments_cents;
+    months.set(r.date.slice(0, 7), m);
+  }
   const payload = {
     schema_version: 'purple-envelope-prepared-report-package-v1',
     target_org_id: 'fx-office',
     report_start: start,
     report_end: end,
     daily_financials_by_entry_date: rows,
-    monthly_financials_by_entry_date: [],
+    monthly_financials_by_entry_date: [...months.entries()].map(([month, m]) => ({ month, coverage: 'full_calendar_month', ...m, credit_adjustments_cents: 0, charge_adjustments_cents: 0 })),
   } as unknown as PreparedReport;
   return { id: `fx-pkg-${start}`, report_start: start, report_end: end, imported_at: importedAt, payload };
 }
@@ -311,6 +340,8 @@ export function fxPerformance(args: {
   events?: MissedEventLite[] | null;
   attention?: AttentionSummary | null;
   today?: string;
+  /** The office calendar; `null` renders the calendar-day fallback. */
+  calendar?: OfficeDayCalendar | null;
 }): { block: PerformanceBlock; pulse: OwnerPulseInput } {
   const today = args.today ?? FX_TODAY;
   const pulse = pulseFromDays(args.days, today, args.targets, args.officePhase);
@@ -330,6 +361,7 @@ export function fxPerformance(args: {
     thisMonth: pulse.thisMonth,
     targets: args.targets,
     monthElapsed: pulse.monthElapsed,
+    calendar: args.calendar === undefined ? fxCalendar : args.calendar,
   };
   return { block: performanceBlockFrom({ raw, state: 'ok', pulse, attention: args.attention ?? null }), pulse };
 }
@@ -349,15 +381,36 @@ const fxTodayLog = (over: Partial<DepositLog> = {}): DepositLog =>
     sealed_by: null,
     needs_manager_review: false,
     staffing_assessment: 'about_right',
-    ...over,
   }) as DepositLog;
+
+/* ------------------------------ my work ------------------------------- */
+
+const FX_USER = 'u-me';
+const FX_EMPLOYEE = 'e-me';
+
+/** A person's own items through the real builder; the caller says which records exist. */
+function myWorkFor(input: Partial<MyWorkInput> & { today?: string }): MyWork {
+  return buildMyWork({ today: input.today ?? FX_TODAY, userId: FX_USER, employeeId: FX_EMPLOYEE, ...input });
+}
+
+const NO_WORK: MyWork = myWorkFor({});
+
+/** The everyday member: two modules, one policy, one bypass reason. */
+const memberWorkInput: Partial<MyWorkInput> = {
+  training: [
+    { id: 'ta1', assigned_to: FX_USER, status: 'assigned', due_date: '2026-03-06', title: 'Sterilization refresher' },
+    { id: 'ta2', assigned_to: FX_USER, status: 'in_progress', due_date: null, title: 'Front desk phone standards' },
+  ],
+  acknowledgments: [{ id: 'ack1', title_snapshot: 'Sterilization log', due_at: '2026-03-05T00:00:00Z', acknowledged_at: null, waived_at: null }],
+  bypasses: [{ id: 'b1', checklist_date: '2026-03-02', resolved: false }],
+};
 
 /* ------------------------------- owner -------------------------------- */
 
 const ownerContext = context('owner', 'Owner', 'dentist');
 
 /** A recorded Attention item, in the shape deriveAttention() returns. */
-const fxItem = (over: Partial<AttentionItem> & Pick<AttentionItem, 'key' | 'kind' | 'verb' | 'label'>): AttentionItem => ({
+export const fxItem = (over: Partial<AttentionItem> & Pick<AttentionItem, 'key' | 'kind' | 'verb' | 'label'>): AttentionItem => ({
   recordTable: over.key.split(':')[0], recordId: over.key.split(':')[1],
   subject: { employeeId: null, userId: null, name: null }, detail: '', why: '', occurredAt: null, ageHours: null,
   deadline: null, coverage: false, payroll: false, href: `/management?item=${over.key}`,
@@ -370,51 +423,113 @@ const ownerItems: AttentionItem[] = [
   fxItem({
     key: 'record_signoff:r1', kind: 'record_signoff', verb: 'follow_up', label: 'Record awaiting your sign-off · attendance',
     subject: { employeeId: '3', userId: 'u3', name: 'Priya S.' }, detail: 'Manager review is done; the record needs your signature', ageHours: 30,
+    why: 'An escalation policy opened this record; the reviewer signs within the review window or it moves up. Nobody reviews their own.',
     payroll: true, deadline: { label: 'payroll Thu', date: '2026-03-05', days: 2 },
   }),
   fxItem({
     key: 'pto_request:p1', kind: 'pto_request', verb: 'decide', label: 'PTO request · 2026-03-09 – 2026-03-10 (16h)',
     subject: { employeeId: '3', userId: 'u3', name: 'Priya S.' }, detail: '2 of 3 hygienists would be off that Monday', ageHours: 50,
+    why: 'A PTO request is waiting on a manager decision.',
   }),
   fxItem({
     key: 'content_review:v4', kind: 'content_review', verb: 'decide', label: 'Sterilization log · version 4 in review',
-    detail: 'Submitted by Dana R.', ageHours: 20,
+    detail: 'Submitted by Dana R.', ageHours: 20, why: 'A version in review needs a reviewer who is not its author before it can be published.',
   }),
   fxItem({
     key: 'incident_countersign:i2', kind: 'incident_countersign', verb: 'decide', label: 'Incident report awaiting countersignature',
     subject: { employeeId: '2', userId: 'u2', name: 'Marcus T.' }, detail: 'Sharps exposure, first aid given', ageHours: 6,
+    why: 'A signed incident report needs a countersignature to close the loop.',
   }),
   fxItem({
     key: 'challenge_verify:g2', kind: 'challenge_verify', verb: 'decide', label: 'Challenge result to verify',
-    detail: 'Morning huddle on time — 10 of 10 claimed', ageHours: 3,
+    detail: 'Morning huddle on time — 10 of 10 claimed', ageHours: 3, why: 'A finished challenge is verified by a manager before it counts.',
   }),
 ].sort(compareByConsequence);
 
 const ownerAttention = { needsNow: ownerItems, waiting: [] as AttentionItem[], deferred: [] as AttentionItem[], degradedSources: [], enabled: true };
 const ownerAttentionSummary: AttentionSummary = { enabled: true, needsNow: ownerItems.length, waiting: 0, oldestHours: 50, payroll: { label: 'payroll Thu', days: 2 }, degraded: false };
 
-const openPerformance = fxPerformance({ role: 'owner', days: fxHistory, targets: fxTargets, officePhase: 'open', attention: ownerAttentionSummary });
-const openBrief = buildDailyBrief(openPulseInput);
+// Wall-clock moments (the staffing rules read local hours): 9:42 AM and 10:32 PM.
+const openNow = new Date(2026, 2, 3, 9, 42);
+const closedNow = new Date(2026, 2, 3, 22, 32);
+
+const openCloseouts = [
+  { id: 'log-0302', deposit_date: '2026-03-02', sealed_at: null, needs_manager_review: false },
+  { id: 'log-0227', deposit_date: '2026-02-27', sealed_at: '2026-02-27T22:40:00Z', needs_manager_review: false },
+];
+
+type OwnerScenarioArgs = {
+  days: DayVitals[];
+  targets?: VitalsTargets;
+  staffing: StaffingSummary;
+  snapshot?: EmployeeSnapshot[];
+  now: Date;
+  todayLog: DepositLog | null;
+  needsNow?: AttentionItem[];
+  closeouts?: { id: string; deposit_date: string; sealed_at: string | null; needs_manager_review: boolean }[];
+  goals?: GoalLike[];
+  payroll?: { dueDate: string | null; dueLabel: string | null } | null;
+  reports?: ReportImportRow[];
+  events?: MissedEventLite[] | null;
+  exceptions?: Signal[];
+  mine?: MyWork;
+  personName?: string;
+  timeLabel?: string;
+  today?: string;
+  dateLabel?: string;
+  calendar?: OfficeDayCalendar | null;
+};
+
+/** Every owner fixture runs the REAL summary, brief, and queue layers. */
+function makeOwner(args: OwnerScenarioArgs): OwnerView {
+  const needsNow = args.needsNow ?? [];
+  const attention = { needsNow, waiting: [] as AttentionItem[], deferred: [] as AttentionItem[], degradedSources: [], enabled: true };
+  const attentionSummary: AttentionSummary = {
+    enabled: true, needsNow: needsNow.length, waiting: 0,
+    oldestHours: needsNow.reduce<number | null>((m, i) => (i.ageHours === null ? m : Math.max(m ?? 0, i.ageHours)), null),
+    payroll: args.payroll?.dueDate ? { label: args.payroll.dueLabel ?? 'payroll', days: 2 } : null, degraded: false,
+  };
+  const { block, pulse } = fxPerformance({
+    role: 'owner', days: args.days, targets: args.targets ?? fxTargets, officePhase: args.staffing.office.phase,
+    attention: attentionSummary, reports: args.reports, events: args.events, today: args.today, calendar: args.calendar,
+  });
+  const today = pulse.today;
+  const band = todayBand({ summary: args.staffing, snapshot: args.snapshot, now: args.now, needsNow });
+  const lastDay = lastDayLine({ closeouts: args.closeouts ?? [], today, phase: args.staffing.office.phase, closeDay: closeDayStatus(args.todayLog, args.staffing.office.phase) });
+  const needs = needsYou(attention);
+  return {
+    kind: 'owner',
+    header: { ...header('Owner', args.personName ?? 'Good morning, Megan', args.timeLabel), ...(args.dateLabel ? { dateLabel: args.dateLabel } : {}) },
+    roleContext: ownerContext,
+    lanes: lanesFor(ownerContext),
+    toolGroups: toolsFor(ownerContext),
+    office: args.staffing.office,
+    summary: stateSummary({ office: args.staffing.office, today: band, needs, lastDay, payroll: args.payroll ?? null, payrollItems: needsNow.filter(i => i.payroll).length, todayDate: today }),
+    brief: buildDailyBrief(pulse),
+    decisionCount: needsNow.length,
+    needs,
+    mine: args.mine ?? NO_WORK,
+    goal: buildGoalBrief(args.goals ?? fxGoals, today),
+    staffing: args.staffing,
+    exceptions: args.exceptions ?? [],
+    ...block,
+  };
+}
 
 /** Established office, mid-morning, with real activity. */
-export const ownerFixture: OwnerView = {
-  kind: 'owner',
-  header: header('Owner', 'Good morning, Megan'),
-  roleContext: ownerContext,
-  lanes: lanesFor(ownerContext),
-  office: staffingOpen.office,
-  summary: dailySummary(openPulseInput, openBrief, ownerItems.length),
-  brief: openBrief,
-  decisionCount: ownerItems.length,
-  needs: needsYou(ownerAttention),
-  goal: buildGoalBrief(fxGoals, FX_TODAY),
+export const ownerFixture: OwnerView = makeOwner({
+  days: fxHistory,
   staffing: staffingOpen,
+  now: openNow,
+  todayLog: null,
+  needsNow: ownerItems,
+  closeouts: openCloseouts,
+  payroll: { dueDate: '2026-03-05', dueLabel: 'payroll Thu' },
   exceptions: [
-    { id: 'p1', label: 'Unresolved office notes', detail: 'Notes Purple Envelope flagged, still open.', value: '3', href: '/inbox', tone: 'attention' },
-    { id: 'p2', label: '1 attendance item needs review', detail: '1 unreviewed late arrival', value: '1', href: '/management/people', tone: 'attention' },
+    { id: 'p2', label: '1 attendance item needs review', detail: '1 no-punch day', value: '1', href: '/management/people', tone: 'attention' },
   ],
-  ...openPerformance.block,
-};
+  mine: myWorkFor({ acknowledgments: [{ id: 'ack-o1', title_snapshot: 'Radiation safety policy', due_at: '2026-03-10T00:00:00Z', acknowledged_at: null, waived_at: null }] }),
+});
 
 /** The same office at 10:32 PM — today closed out clean, decisions clear. */
 const fxTodayClosed = fxDay(FX_TODAY, {
@@ -426,65 +541,67 @@ const fxTodayClosed = fxDay(FX_TODAY, {
   doctorNoShows: 0,
 });
 const closedHistory: DayVitals[] = [...fxHistory.slice(0, -1), fxYesterday, fxTodayClosed];
-const closedPerformance = fxPerformance({ role: 'owner', days: closedHistory, targets: fxTargets, officePhase: 'after_close' });
-const closedPulseInput: OwnerPulseInput = closedPerformance.pulse;
-const closedBrief = buildDailyBrief(closedPulseInput);
 
-export const ownerClosedFixture: OwnerView = {
-  ...ownerFixture,
-  header: header('Owner', 'Good evening, Megan', '10:32 PM'),
-  office: staffingClosed.office,
-  summary: dailySummary(closedPulseInput, closedBrief, 0),
-  brief: closedBrief,
-  decisionCount: 0,
-  needs: needsYou({ ...ownerAttention, needsNow: [] }),
+export const ownerClosedFixture: OwnerView = makeOwner({
+  days: closedHistory,
   staffing: staffingClosed,
-  exceptions: [],
-  ...closedPerformance.block,
-};
+  now: closedNow,
+  todayLog: fxTodayLog({ sealed_at: '2026-03-03T22:20:00Z' }),
+  closeouts: [{ id: 'fx-log', deposit_date: '2026-03-03', sealed_at: '2026-03-03T22:20:00Z', needs_manager_review: false }, { ...openCloseouts[0], sealed_at: '2026-03-02T22:40:00Z' }, openCloseouts[1]],
+  personName: 'Good evening, Megan',
+  timeLabel: '10:32 PM',
+});
 
 /** A brand-new office: setup guidance, not a wall of zeros. */
-const newPerformance = fxPerformance({ role: 'owner', days: [], targets: NO_TARGETS, officePhase: 'no_schedule', events: [] });
-const newPulseInput: OwnerPulseInput = newPerformance.pulse;
-const newBrief = buildDailyBrief(newPulseInput);
-
-export const ownerNewFixture: OwnerView = {
-  kind: 'owner',
-  header: header('Owner', 'Good morning, Megan'),
-  roleContext: ownerContext,
-  lanes: lanesFor(ownerContext),
-  office: staffingNewOffice.office,
-  summary: dailySummary(newPulseInput, newBrief, 0),
-  brief: newBrief,
-  decisionCount: 0,
-  needs: needsYou({ ...ownerAttention, needsNow: [] }),
-  goal: null,
+export const ownerNewFixture: OwnerView = makeOwner({
+  days: [],
+  targets: NO_TARGETS,
   staffing: staffingNewOffice,
-  exceptions: [],
-  ...newPerformance.block,
-};
+  now: openNow,
+  todayLog: null,
+  events: [],
+  goals: [],
+});
 
 /**
- * Incomplete history: closeouts began on Feb 16, a loaded report package
+ * Incomplete history: closeouts began on Feb 17, a loaded report package
  * covers Nov through January by posting date, and no goals are configured.
  * The chart shows gaps as gaps and offers the report view separately.
  */
-const incompleteHistory: DayVitals[] = fxCloseoutHistory('2026-02-16', '2026-03-02');
-const incompletePerformance = fxPerformance({
-  role: 'owner', days: incompleteHistory, targets: NO_TARGETS, officePhase: 'open',
+const incompleteHistory: DayVitals[] = fxCloseoutHistory('2026-02-17', '2026-03-02');
+export const ownerIncompleteFixture: OwnerView = makeOwner({
+  days: incompleteHistory,
+  targets: NO_TARGETS,
+  staffing: staffingOpen,
+  now: openNow,
+  todayLog: null,
+  needsNow: ownerItems.slice(0, 2),
+  closeouts: openCloseouts,
   reports: [fxReportPackage('2025-11-01', '2026-01-31', '2026-02-20T15:00:00Z')],
-  attention: ownerAttentionSummary,
 });
-const incompleteBrief = buildDailyBrief(incompletePerformance.pulse);
 
-export const ownerIncompleteFixture: OwnerView = {
-  ...ownerFixture,
-  summary: dailySummary(incompletePerformance.pulse, incompleteBrief, 2),
-  brief: incompleteBrief,
-  decisionCount: 2,
-  needs: needsYou({ ...ownerAttention, needsNow: ownerItems.slice(0, 2) }),
-  ...incompletePerformance.block,
-};
+/**
+ * A partially recorded month, Thu Mar 12: two office days this month have
+ * no closeout, so the totals show with a partial-data label and no behind
+ * verdict, and the observation names the gap with the way to close it.
+ */
+const partialHistory: DayVitals[] = [
+  ...fxCloseoutHistory('2025-10-01', '2026-02-27', { complete: true }),
+  ...fxCloseoutHistory('2026-03-02', '2026-03-11', { complete: true }).filter(d => d.date !== '2026-03-05' && d.date !== '2026-03-10').map(d => ({ ...d, productionCents: 620_000, collectedCents: 540_000 })),
+];
+export const ownerPartialFixture: OwnerView = makeOwner({
+  days: partialHistory,
+  today: '2026-03-12',
+  dateLabel: 'Thu, Mar 12, 2026',
+  staffing: staffingOpen,
+  now: new Date(2026, 2, 12, 9, 42),
+  todayLog: null,
+  needsNow: [
+    fxItem({ key: 'close_day_unsealed:log-0305', kind: 'close_day_unsealed', verb: 'fix', label: 'Close the Day saved, not sealed · 2026-03-05', detail: 'The record is filled in but unsealed', ageHours: 160, why: 'An unsealed closeout is not on record; sealing locks what is on file.' }),
+    fxItem({ key: 'close_day_unsealed:log-0310', kind: 'close_day_unsealed', verb: 'fix', label: 'Close the Day saved, not sealed · 2026-03-10', detail: 'The record is filled in but unsealed', ageHours: 40, why: 'An unsealed closeout is not on record; sealing locks what is on file.' }),
+  ],
+  closeouts: [{ id: 'log-0311', deposit_date: '2026-03-11', sealed_at: '2026-03-11T22:40:00Z', needs_manager_review: false }],
+});
 
 /* ------------------------------ manager ------------------------------- */
 
@@ -493,23 +610,27 @@ const openItems: AttentionItem[] = [
   fxItem({
     key: 'missing_clock_out:d1', kind: 'missing_clock_out', verb: 'fix', label: 'No clock-out · 2026-03-02',
     subject: { employeeId: '5', userId: 'u5', name: 'Ken W.' }, detail: 'Clocked in 7:58 AM, no clock-out on record', ageHours: 18,
+    why: 'A scheduled day ended more than the buffer ago with an open punch pair.',
     payroll: true, deadline: { label: 'payroll Thu', date: '2026-03-05', days: 2 },
   }),
   fxItem({
     key: 'pto_request:p1', kind: 'pto_request', verb: 'decide', label: 'PTO request · 2026-03-09 – 2026-03-10 (16h)',
     subject: { employeeId: '3', userId: 'u3', name: 'Priya S.' }, detail: '2 of 3 hygienists would be off that Monday', ageHours: 50,
+    why: 'A PTO request is waiting on a manager decision.',
   }),
   fxItem({
     key: 'correction_request:c1', kind: 'correction_request', verb: 'decide', label: 'Time correction · 2026-03-02',
     subject: { employeeId: '2', userId: 'u2', name: 'Marcus T.' }, detail: 'Forgot to clock out at lunch', ageHours: 20,
+    why: 'A correction request is pending. Approving opens the punch editor; the original punches stay on record.',
   }),
   fxItem({
     key: 'close_day_unsealed:log-0302', kind: 'close_day_unsealed', verb: 'fix', label: 'Close the Day saved, not sealed · 2026-03-02',
-    detail: 'The record is filled in but unsealed', ageHours: 14,
+    detail: 'The record is filled in but unsealed', ageHours: 14, why: 'An unsealed closeout is not on record; sealing locks what is on file.',
   }),
   fxItem({
     key: 'excuse_request:t1', kind: 'excuse_request', verb: 'decide', label: 'Excuse requested: pending review · 2026-03-03',
     subject: { employeeId: '2', userId: 'u2', name: 'Marcus T.' }, detail: '“School drop-off ran long”', ageHours: 1,
+    why: 'The person asked for this late arrival to be excused. It waits on a manager decision and does not count toward the late-arrival rule until decided.',
   }),
 ].sort(compareByConsequence);
 
@@ -517,6 +638,7 @@ const waitingItems: AttentionItem[] = [
   fxItem({
     key: 'bypass_followup:b1', kind: 'bypass_followup', verb: 'follow_up', label: 'Checklist bypass reason owed · 2026-02-27',
     subject: { employeeId: '1', userId: 'u1', name: 'Dana R.' }, detail: '2 items were open · level 1', ageHours: 96,
+    why: 'Office rule: a bypass reason owed past 24 hours needs manager follow-up.',
     work: 'waiting_on_employee', waitingOn: { ownerUserId: 'u1', requestedAt: '2026-03-02T15:10:00Z', dueAt: '2026-03-04' },
   }),
 ];
@@ -554,14 +676,15 @@ type ManagerScenarioArgs = {
   goals?: GoalLike[];
   payroll?: { dueDate: string | null; dueLabel: string | null } | null;
   inbox?: { outstanding: number; label: string } | null;
-  mine?: Signal[];
+  mine?: MyWork;
   personName?: string;
   timeLabel?: string;
   urgent?: Signal[];
+  calendar?: OfficeDayCalendar | null;
 };
 
 /**
- * Every manager fixture runs the REAL briefing layer: the sentence, the item
+ * Every manager fixture runs the REAL briefing layer: the summary, the item
  * order, the exceptions, the status lines, and the spotlight rule are all
  * computed by home-brief.ts and attention/, never typed.
  */
@@ -579,7 +702,7 @@ function makeManager(args: ManagerScenarioArgs): ManagerView {
   };
   const { block, pulse: input } = fxPerformance({
     role: 'manager', days: args.days, targets: args.targets ?? fxTargets, officePhase: staffing.office.phase,
-    attention: attentionSummary, events: args.days.length ? undefined : [], today: args.today,
+    attention: attentionSummary, events: args.days.length ? undefined : [], today: args.today, calendar: args.calendar,
   });
   const closeDay = closeDayStatus(todayLog, staffing.office.phase);
   const home = buildHomeBrief({
@@ -601,21 +724,14 @@ function makeManager(args: ManagerScenarioArgs): ManagerView {
     header: { ...header('Practice manager', args.personName ?? 'Good morning, Sofia', args.timeLabel), ...(args.dateLabel ? { dateLabel: args.dateLabel } : {}) },
     roleContext: ctx,
     lanes: lanesFor(ctx, args.urgent ?? []),
+    toolGroups: toolsFor(ctx),
     office: staffing.office,
     home,
-    mine: args.mine ?? [],
+    brief: buildDailyBrief(input),
+    mine: args.mine ?? NO_WORK,
     ...block,
   };
 }
-
-// Wall-clock moments (the staffing rules read local hours): 9:42 AM and 10:32 PM.
-const openNow = new Date(2026, 2, 3, 9, 42);
-const closedNow = new Date(2026, 2, 3, 22, 32);
-
-const openCloseouts = [
-  { id: 'log-0302', deposit_date: '2026-03-02', sealed_at: null, needs_manager_review: false },
-  { id: 'log-0227', deposit_date: '2026-02-27', sealed_at: '2026-02-27T22:40:00Z', needs_manager_review: false },
-];
 
 /** Open office, mid-morning: yesterday saved but unsealed, five items need the manager. */
 export const managerFixture = makeManager({
@@ -628,9 +744,7 @@ export const managerFixture = makeManager({
   waiting: waitingItems,
   closeouts: openCloseouts,
   payroll: { dueDate: '2026-03-05', dueLabel: 'payroll Thu' },
-  mine: [
-    { id: 'acks', label: 'Policies to sign', detail: 'Signing means you read that exact version.', value: '1', href: '/playbook', tone: 'attention' },
-  ],
+  mine: myWorkFor({ acknowledgments: [{ id: 'ack-m1', title_snapshot: 'Sterilization log', due_at: '2026-03-05T00:00:00Z', acknowledged_at: null, waived_at: null }] }),
 });
 
 /** Same office after close: today saved but not yet sealed, one person still clocked in. */
@@ -644,6 +758,7 @@ export const managerClosedFixture = makeManager({
   needsNow: [fxItem({
     key: 'pto_request:p1', kind: 'pto_request', verb: 'decide', label: 'PTO request · 2026-03-09 – 2026-03-10 (16h)',
     subject: { employeeId: '3', userId: 'u3', name: 'Priya S.' }, detail: '2 of 3 hygienists would be off that Monday', ageHours: 63,
+    why: 'A PTO request is waiting on a manager decision.',
   })],
   closeouts: [{ id: 'fx-log', deposit_date: '2026-03-03', sealed_at: null, needs_manager_review: false }, ...openCloseouts],
   inbox: { outstanding: 1, label: 'doctor notes' },
@@ -653,12 +768,12 @@ export const managerClosedFixture = makeManager({
 
 /**
  * Performance materially off pace on Mar 10, and a challenge that is off
- * track too: eight closed-out days whose collections lag a goal the office
- * set high, so the meters read behind and the observations say so.
+ * track too: every office day is recorded, so the meters may read behind,
+ * and the observations say what changed.
  */
 const offPaceHistory: DayVitals[] = [
-  ...fxCloseoutHistory('2025-10-01', '2026-02-27'),
-  ...fxCloseoutHistory('2026-03-02', '2026-03-09').map(d => ({ ...d, productionCents: 450_000, collectedCents: 225_000 })),
+  ...fxCloseoutHistory('2025-10-01', '2026-02-27', { complete: true }),
+  ...fxCloseoutHistory('2026-03-02', '2026-03-09', { complete: true }).map(d => ({ ...d, productionCents: 450_000, collectedCents: 225_000 })),
 ];
 export const managerOffPaceFixture = makeManager({
   ctx: context('manager', 'Practice manager', 'office_manager'),
@@ -667,14 +782,54 @@ export const managerOffPaceFixture = makeManager({
   today: '2026-03-10',
   dateLabel: 'Tue, Mar 10, 2026',
   staffing: staffingOpen,
-  now: openNow,
+  now: new Date(2026, 2, 10, 9, 42),
   todayLog: null,
   needsNow: openItems.slice(0, 2),
-  closeouts: openCloseouts,
+  closeouts: [{ id: 'log-0309', deposit_date: '2026-03-09', sealed_at: '2026-03-09T22:40:00Z', needs_manager_review: false }],
   goals: [{
     id: 'g3', title: 'Recall reactivation', metric: 'patients',
     progress: 3, target_count: 20, starts_on: '2026-02-16', ends_on: '2026-03-08', status: 'active',
   }],
+});
+
+/**
+ * Attendance in the queue: an excuse request to decide, an attendance
+ * report the rule opened (meet, then sign), three closeouts awaiting seal
+ * (one category, three records), and a routine late arrival that is NOT
+ * an item — the person acknowledged it and the rule counts it.
+ */
+const attendanceItems: AttentionItem[] = [
+  fxItem({
+    key: 'excuse_request:t1', kind: 'excuse_request', verb: 'decide', label: 'Excuse requested: pending review · 2026-03-03',
+    subject: { employeeId: '2', userId: 'u2', name: 'Marcus T.' }, detail: '“School drop-off ran long”', ageHours: 1,
+    why: 'The person asked for this late arrival to be excused. It waits on a manager decision and does not count toward the late-arrival rule until decided.',
+  }),
+  fxItem({
+    key: 'attendance_meeting:i7', kind: 'attendance_meeting', verb: 'follow_up', label: 'Meet with team member · attendance report',
+    subject: { employeeId: '5', userId: 'u5', name: 'Ken W.' }, detail: '3 unexcused late arrivals between 2026-02-04 and 2026-03-02 · 41 minutes late in total', ageHours: 20,
+    why: 'Office rule: 3 unexcused late arrivals within a rolling 30-day period open an attendance incident report. It stays open until the meeting is recorded and both of you have signed.',
+  }),
+  fxItem({ key: 'close_day_unsealed:log-0226', kind: 'close_day_unsealed', verb: 'fix', label: 'Close the Day saved, not sealed · 2026-02-26', detail: 'The record is filled in but unsealed', ageHours: 110, why: 'An unsealed closeout is not on record; sealing locks what is on file.' }),
+  fxItem({ key: 'close_day_unsealed:log-0227', kind: 'close_day_unsealed', verb: 'fix', label: 'Close the Day saved, not sealed · 2026-02-27', detail: 'The record is filled in but unsealed', ageHours: 86, why: 'An unsealed closeout is not on record; sealing locks what is on file.' }),
+  fxItem({ key: 'close_day_unsealed:log-0302', kind: 'close_day_unsealed', verb: 'fix', label: 'Close the Day saved, not sealed · 2026-03-02', detail: 'The record is filled in but unsealed', ageHours: 14, why: 'An unsealed closeout is not on record; sealing locks what is on file.' }),
+  openItems.find(i => i.kind === 'missing_clock_out')!,
+  openItems.find(i => i.kind === 'pto_request')!,
+].sort(compareByConsequence);
+
+export const managerAttendanceFixture = makeManager({
+  ctx: context('manager', 'Practice manager', 'office_manager'),
+  days: fxHistory,
+  staffing: staffingOpen,
+  now: openNow,
+  todayLog: null,
+  needsNow: attendanceItems,
+  waiting: waitingItems,
+  closeouts: [
+    { id: 'log-0302', deposit_date: '2026-03-02', sealed_at: null, needs_manager_review: false },
+    { id: 'log-0227', deposit_date: '2026-02-27', sealed_at: null, needs_manager_review: false },
+    { id: 'log-0226', deposit_date: '2026-02-26', sealed_at: null, needs_manager_review: false },
+  ],
+  payroll: { dueDate: '2026-03-05', dueLabel: 'payroll Thu' },
 });
 
 /** Manager who also covers the front desk — personal lane stays compact. */
@@ -717,35 +872,30 @@ type MemberScenarioArgs = {
   days?: DayVitals[];
   targets?: VitalsTargets;
   goals?: GoalLike[];
+  work?: Partial<MyWorkInput>;
   overrides?: Partial<MemberView>;
 };
 
 /**
- * Member fixtures run the REAL visibility filters: which metrics appear is
- * decided by the performance block and rolePulseItems, never hand-picked.
+ * Member fixtures run the REAL visibility filters and the REAL work builder:
+ * which metrics appear and which items need the person are decided by the
+ * performance block, rolePulseItems, and buildMyWork, never hand-picked.
  */
 function makeMember(args: MemberScenarioArgs): MemberView {
   const visibility = args.visibility ?? ALL_VISIBLE;
   const days = args.days ?? fxHistory;
   const { block, pulse: input } = fxPerformance({ role: 'employee', days, targets: args.targets ?? fxTargets, officePhase: 'open', visibility });
+  const work = myWorkFor(args.work ?? memberWorkInput);
+  const waiting = work.waiting.length;
   return {
     kind: 'member',
     header: header('Team member', `Good morning, ${args.name}`),
     roleContext: args.ctx,
     lanes: lanesFor(args.ctx, bypassUrgent),
-    next: {
-      title: 'Read and sign a policy',
-      detail: 'A published version is assigned to you.',
-      href: '/playbook',
-      cta: 'Open playbook',
-    },
+    toolGroups: toolsFor(args.ctx),
+    work,
     officePulseNote: 'Financial figures update after Close the Day — they are not live during the day.',
     rolePulse: rolePulseItems(args.ctx.primary, input, visibility),
-    mine: [
-      { id: '1', label: 'Training assigned to me', detail: 'Modules not yet completed.', value: '2', href: '/training', tone: 'attention' },
-      { id: '2', label: 'Policies to sign', detail: 'Signing means you read that exact version.', value: '1', href: '/playbook', tone: 'attention' },
-      { id: '3', label: 'Bypass reasons owed', detail: 'Never blocks you — just needs a sentence.', value: '1', href: '/checklists', tone: 'attention' },
-    ],
     goal: buildGoalBrief(args.goals ?? fxGoals, input.today),
     ...block,
     status: {
@@ -756,8 +906,9 @@ function makeMember(args: MemberScenarioArgs): MemberView {
     utilities: [
       { id: 'hours', value: '2:14', label: 'Recorded today', detail: 'Full history on your timesheet', href: '/timesheet' },
       { id: 'pto', value: '46h', label: 'PTO balance', detail: '1–3 years', href: '/pto' },
-      { id: 'timesheet', value: '→', label: 'Timesheet', detail: 'Punches, corrections, week totals', href: '/timesheet' },
+      { id: 'requests', value: String(waiting), label: 'Requests pending', detail: 'Waiting on a manager', href: '/my-requests' },
     ],
+    attendanceStanding: null,
     ...args.overrides,
   };
 }
@@ -765,14 +916,7 @@ function makeMember(args: MemberScenarioArgs): MemberView {
 export const frontDeskFixture = makeMember({
   name: 'Dana',
   ctx: context('member', 'Team member', 'front_desk'),
-  overrides: {
-    next: {
-      title: 'Answer an office request',
-      detail: 'A request is sitting in your inbox with no reply yet.',
-      href: '/inbox/requests',
-      cta: 'Open inbox',
-    },
-  },
+  work: { ...memberWorkInput, repliesOwed: 1 },
 });
 
 export const hygienistFixture = makeMember({
@@ -785,14 +929,7 @@ export const memberFixture = hygienistFixture;
 export const assistantFixture = makeMember({
   name: 'Marcus',
   ctx: context('member', 'Team member', 'dental_assistant'),
-  overrides: {
-    next: {
-      title: 'Finish the closeout checklist',
-      detail: 'Two items are still open on today’s list.',
-      href: '/checklists',
-      cta: 'Open checklists',
-    },
-  },
+  work: { ...memberWorkInput, openChecklistItems: 2 },
 });
 
 /**
@@ -812,13 +949,48 @@ export const frontDeskBackupAssistFixture = makeMember({
   ctx: context('member', 'Team member', 'front_desk', ['dental_assistant'], ['dental_assistant']),
 });
 
+/** Front desk primary, dental assisting as a backup capability only — nothing of it in the queue. */
+export const frontDeskBackupOnlyFixture = makeMember({
+  name: 'Dana',
+  ctx: context('member', 'Team member', 'front_desk', ['dental_assistant'], []),
+});
+
+/**
+ * A late arrival waiting on the person's answer, an excuse request already
+ * pending, an attendance report whose meeting is on record and needs their
+ * signature, and a PTO request waiting on a manager. The standing line
+ * reads from the same rule the office set.
+ */
+const lateArrivalTardies: MyWorkInput['tardies'] = [
+  { id: 't-0302', user_id: FX_USER, entry_date: '2026-03-02', minutes_late: 12, approval_status: 'unreviewed', excuse_requested_at: null, acknowledged_at: null, resolved: false, timezone_suspect: false },
+  { id: 't-0224', user_id: FX_USER, entry_date: '2026-02-24', minutes_late: 9, approval_status: 'unreviewed', excuse_requested_at: '2026-02-24T13:20:00Z', acknowledged_at: null, resolved: false, timezone_suspect: false },
+  { id: 't-0210', user_id: FX_USER, entry_date: '2026-02-10', minutes_late: 15, approval_status: 'unapproved', excuse_requested_at: null, acknowledged_at: '2026-02-10T13:30:00Z', resolved: false, timezone_suspect: false },
+];
+const lateStanding = standingToday(lateArrivalTardies.map(t => ({ ...t })), DEFAULT_LATE_ARRIVAL_RULE, FX_TODAY);
+export const memberLateArrivalFixture = makeMember({
+  name: 'Priya',
+  ctx: context('member', 'Team member', 'hygienist'),
+  work: {
+    tardies: lateArrivalTardies,
+    incidents: [{ id: 'i-att-1', employee_id: FX_EMPLOYEE, category: 'attendance', status: 'meeting_completed', incident_date: '2026-02-20', meeting_recorded_at: '2026-02-27T15:00:00Z', employee_signed_at: null, manager_signed_at: null }],
+    ptoRequests: [{ id: 'p-me', start_date: '2026-03-20', end_date: '2026-03-20', status: 'pending' }],
+    acknowledgments: memberWorkInput.acknowledgments,
+  },
+  overrides: {
+    attendanceStanding: {
+      text: `Late arrivals: ${standingSentence(lateStanding, DEFAULT_LATE_ARRIVAL_RULE)}.`,
+      tone: lateStanding.remaining === 0 ? 'attention' : 'calm',
+      href: '/days-off',
+    },
+  },
+});
+
 /** Nothing assigned: the next-move hero says "clear" without a zero wall. */
 export const memberClearFixture = makeMember({
   name: 'Priya',
   ctx: context('member', 'Team member', 'hygienist'),
+  work: {},
   overrides: {
-    next: null,
-    mine: [],
     status: {
       label: 'Clocked out',
       detail: '7h 30m recorded today.',
@@ -834,9 +1006,8 @@ export const memberNewFixture = makeMember({
   days: [],
   targets: NO_TARGETS,
   goals: [],
+  work: {},
   overrides: {
-    next: null,
-    mine: [],
     officePulseNote: null,
     status: {
       label: 'Not clocked in',
@@ -846,7 +1017,7 @@ export const memberNewFixture = makeMember({
     utilities: [
       { id: 'hours', value: '0:00', label: 'Recorded today', detail: 'Full history on your timesheet', href: '/timesheet' },
       { id: 'pto', value: '0h', label: 'PTO balance', detail: 'Accrues as you work', href: '/pto' },
-      { id: 'timesheet', value: '→', label: 'Timesheet', detail: 'Punches, corrections, week totals', href: '/timesheet' },
+      { id: 'requests', value: '0', label: 'Requests pending', detail: 'Waiting on a manager', href: '/my-requests' },
     ],
   },
 });

@@ -1,13 +1,17 @@
 /**
- * "What I'm noticing" — at most three observations for Owner and Manager
- * Home, each built from recorded rows with the comparison, the period, a
- * reason that claims no cause, receipts (source, calculation, coverage),
- * and one next step. Deterministic rules, not a model: this extends the
- * grounded recommendation in owner-pulse.ts rather than replacing it.
+ * "Worth a look" — at most three observations for Owner and Manager Home,
+ * each with what was observed, what it means in practice, and one next
+ * step. Deterministic rules over recorded rows, never a model.
  *
- * Selection is by consequence, and never only negative: a verified goal or
- * a verified improvement is shown whenever it exists. Insufficient data is
- * itself an observation that names what is missing and where to supply it.
+ * One number, one home: the goal meters already carry every pace verdict
+ * and the Needs you queue already carries every open item, so neither is
+ * repeated here. What remains is what only a comparison over the recorded
+ * days can show — a period-over-period move, a rising or falling missed
+ * count, or a data gap that would make every other figure misleading.
+ *
+ * Selection is by consequence, and never only negative: a verified
+ * improvement is shown whenever it exists. Insufficient data is itself an
+ * observation that names what is missing and where to supply it.
  */
 import type { OwnerPulseInput, Receipt } from '@/lib/owner-pulse';
 import { money, ownerRecommendation } from '@/lib/owner-pulse';
@@ -20,12 +24,14 @@ export type InsightTone = 'attention' | 'good' | 'steady' | 'calm';
 export type HomeInsight = {
   id: string;
   tone: InsightTone;
-  /** What changed, in one line. */
+  /** What was observed, in one line. */
   title: string;
   /** The actual comparison and the period it covers. */
   comparison: string;
-  /** Why it deserves a look — never a cause the records do not prove. */
+  /** What it means in practice — never a cause the records do not prove. */
   why: string;
+  /** Observed from records, or an estimate that depends on an assumption. */
+  basis: 'observed' | 'estimate';
   receipts: Receipt[];
   next: { label: string; to: string };
 };
@@ -63,7 +69,7 @@ const pct = (f: number) => `${Math.round(f * 100)}%`;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 export function buildHomeInsights(input: HomeInsightsInput): HomeInsight[] {
-  const { today, role, pulse, goals, month, missed, attention, sources } = input;
+  const { goals, pulse, month, missed, sources } = input;
   const out: HomeInsight[] = [];
   const push = (i: HomeInsight) => { if (out.length < MAX_INSIGHTS) out.push(i); };
 
@@ -72,7 +78,8 @@ export function buildHomeInsights(input: HomeInsightsInput): HomeInsight[] {
     push({
       id: 'closeouts_unreadable', tone: 'attention', title: 'Close the Day records could not be read.',
       comparison: 'No figure on this page is confirmed until they load.',
-      why: 'A source that failed is not an empty office.',
+      why: 'A source that failed is not an empty office. Refresh, then read the month.',
+      basis: 'observed',
       receipts: [{ label: 'deposit_logs', value: 'error', source: 'usePracticeVitals query state' }],
       next: { label: 'Open Close the Day', to: '/deposit-log' },
     });
@@ -84,6 +91,7 @@ export function buildHomeInsights(input: HomeInsightsInput): HomeInsight[] {
         ? `${plural(sources.reportDays, 'posting day')} of report history exist; production and collections pace read from Close the Day.`
         : 'Production, collections, and new patients read from Close the Day.',
       why: 'Without closeouts there is no month pace to judge — this is a data gap, not a result.',
+      basis: 'observed',
       receipts: [
         { label: 'Closeouts on record', value: '0', source: 'deposit_logs, last 12 months' },
         ...(sources.reportDays > 0 ? [{ label: 'Report history', value: plural(sources.reportDays, 'posting day'), source: 'practice_report_imports' }] : []),
@@ -96,27 +104,28 @@ export function buildHomeInsights(input: HomeInsightsInput): HomeInsight[] {
       push({
         id: 'closeout_gap', tone: 'attention', title: 'The deposit log has gone quiet.',
         comparison: rec.receipts.map(r => `${r.label}: ${r.value}`).join(' · '),
-        why: 'Every pace figure reads only recorded days; missing days make this month look worse than it is.',
+        why: 'Every pace figure reads only recorded days; the missing days make this month look worse than it is. Enter them before reading the month as a result.',
+        basis: 'observed',
         receipts: rec.receipts,
         next: { label: 'Open Close the Day', to: '/deposit-log' },
       });
     }
   }
 
-  /* 2 — a goal reached is verified good news; it is never buried. */
-  for (const g of goals) {
-    if (g.state === 'progress' && g.overCents !== null && g.achievedCents !== null) {
-      push({
-        id: `${g.id}_goal_reached`, tone: 'good', title: `${g.label} ${g.id === 'collections' ? 'have' : 'has'} reached the ${g.monthLabel.split(' ')[0]} goal.`,
-        comparison: `${money(g.achievedCents)} recorded against a ${money(g.targetCents)} goal — ${money(g.overCents)} over with ${plural(g.daysInMonth - g.daysElapsed, 'day')} left.`,
-        why: 'Verified from closeouts, not projected.',
-        receipts: [
-          { label: 'Recorded this month', value: money(g.achievedCents), source: `deposit_logs, ${plural(g.recordedDays, 'closed-out day')}` },
-          { label: 'Goal', value: money(g.targetCents), source: 'org_practice_settings' },
-        ],
-        next: { label: 'Open goals', to: '/goals' },
-      });
-    }
+  /* 2 — the month's records are incomplete: say it once, with the fix. The meters mark it; this names the count. */
+  const partial = goals.find(g => g.state === 'progress' && g.completeness === 'partial' && g.missingDays > 0);
+  if (partial && !out.some(i => i.id === 'closeout_gap')) {
+    push({
+      id: 'records_incomplete', tone: 'attention', title: `${plural(partial.missingDays, 'office day')} this month ${partial.missingDays === 1 ? 'has' : 'have'} no closeout.`,
+      comparison: `${partial.recordedDays} of ${partial.expectedRecordedDays} office days through the cutoff are recorded (${partial.monthLabel}).`,
+      why: 'Totals are real but incomplete, so no behind-pace verdict is given until the missing days are entered.',
+      basis: 'observed',
+      receipts: [
+        { label: 'Recorded', value: plural(partial.recordedDays, 'closed-out day'), source: 'deposit_logs, this month' },
+        { label: 'Expected by now', value: plural(partial.expectedRecordedDays, 'office day'), source: 'office calendar: closures, open Saturdays, weekly pattern' },
+      ],
+      next: { label: 'Complete the records', to: '/deposit-log' },
+    });
   }
 
   /* 3 — collections vs the same days last month (same source, similar coverage). */
@@ -138,6 +147,7 @@ export function buildHomeInsights(input: HomeInsightsInput): HomeInsight[] {
         why: down
           ? 'Receipts move with insurance timing and posting, so a drop this size is worth checking before reading it as performance.'
           : 'A rise this size is worth knowing about; the receipts are recorded, the reason is not.',
+        basis: 'observed',
         receipts: [
           { label: 'This period', value: `${money(cur)} · ${money(curPerDay)}/day`, source: `deposit_logs · ${plural(curDays, 'closed-out day')}, receipts by deposit date` },
           { label: 'Same days last month', value: `${money(prev)} · ${money(prevPerDay)}/day`, source: `deposit_logs · ${plural(prevDays, 'closed-out day')}` },
@@ -150,23 +160,7 @@ export function buildHomeInsights(input: HomeInsightsInput): HomeInsight[] {
     }
   }
 
-  /* 4 — behind a configured goal, by calendar-day pace. */
-  for (const g of goals) {
-    if (g.state === 'progress' && g.pace && g.pace.status === 'behind' && g.achievedCents !== null && g.expectedToDateCents !== null) {
-      push({
-        id: `${g.id}_behind`, tone: 'attention', title: `${g.label} ${g.id === 'collections' ? 'are' : 'is'} behind calendar pace for ${g.monthLabel.split(' ')[0]}.`,
-        comparison: `${money(g.achievedCents)} of the ${money(g.targetCents)} goal (${pct(g.pct ?? 0)}) with ${pct(g.daysElapsed / g.daysInMonth)} of the month elapsed — ${money(Math.abs(g.pace.diff))} under the ${money(g.expectedToDateCents)} expected by now.`,
-        why: 'Calendar-day pace spreads the goal over every day, so an office that front- or back-loads its schedule can sit under it without being behind. Worth a look, not a verdict.',
-        receipts: [
-          { label: 'Recorded this month', value: money(g.achievedCents), source: `deposit_logs, ${plural(g.recordedDays, 'closed-out day')}` },
-          { label: 'Expected by now', value: money(g.expectedToDateCents), source: `${money(g.targetCents)} goal × day ${g.daysElapsed} ÷ ${g.daysInMonth} (calendar days)` },
-        ],
-        next: { label: 'Open Close the Day', to: '/deposit-log' },
-      });
-    }
-  }
-
-  /* 5 — cancellations and no-shows vs the comparable prior period. */
+  /* 4 — cancellations and no-shows vs the comparable prior period. */
   if (missed && missed.comparison.comparable) {
     const cur = missed.totals.total;
     const prev = missed.comparison.totals.total;
@@ -182,6 +176,7 @@ export function buildHomeInsights(input: HomeInsightsInput): HomeInsight[] {
         why: rising
           ? 'The counts are recorded; the reason is not — confirmations, the reminder cadence, and the schedule mix are the places to look.'
           : 'Recorded, not inferred. Whatever changed is worth keeping.',
+        basis: 'observed',
         receipts: [
           { label: 'This period', value: `${missed.totals.cancellations} cancellations · ${missed.totals.noShows} no-shows`, source: `${missed.sourceLabel}, ${missed.period.rangeLabel}` },
           { label: 'Comparable period', value: `${missed.comparison.totals.cancellations} cancellations · ${missed.comparison.totals.noShows} no-shows`, source: `${missed.sourceLabel}, ${missed.comparison.rangeLabel}` },
@@ -192,41 +187,16 @@ export function buildHomeInsights(input: HomeInsightsInput): HomeInsight[] {
     }
   }
 
-  /* 6 — work waiting on the manager (owners see decisions in Needs you already). */
-  if (role === 'manager' && attention?.enabled && attention.needsNow > 0) {
-    const oldest = attention.oldestHours !== null && attention.oldestHours >= 24 ? `the oldest ${Math.round(attention.oldestHours / 24)}d old` : null;
-    const due = attention.payroll ? `${attention.payroll.label} in ${plural(attention.payroll.days, 'day')}` : null;
+  /* 5 — a metric paced on calendar days is an estimate; say so once rather than under every figure. */
+  const estimate = goals.find(g => g.state === 'progress' && g.basis.kind === 'calendar_days');
+  if (estimate && out.length < MAX_INSIGHTS) {
     push({
-      id: 'work_waiting', tone: attention.payroll && attention.payroll.days <= 2 ? 'attention' : 'steady',
-      title: `${plural(attention.needsNow, 'item')} need${attention.needsNow === 1 ? 's' : ''} you now${attention.waiting ? `, ${attention.waiting} more waiting on others` : ''}.`,
-      comparison: [oldest, due].filter(Boolean).join(' · ') || 'All arrived within the last day.',
-      why: attention.payroll ? 'Unresolved time records make the payroll period questionable until they change.' : 'Attention is in consequence order; the first row is first.',
-      receipts: [
-        { label: 'Needs you now', value: String(attention.needsNow), source: 'Attention (deriveAttention), open items under the admission rule' },
-        ...(attention.payroll ? [{ label: 'Payroll deadline', value: attention.payroll.label, source: 'payroll_settings due days after the period' }] : []),
-      ],
-      next: { label: 'Open Attention', to: '/management' },
-    });
-  }
-
-  /* 7 — nothing off: say the month is on pace, with the checks that passed. */
-  if (out.length === 0 && pulse && pulse.thisMonth.days > 0) {
-    const judged = goals.filter(g => g.state === 'progress' && g.pace);
-    const receipts: Receipt[] = judged.map(g => ({
-      label: `${g.label} pace`,
-      value: g.pace!.status === 'ahead' ? 'Ahead' : 'On pace',
-      source: `${money(g.pace!.actual)} vs ${money(g.pace!.pacedTarget)} expected by day ${g.daysElapsed} (calendar days)`,
-    }));
-    if (pulse.latest) receipts.push({ label: 'Closeouts', value: 'Current', source: `last closed out ${pulse.latest.date}` });
-    push({
-      id: 'steady', tone: judged.length ? 'good' : 'calm',
-      title: judged.length ? `${goals[0].monthLabel.split(' ')[0]} is on pace for ${judged.map(g => g.label.toLowerCase()).join(' and ')}.` : 'Nothing is materially off this month.',
-      comparison: judged.length
-        ? judged.map(g => `${g.label} ${money(g.pace!.actual)} vs ${money(g.pace!.pacedTarget)} expected`).join(' · ')
-        : `${plural(pulse.thisMonth.days, 'closed-out day')} this month; no goals are configured, so there is no pace to judge.`,
-      why: 'Nothing here suggests an intervention.',
-      receipts,
-      next: judged.length ? { label: 'Open goals', to: '/goals' } : { label: 'Set office goals', to: '/management/office/settings#office-goals' },
+      id: 'calendar_estimate', tone: 'calm', title: 'Pace is a calendar-day estimate this month.',
+      comparison: 'The office calendar could not be read, so the goal is spread over every day of the month instead of the office days.',
+      why: 'An office closed on weekends reads behind at the start of every week on this basis. Treat the pace marker as approximate.',
+      basis: 'estimate',
+      receipts: [{ label: 'Basis', value: `day ${estimate.daysElapsed} of ${estimate.daysInMonth}`, source: 'calendar days' }],
+      next: { label: 'Open the office calendar', to: '/office-calendar' },
     });
   }
 

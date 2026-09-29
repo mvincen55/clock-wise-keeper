@@ -9,7 +9,7 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { money } from '@/lib/owner-pulse';
 import { formatCents } from '@/lib/money';
 import type { Bucket, DayStatus, PerformanceWindow, SeriesSource } from '@/lib/performance-series';
-import { MicroLabel } from '../kit';
+import { SectionLabel, focusRing, interactive } from '../kit';
 import { AXIS_TEXT, GRID_STROKE, SERIES_COLOR, compactDollars, useMeasuredWidth } from './chart-theme';
 
 /**
@@ -106,8 +106,7 @@ function valueLabel(v: number | null, status: DayStatus, recorded: boolean): str
   return recorded ? 'Not entered' : 'Not recorded';
 }
 
-const controlClass =
-  'inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
+const controlClass = cn('inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 text-[13.5px] font-medium', interactive, focusRing);
 
 /** A legend entry that is also the series switch. Color + label + pressed state, never color alone. */
 function SeriesToggle({ label, color, on, onToggle, disabled }: { label: string; color: string; on: boolean; onToggle: () => void; disabled?: boolean }) {
@@ -145,8 +144,8 @@ function ChartTip({
   const range = row.days === 1 ? row.start : `${row.start} – ${row.end}`;
   const href = drilldownFor(row, source, access);
   return (
-    <div className="max-w-[16rem] rounded-lg border border-border bg-card px-3 py-2.5 text-[12px] shadow-md">
-      <p className="font-mono text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground">
+    <div className="max-w-[17rem] rounded-lg border border-border bg-card px-3 py-2.5 text-[13px] shadow-md">
+      <p className="text-[12.5px] font-semibold text-muted-foreground">
         {range}{row.current ? ' · partial, includes today' : ''}
       </p>
       <dl className="mt-1.5 space-y-1">
@@ -163,11 +162,11 @@ function ChartTip({
           </div>
         )}
       </dl>
-      <p className="mt-1.5 text-muted-foreground">
+      <p className="mt-1.5 text-[12.5px] text-muted-foreground">
         {row.days > 1 ? `${Math.max(row.primaryRecordedDays, row.secondaryRecordedDays)} of ${row.days} days recorded · ` : ''}
         {STATUS_LABEL[row.status]} · {defs.sourceLabel}
       </p>
-      {href && <p className="mt-1 text-[11px] text-primary">Click to open</p>}
+      {href && <p className="mt-1 text-[12.5px] font-medium text-primary">Click to open</p>}
     </div>
   );
 }
@@ -223,7 +222,7 @@ export function PerformanceChart(props: PerformanceChartProps) {
             <SeriesToggle label={defs.secondaryLabel} color={SERIES_COLOR.secondary} on={showSecondary} onToggle={() => toggle('secondary')} disabled={!bothShown} />
           )}
         </div>
-        <div className="flex items-center gap-1 rounded-full border border-border p-0.5" role="group" aria-label="Chart view">
+        <div className="flex items-center gap-1 rounded-full border border-border bg-card p-0.5" role="group" aria-label="Chart view">
           {(['daily', 'cumulative'] as ChartView[]).map(v => (
             <button
               key={v}
@@ -232,7 +231,7 @@ export function PerformanceChart(props: PerformanceChartProps) {
               aria-pressed={view === v}
               onClick={() => onViewChange(v)}
               className={cn(
-                'min-h-7 rounded-full px-3 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'min-h-8 rounded-full px-3.5 text-[13.5px] font-medium', interactive, focusRing,
                 view === v ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
               )}
             >
@@ -244,19 +243,21 @@ export function PerformanceChart(props: PerformanceChartProps) {
 
       <div className="mt-3 min-w-0" style={{ minHeight: height }}>
         {state === 'loading' && (
-          <div className="flex h-full min-h-[inherit] items-end gap-1 px-1 pb-6" aria-live="polite">
-            <p className="w-full text-center text-[13px] text-muted-foreground">Reading recorded days…</p>
+          <div className="flex h-full min-h-[inherit] items-center justify-center rounded-lg border border-dashed border-border" aria-live="polite" aria-busy="true">
+            <p className="text-[14px] text-muted-foreground">Reading recorded days…</p>
           </div>
         )}
         {state === 'error' && (
-          <div className="flex min-h-[inherit] items-center justify-center rounded-xl border border-warning/40 bg-warning/[0.06] px-4 text-center">
-            <p className="text-[13px]">The recorded days could not be read. Nothing here is confirmed — refresh to try again.</p>
+          <div className="flex min-h-[inherit] flex-col items-center justify-center rounded-lg border border-warning/40 bg-warning/[0.06] px-4 text-center">
+            <p className="text-[15px] font-semibold">The recorded days could not be read.</p>
+            <p className="mt-1 text-[13.5px] text-muted-foreground">Nothing here is confirmed. Refresh to try again; if it keeps failing, open Close the Day directly.</p>
+            <Link to="/deposit-log" className={cn(controlClass, 'mt-3 border-primary/40 text-primary hover:bg-primary/[0.06]')}>Open Close the Day<ArrowUpRight className="h-3 w-3" /></Link>
           </div>
         )}
         {state === 'ok' && (!w || !anyRecorded) && (
-          <div className="flex min-h-[inherit] flex-col items-center justify-center rounded-xl border border-border bg-muted/40 px-5 text-center">
-            <p className="text-[14px] font-semibold">Nothing recorded for this period.</p>
-            <p className="mt-1 max-w-[46ch] text-[12.5px] text-muted-foreground">{emptyReason}</p>
+          <div className="flex min-h-[inherit] flex-col items-center justify-center rounded-lg border border-border bg-muted/40 px-5 text-center">
+            <p className="text-[15px] font-semibold">Nothing recorded for this period.</p>
+            <p className="mt-1 max-w-[46ch] text-[13.5px] text-muted-foreground">{emptyReason}</p>
             <div className="mt-3 flex flex-wrap justify-center gap-2">
               <Link to="/deposit-log" className={cn(controlClass, 'border-primary/40 text-primary hover:bg-primary/[0.06]')}>Close out a day<ArrowUpRight className="h-3 w-3" /></Link>
               {access === 'admin' && (
@@ -279,8 +280,8 @@ export function PerformanceChart(props: PerformanceChartProps) {
               className="cursor-pointer [&_.recharts-surface]:outline-none [&_.recharts-surface:focus-visible]:outline [&_.recharts-surface:focus-visible]:outline-2 [&_.recharts-surface:focus-visible]:outline-ring"
             >
               <CartesianGrid vertical={false} stroke={GRID_STROKE} strokeWidth={1} />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} stroke={AXIS_TEXT} interval="preserveStartEnd" minTickGap={28} />
-              <YAxis tickFormatter={compactDollars} tickLine={false} axisLine={false} fontSize={11} stroke={AXIS_TEXT} width={52} />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} stroke={AXIS_TEXT} interval="preserveStartEnd" minTickGap={28} />
+              <YAxis tickFormatter={compactDollars} tickLine={false} axisLine={false} fontSize={12} stroke={AXIS_TEXT} width={52} />
               <Tooltip
                 cursor={{ fill: 'hsl(var(--muted))', fillOpacity: 0.6 }}
                 content={<ChartTip view={view} defs={w.definitions} shown={{ primary: showPrimary, secondary: showSecondary }} source={w.source} access={access} />}
@@ -309,15 +310,15 @@ export function PerformanceChart(props: PerformanceChartProps) {
 
       {w && (
         <figcaption className="mt-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <p className="text-[11.5px] text-muted-foreground">
+          <p className="text-[13px] text-muted-foreground">
             {w.definitions.sourceLabel} · {w.definitions.dateBasis} · {w.coverageLabel}
             {w.period.partial ? ` · ${w.period.label.toLowerCase()} is partial` : ''}
             {view === 'cumulative' ? ' · a flat step is an unrecorded day' : ''}
           </p>
           <span className="flex items-center gap-3">
             {periodHref && (
-              <Link to={periodHref} className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-primary hover:underline">
-                Open report history<ArrowUpRight className="h-3 w-3" />
+              <Link to={periodHref} className="inline-flex items-center gap-1 text-[13px] font-medium text-primary hover:underline">
+                Open report history<ArrowUpRight className="h-3.5 w-3.5" />
               </Link>
             )}
             <button
@@ -325,7 +326,7 @@ export function PerformanceChart(props: PerformanceChartProps) {
               data-home-control="table"
               aria-expanded={tableOpen}
               onClick={() => setTableOpen(o => !o)}
-              className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={cn('text-[13px] font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline', focusRing)}
             >
               {tableOpen ? 'Hide table' : 'Values as a table'}
             </button>
@@ -335,7 +336,7 @@ export function PerformanceChart(props: PerformanceChartProps) {
 
       {w && tableOpen && (
         <div className="mt-3 max-h-72 overflow-auto rounded-lg border border-border">
-          <table className="w-full text-[12.5px]">
+          <table className="w-full text-[13.5px]">
             <caption className="sr-only">{w.definitions.primaryLabel} and {w.definitions.secondaryLabel} by {w.granularity}, {w.period.rangeLabel}</caption>
             <thead className="sticky top-0 bg-muted text-left">
               <tr>
@@ -357,7 +358,7 @@ export function PerformanceChart(props: PerformanceChartProps) {
                     {shown.secondary && <td className="px-3 py-1.5 text-right tabular-nums">{valueLabel(view === 'daily' ? r.secondary : r.cumSecondary, r.status, r.secondaryRecordedDays > 0)}</td>}
                     <td className="px-3 py-1.5 text-muted-foreground">{STATUS_LABEL[r.status]}{r.days > 1 ? ` · ${Math.max(r.primaryRecordedDays, r.secondaryRecordedDays)}/${r.days} days` : ''}</td>
                     <td className="px-3 py-1.5 text-right">
-                      {href && <Link to={href} className="font-mono text-[10px] uppercase tracking-[0.1em] text-primary hover:underline">Open</Link>}
+                      {href && <Link to={href} className="text-[13px] font-medium text-primary hover:underline">Open</Link>}
                     </td>
                   </tr>
                 );
@@ -372,7 +373,7 @@ export function PerformanceChart(props: PerformanceChartProps) {
               </tr>
             </tfoot>
           </table>
-          <MicroLabel className="px-3 py-2">{w.definitions.secondaryDefinition}</MicroLabel>
+          <SectionLabel className="px-3 py-2 font-normal">{w.definitions.secondaryDefinition}</SectionLabel>
         </div>
       )}
     </figure>

@@ -74,7 +74,7 @@ describe('manager — empty office', () => {
 describe('member — brand-new employee', () => {
   it('shows clear state without percent-from-nothing or a fake chart', () => {
     const { container } = renderView(<MemberDashboard view={memberNewFixture} />);
-    expect(screen.getByText(/You're clear\./)).toBeInTheDocument();
+    expect(screen.getByText(/You’re clear\. Nothing is assigned to you right now\./)).toBeInTheDocument();
     // The shared goal band stays neutral — no invented progress from nothing.
     expect(screen.getByText(/No office goal is running\./)).toBeInTheDocument();
     // The seven-day personal chart no longer exists on Home at all.
@@ -122,6 +122,9 @@ describe('copy stays US-English and non-punitive on the dashboards', () => {
       'components/dashboard/fixtures.ts',
       'components/dashboard/scenarios.ts',
       'components/dashboard/NeedsYou.tsx',
+      'components/dashboard/MyWork.tsx',
+      'components/dashboard/Summary.tsx',
+      'components/dashboard/tools.ts',
       'components/dashboard/ChallengeCard.tsx',
       'components/dashboard/performance/PerformanceSection.tsx',
       'components/dashboard/performance/PerformanceChart.tsx',
@@ -129,8 +132,10 @@ describe('copy stays US-English and non-punitive on the dashboards', () => {
       'components/dashboard/performance/GoalMeters.tsx',
       'components/dashboard/performance/Noticing.tsx',
       'components/dashboard/performance/MissedTrend.tsx',
-      'components/dashboard/performance/QuickTools.tsx',
       'lib/performance-series.ts',
+      'lib/home-brief.ts',
+      'lib/my-work.ts',
+      'lib/attention/groups.ts',
       'lib/goal-progress.ts',
       'lib/home-insights.ts',
       'lib/missed-trend.ts',

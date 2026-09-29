@@ -1,18 +1,20 @@
-import { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowRight, ChevronDown, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type {
-  Figure, PersonStatus, ProgressRow, RoleContext, RoleLane, Shortcut, Signal, TimelineRow, Tone,
+  Figure, PersonStatus, ProgressRow, RoleContext, RoleLane, Shortcut, Signal, TimelineRow, Tone, ToolGroup,
 } from './types';
 
 /**
- * The authenticated dashboard kit.
+ * The authenticated dashboard kit — one visual system for every role.
  *
- * Same family as the public surfaces — ruled sections, mono micro-labels,
- * heavy display numerals — but warmed up for a working dental office: soft
- * rules instead of hard black bars, rounded surfaces, and the office's purple
- * as an accent rather than a command-console skin. Distinctive, not severe.
+ * Clean neutral page, white cards with a clear boundary and a restrained
+ * shadow, body text at 15px, labels at 13px, key numbers prominent. Purple
+ * guides interaction (links, primary actions, selected controls); amber
+ * and red appear only where something needs attention. Motion is limited
+ * to short color and transform transitions and respects reduced motion.
  */
 
 export const toneText: Record<Tone, string> = {
@@ -29,70 +31,214 @@ export const toneDot: Record<Tone, string> = {
   calm: 'bg-muted-foreground/40',
 };
 
-/** Status is never color alone — every dot carries its own text label. */
+/** Soft tints for chips and callouts, by tone. */
+export const toneChip: Record<Tone, string> = {
+  urgent: 'bg-destructive/10 text-destructive',
+  attention: 'bg-warning/15 text-[hsl(30_80%_32%)] dark:text-warning',
+  steady: 'bg-success/12 text-[hsl(145_60%_28%)] dark:text-success',
+  calm: 'bg-muted text-muted-foreground',
+};
+
+/** The shared card surface. */
+export const panelClass = 'rounded-xl border border-border bg-card shadow-[0_1px_2px_hsl(220_25%_10%/0.04),0_6px_20px_hsl(220_25%_10%/0.04)]';
+
+/** The shared interactive transition, quiet and reduced-motion safe. */
+export const interactive = 'transition-colors duration-150 motion-reduce:transition-none';
+
+/** The text style of a row-level action: purple, 13.5px, one arrow. */
+export const actionClass = cn('inline-flex shrink-0 items-center gap-1 text-[13.5px] font-medium text-primary', interactive);
+
+export const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
+
+/** Status is never color alone — every dot sits beside its own text. */
 export function StatusDot({ tone, className }: { tone: Tone; className?: string }) {
-  return <span aria-hidden className={cn('inline-block h-2 w-2 shrink-0', toneDot[tone], className)} />;
+  return <span aria-hidden className={cn('inline-block h-2 w-2 shrink-0 rounded-full', toneDot[tone], className)} />;
 }
 
-export function MicroLabel({ children, className }: { children: ReactNode; className?: string }) {
+/** A small, readable section label. Sentence case, no letter-spacing tricks. */
+export function SectionLabel({ children, className, as: Tag = 'p' }: { children: ReactNode; className?: string; as?: 'p' | 'span' | 'h2' | 'h3' }) {
+  return <Tag className={cn('text-[13px] font-semibold leading-snug text-muted-foreground', className)}>{children}</Tag>;
+}
+
+/** Kept for older callers; reads like SectionLabel now. */
+export const MicroLabel = SectionLabel;
+
+/** A tone chip with text: "Behind pace", "Partial data", "3 now". */
+export function Chip({ tone = 'calm', children, className }: { tone?: Tone; children: ReactNode; className?: string }) {
   return (
-    <p className={cn('min-w-0 break-words font-mono text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground', className)}>
+    <span className={cn('inline-flex min-h-6 items-center gap-1.5 rounded-full px-2.5 text-[12.5px] font-medium leading-none', toneChip[tone], className)}>
       {children}
-    </p>
+    </span>
   );
 }
 
-/** A titled region. One rule, no box. */
-export function Band({
-  title,
-  count,
-  action,
-  children,
-  className,
-}: {
-  title: string;
-  count?: string;
-  action?: { label: string; to: string };
-  children: ReactNode;
-  className?: string;
+/** A count badge for a panel header. */
+export function CountBadge({ count, tone = 'steady' }: { count: number; tone?: Tone }) {
+  if (count <= 0) return null;
+  return (
+    <span className={cn('inline-flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-[12.5px] font-semibold tabular-nums', tone === 'calm' ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground')}>
+      {count}
+    </span>
+  );
+}
+
+type LinkVariant = 'primary' | 'secondary' | 'ghost' | 'text';
+
+const linkVariant: Record<LinkVariant, string> = {
+  primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
+  secondary: 'border border-primary/30 bg-card text-primary hover:bg-primary/[0.06]',
+  ghost: 'text-primary hover:bg-primary/[0.06]',
+  text: 'text-primary underline-offset-4 hover:underline',
+};
+
+/** The one arrow every action carries; it nudges right on hover unless motion is reduced. */
+export function Arrow() {
+  return <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden />;
+}
+
+/** A link that reads as an action. Comfortable to tap, purple, one arrow. */
+export function ActionLink({ to, children, variant = 'secondary', className, arrow = true, size = 'md', title }: {
+  to: string; children: ReactNode; variant?: LinkVariant; className?: string; arrow?: boolean; size?: 'sm' | 'md'; title?: string;
 }) {
   return (
-    <section className={cn('min-w-0', className)}>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border pb-2">
-        <div className="flex min-w-0 items-baseline gap-3">
-          <MicroLabel className="text-foreground/70">{title}</MicroLabel>
-          {count && <span className="font-mono text-[10px] tabular-nums text-muted-foreground">{count}</span>}
+    <Link
+      to={to}
+      title={title}
+      className={cn(
+        'group inline-flex shrink-0 items-center gap-1.5 rounded-full font-medium', interactive, focusRing,
+        variant === 'text' ? 'text-[14px]' : size === 'sm' ? 'min-h-8 px-3 text-[13px]' : 'min-h-10 px-4 text-[14px]',
+        linkVariant[variant], className,
+      )}
+    >
+      {children}
+      {arrow && <Arrow />}
+    </Link>
+  );
+}
+
+/**
+ * A titled card. The header carries the title, an optional count, an
+ * optional action; the body is the caller's. Every panel on Home is one of
+ * these, so boundaries, spacing, and headings match everywhere.
+ */
+export function Panel({
+  id,
+  title,
+  count,
+  countTone,
+  action,
+  aside,
+  children,
+  className,
+  bodyClassName,
+  tone,
+  description,
+}: {
+  id?: string;
+  title: ReactNode;
+  count?: number;
+  countTone?: Tone;
+  action?: { label: string; to: string };
+  /** Anything else for the header's right side (an info control, a switch). */
+  aside?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  bodyClassName?: string;
+  /** A tinted left edge for a panel that needs attention. */
+  tone?: Tone;
+  description?: ReactNode;
+}) {
+  return (
+    <section
+      id={id}
+      aria-label={typeof title === 'string' ? title : undefined}
+      className={cn(panelClass, 'min-w-0 overflow-hidden', tone === 'attention' && 'border-l-4 border-l-warning', tone === 'urgent' && 'border-l-4 border-l-destructive', className)}
+    >
+      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 pb-2 pt-4 sm:px-6">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <h2 className="text-[16px] font-semibold leading-snug text-foreground">{title}</h2>
+          {count !== undefined && <CountBadge count={count} tone={countTone} />}
         </div>
-        {action && (
-          <Link
-            to={action.to}
-            className="group inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.14em] text-primary hover:underline"
-          >
-            {action.label}
-            <ArrowUpRight className="h-3 w-3 transition-transform group-hover:-translate-y-0.5" />
-          </Link>
-        )}
-      </div>
-      <div className="mt-1">{children}</div>
+        <div className="flex items-center gap-2">
+          {aside}
+          {action && (
+            <ActionLink to={action.to} variant="text" size="sm">
+              {action.label}
+            </ActionLink>
+          )}
+        </div>
+        {description && <p className="basis-full text-[13.5px] leading-snug text-muted-foreground">{description}</p>}
+      </header>
+      <div className={cn('px-5 pb-5 sm:px-6', bodyClassName)}>{children}</div>
     </section>
   );
 }
 
-/** A ruled, scannable row. Replaces one-card-per-fact. */
-export function Row({
-  children,
-  to,
-  className,
-}: {
-  children: ReactNode;
-  to?: string;
-  className?: string;
-}) {
-  const base = cn(
-    'flex items-center gap-3 border-b border-border py-3 text-left transition-colors',
-    to && 'hover:bg-muted/60',
-    className,
+/**
+ * The compact information control: an ⓘ that discloses the caveats — date
+ * range, cutoff, completeness, comparison basis — on demand, so the panel
+ * itself stays readable.
+ */
+export function InfoPopover({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          data-home-control="info"
+          aria-label={label}
+          className={cn('inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground', interactive, focusRing, className)}
+        >
+          <Info className="h-4 w-4" aria-hidden />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] p-4 text-[13.5px] leading-snug">
+        {children}
+      </PopoverContent>
+    </Popover>
   );
+}
+
+/** A definition list for the info control: label → value. */
+export function InfoList({ rows }: { rows: { label: string; value: ReactNode }[] }) {
+  return (
+    <dl className="space-y-2">
+      {rows.map(r => (
+        <div key={r.label} className="grid grid-cols-[7rem_1fr] gap-2">
+          <dt className="text-muted-foreground">{r.label}</dt>
+          <dd className="min-w-0 break-words font-medium text-foreground">{r.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** A key number: prominent value, readable label, one line of context. */
+export function Stat({ value, label, detail, tone, href, size = 'md', className }: {
+  value: ReactNode; label: string; detail?: ReactNode; tone?: Tone; href?: string; size?: 'sm' | 'md' | 'lg'; className?: string;
+}) {
+  const body = (
+    <>
+      <p className="text-[13px] font-semibold text-muted-foreground">{label}</p>
+      <p className={cn('mt-1 font-display font-bold leading-none tabular-nums tracking-[-0.02em]', size === 'lg' ? 'text-[2rem]' : size === 'md' ? 'text-[1.65rem]' : 'text-[1.35rem]', tone ? toneText[tone] : 'text-foreground')}>
+        {value}
+      </p>
+      {detail && <div className="mt-1.5 text-[13px] leading-snug text-muted-foreground">{detail}</div>}
+    </>
+  );
+  if (href) {
+    return (
+      <Link to={href} className={cn('block min-w-0 rounded-lg hover:bg-muted/60', interactive, focusRing, className)}>
+        {body}
+      </Link>
+    );
+  }
+  return <div className={cn('min-w-0', className)}>{body}</div>;
+}
+
+/** A ruled, scannable row. Replaces one-card-per-fact. */
+export function Row({ children, to, className }: { children: ReactNode; to?: string; className?: string }) {
+  const base = cn('flex min-h-11 items-center gap-3 border-b border-border py-3 text-left last:border-b-0', to && cn('hover:bg-muted/50', interactive, focusRing), className);
   if (!to) return <div className={base}>{children}</div>;
   return (
     <Link to={to} className={base}>
@@ -106,20 +252,11 @@ export function SignalRow({ signal }: { signal: Signal }) {
     <Row to={signal.href}>
       <StatusDot tone={signal.tone} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[14px] font-medium leading-snug">{signal.label}</p>
-        {signal.detail && (
-          <p className="truncate text-[12.5px] leading-snug text-muted-foreground">{signal.detail}</p>
-        )}
+        <p className="text-[15px] font-medium leading-snug">{signal.label}</p>
+        {signal.detail && <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">{signal.detail}</p>}
       </div>
       {signal.value && (
-        <span
-          className={cn(
-            'font-display text-[1.35rem] font-bold leading-none tabular-nums',
-            toneText[signal.tone],
-          )}
-        >
-          {signal.value}
-        </span>
+        <span className={cn('font-display text-[1.35rem] font-bold leading-none tabular-nums', toneText[signal.tone])}>{signal.value}</span>
       )}
     </Row>
   );
@@ -127,8 +264,8 @@ export function SignalRow({ signal }: { signal: Signal }) {
 
 export function EmptyLine({ children }: { children: ReactNode }) {
   return (
-    <div className="border-b border-border py-4">
-      <p className="text-[13px] text-muted-foreground">{children}</p>
+    <div className="py-3">
+      <p className="text-[14px] text-muted-foreground">{children}</p>
     </div>
   );
 }
@@ -136,107 +273,80 @@ export function EmptyLine({ children }: { children: ReactNode }) {
 /**
  * A designed empty state. Empty is a real production experience, not an edge
  * case, and each one declares what its emptiness MEANS:
- *  - `good`    — genuinely clear; celebrate, no action needed.
+ *  - `good`    — genuinely clear; say so once, no action needed.
  *  - `neutral` — nothing yet (e.g. not enough history); no action needed.
  *  - `setup`   — incomplete setup; offers the one action that changes it.
+ *  - `error`   — a source failed; nothing here is confirmed.
  */
 export function EmptyState({
   tone = 'neutral',
   title,
   detail,
   action,
+  compact,
 }: {
-  tone?: 'good' | 'neutral' | 'setup';
+  tone?: 'good' | 'neutral' | 'setup' | 'error';
   title: string;
   detail?: string;
   action?: { label: string; to: string };
+  compact?: boolean;
 }) {
   return (
     <div
       className={cn(
-        'rounded-xl border px-4 py-5 my-3',
+        'rounded-lg border px-4', compact ? 'py-3' : 'py-4',
         tone === 'good' && 'border-success/25 bg-success/[0.06]',
         tone === 'neutral' && 'border-border bg-muted/40',
         tone === 'setup' && 'border-primary/25 bg-primary/[0.05]',
+        tone === 'error' && 'border-warning/40 bg-warning/[0.08]',
       )}
     >
-      <p
-        className={cn(
-          'text-[14.5px] font-semibold leading-snug',
-          tone === 'good' ? 'text-success' : tone === 'setup' ? 'text-primary' : 'text-foreground',
-        )}
-      >
+      <p className={cn('text-[15px] font-semibold leading-snug', tone === 'good' ? 'text-[hsl(145_60%_28%)] dark:text-success' : tone === 'setup' ? 'text-primary' : 'text-foreground')}>
         {title}
       </p>
-      {detail && <p className="mt-1 text-[13px] leading-snug text-muted-foreground">{detail}</p>}
+      {detail && <p className="mt-1 text-[13.5px] leading-snug text-muted-foreground">{detail}</p>}
       {action && (
-        <Link
-          to={action.to}
-          className="group mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-[12.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
-        >
+        <ActionLink to={action.to} variant="primary" size="sm" className="mt-3">
           {action.label}
-          <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:-translate-y-0.5" />
-        </Link>
+        </ActionLink>
       )}
     </div>
   );
 }
 
-/**
- * The command strip: the numbers that answer "how are we doing" before any
- * reading happens. Dominant on desktop, a two-up block on mobile.
- */
-export function FigureStrip({ figures, invert }: { figures: Figure[]; invert?: boolean }) {
+/** Skeleton lines for a panel that is still reading. */
+export function LoadingLines({ lines = 3, label = 'Reading…' }: { lines?: number; label?: string }) {
   return (
-    <div
-      className={cn(
-        'grid grid-cols-2',
-        figures.length >= 4 ? 'sm:grid-cols-4' : figures.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2',
-        invert ? 'divide-primary-foreground/20' : 'divide-border',
-        'divide-x divide-y sm:divide-y-0',
-      )}
-    >
-      {figures.map((f) => {
+    <div aria-busy="true" aria-live="polite" className="space-y-2.5 py-1">
+      {Array.from({ length: lines }, (_, i) => (
+        <div key={i} className="h-3.5 rounded bg-muted motion-safe:animate-pulse" style={{ width: `${78 - i * 14}%` }} />
+      ))}
+      <p className="text-[13px] text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+/**
+ * The utility strip: a few numbers the person reaches for. Dominant
+ * numbers, readable labels, two-up on a phone.
+ */
+export function FigureStrip({ figures }: { figures: Figure[] }) {
+  return (
+    <div className={cn('grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border', figures.length >= 3 ? 'sm:grid-cols-3' : '')}>
+      {figures.map(f => {
         const body = (
           <>
-            <p
-              className={cn(
-                'font-display text-[clamp(1.9rem,5vw,3rem)] font-extrabold leading-[0.85] tabular-nums tracking-[-0.03em]',
-                invert
-                  ? 'text-primary-foreground'
-                  : f.tone
-                    ? toneText[f.tone]
-                    : 'text-foreground',
-              )}
-            >
-              {f.value}
-            </p>
-            <p
-              className={cn(
-                'mt-2 font-mono text-[10px] uppercase leading-tight tracking-[0.14em]',
-                invert ? 'text-primary-foreground/70' : 'text-muted-foreground',
-              )}
-            >
-              {f.label}
-            </p>
-            {f.detail && (
-              <p
-                className={cn(
-                  'mt-1 text-[11.5px] leading-tight',
-                  invert ? 'text-primary-foreground/60' : 'text-muted-foreground',
-                )}
-              >
-                {f.detail}
-              </p>
-            )}
+            <p className="text-[13px] font-semibold text-muted-foreground">{f.label}</p>
+            <p className={cn('mt-1 font-display text-[1.5rem] font-bold leading-none tabular-nums tracking-[-0.02em]', f.tone ? toneText[f.tone] : 'text-foreground')}>{f.value}</p>
+            {f.detail && <p className="mt-1.5 text-[13px] leading-snug text-muted-foreground">{f.detail}</p>}
           </>
         );
         return f.href ? (
-          <Link key={f.id} to={f.href} className="block px-4 py-5 transition-opacity hover:opacity-75 sm:px-5">
+          <Link key={f.id} to={f.href} className={cn('block min-w-0 bg-card px-4 py-3.5 hover:bg-muted/50', interactive, focusRing)}>
             {body}
           </Link>
         ) : (
-          <div key={f.id} className="px-4 py-5 sm:px-5">
+          <div key={f.id} className="min-w-0 bg-card px-4 py-3.5">
             {body}
           </div>
         );
@@ -245,30 +355,27 @@ export function FigureStrip({ figures, invert }: { figures: Figure[]; invert?: b
   );
 }
 
-/** Progress as a hard bar, never a decorative chart. */
+/** Progress as a plain bar with its numbers, never a decorative chart. */
 export function ProgressLine({ row }: { row: ProgressRow }) {
   const pct = row.total > 0 ? Math.round((row.done / row.total) * 100) : 0;
   const inner = (
     <>
       <div className="flex items-baseline justify-between gap-3">
-        <p className="truncate text-[13.5px] font-medium">{row.label}</p>
-        <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+        <p className="truncate text-[15px] font-medium">{row.label}</p>
+        <span className="text-[13px] tabular-nums text-muted-foreground">
           {row.done}/{row.total}
         </span>
       </div>
-      <div className="mt-2 h-1.5 w-full bg-muted">
-        <div
-          className={cn('h-full transition-[width] duration-700', pct >= 100 ? 'bg-success' : 'bg-primary')}
-          style={{ width: `${Math.min(100, pct)}%` }}
-        />
+      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className={cn('h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none', pct >= 100 ? 'bg-success' : 'bg-primary')} style={{ width: `${Math.min(100, pct)}%` }} />
       </div>
-      {row.detail && <p className="mt-1.5 text-[12px] text-muted-foreground">{row.detail}</p>}
+      {row.detail && <p className="mt-1.5 text-[13px] text-muted-foreground">{row.detail}</p>}
     </>
   );
   return (
-    <div className="border-b border-border py-3.5">
+    <div className="border-b border-border py-3.5 last:border-b-0">
       {row.href ? (
-        <Link to={row.href} className="block transition-opacity hover:opacity-75">
+        <Link to={row.href} className={cn('block rounded-md hover:bg-muted/40', interactive, focusRing)}>
           {inner}
         </Link>
       ) : (
@@ -281,220 +388,193 @@ export function ProgressLine({ row }: { row: ProgressRow }) {
 /** One line per person. Reads as a roster sheet, not as avatars in a grid. */
 export function PersonRow({ person }: { person: PersonStatus }) {
   return (
-    <div className="flex items-center gap-3 border-b border-border py-2.5">
+    <div className="flex min-h-10 items-center gap-3 border-b border-border py-2 last:border-b-0">
       <StatusDot tone={person.tone} />
-      <p className="min-w-0 flex-1 truncate text-[13.5px] font-medium">{person.name}</p>
-      <span className={cn('font-mono text-[10.5px] uppercase tracking-[0.1em]', toneText[person.tone])}>
-        {person.status}
-      </span>
+      <p className="min-w-0 flex-1 truncate text-[15px] font-medium">{person.name}</p>
+      <span className={cn('text-[13px] font-medium', toneText[person.tone])}>{person.status}</span>
     </div>
   );
 }
 
 export function TimelineLine({ row }: { row: TimelineRow }) {
   return (
-    <div className="grid grid-cols-[3.5rem_1fr] gap-3 border-b border-border py-2.5">
-      <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{row.time}</span>
+    <div className="grid grid-cols-[4rem_1fr] gap-3 border-b border-border py-2.5 last:border-b-0">
+      <span className="text-[13px] tabular-nums text-muted-foreground">{row.time}</span>
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <StatusDot tone={row.tone} />
-          <p className="truncate text-[13.5px]">{row.label}</p>
+          <p className="truncate text-[15px]">{row.label}</p>
         </div>
-        {row.detail && <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{row.detail}</p>}
+        {row.detail && <p className="mt-0.5 truncate text-[13px] text-muted-foreground">{row.detail}</p>}
       </div>
     </div>
   );
 }
 
 /**
- * Page masthead. The office name leads; Purple Envelope is not mentioned —
- * attribution stays in the shell footer.
+ * Page header for Home: greeting, office state, date and time, the role
+ * context, and the primary actions — visible without scrolling on a laptop,
+ * stacked on a phone.
  */
-export function Masthead({
+export function HomeHeader({
+  greeting,
   officeName,
-  roleLabel,
-  title,
   dateLabel,
   timeLabel,
-  right,
-}: {
-  officeName: string;
-  roleLabel: string;
-  title: string;
-  dateLabel: string;
-  timeLabel: string;
-  right?: ReactNode;
-}) {
-  return (
-    <div className="border-b border-border pb-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <MicroLabel>
-          {officeName} · {roleLabel}
-        </MicroLabel>
-        <MicroLabel>
-          {dateLabel} · {timeLabel}
-        </MicroLabel>
-      </div>
-      <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-        <h1 className="font-display text-[clamp(1.6rem,5vw,2.6rem)] font-extrabold leading-[0.95] tracking-[-0.03em]">
-          {title}
-        </h1>
-        {right}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Compact masthead for Home: office, role, date and time on one rule; a
- * short greeting; the role context and the quick tools on the next line.
- * Deliberately small so the performance strip and the chart stay on the
- * first screen.
- */
-export function CompactMasthead({
-  officeName,
-  roleLabel,
-  title,
-  dateLabel,
-  timeLabel,
+  state,
   context,
-  tools,
-  right,
+  actions,
 }: {
+  greeting: string;
   officeName: string;
-  roleLabel: string;
-  title: string;
   dateLabel: string;
   timeLabel: string;
+  /** The office state chip: "Open · 4 of 8 in". */
+  state?: { text: string; tone: Tone };
   context?: ReactNode;
-  tools?: ReactNode;
-  right?: ReactNode;
+  actions?: ReactNode;
 }) {
   return (
-    <header className="border-b border-border pb-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <MicroLabel>
-          {officeName} · {roleLabel}
-        </MicroLabel>
-        <MicroLabel>
-          {dateLabel} · {timeLabel}
-        </MicroLabel>
-      </div>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-        <div className="min-w-0">
-          <h1 className="font-display text-[clamp(1.2rem,2.6vw,1.55rem)] font-bold leading-tight tracking-[-0.02em]">{title}</h1>
-          {context && <div className="mt-1">{context}</div>}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {tools}
-          {right}
+    <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+      <div className="min-w-0">
+        <p className="text-[13.5px] text-muted-foreground">
+          {officeName} · {dateLabel} · {timeLabel}
+        </p>
+        <h1 className="mt-1 text-[clamp(1.5rem,3vw,1.9rem)] font-bold leading-tight tracking-[-0.02em]">{greeting}</h1>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {state && (
+            <Chip tone={state.tone}>
+              <StatusDot tone={state.tone} />
+              {state.text}
+            </Chip>
+          )}
+          {context}
         </div>
       </div>
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </header>
   );
 }
 
 /** Page frame: wide, gutter-consistent, and never centered in a narrow column. */
 export function DashboardShell({ children }: { children: ReactNode }) {
-  return <div className="mx-auto w-full max-w-[1400px] px-4 py-5 sm:px-6 md:px-8 md:py-8">{children}</div>;
+  return <div className="mx-auto w-full max-w-[1400px] px-4 py-5 sm:px-6 md:px-8 md:py-7">{children}</div>;
 }
 
 /**
- * "My view" context line: permission tier, primary operational role, and any
- * backup roles. It is a LABEL, not a switch — it never changes permission, and
- * the underlying links are already filtered to what the tier can open.
+ * "My view" context: permission tier, assigned operational role, and any
+ * backup roles as small chips. A LABEL, not a switch — it grants nothing.
  */
 export function ViewContext({ context }: { context: RoleContext }) {
   const { tierLabel, primaryLabel, secondaryLabels, coveringTodayLabels } = context;
+  const backup = secondaryLabels.filter(l => !coveringTodayLabels.includes(l));
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-      <span className="text-foreground/70">{tierLabel}</span>
-      {primaryLabel && (
-        <>
-          <span aria-hidden>/</span>
-          <span>My view: {primaryLabel}</span>
-        </>
-      )}
-      {secondaryLabels.length > 0 && (
-        <>
-          <span aria-hidden>/</span>
-          <span>Backup: {secondaryLabels.join(', ')}</span>
-        </>
-      )}
-      {coveringTodayLabels.length > 0 && (
-        <>
-          <span aria-hidden>/</span>
-          <span className="text-foreground/70">Also covering today: {coveringTodayLabels.join(', ')}</span>
-        </>
-      )}
-
-    </div>
+    <span className="flex flex-wrap items-center gap-1.5 text-[13px] text-muted-foreground">
+      <Chip tone="calm">{tierLabel}</Chip>
+      {primaryLabel && <Chip tone="calm">{primaryLabel}</Chip>}
+      {coveringTodayLabels.map(l => (
+        <Chip key={l} tone="steady">Covering today: {l}</Chip>
+      ))}
+      {backup.map(l => (
+        <Chip key={l} tone="calm">Backup: {l}</Chip>
+      ))}
+    </span>
   );
 }
 
-/** Shortcut list for an operational-role lane. Reads as an index, not buttons. */
-export function ShortcutList({ shortcuts }: { shortcuts: Shortcut[] }) {
-  if (shortcuts.length === 0) return null;
+/** A tool tile: label, one line of detail, comfortable to tap. */
+export function ToolTile({ tool }: { tool: Shortcut }) {
   return (
-    <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-3">
-      {shortcuts.map((s) => (
-        <Link
-          key={s.id}
-          to={s.to}
-          className="group flex min-w-0 items-center justify-between gap-2 bg-background px-3 py-3 transition-colors hover:bg-muted/70"
-        >
-          <span className="truncate text-[13px] font-medium">{s.label}</span>
-          <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-hover:-translate-y-0.5" />
-        </Link>
-      ))}
-    </div>
+    <Link
+      to={tool.to}
+      className={cn('group flex min-h-[3.25rem] min-w-0 items-center justify-between gap-3 rounded-lg border border-border bg-card px-3.5 py-2.5 hover:border-primary/40 hover:bg-primary/[0.04]', interactive, focusRing)}
+    >
+      <span className="min-w-0">
+        <span className="block truncate text-[14.5px] font-medium text-foreground">{tool.label}</span>
+        {tool.detail && <span className="block truncate text-[12.5px] leading-snug text-muted-foreground">{tool.detail}</span>}
+      </span>
+      <ArrowRight className="h-4 w-4 shrink-0 text-primary transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden />
+    </Link>
   );
 }
 
 /**
- * One operational-role lane. Primary reads full; a backup lane stays compact
- * and clearly labeled so two roles never compete for the same attention.
+ * The tools area: one organized place, the person's most relevant tools
+ * first (their assigned role, today's coverage, management for admins),
+ * with the backup roles and the long tail revealed by one control instead
+ * of a second menu.
  */
-export function Lane({ lane }: { lane: RoleLane }) {
-  const compact = lane.kind === 'backup';
+export function ToolsPanel({ groups, id = 'tools' }: { groups: ToolGroup[]; id?: string }) {
+  const [more, setMore] = useState(false);
+  const primary = groups.filter(g => g.emphasis === 'primary');
+  const secondary = groups.filter(g => g.emphasis === 'secondary');
+  const secondaryCount = secondary.reduce((n, g) => n + g.tools.length, 0);
+  if (groups.length === 0) return null;
+  const renderGroup = (g: ToolGroup) => (
+    <div key={g.id} className="min-w-0">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <SectionLabel as="h3" className="text-foreground">{g.label}</SectionLabel>
+        {g.note && <span className="text-[12.5px] text-muted-foreground">{g.note}</span>}
+      </div>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        {g.tools.map(t => <ToolTile key={t.id} tool={t} />)}
+      </div>
+    </div>
+  );
   return (
-    <section className={cn('min-w-0', compact && 'border-l-2 border-border pl-4')}>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border pb-2">
-        <MicroLabel className="text-foreground/70">
-          {compact ? (lane.covering ? 'Also covering today' : 'Backup') : 'My work'} · {lane.label}
-        </MicroLabel>
-        {lane.note && (
-          <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{lane.note}</span>
+    <Panel id={id} title="Tools" description="Your most relevant tools first. Every destination is checked by its own page and by the office’s access rules.">
+      <div className="space-y-5">
+        {primary.map(renderGroup)}
+        {secondary.length > 0 && (
+          <div>
+            <button
+              type="button"
+              data-home-control="more-tools"
+              aria-expanded={more}
+              aria-controls={`${id}-more`}
+              onClick={() => setMore(m => !m)}
+              className={cn('inline-flex min-h-10 items-center gap-1.5 rounded-full border border-border px-4 text-[14px] font-medium text-foreground hover:bg-muted', interactive, focusRing)}
+            >
+              {more ? 'Fewer tools' : `More tools · ${secondaryCount}`}
+              <ChevronDown className={cn('h-4 w-4 transition-transform duration-150 motion-reduce:transition-none', more && 'rotate-180')} aria-hidden />
+            </button>
+            {more && (
+              <div id={`${id}-more`} className="mt-4 space-y-5">
+                {secondary.map(renderGroup)}
+              </div>
+            )}
+          </div>
         )}
       </div>
-      {!compact && <p className="mt-2 max-w-[52ch] text-[13px] leading-snug text-muted-foreground">{lane.mission}</p>}
-      {lane.urgent.length > 0 && (
-        <div className="mt-2">
-          {lane.urgent.map((s) => (
-            <SignalRow key={s.id} signal={s} />
-          ))}
-        </div>
-      )}
-      <div className="mt-3">
-        <ShortcutList shortcuts={lane.shortcuts} />
-      </div>
-    </section>
+    </Panel>
   );
 }
 
-/** Primary lane first, then backup lanes, compact. */
+/**
+ * Coverage lanes: only the roles a person is covering TODAY contribute
+ * time-sensitive items here, clearly labeled. A backup capability adds
+ * nothing to the queue; its tools live in the tools area.
+ */
 export function Lanes({ lanes, className }: { lanes: RoleLane[]; className?: string }) {
-  if (lanes.length === 0) return null;
-  const primary = lanes.filter((l) => l.kind === 'primary');
-  const backup = lanes.filter((l) => l.kind === 'backup');
+  const covering = lanes.filter(l => l.kind === 'backup' && l.covering && l.urgent.length > 0);
+  if (covering.length === 0) return null;
   return (
-    <div className={cn('space-y-6', className)}>
-      {primary.map((l) => (
-        <Lane key={l.role} lane={l} />
+    <div className={cn('space-y-4', className)}>
+      {covering.map(lane => (
+        <Panel key={lane.role} title={`Covering today · ${lane.label}`} description={lane.mission}>
+          {lane.urgent.map(s => <SignalRow key={s.id} signal={s} />)}
+        </Panel>
       ))}
-      {backup.map((l) => (
-        <Lane key={l.role} lane={l} />
-      ))}
+    </div>
+  );
+}
+
+/** Kept for callers of the older API; the tools area replaced it. */
+export function ShortcutList({ shortcuts }: { shortcuts: Shortcut[] }) {
+  if (shortcuts.length === 0) return null;
+  return (
+    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      {shortcuts.map(s => <ToolTile key={s.id} tool={s} />)}
     </div>
   );
 }

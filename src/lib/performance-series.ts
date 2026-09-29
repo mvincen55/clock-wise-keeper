@@ -16,6 +16,7 @@
  */
 import { daysBetween, mondayOf, shiftDate } from '@/lib/time-utils';
 import { daysInMonthOf } from '@/lib/metric-pace';
+import { countOfficeDays, type OfficeDayCalendar } from '@/lib/office-days';
 
 /* ------------------------------- periods ------------------------------- */
 
@@ -206,12 +207,35 @@ export type ReportDay = {
   dateBasis?: 'entry_date' | 'source_date';
 };
 
+/**
+ * One month's summary row from a loaded package. A `full` month is the
+ * package's own authoritative total for that month: when the daily rows
+ * under it are thin, the month total is still complete.
+ */
+/**
+ * A whole-month total from a loaded report package, as report-history's
+ * `reportMonthsFrom` selects it (newest import wins a month; explicit
+ * comparison rows keep their approved source). Structural, so that richer
+ * row fits without a copy.
+ */
+export type ReportMonth = {
+  /** YYYY-MM */
+  month: string;
+  coverage: 'full_calendar_month' | 'partial';
+  production_cents: number;
+  collections_cents: number;
+};
+
 export type PerformanceSources = {
   closeouts: CloseoutDay[];
   closeoutsState: SourceState;
   reportDays: ReportDay[];
   reportState: SourceState;
+  /** Monthly summaries from the loaded packages (newest import wins a month). */
+  reportMonths?: ReportMonth[];
 };
+
+export type Completeness = 'complete' | 'partial' | 'unknown';
 
 export type SourceChoice = {
   source: SeriesSource | null;
@@ -448,6 +472,21 @@ export type WindowTotals = {
   secondaryRecordedDays: number;
   /** Calendar days in the period. */
   days: number;
+  /**
+   * Office days whose records should be on hand by the cutoff — every office
+   * day before today plus today once it is recorded. Null when the office
+   * calendar is not available, so completeness cannot be judged.
+   */
+  expectedDays: number | null;
+  /** The last day the totals can cover: yesterday, or today once recorded. */
+  cutoff: string;
+  completeness: Completeness;
+  /**
+   * True when the period's total comes from a package's complete monthly
+   * summary rather than a sum of daily rows: the total is complete even if
+   * the daily detail underneath is thin.
+   */
+  authoritative: boolean;
   firstRecorded: string | null;
   lastRecorded: string | null;
   sealedDays: number;
@@ -464,10 +503,69 @@ export function totalsOf(points: DayPoint[]): WindowTotals {
     primaryRecordedDays: a.length,
     secondaryRecordedDays: b.length,
     days: points.length,
+    expectedDays: null,
+    cutoff: points.length ? points[points.length - 1].date : '',
+    completeness: 'unknown',
+    authoritative: false,
     firstRecorded: recorded[0]?.date ?? null,
     lastRecorded: recorded.length ? recorded[recorded.length - 1].date : null,
     sealedDays: points.filter(p => p.status === 'sealed').length,
     unsealedDays: points.filter(p => p.status === 'saved').length,
+  };
+}
+
+/**
+ * The day a period's records can run through: yesterday while today is in
+ * progress, today once today's closeout is on record. Never past the period.
+ */
+export function cutoffFor(period: { start: string; end: string }, today: string, todayRecorded: boolean): string {
+  const last = period.end < today ? period.end : today;
+  if (last === today && !todayRecorded) return shiftDate(today, -1);
+  return last;
+}
+
+/**
+ * Completeness against the office calendar: the office days through the
+ * cutoff that should have a record, compared with the days that do. A
+ * source with no calendar stays `unknown` — it is never called complete.
+ */
+export function withCoverage(
+  totals: WindowTotals,
+  period: { start: string; end: string },
+  args: { today: string; calendar: OfficeDayCalendar | null | undefined; source: SeriesSource },
+): WindowTotals {
+  const recordedDays = Math.max(totals.primaryRecordedDays, totals.secondaryRecordedDays);
+  const todayRecorded = totals.lastRecorded === args.today;
+  const cutoff = cutoffFor(period, args.today, todayRecorded);
+  if (!args.calendar) return { ...totals, cutoff };
+  const expectedDays = countOfficeDays(period.start, cutoff, args.calendar);
+  const completeness: Completeness = recordedDays >= expectedDays ? 'complete' : 'partial';
+  return { ...totals, cutoff, expectedDays, completeness };
+}
+
+/** Whole calendar months inside a period, as YYYY-MM keys; empty unless the period is month-aligned. */
+export function wholeMonthsOf(period: { start: string; end: string }): string[] {
+  if (period.start !== monthStartOf(period.start) || period.end !== monthEndOf(period.end)) return [];
+  const months: string[] = [];
+  for (let cursor = period.start; cursor <= period.end; cursor = addMonthsToStart(cursor, 1)) months.push(cursor.slice(0, 7));
+  return months;
+}
+
+/**
+ * A package's complete monthly summaries for a month-aligned period. When
+ * every month has a `full` row the period total is those rows, authoritative
+ * and complete, whatever the daily detail holds. Otherwise null.
+ */
+export function authoritativeTotals(period: { start: string; end: string }, months: ReportMonth[] | undefined): { primaryCents: number; secondaryCents: number } | null {
+  const keys = wholeMonthsOf(period);
+  if (keys.length === 0 || !months?.length) return null;
+  const byMonth = new Map<string, ReportMonth>();
+  for (const m of months) if (!byMonth.has(m.month)) byMonth.set(m.month, m); // already one row per month, first wins
+  const rows = keys.map(k => byMonth.get(k));
+  if (rows.some(r => !r || r.coverage !== 'full_calendar_month')) return null;
+  return {
+    primaryCents: rows.reduce((s, r) => s + (r as ReportMonth).production_cents, 0),
+    secondaryCents: rows.reduce((s, r) => s + (r as ReportMonth).collections_cents, 0),
   };
 }
 
@@ -561,13 +659,37 @@ export type PerformanceWindow = {
   coverageLabel: string;
 };
 
-export function coverageLabel(totals: WindowTotals, source: SeriesSource): string {
+/**
+ * "18 of 20 office days recorded · through Sep 23 · 1 not sealed", or the
+ * calendar-day count when the office calendar is unavailable, or "complete
+ * month · report package summary" when the package's own total stands.
+ */
+export function coverageLabel(totals: WindowTotals, source: SeriesSource, sourceDates = false): string {
+  if (totals.authoritative) {
+    return `Complete month · report package summary${totals.lastRecorded ? ` · through ${fmtDay(totals.lastRecorded)}` : ''}`;
+  }
   const recorded = Math.max(totals.primaryRecordedDays, totals.secondaryRecordedDays);
-  const unit = source === 'closeouts' ? 'day' : 'posting day';
-  const parts = [`${recorded} of ${totals.days} ${unit}s recorded`];
+  const parts: string[] = [];
+  const reportUnit = sourceDates ? 'source date' : 'posting day';
+  if (totals.expectedDays !== null) {
+    const unit = source === 'closeouts' ? 'office day' : reportUnit;
+    parts.push(`${recorded} of ${totals.expectedDays} ${unit}${totals.expectedDays === 1 ? '' : 's'} recorded`);
+  } else {
+    const unit = source === 'closeouts' ? 'day' : reportUnit;
+    parts.push(`${recorded} of ${totals.days} ${unit}s recorded`);
+  }
   if (totals.lastRecorded) parts.push(`through ${fmtDay(totals.lastRecorded)}`);
   if (source === 'closeouts' && totals.unsealedDays > 0) parts.push(`${totals.unsealedDays} not sealed`);
   return parts.join(' · ');
+}
+
+/** "Partial data · 2 office days not recorded" or null when nothing is missing or unknown. */
+export function partialLabel(totals: WindowTotals, source: SeriesSource): string | null {
+  if (totals.completeness !== 'partial' || totals.expectedDays === null) return null;
+  const recorded = Math.max(totals.primaryRecordedDays, totals.secondaryRecordedDays);
+  const missing = totals.expectedDays - recorded;
+  const unit = source === 'closeouts' ? 'office day' : 'posting day';
+  return `Partial data · ${missing} ${unit}${missing === 1 ? '' : 's'} not recorded`;
 }
 
 /**
@@ -580,6 +702,8 @@ export function buildWindow(args: {
   sources: PerformanceSources;
   /** A source the reader chose; falls back to precedence when it has no days. */
   preferredSource?: SeriesSource | null;
+  /** The office calendar, for office-day coverage; omitted or null = unknown. */
+  calendar?: OfficeDayCalendar | null;
 }): PerformanceWindow | null {
   const { period, today, sources } = args;
   const choice = chooseSource(period, sources);
@@ -588,7 +712,13 @@ export function buildWindow(args: {
   if (!source) return null;
   const granularity = granularityFor(period);
   const points = dayPoints(period, source, sources);
-  const totals = totalsOf(points);
+  let totals = withCoverage(totalsOf(points), period, { today, calendar: args.calendar, source });
+  if (source === 'report_history') {
+    const summary = authoritativeTotals(period, sources.reportMonths);
+    if (summary) totals = { ...totals, ...summary, authoritative: true, completeness: 'complete' };
+  }
+  // Some packages carry the date printed on the source rather than an entry
+  // date; the labels say so instead of calling those posting days.
   const sourceDates = source === 'report_history' && sources.reportDays.some(d => d.date >= period.start && d.date <= period.end && d.dateBasis === 'source_date');
   return {
     period,
@@ -606,7 +736,7 @@ export function buildWindow(args: {
     buckets: bucketize(points, granularity, today, period.partial),
     totals,
     comparison: compare(period, source, sources, totals),
-    coverageLabel: sourceDates ? coverageLabel(totals, source).replace('posting days','source dates') : coverageLabel(totals, source),
+    coverageLabel: coverageLabel(totals, source, sourceDates),
   };
 }
 

@@ -30,7 +30,7 @@ function RoomCount() {
   const n = attention.counts.needsNow;
   if (!n) return null;
   return (
-    <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-bold text-destructive-foreground" aria-label={`${n} need you now`}>
+    <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[12px] font-bold text-destructive-foreground" aria-label={`${n} need you now`}>
       {n}
     </span>
   );
@@ -57,8 +57,8 @@ export default function ManagementShell({ room, children, wide = false }: { room
 
   return (
     <div className={`p-4 md:p-8 mx-auto space-y-6 ${wide ? 'max-w-7xl' : 'max-w-5xl'}`}>
-      <nav aria-label="Management rooms" className="flex flex-wrap items-center gap-1 border-b pb-3">
-        <span className="mr-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Management</span>
+      <nav aria-label="Management rooms" className="flex flex-wrap items-center gap-1.5 border-b pb-3">
+        <span className="mr-2 text-[13px] font-semibold text-muted-foreground">Management</span>
         {ROOMS.map(r => {
           const current = r.id === active;
           return (
@@ -67,8 +67,8 @@ export default function ManagementShell({ room, children, wide = false }: { room
               to={r.to}
               aria-current={current ? 'page' : undefined}
               title={r.answers}
-              className={`inline-flex min-h-9 items-center rounded-md px-3 text-sm font-medium transition-colors ${
-                current ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              className={`inline-flex min-h-10 items-center rounded-full px-4 text-[14px] font-medium transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                current ? 'bg-primary text-primary-foreground' : 'border border-border bg-card text-foreground/80 hover:border-primary/40 hover:text-foreground'
               }`}
             >
               {r.label}
