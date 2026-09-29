@@ -26,23 +26,40 @@ export type StripTile = {
   ariaLabel: string;
 };
 
+/**
+ * The strip sizes itself to the column it sits in, not the viewport: two by
+ * two until the column comfortably fits every tile across (a container
+ * query on the strip's own width), so a narrower main column beside the
+ * sidebar never squeezes four tiles into unreadable slivers.
+ */
+const STRIP_CONTAINER = '[container-type:inline-size]';
+const COLS: Record<number, string> = {
+  1: 'grid-cols-1',
+  2: 'grid-cols-2',
+  3: 'grid-cols-2 [@container(min-width:44rem)]:grid-cols-3',
+  4: 'grid-cols-2 [@container(min-width:58rem)]:grid-cols-4',
+};
+
 export function PerformanceStrip({ tiles, loading }: { tiles: StripTile[]; loading?: boolean }) {
   if (loading) {
     return (
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-busy="true" aria-live="polite">
-        {[0, 1, 2, 3].map(i => (
-          <div key={i} className="rounded-xl border border-border bg-card px-4 py-4">
-            <div className="h-3.5 w-24 rounded bg-muted motion-safe:animate-pulse" />
-            <div className="mt-3 h-8 w-28 rounded bg-muted motion-safe:animate-pulse" />
-            <p className="mt-2 text-[13px] text-muted-foreground">Reading…</p>
-          </div>
-        ))}
+      <div className={STRIP_CONTAINER}>
+        <div className={cn('grid gap-3', COLS[4])} aria-busy="true" aria-live="polite">
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className="rounded-xl border border-border bg-card px-4 py-4">
+              <div className="h-3.5 w-24 rounded bg-muted motion-safe:animate-pulse" />
+              <div className="mt-3 h-8 w-28 rounded bg-muted motion-safe:animate-pulse" />
+              <p className="mt-2 text-[13px] text-muted-foreground">Reading…</p>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
   if (tiles.length === 0) return null;
-  const cols = tiles.length >= 4 ? 'grid-cols-2 lg:grid-cols-4' : tiles.length === 3 ? 'grid-cols-2 lg:grid-cols-3' : tiles.length === 2 ? 'grid-cols-2' : 'grid-cols-1';
+  const cols = COLS[Math.min(tiles.length, 4)];
   return (
+    <div className={STRIP_CONTAINER}>
     <div className={cn('grid gap-3', cols)} role="list" aria-label="Performance strip">
       {tiles.map(t => {
         const first = t.lines[0];
@@ -74,6 +91,7 @@ export function PerformanceStrip({ tiles, loading }: { tiles: StripTile[]; loadi
           </div>
         );
       })}
+    </div>
     </div>
   );
 }

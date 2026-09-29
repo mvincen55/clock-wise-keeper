@@ -14,7 +14,7 @@ import type {
 } from '@/lib/owner-pulse';
 import type { CloseDayStatus } from '@/lib/manager-pulse';
 import type { RolePulseItem } from '@/lib/member-pulse';
-import type { HomeBrief, HomeSummary, NeedsYou } from '@/lib/home-brief';
+import type { HomeBrief, HomeSummary, NeedsYou, StatusLine } from '@/lib/home-brief';
 import type { PerformanceData } from '@/lib/home-performance';
 import type { GoalMeter } from '@/lib/goal-progress';
 import type { HomeInsight } from '@/lib/home-insights';
@@ -200,6 +200,8 @@ export type OwnerView = PerformanceBlock & {
   summary: HomeSummary;
   /** The latest closed-out day's facts, honestly labeled. */
   brief: DailyBrief | null;
+  /** The latest closeout's state (sealed, not sealed, none on record), shown with its facts. */
+  lastDay: StatusLine | null;
   /** Everything waiting on owner authority, resolved to one number. */
   decisionCount: number;
   /** The same Attention lists Manager Home shows. */

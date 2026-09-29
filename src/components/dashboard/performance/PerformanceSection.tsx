@@ -27,8 +27,6 @@ export type PerformanceState = 'loading' | 'ok' | 'error';
 export type PerformanceSectionProps = {
   data: PerformanceData | null;
   state: PerformanceState;
-  /** The narrower goal column beside the chart. */
-  aside?: ReactNode;
   /** Supporting operational visual under the chart, scoped to the same period. */
   supporting?: (period: Period, data: PerformanceData) => ReactNode;
   compact?: boolean;
@@ -212,7 +210,7 @@ export function stripTiles(args: {
 }
 
 export function PerformanceSection(props: PerformanceSectionProps) {
-  const { data, state, aside, supporting, compact } = props;
+  const { data, state, supporting, compact } = props;
   const [preset, setPreset] = useState<PeriodPreset | null>(null);
   const [preferred, setPreferred] = useState<SeriesSource | null>(null);
   const [view, setView] = useState<ChartView>('daily');
@@ -287,7 +285,7 @@ export function PerformanceSection(props: PerformanceSectionProps) {
         <PerformanceStrip tiles={model?.tiles ?? []} loading={state === 'loading' || !model} />
       </div>
 
-      <div className={cn('mt-4 grid gap-4 [&>*]:min-w-0', aside && 'lg:grid-cols-[minmax(0,1.7fr)_minmax(19rem,1fr)] lg:items-stretch')}>
+      <div className="mt-4 min-w-0">
         {chartVisible && (
           <div className={cn(panelClass, 'px-4 py-4 sm:px-5')}>
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -309,7 +307,6 @@ export function PerformanceSection(props: PerformanceSectionProps) {
             </div>
           </div>
         )}
-        {aside}
       </div>
 
       {supporting && data && model && <div className="mt-4">{supporting(model.period, data)}</div>}

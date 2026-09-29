@@ -2,7 +2,7 @@ import type { ManagerView, MemberView, OwnerView } from './types';
 import {
   assistantFixture, frontDeskBackupAssistFixture, frontDeskBackupOnlyFixture, frontDeskFixture, hygienistFixture,
   managerAttendanceFixture, managerClosedFixture, managerFixture, managerFrontDeskFixture, managerNewFixture,
-  managerOffPaceFixture, memberClearFixture, memberHiddenFinancialsFixture, memberLateArrivalFixture, memberNewFixture,
+  managerClearFixture, ownerClearFixture, managerOffPaceFixture, memberClearFixture, memberHiddenFinancialsFixture, memberLateArrivalFixture, memberNewFixture,
   ownerClosedFixture, ownerFixture, ownerIncompleteFixture, ownerNewFixture, ownerPartialFixture,
 } from './fixtures';
 
@@ -87,6 +87,16 @@ export const SCENARIOS: Scenario[] = [
     omitted: NO_CLINICAL,
   },
   {
+    slug: 'owner-clear',
+    title: 'Owner — nothing waiting, yesterday sealed',
+    tier: 'Owner',
+    primary: 'Dentist',
+    secondary: 'None',
+    view: ownerClearFixture,
+    sources: ADMIN_SOURCES,
+    omitted: NO_CLINICAL,
+  },
+  {
     slug: 'owner-closed',
     title: 'Owner — office closed for the day (10:32 PM)',
     tier: 'Owner',
@@ -146,6 +156,16 @@ export const SCENARIOS: Scenario[] = [
     primary: 'Office manager',
     secondary: 'None',
     view: managerFixture,
+    sources: MANAGER_SOURCES,
+    omitted: NO_CLINICAL,
+  },
+  {
+    slug: 'manager-clear',
+    title: 'Manager — nothing waiting, one parked item, yesterday sealed',
+    tier: 'Manager',
+    primary: 'Office manager',
+    secondary: 'None',
+    view: managerClearFixture,
     sources: MANAGER_SOURCES,
     omitted: NO_CLINICAL,
   },

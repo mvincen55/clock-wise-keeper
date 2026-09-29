@@ -506,6 +506,7 @@ function makeOwner(args: OwnerScenarioArgs): OwnerView {
     office: args.staffing.office,
     summary: stateSummary({ office: args.staffing.office, today: band, needs, lastDay, payroll: args.payroll ?? null, payrollItems: needsNow.filter(i => i.payroll).length, todayDate: today }),
     brief: buildDailyBrief(pulse),
+    lastDay,
     decisionCount: needsNow.length,
     needs,
     mine: args.mine ?? NO_WORK,
@@ -529,6 +530,16 @@ export const ownerFixture: OwnerView = makeOwner({
     { id: 'p2', label: '1 attendance item needs review', detail: '1 no-punch day', value: '1', href: '/management/people', tone: 'attention' },
   ],
   mine: myWorkFor({ acknowledgments: [{ id: 'ack-o1', title_snapshot: 'Radiation safety policy', due_at: '2026-03-10T00:00:00Z', acknowledged_at: null, waived_at: null }] }),
+});
+
+/** The same office with nothing waiting on the owner and yesterday sealed. */
+export const ownerClearFixture: OwnerView = makeOwner({
+  days: fxHistory,
+  staffing: staffingOpen,
+  now: openNow,
+  todayLog: null,
+  needsNow: [],
+  closeouts: [{ ...openCloseouts[0], sealed_at: '2026-03-02T22:40:00Z' }, openCloseouts[1]],
 });
 
 /** The same office at 10:32 PM — today closed out clean, decisions clear. */
@@ -745,6 +756,27 @@ export const managerFixture = makeManager({
   closeouts: openCloseouts,
   payroll: { dueDate: '2026-03-05', dueLabel: 'payroll Thu' },
   mine: myWorkFor({ acknowledgments: [{ id: 'ack-m1', title_snapshot: 'Sterilization log', due_at: '2026-03-05T00:00:00Z', acknowledged_at: null, waived_at: null }] }),
+});
+
+/**
+ * The same open office with nothing waiting: yesterday sealed, one item
+ * parked, one person not in yet. The queue stays compact and the numbers
+ * follow it directly.
+ */
+export const managerClearFixture = makeManager({
+  ctx: context('manager', 'Practice manager', 'office_manager'),
+  days: fxHistory,
+  staffing: staffingOpen,
+  now: openNow,
+  todayLog: null,
+  needsNow: [],
+  waiting: [],
+  deferred: [fxItem({
+    key: 'content_review:cr-4', kind: 'content_review', verb: 'decide', label: 'Handbook v4 · review before publishing',
+    subject: { employeeId: null, userId: 'u1', name: 'Dana R.' }, detail: 'Parked until Friday', ageHours: 40,
+    parkedUntil: '2026-03-06T00:00:00Z',
+  })],
+  closeouts: [{ ...openCloseouts[0], sealed_at: '2026-03-02T22:40:00Z' }, openCloseouts[1]],
 });
 
 /** Same office after close: today saved but not yet sealed, one person still clocked in. */
