@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseTreatmentText, parseTreatmentWords, REVIEW_ROW_LIMIT } from '@/lib/fof/local-treatment-import';
+import { CONFIDENCE_FLOOR, normalizeCodeToken, normalizeMoneyToken, ocrScale, parseTreatmentText, parseTreatmentWords, REVIEW_ROW_LIMIT, toGrayscale, visitFromHeading } from '@/lib/fof/local-treatment-import';
+import pmsPlanWords from './fixtures/pms-plan-ocr-words.json';
 import type { OcrWord } from '@/lib/schedule-reader/types';
 const word = (text: string, x: number, y: number, confidence = 95): OcrWord => ({ text, confidence, bbox: { x0:x-25, x1:x+25, y0:y, y1:y+20 } });
 const header = ['Code', 'Th', 'Description', 'Fee', 'OFFICE', 'Visit', 'Date'].map((text,i)=>word(text,100+i*150,20));
@@ -27,11 +28,70 @@ describe('local treatment screenshot parser', () => {
       expect(JSON.stringify(result.rows[1].issues)).not.toContain('PRIVATE');
     }
   });
-  it('drops an unreadable amount to a hand-entered value with a note, never a silent zero', () => {
-    const second=row(100); second[3]=word('9O0.OO',100+3*150,100);
+  it('drops an unreadable amount to a hand-entered value with a note that quotes what was read, never a silent zero', () => {
+    const second=row(100); second[3]=word('9O0.O',100+3*150,100);
     const result=parseTreatmentWords([...header,...row(60),...second],{});
     expect(result.rows[1].fee).toBeNull();
-    expect(result.rows[1].issues.join(' ')).toContain('Fee amount');
+    expect(result.rows[1].issues.join(' ')).toContain('The Fee amount was read as "9O0.O"');
+  });
+  it('says what was read and how sure the reader was when a cell is below the confidence floor', () => {
+    const second=row(100); second[0].confidence=39; second[3].confidence=58; second[1].confidence=50;
+    const result=parseTreatmentWords([...header,...row(60),...second],{D2740:'Crown'});
+    const issues=result.rows[1].issues.join(' ');
+    expect(issues).toContain(`The code D2740 was read at 39% confidence (below ${CONFIDENCE_FLOOR}%)`);
+    expect(issues).toContain('The Fee amount "$900.00" was read at 58% confidence');
+    expect(issues).toContain('The tooth number "8" was read at 50% confidence');
+  });
+  it('corrects OCR letter-for-digit confusions in codes, amounts, teeth and dates, and says so for codes', () => {
+    expect(normalizeCodeToken('D6O58')).toEqual({ code: 'D6058', corrected: true });
+    expect(normalizeCodeToken('06057')).toEqual({ code: 'D6057', corrected: true });
+    expect(normalizeCodeToken('06057', { '06057': 'Office code' })).toEqual({ code: '06057', corrected: false });
+    expect(normalizeCodeToken('2014')).toEqual({ code: '2014', corrected: false });
+    expect(normalizeCodeToken('|D2740')).toEqual({ code: 'D2740', corrected: false });
+    expect(normalizeCodeToken('Custom')).toEqual({ code: 'CUSTOM', corrected: false });
+    expect(normalizeMoneyToken('$1,141.00')).toBe(1141);
+    expect(normalizeMoneyToken('1.141.00')).toBe(1141);
+    expect(normalizeMoneyToken('1,141,00')).toBe(1141);
+    expect(normalizeMoneyToken('l,927.OO')).toBe(1927);
+    expect(normalizeMoneyToken('1141')).toBeNull();
+    expect(normalizeMoneyToken('abc')).toBeNull();
+    const second=row(100,'D6O58'); second[1]=word('l9',100+150,100); second[6]=word('6/24/2O24',100+6*150,100);
+    const result=parseTreatmentWords([...header,...row(60),...second],{});
+    expect(result.rows[1]).toMatchObject({ code:'D6058', tooth:'19', entryDate:'6/24/2024', confidence:'low' });
+    expect(result.rows[1].issues.join(' ')).toContain('The code was read as "D6O58" and corrected to D6058');
+  });
+  it('reads a real PMS grid: rows right under the header, "Visit1" headings, icon glyphs beside cells, and the Entry Date column', () => {
+    const result=parseTreatmentWords(pmsPlanWords as OcrWord[],{});
+    expect(result.rows.map(r=>[r.code,r.tooth,r.visit,r.fee,r.officeFee,r.entryDate,r.confidence])).toEqual([
+      ['D6057','3',1,1141,1141,'6/24/2024','ok'],
+      ['D6058','3',1,1927,1927,'6/24/2024','ok'],
+      ['D6057','19',null,1141,1141,'6/24/2024','ok'],
+      ['D6058','19',null,1927,1927,'6/24/2024','ok'],
+      ['D6057','20',null,1141,1141,'6/24/2024','ok'],
+      ['D6058','20',null,1927,1927,'6/24/2024','ok'],
+      ['D6057','30',null,1141,1141,'6/24/2024','ok'],
+      ['D6058','30',null,1927,1927,'6/24/2024','ok'],
+    ]);
+    expect(result.rows.every(r=>r.issues.length===0)).toBe(true);
+    expect(result.warnings).toEqual([]);
+    // Descriptions come from the office code bank, never from the image.
+    expect(JSON.stringify(result)).not.toMatch(/abutment|porc/i);
+  });
+  it('turns section headings into visit numbers and leaves "Visit Not Set" open', () => {
+    expect(visitFromHeading(['\\Visit1'])).toBe(1);
+    expect(visitFromHeading(['Visit','#','2'])).toBe(2);
+    expect(visitFromHeading(['(®','Visit','Not','Set'])).toBeNull();
+    expect(visitFromHeading(['Visit','Not','Set'])).toBeNull();
+    expect(visitFromHeading(['Totals'])).toBeUndefined();
+  });
+  it('enlarges small captures for the reader within the pixel budget and flattens colour to gray', () => {
+    expect(ocrScale(1118,265)).toBe(2);
+    expect(ocrScale(600,200)).toBe(3);
+    expect(ocrScale(4000,3000)).toBe(1);
+    expect(ocrScale(2400,2000)).toBeCloseTo(1.58,2);
+    const pixels=new Uint8ClampedArray([255,0,0,255, 0,0,255,255]);
+    toGrayscale(pixels);
+    expect([...pixels]).toEqual([76,76,76,255, 29,29,29,255]);
   });
   it('flags a code the office does not know instead of dropping it', () => {
     const result=parseTreatmentWords([...header,...row(60,'ZZ99')],{});

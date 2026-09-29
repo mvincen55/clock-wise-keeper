@@ -14,7 +14,8 @@ import type { OcrWord } from '../schedule-reader/types';
  * Nothing is silently discarded: a cell the OCR is unsure about, a code the
  * office bank does not know, or a plan longer than the review limit comes
  * back as a row with issues for staff to confirm or drop, never as a
- * vanished line.
+ * vanished line. Every issue says what was read and how sure the reader
+ * was, so staff can check the exact cell instead of guessing.
  */
 
 export type RowConfidence = 'ok' | 'low';
@@ -45,14 +46,19 @@ export interface LocalTreatmentImport {
 export const REVIEW_ROW_LIMIT = 40;
 /** A hard ceiling that keeps a misread page from producing thousands of rows. */
 export const MAX_ROWS = 200;
-const CONFIDENCE_FLOOR = 65;
+/** Words read below this Tesseract confidence (0–100) are flagged for a second look. */
+export const CONFIDENCE_FLOOR = 65;
+/** Pixel budget for the upscaled read; keeps the reader responsive on a laptop. */
+const OCR_PIXEL_BUDGET = 12_000_000;
 
 const failure = () =>
   new Error(
     'The screenshot could not be read. Nothing was imported. Use a clearer image with the Code and column headers visible, paste the plan as text, or enter the procedures manually.'
   );
 const midpoint = (word: OcrWord) => (word.bbox.y0 + word.bbox.y1) / 2;
-const plain = (text: string) => text.trim().replace(/[():]/g, '').toLowerCase();
+const center = (word: OcrWord) => (word.bbox.x0 + word.bbox.x1) / 2;
+const plain = (text: string) => text.trim().replace(/[():.]/g, '').toLowerCase();
+const percent = (word: OcrWord) => `${Math.round(word.confidence)}%`;
 const dentalCode = /^D\d{4}$/i;
 // A CDT code (with an optional office suffix), a numeric office code, or a
 // short letters-plus-digits office code. A word, a name or a sentence
@@ -61,46 +67,120 @@ const officeCode = /^(?:D\d{4}(?:[A-Z.]{1,3})?|\d{1,6}|[A-Z]{1,2}\d{2,5}[A-Z]?)$
 const tooth = /^#?(?:[1-9]|[12]\d|3[0-2]|[A-T])(?:[-*](?:[1-9]|[12]\d|3[0-2]|[A-T]))?$/i;
 const moneyText = /^\d+\.\d{2}$/;
 const dateText = /^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/;
+/** Icons, bullets and list glyphs the OCR turns into stray symbols beside a cell. */
+const symbolOnly = (text: string) => !/[A-Za-z0-9]/.test(text);
+/** Leading/trailing glyph noise ("(®", "\\Visit1", "|3") without touching the token itself. */
+const trimGlyphs = (text: string) => text.trim().replace(/^[^A-Za-z0-9$#]+/, '').replace(/[^A-Za-z0-9%.]+$/, '');
 
 const HEADER_NAMES: Record<string, string> = {
   code: 'code', tooth: 'tooth', teeth: 'tooth', th: 'tooth', visit: 'visit', date: 'date', fee: 'fee',
   office: 'officeFee', description: 'description', desc: 'description', procedure: 'description',
   allowable: 'ignore', insurance: 'ignore', portion: 'ignore', ins: 'ignore', pays: 'ignore',
-  surface: 'ignore', surfaces: 'ignore',
+  surface: 'ignore', surfaces: 'ignore', surf: 'ignore', proc: 'ignore', appt: 'ignore', entry: 'ignore', exp: 'ignore',
+  status: 'ignore', provider: 'ignore', prov: 'ignore',
 };
+/** The word before "Date" in a two-word PMS header decides which date column it is. */
+const DATE_QUALIFIERS: Record<string, string> = { entry: 'date', proc: 'ignore', appt: 'ignore', exp: 'ignore', post: 'ignore', due: 'ignore' };
+
+/**
+ * OCR confusions inside a token that can only be digits: the letter O for 0,
+ * I or l for 1, S for 5, B for 8. Applied to codes, amounts, teeth and dates
+ * only after the token's shape says it is numeric there.
+ */
+const digitConfusables: Record<string, string> = { O: '0', o: '0', I: '1', l: '1', '|': '1', S: '5', B: '8' };
+const fixDigits = (text: string) => text.replace(/[OoIl|SB]/g, ch => digitConfusables[ch] ?? ch);
+
+/**
+ * A code token as the office would write it, plus whether the read had to be
+ * corrected. "D6O57" and "D6O5B" become D6057; "06057" (a D read as a zero)
+ * becomes D6057 unless the office bank really has a code spelled that way.
+ */
+export function normalizeCodeToken(raw: string, known: Record<string, string> = {}): { code: string; corrected: boolean } {
+  const trimmed = trimGlyphs(raw).toUpperCase();
+  if (known[trimmed] || dentalCode.test(trimmed)) return { code: trimmed, corrected: false };
+  const cdt = /^[D0O]([0-9OIlSB]{4})([A-Z.]{1,3})?$/.exec(trimmed);
+  if (cdt && !(/^\d+$/.test(trimmed) && trimmed[0] !== '0')) {
+    const code = `D${fixDigits(cdt[1])}${cdt[2] ?? ''}`;
+    if (code !== trimmed) return { code, corrected: true };
+  }
+  return { code: trimmed, corrected: false };
+}
+
+/**
+ * Dollars and cents from an OCR cell: "$1,141.00", "1.141.00", "1,141,00" and
+ * digit confusions all read as 1141.00; the last separator is the decimal
+ * point and it must leave exactly two cents digits. Null when the text is
+ * not an amount at all.
+ */
+export function normalizeMoneyToken(raw: string): number | null {
+  const text = fixDigits(trimGlyphs(raw).replace(/[$\s]/g, ''));
+  const match = /^(\d[\d.,]*)[.,](\d{2})$/.exec(text);
+  if (!match) return null;
+  const whole = match[1].replace(/[.,]/g, '');
+  if (!/^\d+$/.test(whole)) return null;
+  const value = Number(`${whole}.${match[2]}`);
+  return Number.isFinite(value) ? value : null;
+}
+
+/** "6/24/2024" with digit confusions fixed; empty when the cell is not a date. */
+export function normalizeDateToken(raw: string): string {
+  const text = fixDigits(trimGlyphs(raw).replace(/\s/g, ''));
+  return dateText.test(text) ? text : '';
+}
+
+/** "Visit 1", "Visit1", "\\Visit #2" → 2; "Visit Not Set" → null; anything else → undefined. */
+export function visitFromHeading(words: string[]): number | null | undefined {
+  const joined = words.map(word => trimGlyphs(word)).join(' ').replace(/\s+/g, ' ').trim();
+  const match = /^visit\s*#?\s*(\d{1,3})\b/i.exec(joined);
+  if (match) return Number(match[1]);
+  return /^visit\b/i.test(joined) ? null : undefined;
+}
 
 /** Geometry-based reading of explicit PMS columns. No fee/visit guessing and no
  * raw descriptions copied out of an image. Staff review every row before import. */
 export function parseTreatmentWords(words: OcrWord[], codeNames: Record<string, string>): LocalTreatmentImport {
   if (!words.length) throw failure();
   const ordered = [...words].sort((a, b) => midpoint(a) - midpoint(b) || a.bbox.x0 - b.bbox.x0);
-  const firstCode = ordered.find(word => dentalCode.test(word.text) || !!codeNames[word.text.toUpperCase()]);
+  const firstCode = ordered.find(word => dentalCode.test(trimGlyphs(word.text)) || !!codeNames[trimGlyphs(word.text).toUpperCase()]);
   const codeHeader = ordered.find(word => plain(word.text) === 'code' && (!firstCode || midpoint(word) < midpoint(firstCode)));
   if (!codeHeader) throw failure();
   const headerY = midpoint(codeHeader);
   const headerHeight = codeHeader.bbox.y1 - codeHeader.bbox.y0;
-  const headerWords = ordered.filter(word => Math.abs(midpoint(word) - headerY) < Math.max(10, headerHeight));
+  const headerWords = ordered
+    .filter(word => Math.abs(midpoint(word) - headerY) < Math.max(10, headerHeight))
+    .sort((a, b) => a.bbox.x0 - b.bbox.x0);
   const columns = headerWords
-    .filter(word => HEADER_NAMES[plain(word.text)])
-    .map(word => ({ name: HEADER_NAMES[plain(word.text)], x: (word.bbox.x0 + word.bbox.x1) / 2 }))
+    .map((word, index) => {
+      let name = HEADER_NAMES[plain(word.text)];
+      if (name === 'date') {
+        // "Proc Date", "Appt Date", "Entry Date": only the entry date is office-copy detail.
+        const before = headerWords[index - 1];
+        const qualifier = before && word.bbox.x0 - before.bbox.x1 < 40 ? DATE_QUALIFIERS[plain(before.text)] : undefined;
+        if (qualifier) name = qualifier;
+      }
+      return name ? { name, x: center(word) } : null;
+    })
+    .filter((column): column is { name: string; x: number } => column !== null)
     .sort((a, b) => a.x - b.x);
+  // Several plain "Date" headers and none marked "Entry": the first is the date column, as before.
   const codeColumn = columns.find(column => column.name === 'code')!;
   const codeIndex = columns.indexOf(codeColumn);
   const codeLeft = codeIndex ? (columns[codeIndex - 1].x + codeColumn.x) / 2 : -Infinity;
   const codeRight = columns[codeIndex + 1] ? (codeColumn.x + columns[codeIndex + 1].x) / 2 : codeColumn.x + 80;
-  const inCodeColumn = (word: OcrWord) => {
-    const center = (word.bbox.x0 + word.bbox.x1) / 2;
-    return center >= codeLeft && center < codeRight;
-  };
-  const belowHeader = ordered.filter(word => midpoint(word) > headerY + headerHeight);
+  const inCodeColumn = (word: OcrWord) => center(word) >= codeLeft && center(word) < codeRight;
+  // Everything whose centre sits below the header's bottom edge: the first
+  // data row of a tight PMS grid starts directly under the header.
+  const belowHeader = ordered.filter(word => midpoint(word) > headerY + headerHeight * 0.5);
   const footer = belowHeader.find(word => inCodeColumn(word) && /^(?:total|totals|balance)$/i.test(plain(word.text)));
-  const candidates = belowHeader.filter(
-    word =>
-      (!footer || midpoint(word) < midpoint(footer)) &&
-      inCodeColumn(word) &&
-      officeCode.test(word.text) &&
-      !/^(?:code|visit|subtotal|page)$/i.test(word.text)
-  );
+  const candidates = belowHeader
+    .map(word => ({ word, ...normalizeCodeToken(word.text, codeNames) }))
+    .filter(
+      ({ word, code }) =>
+        (!footer || midpoint(word) < midpoint(footer)) &&
+        inCodeColumn(word) &&
+        officeCode.test(code) &&
+        !/^(?:code|visit|subtotal|page)$/i.test(code)
+    );
   if (!candidates.length) throw failure();
   if (candidates.length > MAX_ROWS) throw failure();
   const warnings: string[] = [];
@@ -112,16 +192,26 @@ export function parseTreatmentWords(words: OcrWord[], codeNames: Record<string, 
   }
   if (!columns.some(column => column.name === 'officeFee' || column.name === 'fee')) warnings.push('No fee column was recognized; the office fee schedule will supply the fees.');
   if (!columns.some(column => column.name === 'tooth')) warnings.push('No tooth column was recognized. Check and enter tooth numbers before printing.');
-  const rows = candidates.map((candidate): LocalTreatmentRow => {
+  const headings = ordered.filter(word => /^visit/i.test(trimGlyphs(word.text)));
+  const rows = candidates.map(({ word: candidate, code, corrected }): LocalTreatmentRow => {
     const issues: string[] = [];
-    let confidence: RowConfidence = candidate.confidence < CONFIDENCE_FLOOR ? 'low' : 'ok';
-    if (confidence === 'low') issues.push('The code was read with low confidence; compare it with the screenshot.');
+    let confidence: RowConfidence = 'ok';
+    const lower = () => { confidence = 'low'; };
+    if (corrected) {
+      issues.push(`The code was read as "${trimGlyphs(candidate.text)}" and corrected to ${code}; confirm it against the screenshot.`);
+      lower();
+    }
+    if (candidate.confidence < CONFIDENCE_FLOOR) {
+      issues.push(`The code ${code} was read at ${percent(candidate)} confidence (below ${CONFIDENCE_FLOOR}%); compare it with the screenshot.`);
+      lower();
+    }
     const y = midpoint(candidate);
     const height = Math.max(8, candidate.bbox.y1 - candidate.bbox.y0);
-    const rowWords = belowHeader.filter(word => Math.abs(midpoint(word) - y) <= height * 0.55);
-    if (candidates.filter(word => Math.abs(midpoint(word) - y) <= height * 0.55).length !== 1) {
+    const sameRow = (word: OcrWord) => Math.abs(midpoint(word) - y) <= height * 0.55;
+    const rowWords = belowHeader.filter(sameRow);
+    if (candidates.filter(({ word }) => sameRow(word)).length !== 1) {
       issues.push('Two codes share this row on the image; confirm which procedure this is.');
-      confidence = 'low';
+      lower();
     }
     const cell = (name: string) => {
       const index = columns.findIndex(column => column.name === name);
@@ -129,57 +219,69 @@ export function parseTreatmentWords(words: OcrWord[], codeNames: Record<string, 
       const left = index ? (columns[index - 1].x + columns[index].x) / 2 : -Infinity;
       const right = columns[index + 1] ? (columns[index].x + columns[index + 1].x) / 2 : Infinity;
       return rowWords
-        .filter(word => { const x = (word.bbox.x0 + word.bbox.x1) / 2; return x >= left && x < right; })
+        .filter(word => !symbolOnly(word.text) && center(word) >= left && center(word) < right)
         .sort((a, b) => a.bbox.x0 - b.bbox.x0);
     };
     const readMoney = (name: string, label: string): number | null => {
       const values = cell(name);
       if (!values.length) return null;
-      const raw = values.map(word => word.text).join('').replace(/[$,\s]/g, '');
-      if (!moneyText.test(raw)) {
-        issues.push(`The ${label} amount could not be read as dollars and cents; enter it by hand.`);
-        confidence = 'low';
+      const raw = values.map(word => trimGlyphs(word.text)).join('');
+      const number = normalizeMoneyToken(raw);
+      if (number === null) {
+        issues.push(`The ${label} amount was read as "${raw}", which is not dollars and cents; enter it by hand.`);
+        lower();
         return null;
       }
-      const number = Number(raw);
-      if (!Number.isFinite(number) || number > 10000000) {
-        issues.push(`The ${label} amount is out of range; enter it by hand.`);
-        confidence = 'low';
+      if (number > 10000000) {
+        issues.push(`The ${label} amount was read as "${raw}", which is out of range; enter it by hand.`);
+        lower();
         return null;
       }
-      if (values.some(word => word.confidence < CONFIDENCE_FLOOR)) {
-        issues.push(`The ${label} amount was read with low confidence; compare it with the screenshot.`);
-        confidence = 'low';
+      const weakest = values.reduce((low, word) => (word.confidence < low.confidence ? word : low));
+      if (weakest.confidence < CONFIDENCE_FLOOR) {
+        issues.push(`The ${label} amount "${raw}" was read at ${percent(weakest)} confidence (below ${CONFIDENCE_FLOOR}%); compare it with the screenshot.`);
+        lower();
       }
       return number;
     };
     const toothWords = cell('tooth');
-    let toothValue = toothWords.map(word => word.text).join('').replace(/\s/g, '');
+    let toothValue = toothWords.map(word => trimGlyphs(word.text)).join('').replace(/\s/g, '');
+    if (toothValue && !tooth.test(toothValue) && tooth.test(fixDigits(toothValue))) toothValue = fixDigits(toothValue);
     if (toothValue && !tooth.test(toothValue)) {
-      issues.push('The tooth cell did not read as a tooth number; enter it by hand.');
-      confidence = 'low';
+      issues.push(`The tooth cell was read as "${toothValue}", which is not a tooth number; enter it by hand.`);
+      lower();
       toothValue = '';
-    } else if (toothValue && toothWords.some(word => word.confidence < CONFIDENCE_FLOOR)) {
-      issues.push('The tooth number was read with low confidence; compare it with the screenshot.');
-      confidence = 'low';
+    } else if (toothValue) {
+      const weakest = toothWords.reduce((low, word) => (word.confidence < low.confidence ? word : low));
+      if (weakest.confidence < CONFIDENCE_FLOOR) {
+        issues.push(`The tooth number "${toothValue}" was read at ${percent(weakest)} confidence (below ${CONFIDENCE_FLOOR}%); compare it with the screenshot.`);
+        lower();
+      }
     }
-    let visitValue = cell('visit').map(word => word.text).join('');
-    if (!visitValue) {
-      const heading = ordered.filter(word => plain(word.text) === 'visit' && midpoint(word) < y).at(-1);
-      const number = heading && ordered.find(word => Math.abs(midpoint(word) - midpoint(heading)) < height * 0.55 && word.bbox.x0 >= heading.bbox.x1 && word.bbox.x0 - heading.bbox.x1 < 100 && /^\d{1,3}$/.test(word.text));
-      if (number) visitValue = number.text;
+    // A visit column on the row, else the "Visit N" section heading above it
+    // ("Visit Not Set" leaves the visit open on purpose).
+    let visitValue: number | null = null;
+    let visitProblem = '';
+    const visitCell = cell('visit').map(word => trimGlyphs(word.text)).join('');
+    if (visitCell) {
+      const digits = fixDigits(visitCell);
+      if (/^\d{1,3}$/.test(digits) && Number(digits) >= 1) visitValue = Number(digits);
+      else visitProblem = `The visit cell was read as "${visitCell}", which is not a visit number; check the appointment grouping.`;
+    } else {
+      const heading = headings.filter(word => midpoint(word) < y).at(-1);
+      if (heading) {
+        const rest = ordered
+          .filter(word => word !== heading && Math.abs(midpoint(word) - midpoint(heading)) < height * 0.55 && word.bbox.x0 >= heading.bbox.x1 - 2 && word.bbox.x0 - heading.bbox.x1 < 100)
+          .sort((a, b) => a.bbox.x0 - b.bbox.x0)
+          .map(word => word.text);
+        const fromHeading = visitFromHeading([heading.text, ...rest]);
+        if (typeof fromHeading === 'number') visitValue = fromHeading;
+      }
     }
-    if (visitValue && (!/^\d{1,3}$/.test(visitValue) || Number(visitValue) < 1)) {
-      issues.push('The visit number could not be read; check the appointment grouping.');
-      confidence = 'low';
-      visitValue = '';
-    }
-    let entryDate = cell('date').map(word => word.text).join('');
-    if (entryDate && !dateText.test(entryDate)) {
-      issues.push('The entry date could not be read; it is office-copy detail only.');
-      entryDate = '';
-    }
-    const code = candidate.text.toUpperCase();
+    if (visitProblem) { issues.push(visitProblem); lower(); }
+    const dateRaw = cell('date').map(word => trimGlyphs(word.text)).join('');
+    const entryDate = dateRaw ? normalizeDateToken(dateRaw) : '';
+    if (dateRaw && !entryDate) issues.push(`The entry date was read as "${dateRaw}", which is not a date; it is office-copy detail only.`);
     if (!dentalCode.test(code) && !codeNames[code]) {
       issues.push('This code is not on the office fee schedule; confirm it or correct it before importing.');
     }
@@ -187,7 +289,7 @@ export function parseTreatmentWords(words: OcrWord[], codeNames: Record<string, 
     const officeFee = readMoney('officeFee', 'Office');
     return {
       code, tooth: toothValue.replace(/^#/, '').toUpperCase(), description: codeNames[code] ?? '',
-      fee, officeFee, entryDate, visit: visitValue ? Number(visitValue) : null, confidence, issues,
+      fee, officeFee, entryDate, visit: visitValue, confidence, issues,
     };
   });
   if (rows.every(row => row.visit === null)) warnings.push('No visit numbers were read. Check the appointment grouping after import.');
@@ -210,6 +312,7 @@ export function parseTreatmentText(text: string, codeNames: Record<string, strin
   for (const line of lines) {
     const visitHeading = /^visit\s*#?\s*(\d{1,3})\b/i.exec(line);
     if (visitHeading) { currentVisit = Number(visitHeading[1]); continue; }
+    if (/^visit\s+not\s+set\b/i.test(line)) { currentVisit = null; continue; }
     // Tabs, pipes, semicolons and whitespace separate cells; a comma only
     // separates when it ends a cell (so "$1,569.00" stays one amount).
     const tokens = line.split(/[\t|;]+|\s+/).map(token => token.replace(/,+$/, '')).filter(Boolean);
@@ -251,6 +354,26 @@ export function parseTreatmentText(text: string, codeNames: Record<string, strin
   return { rows, warnings, oversized };
 }
 
+/**
+ * How much to enlarge a screenshot before reading it. PMS grids are set in
+ * 9–11px type, which Tesseract misreads at native size (on a real plan it
+ * found 4 of 8 codes and no amounts; at 2× it found all 8 with every amount
+ * and date). Small captures get 3×, ordinary ones 2×, within the pixel budget.
+ */
+export function ocrScale(width: number, height: number): number {
+  const wanted = width < 900 ? 3 : 2;
+  const budget = Math.sqrt(OCR_PIXEL_BUDGET / Math.max(1, width * height));
+  return Math.max(1, Math.min(wanted, budget));
+}
+
+/** Flatten anti-aliased colour UI text to grayscale in place (luma weights). */
+export function toGrayscale(pixels: Uint8ClampedArray): void {
+  for (let i = 0; i < pixels.length; i += 4) {
+    const gray = Math.round(0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2]);
+    pixels[i] = pixels[i + 1] = pixels[i + 2] = gray;
+  }
+}
+
 /** Same-origin OCR assets; no upload, CDN, storage, logging, or remote fallback. */
 export async function readLocalTreatment(file: File, codeNames: Record<string, string>): Promise<LocalTreatmentImport> {
   const { createWorker } = await import('tesseract.js');
@@ -265,14 +388,23 @@ export async function readLocalTreatment(file: File, codeNames: Record<string, s
     }
     bitmap = await createImageBitmap(file);
     if (bitmap.width * bitmap.height > 25000000) throw new Error('The image is too large to read on this device. Crop it to the treatment plan and try again. Nothing was imported.');
-    canvas.width = bitmap.width; canvas.height = bitmap.height;
-    const context = canvas.getContext('2d');
+    const scale = ocrScale(bitmap.width, bitmap.height);
+    canvas.width = Math.round(bitmap.width * scale); canvas.height = Math.round(bitmap.height * scale);
+    const context = canvas.getContext('2d', { willReadFrequently: true });
     if (!context) throw failure();
-    context.fillStyle = 'white'; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(bitmap, 0, 0);
+    context.imageSmoothingEnabled = true; context.imageSmoothingQuality = 'high';
+    context.fillStyle = 'white'; context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const image = context.getImageData(0, 0, canvas.width, canvas.height);
+    toGrayscale(image.data);
+    context.putImageData(image, 0, 0);
     const { data } = await worker.recognize(canvas, {}, { blocks: true });
     const words: OcrWord[] = [];
     for (const block of data.blocks ?? []) for (const paragraph of block.paragraphs) for (const line of paragraph.lines) {
-      for (const word of line.words) words.push({ text: word.text.trim(), confidence: word.confidence, bbox: { ...word.bbox } });
+      for (const word of line.words) {
+        // Positions are reported in screenshot pixels, whatever the read scale.
+        words.push({ text: word.text.trim(), confidence: word.confidence, bbox: { x0: word.bbox.x0 / scale, y0: word.bbox.y0 / scale, x1: word.bbox.x1 / scale, y1: word.bbox.y1 / scale } });
+      }
     }
     return parseTreatmentWords(words, codeNames);
   } catch (error) {

@@ -104,6 +104,25 @@ how it was proven, and what a human still has to do to release it.
   Lovable database query tool; the migration file is idempotent, so the normal migration
   run is a no-op for it.
 
+### Follow-up 2026-09-29: PMS screenshot reads and patient wording
+
+A real PMS capture (1,118 × 265 px, 9–11 px type) read at native size gave 4 of 8 codes,
+no amounts and no dates, with flags that only said "low confidence". The on-device read
+now enlarges the capture (2×, 3× for small captures, within a 12 MP budget) and flattens
+it to grayscale before recognition: on that capture every code, amount and date reads at
+91–96 %. The parser also takes the first data row that sits directly under the header,
+reads "Visit1"-style section headings (and leaves "Visit Not Set" open), ignores icon
+glyphs beside cells, prefers the "Entry Date" column over "Proc Date"/"Appt Date", and
+corrects letter-for-digit confusions in codes, amounts, teeth and dates while saying so.
+Every review flag now quotes what was read and at what confidence ("The code D6057 was
+read at 39% confidence (below 65%)"). The capture's OCR words are a fixture
+(`src/test/fixtures/pms-plan-ocr-words.json`; codes, teeth, dates and fees only).
+
+Wording: the built-in names for D6056/D6057 are "Implant connector (standard/custom
+abutment)" and D6011 "Implant uncovering (second stage)", and the visit-naming prompt now
+requires everyday words ("implant connector", never "abutment"; "crown", never
+"porc/cer crn"; no surface or lab shorthand). Office overrides on Fees & Plans still win.
+
 ## Policies the numbers follow
 
 - **Harelick payment policy** (`fof_settings.payment_policy`, `harelickPolicyTemplate`):
@@ -178,19 +197,46 @@ See the "End-to-end evidence" section at the bottom of this file; it is filled i
 locally and the live Supabase project, signed in as a synthetic manager of a synthetic
 office; no real patient data).
 
-## Release order
+## Release order (done 2026-09-29)
 
-1. Merge this branch into `main` (Lovable syncs `main`).
-2. In Lovable, deploy `name-visits`, `fof-office-guidance` and `kimi-agent` (they share
-   `_shared/procedure-notes.ts` and `_shared/ai-allowlist.ts`) and delete the deployed
-   `parse-treatment` function. Direct pushes do not deploy functions.
-3. Run migrations (the `alternate_benefit_downgrade` column is already live; the file is
-   a no-op there).
-4. Publish the frontend.
-5. Verify: `/fof/fees` lists the live schedules with their counts and the saved plan;
-   `/fof` blocks printing until fees, practice identity and policy are loaded; the
-   naming status shows a final state; a 404 or missing secret on `name-visits` shows the
-   "unavailable" state with a Retry, never a blank label.
+1. **Merged.** PR #249 squash-merged into `main` as `129565f9` at 18:01 UTC after all four
+   CI checks passed; Lovable synced it and regenerated `types.ts` with the new column
+   (`34cac567`).
+2. **Edge functions deployed** at 18:03 UTC through the Lovable agent: `name-visits`,
+   `fof-office-guidance` and `kimi-agent` (they share `_shared/procedure-notes.ts` and
+   `_shared/ai-allowlist.ts`); the deployed `parse-treatment` function was deleted in the
+   same step. Verified signed in at 20:22 UTC: `parse-treatment` answers 404; `name-visits`
+   answers 400 "Invalid office" to a malformed `orgId` and 403 to an office the caller is
+   not a member of, which only the new version does.
+3. **Column live.** `insurance_plans.alternate_benefit_downgrade` (boolean, nullable) was
+   applied through the Lovable query tool before the merge and re-confirmed at 20:22 UTC.
+   It was applied as plain SQL, so `supabase_migrations.schema_migrations` does not list
+   `20260930150000`; the file is `IF NOT EXISTS`, so a later migration run is a no-op.
+   The pending-schema entry was removed on 2026-09-29 (`8225dbb`) once the generated
+   types carried the column.
+4. **Frontend published** at 18:05 UTC (bundle `index-B3J64A7l.js`), republished after
+   the pending-schema cleanup (same bundle), and again by another session with PR #250 at
+   about 20:20 UTC (`index-DRaVJQWt.js`, includes the FOF changes).
+5. **Live verification** at 20:36 UTC against https://purpleenvelope.app, signed in as
+   the synthetic office (recreated for the check and removed afterwards): `/fof/fees`
+   lists the live schedules with their counts and the saved plan; a 7-row fee import
+   previews "5 valid · 1 skipped · 1 duplicate" and reports "verified on the schedule";
+   `/fof` blocks printing until benefits are confirmed and opens 520 ms after; the
+   typed code resolves 454 ms after the fee items arrive; naming reaches "done" through
+   the deployed `name-visits` with the office id in the request; all three print modes
+   produce the expected pages; Clear and refresh empty the form; no request carried the
+   patient name. 15 of 16 steps passed. The one failure is the on-device screenshot
+   read of a real PMS capture (4 of 8 rows, all flagged), which is the follow-up below.
+   The "unavailable with Retry" naming state on a 404 or missing secret is covered by
+   `fof-naming-hook.test.tsx` (it cannot be provoked on the live project without
+   removing the secret).
+
+Open finding, not part of this repair: `fof-office-guidance` answers 502 ("Office
+guidance could not be generated. Existing office rules remain in use.") for the synthetic
+office on every call, before and after the deployment, so the builder shows "Code-bank
+guidance is unavailable" and falls back to the office rules as designed. The function
+throws when the gateway fails or the model does not cover every code-bank batch; the
+Lovable function logs will say which. The form works without it.
 
 ## Human decisions
 
@@ -252,7 +298,9 @@ arrived, printing opened 556 ms after the benefits were confirmed). In order:
 - **Naming (live `name-visits`).** Status reached "done"; the single request carried
   `slots`, `visits`, `wantTreatment`, `doctorName`, `orgId` only, with visits such as
   `["CT Scan"]`, `["Dental Implant (tooth #30)"]`, `["Crown (tooth #3)"]` — no name, no
-  amount. The deployed function is the pre-release version, which ignores `orgId`.
+  amount. At the time of that run the deployed function was the pre-release version;
+  the released version was deployed at 18:03 UTC and the live check at 20:36 UTC shows
+  naming reaching "done" through it with the office id honoured.
 - **Local imports.** The synthetic screenshot produced "Review 4 extracted procedures —
   read on this device"; low-confidence and unreadable-fee rows were flagged and had to be
   acknowledged; no request at all left the browser during the read; the reviewed rows
