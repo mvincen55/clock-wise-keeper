@@ -115,7 +115,12 @@ count, so it is not shown as a daily series.
 ## 6. Roles
 
 Every role reads the same order: what needs my action → status → trends →
-tools.
+tools. The page is two columns that flow independently (`HomeColumns`): the
+main column holds the queue and, directly beneath it, the period filters,
+the strip, the chart and the cancellation trend; the sidebar holds today,
+the latest closeout with its state, the goal meters and the rest of the
+secondary information. Under `lg` the columns dissolve into one, actions
+first.
 
 - **Owner** — header (state chip, role context, Close the Day, Attention · n),
   "Right now" (headline plus at most three genuine priorities: a degraded

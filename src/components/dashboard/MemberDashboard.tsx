@@ -3,7 +3,7 @@ import { ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MemberView } from './types';
 import {
-  ActionLink, DashboardShell, EmptyState, FigureStrip, HomeHeader, Lanes, Panel, SignalRow, StatusDot, ToolsPanel, ViewContext, focusRing, interactive,
+  ActionLink, DashboardShell, EmptyState, FigureStrip, HomeColumns, HomeHeader, Lanes, Panel, SignalRow, Slot, StatusDot, ToolsPanel, ViewContext, focusRing, interactive,
 } from './kit';
 import { MyWorkPanel } from './MyWork';
 import { PerformanceSection } from './performance/PerformanceSection';
@@ -16,11 +16,13 @@ import { ChallengeCard } from './ChallengeCard';
  *
  *   1  header: greeting, clock status, role context
  *   2  My next move — the one highest-priority item, or a genuine all-clear
- *   3  Needs you (my own items, exact records) beside my role's slice of the
- *      office, the shared challenge, and my time & PTO
- *   4  Our office pulse — the same rows, chart, and goal meters the owner
- *      reads, limited to the metrics the office shares; office-level only
- *   5  coverage today, then the tools area
+ *   3  two columns that flow independently —
+ *      main: Needs you (my own items, exact records), then Our office pulse
+ *      (the same rows and chart the owner reads, limited to the metrics the
+ *      office shares) directly beneath it;
+ *      sidebar: my role's slice of the office, the shared challenge, my time
+ *      & PTO, the month's shared goal meters
+ *   4  coverage today, then the tools area
  *
  * Clocking stays in the shell's GlobalTimeControl / sticky mobile bar.
  */
@@ -33,6 +35,79 @@ export default function MemberDashboard({ view, chartWidth }: { view: MemberView
   const hasRecorded = !!performance && performance.sources.closeouts.length > 0;
   const showPulse = performanceState !== 'error' && sharesAnything && (hasRecorded || performanceState === 'loading');
   const next = work.next;
+
+  const main = (
+    <>
+      <Slot order={1}>
+        <MyWorkPanel
+          work={work}
+          emptyTitle="You’re clear."
+          emptyDetail="Nothing is assigned to you. Anything new will land here and in your inbox."
+          description="Each row opens the exact record. Nothing here is a task for anyone else."
+        />
+      </Slot>
+      {/* OUR OFFICE PULSE. Real values when the office shares them; a
+          hidden metric is simply absent — no locked teaser. */}
+      {showPulse && (
+        <Slot order={5}>
+          <section aria-labelledby="office-pulse-title">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pb-3">
+              <h2 id="office-pulse-title" className="text-[16px] font-semibold">Our office pulse</h2>
+              <ActionLink to="/deposit-log" variant="text" size="sm">Close the Day</ActionLink>
+            </div>
+            <PerformanceSection data={performance} state={performanceState} compact chartWidth={chartWidth} />
+            <p className="mt-3 text-[13px] text-muted-foreground">
+              {officePulseNote ? `${officePulseNote} ` : ''}Office totals only — this is a shared scoreboard, never an individual one.
+            </p>
+          </section>
+        </Slot>
+      )}
+    </>
+  );
+
+  const aside = (
+    <>
+      {rolePulse.length > 0 && (
+        <Slot order={2}>
+          <Panel title="For my role" description="Office-level facts your role acts on. Never an individual score.">
+            {rolePulse.map(item => <SignalRow key={item.id} signal={item} />)}
+          </Panel>
+        </Slot>
+      )}
+      <Slot order={3}>
+        <Panel title="Office goal" action={{ label: 'Goals', to: '/goals' }}>
+          {goal ? (
+            <ChallengeCard goal={goal} compact />
+          ) : (
+            <EmptyState tone="neutral" title="No office goal is running." detail="When the office starts a sprint, its shared progress lives here." compact />
+          )}
+        </Panel>
+      </Slot>
+      <Slot order={4}>
+        <Panel title="My time & PTO" action={{ label: 'Timesheet', to: '/timesheet' }}>
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pb-3">
+            <StatusDot tone={status.tone} />
+            <p className="text-[15px] font-medium">{status.label}</p>
+            <p className="min-w-0 flex-1 text-[13px] text-muted-foreground">{status.detail}</p>
+          </div>
+          <FigureStrip figures={utilities} />
+          {attendanceStanding && (
+            <Link to={attendanceStanding.href} className={cn('mt-3 flex items-center gap-2 rounded-md text-[13.5px] text-muted-foreground hover:text-foreground', interactive, focusRing)}>
+              <StatusDot tone={attendanceStanding.tone} />
+              {attendanceStanding.text}
+            </Link>
+          )}
+        </Panel>
+      </Slot>
+      {showPulse && goalMeters && goalMeters.length > 0 && (
+        <Slot order={6}>
+          <Panel title="Goals this month" action={{ label: 'Goals', to: '/goals' }}>
+            <GoalMeters meters={goalMeters} canSetGoals={false} loading={performanceState === 'loading'} />
+          </Panel>
+        </Slot>
+      )}
+    </>
+  );
 
   return (
     <DashboardShell>
@@ -70,72 +145,7 @@ export default function MemberDashboard({ view, chartWidth }: { view: MemberView
         )}
       </section>
 
-      <div className="mt-4 grid gap-4 [&>*]:min-w-0 lg:grid-cols-[minmax(0,1.4fr)_minmax(20rem,1fr)] lg:items-start">
-        <MyWorkPanel
-          work={work}
-          emptyTitle="You’re clear."
-          emptyDetail="Nothing is assigned to you. Anything new will land here and in your inbox."
-          description="Each row opens the exact record. Nothing here is a task for anyone else."
-        />
-
-        <div className="space-y-4">
-          {rolePulse.length > 0 && (
-            <Panel title="For my role" description="Office-level facts your role acts on. Never an individual score.">
-              {rolePulse.map(item => <SignalRow key={item.id} signal={item} />)}
-            </Panel>
-          )}
-
-          <Panel title="Office goal" action={{ label: 'Goals', to: '/goals' }}>
-            {goal ? (
-              <ChallengeCard goal={goal} compact />
-            ) : (
-              <EmptyState tone="neutral" title="No office goal is running." detail="When the office starts a sprint, its shared progress lives here." compact />
-            )}
-          </Panel>
-
-          <Panel title="My time & PTO" action={{ label: 'Timesheet', to: '/timesheet' }}>
-            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pb-3">
-              <StatusDot tone={status.tone} />
-              <p className="text-[15px] font-medium">{status.label}</p>
-              <p className="min-w-0 flex-1 text-[13px] text-muted-foreground">{status.detail}</p>
-            </div>
-            <FigureStrip figures={utilities} />
-            {attendanceStanding && (
-              <Link to={attendanceStanding.href} className={cn('mt-3 flex items-center gap-2 rounded-md text-[13.5px] text-muted-foreground hover:text-foreground', interactive, focusRing)}>
-                <StatusDot tone={attendanceStanding.tone} />
-                {attendanceStanding.text}
-              </Link>
-            )}
-          </Panel>
-        </div>
-      </div>
-
-      {/* 4 — OUR OFFICE PULSE. Real values when the office shares them; a
-          hidden metric is simply absent — no locked teaser. */}
-      {showPulse && (
-        <section className="mt-6" aria-labelledby="office-pulse-title">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pb-3">
-            <h2 id="office-pulse-title" className="text-[16px] font-semibold">Our office pulse</h2>
-            <ActionLink to="/deposit-log" variant="text" size="sm">Close the Day</ActionLink>
-          </div>
-          <PerformanceSection
-            data={performance}
-            state={performanceState}
-            compact
-            chartWidth={chartWidth}
-            aside={
-              goalMeters && goalMeters.length > 0 ? (
-                <Panel title="Goals this month" action={{ label: 'Goals', to: '/goals' }} className="h-full">
-                  <GoalMeters meters={goalMeters} canSetGoals={false} loading={performanceState === 'loading'} />
-                </Panel>
-              ) : undefined
-            }
-          />
-          <p className="mt-3 text-[13px] text-muted-foreground">
-            {officePulseNote ? `${officePulseNote} ` : ''}Office totals only — this is a shared scoreboard, never an individual one.
-          </p>
-        </section>
-      )}
+      <HomeColumns className="mt-4" main={main} aside={aside} />
 
       <div className="mt-4 space-y-4">
         <Lanes lanes={lanes} />

@@ -456,6 +456,29 @@ export function HomeHeader({
   );
 }
 
+/**
+ * The two-column Home layout: a main column and a narrower sidebar that
+ * flow INDEPENDENTLY — the main column's next panel follows its previous
+ * one whatever the sidebar's height, so a short queue never leaves a gap
+ * above the financial block. Under `lg` the two columns dissolve
+ * (`display: contents`) into one flex column and each slot's `order` sets
+ * the reading order: the person's actions first, then today's status, then
+ * the numbers.
+ */
+export function HomeColumns({ main, aside, className }: { main: ReactNode; aside: ReactNode; className?: string }) {
+  return (
+    <div data-home-columns className={cn('flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(19rem,22rem)] lg:items-start', className)}>
+      <div data-home-column="main" className="contents lg:block lg:min-w-0 lg:space-y-4">{main}</div>
+      <div data-home-column="aside" className="contents lg:block lg:min-w-0 lg:space-y-4">{aside}</div>
+    </div>
+  );
+}
+
+/** One panel's place in the Home columns: its mobile reading order, and no stretching. */
+export function Slot({ order, children, className }: { order: number; children: ReactNode; className?: string }) {
+  return <div data-home-slot className={cn('min-w-0', className)} style={{ order }}>{children}</div>;
+}
+
 /** Page frame: wide, gutter-consistent, and never centered in a narrow column. */
 export function DashboardShell({ children }: { children: ReactNode }) {
   return <div className="mx-auto w-full max-w-[1400px] px-4 py-5 sm:px-6 md:px-8 md:py-7">{children}</div>;

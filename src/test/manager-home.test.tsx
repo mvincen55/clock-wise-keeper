@@ -236,8 +236,10 @@ describe('after close', () => {
 describe('brand-new office', () => {
   it('states what is missing, links the door, and shows no zeros', () => {
     const { container } = renderView(<ManagerDashboard view={managerNewFixture} chartWidth={800} />);
-    expect(screen.getByText('Last closeout').closest('a')).toHaveAttribute('href', '/deposit-log');
-    expect(screen.getByText('none on record in the last two weeks')).toBeInTheDocument();
+    const closeout = screen.getByRole('region', { name: 'Last closeout' });
+    expect(within(closeout).getByText('No days have been closed out yet.')).toBeInTheDocument();
+    expect(within(closeout).getByText(/None on record in the last two weeks/)).toBeInTheDocument();
+    expect(within(closeout).getByRole('link', { name: /Close out a day/ })).toHaveAttribute('href', '/deposit-log');
     expect(screen.getByText('Nothing recorded for this period.')).toBeInTheDocument();
     for (const door of screen.getAllByRole('link', { name: /Close out a day/ })) expect(door).toHaveAttribute('href', '/deposit-log');
     expect(screen.getAllByText('No goal set')).toHaveLength(2);

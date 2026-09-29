@@ -517,3 +517,50 @@ are read, never written. Source map, definitions and rules:
 - The late-arrival threshold, the automatic attendance report and the two signatures are the existing database workflow from the late-arrivals pass; this pass reads them onto Home and changes none of it.
 - Office-day pacing depends on the office calendar being maintained (closures, open Saturdays); without it the meter labels its calendar-day estimate. Per-person schedules are not used for pacing.
 - Attention item titles keep the ISO dates the Attention room already prints; the queue adds the age and next step beside them rather than reformatting the shared labels.
+
+---
+
+## Pass 8 — Home columns that flow independently
+
+A layout correction, every role, no change to data, permissions or Settings.
+On the live manager Home a short (or empty) queue left a large blank area
+beneath Needs you: the queue and the sidebar (Today, Status, the latest
+closeout) shared one grid row, and the financial block only began below the
+whole row — so the row's height followed the taller sidebar.
+
+### What changed
+
+| Surface | Before | After |
+| --- | --- | --- |
+| Column structure | One shared grid row (queue beside a sidebar stack), then the performance block full width below both | `HomeColumns`: a main column and a sidebar that flow independently (`lg:grid`, `items-start`, each column its own block); the main column's next panel follows its previous one whatever the sidebar's height |
+| Main column | Needs you (+ Mine) | Needs you → Mine → the period filters, the performance strip, the production-and-collections chart, the cancellation trend — directly beneath the queue |
+| Sidebar | Today, Status, the closeout facts (manager); the closeout facts, the challenge, staffing (owner) | Today (manager) or Staffing today (owner) → the latest closeout with its state in one panel → Goals this month → Worth a look → the challenge. Members: For my role → Office goal → My time & PTO → Goals this month |
+| Closeout status | A separate Status card ("Friday's closeout · sealed") beside a "Friday's closeout" facts card | One `CloseoutPanel`: the day's facts with a state chip — Sealed / Not sealed / Sealed · items to review — and, with nothing on record, the door to the first closeout. The queue still carries the task of sealing an open day; the panel never repeats it as a second action |
+| Performance strip | Four across from `lg` | Sized to its own column (a container query): two by two until the column comfortably fits four; three-tile strips fit three across at 44rem |
+| Goal meters | Beside the chart, stretched to its height (`items-stretch`, `h-full`) | A sidebar panel at its natural height; the chart fills the main column |
+| Empty queue | A compact all-clear, already | Unchanged: the all-clear and the collapsed Waiting / Parked rows; the queue grows only when work appears |
+| Under `lg` | Column-major stacking | The column wrappers dissolve (`display: contents`) into one flex column and each slot's `order` sets the reading order: Needs you, Mine, Today, the closeout, then the numbers, the goals, the rest |
+
+Removed while inspecting for reserved space: `lg:items-stretch` on the chart row, `h-full` on the goal panel, the shared row itself. No spacer elements existed; the minimum heights that remain are row heights (44px tap targets) and the chart frame.
+
+### Files
+- Added: `src/components/dashboard/CloseoutPanel.tsx` (`CloseoutPanel`, `StatusRow`), `src/test/home-layout.test.tsx`
+- Changed: `kit.tsx` (`HomeColumns`, `Slot`), `OwnerDashboard.tsx`, `ManagerDashboard.tsx`, `MemberDashboard.tsx`, `performance/PerformanceSection.tsx` (no `aside`), `performance/PerformanceStrip.tsx` (container-query columns), `types.ts` + `useDashboardView.ts` (the owner carries `lastDay`), `fixtures.ts` + `scenarios.ts` (`owner-clear`, `manager-clear`: nothing waiting, one parked item, yesterday sealed), `scripts/design-review-capture.mjs`, `src/test/manager-home.test.tsx` (the brand-new office's closeout door)
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| Typecheck (`tsc --noEmit -p tsconfig.app.json`, app and tests) | clean |
+| Full test suite (`vitest run`) | 2526 passed / 53 skipped / 0 failed (247 files; `home-layout` adds 7) |
+| Lint on the changed files | 0 errors; the same `react-refresh/only-export-components` warnings on the kit and chart files as before |
+| Production build (`vite build`) | built; the strip's container query compiles (`@container (min-width:58rem)` → four across, `44rem` → three across) |
+| Captures | 22 scenarios × 3 widths (1440×1000, 834×1112, 390×844): 66 of 66, no page errors, no horizontal overflow |
+| Production publish | not part of this pass |
+
+### What the captures show (`design-review/`)
+- `manager-clear-desktop`: the empty queue (the all-clear and "Parked · 1") with the period filters, four cards, the chart and the cancellation trend directly beneath it; the sidebar reads Today → "Yesterday's closeout · Sealed" → Goals this month → Worth a look; no blank area.
+- `manager-desktop`, `owner-desktop`: populated queues (five items, Mine beneath), the same shape, "Not sealed" on the closeout panel.
+- `owner-clear-desktop`: Staffing today first in the sidebar, then the sealed closeout, the goals, the challenge, Worth a look.
+- `manager-clear-tablet`, `manager-clear-mobile`: one column in reading order — Needs you, Today, the closeout, the filters, the cards two by two, the charts, the goals, the tools.
+- Every other scenario (`front-desk`, `hygienist`, `member-clear`, `manager-closed`, `owner-partial`, …) at all three widths: the same columns, nothing reserved.

@@ -340,6 +340,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         office: staffing.office,
         summary,
         brief,
+        lastDay,
         decisionCount,
         needs,
         mine,
