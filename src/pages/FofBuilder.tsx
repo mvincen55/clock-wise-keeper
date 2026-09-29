@@ -3,21 +3,24 @@
  *
  * HIPAA BOUNDARY — READ BEFORE EDITING:
  * Patient-entered data on this page (name, date, procedures chosen, dollar
- * amounts, remaining deductible/benefits) exists ONLY in component memory
- * and goes straight to the printer. It must never be sent to Supabase,
- * written to localStorage/sessionStorage, placed in the URL, logged,
- * toasted, or passed to analytics/audit calls. Only de-identified
- * configuration (templates, fee schedules, plan rules) may touch the
- * network. Keep it that way — the practice has no BAA covering patient
- * data in this app.
+ * amounts, remaining deductible/benefits, imported treatment plans) exists
+ * ONLY in component memory and goes straight to the printer. It must never
+ * be sent to Supabase, written to localStorage/sessionStorage, placed in
+ * the URL, logged, toasted, or passed to analytics/audit calls. Only
+ * de-identified configuration (templates, fee schedules, plan rules) may
+ * touch the network, and the one AI request this page makes (name-visits)
+ * is built from vetted procedure codes alone. A screenshot of a treatment
+ * plan is read on this device and never uploaded. Keep it that way — the
+ * practice has no BAA covering patient data in this app.
  */
-import { useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useBlocker } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -32,6 +35,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -50,6 +54,7 @@ import { toast } from 'sonner';
 import {
   ChevronDown,
   ChevronUp,
+  ClipboardPaste,
   DollarSign,
   Loader2,
   Plus,
@@ -61,28 +66,30 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useMyProfile';
 import FofAssistantWidget from '@/components/fof/FofAssistantWidget';
-import FofPrintSheet from '@/components/fof/FofPrintSheet';
+import FofPrintSheet, { type FofPrintMode } from '@/components/fof/FofPrintSheet';
+import TreatmentImportReview from '@/components/fof/TreatmentImportReview';
 import { useFofSettings, useFofTemplates } from '@/hooks/useFofTemplates';
 import {
   useDeleteProcedureBundle,
   useCodeNames,
   useFeeScheduleItems,
   useFeeSchedules,
+  useInsurancePlans,
   useProcedureBundles,
   useSaveProcedureBundle,
+  type InsurancePlan,
 } from '@/hooks/useFeeSchedules';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import { useInsurancePlans } from '@/hooks/useFeeSchedules';
 import { revertsToOfficeFeesOnMax } from '@/lib/fof/schedule-defaults';
 import { computeFof } from '@/lib/fof/compute';
 import { suggestedPaymentLabels } from '@/lib/fof/payment-engine';
 import { useFofOfficeGuidance } from '@/hooks/useFofOfficeGuidance';
+import { useFofNaming, type NamingResult } from '@/hooks/useFofNaming';
 import type { CurrentFofContext } from '@/lib/fof/current-form-assistant';
-import { readLocalTreatment, type LocalTreatmentRow } from '@/lib/fof/local-treatment-import';
+import { parseTreatmentText, readLocalTreatment, type LocalTreatmentImport, type LocalTreatmentRow } from '@/lib/fof/local-treatment-import';
 import { useFofPolicySettings, usePaymentClassifications } from '@/hooks/useFofPolicySettings';
 import { PaymentScheduleEditor, classTitle, usePaymentScheduleEditor } from '@/components/fof/PaymentScheduleEditor';
 import { suggestPaymentClass } from '@/lib/fof/suggest-class';
@@ -94,32 +101,34 @@ import {
   estimateInsurance,
   type FeeCategory,
   type FofLine,
+  type LineEstimate,
   type PlanRules,
 } from '@/lib/fof/insurance';
 import { categorizeCdtCode } from '@/lib/fof/cdt';
 import { resolvePatientName } from '@/lib/fof/cdt-names';
 import { computeFofDiscounts } from '@/lib/fof/discounts';
-import { buildNameVisitsPayload, safeProcedureLabel } from '@/lib/fof/ai';
+import { buildNameVisitsPayload, isVettedProcedureCode, safeProcedureLabel } from '@/lib/fof/ai';
+import { downgradeDefault, GENERIC_PLAN_DEFAULTS, parsePercentInput, planDefaults, plansForSchedule, type PlanDefaults } from '@/lib/fof/plan-hydration';
+import { feeSourceFor, SOURCE_SHORT, type ValueSource } from '@/lib/fof/provenance';
 import {
   buildVisitSchedule,
-  DAY_OF_SERVICE_THRESHOLD_CENTS,
   decideVisitPlan,
   planForCount,
   suggestVisitStage,
   VISIT_PLANS,
   visitSegmentsForCode,
 } from '@/lib/fof/visits';
-import { DEFAULT_PRACTICE_INFO } from '@/lib/fof/defaults';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
 import ScaledPrintPreview from '@/components/ScaledPrintPreview';
 import { useOrgBranding } from '@/hooks/useOrgBranding';
-import type { Cents, FofAmounts, FofOverrides, FofTemplate } from '@/lib/fof/types';
+import type { Cents, FofAmounts, FofOfficeLine, FofOverrides, FofTemplate } from '@/lib/fof/types';
 
 const NO_SCHEDULE = '__none__';
 // OON carriers the office has no fee schedule for: the full insurance
 // estimate still runs, with allowable fees defaulting to office fees and
 // every amount typed/overridable per line.
 const MANUAL_SCHEDULE = '__manual__';
+const NO_PLAN = '__no_plan__';
 
 // Alternate-benefit downgrades: plans commonly pay posterior composites
 // at the corresponding amalgam rate (by surface count).
@@ -166,6 +175,9 @@ const MEMBERSHIP_INCLUDED = new Set([
   'D1206', 'D1208', 'D1351', // fluoride + sealant (child plan)
 ]);
 
+/** Printed beside a $0 office-schedule row so nobody mistakes a no-charge line for a missing fee. */
+const NO_CHARGE_FLAG = 'No charge — $0.00 on the office fee schedule.';
+
 const CATEGORY_SHORT: Record<FeeCategory, string> = {
   preventive: 'Preventive',
   basic: 'Basic',
@@ -189,6 +201,8 @@ function todayISO(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
+const normalizeCode = (raw: string) => raw.trim().toUpperCase();
+
 interface BuilderLine {
   key: string;
   code: string;
@@ -200,6 +214,8 @@ interface BuilderLine {
   allowedInput: string;
   /** Per-line insurance payment override; '' = computed automatically. */
   insPayInput: string;
+  /** 'yes' = the office knowingly lets the override exceed the payable basis. */
+  insPayException: string;
   /** '' = membership-included codes are free, 'off' = charge (allowance used). */
   membershipFree: string;
   /** 'yes' = work-up procedure: billed at its visit, never prepaid. */
@@ -209,10 +225,32 @@ interface BuilderLine {
   /** Warning when an imported fee differs from the fees on file. */
   feeFlag: string;
   /**
-   * '' = plan pays composite rates (the default — most plans don't
-   * downgrade), 'yes' = alternate-benefit downgrade applies (e.g. Altus).
+   * '' = plan pays composite rates, 'yes' = alternate-benefit downgrade
+   * applies. Defaulted from the selected plan (or the office setting).
    */
   downgrade: string;
+  /**
+   * Where the office fee came from: 'office' (schedule), 'manual',
+   * 'import', 'missing' (no fee on file), 'pending' (typed while the
+   * schedule was still loading — resolved as soon as it arrives).
+   */
+  feeSource: string;
+  /**
+   * Overrides cleared by a code or carrier change, kept (as JSON) so staff
+   * can restore them deliberately. '' when there is nothing to restore.
+   */
+  restore: string;
+  /** Review notes for this line (cleared overrides, missing fees…), newline-joined. */
+  notes: string;
+}
+
+interface ClearedOverrides {
+  /** What changed: the previous code, or the previous carrier name. */
+  reason: string;
+  feeInput?: string;
+  allowedInput?: string;
+  insPayInput?: string;
+  insPayException?: string;
 }
 
 let lineCounter = 0;
@@ -226,11 +264,15 @@ const newLine = (): BuilderLine => ({
   feeInput: '',
   allowedInput: '',
   insPayInput: '',
+  insPayException: '',
   membershipFree: '',
   workupFlag: '',
   entryDate: '',
   feeFlag: '',
   downgrade: '',
+  feeSource: '',
+  restore: '',
+  notes: '',
 });
 
 interface BuilderState {
@@ -247,6 +289,11 @@ interface BuilderState {
   pctPrev: string;
   pctBasic: string;
   pctMajor: string;
+  /** 'plan' = filled from a saved plan (unverified), 'default' = generic, 'patient' = staff typed/confirmed. */
+  benefitsSource: string;
+  benefitsConfirmed: string; // '' or 'yes' — staff confirmed the deductible/max for this patient
+  planId: string; // selected saved plan for the carrier, or NO_PLAN
+  deductibleWaived: string; // '' or 'no' — preventive care is NOT deductible-waived on this plan
   spans2Years: string; // '' or 'yes' — treatment crosses a benefit-year renewal
   nextMaxInput: string;
   nextDedInput: string;
@@ -254,10 +301,11 @@ interface BuilderState {
   afterMaxState: string; // '' or 'yes' — reverts to office fees once maxed out
   prevExemptState: string; // '' or 'yes' — preventive doesn't count toward the max
   paymentCountOverride: string;
-  importUsed: string; // 'yes' when rows came from a screenshot import (office copy notes it)
+  importUsed: string; // 'yes' when rows came from a screenshot/text import (office copy notes it)
   prepayOptionState: string; // '' = follow template, 'on'/'off' = per-form override
   installmentOptionState: string;
   isSenior: string; // '' or 'yes' — patient is 65+; memory only
+  stackPrepayApproved: string; // '' or 'yes' — manager allowed the prepay courtesy on top of an office discount
   insuranceOverride: string;
   writeOffOverride: string;
   portionOverride: string;
@@ -274,7 +322,9 @@ type ScalarField = keyof Omit<
 
 type BuilderAction =
   | { type: 'set'; field: ScalarField; value: string }
+  | { type: 'setMany'; values: Partial<Pick<BuilderState, ScalarField>> }
   | { type: 'setLine'; index: number; patch: Partial<BuilderLine> }
+  | { type: 'mapLines'; map: (line: BuilderLine) => BuilderLine }
   | { type: 'addLine' }
   | { type: 'addLines'; lines: BuilderLine[] }
   | { type: 'setLines'; lines: BuilderLine[] }
@@ -298,6 +348,10 @@ const initialState = (): BuilderState => ({
   pctPrev: '100',
   pctBasic: '80',
   pctMajor: '50',
+  benefitsSource: '',
+  benefitsConfirmed: '',
+  planId: NO_PLAN,
+  deductibleWaived: '',
   spans2Years: '',
   nextMaxInput: '$1,500.00',
   nextDedInput: '$50.00',
@@ -309,6 +363,7 @@ const initialState = (): BuilderState => ({
   prepayOptionState: '',
   installmentOptionState: '',
   isSenior: '',
+  stackPrepayApproved: '',
   insuranceOverride: '',
   writeOffOverride: '',
   portionOverride: '',
@@ -322,11 +377,15 @@ function reducer(state: BuilderState, action: BuilderAction): BuilderState {
   switch (action.type) {
     case 'set':
       return { ...state, [action.field]: action.value };
+    case 'setMany':
+      return { ...state, ...action.values };
     case 'setLine': {
       const lines = [...state.lines];
       lines[action.index] = { ...lines[action.index], ...action.patch };
       return { ...state, lines };
     }
+    case 'mapLines':
+      return { ...state, lines: state.lines.map(action.map) };
     case 'addLine':
       return { ...state, lines: [...state.lines, newLine()] };
     case 'setLines':
@@ -375,6 +434,9 @@ function parseOverride(input: string): Cents | undefined {
   return parseCurrencyInput(input) ?? undefined;
 }
 
+/** A money field that has text in it but not a valid dollar amount. */
+const invalidMoney = (input: string) => input.trim() !== '' && parseCurrencyInput(input) === null;
+
 interface SectionHeaderProps {
   title: string;
   open: boolean;
@@ -412,13 +474,16 @@ interface OverrideRowProps {
   value: string;
   overridden: boolean;
   onChange: (value: string) => void;
+  /** Where the computed figure came from. */
+  source?: string;
 }
 
-function OverrideRow({ label, computedCents, value, overridden, onChange }: OverrideRowProps) {
+function OverrideRow({ label, computedCents, value, overridden, onChange, source }: OverrideRowProps) {
   return (
     <div className="flex items-center gap-2">
       <span className="flex-1 text-sm">{label}</span>
-      {overridden && <Badge variant="secondary">custom</Badge>}
+      {invalidMoney(value) && <Badge variant="destructive">not an amount</Badge>}
+      <SourceChip source={overridden ? 'manual' : source} />
       <Input
         className="w-32 text-right"
         inputMode="decimal"
@@ -436,20 +501,36 @@ function OverrideRow({ label, computedCents, value, overridden, onChange }: Over
   );
 }
 
+/** A small provenance chip: where an amount came from. */
+function SourceChip({ source, title }: { source?: string; title?: string }) {
+  if (!source) return null;
+  const short = SOURCE_SHORT[source as ValueSource] ?? source;
+  const variant = source === 'manual' ? 'secondary' : source === 'missing' ? 'destructive' : 'outline';
+  return (
+    <Badge variant={variant} className="h-5 px-1.5 text-[10px] font-normal" title={title} data-source={source}>
+      {short}
+    </Badge>
+  );
+}
+
 export default function FofBuilder() {
   const policyQuery = useFofPolicySettings();
   const classificationQuery = usePaymentClassifications();
   const paymentPolicy = policyQuery.data?.payment_policy;
   const { data: templates, isLoading: templatesLoading } = useFofTemplates();
-  const { data: practice } = useFofSettings();
+  const practiceQuery = useFofSettings();
+  const practice = practiceQuery.data;
   const { data: branding } = useOrgBranding();
-  const { data: schedules } = useFeeSchedules();
+  const schedulesQuery = useFeeSchedules();
+  const schedules = schedulesQuery.data;
   // Office wording for what patients see. Display and print only —
   // the AI payload stays code-derived (see safeProcedureLabel).
   const { data: codeNames } = useCodeNames();
-  // Saved plan configurations: a carrier schedule can carry plan-specific
-  // defaults (office fees after the annual max) onto the form.
-  const { data: insurancePlans } = useInsurancePlans();
+  // Saved plan configurations: coverage percentages, deductible, annual
+  // maximum and plan rules that fill in (as unverified estimates) when a
+  // carrier schedule is picked.
+  const plansQuery = useInsurancePlans();
+  const insurancePlans = plansQuery.data;
 
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   // Includes uncommitted money inputs; automatic defaults do not mark a form dirty.
@@ -476,7 +557,6 @@ export default function FofBuilder() {
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
   const [bundleName, setBundleName] = useState('');
   const officeGuidance = useFofOfficeGuidance();
-  const [aiNaming, setAiNaming] = useState(false);
   const [doctorName, setDoctorName] = useState(FOF_NO_DOCTOR);
   useEffect(() => {
     const doctors = practice?.doctorNames ?? [];
@@ -487,26 +567,44 @@ export default function FofBuilder() {
   }, [practice?.doctorName, practice?.doctorNames?.join('|')]);
   const [importing, setImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
+  // Local review of an imported plan (screenshot read on this device, or
+  // pasted text). Memory only; the object URL is revoked on close.
+  const [importReview, setImportReview] = useState<null | { source: 'screenshot' | 'text'; result: LocalTreatmentImport; previewUrl?: string; scope: number }>(null);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState('');
+  // Which sheet the preview shows and which pages the printer gets.
+  const [previewPage, setPreviewPage] = useState<'patient' | 'office'>('patient');
+  const [printMode, setPrintMode] = useState<FofPrintMode>('both');
+  // Memory-only session facts: when the form was last printed, and the
+  // non-identifying finish checklist. Nothing here is stored anywhere.
+  const [printedAt, setPrintedAt] = useState<string>('');
+  const [finish, setFinish] = useState({ printed: false, contactConfirmed: false });
   // In-app confirm dialog (native confirm() shows ugly browser chrome).
   const [confirmState, setConfirmState] = useState<null | {
     title: string;
     body: string;
     action: string;
     onConfirm: () => void;
-    previewUrl?: string;
   }>(null);
+  // Bumped by Clear/Start Over so async work for the old form is dropped.
+  const [resetKey, setResetKey] = useState(0);
 
   const { data: bundles } = useProcedureBundles();
   const saveBundle = useSaveProcedureBundle();
   const deleteBundle = useDeleteProcedureBundle();
   const { data: orgCtx } = useOrgContext();
   const importScope = useRef(0);
+  const closeImportReview = useCallback(() => {
+    setImportReview(previous => {
+      if (previous?.previewUrl) URL.revokeObjectURL(previous.previewUrl);
+      return null;
+    });
+  }, []);
   useEffect(() => {
     importScope.current += 1;
     setImporting(false);
-    setConfirmState(previous => previous?.previewUrl ? null : previous);
-  }, [orgCtx?.org_id, state.patientName]);
-  useEffect(() => () => { if (confirmState?.previewUrl) URL.revokeObjectURL(confirmState.previewUrl); }, [confirmState?.previewUrl]);
+    closeImportReview();
+  }, [orgCtx?.org_id, state.patientName, closeImportReview]);
   useEffect(() => () => { importScope.current += 1; }, []);
   const isManager = orgCtx?.role === 'owner' || orgCtx?.role === 'manager';
   // Who's signed in — printed on the office copy's created-by line.
@@ -521,16 +619,56 @@ export default function FofBuilder() {
   const template: FofTemplate | undefined =
     activeTemplates.find(t => t.id === templateId) ?? activeTemplates[0];
 
-  const officeSchedule = (schedules ?? []).find(s => s.kind === 'office');
-  const { data: officeItems } = useFeeScheduleItems(officeSchedule?.id ?? null);
+  // Only the ACTIVE office schedule feeds the form; an inactive one is
+  // office history and never prices a line.
+  const officeSchedule = (schedules ?? []).find(s => s.kind === 'office' && s.isActive);
+  const officeItemsQuery = useFeeScheduleItems(officeSchedule?.id ?? null);
+  const officeItems = officeItemsQuery.data;
 
   const insuranceEnabled = !!template?.showInsuranceEstimate;
   const insuranceActive = insuranceEnabled && feeScheduleId !== NO_SCHEDULE;
-  const { data: carrierItems } = useFeeScheduleItems(
+  const carrierItemsQuery = useFeeScheduleItems(
     insuranceActive && feeScheduleId !== MANUAL_SCHEDULE ? feeScheduleId : null
   );
+  const carrierItems = carrierItemsQuery.data;
   const payActive = insuranceActive && payScheduleId !== NO_SCHEDULE;
-  const { data: payItems } = useFeeScheduleItems(payActive ? payScheduleId : null);
+  const payItemsQuery = useFeeScheduleItems(payActive ? payScheduleId : null);
+  const payItems = payItemsQuery.data;
+
+  // ---- Readiness: the calculation only runs on loaded, current data. A
+  // failed query is a visible blocker with a retry, never an empty map.
+  const feesLoading = !!schedulesQuery.isLoading || !!officeItemsQuery.isLoading || (insuranceActive && feeScheduleId !== MANUAL_SCHEDULE && !!carrierItemsQuery.isLoading) || (payActive && !!payItemsQuery.isLoading);
+  const feesError = schedulesQuery.error ?? officeItemsQuery.error ?? carrierItemsQuery.error ?? payItemsQuery.error ?? null;
+  const plansLoading = insuranceActive && !!plansQuery.isLoading;
+  const practiceLoading = !!practiceQuery.isLoading;
+  const practiceError = practiceQuery.error ?? null;
+  const practiceMissing = !practiceLoading && !practiceError && !(practice?.practiceName ?? '').trim();
+  const policyLoading = !!policyQuery.isLoading || (!!paymentPolicy && !!classificationQuery.isLoading);
+  const policyError = policyQuery.error ?? (paymentPolicy ? classificationQuery.error : null) ?? null;
+  const dataReady = !feesLoading && !feesError && !plansLoading && !practiceLoading && !practiceError && !policyLoading && !policyError;
+  const retryData = () => {
+    if (schedulesQuery.error) void schedulesQuery.refetch();
+    if (officeItemsQuery.error) void officeItemsQuery.refetch();
+    if (carrierItemsQuery.error) void carrierItemsQuery.refetch();
+    if (payItemsQuery.error) void payItemsQuery.refetch();
+    if (plansQuery.error) void plansQuery.refetch();
+    if (practiceQuery.error) void practiceQuery.refetch();
+    if (policyQuery.error) void policyQuery.refetch();
+    if (classificationQuery.error) void classificationQuery.refetch();
+  };
+  // Blocking: nothing can be trusted until these load. Warnings: the form
+  // works, with every fee typed by hand, and says so.
+  const readinessIssues: string[] = [];
+  const readinessWarnings: string[] = [];
+  if (feesError) readinessIssues.push(`The fee schedules could not be loaded (${feesError.message}). Fees, allowables and estimates are on hold until they load.`);
+  if (practiceError) readinessIssues.push(`The practice settings could not be loaded (${practiceError.message}). The form cannot print without the practice header.`);
+  if (practiceMissing) readinessIssues.push('The practice identity (name, address, phone) is not set up, so the form header would print blank. An owner or manager sets it in Office Settings → Branding.');
+  if (policyError) readinessIssues.push(`The office payment policy could not be loaded (${policyError.message}). Reload the page or ask a manager to check FOF Settings.`);
+  if (!schedulesQuery.isLoading && !schedulesQuery.error && schedules && !officeSchedule) {
+    readinessWarnings.push(isManager
+      ? 'This office has no active fee schedule. Create the office fee schedule and import the office fees on Fees & Plans; until then every fee on this form is typed by hand.'
+      : 'This office has no active fee schedule, so no fee can be looked up. Ask a manager to set it up on Fees & Plans; until then every fee on this form is typed by hand.');
+  }
 
   const officeByCode = useMemo(() => {
     const map = new Map<
@@ -547,19 +685,23 @@ export default function FofBuilder() {
     }
     return map;
   }, [officeItems]);
+  /** Codes the office bills: what the AI request may name. */
+  const vettedCodes = useMemo(() => new Set(officeByCode.keys()), [officeByCode]);
 
-  const allowedByCode = useMemo(() => {
+  // Contracted rates by code. A row marked as the office fee is not a rate
+  // the carrier agreed to, and a $0 rate is a missing rate, not a free
+  // procedure: both are left out so the estimate falls back to the CURRENT
+  // office fee (allowedCents ?? officeFee in lib/fof/insurance.ts) and the
+  // line says so, instead of inventing a full write-off.
+  const { allowedByCode, allowableMissing } = useMemo(() => {
     const map = new Map<string, Cents>();
+    const missing = new Set<string>();
     for (const item of carrierItems ?? []) {
-      // A row marked as the office fee is not a rate the carrier agreed
-      // to, so it is not an allowable. Leaving it out lets the estimate
-      // fall back to the CURRENT office fee (allowedCents ?? officeFee in
-      // lib/fof/insurance.ts) and keeps the write-off at zero, instead of
-      // inventing one the day the office raises that fee.
-      if (item.isOfficeFee) continue;
-      map.set(item.code.toUpperCase(), item.feeCents);
+      const key = item.code.toUpperCase();
+      if (item.isOfficeFee || item.feeCents <= 0) { missing.add(key); continue; }
+      map.set(key, item.feeCents);
     }
-    return map;
+    return { allowedByCode: map, allowableMissing: missing };
   }, [carrierItems]);
 
   const payByCode = useMemo(() => {
@@ -570,25 +712,131 @@ export default function FofBuilder() {
     return map;
   }, [payItems]);
 
+  const selectedSchedule = (schedules ?? []).find(s => s.id === feeScheduleId);
+  const carrierPlans = useMemo(
+    () => (insuranceActive && feeScheduleId !== MANUAL_SCHEDULE ? plansForSchedule(feeScheduleId, insurancePlans) : []),
+    [insuranceActive, feeScheduleId, insurancePlans]
+  );
+  const selectedPlan: InsurancePlan | null = carrierPlans.find(p => p.id === state.planId) ?? null;
+  const selectedPlanDefaults: PlanDefaults | null = selectedPlan ? planDefaults(selectedPlan) : null;
+  const downgradeOn = downgradeDefault(policyQuery.data?.downgrade_default_on ?? false, selectedPlanDefaults);
+
+  /** Fields a matched (or unmatched) code fills on a line. Code-derived only. */
+  const resolveCodeFields = useCallback((rawCode: string): Partial<BuilderLine> => {
+    const key = normalizeCode(rawCode);
+    const match = key ? officeByCode.get(key) : undefined;
+    const eligible = insuranceActive && !!DOWNGRADE_MAP[key];
+    const downgrade = eligible && downgradeOn ? 'yes' : '';
+    if (match) {
+      // A $0 row on the office schedule is a real office decision (post-ops,
+      // inserts, adjustments): the line is a no-charge line, says so, and
+      // never blocks the print. Only a code the schedule does not carry is
+      // "no fee on file".
+      const noCharge = match.feeCents <= 0;
+      return {
+        code: match.code,
+        // Auto-fill with the patient-friendly wording that prints on
+        // the form (schedule description as fallback).
+        description: resolvePatientName(match.code, codeNames) || match.description,
+        feeInput: formatCents(Math.max(0, match.feeCents)),
+        feeSource: 'office',
+        feeFlag: noCharge ? NO_CHARGE_FLAG : '',
+        downgrade,
+        ...resolveCategory(categorizeCdtCode(match.code) === 'workup' ? 'workup' : match.category),
+      };
+    }
+    return {
+      code: rawCode,
+      description: key ? resolvePatientName(key, codeNames) || '' : '',
+      feeInput: '',
+      // Typed while the schedule is still loading: resolved once it arrives.
+      feeSource: key ? (officeItemsQuery.isLoading ? 'pending' : officeSchedule ? 'missing' : 'manual') : '',
+      downgrade,
+      ...resolveCategory(categorizeCdtCode(key)),
+    };
+  }, [officeByCode, codeNames, insuranceActive, downgradeOn, officeItemsQuery.isLoading, officeSchedule]);
+
+  /** Record cleared overrides on a line so staff can put them back on purpose. */
+  const clearedOverrideNote = (line: BuilderLine, reason: string): Pick<BuilderLine, 'restore' | 'notes'> | null => {
+    const cleared: ClearedOverrides = { reason };
+    if (line.feeSource === 'manual' && line.feeInput.trim()) cleared.feeInput = line.feeInput;
+    if (line.allowedInput.trim()) cleared.allowedInput = line.allowedInput;
+    if (line.insPayInput.trim()) cleared.insPayInput = line.insPayInput;
+    if (line.insPayException) cleared.insPayException = line.insPayException;
+    const parts: string[] = [];
+    if (cleared.feeInput) parts.push(`manual fee ${cleared.feeInput}`);
+    if (cleared.allowedInput) parts.push(`allowable ${cleared.allowedInput}`);
+    if (cleared.insPayInput) parts.push(`insurance payment ${cleared.insPayInput}`);
+    if (parts.length === 0) return null;
+    return {
+      restore: JSON.stringify(cleared),
+      notes: `${reason}: cleared ${parts.join(', ')}. Restore only if it still applies.`,
+    };
+  };
+
   const handleCodeChange = (index: number, rawCode: string) => {
-    // Exact code match (case-insensitive) fills the line; anything else is
-    // kept as typed so it can drive the description search below the row.
-    const match = officeByCode.get(rawCode.trim().toUpperCase());
+    const line = state.lines[index];
+    const previous = normalizeCode(line.code);
+    const next = normalizeCode(rawCode);
+    // Same procedure, different capitalisation/spacing: nothing else moves.
+    if (previous === next) {
+      dispatch({ type: 'setLine', index, patch: { code: rawCode } });
+      return;
+    }
+    // A different code: every code-derived value is re-evaluated and every
+    // override that belonged to the old code is cleared (kept for restore).
+    const fields = resolveCodeFields(rawCode);
+    const cleared = previous ? clearedOverrideNote(line, `Code changed from ${previous}`) : null;
+    const dentureNow = /^D5[0-8]\d{2}$/.test(next);
     dispatch({
       type: 'setLine',
       index,
-      patch: match
-        ? {
-            code: match.code,
-            // Auto-fill with the patient-friendly wording that prints on
-            // the form (schedule description as fallback).
-            description: resolvePatientName(match.code, codeNames) || match.description,
-            feeInput: formatCents(match.feeCents),
-            ...resolveCategory(categorizeCdtCode(match.code) === 'workup' ? 'workup' : match.category),
-          }
-        : { code: rawCode, ...resolveCategory(categorizeCdtCode(rawCode.trim().toUpperCase())) },
+      patch: {
+        ...fields,
+        allowedInput: '',
+        insPayInput: '',
+        insPayException: '',
+        feeFlag: fields.feeFlag ?? '',
+        entryDate: '',
+        membershipFree: '',
+        // Dentures carry the arch in their name; a tooth number is noise.
+        tooth: dentureNow ? '' : line.tooth,
+        restore: cleared?.restore ?? '',
+        notes: cleared?.notes ?? '',
+      },
     });
   };
+
+  const restoreOverrides = (index: number) => {
+    const line = state.lines[index];
+    if (!line.restore) return;
+    let cleared: ClearedOverrides;
+    try { cleared = JSON.parse(line.restore) as ClearedOverrides; } catch { return; }
+    dispatch({
+      type: 'setLine',
+      index,
+      patch: {
+        ...(cleared.feeInput ? { feeInput: cleared.feeInput, feeSource: 'manual' } : {}),
+        ...(cleared.allowedInput ? { allowedInput: cleared.allowedInput } : {}),
+        ...(cleared.insPayInput ? { insPayInput: cleared.insPayInput } : {}),
+        ...(cleared.insPayException ? { insPayException: cleared.insPayException } : {}),
+        restore: '',
+        notes: `Restored overrides from ${cleared.reason.replace(/^Code changed from |^Carrier changed from /, '')} on purpose.`,
+      },
+    });
+  };
+
+  // Codes typed while the office schedule was still loading resolve the
+  // moment it arrives, so a line never keeps a blank fee it was owed.
+  useEffect(() => {
+    if (officeItemsQuery.isLoading || !officeItems) return;
+    if (!state.lines.some(l => l.feeSource === 'pending')) return;
+    dispatch({
+      type: 'mapLines',
+      map: line => (line.feeSource === 'pending' ? { ...line, ...resolveCodeFields(line.code) } : line),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [officeItemsQuery.isLoading, officeItems]);
 
   // A line's effective visit: the typed number, else the stage suggested
   // from the code (multi-segment codes start at their earliest stage).
@@ -638,23 +886,13 @@ export default function FofBuilder() {
   const handleTemplateChange = (nextTemplateId: string) => {
     setEdited(true);
     setTemplateId(nextTemplateId);
-    dispatch({ type: 'set', field: 'prepayOptionState', value: '' });
-    dispatch({ type: 'set', field: 'installmentOptionState', value: '' });
-    dispatch({ type: 'set', field: 'paymentCountOverride', value: '' });
+    dispatch({ type: 'setMany', values: { prepayOptionState: '', installmentOptionState: '', paymentCountOverride: '', stackPrepayApproved: '' } });
   };
 
-  const lineFromCode = (rawCode: string): BuilderLine => {
-    const match = officeByCode.get(rawCode.trim().toUpperCase());
-    return {
-      ...newLine(),
-      code: match?.code ?? rawCode.toUpperCase(),
-      description: match
-        ? resolvePatientName(match.code, codeNames) || match.description
-        : resolvePatientName(rawCode.toUpperCase(), codeNames) || '',
-      feeInput: match ? formatCents(match.feeCents) : '',
-      ...resolveCategory(categorizeCdtCode(rawCode) === 'workup' ? 'workup' : match?.category ?? categorizeCdtCode(rawCode)),
-    };
-  };
+  const lineFromCode = (rawCode: string): BuilderLine => ({
+    ...newLine(),
+    ...resolveCodeFields(rawCode),
+  });
 
   const insertBundle = (bundleId: string) => {
     const bundle = (bundles ?? []).find(b => b.id === bundleId);
@@ -678,27 +916,77 @@ export default function FofBuilder() {
     );
   };
 
+  /**
+   * Fill the plan section from a saved plan (an UNVERIFIED estimate the
+   * patient's benefits still need to confirm) or from generic defaults.
+   */
+  const applyPlanDefaults = (plan: PlanDefaults | null, nextScheduleId: string, scheduleName: string | undefined) => {
+    const defaults = plan ?? GENERIC_PLAN_DEFAULTS;
+    const afterMax = plan ? plan.officeFeesAfterMax : revertsToOfficeFeesOnMax(nextScheduleId, scheduleName, insurancePlans);
+    dispatch({
+      type: 'setMany',
+      values: {
+        planId: plan?.planId ?? NO_PLAN,
+        pctPrev: String(defaults.pctPrev),
+        pctBasic: String(defaults.pctBasic),
+        pctMajor: String(defaults.pctMajor),
+        deductibleInput: formatCents(defaults.deductibleCents),
+        annualMaxInput: formatCents(defaults.annualMaxCents),
+        deductibleWaived: defaults.deductibleWaivedPreventive ? '' : 'no',
+        benefitsSource: plan ? 'plan' : 'default',
+        benefitsConfirmed: '',
+        afterMaxState: afterMax ? 'yes' : '',
+        prevExemptState: '',
+        spans2Years: '',
+      },
+    });
+    const on = downgradeDefault(policyQuery.data?.downgrade_default_on ?? false, plan);
+    dispatch({
+      type: 'mapLines',
+      map: line => (DOWNGRADE_MAP[normalizeCode(line.code)] ? { ...line, downgrade: on ? 'yes' : '' } : line),
+    });
+  };
+
   const handleScheduleChange = (nextId: string) => {
     setEdited(true);
+    const previousName = selectedSchedule?.name ?? (feeScheduleId === MANUAL_SCHEDULE ? 'manual plan' : '');
     setFeeScheduleId(nextId);
     setPayScheduleId(NO_SCHEDULE);
-    // A different carrier means a different plan: plan-specific toggles
-    // start from that carrier's defaults rather than carrying over. Altus
-    // (and any saved plan flagged for it) reverts to office fees once the
-    // annual maximum is used up, so that toggle switches on with it.
-    const picked = (schedules ?? []).find(s => s.id === nextId);
-    dispatch({ type: 'set', field: 'afterMaxState', value: nextId !== NO_SCHEDULE && revertsToOfficeFeesOnMax(nextId, picked?.name, insurancePlans) ? 'yes' : '' });
-    dispatch({ type: 'set', field: 'prevExemptState', value: '' });
-    dispatch({ type: 'set', field: 'spans2Years', value: '' });
-    if (nextId !== NO_SCHEDULE) {
-      if (state.deductibleInput.trim() === '') {
-        dispatch({ type: 'set', field: 'deductibleInput', value: '$50.00' });
-      }
-      if (state.annualMaxInput.trim() === '') {
-        dispatch({ type: 'set', field: 'annualMaxInput', value: '$1,500.00' });
-      }
+    // Every carrier-derived estimate on the form belongs to the previous
+    // carrier: per-line allowable/insurance overrides and the global
+    // insurance/write-off overrides are cleared (kept for restore) so a
+    // stale number never survives the change.
+    dispatch({
+      type: 'mapLines',
+      map: line => {
+        const cleared = previousName ? clearedOverrideNote({ ...line, feeSource: line.feeSource === 'manual' ? 'office' : line.feeSource }, `Carrier changed from ${previousName}`) : null;
+        return { ...line, allowedInput: '', insPayInput: '', insPayException: '', restore: cleared?.restore ?? line.restore, notes: cleared?.notes ?? (cleared ? '' : line.notes) };
+      },
+    });
+    dispatch({ type: 'setMany', values: { insuranceOverride: '', writeOffOverride: '' } });
+    if (nextId === NO_SCHEDULE) {
+      dispatch({ type: 'setMany', values: { planId: NO_PLAN, benefitsSource: '', benefitsConfirmed: '', afterMaxState: '', prevExemptState: '', spans2Years: '', deductibleWaived: '' } });
+      return;
     }
+    const picked = (schedules ?? []).find(s => s.id === nextId);
+    const plans = nextId === MANUAL_SCHEDULE ? [] : plansForSchedule(nextId, insurancePlans);
+    // One saved plan applies itself; several offer a choice (the first
+    // starts selected); none falls back to generic defaults, labelled so.
+    applyPlanDefaults(plans[0] ? planDefaults(plans[0]) : null, nextId, picked?.name);
   };
+
+  const handlePlanChange = (planId: string) => {
+    setEdited(true);
+    const plan = carrierPlans.find(p => p.id === planId) ?? null;
+    applyPlanDefaults(plan ? planDefaults(plan) : null, feeScheduleId, selectedSchedule?.name);
+  };
+
+  // Typing a patient-specific benefit replaces the plan default; the
+  // typed value counts as reviewed for that field.
+  const setBenefit = (field: 'deductibleInput' | 'annualMaxInput') =>
+    (e: React.ChangeEvent<HTMLInputElement>) =>
+      dispatch({ type: 'setMany', values: { [field]: e.target.value, benefitsSource: 'patient' } });
+  const confirmBenefits = () => dispatch({ type: 'setMany', values: { benefitsConfirmed: 'yes' } });
 
   // Visit # where the new benefit year starts (2-year treatment plans);
   // null = no boundary known, renewal falls back to when the max runs out.
@@ -723,8 +1011,9 @@ export default function FofBuilder() {
         .filter(l => l.code.trim() !== '' || l.description.trim() !== '' || l.feeInput.trim() !== '')
         .map(l => {
           const code = l.code.trim().toUpperCase();
-          // Downgrades are decided per line (default on for D2391–D2394).
+          // Downgrades are decided per line (default from the plan or office setting).
           const downgradeCode = l.downgrade === 'yes' ? DOWNGRADE_MAP[code] : undefined;
+          const manualAllowed = l.allowedInput.trim() !== '';
           return {
             key: l.key,
             visit: effectiveVisit(l),
@@ -735,9 +1024,10 @@ export default function FofBuilder() {
               // Membership-included fees stay in the total (the patient
               // sees the value); they come off as their own covered row.
               officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
-              allowedCents: l.allowedInput.trim()
+              allowedCents: manualAllowed
                 ? parseCurrencyInput(l.allowedInput)
                 : allowedByCode.get(code) ?? null,
+              allowedSource: manualAllowed ? 'manual' : allowedByCode.has(code) ? 'carrier' : null,
               benefitBasisCents: downgradeCode ? allowedByCode.get(downgradeCode) ?? null : null,
               // Table-of-allowance plan: the set payment for the code (the
               // amalgam entry when downgraded); missing entry = not covered.
@@ -750,6 +1040,7 @@ export default function FofBuilder() {
               insurancePaysOverrideCents: l.insPayInput.trim()
                 ? parseCurrencyInput(l.insPayInput)
                 : null,
+              insurancePaysOverrideException: l.insPayException === 'yes',
             } satisfies FofLine,
           };
         })
@@ -764,29 +1055,54 @@ export default function FofBuilder() {
     [feeLineEntries]
   );
 
-  const clampPct = (value: string, fallback: number) => {
-    const n = parseInt(value, 10);
-    return isNaN(n) ? fallback : Math.min(100, Math.max(0, n));
-  };
-  // Per-form insurance settings: coverage %s and benefits are typed in
-  // directly (no plan configs). Write-offs are automatic — they apply
-  // when the selected carrier schedule is marked in network (on the Fee
-  // Schedules page) or the template itself is the In-Network one; only
-  // contracted plans take write-offs.
-  const selectedSchedule = (schedules ?? []).find(s => s.id === feeScheduleId);
+  // Malformed money or percentage input is a visible review error, never a
+  // number quietly read as zero.
+  const inputErrors: string[] = [];
+  const pctFields = [['pctPrev', 'Preventive %'], ['pctBasic', 'Basic %'], ['pctMajor', 'Major %']] as const;
+  if (insuranceActive && !payActive) {
+    for (const [field, label] of pctFields) {
+      if (parsePercentInput(state[field]) === null) inputErrors.push(`${label} must be a whole number from 0 to 100 (currently "${state[field]}").`);
+    }
+  }
+  if (insuranceActive) {
+    if (invalidMoney(state.deductibleInput)) inputErrors.push('The remaining deductible is not a dollar amount.');
+    if (invalidMoney(state.annualMaxInput)) inputErrors.push('The remaining annual maximum is not a dollar amount.');
+    if (state.spans2Years === 'yes' && (invalidMoney(state.nextMaxInput) || invalidMoney(state.nextDedInput))) inputErrors.push("Next year's maximum or deductible is not a dollar amount.");
+  }
+  for (const field of ['officeDiscountInput', 'patientCreditInput', 'insuranceOverride', 'writeOffOverride', 'portionOverride', 'discountOverride', 'prepayOverride'] as const) {
+    if (invalidMoney(state[field])) inputErrors.push(`An amount in Amounts & Payment Plan or Discounts & Credits is not a dollar amount ("${state[field]}").`);
+  }
+  for (const l of state.lines) {
+    const active = l.code.trim() !== '' || l.description.trim() !== '' || l.feeInput.trim() !== '';
+    if (!active) continue;
+    const label = l.code.trim().toUpperCase() || 'a procedure line';
+    if (invalidMoney(l.feeInput)) inputErrors.push(`The office fee for ${label} is not a dollar amount.`);
+    else if (l.feeInput.trim() === '') inputErrors.push(`${label} has no office fee: ${l.feeSource === 'missing' ? 'the office schedule has no fee on file for it' : 'enter the fee'} (a blank fee is not $0).`);
+    if (invalidMoney(l.allowedInput)) inputErrors.push(`The allowable for ${label} is not a dollar amount.`);
+    if (invalidMoney(l.insPayInput)) inputErrors.push(`The insurance payment for ${label} is not a dollar amount.`);
+    if (l.feeSource === 'pending') inputErrors.push(`${label} is still being looked up on the office schedule.`);
+  }
+
+  // Per-form insurance settings: coverage %s and benefits come from the
+  // saved plan (unverified) or were typed for this patient. Write-offs are
+  // automatic — they apply when the selected carrier schedule is marked in
+  // network (Fees & Plans) or the template itself is the In-Network one,
+  // and never when the saved plan says the plan takes no write-offs.
   const writeoffsApplied =
-    insuranceActive && ((selectedSchedule?.isInNetwork ?? false) || (template?.showWriteOff ?? false));
-  const planRules: PlanRules | null = insuranceActive
+    insuranceActive &&
+    ((selectedSchedule?.isInNetwork ?? false) || (template?.showWriteOff ?? false)) &&
+    (selectedPlanDefaults?.writeoffApplies ?? true);
+  const planRules = useMemo<PlanRules | null>(() => insuranceActive
     ? {
-        preventivePct: clampPct(state.pctPrev, 100),
-        basicPct: clampPct(state.pctBasic, 80),
-        majorPct: clampPct(state.pctMajor, 50),
-        deductibleWaivedPreventive: true,
+        preventivePct: parsePercentInput(state.pctPrev) ?? 0,
+        basicPct: parsePercentInput(state.pctBasic) ?? 0,
+        majorPct: parsePercentInput(state.pctMajor) ?? 0,
+        deductibleWaivedPreventive: state.deductibleWaived !== 'no',
         writeoffApplies: writeoffsApplied,
         officeFeesAfterMax: state.afterMaxState === 'yes',
         preventiveExemptFromMax: state.prevExemptState === 'yes',
       }
-    : null;
+    : null, [insuranceActive, state.pctPrev, state.pctBasic, state.pctMajor, state.deductibleWaived, writeoffsApplied, state.afterMaxState, state.prevExemptState]);
 
   // Payment plan follows the treatment (front-loaded for implants and
   // dentures so the balance never runs behind the work), with visit
@@ -810,14 +1126,13 @@ export default function FofBuilder() {
               }
             : null,
       }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [feeLines, planRules, state.deductibleInput, state.annualMaxInput, state.spans2Years, state.nextMaxInput, state.nextDedInput]
   );
 
   // Per-row estimates keyed back to builder lines (entries are visit-sorted
   // in the same order estimateInsurance processed them).
   const perLineByKey = useMemo(() => {
-    const map = new Map<string, (typeof estimate.perLine)[number]>();
+    const map = new Map<string, LineEstimate>();
     feeLineEntries.forEach((entry, i) => {
       const lineEstimate = estimate.perLine[i];
       if (lineEstimate) map.set(entry.key, lineEstimate);
@@ -834,9 +1149,8 @@ export default function FofBuilder() {
   );
 
   // Manual dollars taken off the top (collapsed-section summary).
-  const manualAdjustmentsCents =
-    (parseCurrencyInput(state.officeDiscountInput) ?? 0) +
-    (parseCurrencyInput(state.patientCreditInput) ?? 0);
+  const officeDiscountCents = parseCurrencyInput(state.officeDiscountInput) ?? 0;
+  const manualAdjustmentsCents = officeDiscountCents + (parseCurrencyInput(state.patientCreditInput) ?? 0);
 
   // Discount rules (membership/senior) key off the portion BEFORE any
   // rule-derived discount: total − manual discounts/credit − insurance.
@@ -857,7 +1171,6 @@ export default function FofBuilder() {
         insurance -
         writeOff
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [template, estimate, state.insuranceOverride, state.writeOffOverride, state.officeDiscountInput, state.patientCreditInput, membershipCoveredCents]);
 
   // The TEMPLATE decides which agreements are offered; staff can toggle
@@ -896,10 +1209,19 @@ export default function FofBuilder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [template, prepayForcedOn, isSenior, portionBeforeAutoDiscount]
   );
+  // One courtesy at a time: an office (family/courtesy) discount typed on
+  // the form suppresses the prepay courtesy unless a manager explicitly
+  // stacks them for this case.
+  const prepayCourtesyAvailable = (discounts?.prepayDiscountPercent ?? 0) > 0;
+  const prepaySuppressed = prepayCourtesyAvailable && officeDiscountCents > 0 && state.stackPrepayApproved !== 'yes';
+  const prepayDiscountPercent = prepaySuppressed ? 0 : discounts?.prepayDiscountPercent ?? template?.discountPercent ?? 0;
+  const prepayDiscountLabel = prepaySuppressed ? '' : discounts?.prepayDiscountLabel ?? template?.discountLabel ?? '';
 
-  // Portions under $1,000 default to a single "Due at Time of Service"
-  // payment — no installment schedule needed. The payment-count selector
-  // overrides for patients who need a real schedule anyway.
+  // Portions under the office threshold default to a single "Due at Time
+  // of Service" payment — no installment schedule needed. The payment-count
+  // selector overrides for patients who need a real schedule anyway.
+  const dayOfServiceThresholdCents = policyQuery.data?.day_of_service_threshold_cents ?? 100_000;
+  const minStandalonePaymentCents = policyQuery.data?.min_standalone_payment_cents ?? 10_000;
   const projectedPortion = Math.max(
     0,
     portionBeforeAutoDiscount - (discounts?.autoDiscount?.cents ?? 0)
@@ -1008,17 +1330,19 @@ export default function FofBuilder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.lines, membershipActive]);
 
+
   const schedulePortion = parseOverride(state.portionOverride) ?? projectedPortion;
-  const scheduleFromVisits = visitWork ? buildVisitSchedule(schedulePortion, visitWork) : null;
+  const scheduleOptions = { dayOfServiceThresholdCents: dayOfServiceThresholdCents, minStandalonePaymentCents: minStandalonePaymentCents };
+  const scheduleFromVisits = visitWork ? buildVisitSchedule(schedulePortion, visitWork, scheduleOptions) : null;
 
   const autoVisitPlan =
-    projectedPortion > 0 && projectedPortion < DAY_OF_SERVICE_THRESHOLD_CENTS
+    projectedPortion > 0 && projectedPortion < dayOfServiceThresholdCents
       ? VISIT_PLANS.dayOfService
       : scheduleFromVisits ?? treatmentVisitPlan;
   const forcedPlan =
     overrideCount >= 1 && overrideCount <= 4 ? planForCount(overrideCount) : null;
-  // Office policy holds in EVERY plan shape: under $1,000 nothing is due
-  // before the first visit — a forced payment count (or generic plan)
+  // Office policy holds in EVERY plan shape: under the threshold nothing is
+  // due before the first visit — a forced payment count (or generic plan)
   // that opens with "Upon Scheduling" collects that payment at the first
   // visit instead. (The visit-schedule builder already handles this.)
   const basePlan = forcedPlan ?? autoVisitPlan;
@@ -1026,7 +1350,7 @@ export default function FofBuilder() {
     basePlan &&
     basePlan.key !== 'visitSchedule' &&
     projectedPortion > 0 &&
-    projectedPortion < DAY_OF_SERVICE_THRESHOLD_CENTS &&
+    projectedPortion < dayOfServiceThresholdCents &&
     /scheduling/i.test(basePlan.labels[0] ?? '')
       ? { ...basePlan, labels: ['At the First Visit', ...basePlan.labels.slice(1)] }
       : basePlan;
@@ -1085,9 +1409,9 @@ export default function FofBuilder() {
           ? [...template.footnotes, ...extraFootnotes]
           : template.footnotes,
         // Discount rules decide the prepay percentage (template default,
-        // senior-suppressed, or membership +5%).
-        discountPercent: discounts?.prepayDiscountPercent ?? template.discountPercent,
-        discountLabel: discounts?.prepayDiscountLabel ?? template.discountLabel,
+        // senior-suppressed, membership +5%, or suppressed by an office discount).
+        discountPercent: prepayDiscountPercent,
+        discountLabel: prepayDiscountLabel,
       }
     : undefined;
 
@@ -1102,9 +1426,9 @@ export default function FofBuilder() {
       membershipCoveredCents,
       autoDiscount: discounts?.autoDiscount ?? null,
       prepayDiscountBaseCents:
-        discounts?.prepayDiscountBase === 'preDiscountTotal' ? portionBeforeAutoDiscount : null,
+        !prepaySuppressed && discounts?.prepayDiscountBase === 'preDiscountTotal' ? portionBeforeAutoDiscount : null,
     }),
-    [estimate, state.insuranceOverride, state.writeOffOverride, state.officeDiscountInput, state.officeDiscountReason, state.patientCreditInput, discounts, portionBeforeAutoDiscount, membershipCoveredCents]
+    [estimate, state.insuranceOverride, state.writeOffOverride, state.officeDiscountInput, state.officeDiscountReason, state.patientCreditInput, discounts, portionBeforeAutoDiscount, membershipCoveredCents, prepaySuppressed]
   );
 
   const overrides: FofOverrides = useMemo(
@@ -1170,22 +1494,32 @@ export default function FofBuilder() {
   const paymentEditor = usePaymentScheduleEditor(orgCtx?.org_id, paymentPolicy, policyLines, expectedPortionCents);
   const computation = effectiveTemplate ? computeFof(effectiveTemplate, amounts, overrides, visitPlan, paymentEditor.model?.schedule) : null;
   const legacyOverrideReview = !!paymentPolicy && (state.installmentOverrides.some(Boolean) || state.installmentLabelOverrides.some(Boolean) || !!state.paymentCountOverride);
-  const policyBlocked = policyQuery.isLoading || !!policyQuery.error || (!!paymentPolicy && (classificationQuery.isLoading || !!classificationQuery.error || legacyOverrideReview || !!paymentEditor.model?.schedule.issues.length));
-  // Why the preview is paused, in the preview itself — the detailed editor
-  // lives in a section that starts collapsed, so a silent blank preview
-  // used to be the only signal that a code needed a classification.
-  const reviewReasons: string[] = policyQuery.isLoading || (!!paymentPolicy && classificationQuery.isLoading)
+  const policyIssues = paymentEditor.model?.schedule.issues ?? [];
+  const policyBlocked = policyLoading || !!policyError || (!!paymentPolicy && (legacyOverrideReview || policyIssues.length > 0));
+  // The office's payment policy is required configuration for this office.
+  // Without it the legacy visit-based schedule is in use, and the form says
+  // so on screen and on the office copy rather than pretending otherwise.
+  const legacyPolicy = !policyLoading && !policyError && !paymentPolicy;
+  // An insurance form needs the patient's remaining benefits confirmed:
+  // plan defaults are estimates, never the patient's verified eligibility.
+  const benefitsUnconfirmed = insuranceActive && state.benefitsConfirmed !== 'yes';
+  const imbalanceCents = computation?.imbalanceCents ?? 0;
+  // Everything that pauses the preview and the printer, in one list.
+  const reviewReasons: string[] = policyLoading
     ? ['Loading the office payment policy…']
-    : policyQuery.error || classificationQuery.error
-      ? ['The office payment policy could not be loaded. Reload the page or ask a manager to check FOF Settings.']
-      : [
-          ...(legacyOverrideReview ? ['Previous payment overrides are still on this form. Open Amounts & Payment Plan and use Reset all to clear them.'] : []),
-          ...new Set(paymentEditor.model?.schedule.issues ?? []),
-        ];
+    : [
+        ...readinessIssues,
+        ...inputErrors,
+        ...(benefitsUnconfirmed ? [`Confirm the patient's remaining deductible and annual maximum in the Insurance section (${state.benefitsSource === 'plan' ? 'the saved plan defaults are unverified estimates' : state.benefitsSource === 'default' ? 'the generic defaults are unverified estimates' : 'the entered values need confirming'}).`] : []),
+        ...(imbalanceCents > 0 ? [`Discounts, credits and insurance exceed the total by ${formatCents(imbalanceCents)}. Reduce the credit or discount; the patient portion is not silently set to $0.`] : []),
+        ...(legacyOverrideReview ? ['Previous payment overrides are still on this form. Open Amounts & Payment Plan and use Reset all to clear them.'] : []),
+        ...new Set(policyIssues),
+      ];
+  const printBlocked = !template || !computation || !dataReady || policyBlocked || reviewReasons.length > 0;
   // Paid lines the office registry has not classified yet: offer the CDT-range
   // suggestion as a one-click, form-only decision (staff can change it in the
   // editor; a manager saves office-wide classifications in the registry).
-  const unclassifiedLines = paymentPolicy && !policyQuery.isLoading && !classificationQuery.isLoading
+  const unclassifiedLines = paymentPolicy && !policyLoading
     ? paymentEditor.source.filter(line => {
         const edit = paymentEditor.state.lines[line.id];
         const chosen = edit && (edit.code === undefined || edit.code === line.code) ? edit.classification : undefined;
@@ -1197,25 +1531,45 @@ export default function FofBuilder() {
   const classifyForForm = (id: string, code: string, classification: ReturnType<typeof suggestPaymentClass>) =>
     paymentEditor.update(s => ({ ...s, lines: { ...s.lines, [id]: { classification, code } } }));
 
-  // AI pass over the payment names and treatment wording. HIPAA: the
-  // request is built ONLY from CDT codes, code-derived labels, and
-  // strictly-validated tooth numbers (src/lib/fof/ai.ts) — staff-typed
+  // ---- AI pass over the payment names and treatment wording. HIPAA: the
+  // request is built ONLY from vetted procedure codes, code-derived labels,
+  // and strictly-validated tooth numbers (src/lib/fof/ai.ts) — staff-typed
   // descriptions, edited labels, patient fields, and dollar amounts never
   // leave the browser. The doctor name comes from the org's fof_settings
-  // dropdown, never free text.
-  const aiCall = async (wantTreatment: boolean) => {
-    if (!computation) return null;
+  // dropdown, never free text. Codes must be shaped like procedure codes
+  // AND (for non-CDT codes) exist on the office schedule.
+  const codeMayLeave = (code: string) => {
+    const key = normalizeCode(code);
+    if (!isVettedProcedureCode(key)) return false;
+    return /^D\d{4}(?:[A-Z.]{1,3})?$/.test(key) || vettedCodes.has(key);
+  };
+  const namingSignature = useMemo(
+    () =>
+      JSON.stringify([
+        orgCtx?.org_id ?? '',
+        doctorName,
+        !!paymentPolicy,
+        feeScheduleId,
+        state.lines.filter(l => l.code.trim()).map(l => [normalizeCode(l.code), l.tooth, effectiveVisit(l), l.feeInput]),
+        computation?.installmentLabels.length ?? 0,
+      ]),
+    [state.lines, doctorName, paymentPolicy, feeScheduleId, orgCtx?.org_id, computation?.installmentLabels.length]
+  );
+  const [aiText, setAiText] = useState<{ signature: string; treatment: string } | null>(null);
+  const buildNamingRequest = () => {
+    if (!computation || !orgCtx?.org_id) return null;
     const byVisit = new Map<number, { code: string; tooth: string }[]>();
     for (const l of state.lines) {
-      if (!l.code.trim()) continue;
+      if (!l.code.trim() || !codeMayLeave(l.code)) continue;
       byVisit.set(effectiveVisit(l), [
         ...(byVisit.get(effectiveVisit(l)) ?? []),
-        { code: l.code, tooth: l.tooth },
+        { code: normalizeCode(l.code), tooth: l.tooth },
       ]);
     }
     const visitEntries = [...byVisit.entries()]
       .sort((a, b) => a[0] - b[0])
       .map(([, entries]) => entries);
+    if (visitEntries.length === 0) return null;
     // Display slot labels can embed typed descriptions (custom codes
     // fall back to them), so the AI slots are REBUILT from the
     // code-derived safeLabels — same schedule structure, safe wording.
@@ -1227,49 +1581,56 @@ export default function FofBuilder() {
               label: v.safeLabel,
               feeCents: v.feeCents,
               dueAtVisitCents: v.dueAtVisitCents,
-            }))
+            })),
+            scheduleOptions
           )
         : null;
     const autoSlots = paymentPolicy
       ? computation.installmentLabels.map((_, i) => `Payment ${i + 1}`)
       : safeSchedule?.labels ?? rawVisitPlan?.labels ?? computation.installmentLabels;
-    const { data, error } = await supabase.functions.invoke('name-visits', {
+    if (autoSlots.length === 0) return null;
+    return {
       body: {
         ...buildNameVisitsPayload(visitEntries, autoSlots),
-        wantTreatment,
+        wantTreatment: true,
         // "No specific doctor" → empty name; the AI writes as "we".
         doctorName: doctorName === FOF_NO_DOCTOR ? '' : doctorName,
+        orgId: orgCtx.org_id,
       },
-    });
-    if (error) throw new Error(error.message);
-    return { data, slotCount: autoSlots.length };
+      slotCount: autoSlots.length,
+    };
   };
-
-  const aiNamePayments = async () => {
+  const applyNaming = (result: NamingResult, signature: string, manual: boolean) => {
+    if (result.treatment) setAiText({ signature, treatment: result.treatment });
+    // Names are added where staff have not written their own: on the
+    // policy path through the editor's label overrides (which keep staff
+    // wording), on the legacy path per installment slot.
     const requestedSchedule = paymentEditor.model?.schedule;
-    setAiNaming(true);
-    try {
-      const result = await aiCall(false);
-      if (!result) return;
-      const names: string[] = result.data?.names ?? [];
-      if (names.length !== result.slotCount) {
-        throw new Error('AI returned an unexpected number of names');
+    if (paymentPolicy) {
+      if (requestedSchedule && requestedSchedule.rows.length === result.names.length) {
+        paymentEditor.update(s => ({ ...s, overrides: suggestedPaymentLabels(requestedSchedule, s.overrides, result.names) }));
+        if (manual) toast.success('Suggested names added; existing staff wording is preserved');
+      } else if (manual) {
+        toast.error('The payment schedule changed while names were being suggested. Try again.');
       }
-      if (paymentPolicy && requestedSchedule) {
-        paymentEditor.update(s => ({ ...s, overrides: suggestedPaymentLabels(requestedSchedule, s.overrides, names) }));
-        toast.success('Suggested names added; existing staff wording is preserved');
-        return;
-      }
-      names.forEach((name, i) =>
-        dispatch({ type: 'setInstallmentLabel', index: i, value: name })
-      );
-      toast.success('Payment names updated — edit any of them freely');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'AI naming failed');
-    } finally {
-      setAiNaming(false);
+      return;
     }
+    result.names.forEach((name, i) => {
+      if ((state.installmentLabelOverrides[i] ?? '').trim() === '' || manual) {
+        dispatch({ type: 'setInstallmentLabel', index: i, value: name });
+      }
+    });
+    if (manual) toast.success('Payment names updated — edit any of them freely');
   };
+  const naming = useFofNaming({
+    ready: dataReady && !importing && !!computation && feeLines.length > 0 && !inputErrors.length,
+    signature: namingSignature,
+    orgId: orgCtx?.org_id,
+    buildRequest: buildNamingRequest,
+    onApply: applyNaming,
+    resetKey,
+  });
+  const aiNaming = naming.state.status === 'working' || naming.state.status === 'retrying';
 
   // Refresh office-wide code-bank guidance only. No part of this form
   // enters that request.
@@ -1279,55 +1640,17 @@ export default function FofBuilder() {
     else toast.success('Code-bank guidance refreshed. Staff corrections on this form are preserved.');
   };
 
-  // Auto-polish: once the treatment settles (2.5s of quiet), AI rewords
-  // the treatment summary like a human and names the payments — silently,
-  // and never overwriting anything staff already typed.
-  const aiSignature = useMemo(
-    () =>
-      JSON.stringify([
-        doctorName,
-        state.lines.map(l => [l.code, l.tooth, l.description, l.visit, l.feeInput]),
-      ]),
-    [state.lines, doctorName]
-  );
-  const [aiText, setAiText] = useState<{ signature: string; treatment: string } | null>(null);
-  const aiRanForRef = useRef<string>('');
-  useEffect(() => {
-    if (feeLines.length === 0 || importing || !computation) return;
-    if (aiRanForRef.current === aiSignature) return;
-    const timer = setTimeout(async () => {
-      aiRanForRef.current = aiSignature;
-      try {
-        const result = await aiCall(true);
-        if (!result) return;
-        if (typeof result.data?.treatment === 'string' && result.data.treatment.trim() !== '') {
-          setAiText({ signature: aiSignature, treatment: result.data.treatment.trim() });
-        }
-        const names: string[] = result.data?.names ?? [];
-        const noManualNames = state.installmentLabelOverrides.every(l => !l || l.trim() === '');
-        if (!paymentPolicy && names.length === result.slotCount && noManualNames) {
-          names.forEach((name, i) =>
-            dispatch({ type: 'setInstallmentLabel', index: i, value: name })
-          );
-        }
-      } catch {
-        // Silent — the auto wording is a bonus, never an error state.
-      }
-    }, 2500);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aiSignature, feeLines.length, importing]);
-
-  // The reminder every import path goes through — no patient info in the
-  // image, ever.
+  // ---- Importing a treatment plan. Every path is local: the screenshot is
+  // read on this device (same-origin OCR, no upload, no AI, no fallback),
+  // pasted text is parsed here, and staff review every row before it lands.
   const askNoPatientInfo = (onConfirm: () => void) =>
     setConfirmState({
       title: 'Before you import',
       body:
-        "Make sure the screenshot does NOT show the patient's name or any other " +
-        'personal information — crop it out first. Only procedure codes, fees, and ' +
-        'dates should be visible.',
-      action: 'Import',
+        "Crop the patient's name and any other personal information out of the screenshot first. " +
+        'The image is read on this device only — it is never uploaded, sent to an AI service or stored — ' +
+        'and you will review every row before anything enters the form.',
+      action: 'Choose screenshot',
       onConfirm,
     });
 
@@ -1340,141 +1663,80 @@ export default function FofBuilder() {
     const minVisit = visitNumbers.length > 0 ? Math.min(...visitNumbers) : null;
     let differed = 0;
     let unpriced = 0;
+    let unmatched = 0;
     const lines = rows.map(r => {
       const base = lineFromCode(r.code);
       const code = r.code.trim().toUpperCase();
+      const onFile = officeByCode.get(code);
+      if (!onFile) unmatched++;
       // OFFICE column → our own fee schedule → the plain "Fee" column,
       // which may be a carrier's contracted rate. See resolveImportedFee.
       const resolved = resolveImportedFee({
         code,
         pmsOfficeFeeCents: r.officeFee !== null ? Math.round(r.officeFee * 100) : null,
-        onFileFeeCents: officeByCode.get(code)?.feeCents ?? null,
+        // A $0 row on our schedule is a no-charge fee, not a missing one.
+        onFileFeeCents: onFile ? Math.max(0, onFile.feeCents) : null,
         contractedFeeCents: r.fee !== null ? Math.round(r.fee * 100) : null,
       });
       if (resolved.unpriced) unpriced++;
       else if (resolved.flag) differed++;
+      const feeCents = resolved.feeCents;
       return {
         ...base,
         tooth: r.tooth,
         description: base.description || r.description,
-        feeInput:
-          resolved.feeCents !== null ? formatCents(resolved.feeCents) : base.feeInput,
+        feeInput: feeCents !== null ? formatCents(feeCents) : base.feeInput,
+        feeSource: feeCents !== null ? feeSourceFor(feeCents, onFile?.feeCents ?? null, true) : base.feeSource,
         entryDate: r.entryDate,
         visit:
           r.visit !== null && minVisit !== null ? String(r.visit - minVisit + 1) : base.visit,
-        feeFlag: resolved.flag,
+        feeFlag: [resolved.flag, onFile && onFile.feeCents <= 0 && feeCents === 0 ? NO_CHARGE_FLAG : ''].filter(Boolean).join(' '),
+        notes: r.issues.length ? `Imported with review notes: ${r.issues.join(' ')}` : '',
       };
     });
     dispatch({ type: 'addLines', lines });
     dispatch({ type: 'set', field: 'importUsed', value: 'yes' });
     const notes: string[] = [];
-    if (differed > 0) {
-      notes.push(`${differed} fee difference${differed === 1 ? '' : 's'} flagged`);
-    }
-    if (unpriced > 0) {
-      notes.push(`${unpriced} with no office fee on file`);
-    }
+    if (differed > 0) notes.push(`${differed} fee difference${differed === 1 ? '' : 's'} flagged`);
+    if (unpriced > 0) notes.push(`${unpriced} priced from the plan (no office fee on file)`);
+    if (unmatched > 0) notes.push(`${unmatched} code${unmatched === 1 ? '' : 's'} not on the office schedule`);
     const summary = `Imported ${lines.length} procedure${lines.length === 1 ? '' : 's'}${
       notes.length ? ` — ${notes.join(', ')}` : ''
-    }. Estimates come from your fee schedules, not the screenshot.`;
-    // A row priced off the screenshot needs a look before it prints, so
-    // it does not get a green tick.
-    if (unpriced > 0) toast.warning(summary);
+    }. Estimates come from your fee schedules, not the plan.`;
+    if (unpriced > 0 || unmatched > 0) toast.warning(summary);
     else toast.success(summary);
   };
 
-  // Screenshot import: staff crop out patient identifiers first; the image
-  // is parsed in memory (never stored) and only procedure rows come back.
-  // Every ESTIMATE (allowable, ins pays, portion) is recomputed from our own
-  // schedules — never taken from the screenshot. Large screenshots (retina
-  // captures are often multi-MB PNGs) get downscaled/re-encoded in memory
-  // so they fit the function's payload cap; nothing ever touches disk.
-  const shrinkForUpload = (dataUrl: string): Promise<string> =>
-    new Promise(resolve => {
-      if (dataUrl.length < 4_000_000) return resolve(dataUrl);
-      const img = new Image();
-      img.onload = () => {
-        const scale = Math.min(1, 2200 / Math.max(img.width, img.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return resolve(dataUrl);
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.9));
-      };
-      img.onerror = () => resolve(dataUrl);
-      img.src = dataUrl;
-    });
-  const readTreatmentWithAi = async (file: File): Promise<{ rows: LocalTreatmentRow[]; warnings: string[] }> => {
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(new Error('Could not read the image'));
-      reader.readAsDataURL(file);
-    });
-    const image = await shrinkForUpload(dataUrl);
-    const { data, error } = await supabase.functions.invoke('parse-treatment', { body: { image } });
-    if (error) {
-      // invoke() wraps non-2xx responses in a generic message; the
-      // function's JSON body has the actual reason.
-      let message = error.message;
-      try {
-        const body = (await (error as { context?: { json?: () => Promise<unknown> } }).context?.json?.()) as { error?: string } | undefined;
-        if (body?.error) message = body.error;
-      } catch { /* keep the generic message */ }
-      throw new Error(message);
-    }
-    if (data?.status !== 'complete' || !Array.isArray(data.rows)) {
-      throw new Error(data?.error || 'The extraction was not confirmed complete. Nothing was imported.');
-    }
-    return { rows: data.rows as LocalTreatmentRow[], warnings: [] };
-  };
-
-  // The AI reader is the primary path (it reads real PMS screenshots
-  // reliably); the in-browser OCR is the fallback when it is unavailable.
-  // Either way staff review every row before anything enters the form.
   const importScreenshot = async (file: File) => {
     const scope = ++importScope.current;
     setImporting(true);
+    let previewUrl: string | undefined;
     try {
-      let result: { rows: LocalTreatmentRow[]; warnings: string[] };
-      let aiMessage = '';
-      try {
-        result = await readTreatmentWithAi(file);
-      } catch (aiError) {
-        aiMessage = aiError instanceof Error ? aiError.message : '';
-        if (scope !== importScope.current) return;
-        try {
-          result = await readLocalTreatment(file, Object.fromEntries([...officeByCode].map(([code,item]) => [code,item.description])));
-        } catch (localError) {
-          // Prefer the AI reader's specific reason (e.g. "more than 40 procedures")
-          // over the OCR's generic one, unless the AI simply could not be reached.
-          const specific = aiMessage && !/non-2xx|Failed to send|fetch|not confirmed complete/i.test(aiMessage);
-          throw new Error(specific ? aiMessage : localError instanceof Error ? localError.message : 'Screenshot import failed. Nothing was imported.');
-        }
-      }
+      const result = await readLocalTreatment(file, Object.fromEntries([...officeByCode].map(([code, item]) => [code, resolvePatientName(code, codeNames) || item.description])));
       if (scope !== importScope.current) return;
-      if (!result.rows.length) throw new Error('No procedures were read. Nothing was imported.');
-      setConfirmState({
-        title: 'Review ' + result.rows.length + ' extracted procedures',
-        body: 'Compare every row with your screenshot. Confirm all procedures, tooth numbers, fees and visit groups were captured. Nothing has been imported yet.\n\n' +
-          result.rows.map((row,i) => (i+1) + '. ' + row.code + (row.tooth ? ' #' + row.tooth : '') + ' · ' +
-            (row.officeFee !== null ? 'Office ' + formatCents(Math.round(row.officeFee*100)) : row.fee !== null ? 'Fee ' + formatCents(Math.round(row.fee*100)) : 'Use office fee schedule') +
-            (row.visit !== null ? ' · Visit ' + row.visit : ' · Check visit')).join('\n') +
-          (result.warnings.length ? '\n\n' + result.warnings.join('\n') : ''),
-        action: 'Import reviewed rows', previewUrl: URL.createObjectURL(file),
-        onConfirm: () => { if (scope === importScope.current) commitImportedRows(result.rows); },
-      });
+      previewUrl = URL.createObjectURL(file);
+      setImportReview({ source: 'screenshot', result, previewUrl, scope });
     } catch (error) {
-      if (scope === importScope.current) toast.error(error instanceof Error ? error.message : 'Local screenshot reading failed. Nothing was imported.');
-    } finally { if (scope === importScope.current) setImporting(false); }
+      if (scope === importScope.current) toast.error(error instanceof Error ? error.message : 'The screenshot could not be read on this device. Nothing was imported.');
+    } finally {
+      if (scope === importScope.current) setImporting(false);
+    }
+  };
+
+  const importPastedText = () => {
+    const scope = ++importScope.current;
+    try {
+      const result = parseTreatmentText(pasteText, Object.fromEntries([...officeByCode].map(([code, item]) => [code, resolvePatientName(code, codeNames) || item.description])));
+      setPasteOpen(false);
+      setPasteText('');
+      setImportReview({ source: 'text', result, scope });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'The pasted text could not be read. Nothing was imported.');
+    }
   };
 
   // Paste-to-import: Ctrl/Cmd+V with a screenshot on the clipboard runs
-  // the same import (text pastes into inputs are untouched).
+  // the same local import (text pastes into inputs are untouched).
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       if (importing) return;
@@ -1540,7 +1802,7 @@ export default function FofBuilder() {
   const guidedTreatment = policyLines.some(line => line.guidance) && guidedGroups.length
     ? 'Your treatment includes ' + guidedGroups.map(group => group.label).join(', ') + '.'
     : '';
-  const aiTreatment = (aiText && aiText.signature === aiSignature ? aiText.treatment : '') || guidedTreatment;
+  const aiTreatment = (aiText && aiText.signature === namingSignature ? aiText.treatment : '') || guidedTreatment;
   const printedTreatment = noteEdited ? state.note : aiTreatment || autoTreatment;
 
   // Current form facts never leave this component tree or enter AI requests.
@@ -1559,11 +1821,11 @@ export default function FofBuilder() {
       deductibleCents: parseCurrencyInput(state.deductibleInput) ?? 0,
       annualMaximumCents: parseCurrencyInput(state.annualMaxInput) ?? 0,
       manuallyOverridden: !!state.insuranceOverride.trim() || !!state.writeOffOverride.trim(),
-      settings: (planRules ? `Entered coverage: preventive ${planRules.preventivePct}%, basic ${planRules.basicPct}%, major ${planRules.majorPct}%. Contracted write-offs ${planRules.writeoffApplies ? 'apply' : 'do not apply'}. Preventive care ${planRules.preventiveExemptFromMax ? 'does not use' : 'uses'} the annual maximum. ` : '') + (state.spans2Years === 'yes' ? `This estimate spans two benefit years; next-year maximum ${formatCents(parseCurrencyInput(state.nextMaxInput) ?? 0)} and deductible ${formatCents(parseCurrencyInput(state.nextDedInput) ?? 0)} also apply.` : 'This estimate uses the entered benefits for one benefit year.'),
+      settings: (planRules ? `Entered coverage: preventive ${planRules.preventivePct}%, basic ${planRules.basicPct}%, major ${planRules.majorPct}% (${state.benefitsSource === 'plan' ? `from the saved plan ${selectedPlan?.name ?? ''}, unverified` : state.benefitsSource === 'patient' ? 'entered for this patient' : 'generic defaults, unverified'}). Contracted write-offs ${planRules.writeoffApplies ? 'apply' : 'do not apply'}. Preventive care ${planRules.preventiveExemptFromMax ? 'does not use' : 'uses'} the annual maximum. ` : '') + (state.spans2Years === 'yes' ? `This estimate spans two benefit years; next-year maximum ${formatCents(parseCurrencyInput(state.nextMaxInput) ?? 0)} and deductible ${formatCents(parseCurrencyInput(state.nextDedInput) ?? 0)} also apply.` : 'This estimate uses the entered benefits for one benefit year.'),
     },
   } : null;
 
-  const isDirty = importing || !!confirmState?.previewUrl || edited || paymentEditor.isDirty ||
+  const isDirty = importing || !!importReview || edited || paymentEditor.isDirty ||
     !!state.prepayOptionState || !!state.installmentOptionState || !!state.isSenior ||
     !!state.paymentCountOverride ||
     state.patientName.trim() !== '' ||
@@ -1586,62 +1848,142 @@ export default function FofBuilder() {
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       dispatch({ type: 'set', field, value: e.target.value });
 
+  const basisLabel = (basis: LineEstimate['allowedBasis'] | undefined): string => {
+    switch (basis) {
+      case 'carrier': return 'carrier rate';
+      case 'manual': return 'typed allowable';
+      case 'office': return 'no carrier rate on file — office fee';
+      case 'downgrade': return 'alternate benefit — office fee';
+      case 'after-max': return 'after annual max — office fee';
+      case 'uncovered': return 'not covered — office fee';
+      default: return '';
+    }
+  };
+
   // Office-copy detail lines for the auto-printed second page: the exact
-  // codes and amounts behind the patient-facing summary. Memory-only.
-  const officeLines = state.lines
+  // codes and amounts behind the patient-facing summary, with the allowed
+  // fee the calculation ACTUALLY used and where each figure came from.
+  // Memory-only.
+  const officeLines: FofOfficeLine[] = state.lines
     .filter(l => l.code.trim() !== '' || l.description.trim() !== '' || l.feeInput.trim() !== '')
     .map(l => {
       const code = l.code.trim().toUpperCase();
       const per = perLineByKey.get(l.key);
-      // Fillings never show surface detail \u2014 office copy included. A raw
+      // Fillings never show surface detail — office copy included. A raw
       // PMS description ("Composite - 2 srf, ant") collapses to the
       // friendly name; other codes keep whatever staff typed.
       const fillMatch = /^D2(1[4-6]\d|3[0-9]\d)$/.exec(code);
       const description = fillMatch
         ? resolvePatientName(code, codeNames) || l.description.trim()
         : l.description.trim();
+      const notes: string[] = [];
+      if (l.notes.trim()) notes.push(l.notes.trim());
+      if (l.feeFlag.trim()) notes.push(l.feeFlag.trim());
+      if (per?.overrideBounded) {
+        notes.push(`Typed insurance payment ${formatCents(per.overrideBounded.typedCents)} limited to ${formatCents(per.insurancePaysCents)} (${per.overrideBounded.reason === 'max' ? 'remaining annual maximum' : per.overrideBounded.reason === 'workup' ? 'work-up is never covered' : 'payable basis'}).`);
+      }
+      if (insuranceActive && l.insPayInput.trim() && l.insPayException === 'yes') notes.push('Insurance payment override exception approved on this form.');
+      if (insuranceActive && allowableMissing.has(code) && !l.allowedInput.trim() && l.category !== 'other') notes.push(`${selectedSchedule?.name ?? 'The carrier'} has no contracted rate for ${code}; the office fee stood in.`);
       return {
         code,
         tooth: l.tooth.trim(),
         visit: String(effectiveVisit(l)),
         category:
-          CATEGORY_SHORT[l.category] + (!paymentPolicy && l.workupFlag === 'yes' ? ' \u00b7 Work Up' : ''),
+          CATEGORY_SHORT[l.category] + (!paymentPolicy && l.workupFlag === 'yes' ? ' · Work Up' : ''),
         description,
         officeFeeCents: parseCurrencyInput(l.feeInput) ?? 0,
-        // No-coverage lines print no allowable — a carrier fee is
-        // meaningless (and misleading) on a line insurance won't touch.
-        allowableCents:
-          insuranceActive && l.category !== 'other'
-            ? l.allowedInput.trim()
-              ? parseCurrencyInput(l.allowedInput)
-              : allowedByCode.get(code) ?? null
-            : null,
+        allowableCents: insuranceActive ? per?.allowedCents ?? null : null,
+        allowableBasis: insuranceActive ? basisLabel(per?.allowedBasis) : undefined,
         entryDate: l.entryDate,
         insPaysCents: per?.insurancePaysCents ?? 0,
         writeOffCents: per?.writeOffCents ?? 0,
+        feeSource: l.feeSource || undefined,
+        notes: notes.length ? notes : undefined,
       };
     });
 
-  const sheet = effectiveTemplate && computation && !policyBlocked && (
-    <FofPrintSheet
-      practice={practice ?? DEFAULT_PRACTICE_INFO}
-      template={effectiveTemplate}
-      patient={{ patientName: state.patientName, dateISO: state.dateISO, treatment: printedTreatment }}
-      amounts={amounts}
-      computation={computation}
-      officeLines={officeLines}
-      createdBy={createdBy}
-      doctorName={doctorName === FOF_NO_DOCTOR ? '' : doctorName}
-      importedFromScreenshot={state.importUsed === 'yes'}
-    />
-  );
+  // Global manual insurance/write-off overrides are reconciled against the
+  // line totals on the office copy, so a hand-typed total never hides a
+  // difference from the line math.
+  const reconciliation = insuranceActive
+    ? {
+        lineInsuranceCents: estimate.insurancePaysCents,
+        printedInsuranceCents: amounts.insuranceEstimateCents ?? 0,
+        lineWriteOffCents: estimate.writeOffCents,
+        printedWriteOffCents: template?.showWriteOff ? amounts.writeOffCents ?? 0 : 0,
+      }
+    : undefined;
+
+  const sheetProps = effectiveTemplate && computation && practice && !printBlocked
+    ? {
+        practice,
+        template: effectiveTemplate,
+        patient: { patientName: state.patientName, dateISO: state.dateISO, treatment: printedTreatment },
+        amounts,
+        computation,
+        officeLines,
+        createdBy,
+        doctorName: doctorName === FOF_NO_DOCTOR ? '' : doctorName,
+        importedFromScreenshot: state.importUsed === 'yes',
+        legacyPolicy,
+        reconciliation,
+        benefitsNote: insuranceActive
+          ? `Benefits confirmed by staff for this form (source: ${state.benefitsSource === 'plan' ? `saved plan ${selectedPlan?.name ?? ''} defaults, reviewed` : state.benefitsSource === 'patient' ? 'entered for this patient' : 'generic defaults, reviewed'}). Estimate only.`
+          : undefined,
+      }
+    : null;
+  const previewSheet = sheetProps && <FofPrintSheet {...sheetProps} printMode={previewPage} />;
+  const printSheet = sheetProps && <FofPrintSheet {...sheetProps} printMode={printMode} />;
+
+  const handlePrint = () => {
+    if (printBlocked) {
+      toast.error('Resolve the review items before printing.');
+      return;
+    }
+    const layoutReview = document.querySelector('.fof-print-root .fof-layout-review, .fof-layout-review');
+    if (layoutReview) { toast.error(layoutReview.textContent || 'Review the form layout before printing.'); return; }
+    window.print();
+    // Printing never erases the form: the same form can be corrected and
+    // reprinted until staff finish it on purpose.
+    setPrintedAt(new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+    setFinish(f => ({ ...f, printed: true }));
+  };
+
+  const clearForm = () => {
+    importScope.current += 1;
+    setConfirmState(null);
+    setImporting(false);
+    closeImportReview();
+    dispatch({ type: 'clearAll' });
+    paymentEditor.reset();
+    setFeeScheduleId(NO_SCHEDULE);
+    setPayScheduleId(NO_SCHEDULE);
+    setAiText(null);
+    setPrintedAt('');
+    setFinish({ printed: false, contactConfirmed: false });
+    setPreviewPage('patient');
+    setEdited(false);
+    setResetKey(k => k + 1);
+  };
+
+  const namingStatusText = (() => {
+    switch (naming.state.status) {
+      case 'working': return 'Writing the treatment summary and payment names…';
+      case 'retrying': return `The wording service did not answer (attempt ${naming.state.attempt} of 3). Retrying…`;
+      case 'error': return naming.state.message;
+      case 'unavailable': return naming.state.message;
+      case 'done': return 'Treatment summary and payment names are current.';
+      case 'waiting': return dataReady ? 'Waiting for the treatment to settle before writing the summary…' : 'Waiting for fees and settings to load…';
+      default: return '';
+    }
+  })();
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-7xl mx-auto" onChangeCapture={() => setEdited(true)}>
       <FofAssistantWidget context={assistantContext} patientName={state.patientName} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">Financial Options Form</h1>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isManager && <Button variant="outline" asChild><Link to="/fof/settings">FOF Settings</Link></Button>}
           <Button variant="outline" asChild>
             <Link to="/fof/fees">
@@ -1655,13 +1997,19 @@ export default function FofBuilder() {
               Templates
             </Link>
           </Button>
-          <Button onClick={() => {
-            const layoutReview = document.querySelector('.fof-layout-review');
-            if (layoutReview) { toast.error(layoutReview.textContent || 'Review the form layout before printing.'); return; }
-            window.print();
-          }} disabled={!template || policyBlocked}>
+          <Select value={printMode} onValueChange={v => setPrintMode(v as FofPrintMode)}>
+            <SelectTrigger className="w-56" aria-label="What to print">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="both">Patient form + office copy</SelectItem>
+              <SelectItem value="patient">Patient form only</SelectItem>
+              <SelectItem value="office">Office copy only (internal)</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={handlePrint} disabled={printBlocked}>
             <Printer className="h-4 w-4 mr-2" />
-            Print
+            {printedAt ? 'Reprint' : 'Print'}
           </Button>
         </div>
       </div>
@@ -1670,10 +2018,47 @@ export default function FofBuilder() {
         <ShieldCheck className="h-4 w-4" />
         <AlertTitle>Print-only — nothing is saved</AlertTitle>
         <AlertDescription>
-          Patient information on this page stays on this device and is never stored.
-          Print the form before leaving this page; file the signed copy per office policy.
+          Patient information on this page stays on this device and is never stored, uploaded or sent to any
+          service. Print the form before leaving this page; file the signed copy per office policy.
+          {printedAt ? ` Last printed at ${printedAt}; the form stays here until you clear it.` : ''}
         </AlertDescription>
       </Alert>
+
+      {readinessIssues.length > 0 && (
+        <Alert variant="destructive" role="alert">
+          <AlertTitle>Some office data is not ready</AlertTitle>
+          <AlertDescription>
+            <ul className="list-disc space-y-1 pl-5">
+              {readinessIssues.map(issue => <li key={issue}>{issue}</li>)}
+            </ul>
+            {(feesError || practiceError || policyError || plansQuery.error) && (
+              <Button variant="outline" size="sm" className="mt-2" onClick={retryData}>Try loading again</Button>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+      {readinessWarnings.length > 0 && (
+        <Alert role="status">
+          <AlertTitle>No office fee schedule</AlertTitle>
+          <AlertDescription>{readinessWarnings.join(' ')}</AlertDescription>
+        </Alert>
+      )}
+      {(feesLoading || practiceLoading || policyLoading) && readinessIssues.length === 0 && (
+        <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading fee schedules and office settings… codes typed now resolve as soon as they arrive.
+        </p>
+      )}
+      {legacyPolicy && (
+        <Alert role="alert">
+          <AlertTitle>No office payment policy is configured</AlertTitle>
+          <AlertDescription>
+            This office has not saved a payment policy, so the older visit-based payment schedule is in use and the
+            office copy says so. {isManager ? <Link className="underline" to="/fof/settings">Configure the office payment policy</Link> : 'Ask an owner or manager to configure it in FOF Settings'} so
+            collection events follow the office's rules.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {templatesLoading ? (
         <div className="flex items-center justify-center py-16">
@@ -1728,7 +2113,7 @@ export default function FofBuilder() {
                   <div className="space-y-1.5">
                     <Label>Doctor</Label>
                     <Select value={doctorName} onValueChange={value => { setEdited(true); setDoctorName(value); }}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Doctor">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1741,7 +2126,7 @@ export default function FofBuilder() {
                   </div>
                 </div>
                 <Select value={template.id} onValueChange={handleTemplateChange}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Form template">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1819,14 +2204,14 @@ export default function FofBuilder() {
                       ? 'No carrier selected'
                       : feeScheduleId === MANUAL_SCHEDULE
                         ? 'Out of network — manual'
-                        : selectedSchedule?.name
+                        : `${selectedSchedule?.name ?? ''}${selectedPlan ? ` · ${selectedPlan.name}` : ''}${benefitsUnconfirmed ? ' · benefits unconfirmed' : ''}`
                   }
                 />
                 <CardContent className={collapsed.insurance ? 'hidden' : 'space-y-3'}>
                   <div className="space-y-1.5">
                     <Label>Carrier Fee Schedule</Label>
                     <Select value={feeScheduleId} onValueChange={handleScheduleChange}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Carrier Fee Schedule">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1842,11 +2227,32 @@ export default function FofBuilder() {
                   </div>
                   {insuranceActive && (
                     <>
+                      {feeScheduleId !== MANUAL_SCHEDULE && (
+                        <div className="space-y-1.5">
+                          <Label>Saved plan (estimate defaults)</Label>
+                          {carrierPlans.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">
+                              No saved plan for {selectedSchedule?.name ?? 'this carrier'} — generic defaults (100/80/50, $50 deductible, $1,500 maximum) are filled in below as unverified estimates.
+                              {isManager ? <> Save a plan on <Link className="underline" to="/fof/fees">Fees &amp; Plans</Link>.</> : ''}
+                            </p>
+                          ) : (
+                            <Select value={state.planId} onValueChange={handlePlanChange}>
+                              <SelectTrigger aria-label="Saved plan">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {carrierPlans.map(plan => <SelectItem key={plan.id} value={plan.id}>{plan.name}</SelectItem>)}
+                                <SelectItem value={NO_PLAN}>No saved plan — generic defaults</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </div>
+                      )}
                       {(schedules ?? []).some(sch => sch.kind === 'payment' && sch.isActive) && (
                         <div className="space-y-1.5">
                           <Label>Plan Payment Table (fee-schedule plans — optional)</Label>
                           <Select value={payScheduleId} onValueChange={value => { setEdited(true); setPayScheduleId(value); }}>
-                            <SelectTrigger>
+                            <SelectTrigger aria-label="Plan Payment Table">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1870,59 +2276,69 @@ export default function FofBuilder() {
                       )}
                       {!payActive && (
                         <div className="grid gap-3 grid-cols-3">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="fof-pct-prev">Preventive %</Label>
-                            <Input
-                              id="fof-pct-prev"
-                              inputMode="numeric"
-                              autoComplete="off"
-                              value={state.pctPrev}
-                              onChange={setField('pctPrev')}
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor="fof-pct-basic">Basic %</Label>
-                            <Input
-                              id="fof-pct-basic"
-                              inputMode="numeric"
-                              autoComplete="off"
-                              value={state.pctBasic}
-                              onChange={setField('pctBasic')}
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor="fof-pct-major">Major %</Label>
-                            <Input
-                              id="fof-pct-major"
-                              inputMode="numeric"
-                              autoComplete="off"
-                              value={state.pctMajor}
-                              onChange={setField('pctMajor')}
-                            />
-                          </div>
+                          {pctFields.map(([field, label]) => (
+                            <div key={field} className="space-y-1.5">
+                              <Label htmlFor={`fof-${field}`} className="flex items-center gap-1.5">{label}<SourceChip source={state.benefitsSource || undefined} /></Label>
+                              <Input
+                                id={`fof-${field}`}
+                                inputMode="numeric"
+                                autoComplete="off"
+                                aria-invalid={parsePercentInput(state[field]) === null}
+                                value={state[field]}
+                                onChange={setField(field)}
+                              />
+                            </div>
+                          ))}
                         </div>
                       )}
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
-                          <Label htmlFor="fof-ded">Patient's Remaining Deductible</Label>
+                          <Label htmlFor="fof-ded" className="flex items-center gap-1.5">Patient's Remaining Deductible<SourceChip source={state.benefitsSource || undefined} /></Label>
                           <Input
                             id="fof-ded"
                             inputMode="decimal"
                             autoComplete="off"
+                            aria-invalid={invalidMoney(state.deductibleInput)}
                             value={state.deductibleInput}
-                            onChange={setField('deductibleInput')}
+                            onChange={setBenefit('deductibleInput')}
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <Label htmlFor="fof-max">Patient's Remaining Annual Max</Label>
+                          <Label htmlFor="fof-max" className="flex items-center gap-1.5">Patient's Remaining Annual Max<SourceChip source={state.benefitsSource || undefined} /></Label>
                           <Input
                             id="fof-max"
                             inputMode="decimal"
                             autoComplete="off"
+                            aria-invalid={invalidMoney(state.annualMaxInput)}
                             value={state.annualMaxInput}
-                            onChange={setField('annualMaxInput')}
+                            onChange={setBenefit('annualMaxInput')}
                           />
                         </div>
+                      </div>
+                      <div className={`flex flex-wrap items-center gap-2 rounded-md border p-2 text-xs ${benefitsUnconfirmed ? 'border-amber-400 bg-amber-50' : 'border-emerald-300 bg-emerald-50'}`} role="status">
+                        {benefitsUnconfirmed ? (
+                          <>
+                            <span className="flex-1">
+                              {state.benefitsSource === 'plan'
+                                ? `These are ${selectedPlan?.name ?? 'the saved plan'}'s defaults — an unverified estimate, not this patient's eligibility.`
+                                : state.benefitsSource === 'default'
+                                  ? 'These are generic defaults — an unverified estimate, not this patient\'s eligibility.'
+                                  : 'Confirm the remaining deductible and annual maximum for this patient.'}
+                              {' '}Check the patient's benefits, correct the numbers, then confirm.
+                            </span>
+                            <Button type="button" size="sm" variant="outline" onClick={confirmBenefits}>Confirm benefits as entered</Button>
+                          </>
+                        ) : (
+                          <span className="flex-1">Benefits confirmed for this patient by staff (still an estimate on the printed form).</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="fof-ded-waived"
+                          checked={state.deductibleWaived !== 'no'}
+                          onCheckedChange={v => dispatch({ type: 'set', field: 'deductibleWaived', value: v ? '' : 'no' })}
+                        />
+                        <Label htmlFor="fof-ded-waived">Deductible waived for preventive care</Label>
                       </div>
                       <div className="flex items-center gap-2">
                         <Switch
@@ -2003,7 +2419,7 @@ export default function FofBuilder() {
                           Preventive doesn't count toward the annual max
                         </Label>
                       </div>
-                      {state.annualMaxInput.trim() !== '' && (
+                      {state.annualMaxInput.trim() !== '' && !invalidMoney(state.annualMaxInput) && (
                         <p className="text-xs font-medium">
                           {estimate.maxedOut
                             ? 'This treatment uses up the patient’s annual max — the form will say so.'
@@ -2012,11 +2428,11 @@ export default function FofBuilder() {
                       )}
                       <p className="text-xs text-muted-foreground">
                         Write-offs {writeoffsApplied ? 'apply on this form' : "don't apply on this form"} —
-                        they follow the carrier's "In network" marker on the Fee Schedules page.
-                        Allowed fees auto-fill from the selected schedule; type in the Allowed
-                        column to override a line. If this treatment maxes the patient out, the
-                        form automatically explains that later visits (including hygiene) are out
-                        of pocket. None of these patient numbers are saved.
+                        they follow the carrier's "In network" marker and the saved plan on Fees &amp; Plans.
+                        Allowed fees auto-fill from the selected schedule; a code the carrier has no contracted
+                        rate for uses the office fee and says so. Type in the Allowed column to override a
+                        line. If this treatment maxes the patient out, the form explains that later visits
+                        (including hygiene) are out of pocket. None of these patient numbers are saved.
                       </p>
                     </>
                   )}
@@ -2037,12 +2453,29 @@ export default function FofBuilder() {
                   const autoAllowed = allowedByCode.get(lineCode);
                   const downgradeTo = DOWNGRADE_MAP[lineCode];
                   const suggestions = codeSuggestions(line.code);
+                  const per = perLineByKey.get(line.key);
                   const microLabel = 'text-[10px] uppercase tracking-wide text-muted-foreground';
+                  const feeSource = line.feeInput.trim() === ''
+                    ? (line.feeSource === 'pending' ? 'pending' : lineCode ? 'missing' : '')
+                    : line.feeSource === 'import'
+                      ? 'import'
+                      : feeSourceFor(parseCurrencyInput(line.feeInput), officeByCode.get(lineCode)?.feeCents ?? null, false);
+                  const allowedSource = !insuranceActive || !lineCode
+                    ? ''
+                    : line.allowedInput.trim()
+                      ? 'manual'
+                      : autoAllowed !== undefined
+                        ? 'carrier'
+                        : allowableMissing.has(lineCode)
+                          ? 'missing'
+                          : 'office';
+                  const unmatched = lineCode !== '' && !officeByCode.has(lineCode) && !officeItemsQuery.isLoading && !!officeSchedule;
                   return (
-                    <div key={line.key} className="rounded-md border p-2 space-y-1.5">
+                    <div key={line.key} className="rounded-md border p-2 space-y-1.5" data-line-code={lineCode}>
                       <div className="flex gap-1.5 items-center">
                         <Input
                           placeholder="D2740 / crown"
+                            aria-label={`Procedure code, line ${i + 1}`}
                           autoComplete="off"
                           className="font-mono w-28 shrink-0"
                           value={line.code}
@@ -2050,6 +2483,7 @@ export default function FofBuilder() {
                         />
                         <Input
                           placeholder="Description"
+                            aria-label={`Description for ${lineCode || `line ${i + 1}`}`}
                           autoComplete="off"
                           className="flex-1 min-w-0"
                           value={line.description}
@@ -2059,11 +2493,18 @@ export default function FofBuilder() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 shrink-0 text-destructive"
+                          aria-label="Remove procedure"
                           onClick={() => dispatch({ type: 'removeLine', index: i })}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
+                      {unmatched && (
+                        <p className="text-xs text-amber-700" role="status">
+                          {lineCode} is not on the office fee schedule
+                          {line.feeInput.trim() ? ' — the typed fee is a manual entry' : ' — enter the fee by hand or pick a matching code below'}.
+                        </p>
+                      )}
                       {suggestions.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {suggestions.map(it => (
@@ -2092,6 +2533,7 @@ export default function FofBuilder() {
                           <span className={microLabel}>Tooth</span>
                           <Input
                             placeholder="#"
+                            aria-label={`Tooth for ${lineCode || `line ${i + 1}`}`}
                             autoComplete="off"
                             className="text-center"
                             value={line.tooth}
@@ -2120,7 +2562,7 @@ export default function FofBuilder() {
                             value={line.category}
                             onValueChange={v => dispatch({ type: 'setLine', index: i, patch: { category: v as FeeCategory } })}
                           >
-                            <SelectTrigger className="h-10">
+                            <SelectTrigger className="h-10" aria-label="Category">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -2133,20 +2575,22 @@ export default function FofBuilder() {
                           </Select>
                         </div>
                         <div className="space-y-0.5">
-                          <span className={microLabel}>Office Fee</span>
+                          <span className={`${microLabel} flex items-center gap-1`}>Office Fee<SourceChip source={feeSource || undefined} /></span>
                           <Input
                             inputMode="decimal"
                             autoComplete="off"
                             placeholder="$0.00"
+                            aria-label={`Office fee for ${lineCode || `line ${i + 1}`}`}
                             className="text-right"
+                            aria-invalid={invalidMoney(line.feeInput) || (line.feeInput.trim() === '' && lineCode !== '')}
                             value={line.feeInput}
-                            onChange={e => dispatch({ type: 'setLine', index: i, patch: { feeInput: e.target.value } })}
+                            onChange={e => dispatch({ type: 'setLine', index: i, patch: { feeInput: e.target.value, feeSource: e.target.value.trim() ? 'manual' : line.feeSource === 'pending' ? 'pending' : 'missing' } })}
                           />
                         </div>
                         {insuranceEnabled && (
                           <>
                             <div className="space-y-0.5">
-                              <span className={microLabel}>Allowable</span>
+                              <span className={`${microLabel} flex items-center gap-1`}>Allowable<SourceChip source={allowedSource || undefined} title={allowedSource === 'missing' ? 'The carrier has no contracted rate on file for this code; the office fee stands in.' : undefined} /></span>
                               <Input
                                 inputMode="decimal"
                                 autoComplete="off"
@@ -2157,6 +2601,7 @@ export default function FofBuilder() {
                                     ? 'office fee'
                                     : 'auto'
                                 }
+                                aria-label={`Allowable for ${lineCode || `line ${i + 1}`}`}
                                 className="text-right"
                                 value={
                                   line.allowedInput !== ''
@@ -2169,43 +2614,41 @@ export default function FofBuilder() {
                               />
                             </div>
                             <div className="space-y-0.5">
-                              <span className={microLabel}>Ins Pays</span>
+                              <span className={`${microLabel} flex items-center gap-1`}>Ins Pays<SourceChip source={line.insPayInput.trim() ? 'manual' : insuranceActive && lineCode ? (state.benefitsSource === 'plan' ? 'plan' : 'carrier') : undefined} /></span>
                               <Input
                                 inputMode="decimal"
                                 autoComplete="off"
                                 placeholder="$0.00"
+                                aria-label={`Insurance payment for ${lineCode || `line ${i + 1}`}`}
                                 className="text-right"
+                                aria-invalid={invalidMoney(line.insPayInput)}
                                 value={
                                   line.insPayInput !== ''
                                     ? line.insPayInput
                                     : insuranceActive
-                                      ? formatCents(
-                                          perLineByKey.get(line.key)?.insurancePaysCents ?? 0
-                                        )
+                                      ? formatCents(per?.insurancePaysCents ?? 0)
                                       : ''
                                 }
                                 onChange={e => dispatch({ type: 'setLine', index: i, patch: { insPayInput: e.target.value } })}
-                                onBlur={() => {
-                                  // Snap to what the plan can actually pay:
-                                  // an override beyond the remaining max (or
-                                  // unparseable) settles to the effective
-                                  // amount so the cell never overstates.
-                                  if (line.insPayInput.trim() === '') return;
-                                  const typed = parseCurrencyInput(line.insPayInput);
-                                  const effective = perLineByKey.get(line.key)?.insurancePaysCents;
-                                  if (effective !== undefined && typed !== effective) {
-                                    dispatch({
-                                      type: 'setLine',
-                                      index: i,
-                                      patch: { insPayInput: formatCents(effective) },
-                                    });
-                                  }
-                                }}
                               />
                             </div>
                           </>
                         )}
                       </div>
+                      {insuranceActive && per?.overrideBounded && (
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-amber-700" role="status">
+                          <span>
+                            Typed {formatCents(per.overrideBounded.typedCents)}; the plan can pay at most {formatCents(per.insurancePaysCents)} on this line
+                            ({per.overrideBounded.reason === 'max' ? 'remaining annual maximum' : per.overrideBounded.reason === 'workup' ? 'work-up is never covered' : `payable basis ${formatCents(per.allowedCents)}`}).
+                          </span>
+                          {per.overrideBounded.reason === 'basis' && (
+                            <label className="flex items-center gap-1.5">
+                              <Checkbox checked={line.insPayException === 'yes'} onCheckedChange={v => dispatch({ type: 'setLine', index: i, patch: { insPayException: v === true ? 'yes' : '' } })} aria-label={`Allow the insurance payment for ${lineCode} to exceed its payable basis`} />
+                              Office exception: this plan pays more than the basis (recorded on the office copy)
+                            </label>
+                          )}
+                        </div>
+                      )}
                       {insuranceActive && downgradeTo && (
                         <div className="flex items-center gap-2">
                           <Switch
@@ -2219,8 +2662,7 @@ export default function FofBuilder() {
                             htmlFor={`fof-dg-${line.key}`}
                             className="text-xs text-muted-foreground font-normal"
                           >
-                            Plan downgrades to the amalgam benefit ({downgradeTo}) — most plans
-                            pay composite rates; turn on for plans like Altus
+                            Plan downgrades to the amalgam benefit ({downgradeTo}) — default {downgradeOn ? 'on' : 'off'} per {selectedPlanDefaults?.alternateBenefitDowngrade !== null && selectedPlanDefaults ? `the ${selectedPlan?.name} plan` : 'the office FOF setting'}
                           </Label>
                         </div>
                       )}
@@ -2262,10 +2704,18 @@ export default function FofBuilder() {
                           </Label>
                         </div>
                       )}
-                      {(line.feeFlag !== '' || line.entryDate !== '') && (
-                        <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                      {(line.feeFlag !== '' || line.entryDate !== '' || line.notes !== '') && (
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs">
                           {line.feeFlag !== '' && (
                             <span className="text-amber-600 font-medium">⚠ {line.feeFlag}</span>
+                          )}
+                          {line.notes !== '' && (
+                            <span className="text-amber-700" role="status">{line.notes}</span>
+                          )}
+                          {line.restore !== '' && (
+                            <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-xs" onClick={() => restoreOverrides(i)}>
+                              Restore cleared overrides
+                            </Button>
                           )}
                           {line.entryDate !== '' && (
                             <span className="text-muted-foreground">
@@ -2297,7 +2747,7 @@ export default function FofBuilder() {
                     variant="outline"
                     size="sm"
                     disabled={importing}
-                    title="Upload or paste (Ctrl+V) a treatment-plan screenshot — crop out the patient's name first. Estimates still come from your fee schedules."
+                    title="Upload or paste (Ctrl+V) a treatment-plan screenshot — crop out the patient's name first. It is read on this device and never uploaded; estimates still come from your fee schedules."
                     onClick={() => askNoPatientInfo(() => importInputRef.current?.click())}
                   >
                     {importing ? (
@@ -2305,11 +2755,21 @@ export default function FofBuilder() {
                     ) : (
                       <Upload className="h-3.5 w-3.5 mr-1.5" />
                     )}
-                    Import Screenshot
+                    Import Screenshot (on this device)
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={importing}
+                    title="Paste the treatment plan as text (one procedure per line) and review it before it enters the form."
+                    onClick={() => setPasteOpen(true)}
+                  >
+                    <ClipboardPaste className="h-3.5 w-3.5 mr-1.5" />
+                    Paste plan text
                   </Button>
                   {(bundles ?? []).length > 0 && (
                     <Select value="" onValueChange={insertBundle}>
-                      <SelectTrigger className="h-9 w-44">
+                      <SelectTrigger className="h-9 w-44" aria-label="Insert bundle">
                         <SelectValue placeholder="Insert bundle…" />
                       </SelectTrigger>
                       <SelectContent>
@@ -2371,6 +2831,18 @@ export default function FofBuilder() {
                     it, your wording sticks ("Back to auto" re-syncs). Individual codes and
                     fees never print — only this line and the totals.
                   </p>
+                  {feeLines.length > 0 && namingStatusText && (
+                    <div className={`flex flex-wrap items-center gap-2 text-xs ${naming.state.status === 'error' || naming.state.status === 'unavailable' ? 'text-destructive' : 'text-muted-foreground'}`} role="status" data-naming-status={naming.state.status}>
+                      {aiNaming && <Loader2 className="h-3 w-3 animate-spin" />}
+                      <span>{namingStatusText}</span>
+                      {(naming.state.status === 'error' || naming.state.status === 'unavailable' || naming.state.status === 'done') && (
+                        <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-xs" onClick={naming.retry} disabled={aiNaming || !dataReady}>
+                          <Sparkles className="h-3 w-3 mr-1" />
+                          {naming.state.status === 'done' ? 'Rewrite' : 'Retry'}
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -2393,6 +2865,7 @@ export default function FofBuilder() {
                       inputMode="decimal"
                       autoComplete="off"
                       placeholder="$0.00"
+                      aria-invalid={invalidMoney(state.officeDiscountInput)}
                       value={state.officeDiscountInput}
                       onChange={setField('officeDiscountInput')}
                     />
@@ -2404,12 +2877,13 @@ export default function FofBuilder() {
                       inputMode="decimal"
                       autoComplete="off"
                       placeholder="$0.00"
+                      aria-invalid={invalidMoney(state.patientCreditInput)}
                       value={state.patientCreditInput}
                       onChange={setField('patientCreditInput')}
                     />
                   </div>
                 </div>
-                {(parseCurrencyInput(state.officeDiscountInput) ?? 0) > 0 && (
+                {officeDiscountCents > 0 && (
                   <div className="space-y-1.5">
                     <Label htmlFor="fof-office-discount-reason">
                       What's this discount for? (prints as the line's name)
@@ -2423,10 +2897,32 @@ export default function FofBuilder() {
                     />
                   </div>
                 )}
+                {officeDiscountCents > 0 && prepayCourtesyAvailable && (
+                  <div className="flex items-start gap-2 rounded-md border p-2 text-xs">
+                    <Switch
+                      id="fof-stack-prepay"
+                      checked={state.stackPrepayApproved === 'yes'}
+                      onCheckedChange={v => {
+                        if (!v) { dispatch({ type: 'set', field: 'stackPrepayApproved', value: '' }); return; }
+                        setConfirmState({
+                          title: 'Stack two courtesies?',
+                          body: 'Office policy applies one discount at a time: an office (family/courtesy) discount replaces the prepay courtesy. Turn this on only for a case a manager has approved.',
+                          action: 'Approved — stack them',
+                          onConfirm: () => dispatch({ type: 'set', field: 'stackPrepayApproved', value: 'yes' }),
+                        });
+                      }}
+                    />
+                    <Label htmlFor="fof-stack-prepay" className="font-normal leading-snug">
+                      {prepaySuppressed
+                        ? `The prepay courtesy (${discounts?.prepayDiscountLabel || 'prepay discount'}) is off because an office discount is on this form. Turn on only with manager approval to stack both.`
+                        : 'Manager-approved: the prepay courtesy is stacked on top of the office discount for this case.'}
+                    </Label>
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground">
                   These print under the Total only when an amount is entered, and reduce
                   the Patient's Portion. Courtesy discounts (senior, membership, prepay)
-                  apply automatically per the template.
+                  apply automatically per the template, one at a time.
                 </p>
               </CardContent>
             </Card>
@@ -2455,6 +2951,11 @@ export default function FofBuilder() {
                   }
                 />
                 <CardContent className={collapsed.amounts ? 'hidden' : 'space-y-2'}>
+                  {imbalanceCents > 0 && (
+                    <p role="alert" className="text-sm text-destructive">
+                      Discounts, credits and insurance exceed the total by {formatCents(imbalanceCents)}. The patient portion is shown as $0.00 but this form will not print until the credit or discount is corrected.
+                    </p>
+                  )}
                   {insuranceEnabled && (
                     <>
                       <OverrideRow
@@ -2462,6 +2963,7 @@ export default function FofBuilder() {
                         computedCents={estimate.insurancePaysCents}
                         value={state.insuranceOverride}
                         overridden={state.insuranceOverride.trim() !== ''}
+                        source={insuranceActive ? (state.benefitsSource === 'plan' ? 'plan' : 'carrier') : undefined}
                         onChange={v => dispatch({ type: 'set', field: 'insuranceOverride', value: v })}
                       />
                       {template.showWriteOff && (
@@ -2470,8 +2972,14 @@ export default function FofBuilder() {
                           computedCents={estimate.writeOffCents}
                           value={state.writeOffOverride}
                           overridden={state.writeOffOverride.trim() !== ''}
+                          source={insuranceActive ? 'carrier' : undefined}
                           onChange={v => dispatch({ type: 'set', field: 'writeOffOverride', value: v })}
                         />
+                      )}
+                      {(state.insuranceOverride.trim() !== '' || state.writeOffOverride.trim() !== '') && (
+                        <p className="text-xs text-amber-700" role="status">
+                          Line estimates total {formatCents(estimate.insurancePaysCents)} insurance and {formatCents(estimate.writeOffCents)} write-off; the manual totals print instead and the difference is reconciled on the office copy.
+                        </p>
                       )}
                     </>
                   )}
@@ -2480,6 +2988,7 @@ export default function FofBuilder() {
                     computedCents={computation.computed.patientPortionCents}
                     value={state.portionOverride}
                     overridden={computation.overridden.patientPortion}
+                    source="policy"
                     onChange={v => dispatch({ type: 'set', field: 'portionOverride', value: v })}
                   />
                   {effectiveTemplate!.showPrepayOption && (
@@ -2491,6 +3000,7 @@ export default function FofBuilder() {
                           computedCents={computation.computed.discountCents}
                           value={state.discountOverride}
                           overridden={computation.overridden.discount}
+                          source="policy"
                           onChange={v => dispatch({ type: 'set', field: 'discountOverride', value: v })}
                         />
                       )}
@@ -2499,11 +3009,12 @@ export default function FofBuilder() {
                         computedCents={computation.computed.prepayTotalCents}
                         value={state.prepayOverride}
                         overridden={computation.overridden.prepayTotal}
+                        source="policy"
                         onChange={v => dispatch({ type: 'set', field: 'prepayOverride', value: v })}
                       />
                     </>
                   )}
-                  {paymentPolicy && <><p className="text-sm text-muted-foreground" role="status">{officeGuidance.isFetching ? 'Reading office code-bank guidance…' : officeGuidance.error ? 'Code-bank guidance is unavailable. Existing office payment rules remain in use; you can refresh and review again.' : officeGuidance.data?.recipes.length ? 'Treatment wording and grouping are drafted from office code-bank notes. Review the draft and correct this form as needed.' : 'No office code-bank guidance is available yet. The saved payment classifications and office payment rules are in use.'}</p>{officeGuidance.data?.warnings.map((warning, i) => <p key={i} className="text-sm text-amber-700">{warning}</p>)}<PaymentScheduleEditor editor={paymentEditor} /><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={aiNaming || feeLines.length === 0 || policyBlocked} onClick={aiNamePayments}>Suggest payment names</Button><Button variant="outline" disabled={officeGuidance.isFetching || feeLines.length === 0} onClick={refreshGuidance}>Refresh code-bank guidance</Button></div></>}
+                  {paymentPolicy && <><p className="text-sm text-muted-foreground" role="status">{officeGuidance.isFetching ? 'Reading office code-bank guidance…' : officeGuidance.error ? 'Code-bank guidance is unavailable. Existing office payment rules remain in use; you can refresh and review again.' : officeGuidance.data?.recipes.length ? 'Treatment wording and grouping are drafted from office code-bank notes. Review the draft and correct this form as needed.' : 'No office code-bank guidance is available yet. The saved payment classifications and office payment rules are in use.'}</p>{officeGuidance.data?.warnings.map((warning, i) => <p key={i} className="text-sm text-amber-700">{warning}</p>)}<PaymentScheduleEditor editor={paymentEditor} /><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={aiNaming || feeLines.length === 0 || policyBlocked || !dataReady} onClick={naming.retry}>Suggest payment names</Button><Button variant="outline" disabled={officeGuidance.isFetching || feeLines.length === 0} onClick={refreshGuidance}>Refresh code-bank guidance</Button></div></>}
                   {policyBlocked && <p role="alert" className="text-destructive">Payment policy review is required before printing. Check policy loading, classifications, adjustments, and saved overrides.</p>}
                   {(effectiveTemplate!.showInstallmentOption || legacyOverrideReview) && (
                     <>
@@ -2521,7 +3032,7 @@ export default function FofBuilder() {
                             })
                           }
                         >
-                          <SelectTrigger className="w-56">
+                          <SelectTrigger className="w-56" aria-label="Payment plan">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -2538,8 +3049,8 @@ export default function FofBuilder() {
                         <Button
                           variant="outline"
                           size="sm"
-                          disabled={aiNaming || feeLines.length === 0}
-                          onClick={aiNamePayments}
+                          disabled={aiNaming || feeLines.length === 0 || !dataReady}
+                          onClick={naming.retry}
                           title="Have AI suggest friendlier payment names — edit freely after"
                         >
                           {aiNaming ? (
@@ -2599,21 +3110,35 @@ export default function FofBuilder() {
               </Card>
             )}
 
-            <div className="flex justify-end">
-              <Button variant="outline" onClick={() => { importScope.current += 1; setConfirmState(null); setImporting(false); dispatch({ type: 'clearAll' }); paymentEditor.reset(); setEdited(false); }}>
-                Clear form
-              </Button>
-            </div>
+            <Card>
+              <CardContent className="flex flex-wrap items-center gap-3 py-3 text-sm">
+                <div className="flex-1 space-y-1">
+                  <p className="font-medium">Finish this form</p>
+                  <p className="text-xs text-muted-foreground">A memory-only checklist for the person handing off the form. Nothing here is stored; Clear erases every patient detail on this page.</p>
+                  <label className="flex items-center gap-2 text-xs"><Checkbox checked={finish.printed} onCheckedChange={v => setFinish(f => ({ ...f, printed: v === true }))} aria-label="FOF printed" />FOF printed{printedAt ? ` (last at ${printedAt})` : ''}</label>
+                  <label className="flex items-center gap-2 text-xs"><Checkbox checked={finish.contactConfirmed} onCheckedChange={v => setFinish(f => ({ ...f, contactConfirmed: v === true }))} aria-label="Patient contact confirmed" />Patient contact confirmed</label>
+                </div>
+                <Button variant="outline" onClick={clearForm}>
+                  Clear form
+                </Button>
+              </CardContent>
+            </Card>
           </div>
 
           <Card className="lg:sticky lg:top-4 self-start">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Print Preview</CardTitle>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle className="text-base">Print Preview</CardTitle>
+                <div className="flex gap-1" role="tablist" aria-label="Preview page">
+                  <Button type="button" size="sm" variant={previewPage === 'patient' ? 'default' : 'outline'} role="tab" aria-selected={previewPage === 'patient'} onClick={() => setPreviewPage('patient')}>Patient form</Button>
+                  <Button type="button" size="sm" variant={previewPage === 'office' ? 'default' : 'outline'} role="tab" aria-selected={previewPage === 'office'} onClick={() => setPreviewPage('office')}>Office copy</Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              {policyBlocked && effectiveTemplate ? (
+              {printBlocked && effectiveTemplate ? (
                 <div role="alert" className="space-y-3 rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
-                  <p className="font-semibold">Preview paused: the payment schedule needs a decision before this form can print.</p>
+                  <p className="font-semibold">Preview paused: this form needs a decision before it can print.</p>
                   <ul className="list-disc space-y-1 pl-5">
                     {reviewReasons.map(reason => <li key={reason}>{reason}</li>)}
                   </ul>
@@ -2628,12 +3153,15 @@ export default function FofBuilder() {
                       </div>
                     );
                   })}
+                  {benefitsUnconfirmed && !inputErrors.length && (
+                    <Button type="button" size="sm" onClick={confirmBenefits}>Confirm benefits as entered</Button>
+                  )}
                   <Button type="button" variant="outline" size="sm" onClick={openAmounts}>
                     Open Amounts &amp; Payment Plan
                   </Button>
                 </div>
               ) : (
-                <ScaledPrintPreview>{sheet}</ScaledPrintPreview>
+                <ScaledPrintPreview>{previewSheet}</ScaledPrintPreview>
               )}
             </CardContent>
           </Card>
@@ -2645,7 +3173,6 @@ export default function FofBuilder() {
           <AlertDialogHeader>
             <AlertDialogTitle>{confirmState?.title}</AlertDialogTitle>
             <AlertDialogDescription className="max-h-[35vh] overflow-y-auto whitespace-pre-line">{confirmState?.body}</AlertDialogDescription>
-            {confirmState?.previewUrl && <img src={confirmState.previewUrl} alt="Screenshot being reviewed locally" className="max-h-[30vh] w-full object-contain" />}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -2660,6 +3187,36 @@ export default function FofBuilder() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <TreatmentImportReview
+        open={!!importReview}
+        source={importReview?.source ?? 'screenshot'}
+        result={importReview?.result ?? null}
+        previewUrl={importReview?.previewUrl}
+        officeFeeFor={code => { const item = officeByCode.get(normalizeCode(code)); return item ? Math.max(0, item.feeCents) : null; }}
+        onCancel={closeImportReview}
+        onImport={rows => {
+          const scope = importReview?.scope;
+          closeImportReview();
+          if (scope === importScope.current) commitImportedRows(rows);
+        }}
+      />
+
+      <Dialog open={pasteOpen} onOpenChange={open => { if (!open) { setPasteOpen(false); setPasteText(''); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Paste the treatment plan</DialogTitle>
+            <DialogDescription>
+              One procedure per line: code, then tooth, fee and visit in any order (for example <span className="font-mono">D2740 #3 1569.00 Visit 2</span>). Leave the patient's name out. The text is read on this device only and you review every row before it enters the form.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea aria-label="Treatment plan text" rows={8} value={pasteText} onChange={e => setPasteText(e.target.value)} autoComplete="off" spellCheck={false} />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setPasteOpen(false); setPasteText(''); }}>Cancel</Button>
+            <Button onClick={importPastedText} disabled={!pasteText.trim()}>Review rows</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={bundleDialogOpen} onOpenChange={open => !open && setBundleDialogOpen(false)}>
         <DialogContent className="max-w-md">
@@ -2733,7 +3290,7 @@ export default function FofBuilder() {
 
       {/* Hidden print copy, portaled outside #root so print CSS can show
           only the sheet. Same props as the preview — cannot diverge. */}
-      {sheet && createPortal(<div className="fof-print-root">{sheet}</div>, document.body)}
+      {printSheet && createPortal(<div className="fof-print-root">{printSheet}</div>, document.body)}
     </div>
   );
 }

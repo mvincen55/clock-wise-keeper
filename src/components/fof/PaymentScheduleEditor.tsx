@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { buildPaymentSchedule, type CollectionEvent, type PaymentGroup, type PaymentOverride } from '@/lib/fof/payment-engine';
+import { buildPaymentSchedule, type CollectionEvent, type PaymentGroup, type PaymentOverride, isSuggestionOnly } from '@/lib/fof/payment-engine';
 import { milestoneKinds, paymentClasses, type PaymentClass, type PaymentPolicy } from '@/lib/fof/payment-policy';
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
 import { Input } from '@/components/ui/input';
@@ -189,7 +189,8 @@ export function PaymentScheduleEditor({ editor }: { editor: ReturnType<typeof us
   });
   const editGroup = (id: string, patch: Partial<PaymentGroup>) => update(s => ({ ...s, groups: { ...s.groups, [id]: { ...s.groups[id], ...patch } } }));
   const editEvent = (id: string, patch: Partial<CollectionEvent>) => update(s => ({ ...s, events: { ...s.events, [id]: { ...s.events[id], ...patch } } }));
-  const editOverride = (id: string, patch: Partial<PaymentOverride>) => update(s => ({ ...s, overrides: { ...s.overrides, [id]: { ...s.overrides[id], basis: schedule.signature, ...patch } } }));
+  // Staff wording replaces a suggested label for good; amounts and allocations are staff decisions on today's plan.
+  const editOverride = (id: string, patch: Partial<PaymentOverride>) => update(s => ({ ...s, overrides: { ...s.overrides, [id]: { ...s.overrides[id], basis: schedule.signature, ...patch, ...('label' in patch ? { suggestedLabel: false } : {}) } } }));
   const activeGroups = groups.filter(group => model.procedures.some(p => p.groupId === group.id && (p.responsibilityCents !== 0 || p.adjustmentCents || p.paidCents)));
   const activeEventIds = new Set(schedule.rows.map(row => row.id));
   const relevantKinds = (group: PaymentGroup): MilestoneKind[] => {
@@ -253,8 +254,8 @@ export function PaymentScheduleEditor({ editor }: { editor: ReturnType<typeof us
       <Button type="button" variant="outline" onClick={() => update(s => ({ ...s, extraEvents: [...s.extraEvents, { id: `custom:${crypto.randomUUID()}`, label: 'New collection event', order: events.length * 100 }] }))}>Add collection event</Button>
     </details>
     {schedule.rows.map(row => <details key={row.id} className="text-sm"><summary>Adjust procedure amounts for {row.label}</summary>{row.allocations.map((a, i) => <label className="block" key={i}>{schedule.procedureLabels[a.procedureId]} — {schedule.groupLabels[a.groupId]}<MoneyEdit key={`${row.id}:${a.procedureId}:${a.cents}`} label={`Allocation ${row.id} ${a.procedureId} ${i}`} cents={a.cents} commit={cents => { const allocations = row.allocations.map((b, j) => j === i ? { ...b, cents } : b); editOverride(row.id, { allocations, cents: allocations.reduce((s, b) => s + b.cents, 0) }); }} /></label>)}</details>)}
-    {Object.keys(state.overrides).length > 0 && <Button variant="outline" onClick={() => update(s => ({ ...s, overrides: {} }))}>Clear payment overrides</Button>}
-    {Object.entries(state.overrides).filter(([, o]) => o.basis !== schedule.signature).map(([id, o]) => <div key={id} className="text-sm">Saved payment change: {o.label} {o.cents === undefined ? '' : formatCents(o.cents)} <Button variant="outline" onClick={() => editOverride(id, {})}>Confirm after review</Button></div>)}
+    {Object.values(state.overrides).some(o => !isSuggestionOnly(o)) && <Button variant="outline" onClick={() => update(s => ({ ...s, overrides: {} }))}>Clear payment overrides</Button>}
+    {Object.entries(state.overrides).filter(([, o]) => o.basis !== schedule.signature && !isSuggestionOnly(o)).map(([id, o]) => <div key={id} className="text-sm">Saved payment change: {o.label} {o.cents === undefined ? '' : formatCents(o.cents)} <Button variant="outline" onClick={() => editOverride(id, {})}>Confirm after review</Button></div>)}
     </div></details>
   </section>;
 }

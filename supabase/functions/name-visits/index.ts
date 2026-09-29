@@ -57,15 +57,45 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return json({ error: "Unauthorized" }, 401);
 
-    // Only active org members may spend AI credits.
-    const { data: membership } = await supabase
+    // Only active org members may spend AI credits, and only for the office
+    // the form is being built for. The client names that office; the
+    // membership is verified server-side. A caller with several offices
+    // must say which one — the first membership row is never assumed.
+    const body = (await req.json()) as {
+      /** Current payment slot labels, in order (e.g. "Upon Scheduling", "Crown Prep"). */
+      slots: string[];
+      /** Procedures happening at each clinical visit, in order (may include "(tooth #N)"). */
+      visits: { procedures: string[] }[];
+      /** Also write a plain-language treatment summary for the form. */
+      wantTreatment?: boolean;
+      /** Treating doctor's display name (practice config, not patient data). */
+      doctorName?: string;
+      /** The office this form belongs to (validated against the caller's memberships). */
+      orgId?: string;
+    };
+    const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
+    if (body.orgId != null && (typeof body.orgId !== "string" || !UUID.test(body.orgId))) {
+      return json({ error: "Invalid office" }, 400);
+    }
+    const { data: memberships, error: membershipError } = await supabase
       .from("org_members")
       .select("org_id")
       .eq("user_id", user.id)
       .eq("status", "active")
-      .limit(1)
-      .maybeSingle();
-    if (!membership) return json({ error: "Unauthorized" }, 403);
+      .limit(50);
+    if (membershipError) return json({ error: "Unauthorized" }, 403);
+    const orgIds = new Set((memberships ?? []).map((m: { org_id: string }) => m.org_id));
+    if (orgIds.size === 0) return json({ error: "Unauthorized" }, 403);
+    let orgId: string;
+    if (body.orgId) {
+      if (!orgIds.has(body.orgId)) return json({ error: "Unauthorized" }, 403);
+      orgId = body.orgId;
+    } else if (orgIds.size === 1) {
+      orgId = [...orgIds][0];
+    } else {
+      return json({ error: "Select an office", code: "OFFICE_REQUIRED" }, 400);
+    }
+    const membership = { org_id: orgId };
 
     // Standing wording rules taught through the FOF assistant widget —
     // de-identified office preferences that shape every summary.
@@ -85,22 +115,13 @@ Deno.serve(async (req) => {
         : "";
 
     // Per-procedure notes managers set on the office fee schedule.
-    const procedureNotes = await loadProcedureNotes(supabase);
+    const procedureNotes = await loadProcedureNotes(supabase, 40, 300, membership.org_id);
     const notesBlock =
       procedureNotes.length > 0
         ? ` PER-PROCEDURE OFFICE NOTES (authoritative wording/policy for specific procedures — apply the ones matching procedures in this plan, silently ignore the rest): ${procedureNotes.map((n, i) => `(${i + 1}) ${n}`).join(" ")}`
         : "";
 
-    const { slots, visits, wantTreatment, doctorName } = (await req.json()) as {
-      /** Current payment slot labels, in order (e.g. "Upon Scheduling", "Crown Prep"). */
-      slots: string[];
-      /** Procedures happening at each clinical visit, in order (may include "(tooth #N)"). */
-      visits: { procedures: string[] }[];
-      /** Also write a plain-language treatment summary for the form. */
-      wantTreatment?: boolean;
-      /** Treating doctor's display name (practice config, not patient data). */
-      doctorName?: string;
-    };
+    const { slots, visits, wantTreatment, doctorName } = body;
     if (!Array.isArray(slots) || slots.length === 0 || slots.length > MAX_SLOTS) {
       return json({ error: "Bad request" }, 400);
     }

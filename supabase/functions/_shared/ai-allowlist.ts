@@ -91,15 +91,10 @@ export const AI_GATEWAY_ALLOWLIST: Record<string, GatewayEntry> = {
     handler: "consented",
     reason: "Owner deliberately uploads office policy documents to the corpus.",
   },
-  "parse-treatment": {
-    handler: "consented",
-    reason:
-      "Staff crop patient identifiers, then upload a treatment-plan screenshot and ask for its procedure rows to be read. The image is processed in memory and only code/tooth/fee/visit rows come back.",
-  },
   "name-visits": {
     handler: "consented",
     reason:
-      "Sees CDT codes, code-derived procedure names, validated tooth numbers, visit order and the configured doctor name only — the client builds the payload from codes, never from typed text or person fields (src/lib/fof/ai.ts).",
+      "Sees vetted procedure codes, code-derived procedure names, validated tooth numbers, visit order and the configured doctor name only — the client builds the payload from codes it allowlists (src/lib/fof/ai.ts), never from typed text, amounts, screenshots or person fields. Treatment-plan screenshots are read on the device (parse-treatment was retired for that reason).",
   },
 };
 

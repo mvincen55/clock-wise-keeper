@@ -1,6 +1,6 @@
 import { fullFixture } from './fof-payment-fixture';
 import { describe, it, expect } from 'vitest';
-import { buildPaymentSchedule, splitPolicyCents, suggestedPaymentLabels, type PaymentGroup, type PaymentInput } from '@/lib/fof/payment-engine';
+import { buildPaymentSchedule, isSuggestionOnly, splitPolicyCents, suggestedPaymentLabels, type PaymentGroup, type PaymentInput } from '@/lib/fof/payment-engine';
 import { harelickPolicyTemplate, type PaymentClass } from '@/lib/fof/payment-policy';
 import { estimateInsurance } from '@/lib/fof/insurance';
 import { readFileSync } from 'node:fs';
@@ -51,6 +51,29 @@ describe('organization payment engine — confirmed policy', () => {
     expect(renamed.rows.map(r=>[r.id,r.cents,r.allocations])).toEqual(original.rows.map(r=>[r.id,r.cents,r.allocations]));
     expect(renamed.rows[0].label).toBe('Staff wording');
     expect(renamed.issues.some(i=>i.includes('stale'))).toBe(true);
+  });
+  it('suggested labels follow the plan: never a review blocker after a change, dropped with their event, replaced by the next suggestion, and staff wording wins', () => {
+    const input = plan('restoration', 320100); // thirds at scheduling, prep and delivery
+    const original = buildPaymentSchedule(input);
+    input.overrides = suggestedPaymentLabels(original, {}, original.rows.map((_, i) => `Suggested ${i + 1}`));
+    expect(buildPaymentSchedule(input).rows.map(r => r.label)).toEqual(['Suggested 1', 'Suggested 2', 'Suggested 3']);
+    // A smaller course: halves at prep and delivery, so the scheduling event disappears and the signature moves on.
+    const changed = plan('restoration', 90000); changed.overrides = input.overrides;
+    const rebuilt = buildPaymentSchedule(changed);
+    expect(rebuilt.issues).toEqual([]);
+    expect(rebuilt.rows.map(r => r.label)).toEqual(['Suggested 2', 'Suggested 3']);
+    changed.overrides = suggestedPaymentLabels(rebuilt, changed.overrides, rebuilt.rows.map((_, i) => `Fresh ${i + 1}`));
+    expect(Object.keys(changed.overrides).sort()).toEqual(rebuilt.rows.map(r => r.id).sort());
+    expect(Object.values(changed.overrides).every(o => o.basis === rebuilt.signature && isSuggestionOnly(o))).toBe(true);
+    expect(buildPaymentSchedule(changed).rows.map(r => r.label)).toEqual(['Fresh 1', 'Fresh 2']);
+    // Staff wording on one row survives the next round of suggestions and is no longer a mere suggestion.
+    const staffRow = rebuilt.rows[0].id;
+    changed.overrides[staffRow] = { ...changed.overrides[staffRow], label: 'Staff wording', suggestedLabel: false };
+    changed.overrides = suggestedPaymentLabels(buildPaymentSchedule(changed), changed.overrides, ['Third 1', 'Third 2']);
+    const final = buildPaymentSchedule(changed);
+    expect(final.issues).toEqual([]);
+    expect(final.rows.map(r => r.label)).toEqual(['Staff wording', 'Third 2']);
+    expect(isSuggestionOnly(changed.overrides[staffRow])).toBe(false);
   });
   it('requires review when distinct impressions and try-in appointments have tied order', () => {
     const p=plan('denture',150000);p.events.find(e=>e.id==='y')!.order=3;

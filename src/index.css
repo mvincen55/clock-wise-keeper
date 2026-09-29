@@ -2062,6 +2062,37 @@
   white-space: nowrap;
 }
 
+/* Provenance beside an amount ("carrier rate", "office fee", "manual"). */
+.fof-office-basis {
+  display: block;
+  font-size: 6.4pt;
+  color: var(--fof-muted);
+  white-space: normal;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.fof-office-line-notes td {
+  font-size: 6.8pt;
+  color: var(--fof-muted);
+  background: #faf9fc;
+}
+
+/* Long plans: the office table may run to several pages; rows never split
+   and the header repeats on every page. */
+.fof-office-table thead {
+  display: table-header-group;
+}
+
+.fof-office-table tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.fof-office-page {
+  break-before: page;
+}
+
 .fof-office-totals td {
   font-weight: 800;
   background: #faf9fc;

@@ -472,3 +472,57 @@ describe('estimateInsurance', () => {
     expect(result.writeOffCents).toBe(3_000 + 5_000 + 40_000);
   });
 });
+
+describe('manual insurance-payment overrides are bounded and explained', () => {
+  const benefits = { remainingDeductibleCents: 0, remainingAnnualMaxCents: 100_000 };
+  it('caps a typed payment at the payable basis (the allowed fee) and reports the typed amount', () => {
+    const result = estimateInsurance([line({ category: 'major', officeFeeCents: 150_000, allowedCents: 120_000, insurancePaysOverrideCents: 130_000 })], plan, benefits);
+    expect(result.perLine[0].insurancePaysCents).toBe(100_000); // basis 120,000, then the 100,000 max
+    expect(result.perLine[0].overrideBounded).toEqual({ typedCents: 130_000, reason: 'basis' });
+  });
+  it('caps an uncovered line at zero unless the office records an exception', () => {
+    const bounded = estimateInsurance([line({ category: 'other', officeFeeCents: 50_000, insurancePaysOverrideCents: 20_000 })], plan, benefits);
+    expect(bounded.perLine[0].insurancePaysCents).toBe(0);
+    expect(bounded.perLine[0].overrideBounded).toEqual({ typedCents: 20_000, reason: 'basis' });
+    const excepted = estimateInsurance([line({ category: 'other', officeFeeCents: 50_000, insurancePaysOverrideCents: 20_000, insurancePaysOverrideException: true })], plan, benefits);
+    expect(excepted.perLine[0].insurancePaysCents).toBe(20_000);
+    expect(excepted.perLine[0].overrideBounded).toBeUndefined();
+  });
+  it('the exception never lifts the remaining annual max, and work-up stays uncovered', () => {
+    const maxed = estimateInsurance([line({ category: 'major', officeFeeCents: 150_000, allowedCents: 120_000, insurancePaysOverrideCents: 130_000, insurancePaysOverrideException: true })], plan, benefits);
+    expect(maxed.perLine[0].insurancePaysCents).toBe(100_000);
+    expect(maxed.perLine[0].overrideBounded).toEqual({ typedCents: 130_000, reason: 'max' });
+    const workup = estimateInsurance([line({ category: 'workup', officeFeeCents: 52_000, insurancePaysOverrideCents: 10_000, insurancePaysOverrideException: true })], plan, benefits);
+    expect(workup.perLine[0].insurancePaysCents).toBe(0);
+    expect(workup.perLine[0].overrideBounded).toEqual({ typedCents: 10_000, reason: 'workup' });
+  });
+  it('a typed payment within the basis and max stands as written', () => {
+    const result = estimateInsurance([line({ category: 'major', officeFeeCents: 150_000, allowedCents: 120_000, insurancePaysOverrideCents: 40_000 })], plan, benefits);
+    expect(result.perLine[0].insurancePaysCents).toBe(40_000);
+    expect(result.perLine[0].overrideBounded).toBeUndefined();
+  });
+});
+
+describe('the allowed fee the calculation used is labelled by its origin', () => {
+  const benefits = { remainingDeductibleCents: 0, remainingAnnualMaxCents: 1_000_000 };
+  it('carrier rate, typed allowable, office fallback, downgrade, uncovered and after-max', () => {
+    const lines: FofLine[] = [
+      line({ category: 'major', officeFeeCents: 150_000, allowedCents: 120_000, allowedSource: 'carrier' }),
+      line({ category: 'major', officeFeeCents: 150_000, allowedCents: 110_000, allowedSource: 'manual' }),
+      line({ category: 'basic', officeFeeCents: 20_000, allowedCents: null }),
+      line({ category: 'basic', officeFeeCents: 30_000, allowedCents: 25_000, benefitBasisCents: 15_000, allowedSource: 'carrier' }),
+      line({ category: 'other', officeFeeCents: 45_000, allowedCents: 30_000, allowedSource: 'carrier' }),
+    ];
+    const result = estimateInsurance(lines, plan, benefits);
+    expect(result.perLine.map(l => l.allowedBasis)).toEqual(['carrier', 'manual', 'office', 'downgrade', 'uncovered']);
+    expect(result.perLine.map(l => l.allowedCents)).toEqual([120_000, 110_000, 20_000, 30_000, 45_000]);
+    expect(result.perLine[3].benefitBasisCents).toBe(15_000);
+    const afterMax = estimateInsurance(
+      [line({ category: 'major', officeFeeCents: 100_000, allowedCents: 80_000, allowedSource: 'carrier' }), line({ category: 'major', officeFeeCents: 100_000, allowedCents: 80_000, allowedSource: 'carrier' })],
+      { ...plan, officeFeesAfterMax: true },
+      { remainingDeductibleCents: 0, remainingAnnualMaxCents: 40_000 }
+    );
+    expect(afterMax.perLine.map(l => l.allowedBasis)).toEqual(['carrier', 'after-max']);
+    expect(afterMax.perLine[1].allowedCents).toBe(100_000);
+  });
+});

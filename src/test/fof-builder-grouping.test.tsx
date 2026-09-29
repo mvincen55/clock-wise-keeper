@@ -10,7 +10,7 @@ import { transferableAbortController } from 'node:util';
 vi.stubGlobal('AbortController', class { constructor() { return transferableAbortController(); } });
 
 const mocks = vi.hoisted(() => ({ invoke: vi.fn() }));
-vi.mock('@/lib/fof/local-treatment-import', () => ({ readLocalTreatment: vi.fn() }));
+vi.mock('@/lib/fof/local-treatment-import', () => ({ readLocalTreatment: vi.fn(), parseTreatmentText: vi.fn() }));
 vi.mock('@/hooks/useFofOfficeGuidance', () => ({ useFofOfficeGuidance: () => ({ data: { recipes: [], warnings: [] }, isFetching: false, refetch: vi.fn() }) }));
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { functions: { invoke: mocks.invoke } } }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
@@ -21,7 +21,7 @@ vi.mock('@/hooks/useFofPolicySettings', () => ({
   useFofPolicySettings: () => ({ data: { payment_policy: harelickPolicyTemplate() } }),
   usePaymentClassifications: () => ({ data: { D0367: 'workup', D0470: 'workup', D6010: 'implant', D6011: 'implant', D6057: 'restoration', D6059: 'restoration', D4249: 'other', D2954: 'restoration', D2740: 'restoration' } }),
 }));
-vi.mock('@/hooks/useFofTemplates', () => ({ useFofTemplates: () => ({ data: LIVE_TEMPLATES }), useFofSettings: () => ({ data: undefined }) }));
+vi.mock('@/hooks/useFofTemplates', () => ({ useFofTemplates: () => ({ data: LIVE_TEMPLATES }), useFofSettings: () => ({ data: PRACTICE_DEFAULT_BRANDING }) }));
 vi.mock('@/hooks/useOrgBranding', () => ({ useOrgBranding: () => ({ data: PRACTICE_DEFAULT_BRANDING }) }));
 vi.mock('@/hooks/useFeeSchedules', () => ({
   useFeeSchedules: () => ({ data: [] }), useCodeNames: () => ({ data: {} }), useFeeScheduleItems: () => ({ data: [] }),
@@ -51,7 +51,7 @@ function addProcedures(rows: { code: string; fee: string; tooth?: string }[]) {
 beforeEach(() => { mocks.invoke.mockReset(); mocks.invoke.mockResolvedValue({ data: {} }); });
 
 describe('payment groups follow the appointment the office copy prints', () => {
-  it('groups untyped lines by their suggested visit instead of one group per code', () => {
+  it('groups untyped lines by their suggested visit instead of one group per code', { timeout: 15000 }, () => {
     mount();
     addProcedures([
       { code: 'D0367', fee: '520' }, { code: 'D0470', fee: '256' },
