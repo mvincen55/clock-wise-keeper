@@ -2,7 +2,7 @@ import type { ManagerView, MemberView, OwnerView } from './types';
 import {
   assistantFixture, frontDeskBackupAssistFixture, frontDeskBackupOnlyFixture, frontDeskFixture, hygienistFixture,
   managerAttendanceFixture, managerClosedFixture, managerFixture, managerFrontDeskFixture, managerNewFixture,
-  managerClearFixture, ownerClearFixture, managerOffPaceFixture, memberClearFixture, memberHiddenFinancialsFixture, memberLateArrivalFixture, memberNewFixture,
+  managerClearFixture, ownerClearFixture, ownerOffCalendarFixture, managerOffPaceFixture, memberClearFixture, memberHiddenFinancialsFixture, memberLateArrivalFixture, memberNewFixture,
   ownerClosedFixture, ownerFixture, ownerIncompleteFixture, ownerNewFixture, ownerPartialFixture,
 } from './fixtures';
 
@@ -134,6 +134,19 @@ export const SCENARIOS: Scenario[] = [
     omitted: [
       ...NO_CLINICAL,
       'A behind-pace verdict — two office days are unrecorded, so the meters show the totals with a partial-data label and the way to complete the records.',
+    ],
+  },
+  {
+    slug: 'owner-off-calendar',
+    title: 'Owner — closeouts on days the office calendar does not list (Thu Mar 12)',
+    tier: 'Owner',
+    primary: 'Dentist',
+    secondary: 'None',
+    view: ownerOffCalendarFixture,
+    sources: ADMIN_SOURCES,
+    omitted: [
+      ...NO_CLINICAL,
+      'A closeout on an unlisted Saturday or Sunday counts in the totals but never stands in for a missing office day; the label names it so the calendar gap is visible.',
     ],
   },
   {

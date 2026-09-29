@@ -7,7 +7,7 @@ import { performanceDataFrom, type PerformanceData, type PerformanceRaw } from '
 import { buildWindow, periodFor } from '@/lib/performance-series';
 import { missedSeries } from '@/lib/missed-trend';
 import type { VitalsVisibility } from '@/hooks/usePracticeVitals';
-import { countOfficeDays } from '@/lib/office-days';
+import { countOfficeDays, isOfficeDay } from '@/lib/office-days';
 import { shiftDate } from '@/lib/time-utils';
 import type { PerformanceBlock, PerformanceState } from '../types';
 import { ADMIN_HOME_TOOLS } from '../tools';
@@ -29,10 +29,12 @@ export function performanceBlockFrom(args: {
     return { performance: null, performanceState: state === 'ok' ? 'loading' : state, goalMeters: null, insights: null, tools: [] };
   }
   const admin = performance.access === 'admin';
+  const todayRecorded = performance.sources.closeouts.some(d => d.date === performance.today);
   const allMeters = goalMeters({
     today: performance.today, thisMonth: performance.thisMonth, targets: performance.targets, monthElapsed: performance.monthElapsed,
     officeDays: officeDaysForMonth(performance.today, performance.calendar),
-    todayRecorded: performance.sources.closeouts.some(d => d.date === performance.today),
+    todayRecorded,
+    recordedOfficeDays: recordedOfficeDaysThisMonth(performance, todayRecorded),
   });
   const meters = admin ? allMeters : filterMetersByVisibility(allMeters, performance.visibility);
 
@@ -73,6 +75,24 @@ export function officeDaysForMonth(today: string, calendar: OfficeDayCalendar | 
     total: countOfficeDays(start, end, calendar),
     throughYesterday: countOfficeDays(start, shiftDate(today, -1), calendar),
     throughToday: countOfficeDays(start, today, calendar),
+  };
+}
+
+/**
+ * Per metric, this month's closeouts that fall on office days through the
+ * cutoff (yesterday, or today once recorded). A closeout on a day the
+ * calendar does not list stays in the totals but never covers a missing
+ * office day. Null without a calendar.
+ */
+export function recordedOfficeDaysThisMonth(performance: PerformanceData, todayRecorded: boolean): { production: number; collections: number } | null {
+  const calendar = performance.calendar;
+  if (!calendar) return null;
+  const monthStart = `${performance.today.slice(0, 7)}-01`;
+  const cutoff = todayRecorded ? performance.today : shiftDate(performance.today, -1);
+  const inWindow = performance.sources.closeouts.filter(d => d.date >= monthStart && d.date <= cutoff && isOfficeDay(d.date, calendar));
+  return {
+    production: inWindow.filter(d => d.productionCents !== null).length,
+    collections: inWindow.filter(d => d.collectionsCents !== null).length,
   };
 }
 

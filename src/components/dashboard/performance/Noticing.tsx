@@ -51,8 +51,13 @@ export function Noticing({ insights, loading }: { insights: HomeInsight[] | null
     return <p className="py-2 text-[14px] text-muted-foreground">Nothing else to note from the recorded days. The meters above carry this month’s pace.</p>;
   }
   return (
-    <ul className={cn('grid gap-3', insights.length > 1 && 'md:grid-cols-2', insights.length > 2 && 'xl:grid-cols-3')}>
-      {insights.map(i => <InsightCard key={i.id} insight={i} />)}
-    </ul>
+    // One card per row in a narrow column (the sidebar); side by side only
+    // when the container itself is wide — a query on the wrapper's width,
+    // never the viewport's.
+    <div className="[container-type:inline-size]">
+      <ul className={cn('grid gap-3', insights.length > 1 && '[@container(min-width:40rem)]:grid-cols-2', insights.length > 2 && '[@container(min-width:60rem)]:grid-cols-3')}>
+        {insights.map(i => <InsightCard key={i.id} insight={i} />)}
+      </ul>
+    </div>
   );
 }

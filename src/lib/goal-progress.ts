@@ -50,6 +50,13 @@ export type GoalMeter = {
   /** "$1,200 ahead of pace" / "on pace" / null. */
   paceLabel: string | null;
   recordedDays: number;
+  /**
+   * Recorded days that fall on office days through the cutoff — what
+   * `missingDays` is judged on. A closeout on a day the calendar does not
+   * list never stands in for a missing office day. Equals `recordedDays`
+   * when the caller has no per-day calendar view.
+   */
+  recordedOfficeDays: number;
   /** Calendar day of month and days in the month, for the caption. */
   daysElapsed: number;
   daysInMonth: number;
@@ -105,8 +112,14 @@ export function goalMeters(input: {
   officeDays?: OfficeDaysInput | null;
   /** Whether today's closeout is already on record (today then counts as elapsed). */
   todayRecorded?: boolean;
+  /**
+   * Per metric, the recorded days that fall on office days through the
+   * cutoff. Without it the plain recorded-day count stands in, which a
+   * closeout on an unlisted day can inflate.
+   */
+  recordedOfficeDays?: { production: number; collections: number } | null;
 }): GoalMeter[] {
-  const { today, thisMonth, targets, monthElapsed, officeDays, todayRecorded } = input;
+  const { today, thisMonth, targets, monthElapsed, officeDays, todayRecorded, recordedOfficeDays: officeRecorded } = input;
   const daysInMonth = daysInMonthOf(today);
   const daysElapsed = Number(today.slice(8, 10));
   const monthLabel = formatMonthLong(today);
@@ -122,12 +135,14 @@ export function goalMeters(input: {
     targetCents: number,
     achieved: number,
     recordedDays: number,
+    onOfficeDays: number | undefined,
   ): GoalMeter => {
+    const recordedOfficeDays = basis.kind === 'office_days' ? Math.min(onOfficeDays ?? recordedDays, recordedDays) : recordedDays;
     const expectedRecordedDays = basis.kind === 'office_days' ? basis.elapsed : 0;
-    const missingDays = basis.kind === 'office_days' ? Math.max(0, expectedRecordedDays - recordedDays) : 0;
+    const missingDays = basis.kind === 'office_days' ? Math.max(0, expectedRecordedDays - recordedOfficeDays) : 0;
     const completeness: GoalCompleteness = basis.kind !== 'office_days' ? 'unknown' : missingDays > 0 ? 'partial' : 'complete';
     const base = {
-      id, label, monthLabel, targetCents, recordedDays, daysElapsed, daysInMonth, basis, expectedRecordedDays, missingDays, completeness,
+      id, label, monthLabel, targetCents, recordedDays, recordedOfficeDays, daysElapsed, daysInMonth, basis, expectedRecordedDays, missingDays, completeness,
       achievedCents: null as number | null, remainingCents: null as number | null, overCents: null as number | null,
       pct: null as number | null, expectedToDateCents: null as number | null, pace: null as MetricPace | null, paceLabel: null as string | null,
       verdict: null as GoalVerdict | null, verdictLabel: '',
@@ -193,7 +208,7 @@ export function goalMeters(input: {
   };
 
   return [
-    build('production', 'Production', targets.productionCents, thisMonth.productionCents, thisMonth.productionRecordedDays ?? thisMonth.days),
-    build('collections', 'Collections', targets.collectionsCents, thisMonth.collectedCents, thisMonth.days),
+    build('production', 'Production', targets.productionCents, thisMonth.productionCents, thisMonth.productionRecordedDays ?? thisMonth.days, officeRecorded?.production),
+    build('collections', 'Collections', targets.collectionsCents, thisMonth.collectedCents, thisMonth.days, officeRecorded?.collections),
   ];
 }

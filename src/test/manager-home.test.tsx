@@ -168,8 +168,8 @@ describe('today', () => {
     expect(screen.queryByText('Marcus T.')).not.toBeInTheDocument();
     expect(screen.getByText('4 in · Sam K. at 1:00 PM')).toBeInTheDocument();
     expect(screen.getByText('8 scheduled')).toBeInTheDocument();
-    expect(screen.getByText('Ken W.').closest('a')).toHaveAttribute('href', '/management?item=missing_clock_out:d1');
-    expect(screen.getByText('Jo B.').closest('a')).toHaveAttribute('href', '/management/people/4');
+    expect(within(screen.getByRole('region', { name: 'Today' })).getByText('Ken W.').closest('a')).toHaveAttribute('href', '/management?item=missing_clock_out:d1');
+    expect(within(screen.getByRole('region', { name: 'Today' })).getByText('Jo B.').closest('a')).toHaveAttribute('href', '/management/people/4');
   });
 
   it('a closed office never invents absences', () => {

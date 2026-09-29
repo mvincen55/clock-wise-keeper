@@ -504,7 +504,7 @@ function makeOwner(args: OwnerScenarioArgs): OwnerView {
     lanes: lanesFor(ownerContext),
     toolGroups: toolsFor(ownerContext),
     office: args.staffing.office,
-    summary: stateSummary({ office: args.staffing.office, today: band, needs, lastDay, payroll: args.payroll ?? null, payrollItems: needsNow.filter(i => i.payroll).length, todayDate: today }),
+    summary: stateSummary({ office: args.staffing.office, today: band, needs, lastDay, payroll: args.payroll ?? null, payrollItems: needsNow.filter(i => i.payroll).length, todayDate: today, closeouts: args.closeouts ?? [], calendar: args.calendar === undefined ? fxCalendar : args.calendar }),
     brief: buildDailyBrief(pulse),
     lastDay,
     decisionCount: needsNow.length,
@@ -600,6 +600,29 @@ const partialHistory: DayVitals[] = [
   ...fxCloseoutHistory('2025-10-01', '2026-02-27', { complete: true }),
   ...fxCloseoutHistory('2026-03-02', '2026-03-11', { complete: true }).filter(d => d.date !== '2026-03-05' && d.date !== '2026-03-10').map(d => ({ ...d, productionCents: 620_000, collectedCents: 540_000 })),
 ];
+/**
+ * Closeouts on days the office calendar does not list: a Saturday and a
+ * Sunday closed out (Mar 7 and 8), while one office day (Mar 5) has none.
+ * The extra days stay in the totals but never cover the missing office day.
+ */
+const offCalendarHistory: DayVitals[] = [
+  ...fxCloseoutHistory('2025-10-01', '2026-02-27', { complete: true }),
+  ...fxCloseoutHistory('2026-03-02', '2026-03-11', { complete: true }).filter(d => d.date !== '2026-03-05').map(d => ({ ...d, productionCents: 620_000, collectedCents: 540_000 })),
+  fxDay('2026-03-07', { productionCents: 180_000, collectedCents: 150_000, newPatientsScheduled: 0, newPatientsSeen: 0 }),
+  fxDay('2026-03-08', { productionCents: 90_000, collectedCents: 210_000, newPatientsScheduled: 0, newPatientsSeen: 0 }),
+].sort((a, b) => a.date.localeCompare(b.date));
+
+export const ownerOffCalendarFixture: OwnerView = makeOwner({
+  days: offCalendarHistory,
+  today: '2026-03-12',
+  dateLabel: 'Thu, Mar 12, 2026',
+  staffing: staffingOpen,
+  now: new Date(2026, 2, 12, 9, 42),
+  todayLog: null,
+  needsNow: [],
+  closeouts: [{ id: 'log-0311', deposit_date: '2026-03-11', sealed_at: '2026-03-11T22:40:00Z', needs_manager_review: false }],
+});
+
 export const ownerPartialFixture: OwnerView = makeOwner({
   days: partialHistory,
   today: '2026-03-12',
@@ -729,6 +752,7 @@ function makeManager(args: ManagerScenarioArgs): ManagerView {
     goal: buildGoalBrief(goals, input.today),
     payroll: args.payroll ?? null,
     inbox: args.inbox ?? null,
+    calendar: args.calendar === undefined ? fxCalendar : args.calendar,
   });
   return {
     kind: 'manager',

@@ -16,7 +16,7 @@
  */
 import { daysBetween, mondayOf, shiftDate } from '@/lib/time-utils';
 import { daysInMonthOf } from '@/lib/metric-pace';
-import { countOfficeDays, type OfficeDayCalendar } from '@/lib/office-days';
+import { countOfficeDays, isOfficeDay, type OfficeDayCalendar } from '@/lib/office-days';
 
 /* ------------------------------- periods ------------------------------- */
 
@@ -470,6 +470,17 @@ export type WindowTotals = {
   secondaryCents: number | null;
   primaryRecordedDays: number;
   secondaryRecordedDays: number;
+  /**
+   * Recorded days that fall on office days through the cutoff — the count
+   * completeness is judged on. A closeout on a day the office calendar does
+   * not list (an unmarked Saturday, a listed closure) is real and stays in
+   * the totals, but never stands in for a missing office day. Null without
+   * a calendar.
+   */
+  primaryRecordedOfficeDays: number | null;
+  secondaryRecordedOfficeDays: number | null;
+  /** Recorded days outside the office calendar, named so the calendar gap is visible. */
+  offCalendarDays: number;
   /** Calendar days in the period. */
   days: number;
   /**
@@ -502,6 +513,9 @@ export function totalsOf(points: DayPoint[]): WindowTotals {
     secondaryCents: b.length ? b.reduce((s, p) => s + (p.secondaryCents as number), 0) : null,
     primaryRecordedDays: a.length,
     secondaryRecordedDays: b.length,
+    primaryRecordedOfficeDays: null,
+    secondaryRecordedOfficeDays: null,
+    offCalendarDays: 0,
     days: points.length,
     expectedDays: null,
     cutoff: points.length ? points[points.length - 1].date : '',
@@ -532,15 +546,20 @@ export function cutoffFor(period: { start: string; end: string }, today: string,
 export function withCoverage(
   totals: WindowTotals,
   period: { start: string; end: string },
-  args: { today: string; calendar: OfficeDayCalendar | null | undefined; source: SeriesSource },
+  args: { today: string; calendar: OfficeDayCalendar | null | undefined; source: SeriesSource; points: DayPoint[] },
 ): WindowTotals {
-  const recordedDays = Math.max(totals.primaryRecordedDays, totals.secondaryRecordedDays);
   const todayRecorded = totals.lastRecorded === args.today;
   const cutoff = cutoffFor(period, args.today, todayRecorded);
   if (!args.calendar) return { ...totals, cutoff };
-  const expectedDays = countOfficeDays(period.start, cutoff, args.calendar);
-  const completeness: Completeness = recordedDays >= expectedDays ? 'complete' : 'partial';
-  return { ...totals, cutoff, expectedDays, completeness };
+  const calendar = args.calendar;
+  const expectedDays = countOfficeDays(period.start, cutoff, calendar);
+  const onOfficeDay = (pt: DayPoint) => pt.date <= cutoff && isOfficeDay(pt.date, calendar);
+  const primaryRecordedOfficeDays = args.points.filter(pt => pt.primaryCents !== null && onOfficeDay(pt)).length;
+  const secondaryRecordedOfficeDays = args.points.filter(pt => pt.secondaryCents !== null && onOfficeDay(pt)).length;
+  const offCalendarDays = args.points.filter(pt => (pt.primaryCents !== null || pt.secondaryCents !== null) && !isOfficeDay(pt.date, calendar)).length;
+  const recordedOfficeDays = Math.max(primaryRecordedOfficeDays, secondaryRecordedOfficeDays);
+  const completeness: Completeness = recordedOfficeDays >= expectedDays ? 'complete' : 'partial';
+  return { ...totals, cutoff, expectedDays, completeness, primaryRecordedOfficeDays, secondaryRecordedOfficeDays, offCalendarDays };
 }
 
 /** Whole calendar months inside a period, as YYYY-MM keys; empty unless the period is month-aligned. */
@@ -673,12 +692,14 @@ export function coverageLabel(totals: WindowTotals, source: SeriesSource, source
   const reportUnit = sourceDates ? 'source date' : 'posting day';
   if (totals.expectedDays !== null) {
     const unit = source === 'closeouts' ? 'office day' : reportUnit;
-    parts.push(`${recorded} of ${totals.expectedDays} ${unit}${totals.expectedDays === 1 ? '' : 's'} recorded`);
+    const onCalendar = Math.max(totals.primaryRecordedOfficeDays ?? 0, totals.secondaryRecordedOfficeDays ?? 0);
+    parts.push(`${onCalendar} of ${totals.expectedDays} ${unit}${totals.expectedDays === 1 ? '' : 's'} recorded`);
   } else {
     const unit = source === 'closeouts' ? 'day' : reportUnit;
     parts.push(`${recorded} of ${totals.days} ${unit}s recorded`);
   }
   if (totals.lastRecorded) parts.push(`through ${fmtDay(totals.lastRecorded)}`);
+  if (totals.offCalendarDays > 0) parts.push(`${totals.offCalendarDays} recorded outside the office calendar`);
   if (source === 'closeouts' && totals.unsealedDays > 0) parts.push(`${totals.unsealedDays} not sealed`);
   return parts.join(' · ');
 }
@@ -686,7 +707,7 @@ export function coverageLabel(totals: WindowTotals, source: SeriesSource, source
 /** "Partial data · 2 office days not recorded" or null when nothing is missing or unknown. */
 export function partialLabel(totals: WindowTotals, source: SeriesSource): string | null {
   if (totals.completeness !== 'partial' || totals.expectedDays === null) return null;
-  const recorded = Math.max(totals.primaryRecordedDays, totals.secondaryRecordedDays);
+  const recorded = Math.max(totals.primaryRecordedOfficeDays ?? totals.primaryRecordedDays, totals.secondaryRecordedOfficeDays ?? totals.secondaryRecordedDays);
   const missing = totals.expectedDays - recorded;
   const unit = source === 'closeouts' ? 'office day' : 'posting day';
   return `Partial data · ${missing} ${unit}${missing === 1 ? '' : 's'} not recorded`;
@@ -712,7 +733,7 @@ export function buildWindow(args: {
   if (!source) return null;
   const granularity = granularityFor(period);
   const points = dayPoints(period, source, sources);
-  let totals = withCoverage(totalsOf(points), period, { today, calendar: args.calendar, source });
+  let totals = withCoverage(totalsOf(points), period, { today, calendar: args.calendar, source, points });
   if (source === 'report_history') {
     const summary = authoritativeTotals(period, sources.reportMonths);
     if (summary) totals = { ...totals, ...summary, authoritative: true, completeness: 'complete' };

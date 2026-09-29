@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import type { AttentionItem } from '@/lib/attention';
 import type { StaffingSummary } from '@/components/dashboard/staffing';
 import type { GoalBrief, MonthPaceLine } from '@/lib/owner-pulse';
-import { buildHomeBrief, lastDayLine, needsYou, paceLine, spotlight, stateSummary, todayBand } from '@/lib/home-brief';
+import { buildHomeBrief, lastDayLine, needsYou, paceLine, rosterGroups, spotlight, stateSummary, todayBand } from '@/lib/home-brief';
 
 const item = (over: Partial<AttentionItem>): AttentionItem => ({
   key: 'pto_request:p1', kind: 'pto_request', verb: 'decide', recordTable: 'pto_requests', recordId: 'p1',
@@ -88,6 +88,47 @@ describe('spotlight', () => {
     expect(spotlight(goal({ daysLeft: 2 }))?.reason).toBe('2 days left');
     expect(spotlight(goal({ remaining: 0, done: 10 }))?.reason).toBe('finished');
     expect(spotlight(null)).toBeNull();
+  });
+});
+
+describe('the roster line', () => {
+  it('names who is in (with a late or remote note), not in yet, starting later, and off — in that order', () => {
+    const who = rosterGroups([...open.rows, { id: 'e7', name: 'Alice N.', status: 'In — remote', tone: 'steady' }]);
+    expect(who.map(g => [g.label, g.names])).toEqual([
+      ['In', ['Dana R.', 'Marcus T. (late 12m)', 'Rita M.', 'Alice N. (remote)']],
+      ['Not in yet', ['Ken W.']],
+      ['Later', ['Sam K. (1:00 PM)']],
+      ['Off', ['Jo B.']],
+    ]);
+    const s = stateSummary({ office: open.office, today: todayBand({ summary: open, now, needsNow: [] }), needs: quietNeeds, lastDay: null, payroll: null, todayDate: '2026-09-21' });
+    expect(s.who.map(g => g.label)).toEqual(['In', 'Not in yet', 'Later', 'Off']);
+    expect(rosterGroups([{ id: 'x', name: 'Pat Q.', status: 'Scheduled today', tone: 'calm' }])).toEqual([]);
+  });
+  it('after close it names who is still in and who is done, from the snapshot', () => {
+    const snapshot = [
+      { employee_id: 'e5', user_id: 'u5', display_name: 'Sam K.', status_code: 'ok', is_late: false, is_absent: false, is_incomplete: true, has_punches: true, is_remote: false, minutes_late: 0, has_day_off: false, office_closed: false, is_scheduled_day: true, schedule_expected_start: '13:00:00', schedule_expected_end: '17:00:00', tardy_approval_status: null },
+      { employee_id: 'e1', user_id: 'u1', display_name: 'Dana R.', status_code: 'ok', is_late: false, is_absent: false, is_incomplete: false, has_punches: true, is_remote: false, minutes_late: 0, has_day_off: false, office_closed: false, is_scheduled_day: true, schedule_expected_start: '08:00:00', schedule_expected_end: '17:00:00', tardy_approval_status: null },
+    ];
+    const t = todayBand({ summary: closed, snapshot, now: new Date('2026-09-21T21:20:00Z'), needsNow: [] });
+    expect(rosterGroups(t.people).map(g => [g.label, g.names])).toEqual([['Still in', ['Sam K.']], ['Done', ['Dana R.']]]);
+  });
+});
+
+describe('an office day with no closeout', () => {
+  const weekdays = { closedDates: new Set<string>(), openDates: new Set<string>() };
+  const closeout = (deposit_date: string) => ({ id: `c-${deposit_date}`, deposit_date, sealed_at: 'x', needs_manager_review: false });
+  const summaryWith = (closeouts: ReturnType<typeof closeout>[]) => stateSummary({
+    office: open.office, today: todayBand({ summary: open, now, needsNow: [] }), needs: quietNeeds,
+    lastDay: { id: 'l', label: "Thursday's closeout", text: 'sealed', tone: 'calm', href: '/deposit-log' },
+    payroll: null, todayDate: '2026-09-21', closeouts, calendar: weekdays,
+  });
+  it('is named as a priority, linked to that day, when the last closeout is older than the previous office day', () => {
+    // Mon Sep 21: the last closeout is Thu Sep 17, so Fri Sep 18 has none; the weekend is not an office day.
+    expect(summaryWith([closeout('2026-09-17')]).lines).toEqual([{ id: 'closeout-missing', text: 'Fri, Sep 18 has no closeout.', href: '/deposit-log?date=2026-09-18', tone: 'attention' }]);
+    expect(summaryWith([closeout('2026-09-15')]).lines[0].text).toBe('3 office days have no closeout (Wed, Sep 16 – Fri, Sep 18).');
+  });
+  it('is silent when yesterday (or the last office day) is on record', () => {
+    expect(summaryWith([closeout('2026-09-18')]).lines).toEqual([]);
   });
 });
 
