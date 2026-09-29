@@ -167,7 +167,8 @@ Deno.serve(async (req) => {
               "(2) Every tooth number provided in the visit list MUST appear next to its procedure. EXCEPTION: dentures and partials get arch wording only ('a new lower partial denture') — never tooth numbers or ranges for a denture, even if teeth are listed. For fillings, never mention surfaces or surface counts — just 'a composite filling on tooth #3'. " +
               "(3) Never promise or guarantee results. Frame outcomes as the goal: 'designed to restore comfortable chewing', 'to help rebuild a strong, functional bite'. BANNED: 'full function', 'complete', 'perfect', 'permanent', 'guaranteed', 'will restore', 'pain-free', and any absolute promise. " +
               "(4) End on the goal of the plan (comfort, function, or the finished smile) — as an aim, not a promise. " +
-              "No codes, no prices, no per-visit breakdown, no hype words; 420 characters max." +
+              "No codes, no prices, no per-visit breakdown, no hype words; 420 characters max. " +
+              "(5) PATIENTS READ EVERY WORD, so names and the summary use everyday language only. Say 'implant connector' — never 'abutment'; 'crown' — never 'porcelain/ceramic crown', 'porc/cer crn', 'PFM' or 'FMC'; 'denture', 'partial', 'bridge' or 'crown' — never 'prosthesis' or 'restoration' as a noun; 'filling' — never 'resin composite'; 'impressions' — never 'scan/impression protocol'. Never use tooth-surface words (occlusal, buccal, lingual, distal, mesial), lab shorthand, or abbreviations a patient would not say out loud. If a procedure name you were given is clinical, translate it into these plain words. " +
               guidanceBlock +
               notesBlock,
           },
