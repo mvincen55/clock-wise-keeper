@@ -26,8 +26,6 @@ import type { Database as Generated } from './types';
  *   20260922160000_office_pto_policy      org_pto_policy; pto_settings.policy_override;
  *                                         set_org_pto_policy
  *   20260929120000_pto_balance_guard      pto_available_hours, pto_allows_negative
- *   20260930150000_insurance_plan_alternate_benefit
- *                                         insurance_plans.alternate_benefit_downgrade
  *
  * Same idea as ./knowledge-client.ts, generalised: one module, one merge.
  */
@@ -158,12 +156,6 @@ type PendingColumns = {
     Row: { policy_override: boolean };
     Insert: { policy_override?: boolean };
     Update: { policy_override?: boolean };
-  };
-  /** 20260930150000_insurance_plan_alternate_benefit.sql */
-  insurance_plans: {
-    Row: { alternate_benefit_downgrade: boolean | null };
-    Insert: { alternate_benefit_downgrade?: boolean | null };
-    Update: { alternate_benefit_downgrade?: boolean | null };
   };
 };
 
