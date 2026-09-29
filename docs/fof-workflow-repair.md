@@ -218,7 +218,9 @@ discount and code rules and the wording guidance, plus an empty `E2E Import Targ
 carrier and an inactive `E2E Retired Carrier`. Patient name used: `Synthetic Patient
 Zeta`. No real patient information was involved.
 
-Result: 16 steps, 0 failed (44 checks). In order:
+Result: 16 steps, 0 failed (44 checks); a confirmation run after the suggested-label fix
+repeated it (16 steps, 0 failed; the typed code resolved 429 ms after the fee items
+arrived, printing opened 556 ms after the benefits were confirmed). In order:
 
 - **Fees page.** All schedules listed with their counts; the 1,174-code office schedule
   reports every row (the read paged past 1,000); the retired carrier is marked
