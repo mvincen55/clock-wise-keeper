@@ -118,6 +118,14 @@ Every review flag now quotes what was read and at what confidence ("The code D60
 read at 39% confidence (below 65%)"). The capture's OCR words are a fixture
 (`src/test/fixtures/pms-plan-ocr-words.json`; codes, teeth, dates and fees only).
 
+Released 2026-09-29: PR #251 merged as `b50c8d81` at 20:41 UTC; `name-visits` redeployed
+at 20:45 UTC; frontend published (`index-BUnqDJcn.js`) at about 20:47 UTC. Live check at
+20:50 UTC on https://purpleenvelope.app with the synthetic office (removed afterwards):
+the real capture reads as 8 rows with the right codes, all 16 amounts and no flags; the
+form names the course "Implant Crown #3, #19, #20 and #30", the payments "On Implant
+Crown Delivery #3…", and the summary says "implant connectors and implant crowns";
+17 of 17 steps passed.
+
 Wording: the built-in names for D6056/D6057 are "Implant connector (standard/custom
 abutment)" and D6011 "Implant uncovering (second stage)", and the visit-naming prompt now
 requires everyday words ("implant connector", never "abutment"; "crown", never
