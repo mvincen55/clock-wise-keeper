@@ -20,17 +20,29 @@ import type { PersonStatus, Tone } from '@/components/dashboard/types';
 import type { CloseDayStatus } from '@/lib/manager-pulse';
 import type { GoalBrief, MonthPaceLine } from '@/lib/owner-pulse';
 import { closeoutDayLabel } from '@/lib/owner-pulse';
-import { daysBetween, formatDate } from '@/lib/time-utils';
+import { daysBetween, formatDate, shiftDate } from '@/lib/time-utils';
+import { listOfficeDays, type OfficeDayCalendar } from '@/lib/office-days';
 
 export type SummaryLine = { id: string; text: string; href?: string; tone: Tone };
 
-/** The short summary at the top of Home: the office state and at most three priorities. */
+/** One group of the roster line: "In: Dana R., Marcus T. (late 12m)". */
+export type RosterGroup = {
+  id: 'in' | 'still_in' | 'not_yet' | 'later' | 'absent' | 'off' | 'done';
+  label: string;
+  /** Names, with a short note where it matters: "(late 12m)", "(remote)", "(1:00 PM)". */
+  names: string[];
+  tone: Tone;
+};
+
+/** The short summary at the top of Home: the office state, who is where, and at most three priorities. */
 export type HomeSummary = {
   /** "Open · 4 of 8 in", "Closed for the day", "Not open yet". */
   headline: string;
   /** One supporting clause: the workday's end, who starts later, the closure. */
   detail: string;
   tone: Tone;
+  /** Who is in, not in yet, starting later, off, done — by name. */
+  who: RosterGroup[];
   lines: SummaryLine[];
 };
 
@@ -62,6 +74,8 @@ export type TodayBand = {
   exceptions: TodayException[];
   /** "5 in · Sam K. at 1:00 PM" */
   countLine: string;
+  /** Everyone on today's roster with their status, for the summary's roster line. */
+  people: PersonStatus[];
   /** When the roster is stale or loading, when it was last read. */
   asOf: string | null;
 };
@@ -145,7 +159,7 @@ export function todayBand(input: {
   } else {
     countLine = summary.office.detail.replace(/\.$/, '');
   }
-  return { phase, scheduled: summary.scheduledToday, inNow, exceptions, countLine, asOf: input.asOf ?? null };
+  return { phase, scheduled: summary.scheduledToday, inNow, exceptions, countLine, people: rows, asOf: input.asOf ?? null };
 }
 
 /** The last workday's closeout as one line; after close, today's. */
@@ -211,6 +225,35 @@ export function spotlight(goal: GoalBrief | null): Spotlight | null {
 export const MAX_SUMMARY_LINES = 3;
 
 /**
+ * The roster line: who is in (with a late or remote note), still in after
+ * close, not in yet, starting later, absent, off, or done — by name, in
+ * that order, only the groups that have anyone. Someone merely scheduled
+ * or not scheduled today is not a status worth a name.
+ */
+export function rosterGroups(people: PersonStatus[]): RosterGroup[] {
+  const names: Record<RosterGroup['id'], string[]> = { in: [], still_in: [], not_yet: [], later: [], absent: [], off: [], done: [] };
+  for (const p of people) {
+    const s = p.status;
+    if (s === 'Still clocked in') names.still_in.push(p.name);
+    else if (s.startsWith('In')) {
+      const note = s.startsWith('In · ') ? ` (${s.slice('In · '.length)})` : s === 'In — remote' ? ' (remote)' : '';
+      names.in.push(`${p.name}${note}`);
+    } else if (s === 'Not in yet') names.not_yet.push(p.name);
+    else if (s.startsWith('Starts ')) names.later.push(`${p.name} (${s.slice('Starts '.length)})`);
+    else if (s === 'Absent') names.absent.push(p.name);
+    else if (s === 'Approved off') names.off.push(p.name);
+    else if (s.startsWith('Done') || s === 'Clocked out') names.done.push(p.name);
+  }
+  const order: [RosterGroup['id'], string, Tone][] = [
+    ['in', 'In', 'steady'], ['still_in', 'Still in', 'attention'], ['not_yet', 'Not in yet', 'calm'], ['later', 'Later', 'calm'],
+    ['absent', 'Absent', 'attention'], ['off', 'Off', 'calm'], ['done', 'Done', 'calm'],
+  ];
+  return order.filter(([id]) => names[id].length > 0).map(([id, label, tone]) => ({ id, label, names: names[id], tone }));
+}
+
+const shortDay = (date: string) => formatDate(date).split(', ').slice(0, 2).join(', ');
+
+/**
  * The summary: the office state as a headline, then at most three
  * priorities, each one linked. What needs the manager is counted by the
  * Needs you queue itself, and the closeout's state sits in the queue and
@@ -228,8 +271,12 @@ export function stateSummary(input: {
   payrollItems?: number;
   inbox?: StatusLine | null;
   todayDate: string;
+  /** The closeouts on record and the office calendar: an office day with no closeout is named. */
+  closeouts?: CloseoutFact[];
+  calendar?: OfficeDayCalendar | null;
 }): HomeSummary {
   const { office, today, needs, lastDay, payroll, inbox, todayDate } = input;
+  const who = today.asOf ? [] : rosterGroups(today.people);
   const phase = office.phase;
   const lines: SummaryLine[] = [];
   const push = (l: SummaryLine) => { if (lines.length < MAX_SUMMARY_LINES) lines.push(l); };
@@ -280,6 +327,16 @@ export function stateSummary(input: {
   // at all, which no queue item says.
   if (lastDay?.action && lastDay.text.startsWith('none on record')) {
     push({ id: 'closeout', text: 'No closeout is on record in the last two weeks.', href: lastDay.href, tone: 'attention' });
+  } else if (input.calendar && input.closeouts?.length) {
+    // An office day since the last closeout with none of its own: the one
+    // gap no queue item names. Yesterday counts; today does not until close.
+    const last = input.closeouts.filter(c => c.deposit_date < todayDate).sort((a, b) => b.deposit_date.localeCompare(a.deposit_date))[0];
+    const missing = last ? listOfficeDays(shiftDate(last.deposit_date, 1), shiftDate(todayDate, -1), input.calendar) : [];
+    if (missing.length === 1) {
+      push({ id: 'closeout-missing', text: `${shortDay(missing[0])} has no closeout.`, href: `/deposit-log?date=${missing[0]}`, tone: 'attention' });
+    } else if (missing.length > 1) {
+      push({ id: 'closeout-missing', text: `${missing.length} office days have no closeout (${shortDay(missing[0])} – ${shortDay(missing[missing.length - 1])}).`, href: `/deposit-log?date=${missing[0]}`, tone: 'attention' });
+    }
   }
 
   const due = payroll?.dueDate && daysBetween(todayDate, payroll.dueDate) <= 7 ? payroll.dueDate : null;
@@ -297,7 +354,7 @@ export function stateSummary(input: {
 
   // Routine status (someone not in yet, someone starting later) belongs to
   // the Today panel, calmly; it is not a priority and is not repeated here.
-  return { headline, detail, tone, lines };
+  return { headline, detail, tone, who, lines };
 }
 
 /** The Attention lists behind Needs you — shared by Owner and Manager Home. */
@@ -329,6 +386,8 @@ export function buildHomeBrief(input: {
   payroll: { dueDate: string | null; dueLabel: string | null } | null;
   inbox: { outstanding: number; label: string } | null;
   asOf?: string | null;
+  /** The office calendar, so an office day with no closeout can be named. */
+  calendar?: OfficeDayCalendar | null;
 }): HomeBrief {
   const needs = needsYou(input.attention);
   const today = todayBand({ summary: input.summary, snapshot: input.snapshot, now: input.now, needsNow: input.attention.needsNow, asOf: input.asOf });
@@ -341,7 +400,7 @@ export function buildHomeBrief(input: {
     : null;
   const payrollItems = input.attention.needsNow.filter(i => i.payroll).length;
   return {
-    summary: stateSummary({ office: input.summary.office, today, needs, lastDay, payroll: input.payroll, payrollItems, inbox, todayDate: input.today }),
+    summary: stateSummary({ office: input.summary.office, today, needs, lastDay, payroll: input.payroll, payrollItems, inbox, todayDate: input.today, closeouts: input.closeouts, calendar: input.calendar }),
     wrapUp,
     needs,
     today,

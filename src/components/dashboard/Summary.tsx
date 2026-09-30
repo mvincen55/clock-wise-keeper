@@ -5,8 +5,9 @@ import { StatusDot, focusRing, interactive, panelClass, toneText } from './kit';
 
 /**
  * The short summary at the top of an admin Home: the office state as a
- * headline and at most three genuine priorities, each one linked. Routine
- * status is calm; nothing here repeats the queue's count or the meters.
+ * headline, who is where by name, and at most three genuine priorities,
+ * each one linked. Routine status is calm; nothing here repeats the queue's
+ * count or the meters.
  */
 export function SummaryPanel({ summary, title }: { summary: HomeSummary; title: string }) {
   const hasLines = summary.lines.length > 0;
@@ -19,6 +20,16 @@ export function SummaryPanel({ summary, title }: { summary: HomeSummary; title: 
       <p className={cn('mt-1 text-[clamp(1.15rem,2.2vw,1.4rem)] font-bold leading-snug tracking-[-0.01em]', summary.tone === 'attention' && 'text-[hsl(30_80%_32%)] dark:text-warning')}>
         {summary.headline}
       </p>
+      {summary.who.length > 0 && (
+        <p className="mt-1.5 text-[14px] leading-relaxed text-foreground/85" data-home-roster>
+          {summary.who.map((g, i) => (
+            <span key={g.id}>
+              {i > 0 && <span className="text-muted-foreground"> · </span>}
+              <span className={cn('font-semibold', g.tone === 'attention' ? toneText.attention : 'text-muted-foreground')}>{g.label}:</span> {g.names.join(', ')}
+            </span>
+          ))}
+        </p>
+      )}
       {hasLines ? (
         <ul className="mt-3 space-y-1.5">
           {summary.lines.map(l => (
@@ -35,7 +46,7 @@ export function SummaryPanel({ summary, title }: { summary: HomeSummary; title: 
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-[14px] text-muted-foreground">Nothing urgent. Routine work is in the queue below.</p>
+        <p className="mt-2 text-[14px] text-muted-foreground">Nothing needs your attention right now.</p>
       )}
     </section>
   );

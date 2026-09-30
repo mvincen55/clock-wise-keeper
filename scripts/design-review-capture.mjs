@@ -13,7 +13,7 @@ const base = process.argv[2] || 'http://127.0.0.1:5173';
 const slugs = process.argv.slice(3).length
   ? process.argv.slice(3)
   : [
-      'owner', 'owner-clear', 'owner-closed', 'owner-incomplete', 'owner-partial', 'owner-new',
+      'owner', 'owner-clear', 'owner-closed', 'owner-incomplete', 'owner-partial', 'owner-off-calendar', 'owner-new',
       'manager', 'manager-clear', 'manager-attendance', 'manager-closed', 'manager-off-pace', 'manager-new', 'manager-front-desk',
       'front-desk', 'hygienist', 'dental-assistant', 'member-late-arrival', 'member-hidden-financials', 'member-clear', 'member-new',
       'front-desk-backup-assistant', 'front-desk-backup-only',

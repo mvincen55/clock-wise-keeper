@@ -329,6 +329,8 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         payroll: attention.payrollPeriod ? { dueDate: attention.payrollPeriod.dueDate, dueLabel: attention.payrollPeriod.dueLabel } : null,
         payrollItems: attention.needsNow.filter(i => i.payroll).length,
         todayDate: today,
+        closeouts: (recentLogs ?? []).map(l => ({ id: l.id, deposit_date: l.deposit_date, sealed_at: l.sealed_at, needs_manager_review: l.needs_manager_review })),
+        calendar: officeDays.data ?? null,
       });
 
       const owner: OwnerView = {
@@ -372,6 +374,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         payroll: attention.payrollPeriod ? { dueDate: attention.payrollPeriod.dueDate, dueLabel: attention.payrollPeriod.dueLabel } : null,
         inbox: messagesCloseout.applies ? { outstanding: messagesCloseout.outstanding.length, label: messagesCloseout.label.replace(/ read$/, '') } : null,
         asOf: snapshotQuery.isError ? 'unavailable' : snapshotQuery.data === undefined ? 'loading' : null,
+        calendar: officeDays.data ?? null,
       });
 
       const manager: ManagerView = {

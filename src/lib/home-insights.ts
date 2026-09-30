@@ -117,11 +117,11 @@ export function buildHomeInsights(input: HomeInsightsInput): HomeInsight[] {
   if (partial && !out.some(i => i.id === 'closeout_gap')) {
     push({
       id: 'records_incomplete', tone: 'attention', title: `${plural(partial.missingDays, 'office day')} this month ${partial.missingDays === 1 ? 'has' : 'have'} no closeout.`,
-      comparison: `${partial.recordedDays} of ${partial.expectedRecordedDays} office days through the cutoff are recorded (${partial.monthLabel}).`,
+      comparison: `${partial.recordedOfficeDays} of ${partial.expectedRecordedDays} office days through the cutoff are recorded (${partial.monthLabel}).`,
       why: 'Totals are real but incomplete, so no behind-pace verdict is given until the missing days are entered.',
       basis: 'observed',
       receipts: [
-        { label: 'Recorded', value: plural(partial.recordedDays, 'closed-out day'), source: 'deposit_logs, this month' },
+        { label: 'Recorded', value: `${plural(partial.recordedOfficeDays, 'office day')}${partial.recordedDays > partial.recordedOfficeDays ? ` · ${partial.recordedDays - partial.recordedOfficeDays} more outside the office calendar` : ''}`, source: 'deposit_logs, this month' },
         { label: 'Expected by now', value: plural(partial.expectedRecordedDays, 'office day'), source: 'office calendar: closures, open Saturdays, weekly pattern' },
       ],
       next: { label: 'Complete the records', to: '/deposit-log' },

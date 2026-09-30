@@ -558,6 +558,30 @@ Removed while inspecting for reserved space: `lg:items-stretch` on the chart row
 | Captures | 22 scenarios × 3 widths (1440×1000, 834×1112, 390×844): 66 of 66, no page errors, no horizontal overflow |
 | Production publish | not part of this pass |
 
+### Follow-up from the live site (same pass)
+- **Worth a look in the sidebar** kept its viewport-based three-column grid, so its
+  cards collapsed into slivers and the third was clipped. The grid now sizes to its
+  container: one card per row in the sidebar, two or three across only when the
+  container itself is wide (`Noticing.tsx`).
+- **"25 of 19 office days recorded."** The live office closes out days the office
+  calendar does not list (unmarked Saturdays), and every recorded day counted toward
+  the office days expected. Completeness is now judged on office days only
+  (`withCoverage` counts recorded days that fall on the calendar; `goalMeters` takes
+  the same per-metric count from `block.ts`), a closeout outside the calendar stays
+  in the totals, and the label names it: "18 of 19 office days recorded · through
+  Sep 25 · 6 recorded outside the office calendar". The same rule now reaches the
+  collections meter, which had judged completeness on every closeout day and so
+  could read "Behind pace" while production read "Partial data" on the same records.
+  Fixture `owner-off-calendar` reproduces it; `performance-completeness` and
+  `goal-progress` pin it.
+- **"Right now" read like half a sentence.** It now carries a roster line by name —
+  In (with a "(late 12m)" or "(remote)" note), Still in, Not in yet, Later (with the
+  start time), Absent, Off, Done — from the same rows Today reads, and the empty state
+  reads "Nothing needs your attention right now." It also names the one gap no queue
+  item carries: an office day since the last closeout with no closeout of its own
+  ("Mon, Sep 28 has no closeout.", linked to that day in Close the Day), judged on the
+  office calendar so weekends and closures never count.
+
 ### What the captures show (`design-review/`)
 - `manager-clear-desktop`: the empty queue (the all-clear and "Parked · 1") with the period filters, four cards, the chart and the cancellation trend directly beneath it; the sidebar reads Today → "Yesterday's closeout · Sealed" → Goals this month → Worth a look; no blank area.
 - `manager-desktop`, `owner-desktop`: populated queues (five items, Mine beneath), the same shape, "Not sealed" on the closeout panel.

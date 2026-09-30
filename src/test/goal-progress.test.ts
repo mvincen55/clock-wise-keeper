@@ -87,3 +87,18 @@ describe('no goal and no data', () => {
     expect(coll.state).toBe('progress');
   });
 });
+
+describe('closeouts outside the office calendar', () => {
+  it('never cover a missing office day: the meter judges completeness on office days only', () => {
+    // 5 office days elapsed; production recorded on 4 of them plus 2 weekend closeouts (6 recorded in all).
+    const meters = goalMeters({
+      today: '2026-09-10', targets: { productionCents: 10_000_000, collectionsCents: 9_000_000, newPatientsSeen: 0 },
+      thisMonth: month({ productionCents: 3_000_000, collectedCents: 2_500_000, productionRecordedDays: 6, days: 6 }),
+      monthElapsed: 10 / 30, officeDays: { total: 22, throughYesterday: 5, throughToday: 6 }, todayRecorded: false,
+      recordedOfficeDays: { production: 4, collections: 5 },
+    });
+    const [prod, coll] = meters;
+    expect(prod).toMatchObject({ recordedDays: 6, recordedOfficeDays: 4, expectedRecordedDays: 5, missingDays: 1, completeness: 'partial' });
+    expect(coll).toMatchObject({ recordedDays: 6, recordedOfficeDays: 5, missingDays: 0, completeness: 'complete' });
+  });
+});

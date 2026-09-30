@@ -272,7 +272,7 @@ describe('office states', () => {
     expect(screen.getAllByText(/Closed for the day/).length).toBeGreaterThan(0);
     expect(container.textContent).not.toMatch(/not in yet/i);
     expect(ownerClosedFixture.summary.lines).toEqual([]);
-    expect(screen.getByText(/Nothing urgent\./)).toBeInTheDocument();
+    expect(screen.getByText(/Nothing needs your attention right now\./)).toBeInTheDocument();
   });
 });
 

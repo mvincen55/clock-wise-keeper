@@ -28,6 +28,10 @@ describe('office days', () => {
 
 describe('cutoff and coverage', () => {
   const period = periodFor('this_month', '2026-09-10');
+  const coverageOf = (src: PerformanceSources) => {
+    const points = buildWindow({ period, today: '2026-09-10', sources: src })!.points;
+    return withCoverage(totalsOf(points), period, { today: '2026-09-10', calendar, source: 'closeouts', points });
+  };
   it('the cutoff is yesterday while today is in progress, today once its closeout is on record', () => {
     expect(cutoffFor(period, '2026-09-10', false)).toBe('2026-09-09');
     expect(cutoffFor(period, '2026-09-10', true)).toBe('2026-09-10');
@@ -35,16 +39,16 @@ describe('cutoff and coverage', () => {
   });
   it('expected days are the office days through the cutoff; recorded against them decides completeness', () => {
     const days = ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04', '2026-09-08', '2026-09-09'].map(d => closeout(d));
-    const full = withCoverage(totalsOf(buildWindow({ period, today: '2026-09-10', sources: sources(days) })!.points), period, { today: '2026-09-10', calendar, source: 'closeouts' });
+    const full = coverageOf(sources(days));
     expect(full).toMatchObject({ expectedDays: 6, completeness: 'complete', cutoff: '2026-09-09' });
     expect(coverageLabel(full, 'closeouts')).toBe('6 of 6 office days recorded · through Sep 9');
     expect(partialLabel(full, 'closeouts')).toBeNull();
 
-    const thin = withCoverage(totalsOf(buildWindow({ period, today: '2026-09-10', sources: sources(days.slice(0, 4)) })!.points), period, { today: '2026-09-10', calendar, source: 'closeouts' });
+    const thin = coverageOf(sources(days.slice(0, 4)));
     expect(thin).toMatchObject({ expectedDays: 6, completeness: 'partial' });
     expect(partialLabel(thin, 'closeouts')).toBe('Partial data · 2 office days not recorded');
 
-    const recordedToday = withCoverage(totalsOf(buildWindow({ period, today: '2026-09-10', sources: sources([...days, closeout('2026-09-10')]) })!.points), period, { today: '2026-09-10', calendar, source: 'closeouts' });
+    const recordedToday = coverageOf(sources([...days, closeout('2026-09-10')]));
     expect(recordedToday).toMatchObject({ expectedDays: 7, completeness: 'complete', cutoff: '2026-09-10' });
   });
   it('without the calendar completeness stays unknown and the label counts calendar days', () => {
@@ -57,6 +61,31 @@ describe('cutoff and coverage', () => {
     const w = buildWindow({ period, today: '2026-09-10', sources: sources([closeout('2026-09-01')]), calendar })!;
     expect(w.totals.expectedDays).toBe(6);
     expect(w.coverageLabel).toBe('1 of 6 office days recorded · through Sep 1');
+  });
+});
+
+describe('closeouts outside the office calendar', () => {
+  const period = periodFor('this_month', '2026-09-10');
+  it('count in the totals but never cover a missing office day, and the label names them', () => {
+    // Office days through Sep 9 (cutoff): Sep 1, 2, 3, 4, 8, 9 = 6. Recorded: five of them (Sep 8 missing)
+    // plus Sat Sep 5 and Sun Sep 6, which the calendar does not list.
+    const days = ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04', '2026-09-05', '2026-09-06', '2026-09-09'].map(d => closeout(d));
+    const w = buildWindow({ period, today: '2026-09-10', sources: sources(days), calendar })!;
+    expect(w.totals.primaryRecordedDays).toBe(7);
+    expect(w.totals.primaryCents).toBe(7 * 500_000); // the weekend closeouts are real money
+    expect(w.totals.expectedDays).toBe(6);
+    expect(w.totals.primaryRecordedOfficeDays).toBe(5);
+    expect(w.totals.offCalendarDays).toBe(2);
+    expect(w.totals.completeness).toBe('partial');
+    expect(partialLabel(w.totals, 'closeouts')).toBe('Partial data · 1 office day not recorded');
+    expect(coverageLabel(w.totals, 'closeouts')).toBe('5 of 6 office days recorded · through Sep 9 · 2 recorded outside the office calendar');
+  });
+  it('never read as more recorded than expected', () => {
+    const days = ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04', '2026-09-05', '2026-09-06', '2026-09-08', '2026-09-09'].map(d => closeout(d));
+    const w = buildWindow({ period, today: '2026-09-10', sources: sources(days), calendar })!;
+    expect(w.totals.completeness).toBe('complete');
+    expect(coverageLabel(w.totals, 'closeouts')).toBe('6 of 6 office days recorded · through Sep 9 · 2 recorded outside the office calendar');
+    expect(partialLabel(w.totals, 'closeouts')).toBeNull();
   });
 });
 

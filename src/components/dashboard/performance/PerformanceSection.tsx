@@ -14,6 +14,7 @@ import { PerformanceChart, type ChartView } from './PerformanceChart';
 import { PerformanceStrip, type StripTile } from './PerformanceStrip';
 import { missedHref } from './MissedTrend';
 import { officeDaysForMonth } from './block';
+import { isOfficeDay } from '@/lib/office-days';
 import { shiftDate } from '@/lib/time-utils';
 
 /**
@@ -81,7 +82,7 @@ export function stripTiles(args: {
       info.push(
         { label: 'Through', value: cutoff },
         { label: 'Source', value: `${w.definitions.sourceLabel} · ${w.definitions.dateBasis}` },
-        { label: 'Completeness', value: w.totals.authoritative ? 'Complete month from the package summary' : w.totals.expectedDays !== null ? `${recorded} of ${w.totals.expectedDays} ${dayUnit(w.source, w.definitions.dateBasis)} recorded through ${fmtDay(w.totals.cutoff)}` : `${recorded} of ${w.totals.days} calendar days recorded (office calendar unavailable)` },
+        { label: 'Completeness', value: w.totals.authoritative ? 'Complete month from the package summary' : w.totals.expectedDays !== null ? `${(key === 'primary' ? w.totals.primaryRecordedOfficeDays : w.totals.secondaryRecordedOfficeDays) ?? recorded} of ${w.totals.expectedDays} ${dayUnit(w.source, w.definitions.dateBasis)} recorded through ${fmtDay(w.totals.cutoff)}${w.totals.offCalendarDays > 0 ? ` · ${w.totals.offCalendarDays} recorded outside the office calendar` : ''}` : `${recorded} of ${w.totals.days} calendar days recorded (office calendar unavailable)` },
         { label: 'Comparison', value: c.comparable ? `Per recorded day against the same span of the prior period (${c.rangeLabel})` : `Withheld: ${c.reason ?? 'not comparable'}` },
         { label: 'Definition', value: key === 'primary' ? w.definitions.primaryDefinition : w.definitions.secondaryDefinition },
       );
@@ -129,7 +130,8 @@ export function stripTiles(args: {
         : { kind: 'calendar_days', elapsed: Math.round(data.monthElapsed * daysInMonthOf(data.today)), total: daysInMonthOf(data.today) };
       const monthStart = `${data.today.slice(0, 7)}-01`;
       const cutoff = todayRecorded ? data.today : shiftDate(data.today, -1);
-      const recordedOfficeDays = data.sources.closeouts.filter(d => d.date >= monthStart && d.date <= cutoff).length;
+      const calendar = data.calendar;
+      const recordedOfficeDays = data.sources.closeouts.filter(d => d.date >= monthStart && d.date <= cutoff && (!calendar || isOfficeDay(d.date, calendar))).length;
       const missing = basis.kind === 'office_days' ? Math.max(0, basis.elapsed - recordedOfficeDays) : 0;
       const pace = metricPace({
         actual: data.thisMonth.newPatientsSeen,

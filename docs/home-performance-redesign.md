@@ -72,7 +72,12 @@ count, so it is not shown as a daily series.
   calendar pace (estimate)"). No "you need $X per remaining day" projection is
   shown.
 - **Completeness** — every money figure carries the number of office days
-  recorded against the office days expected through its cutoff. Cutoff is
+  recorded against the office days expected through its cutoff. Only
+  closeouts that fall on office days count toward "recorded": a closeout on
+  a day the office calendar does not list (an unmarked Saturday, a listed
+  closure) stays in the totals but never stands in for a missing office day,
+  and the label names it ("18 of 19 office days recorded · through Sep 25 ·
+  6 recorded outside the office calendar") so the calendar gap is visible. Cutoff is
   yesterday until today's closeout exists, then today. `complete` (every
   expected day recorded), `partial` (N office days not recorded — the label
   names N and links Close the Day to complete the records), `unknown` (no
@@ -123,9 +128,11 @@ secondary information. Under `lg` the columns dissolve into one, actions
 first.
 
 - **Owner** — header (state chip, role context, Close the Day, Attention · n),
-  "Right now" (headline plus at most three genuine priorities: a degraded
-  source, someone absent after their shift, no closeout on record, payroll due
-  within a week, the inbox), Needs you (unique actionable items, repeated
+  "Right now" (headline, a roster line by name — in, still in, not in yet,
+  later, absent, off, done — and at most three genuine priorities: a degraded
+  source, someone absent after their shift, no closeout on record, an office
+  day since the last closeout with none of its own, payroll due within a
+  week, the inbox), Needs you (unique actionable items, repeated
   kinds folded into expandable groups that still open each record, waiting
   and parked apart) with Mine (the owner's own items) beneath, the latest
   closeout's facts, the challenge, staffing exceptions, the performance block
