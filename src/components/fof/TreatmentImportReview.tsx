@@ -59,7 +59,7 @@ export default function TreatmentImportReview({ open, source, result, previewUrl
 
   return (
     <AlertDialog open={open} onOpenChange={isOpen => { if (!isOpen) onCancel(); }}>
-      <AlertDialogContent className="max-w-4xl">
+      <AlertDialogContent className="min-w-0 max-h-[90vh] overflow-y-auto p-4 sm:p-6" style={{ width: 'calc(100% - 2rem)', maxWidth: '72rem' }}>
         <AlertDialogHeader>
           <AlertDialogTitle>Review {rows.length} extracted procedure{rows.length === 1 ? '' : 's'}</AlertDialogTitle>
           <AlertDialogDescription>
@@ -68,9 +68,9 @@ export default function TreatmentImportReview({ open, source, result, previewUrl
               : 'Read from the pasted text on this device. Compare every row with the plan: codes, tooth numbers, fees and visit groups. Nothing has been imported yet.'}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem]">
-          <div className="max-h-[50vh] overflow-auto rounded-md border">
-            <table className="w-full text-xs">
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_16rem]">
+          <div className="min-w-0 max-h-[50vh] overflow-auto rounded-md border">
+            <table className="w-full min-w-[44rem] text-xs">
               <thead className="sticky top-0 bg-muted/80">
                 <tr>
                   <th className="p-1.5 text-left">Use</th>
@@ -105,7 +105,7 @@ export default function TreatmentImportReview({ open, source, result, previewUrl
                       <td className="p-1.5 text-right whitespace-nowrap">{row.fee !== null ? formatCents(Math.round(row.fee * 100)) : '—'}</td>
                       <td className="p-1.5 text-right whitespace-nowrap">{row.officeFee !== null ? formatCents(Math.round(row.officeFee * 100)) : '—'}</td>
                       <td className="p-1.5 text-right whitespace-nowrap">{onFile !== null ? formatCents(onFile) : <span className="text-amber-700">none</span>}</td>
-                      <td className="p-1.5">
+                      <td className="p-1.5 min-w-40">
                         {flaggedRow ? (
                           <ul className="space-y-0.5">
                             {row.confidence === 'low' && row.issues.length === 0 && <li><Badge variant="outline" className="border-amber-400 text-amber-800">Check this row against the screenshot</Badge></li>}
@@ -121,7 +121,7 @@ export default function TreatmentImportReview({ open, source, result, previewUrl
               </tbody>
             </table>
           </div>
-          <div className="space-y-2">
+          <div className="min-w-0 space-y-2">
             {previewUrl && <img src={previewUrl} alt="Screenshot being reviewed locally" className="max-h-[30vh] w-full rounded border object-contain" />}
             {(result?.warnings ?? []).map((warning, i) => <p key={i} className="text-xs text-amber-800">{warning}</p>)}
             <p className="text-xs text-muted-foreground">

@@ -22,6 +22,13 @@ export default function AdaptivePatientPages({ children }: { children: ReactNode
       const measure = document.createElement('div');
       measure.className = 'fof-page-measure';
       target.parentElement!.append(measure);
+      // Print uses the actual page viewport, including browser zoom. Reserve
+      // the same rounding slack used by the final page, instead of stretching
+      // a measured fit to the very edge of a 10-inch flex box.
+      const capacity = document.createElement('div');
+      capacity.className = 'fof-page-capacity';
+      measure.append(capacity);
+      const pageHeight = capacity.getBoundingClientRect().height || PAGE_HEIGHT;
       let measured = false;
       const naturalHeight = (page: HTMLElement) => {
         measure.replaceChildren(page);
@@ -45,7 +52,7 @@ export default function AdaptivePatientPages({ children }: { children: ReactNode
         for (const {compact,columns} of variants) {
           const page = prepare(clone(original), compact, columns);
           const height = naturalHeight(page);
-          if (height > 0 && height <= PAGE_HEIGHT) { pages = [page]; break; }
+          if (height > 0 && height <= pageHeight) { pages = [page]; break; }
         }
         if (!pages && phases.length > 0) {
           // Split only at whole treatment groups. Keep total, terms and signatures
@@ -82,7 +89,7 @@ export default function AdaptivePatientPages({ children }: { children: ReactNode
                 page.querySelector('.fof-footer')?.append(number);
               });
               const heights=pair.map(naturalHeight);
-              if(heights.every(h=>h>0&&h<=PAGE_HEIGHT)) {
+              if(heights.every(h=>h>0&&h<=pageHeight)) {
                 const difference=Math.abs(heights[0]-heights[1]);
                 if(!best || difference<best.difference)best={pages:pair,difference};
               }

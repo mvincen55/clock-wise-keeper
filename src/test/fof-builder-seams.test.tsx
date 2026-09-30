@@ -107,6 +107,23 @@ beforeEach(() => { resetOffice(); mocks.invoke.mockReset(); mocks.invoke.mockRes
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('saved plans hydrate the form as unverified estimates', () => {
+  it.each([true,false])('blocks unrecorded offsets, then permits an itemized courtesy (policy=%s)', policyOn => {
+    mocks.templates=[LIVE_TEMPLATES[0]];
+    if(!policyOn) mocks.policy.data={...mocks.policy.data,payment_policy:null};
+    mount();typeCode(0,'D2740');
+    fireEvent.click(screen.getByText('Amounts & Payment Plan'));
+    expect(printButton()).toBeEnabled();
+    fireEvent.change(screen.getByLabelText("Patient's Portion"),{target:{value:'1469.00'}});
+    expect(printButton()).toBeDisabled();
+    expect(document.querySelector('.fof-print-root')).toBeNull();
+    expect(screen.getAllByText(/Record an office courtesy/).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByText('Discounts & Credits'));
+    fireEvent.change(screen.getByLabelText('Office Discount (optional)'),{target:{value:'100.00'}});
+    fireEvent.change(screen.getByLabelText("What's this discount for? (prints as the line's name)"),{target:{value:'Office courtesy'}});
+    expect(printButton()).toBeEnabled();
+    expect(document.querySelector('.fof-print-root')?.textContent).toContain('Office courtesy');
+    expect(document.querySelector('.fof-print-root')?.textContent).toContain('−$100.00');
+  });
   it('choosing a carrier applies its plan defaults, marks them, and blocks printing until benefits are confirmed', async () => {
     mount();
     typeCode(0, 'D2740');

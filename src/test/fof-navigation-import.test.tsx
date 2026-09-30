@@ -74,6 +74,7 @@ describe('memory-only FOF navigation', () => {
   it('payment edits and same-user refresh survive Stay', async () => {
     const router = mount();
     fireEvent.change(screen.getByPlaceholderText('D2740 / crown'), { target: { value: 'D2740' } });
+    fireEvent.change(screen.getByLabelText('Office fee for D2740'), { target: { value: '100' } });
     fireEvent.click(screen.getByText('Amounts & Payment Plan'));
     const paid = screen.getByLabelText(/^Paid /);
     fireEvent.change(paid, { target: { value: '25' } });

@@ -95,6 +95,7 @@ import { PaymentScheduleEditor, classTitle, usePaymentScheduleEditor } from '@/c
 import { suggestPaymentClass } from '@/lib/fof/suggest-class';
 import { isRestorationProcedure, isRestorationSurgery, toothTokens } from '@/lib/fof/restoration-surgery';
 import { allocateAcrossLines } from '@/lib/fof/adjustments';
+import { fofReconciliationIssues } from '@/lib/fof/reconciliation';
 import { formatCents, parseCurrencyInput } from '@/lib/fof/money';
 import { resolveImportedFee } from '@/lib/fof/import-fee';
 import {
@@ -485,6 +486,7 @@ function OverrideRow({ label, computedCents, value, overridden, onChange, source
       {invalidMoney(value) && <Badge variant="destructive">not an amount</Badge>}
       <SourceChip source={overridden ? 'manual' : source} />
       <Input
+        aria-label={label}
         className="w-32 text-right"
         inputMode="decimal"
         autoComplete="off"
@@ -1486,7 +1488,9 @@ export default function FofBuilder() {
   // membership or senior discount) come off the patient portion as a whole.
   // Spread them across the paid lines in proportion so the schedule
   // reconciles on its own; staff can still allocate any line by hand.
-  const expectedPortionCents = baselineComputation?.effective.patientPortionCents ?? 0;
+  // Only recorded offsets may reduce what the schedule must collect. A typed
+  // patient-total override must not manufacture an anonymous line adjustment.
+  const expectedPortionCents = baselineComputation?.computed.patientPortionCents ?? 0;
   const lineResponsibilityCents = policyLinesBase.reduce((sum, line) => sum + (Number.isFinite(line.responsibilityCents) ? line.responsibilityCents : 0), 0);
   const formAdjustments = allocateAcrossLines(lineResponsibilityCents - expectedPortionCents,
     policyLinesBase.map(line => (Number.isFinite(line.responsibilityCents) ? line.responsibilityCents : 0)));
@@ -1504,12 +1508,14 @@ export default function FofBuilder() {
   // plan defaults are estimates, never the patient's verified eligibility.
   const benefitsUnconfirmed = insuranceActive && state.benefitsConfirmed !== 'yes';
   const imbalanceCents = computation?.imbalanceCents ?? 0;
+  const reconciliationIssues = computation && effectiveTemplate ? fofReconciliationIssues(effectiveTemplate, computation) : [];
   // Everything that pauses the preview and the printer, in one list.
   const reviewReasons: string[] = policyLoading
     ? ['Loading the office payment policy…']
     : [
         ...readinessIssues,
         ...inputErrors,
+        ...reconciliationIssues,
         ...(benefitsUnconfirmed ? [`Confirm the patient's remaining deductible and annual maximum in the Insurance section (${state.benefitsSource === 'plan' ? 'the saved plan defaults are unverified estimates' : state.benefitsSource === 'default' ? 'the generic defaults are unverified estimates' : 'the entered values need confirming'}).`] : []),
         ...(imbalanceCents > 0 ? [`Discounts, credits and insurance exceed the total by ${formatCents(imbalanceCents)}. Reduce the credit or discount; the patient portion is not silently set to $0.`] : []),
         ...(legacyOverrideReview ? ['Previous payment overrides are still on this form. Open Amounts & Payment Plan and use Reset all to clear them.'] : []),
@@ -2952,6 +2958,7 @@ export default function FofBuilder() {
                   }
                 />
                 <CardContent className={collapsed.amounts ? 'hidden' : 'space-y-2'}>
+                  {reconciliationIssues.length > 0 && <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive"><strong>Amounts must balance before printing</strong><ul className="mt-1 list-disc pl-5">{reconciliationIssues.map(issue=><li key={issue}>{issue}</li>)}</ul></div>}
                   {imbalanceCents > 0 && (
                     <p role="alert" className="text-sm text-destructive">
                       Discounts, credits and insurance exceed the total by {formatCents(imbalanceCents)}. The patient portion is shown as $0.00 but this form will not print until the credit or discount is corrected.

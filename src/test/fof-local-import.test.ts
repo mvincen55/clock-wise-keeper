@@ -1,11 +1,38 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeCodeToken, normalizeMoneyToken, ocrScale, parseTreatmentText, parseTreatmentWords, REVIEW_ROW_LIMIT, toGrayscale, visitFromHeading } from '@/lib/fof/local-treatment-import';
+import { normalizeCodeToken, normalizeMoneyToken, ocrScale, parseTreatmentText, parseTreatmentWords, rereadVisitHeadings, REVIEW_ROW_LIMIT, toGrayscale, visitFromHeading } from '@/lib/fof/local-treatment-import';
 import pmsPlanWords from './fixtures/pms-plan-ocr-words.json';
+import implantPlanWords from './fixtures/implant-plan-ocr-words.json';
 import type { OcrWord } from '@/lib/schedule-reader/types';
 const word = (text: string, x: number, y: number, confidence = 95): OcrWord => ({ text, confidence, bbox: { x0:x-25, x1:x+25, y0:y, y1:y+20 } });
 const header = ['Code', 'Th', 'Description', 'Fee', 'OFFICE', 'Visit', 'Date'].map((text,i)=>word(text,100+i*150,20));
 const row = (y: number, code='D2740') => [code,'8','IGNORED_PRIVATE_DESCRIPTION','$900.00','$1,200.00','3','9/9/2026'].map((text,i)=>word(text,100+i*150,y));
 describe('local treatment screenshot parser', () => {
+  it('rereads only unresolved headings and keeps their actual visit numbers', async () => {
+    const calls:number[]=[];
+    const checked=await rereadVisitHeadings(implantPlanWords,async box=>{
+      calls.push(box.y0);
+      return ({266:'Visit 4',361:'Visit 5',469:'Visit 6'} as Record<number,string>)[box.y0] ?? '';
+    });
+    expect(calls).toEqual([266,361,469]);
+    const result=parseTreatmentWords(checked,{D0367:'CT scan',D6190:'Guide','7000':'Post-op','6059D':'Delivery'},{D0367:520,D6190:1120});
+    expect(result.rows.map(r=>r.visit)).toEqual([2,2,2,3,3,4,5,5,6]);
+    expect(result.rows.every(r=>r.issues.length===0)).toBe(true);
+    expect(result.rows.reduce((total,r)=>total+(r.officeFee??0),0)).toBe(8173);
+  });
+  it('flags a heading that a second read cannot resolve rather than silently dropping its visit', async () => {
+    const checked=await rereadVisitHeadings(implantPlanWords,async()=> 'unreadable');
+    const result=parseTreatmentWords(checked,{});
+    expect(result.rows.find(r=>r.code==='7000')?.issues.join(' ')).toContain('enter the visit number');
+    const explicit=[word('Visit',100,0),word('Not',160,0),word('Set',195,0)];
+    await rereadVisitHeadings(explicit,async()=>{throw new Error('Do not reinterpret Visit Not Set');});
+  });
+  it('keeps all nine implant-plan procedures, including the numeric delivery code and entry dates', () => {
+    const result=parseTreatmentWords(implantPlanWords,{D0367:'CT scan',D6190:'Guide','7000':'Post-op','6059D':'Delivery'});
+    expect(result.rows.map(r=>r.code)).toEqual(['D0367','D0470','D6190','D6010','D6011','7000','D6057','D6058','6059D']);
+    expect(result.rows.map(r=>r.fee)).toEqual([520,256,1120,2717,492,0,1141,1927,0]);
+    expect(result.rows.every(r=>r.entryDate==='8/12/2025')).toBe(true);
+    expect(result.rows.at(-1)).toMatchObject({tooth:'14',officeFee:0});
+  });
   it('reads office and contracted fees from distinct columns and copies no image description', () => {
     const result = parseTreatmentWords([...header,...row(60),...row(100,'D6010')],{D2740:'Crown',D6010:'Implant surgery'});
     expect(result.rows).toHaveLength(2);
@@ -20,7 +47,7 @@ describe('local treatment screenshot parser', () => {
   it('flags an uncertain amount, tooth or code for review instead of throwing the whole read away', () => {
     for (const field of [0,1,3,4]) {
       const second=row(100); second[field].confidence=20;
-      const result=parseTreatmentWords([...header,...row(60),...second],{D2740:'Crown'});
+      const result=parseTreatmentWords([...header,...row(60),...second],{});
       expect(result.rows).toHaveLength(2);
       expect(result.rows[0].confidence).toBe('ok');
       expect(result.rows[1].confidence).toBe('low');
@@ -36,7 +63,7 @@ describe('local treatment screenshot parser', () => {
   });
   it('asks staff to check specific uncertain values without exposing recognition scores', () => {
     const second=row(100); second[0].confidence=39; second[3].confidence=58; second[1].confidence=50;
-    const result=parseTreatmentWords([...header,...row(60),...second],{D2740:'Crown'});
+    const result=parseTreatmentWords([...header,...row(60),...second],{});
     const issues=result.rows[1].issues.join(' ');
     expect(issues).toContain('Check code D2740 against the screenshot');
     expect(issues).toContain('Check the Fee amount "$900.00" against the screenshot');
@@ -154,6 +181,10 @@ describe('local treatment screenshot parser', () => {
 });
 
 describe('pasted treatment text parser', () => {
+  it('keeps numeric office codes with suffixes, including a free delivery visit', () => {
+    const result=parseTreatmentText('Visit 6\n6059d 14 0.00 0.00',{'6059D':'Delivery'});
+    expect(result.rows[0]).toMatchObject({code:'6059D',tooth:'14',fee:0,officeFee:0,visit:6,issues:[]});
+  });
   it('reads code, tooth, amounts and visit headings without copying descriptions', () => {
     const result = parseTreatmentText('Visit 1\nD2740\t#8\tCrown for Ms Private\t$1,569.00\t$1,200.00\nD2950 8 491.00\nVisit 2\nD6010 19 2717.00 Visit 2\nTotal 4777.00', { D2740: 'Porcelain Crown', D2950: 'Core Buildup', D6010: 'Dental Implant' });
     expect(result.rows.map(r => [r.code, r.tooth, r.fee, r.officeFee, r.visit])).toEqual([

@@ -13,6 +13,19 @@ import { LIVE_TEMPLATES, PRACTICE_DEFAULT_BRANDING } from './blank-form-fixtures
 const crown: ScheduleSourceLine = { id: 'a', code: 'D2740', visit: '1', responsibilityCents: 70000, classification: 'restoration' };
 const policy=harelickPolicyTemplate();
 describe('payment editor and shared print result', () => {
+  it('lets staff clear a recorded payment after the procedure becomes no charge', () => {
+    function Form({ cents }: { cents: number }) {
+      const editor=usePaymentScheduleEditor('a',policy,[{...crown,responsibilityCents:cents}],cents);
+      return <PaymentScheduleEditor editor={editor}/>;
+    }
+    const {rerender}=render(<Form cents={70000}/>);
+    fireEvent.change(screen.getByLabelText('Paid a'),{target:{value:'25'}});
+    rerender(<Form cents={0}/>);
+    expect(screen.getByLabelText('Paid a')).toHaveValue('25');
+    fireEvent.change(screen.getByLabelText('Paid a'),{target:{value:''}});
+    expect(screen.getByText('Balanced')).toBeTruthy();
+    expect(screen.queryByLabelText('Paid a')).toBeNull();
+  });
   it('reconciles a two-year implant plan into six patient-friendly payments', () => {
     const source: ScheduleSourceLine[] = [
       {id:'guide',code:'D6190',visit:'1',classification:'workup',procedureLabel:'Surgical Implant Guide',responsibilityCents:112000},
@@ -41,7 +54,10 @@ describe('payment editor and shared print result', () => {
     const advanced=screen.getByText('Advanced payment settings').closest('details')!;
     expect(advanced.open).toBe(false);
     expect(screen.getAllByText('When payment is due')).toHaveLength(6);
-    expect(screen.getAllByText('Treatment name on the patient form')).toHaveLength(3);
+    expect(screen.getAllByText('Treatment name')).toHaveLength(3);
+    expect(document.querySelectorAll('[data-payment-section]')).toHaveLength(3);
+    expect([...document.querySelectorAll('[data-payment-section]')].map(section=>section.querySelectorAll('[data-editor-payment]').length)).toEqual([1,2,3]);
+    expect(document.querySelectorAll('[data-editor-payment]')).toHaveLength(schedule.rows.length);
     const guideGroup=result.current.model!.groups.find(g=>g.classification==='workup')!;
     expect(screen.queryByLabelText(`${guideGroup.id} surgery`)).toBeNull();
     expect(screen.getByLabelText(`${guideGroup.id} workup`)).toBeTruthy();
@@ -271,7 +287,7 @@ describe('payment editor and shared print result', () => {
   });
   it('renders editable classifications and explicit paid amounts', () => {
     function Harness(){const editor=usePaymentScheduleEditor('a',policy,[crown],70000);return <PaymentScheduleEditor editor={editor}/>;}
-    render(<Harness/>);fireEvent.change(screen.getByLabelText('Paid a'),{target:{value:'700'}});expect(screen.getByText(/Recorded paid: \$700.00/)).toBeTruthy();
+    render(<Harness/>);fireEvent.change(screen.getByLabelText('Paid a'),{target:{value:'700'}});expect(screen.getByText('Already paid').parentElement).toHaveTextContent('$700.00');
   });
   it('patient preview and office copy share six rows and reconcile explicitly paid work-up', () => {
     const input=fullFixture();input.procedures.filter(p=>p.groupId==='w').forEach(p=>p.paidCents=p.responsibilityCents);
