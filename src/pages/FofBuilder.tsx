@@ -85,7 +85,7 @@ import {
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { revertsToOfficeFeesOnMax } from '@/lib/fof/schedule-defaults';
 import { computeFof } from '@/lib/fof/compute';
-import { suggestedPaymentLabels } from '@/lib/fof/payment-engine';
+import { prepareFofPrint } from '@/lib/fof/print';
 import { useFofOfficeGuidance } from '@/hooks/useFofOfficeGuidance';
 import { useFofNaming, type NamingResult } from '@/hooks/useFofNaming';
 import type { CurrentFofContext } from '@/lib/fof/current-form-assistant';
@@ -1585,8 +1585,11 @@ export default function FofBuilder() {
             scheduleOptions
           )
         : null;
+    // The policy already supplies exact collection milestones. Request only
+    // the treatment summary on this path; generated names must never relabel
+    // booking, prep or surgery as delivery. Keep the endpoint's slot contract.
     const autoSlots = paymentPolicy
-      ? computation.installmentLabels.map((_, i) => `Payment ${i + 1}`)
+      ? ['Treatment summary']
       : safeSchedule?.labels ?? rawVisitPlan?.labels ?? computation.installmentLabels;
     if (autoSlots.length === 0) return null;
     return {
@@ -1602,17 +1605,10 @@ export default function FofBuilder() {
   };
   const applyNaming = (result: NamingResult, signature: string, manual: boolean) => {
     if (result.treatment) setAiText({ signature, treatment: result.treatment });
-    // Names are added where staff have not written their own: on the
-    // policy path through the editor's label overrides (which keep staff
-    // wording), on the legacy path per installment slot.
-    const requestedSchedule = paymentEditor.model?.schedule;
+    // Policy payment labels come from the same events as the amounts. Remote
+    // wording is limited to the summary; staff can still edit labels locally.
     if (paymentPolicy) {
-      if (requestedSchedule && requestedSchedule.rows.length === result.names.length) {
-        paymentEditor.update(s => ({ ...s, overrides: suggestedPaymentLabels(requestedSchedule, s.overrides, result.names) }));
-        if (manual) toast.success('Suggested names added; existing staff wording is preserved');
-      } else if (manual) {
-        toast.error('The payment schedule changed while names were being suggested. Try again.');
-      }
+      if (manual && result.treatment) toast.success('Treatment summary updated');
       return;
     }
     result.names.forEach((name, i) => {
@@ -1945,8 +1941,8 @@ export default function FofBuilder() {
       toast.error('Resolve the review items before printing.');
       return;
     }
-    const layoutReview = document.querySelector('.fof-print-root .fof-layout-review, .fof-layout-review');
-    if (layoutReview) { toast.error(layoutReview.textContent || 'Review the form layout before printing.'); return; }
+    const layoutIssue = prepareFofPrint(document.querySelector<HTMLElement>('.fof-print-root'));
+    if (layoutIssue) { toast.error(layoutIssue); return; }
     window.print();
     // Printing never erases the form: the same form can be corrected and
     // reprinted until staff finish it on purpose.
@@ -1973,11 +1969,11 @@ export default function FofBuilder() {
 
   const namingStatusText = (() => {
     switch (naming.state.status) {
-      case 'working': return 'Writing the treatment summary and payment names…';
+      case 'working': return paymentPolicy ? 'Writing the treatment summary…' : 'Writing the treatment summary and payment names…';
       case 'retrying': return `The wording service did not answer (attempt ${naming.state.attempt} of 3). Retrying…`;
       case 'error': return naming.state.message;
       case 'unavailable': return naming.state.message;
-      case 'done': return 'Treatment summary and payment names are current.';
+      case 'done': return paymentPolicy ? 'Treatment summary is current.' : 'Treatment summary and payment names are current.';
       case 'waiting': return dataReady ? 'Waiting for the treatment to settle before writing the summary…' : 'Waiting for fees and settings to load…';
       default: return '';
     }
@@ -3019,7 +3015,7 @@ export default function FofBuilder() {
                       />
                     </>
                   )}
-                  {paymentPolicy && <><p className="text-sm text-muted-foreground" role="status">{officeGuidance.isFetching ? 'Reading office code-bank guidance…' : officeGuidance.error ? 'Code-bank guidance is unavailable. Existing office payment rules remain in use; you can refresh and review again.' : officeGuidance.data?.recipes.length ? 'Treatment wording and grouping are drafted from office code-bank notes. Review the draft and correct this form as needed.' : 'No office code-bank guidance is available yet. The saved payment classifications and office payment rules are in use.'}</p>{officeGuidance.data?.warnings.map((warning, i) => <p key={i} className="text-sm text-amber-700">{warning}</p>)}<PaymentScheduleEditor editor={paymentEditor} /><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={aiNaming || feeLines.length === 0 || policyBlocked || !dataReady} onClick={naming.retry}>Suggest payment names</Button><Button variant="outline" disabled={officeGuidance.isFetching || feeLines.length === 0} onClick={refreshGuidance}>Refresh code-bank guidance</Button></div></>}
+                  {paymentPolicy && <><p className="text-sm text-muted-foreground" role="status">{officeGuidance.isFetching ? 'Reading office code-bank guidance…' : officeGuidance.error ? 'Code-bank guidance is unavailable. Existing office payment rules remain in use; you can refresh and review again.' : officeGuidance.data?.recipes.length ? 'Treatment wording and grouping are drafted from office code-bank notes. Review the draft and correct this form as needed.' : 'No office code-bank guidance is available yet. The saved payment classifications and office payment rules are in use.'}</p>{officeGuidance.data?.warnings.map((warning, i) => <p key={i} className="text-sm text-amber-700">{warning}</p>)}<PaymentScheduleEditor editor={paymentEditor} /><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={aiNaming || feeLines.length === 0 || policyBlocked || !dataReady} onClick={naming.retry}>Refresh treatment summary</Button><Button variant="outline" disabled={officeGuidance.isFetching || feeLines.length === 0} onClick={refreshGuidance}>Refresh code-bank guidance</Button></div></>}
                   {policyBlocked && <p role="alert" className="text-destructive">Payment policy review is required before printing. Check policy loading, classifications, adjustments, and saved overrides.</p>}
                   {(effectiveTemplate!.showInstallmentOption || legacyOverrideReview) && (
                     <>

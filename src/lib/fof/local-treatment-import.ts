@@ -14,8 +14,8 @@ import type { OcrWord } from '../schedule-reader/types';
  * Nothing is silently discarded: a cell the OCR is unsure about, a code the
  * office bank does not know, or a plan longer than the review limit comes
  * back as a row with issues for staff to confirm or drop, never as a
- * vanished line. Every issue says what was read and how sure the reader
- * was, so staff can check the exact cell instead of guessing.
+ * vanished line. Every issue names the exact cell to check (and quotes the
+ * text read when it is not a usable value), never a recognition score.
  *
  * Small PMS type reads correctly at a confidence Tesseract calls low, so a
  * low-confidence code or amount is corroborated against the office fee
@@ -66,7 +66,6 @@ const failure = () =>
 const midpoint = (word: OcrWord) => (word.bbox.y0 + word.bbox.y1) / 2;
 const center = (word: OcrWord) => (word.bbox.x0 + word.bbox.x1) / 2;
 const plain = (text: string) => text.trim().replace(/[():.]/g, '').toLowerCase();
-const percent = (word: OcrWord) => `${Math.round(word.confidence)}%`;
 const dentalCode = /^D\d{4}$/i;
 // A CDT code (with an optional office suffix), a numeric office code, or a
 // short letters-plus-digits office code. A word, a name or a sentence
@@ -258,7 +257,7 @@ export function parseTreatmentWords(words: OcrWord[], codeNames: Record<string, 
       }
       const weakest = values.reduce((low, word) => (word.confidence < low.confidence ? word : low));
       const unsure = weakest.confidence < CONFIDENCE_FLOOR
-        ? `The ${label} amount "${raw}" was read at ${percent(weakest)} confidence (below ${CONFIDENCE_FLOOR}%); compare it with the screenshot.`
+        ? `Check the ${label} amount "${raw}" against the screenshot; the text is unclear.`
         : undefined;
       return { value: number, unsure };
     };
@@ -272,7 +271,7 @@ export function parseTreatmentWords(words: OcrWord[], codeNames: Record<string, 
     } else if (toothValue) {
       const weakest = toothWords.reduce((low, word) => (word.confidence < low.confidence ? word : low));
       if (weakest.confidence < CONFIDENCE_FLOOR) {
-        issues.push(`The tooth number "${toothValue}" was read at ${percent(weakest)} confidence (below ${CONFIDENCE_FLOOR}%); compare it with the screenshot.`);
+        issues.push(`Check tooth number "${toothValue}" against the screenshot; the text is unclear.`);
         lower();
       }
     }
@@ -313,7 +312,7 @@ export function parseTreatmentWords(words: OcrWord[], codeNames: Record<string, 
     const rowFee = officeRead.value ?? feeRead.value;
     const corroborated = scheduleFee !== null && rowFee !== null && rowFee === scheduleFee && !neighbourWithFee(code, scheduleFee);
     if (candidate.confidence < CONFIDENCE_FLOOR && !corroborated) {
-      issues.push(`The code ${code} was read at ${percent(candidate)} confidence (below ${CONFIDENCE_FLOOR}%); compare it with the screenshot.`);
+      issues.push(`Check code ${code} against the screenshot; the text is unclear.`);
       lower();
     }
     for (const read of [feeRead, officeRead]) {

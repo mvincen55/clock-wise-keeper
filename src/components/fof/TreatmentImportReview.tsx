@@ -108,7 +108,7 @@ export default function TreatmentImportReview({ open, source, result, previewUrl
                       <td className="p-1.5">
                         {flaggedRow ? (
                           <ul className="space-y-0.5">
-                            {row.confidence === 'low' && row.issues.length === 0 && <li><Badge variant="outline" className="border-amber-400 text-amber-800">Low confidence</Badge></li>}
+                            {row.confidence === 'low' && row.issues.length === 0 && <li><Badge variant="outline" className="border-amber-400 text-amber-800">Check this row against the screenshot</Badge></li>}
                             {row.issues.map((issue, j) => <li key={j} className="text-amber-800">{issue}</li>)}
                           </ul>
                         ) : (

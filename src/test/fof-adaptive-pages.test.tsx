@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import AdaptivePatientPages from '@/components/fof/AdaptivePatientPages';
+import { prepareFofPrint } from '@/lib/fof/print';
 
 function Form({ groups = 3, name = 'Browser-only name' }) {
   return <AdaptivePatientPages><article className="fof-sheet">
@@ -39,6 +40,27 @@ const composed = (container: HTMLElement) => container.querySelector('.fof-compo
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe('patient page composition', () => {
+  it('measures the selected hidden print job before opening the dialog', () => {
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.closest('[data-fof-preparing]') ? 600 : 0;
+    });
+    const { container } = render(<div className="fof-print-root"><Form /></div>);
+    const root = container.firstElementChild as HTMLElement;
+    expect(composed(container).children).toHaveLength(0);
+    expect(prepareFofPrint(root)).toBeNull();
+    expect(composed(container).querySelectorAll('[data-payment-event]')).toHaveLength(3);
+    expect(root.hasAttribute('data-fof-preparing')).toBe(false);
+  });
+  it('finds an oversized patient job even when the on-screen preview has no warning', () => {
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.closest('[data-fof-preparing]') ? 3000 : 0;
+    });
+    const { container } = render(<div className="fof-print-root"><Form groups={8} /></div>);
+    const root = container.firstElementChild as HTMLElement;
+    expect(container.querySelector('.fof-layout-review')).toBeNull();
+    expect(prepareFofPrint(root)).toContain('Review the plan before printing');
+    expect(root.hasAttribute('data-fof-preparing')).toBe(false);
+  });
   it('keeps a fitting form on one page, including terms and signatures', () => {
     measuredHeight(300, 100);
     const { container } = render(<Form />);

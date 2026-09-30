@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { FOF_PREPARE_PRINT } from '@/lib/fof/print';
 
 const PAGE_HEIGHT = 940; // 10 printable inches, with browser/font rounding slack.
 const clone = (node: Element) => node.cloneNode(true) as HTMLElement;
@@ -116,8 +117,10 @@ export default function AdaptivePatientPages({ children }: { children: ReactNode
     // Keep the preview synchronized with those edits as well as the print event.
     const observer = new MutationObserver(compose);
     observer.observe(original, { subtree: true, childList: true, characterData: true, attributes: true });
+    const printRoot = sourceRoot.closest('.fof-print-root');
+    printRoot?.addEventListener(FOF_PREPARE_PRINT, compose);
     window.addEventListener('beforeprint',compose);
-    return () => { disposed=true;observer.disconnect();images.forEach(img=>img.removeEventListener('load',compose));window.removeEventListener('beforeprint',compose); };
+    return () => { disposed=true;observer.disconnect();images.forEach(img=>img.removeEventListener('load',compose));printRoot?.removeEventListener(FOF_PREPARE_PRINT,compose);window.removeEventListener('beforeprint',compose); };
   }, [children]);
   return <div className="fof-adaptive-patient"><div ref={source} className="fof-page-source">{children}</div><div ref={output} className="fof-composed-output" /></div>;
 }

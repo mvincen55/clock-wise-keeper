@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CONFIDENCE_FLOOR, normalizeCodeToken, normalizeMoneyToken, ocrScale, parseTreatmentText, parseTreatmentWords, REVIEW_ROW_LIMIT, toGrayscale, visitFromHeading } from '@/lib/fof/local-treatment-import';
+import { normalizeCodeToken, normalizeMoneyToken, ocrScale, parseTreatmentText, parseTreatmentWords, REVIEW_ROW_LIMIT, toGrayscale, visitFromHeading } from '@/lib/fof/local-treatment-import';
 import pmsPlanWords from './fixtures/pms-plan-ocr-words.json';
 import type { OcrWord } from '@/lib/schedule-reader/types';
 const word = (text: string, x: number, y: number, confidence = 95): OcrWord => ({ text, confidence, bbox: { x0:x-25, x1:x+25, y0:y, y1:y+20 } });
@@ -34,13 +34,14 @@ describe('local treatment screenshot parser', () => {
     expect(result.rows[1].fee).toBeNull();
     expect(result.rows[1].issues.join(' ')).toContain('The Fee amount was read as "9O0.O"');
   });
-  it('says what was read and how sure the reader was when a cell is below the confidence floor', () => {
+  it('asks staff to check specific uncertain values without exposing recognition scores', () => {
     const second=row(100); second[0].confidence=39; second[3].confidence=58; second[1].confidence=50;
     const result=parseTreatmentWords([...header,...row(60),...second],{D2740:'Crown'});
     const issues=result.rows[1].issues.join(' ');
-    expect(issues).toContain(`The code D2740 was read at 39% confidence (below ${CONFIDENCE_FLOOR}%)`);
-    expect(issues).toContain('The Fee amount "$900.00" was read at 58% confidence');
-    expect(issues).toContain('The tooth number "8" was read at 50% confidence');
+    expect(issues).toContain('Check code D2740 against the screenshot');
+    expect(issues).toContain('Check the Fee amount "$900.00" against the screenshot');
+    expect(issues).toContain('Check tooth number "8" against the screenshot');
+    expect(issues).not.toMatch(/confidence|\d+%/i);
   });
   it('does not flag a low-confidence code or amount that the office fee schedule corroborates', () => {
     const fees = { D2740: 1200, D6190: 1120, D6191: 800 };
@@ -51,12 +52,12 @@ describe('local treatment screenshot parser', () => {
     // Without the fees nothing is corroborated and every low read is still named.
     const bare = parseTreatmentWords([...header, ...row(60), ...second], { D2740: 'Crown' });
     expect(bare.rows[1].confidence).toBe('low');
-    expect(bare.rows[1].issues.join(' ')).toContain('The code D2740 was read at 43% confidence');
-    expect(bare.rows[1].issues.join(' ')).toContain('The Office amount "$1,200.00" was read at 50% confidence');
+    expect(bare.rows[1].issues.join(' ')).toContain('Check code D2740 against the screenshot');
+    expect(bare.rows[1].issues.join(' ')).toContain('Check the Office amount "$1,200.00" against the screenshot');
     // A contracted Fee amount the schedule knows nothing about stays flagged even on a corroborated row.
     const contracted = row(100); contracted[0].confidence = 43; contracted[3].confidence = 50;
     const partial = parseTreatmentWords([...header, ...row(60), ...contracted], { D2740: 'Crown' }, fees);
-    expect(partial.rows[1].issues).toEqual(['The Fee amount "$900.00" was read at 50% confidence (below 65%); compare it with the screenshot.']);
+    expect(partial.rows[1].issues).toEqual(['Check the Fee amount "$900.00" against the screenshot; the text is unclear.']);
     // The plain Fee column corroborates only when the plan has no OFFICE column.
     const plainHeader = header.filter((_, i) => i !== 4);
     const plainRow = row(100).filter((_, i) => i !== 4); plainRow[0].confidence = 43;
@@ -71,13 +72,13 @@ describe('local treatment screenshot parser', () => {
     // Corrected code: the read text differed from the code, so it is always named.
     expect(lowIssue(parseTreatmentWords([...header, ...low('D274O', '$1,200.00')], names, fees).rows)).toContain('corrected to D2740');
     // Unknown code: the schedule cannot vouch for it.
-    expect(lowIssue(parseTreatmentWords([...header, ...low('D9999', '$1,200.00')], names, fees).rows)).toContain('was read at 43% confidence');
+    expect(lowIssue(parseTreatmentWords([...header, ...low('D9999', '$1,200.00')], names, fees).rows)).toContain('Check code D9999 against the screenshot');
     // Fee differs from the schedule.
-    expect(lowIssue(parseTreatmentWords([...header, ...low('D2740', '$1,250.00')], names, fees).rows)).toContain('was read at 43% confidence');
+    expect(lowIssue(parseTreatmentWords([...header, ...low('D2740', '$1,250.00')], names, fees).rows)).toContain('Check code D2740 against the screenshot');
     // $0 on file vouches for nothing.
-    expect(lowIssue(parseTreatmentWords([...header, ...low('D0368', '$0.00')], { ...names, D0368: 'Cone beam' }, fees).rows)).toContain('was read at 43% confidence');
+    expect(lowIssue(parseTreatmentWords([...header, ...low('D0368', '$0.00')], { ...names, D0368: 'Cone beam' }, fees).rows)).toContain('Check code D0368 against the screenshot');
     // D6059 costs the same as D6058, so the amount cannot tell them apart.
-    expect(lowIssue(parseTreatmentWords([...header, ...low('D6058', '$1,927.00')], names, fees).rows)).toContain('The code D6058 was read at 43% confidence');
+    expect(lowIssue(parseTreatmentWords([...header, ...low('D6058', '$1,927.00')], names, fees).rows)).toContain('Check code D6058 against the screenshot');
     // D0367 at $520 has no same-priced neighbour: corroborated.
     expect(parseTreatmentWords([...header, ...low('D0367', '$520.00')], names, fees).rows[0]).toMatchObject({ confidence: 'ok', issues: [] });
   });
