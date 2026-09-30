@@ -3629,10 +3629,11 @@
 .fof-payment-milestone span { font-size: 7.8pt; line-height: 1.25; color: var(--fof-muted); overflow-wrap: anywhere; }
 .fof-payment-milestone strong { font-size: 10pt; font-variant-numeric: tabular-nums; }
 .fof-payment-plan-total { display: flex; justify-content: space-between; padding: 8pt 12pt; color: var(--fof-navy); font-size: 10pt; font-weight: 700; break-inside: avoid; }
-.fof-composed-page { width: 7.5in; min-height: 10in; padding: 0; margin: 0 auto 16pt; break-after: page; }
+.fof-composed-page { width: 7.5in; min-height: 9.8in; padding: 0; margin: 0 auto 16pt; break-inside: avoid-page; break-after: page; }
+.fof-page-capacity { height: 9.8in; }
 .fof-practice-name { max-width: 65%; color: var(--fof-navy); font-size: 16pt; font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; }
 .fof-page-source[data-composed="true"], .fof-page-measure { position: fixed; left: -100000px; top: 0; width: 7.5in; visibility: hidden; pointer-events: none; }
-.fof-page-measure > .fof-sheet { min-height: 0 !important; margin: 0 !important; padding: 0 !important; width: 7.5in !important; }
+.fof-page-measure > .fof-sheet { min-height: 0 !important; margin: 0 !important; padding: 0 !important; width: 100% !important; }
 .fof-composed-page .fof-payment-milestone span { font-size: 8.5pt; }
 .fof-composed-page .fof-payment-phase-name { font-size: 9pt; }
 .fof-composed-compact .fof-head { margin-bottom: 6pt; padding-bottom: 6pt; }
@@ -3667,7 +3668,11 @@
 .fof-layout-review { padding: 16pt; border: 1pt solid #ad3131; color: #8f2222; background: white; }
 @media print {
   .fof-page-source[data-composed="true"] { display: none !important; }
-  .fof-composed-page { margin: 0; }
+  /* Leave rounding room for the unbroken signature block. The page viewport
+     also follows Chrome's print zoom, unlike a fixed ten-inch flex box. */
+  .fof-composed-page { margin: 0; min-height: 98vh; }
+  .fof-page-capacity { height: 98vh; }
+  .fof-page-measure { width: 100vw; }
 }
 .fof-policy-sheet .fof-cells { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .fof-policy-sheet .fof-row > span:first-child { overflow-wrap: anywhere; }

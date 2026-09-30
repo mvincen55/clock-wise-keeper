@@ -22,10 +22,13 @@ try {
   const page=await context.newPage();
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   const {getDocument}=await import('pdfjs-dist/legacy/build/pdf.mjs');
-  async function pdfTexts(file) {
+  async function pdfTexts(file,scale=1) {
+    const viewport=page.viewportSize();
+    await page.setViewportSize({width:Math.round(720/scale),height:Math.round(960/scale)});
     await page.emulateMedia({media:'print'});
-    const bytes=await page.pdf({path:path.join(output,file),format:'Letter',printBackground:true,preferCSSPageSize:true});
+    const bytes=await page.pdf({path:path.join(output,file),format:'Letter',scale,printBackground:true,preferCSSPageSize:true});
     await page.emulateMedia({media:'screen'});
+    await page.setViewportSize(viewport);
     const loadingTask=getDocument({data:new Uint8Array(bytes),disableFontFace:true,verbosity:0});
     const doc=await loadingTask.promise;
     const texts=[];
@@ -54,6 +57,11 @@ try {
       await page.getByRole('button',{name:'Prepare print'}).click();
       const updated=await pdfTexts('patient-repriced.pdf');
       assert.equal(updated.length,1);assert.match(updated[0],/8,273.00/);assert.doesNotMatch(updated[0],/8,173.00/);
+      for(const scale of [0.67,1.25]) {
+        const zoomed=await pdfTexts(`patient-zoom-${scale}.pdf`,scale);
+        console.log(`Patient at ${scale*100}%: ${zoomed.length} pages`);
+        assert.equal(zoomed.length,1);assert.match(zoomed[0],/PATIENT SIGNATURE/i);assert.match(zoomed[0],/8,273.00/);
+      }
     }
   }
   await page.goto(`${origin}/.repro/fof-browser/index.html?view=import`);
