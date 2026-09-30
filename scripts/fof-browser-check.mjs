@@ -23,11 +23,14 @@ try {
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   const {getDocument}=await import('pdfjs-dist/legacy/build/pdf.mjs');
   async function pdfTexts(file) {
+    await page.emulateMedia({media:'print'});
     const bytes=await page.pdf({path:path.join(output,file),format:'Letter',printBackground:true,preferCSSPageSize:true});
-    const doc=await getDocument({data:new Uint8Array(bytes),disableFontFace:true,verbosity:0}).promise;
+    await page.emulateMedia({media:'screen'});
+    const loadingTask=getDocument({data:new Uint8Array(bytes),disableFontFace:true,verbosity:0});
+    const doc=await loadingTask.promise;
     const texts=[];
     for(let i=1;i<=doc.numPages;i++) texts.push((await (await doc.getPage(i)).getTextContent()).items.map(item=>item.str).join(' '));
-    await doc.destroy();return texts;
+    await loadingTask.destroy();return texts;
   }
   for(const mode of ['patient','office','both']) {
     await page.emulateMedia({media:'screen'});
