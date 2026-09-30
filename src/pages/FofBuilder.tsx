@@ -1708,7 +1708,12 @@ export default function FofBuilder() {
     setImporting(true);
     let previewUrl: string | undefined;
     try {
-      const result = await readLocalTreatment(file, Object.fromEntries([...officeByCode].map(([code, item]) => [code, resolvePatientName(code, codeNames) || item.description])));
+      const result = await readLocalTreatment(
+        file,
+        Object.fromEntries([...officeByCode].map(([code, item]) => [code, resolvePatientName(code, codeNames) || item.description])),
+        // On-file fees in dollars, so a low-confidence read that matches the schedule is not flagged.
+        Object.fromEntries([...officeByCode].map(([code, item]) => [code, Math.max(0, item.feeCents) / 100])),
+      );
       if (scope !== importScope.current) return;
       previewUrl = URL.createObjectURL(file);
       setImportReview({ source: 'screenshot', result, previewUrl, scope });

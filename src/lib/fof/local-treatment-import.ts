@@ -14,8 +14,16 @@ import type { OcrWord } from '../schedule-reader/types';
  * Nothing is silently discarded: a cell the OCR is unsure about, a code the
  * office bank does not know, or a plan longer than the review limit comes
  * back as a row with issues for staff to confirm or drop, never as a
- * vanished line. Every issue says what was read and how sure the reader
- * was, so staff can check the exact cell instead of guessing.
+ * vanished line. Every issue names the exact cell to check (and quotes the
+ * text read when it is not a usable value), never a recognition score.
+ *
+ * Small PMS type reads correctly at a confidence Tesseract calls low, so a
+ * low-confidence code or amount is corroborated against the office fee
+ * schedule before it is flagged: a code the office bank knows, on a row
+ * whose fee reads as that code's own on-file fee, is read right unless a
+ * one-character neighbour of the code carries the same fee. A code that
+ * had to be corrected, an unknown code, a $0 fee or a fee that differs
+ * from the schedule is never corroborated.
  */
 
 export type RowConfidence = 'ok' | 'low';
@@ -137,8 +145,23 @@ export function visitFromHeading(words: string[]): number | null | undefined {
 
 /** Geometry-based reading of explicit PMS columns. No fee/visit guessing and no
  * raw descriptions copied out of an image. Staff review every row before import. */
-export function parseTreatmentWords(words: OcrWord[], codeNames: Record<string, string>): LocalTreatmentImport {
+export function parseTreatmentWords(words: OcrWord[], codeNames: Record<string, string>, officeFees: Record<string, number> = {}): LocalTreatmentImport {
   if (!words.length) throw failure();
+  const onFile = (code: string): number | null => {
+    const fee = officeFees[code] ?? officeFees[code.toUpperCase()];
+    return typeof fee === 'number' && Number.isFinite(fee) && fee > 0 ? Math.round(fee * 100) / 100 : null;
+  };
+  // A code the reader could have confused with this one: same length, one
+  // character different (D6057/D6058, D0367/D0387). Same fee there means the
+  // amount cannot tell the two apart.
+  const neighbourWithFee = (code: string, fee: number) =>
+    Object.keys(officeFees).some(other => {
+      const upper = other.toUpperCase();
+      if (upper === code || upper.length !== code.length) return false;
+      let differs = 0;
+      for (let i = 0; i < code.length && differs < 2; i += 1) if (upper[i] !== code[i]) differs += 1;
+      return differs === 1 && onFile(upper) === fee;
+    });
   const ordered = [...words].sort((a, b) => midpoint(a) - midpoint(b) || a.bbox.x0 - b.bbox.x0);
   const firstCode = ordered.find(word => dentalCode.test(trimGlyphs(word.text)) || !!codeNames[trimGlyphs(word.text).toUpperCase()]);
   const codeHeader = ordered.find(word => plain(word.text) === 'code' && (!firstCode || midpoint(word) < midpoint(firstCode)));
@@ -200,10 +223,6 @@ export function parseTreatmentWords(words: OcrWord[], codeNames: Record<string, 
       issues.push(`The code was read as "${trimGlyphs(candidate.text)}" and corrected to ${code}; confirm it against the screenshot.`);
       lower();
     }
-    if (candidate.confidence < CONFIDENCE_FLOOR) {
-      issues.push(`Check code ${code} against the screenshot; the text is unclear.`);
-      lower();
-    }
     const y = midpoint(candidate);
     const height = Math.max(8, candidate.bbox.y1 - candidate.bbox.y0);
     const sameRow = (word: OcrWord) => Math.abs(midpoint(word) - y) <= height * 0.55;
@@ -221,27 +240,26 @@ export function parseTreatmentWords(words: OcrWord[], codeNames: Record<string, 
         .filter(word => !symbolOnly(word.text) && center(word) >= left && center(word) < right)
         .sort((a, b) => a.bbox.x0 - b.bbox.x0);
     };
-    const readMoney = (name: string, label: string): number | null => {
+    const readMoney = (name: string, label: string): { value: number | null; unsure?: string } => {
       const values = cell(name);
-      if (!values.length) return null;
+      if (!values.length) return { value: null };
       const raw = values.map(word => trimGlyphs(word.text)).join('');
       const number = normalizeMoneyToken(raw);
       if (number === null) {
         issues.push(`The ${label} amount was read as "${raw}", which is not dollars and cents; enter it by hand.`);
         lower();
-        return null;
+        return { value: null };
       }
       if (number > 10000000) {
         issues.push(`The ${label} amount was read as "${raw}", which is out of range; enter it by hand.`);
         lower();
-        return null;
+        return { value: null };
       }
       const weakest = values.reduce((low, word) => (word.confidence < low.confidence ? word : low));
-      if (weakest.confidence < CONFIDENCE_FLOOR) {
-        issues.push(`Check the ${label} amount "${raw}" against the screenshot; the text is unclear.`);
-        lower();
-      }
-      return number;
+      const unsure = weakest.confidence < CONFIDENCE_FLOOR
+        ? `Check the ${label} amount "${raw}" against the screenshot; the text is unclear.`
+        : undefined;
+      return { value: number, unsure };
     };
     const toothWords = cell('tooth');
     let toothValue = toothWords.map(word => trimGlyphs(word.text)).join('').replace(/\s/g, '');
@@ -284,8 +302,24 @@ export function parseTreatmentWords(words: OcrWord[], codeNames: Record<string, 
     if (!dentalCode.test(code) && !codeNames[code]) {
       issues.push('This code is not on the office fee schedule; confirm it or correct it before importing.');
     }
-    const fee = readMoney('fee', 'Fee');
-    const officeFee = readMoney('officeFee', 'Office');
+    const feeRead = readMoney('fee', 'Fee');
+    const officeRead = readMoney('officeFee', 'Office');
+    // Corroboration: the row's fee (the OFFICE column when the plan has one)
+    // is exactly the on-file fee of the code as read. Only an uncorrected,
+    // known code with a non-zero on-file fee qualifies, and not when a
+    // one-character neighbour of the code costs the same.
+    const scheduleFee = !corrected && codeNames[code] ? onFile(code) : null;
+    const rowFee = officeRead.value ?? feeRead.value;
+    const corroborated = scheduleFee !== null && rowFee !== null && rowFee === scheduleFee && !neighbourWithFee(code, scheduleFee);
+    if (candidate.confidence < CONFIDENCE_FLOOR && !corroborated) {
+      issues.push(`Check code ${code} against the screenshot; the text is unclear.`);
+      lower();
+    }
+    for (const read of [feeRead, officeRead]) {
+      if (read.unsure && !(corroborated && read.value === scheduleFee)) { issues.push(read.unsure); lower(); }
+    }
+    const fee = feeRead.value;
+    const officeFee = officeRead.value;
     return {
       code, tooth: toothValue.replace(/^#/, '').toUpperCase(), description: codeNames[code] ?? '',
       fee, officeFee, entryDate, visit: visitValue, confidence, issues,
@@ -374,7 +408,7 @@ export function toGrayscale(pixels: Uint8ClampedArray): void {
 }
 
 /** Same-origin OCR assets; no upload, CDN, storage, logging, or remote fallback. */
-export async function readLocalTreatment(file: File, codeNames: Record<string, string>): Promise<LocalTreatmentImport> {
+export async function readLocalTreatment(file: File, codeNames: Record<string, string>, officeFees: Record<string, number> = {}): Promise<LocalTreatmentImport> {
   const { createWorker } = await import('tesseract.js');
   let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
   let bitmap: ImageBitmap | null = null;
@@ -405,7 +439,7 @@ export async function readLocalTreatment(file: File, codeNames: Record<string, s
         words.push({ text: word.text.trim(), confidence: word.confidence, bbox: { x0: word.bbox.x0 / scale, y0: word.bbox.y0 / scale, x1: word.bbox.x1 / scale, y1: word.bbox.y1 / scale } });
       }
     }
-    return parseTreatmentWords(words, codeNames);
+    return parseTreatmentWords(words, codeNames, officeFees);
   } catch (error) {
     throw error instanceof Error && error.message.includes('Nothing was') ? error : failure();
   } finally {

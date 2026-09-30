@@ -283,7 +283,26 @@ one code-bank note (D1354, a caries-arresting medicament) produces a heading out
 list, and one rejected heading failed the whole office. Headings are now screened for
 structure and privacy (plain words, no numbers, tooth, price or case wording, lower-cased
 before the person-name check) instead of vocabulary, and the function logs the failure
-class so the next 502 explains itself.
+class so the next 502 explains itself. Released 2026-09-30: PR #254 merged as `f57a16d6`
+at 14:47 UTC and `fof-office-guidance` redeployed at 14:50 UTC; at 14:52 UTC the live
+function answered 200 for the synthetic office (which carries a copy of the same note)
+with one recipe, titled "Silver Diamine Fluoride", classification `other`.
+
+### Follow-up 2026-09-30: corroborated screenshot reads
+
+Small PMS type reads correctly at a confidence Tesseract calls low, so correct codes such
+as D0367 (read at 54 %) and D6190 (43 %) came back flagged on every import. A
+low-confidence code or amount is now corroborated against the office fee schedule before
+it is flagged: an uncorrected code the office bank knows, on a row whose fee (the OFFICE
+column when the plan has one, else the Fee column) reads as exactly that code's own
+non-zero on-file fee, is accepted as read, unless a one-character neighbour of the code
+(D6058/D6059 on this office's schedule) carries the same fee, in which case the amount
+cannot tell them apart and the flag stays. A corrected code, an unknown code, a $0 fee, a
+fee that differs from the schedule, and a contracted Fee amount the schedule knows
+nothing about are still named, in the plain wording from the policy-wording follow-up
+above ("Check code D6058 against the screenshot; the text is unclear."). The builder passes
+the active office schedule's fees (dollars) into the on-device read; nothing else changes
+in what leaves the browser (nothing does). Covered by `fof-local-import.test.ts`.
 
 ## Human decisions
 
