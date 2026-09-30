@@ -59,7 +59,7 @@ export default function TreatmentImportReview({ open, source, result, previewUrl
 
   return (
     <AlertDialog open={open} onOpenChange={isOpen => { if (!isOpen) onCancel(); }}>
-      <AlertDialogContent className="min-w-0 max-h-[90vh] overflow-y-auto p-4 sm:p-6" style={{ width: 'calc(100vw - 2rem)', maxWidth: '72rem' }}>
+      <AlertDialogContent className="min-w-0 max-h-[90vh] overflow-y-auto p-4 sm:p-6" style={{ width: 'calc(100% - 2rem)', maxWidth: '72rem' }}>
         <AlertDialogHeader>
           <AlertDialogTitle>Review {rows.length} extracted procedure{rows.length === 1 ? '' : 's'}</AlertDialogTitle>
           <AlertDialogDescription>

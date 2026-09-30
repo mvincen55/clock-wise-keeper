@@ -88,6 +88,7 @@ try {
     await page.setViewportSize({width,height:900});
     await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
     const bounds=await page.getByRole('alertdialog').boundingBox();
+    console.log('Review viewport',width,JSON.stringify(await page.getByRole('alertdialog').evaluate(element=>({width:getComputedStyle(element).width,minWidth:getComputedStyle(element).minWidth,inline:element.getAttribute('style'),viewport:innerWidth,client:document.documentElement.clientWidth}))));
     await page.screenshot({path:path.join(output,`import-review-${width}.png`),fullPage:true});
     assert.ok(bounds.x>=0&&bounds.x+bounds.width<=width+1,`Review dialog outside viewport ${width}: ${JSON.stringify(bounds)}`);
     assert.equal(await page.getByLabel('Code row 9').inputValue(),'6059D');
