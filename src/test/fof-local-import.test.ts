@@ -42,6 +42,45 @@ describe('local treatment screenshot parser', () => {
     expect(issues).toContain('The Fee amount "$900.00" was read at 58% confidence');
     expect(issues).toContain('The tooth number "8" was read at 50% confidence');
   });
+  it('does not flag a low-confidence code or amount that the office fee schedule corroborates', () => {
+    const fees = { D2740: 1200, D6190: 1120, D6191: 800 };
+    // Code at 43% and the OFFICE amount at 50%: that amount is the on-file fee, so the row is read right.
+    const second = row(100); second[0].confidence = 43; second[4].confidence = 50;
+    const result = parseTreatmentWords([...header, ...row(60), ...second], { D2740: 'Crown' }, fees);
+    expect(result.rows[1]).toMatchObject({ code: 'D2740', fee: 900, officeFee: 1200, confidence: 'ok', issues: [] });
+    // Without the fees nothing is corroborated and every low read is still named.
+    const bare = parseTreatmentWords([...header, ...row(60), ...second], { D2740: 'Crown' });
+    expect(bare.rows[1].confidence).toBe('low');
+    expect(bare.rows[1].issues.join(' ')).toContain('The code D2740 was read at 43% confidence');
+    expect(bare.rows[1].issues.join(' ')).toContain('The Office amount "$1,200.00" was read at 50% confidence');
+    // A contracted Fee amount the schedule knows nothing about stays flagged even on a corroborated row.
+    const contracted = row(100); contracted[0].confidence = 43; contracted[3].confidence = 50;
+    const partial = parseTreatmentWords([...header, ...row(60), ...contracted], { D2740: 'Crown' }, fees);
+    expect(partial.rows[1].issues).toEqual(['The Fee amount "$900.00" was read at 50% confidence (below 65%); compare it with the screenshot.']);
+    // The plain Fee column corroborates only when the plan has no OFFICE column.
+    const plainHeader = header.filter((_, i) => i !== 4);
+    const plainRow = row(100).filter((_, i) => i !== 4); plainRow[0].confidence = 43;
+    expect(parseTreatmentWords([...plainHeader, ...plainRow], { D2740: 'Crown' }, { D2740: 900 }).rows[0]).toMatchObject({ confidence: 'ok', issues: [] });
+    expect(parseTreatmentWords([...plainHeader, ...plainRow], { D2740: 'Crown' }, { D2740: 950 }).rows[0].confidence).toBe('low');
+  });
+  it('never corroborates a corrected, unknown, $0 or differing-fee code, nor one whose one-character neighbour costs the same', () => {
+    const low = (code: string, office: string) => { const r = row(100, code); r[0].confidence = 43; r[4] = word(office, 100 + 4 * 150, 100); return r; };
+    const names = { D2740: 'Crown', D6058: 'Implant crown', D6059: 'Implant crown', D0367: 'Cone beam' };
+    const fees = { D2740: 1200, D6058: 1927, D6059: 1927, D0367: 520, D0368: 0 };
+    const lowIssue = (rows: ReturnType<typeof parseTreatmentWords>['rows']) => rows[0].issues.join(' ');
+    // Corrected code: the read text differed from the code, so it is always named.
+    expect(lowIssue(parseTreatmentWords([...header, ...low('D274O', '$1,200.00')], names, fees).rows)).toContain('corrected to D2740');
+    // Unknown code: the schedule cannot vouch for it.
+    expect(lowIssue(parseTreatmentWords([...header, ...low('D9999', '$1,200.00')], names, fees).rows)).toContain('was read at 43% confidence');
+    // Fee differs from the schedule.
+    expect(lowIssue(parseTreatmentWords([...header, ...low('D2740', '$1,250.00')], names, fees).rows)).toContain('was read at 43% confidence');
+    // $0 on file vouches for nothing.
+    expect(lowIssue(parseTreatmentWords([...header, ...low('D0368', '$0.00')], { ...names, D0368: 'Cone beam' }, fees).rows)).toContain('was read at 43% confidence');
+    // D6059 costs the same as D6058, so the amount cannot tell them apart.
+    expect(lowIssue(parseTreatmentWords([...header, ...low('D6058', '$1,927.00')], names, fees).rows)).toContain('The code D6058 was read at 43% confidence');
+    // D0367 at $520 has no same-priced neighbour: corroborated.
+    expect(parseTreatmentWords([...header, ...low('D0367', '$520.00')], names, fees).rows[0]).toMatchObject({ confidence: 'ok', issues: [] });
+  });
   it('corrects OCR letter-for-digit confusions in codes, amounts, teeth and dates, and says so for codes', () => {
     expect(normalizeCodeToken('D6O58')).toEqual({ code: 'D6058', corrected: true });
     expect(normalizeCodeToken('06057')).toEqual({ code: 'D6057', corrected: true });
