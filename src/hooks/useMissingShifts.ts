@@ -1,12 +1,14 @@
 import { useMemo } from 'react';
-import { useScheduleVersions, getVersionForDate, getWeekdayRule, ScheduleWeekdayRow, ScheduleVersionWithDays } from '@/hooks/useScheduleVersions';
-import { useWorkSchedule, getScheduleForWeekday, WorkScheduleRow } from '@/hooks/useWorkSchedule';
-import { useTimeEntries, TimeEntryRow } from '@/hooks/useTimeEntries';
-import { useDaysOff, DayOffRow } from '@/hooks/useDaysOff';
-import { useOfficeClosures, OfficeClosureRow } from '@/hooks/useOfficeClosures';
+import { useScheduleVersions, getVersionForDate, getWeekdayRule } from '@/hooks/useScheduleVersions';
+import { useWorkSchedule, getScheduleForWeekday } from '@/hooks/useWorkSchedule';
+import { useTimeEntries } from '@/hooks/useTimeEntries';
+import { useDaysOff } from '@/hooks/useDaysOff';
+import { useOfficeClosures } from '@/hooks/useOfficeClosures';
 import { useAttendanceExceptions, AttendanceExceptionRow } from '@/hooks/useAttendanceExceptions';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { useClocksIn } from '@/hooks/usePracticeSettings';
+import { useTick } from '@/hooks/useTick';
+import { easternDateKey, easternWallToUtcIso, getAppTimezone, shiftDate } from '@/lib/time-utils';
 
 export type MissingShiftDay = {
   date: string;
@@ -19,13 +21,19 @@ export type MissingShiftDay = {
  * Falls back to legacy work_schedule if no versions exist.
  */
 export function useMissingShifts(startDate?: string, endDate?: string) {
+  const now = useTick(60_000);
+  const timezone = getAppTimezone();
+  const today = easternDateKey(now);
+  const start = startDate || shiftDate(today, -30);
+  const end = endDate || today;
   const clocksIn = useClocksIn();
   const { data: versions } = useScheduleVersions();
   const { data: legacySchedule } = useWorkSchedule();
   const { data: entries } = useTimeEntries(startDate, endDate);
   const { data: daysOff } = useDaysOff();
-  const currentYear = new Date().getFullYear();
-  const { data: closures } = useOfficeClosures(currentYear);
+  // A selected range may be historical or cross New Year's Day.
+  const closureYear = start.slice(0, 4) === end.slice(0, 4) ? Number(start.slice(0, 4)) : undefined;
+  const { data: closures } = useOfficeClosures(closureYear);
   const { data: exceptions } = useAttendanceExceptions(startDate, endDate);
   const { data: payrollSettings } = usePayrollSettings();
 
@@ -41,14 +49,6 @@ export function useMissingShifts(startDate?: string, endDate?: string) {
     const hasLegacy = legacySchedule && legacySchedule.length > 0;
     if (!hasVersions && !hasLegacy) return [];
 
-    const now = new Date();
-    const start = startDate ? new Date(startDate + 'T00:00:00') : (() => {
-      const d = new Date();
-      d.setDate(d.getDate() - 30);
-      return d;
-    })();
-    const end = endDate ? new Date(endDate + 'T00:00:00') : now;
-
     const entryDates = new Set((entries || []).map(e => e.entry_date));
     const closureDates = new Set((closures || []).map(c => c.closure_date));
     const exceptionMap = new Map<string, AttendanceExceptionRow>();
@@ -58,18 +58,14 @@ export function useMissingShifts(startDate?: string, endDate?: string) {
     (daysOff || []).forEach(d => {
       // A recorded absence already explains the missing work. Its attendance
       // status stays absent, but it does not also need a missing-punch response.
-      const s = new Date(d.date_start + 'T00:00:00');
-      const e = new Date(d.date_end + 'T00:00:00');
-      for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
-        dayOffDates.add(cur.toISOString().split('T')[0]);
+      // These are calendar dates, not instants in the device's timezone.
+      for (let date = d.date_start; date <= d.date_end; date = shiftDate(date, 1)) {
+        dayOffDates.add(date);
       }
     });
 
     const missing: MissingShiftDay[] = [];
-    const current = new Date(start);
-
-    while (current <= end) {
-      const dateStr = current.toISOString().split('T')[0];
+    for (let dateStr = start; dateStr <= end; dateStr = shiftDate(dateStr, 1)) {
 
       // Try versioned schedule first, then fallback to legacy
       let sched: { weekday: number; enabled: boolean; start_time: string; end_time: string; grace_minutes: number; threshold_minutes: number } | null = null;
@@ -89,10 +85,9 @@ export function useMissingShifts(startDate?: string, endDate?: string) {
 
       if (sched && sched.enabled) {
         const [eh, em] = sched.end_time.split(':').map(Number);
-        const endTime = new Date(dateStr + 'T00:00:00');
-        endTime.setHours(eh, em + bufferMinutes, 0, 0);
+        const endTime = Date.parse(easternWallToUtcIso(dateStr, eh, em)) + bufferMinutes * 60_000;
 
-        if (now > endTime) {
+        if (now.getTime() > endTime) {
           const isOfficeClosed = closureDates.has(dateStr);
           const hasEntry = entryDates.has(dateStr);
           const hasDayOff = dayOffDates.has(dateStr);
@@ -107,11 +102,10 @@ export function useMissingShifts(startDate?: string, endDate?: string) {
           }
         }
       }
-
-      current.setDate(current.getDate() + 1);
     }
 
     return missing;
-  }, [clocksIn, versions, legacySchedule, entries, daysOff, closures, exceptions, startDate, endDate, bufferMinutes]);
+    // Wall-clock conversion reads module state; a timezone change must invalidate this memo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clocksIn, versions, legacySchedule, entries, daysOff, closures, exceptions, start, end, bufferMinutes, now, timezone]);
 }
-
