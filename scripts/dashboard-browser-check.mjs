@@ -23,10 +23,16 @@ try {
   for (const role of ['manager', 'owner', 'member']) {
     await page.setViewportSize({ width: 1440, height: 1100 });
     await page.goto(`${origin}/.repro/dashboard-browser/index.html?role=${role}`);
-    await page.getByRole('heading', { name: 'Goals we’re working toward' }).waitFor();
+    await page.getByRole('heading', { name: 'Active goals' }).waitFor();
     if (role !== 'member') {
       assert.equal(await page.getByRole('button', { name: role === 'owner' ? 'Year to date' : 'This month', pressed: true }).count(), 1);
+      const total = page.getByRole('region', { name: 'Collections', exact: true }).locator('[data-performance-total]');
+      await page.getByRole('button', { name: 'This month' }).click();
+      const monthTotal = await total.innerText();
       await page.getByRole('button', { name: 'Year to date' }).click();
+      const yearTotal = await total.innerText();
+      assert.notEqual(yearTotal, monthTotal, 'Period switch must change the displayed total');
+      assert.equal(await page.getByText('Projected year finish', { exact: true }).count(), 1);
       assert.equal(await page.getByText('Monthly totals · same dates across three years').count(), 1);
       await page.getByRole('button', { name: 'Production', exact: true }).click();
       assert.equal(await page.getByRole('region', { name: 'Production over time' }).count(), 1);
@@ -51,9 +57,24 @@ try {
       if (size.scroll > size.viewport + 1) console.log('Overflow elements', JSON.stringify(await page.locator('body *').evaluateAll(els => els.filter(el => el.getBoundingClientRect().right > innerWidth + 1 && getComputedStyle(el).display !== 'none').slice(0, 20).map(el => ({ tag: el.tagName, class: el.className?.baseVal ?? el.className, width: el.getBoundingClientRect().width, right: el.getBoundingClientRect().right })))));
       assert.ok(size.scroll <= size.viewport + 1, `${role} overflows at ${width}: ${JSON.stringify(size)}`);
       assert.doesNotMatch(await page.locator('body').innerText(), /Office day \d+\.\d+/);
+      if (role !== 'member') {
+        await page.getByRole('button', { name: 'This month' }).click();
+        const monthTotal = await page.getByRole('region', { name: 'Collections', exact: true }).locator('[data-performance-total]').innerText();
+        await page.getByRole('button', { name: 'Year to date' }).click();
+        const yearTotal = await page.getByRole('region', { name: 'Collections', exact: true }).locator('[data-performance-total]').innerText();
+        assert.notEqual(yearTotal, monthTotal, `${role}: totals switch at ${width}`);
+        await page.getByRole('button', { name: role === 'owner' ? 'Year to date' : 'This month' }).click();
+        await page.evaluate(() => scrollTo(0, 0));
+        assert.ok((await page.locator('[data-performance-toolbar]').boundingBox()).y < 300, 'Period control is visible above the numbers');
+      }
 
     }
   }
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto(`${origin}/.repro/dashboard-browser/index.html?role=owner`);
+  await page.getByRole('heading', { name: 'Active goals' }).waitFor();
+  await page.evaluate(() => document.documentElement.classList.add('dark'));
+  await page.screenshot({ path: path.join(output, 'owner-dark.png'), fullPage: true });
   assert.deepEqual(errors, []);
   console.log('Dashboard browser checks passed: three roles at desktop, tablet and phone widths; month/YTD, metric, member selection and chart table.');
 } finally { await browser?.close(); await server.close(); }

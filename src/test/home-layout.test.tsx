@@ -16,8 +16,8 @@ describe('performance and goals near the top', () => {
     expect(within(performance).getByRole('region', { name: 'Needs you' })).toBeInTheDocument();
     expect(within(performance).getByRole('region', { name: 'Collections over time' }).querySelector('svg')).not.toBeNull();
     const text = container.textContent!;
-    expect(text.indexOf('How we’re doing')).toBeLessThan(text.indexOf('Goals we’re working toward'));
-    expect(text.indexOf('Goals we’re working toward')).toBeLessThan(text.indexOf('Team today'));
+    expect(text.indexOf('How we’re doing')).toBeLessThan(text.indexOf('Active goals'));
+    expect(text.indexOf('Active goals')).toBeLessThan(text.indexOf('Team today'));
     expect(screen.getAllByRole('region', { name: 'Team today' })).toHaveLength(1);
     expect(screen.queryByRole('region', { name: 'Right now' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Today' })).not.toBeInTheDocument();
@@ -31,8 +31,8 @@ describe('performance and goals near the top', () => {
   it('owner opens on YTD with the three-year summary beside the chart', () => {
     renderView(<OwnerDashboard view={ownerFixture} />);
     expect(screen.getByRole('button', { name: 'Year to date', pressed: true })).toBeInTheDocument();
-    const years = screen.getByRole('region', { name: 'Compared with prior years' });
-    for (const year of ['2026', '2025', '2024']) expect(within(years).getByText(year)).toBeInTheDocument();
+    const years = screen.getByRole('region', { name: 'Across the years' });
+    for (const year of ['2026 · Current', '2025', '2024']) expect(within(years).getByText(year)).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Needs you' })).toBeInTheDocument();
   });
   it('the cancellation trend and links follow the selected period and completed-day cutoff', () => {

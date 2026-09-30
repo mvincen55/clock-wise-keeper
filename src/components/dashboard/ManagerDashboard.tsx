@@ -24,9 +24,8 @@ export default function ManagerDashboard({ view, chartWidth }: { view: ManagerVi
         state={{ text: office.headline, tone: home.summary.tone }} context={<ViewContext context={roleContext} />}
         actions={<>{fofAction && <ActionLink to={fofAction.to} variant="secondary">{fofAction.label}</ActionLink>}{closeAction && <ActionLink to={closeAction.to} variant="primary">{closeAction.label}</ActionLink>}</>} />
       <div className="mt-5 space-y-5">
-        <BriefPriorities summary={home.summary} />
         <PracticePerformance data={performance} state={performanceState} chartWidth={chartWidth} onPeriodChange={setPeriod}
-          aside={<NeedsYouPanel preview={3} needs={home.needs} title={home.wrapUp ? 'Before you leave' : 'Needs you'} emptyTitle={home.wrapUp ? 'Nothing carries into tomorrow.' : 'Nothing is waiting on you.'} emptyDetail="Decisions, fixes, and follow-ups are all clear." lead={lead} />} />
+          aside={<NeedsYouPanel preview={2} needs={home.needs} title={home.wrapUp ? 'Before you leave' : 'Needs you'} emptyTitle={home.wrapUp ? 'Nothing carries into tomorrow.' : 'Nothing is waiting on you.'} emptyDetail="Decisions, fixes, and follow-ups are all clear." lead={<><BriefPriorities summary={home.summary} />{lead}</>} />} />
         <ChosenGoals data={view.chosenGoals} officeGoal={goal} admin />
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
           <div className="min-w-0 space-y-4">

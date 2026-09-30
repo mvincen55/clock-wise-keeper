@@ -1,0 +1,50 @@
+/* The approved Home palette stays local to the dashboard and follows dark mode. */
+.pe-home {
+  --background: 264 29% 97%;
+  --foreground: 267 20% 18%;
+  --card: 0 0% 100%;
+  --muted: 267 38% 94%;
+  --muted-foreground: 270 9% 44%;
+  --border: 268 27% 90%;
+  --primary: 271 34% 39%;
+  --success: 172 53% 31%;
+  --home-year-current: #7751a0;
+  --home-year-prior: #25786d;
+  --home-year-older: #9c8ead;
+  --home-goal-surface: #eee5f7;
+  --home-warning: #95600c;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 13px;
+}
+.dark .pe-home {
+  --background: 260 17% 11%;
+  --foreground: 270 50% 95%;
+  --card: 258 16% 15%;
+  --muted: 270 22% 21%;
+  --muted-foreground: 271 22% 75%;
+  --border: 265 17% 26%;
+  --primary: 271 54% 75%;
+  --primary-foreground: 266 29% 15%;
+  --success: 169 44% 63%;
+  --home-year-current: #bf97e7;
+  --home-year-prior: #77caba;
+  --home-year-older: #aea0c0;
+  --home-goal-surface: #392a4b;
+  --home-warning: #f0c17c;
+}
+.pe-home [data-home-panel] > header { padding: 16px 17px 8px; gap: 8px; }
+.pe-home [data-home-panel] > header h2 { font-size: 14px; }
+.pe-home [data-home-panel] > header > p { font-size: 12px; }
+.pe-home [data-home-panel] > div { padding-left: 17px; padding-right: 17px; padding-bottom: 17px; }
+.pe-home > header > div:first-child > p { font-size: 12px; }
+.pe-home > header h1 { font-size: 25px; font-weight: 650; }
+.pe-home > header a { border-radius: 8px; font-size: 12px; }
+.pe-home .text-home-warning { color: var(--home-warning); }
+.pe-home [data-home-panel] { box-shadow: 0 2px 4px #27133f09; }
+.pe-home #needs-you [data-item-key] > div > a > span:first-child { font-size: 13px; }
+.pe-home #needs-you [data-item-key] > div > span { font-size: 12px; }
+.pe-home #needs-you [data-item-key] > a { border-radius: 7px; padding: 5px 8px; font-size: 12px; }
+@media (max-width: 620px) {
+  .pe-home > header h1 { font-size: 22px; }
+}

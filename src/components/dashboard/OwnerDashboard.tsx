@@ -21,9 +21,9 @@ export default function OwnerDashboard({ view, chartWidth }: { view: OwnerView; 
         state={{ text: office.headline, tone: summary.tone }} context={<ViewContext context={roleContext} />}
         actions={<>{closeAction && <ActionLink to={closeAction.to} variant="secondary">{closeAction.label}</ActionLink>}<ActionLink to="/management" variant="primary">Attention{decisionCount > 0 ? ` · ${decisionCount}` : ''}</ActionLink></>} />
       <div className="mt-5 space-y-5">
-        <BriefPriorities summary={summary} />
         <PracticePerformance data={performance} state={performanceState} defaultPeriod="year" chartWidth={chartWidth} onPeriodChange={setPeriod} />
         <ChosenGoals data={view.chosenGoals} officeGoal={goal} admin />
+        <BriefPriorities summary={summary} />
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
           <div className="min-w-0 space-y-4">
             <NeedsYouPanel needs={needs} emptyTitle="No owner decisions are waiting." emptyDetail="Approvals, reviews, and sign-offs are clear." />

@@ -17,10 +17,10 @@ describe('the hierarchy', () => {
   it('leads with performance, historical context and chosen goals before operational detail', () => {
     const { container } = renderView(<OwnerDashboard view={ownerFixture} chartWidth={700} />);
     const text = container.textContent!;
-    expect(text.indexOf('How we’re doing')).toBeLessThan(text.indexOf('Goals we’re working toward'));
-    expect(text.indexOf('Goals we’re working toward')).toBeLessThan(text.indexOf('Needs you'));
+    expect(text.indexOf('How we’re doing')).toBeLessThan(text.indexOf('Active goals'));
+    expect(text.indexOf('Active goals')).toBeLessThan(text.indexOf('Needs you'));
     expect(screen.getByRole('region', { name: 'Collections over time' }).querySelector('svg')).not.toBeNull();
-    expect(screen.getByRole('region', { name: 'Compared with prior years' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Across the years' })).toBeInTheDocument();
   });
 
   it('the header carries the greeting, the office state, the role context, and the primary actions', () => {
