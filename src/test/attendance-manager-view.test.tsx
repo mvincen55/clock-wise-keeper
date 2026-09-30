@@ -14,6 +14,8 @@ import TeamAttendance from '@/pages/TeamAttendance';
 import type { AttendanceDayStatusRow } from '@/hooks/useAttendanceDayStatus';
 
 const state = vi.hoisted(() => ({
+  today: '2026-09-22',
+  weekStartDay: 1,
   role: 'manager' as string,
   /** The day-status rows the page reads; a test may add days. */
   rows: null as unknown[] | null,
@@ -52,7 +54,7 @@ const janePunches = [
 
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'manager-login' } }) }));
 vi.mock('@/hooks/useOrgContext', () => ({ useOrgContext: () => ({ data: { org_id: 'office', employee_id: 'emp-jane', user_id: 'manager-login', role: state.role, org_name: 'Office' }, isLoading: false }) }));
-vi.mock('@/hooks/usePayrollSettings', () => ({ usePayrollSettings: () => ({ data: { week_start_day: 1 } }) }));
+vi.mock('@/hooks/usePayrollSettings', () => ({ usePayrollSettings: () => ({ data: { week_start_day: state.weekStartDay } }) }));
 vi.mock('@/hooks/useStaffCodes', () => ({
   useOrgStaff: () => ({ data: [
     { employeeId: 'emp-jane', userId: 'manager-login', displayName: 'Doe, Jane', code: 'JD01', employmentStatus: 'active', membershipStatus: 'active', kind: 'active', isActiveActor: true },
@@ -62,7 +64,7 @@ vi.mock('@/hooks/useStaffCodes', () => ({
 // The office clock the day rule reads: Tuesday Sep 22 at 10:00 AM.
 vi.mock('@/lib/time-utils', async importOriginal => ({
   ...(await importOriginal<typeof import('@/lib/time-utils')>()),
-  getToday: () => '2026-09-22',
+  getToday: () => state.today,
   easternWallMinutes: () => 10 * 60,
 }));
 vi.mock('@/hooks/useAttendanceDayStatus', () => ({
@@ -118,9 +120,23 @@ function mount(path = '/management/attendance') {
 }
 const counter = (label: string) => screen.getByText(label, { selector: 'p.text-xs' }).parentElement!;
 
-afterEach(() => { cleanup(); state.role = 'manager'; state.rickAbsence = 'scheduled_with_notice'; state.rows = null; state.recompute.mockClear(); state.toast.mockClear(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); state.today = '2026-09-22'; state.weekStartDay = 1; state.role = 'manager'; state.rickAbsence = 'scheduled_with_notice'; state.rows = null; state.recompute.mockClear(); state.toast.mockClear(); });
 
 describe('Team Attendance (Management)', () => {
+  it.each([
+    [1, '2026-09-14', '2026-09-20'],
+    [0, '2026-09-20', '2026-09-26'],
+  ])('uses the app date and configured week start (%s) for the default range', (weekStart, start, end) => {
+    vi.useFakeTimers();
+    // Monday in UTC and many device zones, still Sunday at the office.
+    vi.setSystemTime(new Date('2026-09-21T01:00:00Z'));
+    state.today = '2026-09-20';
+    state.weekStartDay = weekStart;
+    mount();
+    expect(screen.getByLabelText('Start Date')).toHaveValue(start);
+    expect(screen.getByLabelText('End Date')).toHaveValue(end);
+  });
+
   it('names every row and explains an absence only with that person’s own day off', () => {
     mount();
     expect(screen.getAllByRole('button', { name: 'Doe, Jane' })).toHaveLength(2);

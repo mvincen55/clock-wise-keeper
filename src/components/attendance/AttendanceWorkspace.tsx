@@ -19,7 +19,7 @@ import ReturnPill from '@/components/management/ReturnPill';
 import PersonalCalendar from '@/components/PersonalCalendar';
 import { usePayrollSettings } from '@/hooks/usePayrollSettings';
 import { useAuth } from '@/hooks/useAuth';
-import { formatDate, formatTime, formatClock, formatClockRange, getToday, minutesToHHMM } from '@/lib/time-utils';
+import { formatDate, formatTime, formatClock, formatClockRange, getToday, minutesToHHMM, shiftDate } from '@/lib/time-utils';
 import { DAY_OFF_LABELS, DAY_TONE_CLASS, EXPLAINED_DAY_OFF_TYPES, dayWord, isAbsence, isMissingClockOut } from '@/lib/attendance-day';
 import { useDayClock } from '@/hooks/useDayClock';
 import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
@@ -197,21 +197,16 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
 
   // Default date range to current pay period
   const weekStartDay = payrollSettings?.week_start_day ?? 1;
-  const nowDate = new Date();
-  const dayOfWeek = nowDate.getDay();
+  const dayOfWeek = new Date(`${today}T12:00:00Z`).getUTCDay();
   const daysBack = (dayOfWeek - weekStartDay + 7) % 7;
-  const defaultStart = new Date(nowDate);
-  defaultStart.setDate(nowDate.getDate() - daysBack);
-  const defaultEnd = new Date(defaultStart);
-  defaultEnd.setDate(defaultStart.getDate() + 6);
+  const defaultStart = shiftDate(today, -daysBack);
+  const defaultEnd = shiftDate(defaultStart, 6);
 
   const [startDate, setStartDate] = useState(() => {
-    const s = defaultStart.toISOString().split('T')[0];
-    return linkedDate && linkedDate < s ? linkedDate : s;
+    return linkedDate && linkedDate < defaultStart ? linkedDate : defaultStart;
   });
   const [endDate, setEndDate] = useState(() => {
-    const e = defaultEnd.toISOString().split('T')[0];
-    return linkedDate && linkedDate > e ? linkedDate : e;
+    return linkedDate && linkedDate > defaultEnd ? linkedDate : defaultEnd;
   });
   // The team view starts on the whole office; a linked person narrows it.
   const [teamFilter, setEmployeeFilter] = useState<string>(linkedEmployee ?? EVERYONE);
@@ -276,7 +271,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
   const daysOff: DayOffRow[] = useMemo(() => daysOffSource || [], [daysOffSource]);
   const daysOffLoading = personal ? ownDaysOff.isLoading : orgDaysOff.isLoading;
   const { data: tardies, isLoading: tardiesLoading } = useTardies(startDate, endDate);
-  const { data: closures } = useOfficeClosures(new Date().getFullYear());
+  const { data: closures } = useOfficeClosures(Number(today.slice(0, 4)));
   const { data: statusRows, isLoading: statusLoading } = useAttendanceDayStatus(startDate, endDate);
   const { data: entries } = useTimeEntries(startDate, endDate, personal ? 'own' : 'all');
   const recompute = useRecomputeAttendance();
@@ -394,10 +389,8 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
   const daysOffByKey = useMemo(() => {
     const map = new Map<string, DayOffRow[]>();
     daysOff.forEach(d => {
-      const start = new Date(d.date_start + 'T00:00:00');
-      const end = new Date(d.date_end + 'T00:00:00');
-      for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
-        const key = coverageKey(d.employee_id, cur.toISOString().split('T')[0]);
+      for (let date = d.date_start; date <= d.date_end; date = shiftDate(date, 1)) {
+        const key = coverageKey(d.employee_id, date);
         if (!map.has(key)) map.set(key, []);
         map.get(key)!.push(d);
       }

@@ -30,6 +30,12 @@ jobs:
       - name: Run tests
         run: bun run test
 
+      - name: Check attendance in device timezones
+        run: |
+          for zone in America/New_York Europe/Prague Pacific/Auckland; do
+            TZ="$zone" bun run test src/test/attendance-manager-view.test.tsx src/test/missing-shift-rules.test.tsx src/test/attendance-timezone.test.tsx src/test/timezone-dst.test.ts
+          done
+
       - name: Build
         run: bun run build
 

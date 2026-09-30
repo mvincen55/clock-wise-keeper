@@ -5,6 +5,7 @@ import {
   easternDateKey,
   easternTimeInputValue,
   easternWallToUtcIso,
+  getEasternOffsetMinutes,
   calculatePunchMinutes,
 } from '@/lib/time-utils';
 
@@ -91,6 +92,12 @@ describe('punch pairs across DST transitions (America/New_York)', () => {
 });
 
 describe('easternWallToUtcIso across DST transitions', () => {
+  it.each(['UTC', 'Europe/London'])('preserves a zero UTC offset in %s', zone => {
+    setAppTimezone(zone);
+    expect(getEasternOffsetMinutes(new Date('2026-01-15T12:00:00Z'))).toBe(0);
+    expect(easternWallToUtcIso('2026-01-15', 9, 0)).toBe('2026-01-15T09:00:00.000Z');
+  });
+
   it('nonexistent spring-forward time shifts forward instead of inventing an instant', () => {
     // 02:30 on Mar 8 2026 never happens in New York; the editor input
     // resolves to 03:30 EDT (07:30Z) rather than failing or going back.

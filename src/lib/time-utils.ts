@@ -176,6 +176,7 @@ export function getEasternOffsetMinutes(atInstant: Date): number {
     timeZone: APP_TZ, timeZoneName: 'shortOffset', year: 'numeric',
   });
   const tzName = dtf.formatToParts(atInstant).find(p => p.type === 'timeZoneName')?.value || 'GMT-5';
+  if (tzName === 'GMT') return 0;
   const m = tzName.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
   if (!m) return -300;
   const sign = m[1] === '+' ? 1 : -1;
