@@ -276,12 +276,14 @@ office; no real patient data).
    `fof-naming-hook.test.tsx` (it cannot be provoked on the live project without
    removing the secret).
 
-Open finding, not part of this repair: `fof-office-guidance` answers 502 ("Office
-guidance could not be generated. Existing office rules remain in use.") for the synthetic
-office on every call, before and after the deployment, so the builder shows "Code-bank
-guidance is unavailable" and falls back to the office rules as designed. The function
-throws when the gateway fails or the model does not cover every code-bank batch; the
-Lovable function logs will say which. The form works without it.
+Fixed 2026-09-30: `fof-office-guidance` answered 502 for this office on every call, so the
+builder showed "Code-bank guidance is unavailable" and fell back to the office rules. The
+recipe validator only accepted headings built from a fixed clinical word list; the office's
+one code-bank note (D1354, a caries-arresting medicament) produces a heading outside that
+list, and one rejected heading failed the whole office. Headings are now screened for
+structure and privacy (plain words, no numbers, tooth, price or case wording, lower-cased
+before the person-name check) instead of vocabulary, and the function logs the failure
+class so the next 502 explains itself.
 
 ## Human decisions
 
