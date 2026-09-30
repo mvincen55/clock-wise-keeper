@@ -1,20 +1,5 @@
-/**
- * Owner Home composition — the redesigned surface.
- *
- * These tests render OwnerDashboard against fixtures that run through the
- * REAL derivation layer (home-brief.ts, attention/, performance-series.ts,
- * goal-progress.ts, home-insights.ts, my-work.ts), and pin the rules:
- *
- *  - the hierarchy is what needs me → status → performance → trends → tools;
- *  - the summary is short: the office state and genuine priorities only;
- *  - Needs you is the same Attention list, with the date, why, next action;
- *  - a closed-out day shows its actual production and collections;
- *  - a missing closeout is narrated, never rendered as $0;
- *  - production and collections each read against ONLY their own goal, on
- *    the office-day basis; a partial month is labeled, never "behind";
- *  - observations never repeat a meter; the challenge appears once;
- *  - the tools area puts the assigned role first and reveals the rest.
- */
+/** Owner dashboard: year-to-date context, comparable history, configured goals,
+ * owner decisions and honest handling of incomplete or missing records. */
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -29,16 +14,13 @@ const pressed = (name: string | RegExp) => screen.getByRole('button', { name, pr
 const clickPreset = (label: string) => fireEvent.click(screen.getByRole('button', { name: label }));
 
 describe('the hierarchy', () => {
-  it('what needs me, then status, then performance, then trends, then tools', () => {
-    const { container } = renderView(<OwnerDashboard view={ownerFixture} chartWidth={800} />);
+  it('leads with performance, historical context and chosen goals before operational detail', () => {
+    const { container } = renderView(<OwnerDashboard view={ownerFixture} chartWidth={700} />);
     const text = container.textContent!;
-    const at = (s: string) => { const i = text.indexOf(s); expect(i, s).toBeGreaterThanOrEqual(0); return i; };
-    expect(at('Right now')).toBeLessThan(at('Needs you'));
-    expect(at('Needs you')).toBeLessThan(at('Production and Collections'));
-    expect(at('Production and Collections')).toBeLessThan(at('Cancellations and no-shows'));
-    expect(at('Cancellations and no-shows')).toBeLessThan(at('Tools'));
-    expect(screen.getByRole('list', { name: 'Performance strip' }).querySelectorAll('[role="listitem"]')).toHaveLength(4);
-    expect(screen.getByTestId('performance-chart-frame').querySelector('svg')).not.toBeNull();
+    expect(text.indexOf('How we’re doing')).toBeLessThan(text.indexOf('Goals we’re working toward'));
+    expect(text.indexOf('Goals we’re working toward')).toBeLessThan(text.indexOf('Needs you'));
+    expect(screen.getByRole('region', { name: 'Collections over time' }).querySelector('svg')).not.toBeNull();
+    expect(screen.getByRole('region', { name: 'Compared with prior years' })).toBeInTheDocument();
   });
 
   it('the header carries the greeting, the office state, the role context, and the primary actions', () => {
@@ -59,41 +41,35 @@ describe('the hierarchy', () => {
     expect(container.textContent).not.toMatch(/came in late|things need you/);
   });
 
-  it('opens on the last three months when this month is still thin, and the reader can switch', () => {
-    renderView(<OwnerDashboard view={ownerFixture} chartWidth={800} />);
-    expect(pressed('Last 3 months')).toBeInTheDocument();
+  it('opens on year to date and switches totals and target to this month', () => {
+    renderView(<OwnerDashboard view={ownerFixture} />);
+    expect(pressed('Year to date')).toBeInTheDocument();
     clickPreset('This month');
     expect(pressed('This month')).toBeInTheDocument();
-    // The strip follows the period: the one closed-out day of March.
-    expect(screen.getByRole('listitem', { name: /^Production, Mar 1 – Mar 3, 2026 · partial: \$7,420/ })).toBeInTheDocument();
-    expect(screen.getByRole('listitem', { name: /^Collections, .*\$6,150/ })).toBeInTheDocument();
-    expect(screen.getByText(/1 of 1 office day recorded · through Mar 2 · 1 not sealed/)).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Production' })).getByText('$7,420')).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Collections' })).getByText('$6,150')).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Collections' })).getAllByText('Partial records').length).toBeGreaterThan(0);
   });
 
-  it('every strip tile carries an information control with the range, cutoff, source, and completeness', () => {
-    renderView(<OwnerDashboard view={ownerFixture} chartWidth={800} />);
-    const info = screen.getAllByRole('button', { name: /^About / });
-    expect(info.length).toBeGreaterThanOrEqual(4);
-    fireEvent.click(screen.getByRole('button', { name: 'About production' }));
-    const popover = screen.getByRole('dialog');
-    expect(within(popover).getByText('Completeness')).toBeInTheDocument();
-    expect(within(popover).getByText(/office days recorded through/)).toBeInTheDocument();
-    expect(within(popover).getByText(/Close the Day · office day \(deposit date\)/)).toBeInTheDocument();
+  it('has readable dates, coverage labels, source and exact chart data', () => {
+    const { container } = renderView(<OwnerDashboard view={ownerFixture} />);
+    expect(screen.getByText('View chart data')).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: /exact dates, amounts, and record coverage/ })).toBeInTheDocument();
+    expect(screen.getByText('About this comparison')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/Office day \d+\.\d+/);
   });
 });
 
 describe('daily financial pulse', () => {
-  it('a closed-out day shows its actual production and collections', () => {
-    renderView(<OwnerDashboard view={ownerClosedFixture} />);
-    expect(screen.getByText("Today's closeout")).toBeInTheDocument();
-    expect(screen.getByText('$8,150')).toBeInTheDocument(); // production
-    expect(screen.getByText('$7,900')).toBeInTheDocument(); // collected
+  it('includes a sealed day in this month’s real totals', () => {
+    renderView(<OwnerDashboard view={ownerClosedFixture} />); clickPreset('This month');
+    expect(within(screen.getByRole('region', { name: 'Production' })).getByText('$15,570')).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Collections' })).getByText('$14,050')).toBeInTheDocument();
   });
 
-  it('a missing closeout is narrated with the last closed day — never $0', () => {
-    const { container } = renderView(<OwnerDashboard view={ownerFixture} chartWidth={800} />);
-    expect(screen.getByText("Yesterday's closeout")).toBeInTheDocument();
-    expect(screen.getByText(/figures appear after the day is closed out/i)).toBeInTheDocument();
+  it('a partial record is labeled and never rendered as a fabricated zero', () => {
+    const { container } = renderView(<OwnerDashboard view={ownerFixture} />); clickPreset('This month');
+    expect(screen.getAllByText('Partial records').length).toBeGreaterThan(0);
     expect(container.textContent).not.toContain('$0');
   });
 
@@ -103,50 +79,37 @@ describe('daily financial pulse', () => {
     expect(container.textContent).not.toContain('$0');
     expect(screen.getAllByText('No goal set')).toHaveLength(2);
     expect(screen.getByRole('link', { name: /Set a production goal/ })).toHaveAttribute('href', '/management/office/settings#office-goals');
-    expect(screen.getByText(/No days have been closed out yet\./)).toBeInTheDocument();
-    expect(screen.getByText('Nothing recorded for this period.')).toBeInTheDocument();
+    expect(screen.getByText('No comparable history recorded for these dates yet.')).toBeInTheDocument();
   });
 });
 
 describe('goal meters', () => {
-  it('production and collections each read against their own goal, on the office-day basis', () => {
-    renderView(<OwnerDashboard view={ownerFixture} />);
-    const production = screen.getByRole('meter', { name: /Production 5% of the \$160,000 goal/ });
-    expect(production).toHaveAttribute('aria-valuenow', '5');
-    expect(screen.getByRole('meter', { name: /Collections 4% of the \$150,000 goal/ })).toBeInTheDocument();
-    expect(screen.getByText('5% of the $160,000 goal · on pace by office day 1 of 22.')).toBeInTheDocument();
-    expect(screen.getByText('4% of the $150,000 goal · on pace by office day 1 of 22.')).toBeInTheDocument();
-    expect(screen.getAllByText('On pace')).toHaveLength(2);
-    expect(screen.getByText('How pace is calculated')).toBeInTheDocument();
-    expect(screen.getByText(/Pace by office days/)).toBeInTheDocument();
+  it('each metric uses its own configured goal and keeps incomplete pace unjudged', () => {
+    renderView(<OwnerDashboard view={ownerFixture} />); clickPreset('This month');
+    expect(screen.getByRole('meter', { name: 'Production goal progress' })).toHaveAttribute('aria-valuenow', '5');
+    expect(screen.getByRole('meter', { name: 'Collections goal progress' })).toHaveAttribute('aria-valuenow', '4');
+    expect(screen.getByText('Monthly goal · $160,000')).toBeInTheDocument();
+    expect(screen.getByText('Monthly goal · $150,000')).toBeInTheDocument();
+    expect(screen.queryByText(/Below expected pace/)).not.toBeInTheDocument();
   });
 
-  it('a month on pace reads as on pace, with the expected figure', () => {
-    renderView(<OwnerDashboard view={ownerClosedFixture} />);
-    expect(screen.getAllByText('On pace')).toHaveLength(2);
-    expect(screen.getByText('Expected by now $14,545')).toBeInTheDocument();
+  it('a complete month shows expected progress and projected finish', () => {
+    renderView(<OwnerDashboard view={ownerClosedFixture} />); clickPreset('This month');
+    expect(screen.getAllByText(/On pace · expected by now/)).toHaveLength(2);
+    expect(screen.getByText('Projected month finish')).toBeInTheDocument();
   });
 
-  it('a partially recorded month shows its totals with a partial-data label, the fix, and no behind verdict', () => {
-    const { container } = renderView(<OwnerDashboard view={ownerPartialFixture} chartWidth={800} />);
-    const meters = ownerPartialFixture.goalMeters!;
-    expect(meters.map(m => [m.verdict, m.missingDays])).toEqual([['incomplete', 2], ['incomplete', 2]]);
-    expect(screen.getAllByText('Partial data').length).toBeGreaterThanOrEqual(2);
+  it('a partially recorded month shows recorded totals and the fix without a pace verdict', () => {
+    const { container } = renderView(<OwnerDashboard view={ownerPartialFixture} />); clickPreset('This month');
+    expect(screen.getAllByText('Partial records').length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByRole('link', { name: /Complete the records/ })[0]).toHaveAttribute('href', '/deposit-log');
-    expect(container.textContent).not.toMatch(/behind (calendar )?pace/i);
-    expect(screen.getAllByText(/2 office days not recorded, so pace is not judged/)).toHaveLength(2); // once per meter
-    // The strip says so too, once per goal-bearing tile (production, collections, new patients), for this month.
-    clickPreset('This month');
-    expect(screen.getAllByText('Partial data · 2 office days not recorded')).toHaveLength(3);
-    expect(screen.getByText(/of the 40 goal · pace is not judged until the records are complete/)).toBeInTheDocument();
-    expect(container.textContent).not.toMatch(/behind (calendar )?pace/i);
+    expect(container.textContent).not.toMatch(/Below expected pace|Projected month finish/);
   });
 
-  it('the new-patient tile is paced on office days like the meters, and names its basis', () => {
-    renderView(<OwnerDashboard view={ownerFixture} chartWidth={800} />);
-    clickPreset('This month');
-    expect(screen.getByText(/of the 40 goal · (on pace|\d+ (ahead of|behind) pace) by office day \d+ of \d+/)).toBeInTheDocument();
-    expect(screen.queryByText(/calendar pace/)).not.toBeInTheDocument();
+  it('new patients are seen counts for the selected period, not scheduled counts', () => {
+    renderView(<OwnerDashboard view={ownerFixture} />); clickPreset('This month');
+    expect(within(screen.getByRole('region', { name: 'New patients seen' })).getByText('2')).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'New patients seen' })).queryByText('3')).not.toBeInTheDocument();
   });
 });
 
@@ -182,17 +145,13 @@ describe('worth a look', () => {
 });
 
 describe('incomplete history', () => {
-  it('shows closeouts with their gaps and offers report history as a separate view, never blended', () => {
-    renderView(<OwnerDashboard view={ownerIncompleteFixture} chartWidth={800} />);
-    expect(pressed('Last 3 months')).toBeInTheDocument();
-    const source = screen.getByRole('group', { name: 'Source' });
-    expect(within(source).getByRole('button', { name: 'Close the Day', pressed: true })).toBeInTheDocument();
-    fireEvent.click(within(source).getByRole('button', { name: 'Report history' }));
-    expect(screen.getByRole('button', { name: /Posted charges/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Receipts/ })).toBeInTheDocument();
-    expect(screen.getByText(/Report history · posting date \(report package\)/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Open report history/ })).toHaveAttribute('href', '/report-history?start=2026-01-01&end=2026-03-03&tab=daily');
-    expect(screen.queryByRole('button', { name: /^Production/ })).not.toBeInTheDocument();
+  it('lets the owner explicitly choose imported history with its own metric names', () => {
+    renderView(<OwnerDashboard view={ownerIncompleteFixture} />);
+    expect(pressed('Year to date')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Financial data source' }), { target: { value: 'report_history' } });
+    expect(screen.getByRole('button', { name: 'Posted charges' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Receipts' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Production' })).not.toBeInTheDocument();
   });
 });
 
@@ -229,7 +188,8 @@ describe('needs you', () => {
   it('zero decisions is one calm line — the day is still judged by the pulse', () => {
     renderView(<OwnerDashboard view={ownerClosedFixture} />);
     expect(screen.getByText(/No owner decisions are waiting\./)).toBeInTheDocument();
-    expect(screen.getByText('$8,150')).toBeInTheDocument();
+    clickPreset('This month');
+    expect(within(screen.getByRole('region', { name: 'Production' })).getByText('$15,570')).toBeInTheDocument();
   });
 
   it('lists every Attention item in consequence order with its date, its next step, why it is mine, and one navigation action', () => {
@@ -251,12 +211,12 @@ describe('needs you', () => {
 });
 
 describe('one number, one home', () => {
-  it('the month figure lives in the strip and the meter; nothing else repeats it', () => {
-    const { container } = renderView(<OwnerDashboard view={ownerClosedFixture} chartWidth={800} />);
-    fireEvent.click(screen.getByRole('button', { name: 'This month' }));
-    container.querySelectorAll('details, ul:not([aria-label="Goals this month"])').forEach(el => el.remove());
-    const collected = container.textContent!.match(/\$14,050/g) ?? [];
-    expect(collected).toHaveLength(2); // the period tile and the goal meter in the board
+  it('keeps the current total and goal in one card; the historical summary is identified', () => {
+    renderView(<OwnerDashboard view={ownerClosedFixture} />); clickPreset('This month');
+    const card = screen.getByRole('region', { name: 'Collections' });
+    expect(within(card).getAllByText('$14,050')).toHaveLength(1);
+    expect(within(card).getByRole('meter')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Goals this month' })).not.toBeInTheDocument();
   });
 });
 
@@ -268,9 +228,9 @@ describe('office states', () => {
     expect(within(board).getByText('In · late 12m')).toHaveClass('text-muted-foreground');
     expect(screen.getAllByText('Marcus T.')).toHaveLength(1);
     // Today keeps the exceptions and the count line only.
-    const today = screen.getByRole('region', { name: 'Today' });
-    expect(within(today).queryByText('Dana R.')).not.toBeInTheDocument();
-    expect(within(today).getByText('Ken W.')).toBeInTheDocument();
+    const today = screen.getByRole('region', { name: 'Team today' });
+    expect(within(today).getAllByRole('list', { name: 'Who is where' })).toHaveLength(1);
+    expect(within(today).getAllByText('Ken W.').length).toBeGreaterThan(0);
   });
 
   it('closed day: most recent business day labeled, no manufactured urgency', () => {
@@ -278,7 +238,7 @@ describe('office states', () => {
     expect(screen.getAllByText(/Closed for the day/).length).toBeGreaterThan(0);
     expect(container.textContent).not.toMatch(/not in yet/i);
     expect(ownerClosedFixture.summary.lines).toEqual([]);
-    expect(screen.getByText(/Nothing needs your attention right now\./)).toBeInTheDocument();
+    expect(screen.getByText('No owner decisions are waiting.')).toBeInTheDocument();
   });
 });
 

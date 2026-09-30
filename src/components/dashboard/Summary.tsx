@@ -105,7 +105,7 @@ function PersonChip({ person: p }: { person: BoardPerson }) {
  * Everyone on the roster. A phone reads the chips as one wrapped line;
  * from 40rem of width they sit in columns that fill the space they have.
  */
-function Roster({ people }: { people: BoardPerson[] }) {
+export function Roster({ people }: { people: BoardPerson[] }) {
   return (
     <TooltipProvider delayDuration={150} skipDelayDuration={500}>
       <div className="mt-3 [container-type:inline-size]">
@@ -119,6 +119,11 @@ function Roster({ people }: { people: BoardPerson[] }) {
       </div>
     </TooltipProvider>
   );
+}
+
+export function BriefPriorities({ summary }: { summary: HomeSummary }) {
+  if (!summary.lines.length) return null;
+  return <ul aria-label="Office priorities" className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">{summary.lines.map(line => <li key={line.id} className="flex items-center gap-2"><StatusDot tone={line.tone} />{line.href ? <Link to={line.href} className={cn('rounded-sm underline decoration-border underline-offset-4', focusRing)}>{line.text}</Link> : line.text}</li>)}</ul>;
 }
 
 /** The office challenge as the month row's third cell, or the door to one. */

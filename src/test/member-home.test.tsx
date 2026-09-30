@@ -1,17 +1,5 @@
-/**
- * Team Member Home composition — the redesigned member surface.
- *
- *  - the page leads with "My next move", never with clock status or hours;
- *  - Needs you is the person's own items, each opening its exact record:
- *    a late arrival to answer, an attendance report to sign, a policy, a
- *    module, a bypass reason; what waits on a manager is apart;
- *  - Our Office Pulse shows real values from the canonical layer when the
- *    office chose "everyone", and omits a hidden metric with no teaser;
- *  - role emphasis follows the OPERATIONAL role; a backup role never adds
- *    tasks; a role covered today does;
- *  - no rankings, no individual attribution, no personal-hours chart;
- *  - timekeeping and PTO live in a small utility band.
- */
+/** Team dashboard: shared financial goals, the member’s chosen goal, their own
+ * work and time. Office visibility rules and existing record links still apply. */
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -27,16 +15,16 @@ describe('my next move leads', () => {
   it('the next action renders before any time or PTO content, and is the first item of the queue', () => {
     const { container } = renderView(<MemberDashboard view={frontDeskFixture} />);
     const text = container.textContent!;
-    expect(text.indexOf('My next move')).toBeLessThan(text.indexOf('My time & PTO'));
+    expect(text.indexOf('Needs you')).toBeLessThan(text.indexOf('My time & PTO'));
     expect(frontDeskFixture.work.next?.kind).toBe('reply');
-    expect(screen.getAllByText('1 office request waiting on your reply')).toHaveLength(2); // the hero and the queue
+    expect(screen.getAllByText('1 office request waiting on your reply')).toHaveLength(1); // the queue has one copy of the next action
     expect(screen.getAllByRole('link', { name: /^Reply/ })[0]).toHaveAttribute('href', '/inbox/requests');
   });
 
   it('nothing assigned reads as a genuine all-clear, not a zero wall', () => {
     renderView(<MemberDashboard view={memberClearFixture} />);
     expect(screen.getByText(/You’re clear\. Nothing is assigned to you right now\./)).toBeInTheDocument();
-    expect(screen.getByText(/Nothing is assigned to you\. Anything new will land here/)).toBeInTheDocument();
+    expect(screen.getByText(/New items will appear here and in your inbox/)).toBeInTheDocument();
   });
 });
 
@@ -44,7 +32,7 @@ describe('needs you — my own items', () => {
   it('a late arrival waits on my answer, the attendance report on my signature, and my requests on a manager', () => {
     renderView(<MemberDashboard view={memberLateArrivalFixture} />);
     expect(memberLateArrivalFixture.work.now.map(i => i.kind)).toEqual(['attendance_report', 'late_arrival', 'acknowledgment']);
-    expect(screen.getAllByText('Sign your attendance report')).toHaveLength(2);
+    expect(screen.getAllByText('Sign your attendance report')).toHaveLength(1);
     const sign = document.querySelector('[data-work-id="attendance_report:i-att-1"]') as HTMLElement;
     expect(within(sign).getByRole('link', { name: /Read and sign/ })).toHaveAttribute('href', '/incident-reports?report=i-att-1');
     expect(within(sign).getByText(/not agreement with every statement/)).toBeInTheDocument();
@@ -80,26 +68,20 @@ describe('needs you — my own items', () => {
 });
 
 describe('our office pulse', () => {
-  it('shows real dollar values, the shared chart, and the goal meters when visibility is "everyone"', () => {
-    renderView(<MemberDashboard view={hygienistFixture} chartWidth={700} />);
-    expect(screen.getByText('Our office pulse')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'This month' }));
-    expect(screen.getByRole('listitem', { name: /^Production, .*\$7,420/ })).toBeInTheDocument();
-    expect(screen.getByRole('listitem', { name: /^Collections, .*\$6,150/ })).toBeInTheDocument();
-    expect(screen.getByTestId('performance-chart-frame').querySelector('svg')).not.toBeNull();
-    expect(screen.getByRole('meter', { name: /Production 5% of the \$160,000 goal/ })).toBeInTheDocument();
-    // No setup action for a member, and no management detail.
-    expect(screen.queryByRole('link', { name: /Set a .* goal/ })).not.toBeInTheDocument();
-    expect(screen.queryByText('Worth a look')).not.toBeInTheDocument();
-    expect(screen.queryByText('Missed appointments')).not.toBeInTheDocument();
-    expect(screen.queryByRole('group', { name: 'Source' })).not.toBeInTheDocument();
+  it('shows shared office values and targets together, without admin controls', () => {
+    renderView(<MemberDashboard view={hygienistFixture} />);
+    const goals = screen.getByRole('region', { name: 'Our office goals this month' });
+    expect(within(goals).getByText('$7,420')).toBeInTheDocument();
+    expect(within(goals).getByText('$6,150')).toBeInTheDocument();
+    expect(within(goals).getByRole('meter', { name: /Production 5% of the \$160,000 goal/ })).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Financial data source' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Report history/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Set a production goal/ })).not.toBeInTheDocument();
   });
 
-  it('states the honest time semantics for financial figures, and frames the pulse as shared', () => {
+  it('labels the financial figures as office totals updated after Close the Day', () => {
     renderView(<MemberDashboard view={hygienistFixture} />);
-    expect(screen.getByText(/Financial figures update after Close the Day — they are not live/)).toBeInTheDocument();
-    expect(screen.getByText(/shared scoreboard, never an individual one/)).toBeInTheDocument();
+    expect(screen.getByText('Office totals update after Close the Day.')).toBeInTheDocument();
   });
 
   it('admin-only metrics are omitted cleanly — no teaser, no lock, no dollar figure anywhere', () => {
@@ -107,7 +89,7 @@ describe('our office pulse', () => {
     expect(container.textContent).not.toMatch(/Production|Collections|\$/);
     expect(screen.queryByTestId('performance-chart-frame')).not.toBeInTheDocument();
     expect(screen.queryByRole('meter', { name: /Production|Collections/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('listitem', { name: /^New patients seen/ })).toBeInTheDocument();
+    expect(screen.getByText('New patients seen')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/\bhidden\b|\blocked\b|admins only/i); // "clocked out" is fine
   });
 });

@@ -158,7 +158,7 @@ function CollapsedList({ id, label, items, note }: { id: string; label: string; 
 }
 
 /** The rows under a Needs you panel: the grouped queue, then what waits on others, then what is parked. */
-export function NeedsYouRows({ needs, emptyTitle, emptyDetail, lead }: { needs: NeedsYouModel; emptyTitle: string; emptyDetail: string; lead?: ReactNode }) {
+export function NeedsYouRows({ needs, emptyTitle, emptyDetail, lead, preview }: { needs: NeedsYouModel; emptyTitle: string; emptyDetail: string; lead?: ReactNode; preview?: number }) {
   const entries = groupAttention(needs.now);
   const nowCount = entryCount(entries);
   return (
@@ -166,7 +166,8 @@ export function NeedsYouRows({ needs, emptyTitle, emptyDetail, lead }: { needs: 
       {lead}
       {nowCount > 0 ? (
         <div>
-          <QueueEntries entries={entries} />
+          <QueueEntries entries={preview ? entries.slice(0, preview) : entries} />
+          {preview && entries.length > preview && <details className="mt-2"><summary className={cn('w-fit cursor-pointer rounded py-2 text-sm font-semibold text-primary', focusRing)}>{entryCount(entries.slice(preview))} more needing attention</summary><QueueEntries entries={entries.slice(preview)} /></details>}
         </div>
       ) : needs.degraded ? (
         <EmptyState
@@ -185,8 +186,8 @@ export function NeedsYouRows({ needs, emptyTitle, emptyDetail, lead }: { needs: 
 }
 
 /** The whole panel, titled and counted with the unique items that need the person now. */
-export function NeedsYouPanel({ needs, title = 'Needs you', emptyTitle, emptyDetail, lead, id = 'needs-you' }: {
-  needs: NeedsYouModel; title?: string; emptyTitle: string; emptyDetail: string; lead?: ReactNode; id?: string;
+export function NeedsYouPanel({ needs, title = 'Needs you', emptyTitle, emptyDetail, lead, id = 'needs-you', preview }: {
+  needs: NeedsYouModel; title?: string; emptyTitle: string; emptyDetail: string; lead?: ReactNode; id?: string; preview?: number;
 }) {
   const count = needs.now.length;
   const urgent = needs.now.some(i => itemTone(i) === 'urgent');
@@ -198,9 +199,8 @@ export function NeedsYouPanel({ needs, title = 'Needs you', emptyTitle, emptyDet
       countTone={count > 0 ? 'steady' : 'calm'}
       tone={urgent ? 'urgent' : count > 0 ? 'attention' : undefined}
       action={{ label: 'Open Attention', to: '/management' }}
-      description={count > 0 ? 'In order of consequence. Each row opens the exact record; a category opens its own list.' : undefined}
     >
-      <NeedsYouRows needs={needs} emptyTitle={emptyTitle} emptyDetail={emptyDetail} lead={lead} />
+      <NeedsYouRows needs={needs} emptyTitle={emptyTitle} emptyDetail={emptyDetail} lead={lead} preview={preview} />
     </Panel>
   );
 }

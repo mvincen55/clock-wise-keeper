@@ -23,6 +23,7 @@ import { countOfficeDays, isOfficeDay, type OfficeDayCalendar } from '@/lib/offi
 export type PeriodPreset =
   | 'this_week'
   | 'this_month'
+  | 'year_to_date'
   | 'last_month'
   | 'last_3_months'
   | 'last_6_months'
@@ -45,6 +46,7 @@ export type Period = {
 export const PRESET_LABELS: Record<PeriodPreset, string> = {
   this_week: 'This week',
   this_month: 'This month',
+  year_to_date: 'Year to date',
   last_month: 'Last month',
   last_3_months: 'Last 3 months',
   last_6_months: 'Last 6 months',
@@ -111,6 +113,8 @@ export function periodFor(preset: PeriodPreset, today: string): Period {
     }
     case 'this_month':
       return build(monthStartOf(today), today, monthEndOf(today));
+    case 'year_to_date':
+      return build(`${today.slice(0, 4)}-01-01`, today, `${today.slice(0, 4)}-12-31`);
     case 'last_month': {
       const start = addMonthsToStart(today, -1);
       return build(start, monthEndOf(start), monthEndOf(start));
@@ -147,6 +151,13 @@ export function comparisonPeriodFor(period: Period): { start: string; end: strin
   let start: string;
   let end: string;
   switch (period.preset) {
+    case 'year_to_date': {
+      const priorYear = Number(period.start.slice(0, 4)) - 1;
+      start = `${priorYear}-01-01`;
+      const month = `${priorYear}-${period.end.slice(5, 7)}-01`;
+      end = `${priorYear}-${period.end.slice(5, 7)}-${String(Math.min(Number(period.end.slice(8)), Number(monthEndOf(month).slice(8)))).padStart(2, '0')}`;
+      break;
+    }
     case 'this_week':
       start = shiftDate(period.start, -7);
       end = shiftDate(start, elapsed);

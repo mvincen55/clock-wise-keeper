@@ -152,7 +152,7 @@ export type VitalsVisibility = {
   newPatients: boolean;
 };
 
-/** Twelve months of history, so this month can be read against the last one. */
+/** Three calendar years for admin comparisons; members keep the shared year of closeouts. */
 export function usePracticeVitals() {
   const { data: ctx } = useOrgContext();
   const { data: practiceSettings } = usePracticeSettings();
@@ -168,16 +168,18 @@ export function usePracticeVitals() {
   // metric from regular members' dashboards. Display control, not secrecy.
   const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
   const visibility: VitalsVisibility = {
-    production: isAdmin || practiceSettings?.production_visibility !== 'admin_only',
-    collections: isAdmin || practiceSettings?.collections_visibility !== 'admin_only',
-    newPatients: isAdmin || practiceSettings?.new_patients_visibility !== 'admin_only',
+    production: isAdmin || (!!practiceSettings && practiceSettings.production_visibility !== 'admin_only'),
+    collections: isAdmin || (!!practiceSettings && practiceSettings.collections_visibility !== 'admin_only'),
+    newPatients: isAdmin || (!!practiceSettings && practiceSettings.new_patients_visibility !== 'admin_only'),
   };
 
   return useQuery({
     queryKey: [
       'practice-vitals',
+      'dashboard-history-v2',
       ctx?.org_id,
-      today.slice(0, 7),
+      isAdmin,
+      today,
       targets.productionCents,
       targets.collectionsCents,
       targets.newPatientsSeen,
@@ -187,15 +189,17 @@ export function usePracticeVitals() {
     ],
     enabled: !!ctx,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('deposit_logs')
-        .select('*')
-        .gte('deposit_date', monthStart(today, -11))
-        .lte('deposit_date', today)
-        .order('deposit_date');
-      if (error) throw error;
-
-      const all = (data ?? []).map(toDayVitals);
+      const windowStart = isAdmin ? `${Number(today.slice(0, 4)) - 2}-01-01` : monthStart(today, -11);
+      const all: DayVitals[] = [];
+      // Paginate explicitly: three years can exceed the server's default row cap.
+      for (let offset = 0; ; offset += 500) {
+        const { data, error } = await supabase.from('deposit_logs').select('*')
+          .eq('org_id', ctx!.org_id).gte('deposit_date', windowStart).lte('deposit_date', today)
+          .order('deposit_date').order('id').range(offset, offset + 499);
+        if (error) throw error;
+        all.push(...(data ?? []).map(toDayVitals));
+        if ((data ?? []).length < 500) break;
+      }
       const thisMonthStart = monthStart(today);
 
       const thisMonthDays = all.filter(d => d.date >= thisMonthStart);
@@ -242,9 +246,9 @@ export function usePracticeVitals() {
       return {
         /** The office these rows belong to — a consumer must never show them under another org. */
         orgId: ctx!.org_id,
-        /** Every closeout in the twelve-month window, oldest first. Days with no row are absent, not zero. */
+        /** Every closeout in the requested window; missing days are absent, never zero. */
         days: all,
-        windowStart: monthStart(today, -11),
+        windowStart,
         today: all.find(d => d.date === today) ?? null,
         /** Most recent closed-out day on record (may be today), or null. */
         latest: all.length > 0 ? all[all.length - 1] : null,

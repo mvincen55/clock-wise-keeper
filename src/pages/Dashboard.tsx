@@ -124,9 +124,9 @@ export default function Home() {
                 <MyMomentumCard />
               </div>
               <div className="space-y-4">
-                <DeepLinked active={!!linkedSprintId}>
+                {linkedSprintId && <DeepLinked active>
                   <SprintCard highlightId={linkedSprintId} />
-                </DeepLinked>
+                </DeepLinked>}
                 <DeepLinked active={!!linkedRecordId}>
                   <MyAccountabilityCard highlightId={linkedRecordId} />
                 </DeepLinked>
