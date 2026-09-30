@@ -44,6 +44,21 @@ try {
     assert.equal(await page.locator('#print-result').textContent(),'Ready');
     const texts=await pdfTexts(`${mode}.pdf`);
     console.log(`${mode}: ${texts.length} PDF pages; signatures per page: ${texts.map(t=>/PATIENT SIGNATURE/i.test(t))}`);
+    if(texts.length!==(mode==='both'?2:1)) {
+      await page.emulateMedia({media:'print'});
+      console.log('Layout metrics',JSON.stringify(await page.evaluate(()=>{
+        const original=document.querySelector('.fof-page-source')?.firstElementChild;
+        if(!original)return {};
+        const measure=document.createElement('div');measure.className='fof-page-measure';document.querySelector('.fof-print-root').append(measure);
+        const variants=[false,true].map(compact=>{
+          const node=original.cloneNode(true);node.classList.remove('fof-roomy');node.classList.add('fof-composed-page');
+          if(compact)node.classList.add('fof-dense','fof-denser','fof-composed-compact');
+          measure.replaceChildren(node);
+          return {compact,width:node.offsetWidth,height:node.offsetHeight,minHeight:getComputedStyle(node).minHeight,children:[...node.children].map(child=>({class:child.className,height:child.getBoundingClientRect().height,margin:getComputedStyle(child).margin}))};
+        });
+        measure.remove();return {viewport:[innerWidth,innerHeight],composed:document.querySelectorAll('.fof-composed-output .fof-composed-page').length,variants};
+      })));
+    }
     assert.equal(texts.length,mode==='both'?2:1,`${mode} page count`);
     if(mode!=='office') {
       assert.match(texts[0],/PATIENT SIGNATURE/i,'Signature must share the patient page with the schedule');
