@@ -6,6 +6,8 @@ import { useOrgAttendanceSnapshot, type EmployeeSnapshot } from '@/hooks/useOrgA
 import { usePracticeVitals } from '@/hooks/usePracticeVitals';
 import { useDepositLog, useRecentDepositLogs } from '@/hooks/useDepositLog';
 import { useTeamGoals, type TeamGoal } from '@/hooks/useTeamGoals';
+import { useGoalsMonth, useActiveTeam } from '@/hooks/useGoals';
+import { chosenGoalsFrom } from '@/lib/dashboard-goals';
 import { useUnresolvedBypasses } from '@/hooks/useChecklistBypasses';
 import { useMyAccountabilityReports } from '@/hooks/useAccountability';
 import { useMyKnowledgeAcknowledgments } from '@/hooks/useKnowledgeAcknowledgments';
@@ -99,6 +101,8 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
   const vitals = vitalsQuery.data;
   const today = getToday();
   const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
+  const personalGoalsQuery = useGoalsMonth(today.slice(0, 7));
+  const goalPeopleQuery = useActiveTeam(isAdmin);
   // Report history and the Dentrix postings are admin sources; the hooks stay
   // disabled for members, and the builder refuses them for members anyway.
   const reportImports = usePracticeReportImports();
@@ -295,6 +299,14 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         }
       : null;
     const block = performanceBlockFrom({ raw, state: performanceState, pulse: pulseInput, attention: attentionSummary });
+    const chosenGoals = chosenGoalsFrom({
+      orgId: ctx.org_id, viewerId: user?.id ?? '', viewerName: profile?.fullName || 'Me', admin: isAdmin,
+      month: today.slice(0, 7),
+      state: personalGoalsQuery.isError || (isAdmin && goalPeopleQuery.isError) ? 'error'
+        : personalGoalsQuery.data === undefined || (isAdmin && goalPeopleQuery.data === undefined) ? 'loading' : 'ok',
+      goals: personalGoalsQuery.data?.goals ?? [], tasks: personalGoalsQuery.data?.tasks ?? [],
+      people: isAdmin ? goalPeopleQuery.data ?? [] : [],
+    });
 
     /* ------------------------------ owner ------------------------------ */
     if (ctx.role === 'owner') {
@@ -351,6 +363,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         staffing,
         exceptions,
         ...block,
+        chosenGoals,
       };
       return { view: owner, isLoading: false };
     }
@@ -390,6 +403,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         mine,
         goal,
         ...block,
+        chosenGoals,
       };
       return { view: manager, isLoading: false };
     }
@@ -486,10 +500,11 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
       utilities,
       attendanceStanding,
       ...block,
+      chosenGoals,
     };
     return { view: member, isLoading: false };
   }, [
-    ctx, ctxLoading, profile, now, today, snapshot, vitals, todayLog, sprintData,
+    ctx, ctxLoading, profile, now, today, snapshot, vitals, todayLog, sprintData, personalGoalsQuery.data, personalGoalsQuery.isError, goalPeopleQuery.data, goalPeopleQuery.isError,
     bypasses, myReports, myAcks, assignments, modules, pto, todayEntry,
     missingDays, user, ops, grants, attention, recentLogs, messagesCloseout, snapshotQuery.isError, snapshotQuery.data,
     vitalsQuery.isError, reportImports, missedEvents, isAdmin, officeDays.data, tardies, incidents, myPto, myCorrections, gating, lateRule,

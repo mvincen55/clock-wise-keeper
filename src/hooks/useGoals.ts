@@ -112,11 +112,11 @@ export function useGoalsMonth(month: string) {
 }
 
 /** Active team members — the card grid is one card per person. */
-export function useActiveTeam() {
+export function useActiveTeam(enabled = true) {
   const { data: ctx } = useOrgContext();
   return useQuery({
     queryKey: ['goals-team', ctx?.org_id],
-    enabled: !!ctx,
+    enabled: !!ctx && enabled,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('employees')

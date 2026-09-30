@@ -1,20 +1,5 @@
-/**
- * Manager Home composition — the redesigned briefing.
- *
- *  - the summary is the office state and a few genuine priorities, each
- *    linked; routine lateness is never a headline;
- *  - Needs you is the whole Attention list, grouped where work repeats,
- *    with the date, why, and the next action on every row, and the count
- *    the badge shows; items waiting on others and parked items are apart;
- *  - Today lists exceptions and one count line, never a roster;
- *  - the closeout's state has one home at a time;
- *  - the same strip, chart, goal meters, and observations Owner Home shows;
- *  - the challenge sits in the board's month row with its state, once;
- *  - after close, Needs you becomes Before you leave;
- *  - a brand-new office gets honest lines, not a wall of zeros;
- *  - Home carries no consequential action: every button is a chart, period,
- *    or disclosure control; no Approve, Seal, or Sign off button.
- */
+/** Manager dashboard: financial context, the real attention queue, chosen goals,
+ * one team roster, and navigation into the existing workflows. */
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -34,7 +19,7 @@ describe('the summary', () => {
     expect(summary.detail).toBe('Workday runs until 5:00 PM · Sam K. at 1:00 PM.');
     expect(summary.lines.map(l => l.id)).toEqual(['payroll']);
     expect(screen.getByText('Payroll hours are due Thu · 1 open time record.')).toHaveAttribute('href', '/management/payroll');
-    expect(container.textContent!.indexOf('Right now')).toBeLessThan(container.textContent!.indexOf('Needs you'));
+    expect(container.textContent!.indexOf('How we’re doing')).toBeLessThan(container.textContent!.indexOf('Team today'));
     // Routine lateness and the queue's own count never headline.
     expect(container.textContent).not.toMatch(/came in late|things need you/);
   });
@@ -46,36 +31,33 @@ describe('the summary', () => {
 });
 
 describe('the financial picture', () => {
-  it('the strip, the chart, the goal meters, and worth a look follow the queue', () => {
-    const { container } = renderView(<ManagerDashboard view={managerFixture} chartWidth={800} />);
-    const text = container.textContent!;
-    expect(text.indexOf('Needs you')).toBeLessThan(text.indexOf('Production and Collections'));
-    expect(screen.getByRole('list', { name: 'Performance strip' }).querySelectorAll('[role="listitem"]')).toHaveLength(4);
-    expect(screen.getByTestId('performance-chart-frame').querySelector('svg')).not.toBeNull();
-    expect(screen.getByRole('meter', { name: /Production 5% of the \$160,000 goal/ })).toBeInTheDocument();
-    expect(screen.getByRole('meter', { name: /Collections 4% of the \$150,000 goal/ })).toBeInTheDocument();
+  it('shows month totals, target progress, the chart, and useful observations', () => {
+    renderView(<ManagerDashboard view={managerFixture} chartWidth={700} />);
+    expect(screen.getByRole('button', { name: 'This month', pressed: true })).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Production' })).getByText('$7,420')).toBeInTheDocument();
+    expect(screen.getByRole('meter', { name: 'Production goal progress' })).toHaveAttribute('aria-valuenow', '5');
+    expect(screen.getByRole('meter', { name: 'Collections goal progress' })).toHaveAttribute('aria-valuenow', '4');
+    expect(screen.getByRole('region', { name: 'Collections over time' }).querySelector('svg')).not.toBeNull();
     expect(screen.getByText('Worth a look')).toBeInTheDocument();
   });
 
   it('carries the primary actions in the header, on existing routes', () => {
     renderView(<ManagerDashboard view={managerFixture} />);
-    expect(screen.getByRole('link', { name: /Attention · 5/ })).toHaveAttribute('href', '/management');
+    expect(screen.getAllByRole('link', { name: /Create FOF/ })[0]).toHaveAttribute('href', '/fof');
     expect(screen.getAllByRole('link', { name: /^Close the Day$/ })[0]).toHaveAttribute('href', '/deposit-log');
   });
 
-  it('the strip follows the chosen period', () => {
-    renderView(<ManagerDashboard view={managerFixture} chartWidth={800} />);
-    fireEvent.click(screen.getByRole('button', { name: 'This month' }));
-    expect(screen.getByRole('listitem', { name: /^Production, Mar 1 – Mar 3, 2026 · partial: \$7,420/ })).toBeInTheDocument();
-    expect(screen.getByRole('listitem', { name: /^Missed appointments, .*: 1\./ })).toBeInTheDocument();
+  it('the totals and targets follow the chosen month or year', () => {
+    renderView(<ManagerDashboard view={managerFixture} />);
+    expect(within(screen.getByRole('region', { name: 'Production' })).getByText('$7,420')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Year to date' }));
+    expect(within(screen.getByRole('region', { name: 'Production' })).getByText('Annualized monthly target · $1,920,000')).toBeInTheDocument();
   });
 
-  it('the latest closeout’s facts have one home, beside the queue', () => {
+  it('does not repeat the period totals in a separate daily closeout panel', () => {
     renderView(<ManagerDashboard view={managerFixture} />);
-    const panel = screen.getByRole('region', { name: "Yesterday's closeout" });
-    expect(within(panel).getByText('$7,420')).toBeInTheDocument();
-    expect(within(panel).getByText('$6,150')).toBeInTheDocument();
-    expect(within(panel).getByText(/figures appear after the day is closed out/)).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: "Yesterday's closeout" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Needs you' })).getByText('Close the Day saved, not sealed · 2026-03-02')).toBeInTheDocument();
   });
 });
 
@@ -114,7 +96,7 @@ describe('needs you', () => {
     renderView(<ManagerDashboard view={managerAttendanceFixture} />);
     const needs = managerAttendanceFixture.home.needs.now;
     expect(needs.filter(i => i.kind === 'close_day_unsealed')).toHaveLength(3);
-    expect(screen.getByRole('link', { name: /Attention · 7/ })).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Needs you' })).getByText('7')).toBeInTheDocument();
     const group = document.querySelector('[data-group-kind="close_day_unsealed"]') as HTMLElement;
     expect(within(group).getByText('Closeouts awaiting seal')).toBeInTheDocument();
     expect(within(group).getByText('3')).toBeInTheDocument();
@@ -145,7 +127,7 @@ describe('needs you', () => {
 
   it('carries no consequential action — Home only navigates; its buttons are chart, period, and disclosure controls', () => {
     const { container } = renderView(<ManagerDashboard view={managerFixture} chartWidth={800} />);
-    expect(container.querySelectorAll('form, input, textarea, select')).toHaveLength(0);
+    expect(container.querySelectorAll('form, input, textarea')).toHaveLength(0);
     const buttons = [...container.querySelectorAll('button')];
     expect(buttons.length).toBeGreaterThan(0);
     expect(buttons.every(b => b.hasAttribute('data-home-control'))).toBe(true);
@@ -160,18 +142,15 @@ describe('needs you', () => {
 });
 
 describe('today', () => {
-  it('lists genuine exceptions only, then one count line, and links the exception that has an item', () => {
+  it('puts exceptions, the count, and the expandable roster in one team panel', () => {
     renderView(<ManagerDashboard view={managerFixture} />);
+    const today = screen.getByRole('region', { name: 'Team today' });
     expect(managerFixture.home.today.exceptions.map(e => e.name)).toEqual(['Ken W.', 'Jo B.']);
-    // Today lists exceptions only; the people who are simply in — late or not — are named on the board at the top, not here.
-    const todayPanel = screen.getByRole('region', { name: 'Today' });
-    expect(within(todayPanel).queryByText('Dana R.')).not.toBeInTheDocument();
-    expect(within(todayPanel).queryByText('Marcus T.')).not.toBeInTheDocument();
-    expect(within(screen.getByRole('list', { name: 'Who is where' })).getByText('Marcus T.')).toBeInTheDocument();
-    expect(screen.getByText('4 in · Sam K. at 1:00 PM')).toBeInTheDocument();
-    expect(screen.getByText('8 scheduled')).toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: 'Today' })).getByText('Ken W.').closest('a')).toHaveAttribute('href', '/management?item=missing_clock_out:d1');
-    expect(within(screen.getByRole('region', { name: 'Today' })).getByText('Jo B.').closest('a')).toHaveAttribute('href', '/management/people/4');
+    expect(within(today).getByText('4 in · Sam K. at 1:00 PM')).toBeInTheDocument();
+    const roster = within(today).getByRole('list', { name: 'Who is where' });
+    expect(within(roster).getByText('Marcus T.')).toBeInTheDocument();
+    const exceptions = within(today).getAllByText('Ken W.').filter(e => !roster.contains(e));
+    expect(exceptions[0].closest('a')).toHaveAttribute('href', '/management?item=missing_clock_out:d1');
   });
 
   it('a closed office never invents absences', () => {
@@ -193,8 +172,7 @@ describe('status and pace', () => {
     const { container } = renderView(<ManagerDashboard view={managerOffPaceFixture} chartWidth={800} />);
     const meters = managerOffPaceFixture.goalMeters!;
     expect(meters.map(m => [m.id, m.verdict, m.completeness])).toEqual([['production', 'behind', 'complete'], ['collections', 'behind', 'complete']]);
-    expect(screen.getAllByText('Behind pace')).toHaveLength(2);
-    expect(screen.getByText(meters[1].detail)).toBeInTheDocument();
+    expect(screen.getAllByText(/Below expected pace/)).toHaveLength(2);
     // The observation is the comparison, not the verdict the meter already gave.
     expect(managerOffPaceFixture.insights!.map(i => i.id)).toEqual(['collections_down', 'missed_falling']);
     expect(managerOffPaceFixture.insights!.every(i => i.basis === 'observed')).toBe(true);
@@ -204,60 +182,44 @@ describe('status and pace', () => {
 });
 
 describe('the challenge in the board', () => {
-  it('a challenge on track sits in the month row once, calmly, with its state and window; nothing else on Home repeats it', () => {
+  it('shows the chosen office goal once with its actual progress and state', () => {
     renderView(<ManagerDashboard view={managerFixture} />);
-    expect(managerFixture.home.spotlight).toBeNull(); // not noteworthy — and still on the board, as the month's third cell
-    const board = screen.getByRole('region', { name: 'Right now' });
-    const month = within(board).getByRole('list', { name: 'Goals this month' });
-    expect(within(month).getAllByRole('listitem')).toHaveLength(3);
-    expect(within(month).getByText('Morning huddle on time')).toBeInTheDocument();
-    expect(within(month).getByText('On track')).toBeInTheDocument();
-    expect(within(month).getByRole('meter', { name: 'Morning huddle on time: 9 of 10' })).toBeInTheDocument();
+    const goal = screen.getByRole('region', { name: 'Office goal' });
+    expect(within(goal).getByText('On track')).toBeInTheDocument();
+    expect(within(goal).getByRole('meter', { name: 'Morning huddle on time: 9 of 10' })).toBeInTheDocument();
     expect(screen.getAllByText('Morning huddle on time')).toHaveLength(1);
-    expect(screen.queryByRole('region', { name: /^Challenge/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: 'Goals this month' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Team member goal' })).toBeInTheDocument();
   });
 
   it('a challenge off track carries its state as the chip; the spotlight reason stays a pure fact', () => {
     renderView(<ManagerDashboard view={managerOffPaceFixture} />);
     expect(managerOffPaceFixture.home.spotlight?.reason).toBe('off track');
-    const month = screen.getByRole('list', { name: 'Goals this month' });
+    const month = screen.getByRole('region', { name: 'Office goal' });
     expect(within(month).getByText('Needs a push')).toBeInTheDocument();
     expect(screen.getAllByText('Recall reactivation')).toHaveLength(1);
   });
 });
 
 describe('after close', () => {
-  it('Needs you becomes Before you leave: who is still in, the closeout step, the inbox line, then what carries over — said once', () => {
-    const { container } = renderView(<ManagerDashboard view={managerClosedFixture} />);
-    expect(managerClosedFixture.home.wrapUp).toBe(true);
-    expect(managerClosedFixture.home.summary.headline).toBe('Closed for the day');
-    expect(managerClosedFixture.home.summary.lines).toEqual([]);
-    expect(screen.getByText('Before you leave')).toBeInTheDocument();
-    expect(screen.queryByText('Needs you')).not.toBeInTheDocument();
-    const text = container.textContent!;
-    expect(text.indexOf('Sam K.')).toBeLessThan(text.indexOf("Today's closeout"));
-    expect(text.indexOf("Today's closeout")).toBeLessThan(text.indexOf('1 doctor notes still needs a reply before closeout'));
-    expect(text.indexOf('doctor notes')).toBeLessThan(text.indexOf('Carries into tomorrow'));
-    expect(screen.getByText('1 doctor notes still needs a reply before closeout').closest('a')).toHaveAttribute('href', '/inbox/requests');
-    expect(text.match(/still clocked in/gi)?.length).toBe(2); // the row ("Still clocked in"), and the Today count line
+  it('after close keeps closeout and inbox actions in Before you leave, attendance in Team today', () => {
+    renderView(<ManagerDashboard view={managerClosedFixture} />);
+    const queue = screen.getByRole('region', { name: 'Before you leave' });
+    expect(within(queue).getByText("Today's closeout")).toBeInTheDocument();
+    expect(within(queue).getByText('1 doctor notes still needs a reply before closeout').closest('a')).toHaveAttribute('href', '/inbox/requests');
+    expect(within(queue).queryByText('Still clocked in')).not.toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Team today' })).getByText('Still clocked in')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Needs you' })).not.toBeInTheDocument();
   });
 });
 
 describe('brand-new office', () => {
-  it('states what is missing, links the door, and shows no zeros', () => {
-    const { container } = renderView(<ManagerDashboard view={managerNewFixture} chartWidth={800} />);
-    const closeout = screen.getByRole('region', { name: 'Last closeout' });
-    expect(within(closeout).getByText('No days have been closed out yet.')).toBeInTheDocument();
-    expect(within(closeout).getByText(/None on record in the last two weeks/)).toBeInTheDocument();
-    expect(within(closeout).getByRole('link', { name: /Close out a day/ })).toHaveAttribute('href', '/deposit-log');
-    expect(screen.getByText('Nothing recorded for this period.')).toBeInTheDocument();
-    for (const door of screen.getAllByRole('link', { name: /Close out a day/ })) expect(door).toHaveAttribute('href', '/deposit-log');
+  it('a new office offers setup and record entry without invented zeros or percentages', () => {
+    const { container } = renderView(<ManagerDashboard view={managerNewFixture} />);
+    expect(screen.getByText('No comparable history recorded for these dates yet.')).toBeInTheDocument();
     expect(screen.getAllByText('No goal set')).toHaveLength(2);
     expect(screen.getByText('No office days have been closed out yet.')).toBeInTheDocument();
-    expect(container.textContent).not.toContain('$0');
-    expect(container.textContent).not.toMatch(/\b0 now\b/);
-    expect(container.textContent).not.toMatch(/%/);
+    expect(screen.getAllByRole('link', { name: /Close out a day/ })[0]).toHaveAttribute('href', '/deposit-log');
+    expect(container.textContent).not.toMatch(/\$0|\b0 now\b|%/);
   });
 });
 

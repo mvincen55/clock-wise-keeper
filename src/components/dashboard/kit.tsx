@@ -547,7 +547,7 @@ export function ToolsPanel({ groups, id = 'tools' }: { groups: ToolGroup[]; id?:
     </div>
   );
   return (
-    <Panel id={id} title="Tools" description="Your most relevant tools first. Every destination is checked by its own page and by the office’s access rules.">
+    <Panel id={id} title="Tools">
       <div className="space-y-5">
         {primary.map(renderGroup)}
         {secondary.length > 0 && (

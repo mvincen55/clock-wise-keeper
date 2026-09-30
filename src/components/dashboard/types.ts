@@ -19,6 +19,7 @@ import type { PerformanceData } from '@/lib/home-performance';
 import type { GoalMeter } from '@/lib/goal-progress';
 import type { HomeInsight } from '@/lib/home-insights';
 import type { MyWork } from '@/lib/my-work';
+import type { ChosenGoals } from '@/lib/dashboard-goals';
 
 export type { OfficeStatus, StaffingSummary };
 export type {
@@ -36,6 +37,8 @@ export type PerformanceState = 'loading' | 'ok' | 'error';
  * and the observations. A member view carries only what the office shares.
  */
 export type PerformanceBlock = {
+  /** Self-chosen monthly goals, already scoped to the viewer and office. */
+  chosenGoals?: ChosenGoals;
   performance: PerformanceData | null;
   performanceState: PerformanceState;
   /** Production and collections against their own targets; null while loading. */
@@ -242,7 +245,7 @@ export type ManagerView = PerformanceBlock & {
   brief: DailyBrief | null;
   /** What needs the manager personally; empty when there is nothing. */
   mine: MyWork;
-  /** The office challenge, shown once in the board's month row; moreCount collapses the rest. */
+  /** The chosen office goal, shown once; moreCount collapses the rest. */
   goal: GoalBrief | null;
 };
 
