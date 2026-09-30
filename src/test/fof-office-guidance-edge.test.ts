@@ -35,6 +35,14 @@ describe('office-only AI guidance endpoint',()=>{
   it('rejects nonmembers before using paid AI',async()=>{
     const test=setup({member:false});expect((await test.run()).status).toBe(403);expect(test.gateway).not.toHaveBeenCalled();
   });
+  it('accepts a plain heading in the office\'s own words, not only a fixed clinical vocabulary',async()=>{
+    const test=setup({recipes:[{...recipe,title:'Silver Diamine Fluoride',classification:'other',grouping:'separate'}]});
+    const response=await test.run();expect(response.status).toBe(200);
+    expect((await response.json()).recipes[0]).toMatchObject({title:'Silver Diamine Fluoride',classification:'other',code:'D6058'});
+  });
+  it.each(['Crown for this patient','Implant Crown tooth 8','Jane Doe Crown Plan Review Extra Words Here'])('still refuses a heading that points at a case or is not a heading: %s',async title=>{
+    const test=setup({recipes:[{...recipe,title}]});expect((await test.run()).status).toBe(502);
+  });
   it('withholds case-specific notes rather than forwarding them',async()=>{
     const test=setup({notes:'This patient owes $600. Member ID: ABC12345'});const response=await test.run();
     expect(response.status).toBe(200);expect((await response.json()).warnings).not.toHaveLength(0);expect(test.gateway).not.toHaveBeenCalled();

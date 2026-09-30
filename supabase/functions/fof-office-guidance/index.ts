@@ -80,7 +80,9 @@ Deno.serve(async req => {
       while (next < batches.length) { const index = next++; results[index] = await compile(batches[index]); }
     }));
     return json({ revision, recipes: results.flat(), warnings });
-  } catch {
+  } catch (error) {
+    // The failure class only (gateway, incomplete, invalid, parse): never a note, a rule or a recipe.
+    console.error('fof-office-guidance failed:', error instanceof Error ? error.message : 'unknown error');
     return json({ error: 'Office guidance could not be generated. Existing office rules remain in use.' }, 502);
   }
 });

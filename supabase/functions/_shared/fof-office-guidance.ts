@@ -39,6 +39,19 @@ export const isClinicalTitle = (value: string) => /^[a-z &/-]+$/i.test(value) &&
 const clean = (value: unknown, limit: number): value is string => typeof value === 'string' &&
   value.trim().length > 0 && value.length <= limit && !fofRuleNeedsReview(value);
 
+/**
+ * A patient heading: a few plain words, letters only, nothing that could name
+ * a person, tooth, price or case (the privacy review also screens it). The
+ * vocabulary is not fixed to a clinical word list: an office note about a
+ * caries-arresting medicament or a night-guard reline must be able to get a
+ * heading in the office's own words, or the whole office loses its guidance.
+ */
+export const isPlainTitle = (value: unknown): value is string =>
+  typeof value === 'string' && /^[a-z][a-z &/'-]*$/i.test(value.trim()) && value.trim().length <= 70 &&
+  value.trim().split(/[\s&/-]+/).filter(Boolean).length <= 6 &&
+  // Screened lower-cased: the person-name heuristic reads any Title Case pair ("Implant Crown") as a name.
+  value.trim().split(/[\s&/-]+/).every(word => word.length <= 24) && !fofRuleNeedsReview(value.toLowerCase());
+
 /** Every suggestion must cite a real office code-bank row. The model cannot
  * manufacture codes, fees, percentages, tooth numbers, schedules, or patients. */
 export function readOfficeRecipes(value: unknown, sources: GuidanceSource[]): OfficeRecipe[] {
@@ -46,7 +59,7 @@ export function readOfficeRecipes(value: unknown, sources: GuidanceSource[]): Of
   const seen = new Set<string>();
   return value.map(raw => {
     const source = sources.find(s => s.id === raw?.sourceId);
-    if (!source || seen.has(source.id) || typeof raw.title !== 'string' || !raw.title.trim() || raw.title.length > 70 || !isClinicalTitle(raw.title) || !clean(raw.summary, 240) ||
+    if (!source || seen.has(source.id) || !isPlainTitle(raw?.title) || !clean(raw.summary, 240) ||
       !classes.includes(raw.classification) || !grouping.includes(raw.grouping) || /[#\d$%]/.test(raw.title)) {
       throw new Error('Invalid guidance');
     }
