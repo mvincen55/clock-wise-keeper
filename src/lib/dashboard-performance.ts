@@ -34,6 +34,8 @@ export type MetricOverview = {
   projectedCents: number | null;
   neededPerDayCents: number | null;
   remainingDays: number | null;
+  /** Configured goal by office day, separate from the recorded history. */
+  goalPoints: { date: string; cents: number }[];
 };
 export type DashboardPerformance = {
   kind: DashboardPeriod;
@@ -42,7 +44,7 @@ export type DashboardPerformance = {
   source: SeriesSource;
   availableSources: SeriesSource[];
   metrics: MetricOverview[];
-  newPatients: { value: number | null; prior: number | null; delta: number | null; complete: boolean } | null;
+  newPatients: { value: number | null; prior: number | null; older: number | null; priorComplete: boolean; olderComplete: boolean; delta: number | null; complete: boolean } | null;
 };
 
 export function dateInYear(date: string, year: number): string {
@@ -180,6 +182,12 @@ export function buildDashboardPerformance(data: PerformanceData, kind: Dashboard
       projectedCents: canProject ? Math.round(current.cents! / current.officeDays! * allDays!) : null,
       neededPerDayCents: canProject && remainingDays ? Math.ceil(Math.max(0, targetCents - current.cents!) / remainingDays) : null,
       remainingDays,
+      goalPoints: !data.calendar || targetCents <= 0 || !allDays ? [] : current.points.map(point => {
+        const monthStart = `${point.date.slice(0, 7)}-01`;
+        const days = countOfficeDays(kind === 'year' ? monthStart : start, point.date, data.calendar!);
+        const totalDays = kind === 'year' ? countOfficeDays(monthStart, monthEndOf(point.date), data.calendar!) : allDays;
+        return { date: point.date, cents: totalDays ? Math.round((kind === 'year' ? targetCents / 12 : targetCents) * days / totalDays) : 0 };
+      }),
     };
   });
   let newPatients: DashboardPerformance['newPatients'] = null;
@@ -191,8 +199,8 @@ export function buildDashboardPerformance(data: PerformanceData, kind: Dashboard
       const covered = data.calendar ? new Set(rows.filter(d => isOfficeDay(d.date, data.calendar!)).map(d => d.date)).size : 0;
       return { value: rows.length ? rows.reduce((s, d) => s + d.seen!, 0) : null, complete: data.sources.closeoutsState === 'ok' && rows.length > 0 && expected !== null && covered >= expected };
     };
-    const now = read(year), prior = read(year - 1);
-    newPatients = { value: now.value, prior: prior.value, complete: now.complete, delta: now.complete && prior.complete && now.value !== null && prior.value !== null ? now.value - prior.value : null };
+    const now = read(year), prior = read(year - 1), older = read(year - 2);
+    newPatients = { value: now.value, prior: prior.value, older: older.value, priorComplete: prior.complete, olderComplete: older.complete, complete: now.complete, delta: now.complete && prior.complete && now.value !== null && prior.value !== null ? now.value - prior.value : null };
   }
   return { kind, period, cutoff, source, availableSources, metrics, newPatients };
 }

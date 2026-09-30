@@ -8,6 +8,46 @@ workbench. This document is the map every chart and observation on Home was
 built against, in the order the brief asked for: source first, then the
 experience.
 
+## September 30, 2026: approved preview implementation
+
+This section supersedes the earlier layout descriptions below. The current
+manager and owner dashboard uses `PracticePerformance` and `ChosenGoals`.
+
+- The first control below the greeting is **This month / Year to date**.
+  Managers start on the month, owners on YTD. Totals, targets, year comparison,
+  chart, forecast and missed-appointment dates all follow that selection.
+- Three compact cards show collections, production and new patients seen,
+  subject to the existing visibility settings. Financial cards include both
+  absolute and percent year-over-year changes, configured target progress,
+  and average per office day with the prior year's average.
+- The chart compares the same calendar dates in the current and previous two
+  years. The month view shows running recorded totals; YTD shows monthly
+  observations. Purple, teal and muted lilac distinguish the years. A dashed
+  line shows the configured goal by office day, separately from actual data.
+- The two outlook figures show projected finish and the amount needed per
+  remaining office day. Missing records, unsealed closeouts, unconfirmed source
+  dates or an unavailable office calendar withhold forecasts and growth claims.
+  The annualized target remains the monthly goal multiplied by twelve and is
+  labeled as such. It is not a separately configured annual goal.
+- An office goal card and selected team member's goal card sit side by side
+  below the chart. The person selector lives in the card header. These active
+  goals keep their own current-month window when financial performance switches
+  to YTD. Personal progress measures completed goal steps, not inferred results
+  against free-text targets. Members only receive their own goal.
+- Owners have an “Across the years” comparison; managers have a two-row preview
+  of the real Needs you queue with the rest expandable. Existing workflows,
+  permissions and exact-record navigation stay in place.
+
+The history adapter reads already imported reports. A full monthly total may
+replace that month's daily sum, but never adds to it. Monthly reports do not
+produce invented daily points or partial-month totals. This presentation update
+does not import, overwrite or reclassify historical records.
+
+Browser checks exercise all three roles with a 240px desktop navigation gutter,
+tablet and phone widths, both period directions, selected-person goals, chart
+metric selection, exact-value disclosure and dark mode. Fixtures contain only
+synthetic data and the browser blocks external requests.
+
 ## 1. Sources (what exists, who can read it, what each row means)
 
 | Source | Table / hook | Who reads it (RLS) | Date basis | What a row is | Nullable / "not recorded" |

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, ChevronDown, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import './dashboard.css';
 import type {
   Figure, PersonStatus, ProgressRow, RoleContext, RoleLane, Shortcut, Signal, TimelineRow, Tone, ToolGroup,
 } from './types';
@@ -152,6 +153,7 @@ export function Panel({
     <section
       id={id}
       aria-label={typeof title === 'string' ? title : undefined}
+      data-home-panel
       className={cn(panelClass, 'min-w-0 overflow-hidden', tone === 'attention' && 'border-l-4 border-l-warning', tone === 'urgent' && 'border-l-4 border-l-destructive', className)}
     >
       <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 pb-2 pt-4 sm:px-6">
@@ -483,7 +485,7 @@ export function Slot({ order, children, className }: { order: number; children: 
 
 /** Page frame: wide, gutter-consistent, and never centered in a narrow column. */
 export function DashboardShell({ children }: { children: ReactNode }) {
-  return <div className="mx-auto w-full max-w-[1400px] px-4 py-5 sm:px-6 md:px-8 md:py-7">{children}</div>;
+  return <div className="pe-home mx-auto w-full max-w-[1400px] px-4 py-5 sm:px-6 md:py-6">{children}</div>;
 }
 
 /**

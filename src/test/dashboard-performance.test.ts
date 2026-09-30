@@ -25,6 +25,7 @@ describe('same-period year comparisons', () => {
     expect(m.expectedCents).toBe(20000);
     expect(m.projectedCents).toBe(310000);
     expect(m.neededPerDayCents).toBe(10000);
+    expect(m.goalPoints).toEqual([{ date: '2026-03-01', cents: 10000 }, { date: '2026-03-02', cents: 20000 }]);
   });
   it('includes today only after its closeout is sealed', () => {
     const d = data(); d.sources.closeouts.push(closeout(d.today, 30000, false));
@@ -79,6 +80,7 @@ describe('same-period year comparisons', () => {
     expect(m.targetLabel).toBe('Annualized monthly target');
     expect(m.years[0].points.map(p => p.cents)).toEqual([null, null, 20000]);
     expect(m.projectedCents).toBeNull();
+    expect(m.goalPoints.map(p => p.cents)).toEqual([310000, 310000, 20000]);
   });
 });
 
@@ -131,7 +133,9 @@ describe('report history remains one consistent source', () => {
   });
   it('new patient comparison counts seen patients and requires both periods to be complete', () => {
     const d = data(); d.newPatients = ['2026-03-01', '2026-03-02', '2025-03-01', '2025-03-02'].map(date => ({ date, seen: date.startsWith('2026') ? 3 : 1, scheduled: 999 }));
-    expect(buildDashboardPerformance(d, 'month').newPatients).toMatchObject({ value: 6, prior: 2, delta: 4 });
+    d.newPatients.push({ date: '2024-03-01', seen: 5, scheduled: 999 });
+    expect(buildDashboardPerformance(d, 'month').newPatients).toMatchObject({ value: 6, prior: 2, delta: 4, older: 5, priorComplete: true, olderComplete: false });
+    d.newPatients.pop();
     d.newPatients.pop(); expect(buildDashboardPerformance(d, 'month').newPatients?.delta).toBeNull();
   });
 });
