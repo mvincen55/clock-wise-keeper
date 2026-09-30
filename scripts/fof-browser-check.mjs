@@ -83,10 +83,13 @@ try {
   }
   await page.goto(`${origin}/.repro/fof-browser/index.html?view=import`);
   await page.getByRole('alertdialog').waitFor();
+  await page.getByRole('alertdialog').evaluate(element=>Promise.all(element.getAnimations().map(animation=>animation.finished)));
   for(const width of [1280,850,390]) {
     await page.setViewportSize({width,height:900});
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
     const bounds=await page.getByRole('alertdialog').boundingBox();
-    assert.ok(bounds.x>=0&&bounds.x+bounds.width<=width+1,`Review dialog outside viewport ${width}`);
+    await page.screenshot({path:path.join(output,`import-review-${width}.png`),fullPage:true});
+    assert.ok(bounds.x>=0&&bounds.x+bounds.width<=width+1,`Review dialog outside viewport ${width}: ${JSON.stringify(bounds)}`);
     assert.equal(await page.getByLabel('Code row 9').inputValue(),'6059D');
     assert.equal(await page.getByRole('button',{name:'Import reviewed rows'}).isEnabled(),true);
   }

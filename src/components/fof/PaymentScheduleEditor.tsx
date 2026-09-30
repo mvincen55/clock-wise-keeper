@@ -261,7 +261,7 @@ export function PaymentScheduleEditor({ editor }: { editor: ReturnType<typeof us
           </div>}
         </div>}
         {line.responsibilityCents === 0 && <label className="block text-sm">Use this zero-fee appointment as delivery for <select aria-label={`Delivery marker ${line.id}`} value={edit.deliveryGroup ?? ''} onChange={e => editLine(line.id, { deliveryGroup: e.target.value })}><option value="">No payment milestone (for example, post-op)</option>{groups.filter(g => ['restoration','denture'].includes(g.classification)).map(g => <option key={g.id} value={g.id}>{g.label}</option>)}</select></label>}
-        {line.responsibilityCents>0 && <>
+        {(line.responsibilityCents>0 || !!(edit.paid?.trim() || edit.adjustment?.trim() || edit.group?.trim())) && <>
           <label className="block text-sm">Collect with another procedure (optional)<Input aria-label={`Group ${line.id}`} value={edit.group ?? ''} placeholder="Automatic grouping" onChange={e => editLine(line.id, { group: e.target.value })} /><span className="text-xs text-muted-foreground">Use the same group name on procedures that should share payments.</span></label>
           <div className="grid grid-cols-2 gap-3"><label className="text-sm">Share of recorded discount / credit<Input inputMode="decimal" aria-label={`Adjustment ${line.id}`} value={edit.adjustment ?? ''} placeholder={line.defaultAdjustmentCents ? (line.defaultAdjustmentCents / 100).toFixed(2) : '0.00'} onChange={e => editLine(line.id, { adjustment: e.target.value })} /></label>
           <label className="text-sm">Payment already received<Input inputMode="decimal" aria-label={`Paid ${line.id}`} value={edit.paid ?? ''} placeholder="0.00" onChange={e => editLine(line.id, { paid: e.target.value })} /></label></div>

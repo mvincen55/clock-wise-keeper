@@ -13,6 +13,19 @@ import { LIVE_TEMPLATES, PRACTICE_DEFAULT_BRANDING } from './blank-form-fixtures
 const crown: ScheduleSourceLine = { id: 'a', code: 'D2740', visit: '1', responsibilityCents: 70000, classification: 'restoration' };
 const policy=harelickPolicyTemplate();
 describe('payment editor and shared print result', () => {
+  it('lets staff clear a recorded payment after the procedure becomes no charge', () => {
+    function Form({ cents }: { cents: number }) {
+      const editor=usePaymentScheduleEditor('a',policy,[{...crown,responsibilityCents:cents}],cents);
+      return <PaymentScheduleEditor editor={editor}/>;
+    }
+    const {rerender}=render(<Form cents={70000}/>);
+    fireEvent.change(screen.getByLabelText('Paid a'),{target:{value:'25'}});
+    rerender(<Form cents={0}/>);
+    expect(screen.getByLabelText('Paid a')).toHaveValue('25');
+    fireEvent.change(screen.getByLabelText('Paid a'),{target:{value:''}});
+    expect(screen.getByText('Balanced')).toBeTruthy();
+    expect(screen.queryByLabelText('Paid a')).toBeNull();
+  });
   it('reconciles a two-year implant plan into six patient-friendly payments', () => {
     const source: ScheduleSourceLine[] = [
       {id:'guide',code:'D6190',visit:'1',classification:'workup',procedureLabel:'Surgical Implant Guide',responsibilityCents:112000},
