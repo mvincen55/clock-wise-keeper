@@ -38,7 +38,12 @@ const milestoneLabel = (policy: PaymentPolicy, kind: MilestoneKind) => legacyMil
 
 function MoneyEdit({ cents, label, commit }: { cents: number; label: string; commit: (cents: number) => void }) {
   const [raw, setRaw] = useState(Number.isFinite(cents) ? (cents / 100).toFixed(2) : '');
-  return <Input aria-label={label} inputMode="decimal" value={raw} onChange={e => setRaw(e.target.value)} onBlur={() => commit(parseCurrencyInput(raw) ?? NaN)} />;
+  return <Input aria-label={label} inputMode="decimal" value={raw} onChange={e => setRaw(e.target.value)} onBlur={() => {
+    const next = parseCurrencyInput(raw) ?? NaN;
+    // Focus/blur and formatting-only edits are not financial overrides.
+    // Otherwise the next recalculation freezes this amount and blocks print.
+    if (!Object.is(next, cents)) commit(next);
+  }} />;
 }
 
 /** All edits are component memory. Org changes hide prior-office state immediately. */

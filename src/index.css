@@ -165,6 +165,16 @@
   display: none;
 }
 
+.fof-print-root[data-fof-preparing] {
+  display: block;
+  position: fixed;
+  left: -100000px;
+  top: 0;
+  width: 7.5in;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* Printable office letterhead (OfficeLetterheadSheet). Hidden on screen;
    shown only when printing from a correspondence page (Broken Appointment
    letters, Write on Letterhead, School/Work notes). Patient values reach it
