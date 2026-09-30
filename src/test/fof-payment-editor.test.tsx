@@ -41,7 +41,10 @@ describe('payment editor and shared print result', () => {
     const advanced=screen.getByText('Advanced payment settings').closest('details')!;
     expect(advanced.open).toBe(false);
     expect(screen.getAllByText('When payment is due')).toHaveLength(6);
-    expect(screen.getAllByText('Treatment name on the patient form')).toHaveLength(3);
+    expect(screen.getAllByText('Treatment name')).toHaveLength(3);
+    expect(document.querySelectorAll('[data-payment-section]')).toHaveLength(3);
+    expect([...document.querySelectorAll('[data-payment-section]')].map(section=>section.querySelectorAll('[data-editor-payment]').length)).toEqual([1,2,3]);
+    expect(document.querySelectorAll('[data-editor-payment]')).toHaveLength(schedule.rows.length);
     const guideGroup=result.current.model!.groups.find(g=>g.classification==='workup')!;
     expect(screen.queryByLabelText(`${guideGroup.id} surgery`)).toBeNull();
     expect(screen.getByLabelText(`${guideGroup.id} workup`)).toBeTruthy();
@@ -271,7 +274,7 @@ describe('payment editor and shared print result', () => {
   });
   it('renders editable classifications and explicit paid amounts', () => {
     function Harness(){const editor=usePaymentScheduleEditor('a',policy,[crown],70000);return <PaymentScheduleEditor editor={editor}/>;}
-    render(<Harness/>);fireEvent.change(screen.getByLabelText('Paid a'),{target:{value:'700'}});expect(screen.getByText(/Recorded paid: \$700.00/)).toBeTruthy();
+    render(<Harness/>);fireEvent.change(screen.getByLabelText('Paid a'),{target:{value:'700'}});expect(screen.getByText('Already paid').parentElement).toHaveTextContent('$700.00');
   });
   it('patient preview and office copy share six rows and reconcile explicitly paid work-up', () => {
     const input=fullFixture();input.procedures.filter(p=>p.groupId==='w').forEach(p=>p.paidCents=p.responsibilityCents);

@@ -32,3 +32,30 @@ jobs:
 
       - name: Build
         run: bun run build
+
+  fof-browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install app and isolated browser test dependencies
+        run: |
+          bun install --frozen-lockfile
+          npm install --prefix /tmp/fof-browser --no-audit --no-fund --package-lock=false playwright@1.51.1
+          /tmp/fof-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Check real FOF PDFs and editor layout
+        env:
+          PLAYWRIGHT_MODULE: /tmp/fof-browser/node_modules/playwright/index.mjs
+        run: node scripts/fof-browser-check.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fof-browser-checks
+          path: |
+            .repro/fof-browser/*.pdf
+            .repro/fof-browser/*.png

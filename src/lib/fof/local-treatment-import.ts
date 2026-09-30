@@ -70,7 +70,7 @@ const dentalCode = /^D\d{4}$/i;
 // A CDT code (with an optional office suffix), a numeric office code, or a
 // short letters-plus-digits office code. A word, a name or a sentence
 // fragment never passes, so nothing else in the plan is ever read as a row.
-const officeCode = /^(?:D\d{4}(?:[A-Z.]{1,3})?|\d{1,6}|[A-Z]{1,2}\d{2,5}[A-Z]?)$/i;
+const officeCode = /^(?:D\d{4}(?:[A-Z.]{1,3})?|\d{1,6}[A-Z.]{0,3}|[A-Z]{1,2}\d{2,5}[A-Z]?)$/i;
 const tooth = /^#?(?:[1-9]|[12]\d|3[0-2]|[A-T])(?:[-*](?:[1-9]|[12]\d|3[0-2]|[A-T]))?$/i;
 const moneyText = /^\d+\.\d{2}$/;
 const dateText = /^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/;
@@ -140,7 +140,20 @@ export function visitFromHeading(words: string[]): number | null | undefined {
   const joined = words.map(word => trimGlyphs(word)).join(' ').replace(/\s+/g, ' ').trim();
   const match = /^visit\s*#?\s*(\d{1,3})\b/i.exec(joined);
   if (match) return Number(match[1]);
-  return /^visit\b/i.test(joined) ? null : undefined;
+  return /^visit\s+not\s+set\b/i.test(joined) ? null : undefined;
+}
+
+/** Retry only unreadable section headings as isolated lines. Never infer visit
+ * numbers from section order: plans can skip numbers or say Visit Not Set. */
+export async function rereadVisitHeadings(words: OcrWord[], readLine: (box: OcrWord['bbox']) => Promise<string>): Promise<OcrWord[]> {
+  const result = words.map(word => ({ ...word }));
+  for (const heading of result.filter(word => /^visit/i.test(trimGlyphs(word.text)))) {
+    const rest = words.filter(word => word.bbox.x0 >= heading.bbox.x1 && word.bbox.x0 - heading.bbox.x1 < 100 && Math.abs(midpoint(word) - midpoint(heading)) < 6).sort((a,b) => a.bbox.x0-b.bbox.x0);
+    if (visitFromHeading([heading.text, ...rest.map(word => word.text)]) !== undefined) continue;
+    const text = (await readLine(heading.bbox)).trim();
+    if (visitFromHeading([text]) !== undefined) heading.text = text;
+  }
+  return result;
 }
 
 /** Geometry-based reading of explicit PMS columns. No fee/visit guessing and no
@@ -169,7 +182,9 @@ export function parseTreatmentWords(words: OcrWord[], codeNames: Record<string, 
   const headerY = midpoint(codeHeader);
   const headerHeight = codeHeader.bbox.y1 - codeHeader.bbox.y0;
   const headerWords = ordered
-    .filter(word => Math.abs(midpoint(word) - headerY) < Math.max(10, headerHeight))
+    // Tall header glyph boxes must not admit the first data row. Otherwise
+    // its date tokens interrupt "Entry Date" and create the wrong column.
+    .filter(word => Math.abs(midpoint(word) - headerY) < Math.max(4, headerHeight * 0.45))
     .sort((a, b) => a.bbox.x0 - b.bbox.x0);
   const columns = headerWords
     .map((word, index) => {
@@ -293,6 +308,7 @@ export function parseTreatmentWords(words: OcrWord[], codeNames: Record<string, 
           .map(word => word.text);
         const fromHeading = visitFromHeading([heading.text, ...rest]);
         if (typeof fromHeading === 'number') visitValue = fromHeading;
+        else if (fromHeading === undefined) visitProblem = `The visit heading was read as "${trimGlyphs(heading.text)}"; enter the visit number shown in the plan.`;
       }
     }
     if (visitProblem) { issues.push(visitProblem); lower(); }
@@ -409,7 +425,7 @@ export function toGrayscale(pixels: Uint8ClampedArray): void {
 
 /** Same-origin OCR assets; no upload, CDN, storage, logging, or remote fallback. */
 export async function readLocalTreatment(file: File, codeNames: Record<string, string>, officeFees: Record<string, number> = {}): Promise<LocalTreatmentImport> {
-  const { createWorker } = await import('tesseract.js');
+  const { createWorker, PSM } = await import('tesseract.js');
   let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
   let bitmap: ImageBitmap | null = null;
   const canvas = document.createElement('canvas');
@@ -439,7 +455,18 @@ export async function readLocalTreatment(file: File, codeNames: Record<string, s
         words.push({ text: word.text.trim(), confidence: word.confidence, bbox: { x0: word.bbox.x0 / scale, y0: word.bbox.y0 / scale, x1: word.bbox.x1 / scale, y1: word.bbox.y1 / scale } });
       }
     }
-    return parseTreatmentWords(words, codeNames, officeFees);
+    await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_LINE });
+    const checkedWords = await rereadVisitHeadings(words, async box => {
+      const left = Math.max(0, Math.floor((box.x0 - 3) * scale));
+      const top = Math.max(0, Math.floor((box.y0 - 4) * scale));
+      const { data: line } = await worker!.recognize(canvas, { rectangle: {
+        left, top,
+        width: Math.min(canvas.width - left, Math.ceil(Math.max(110, box.x1 - box.x0 + 6) * scale)),
+        height: Math.min(canvas.height - top, Math.ceil((box.y1 - box.y0 + 8) * scale)),
+      } });
+      return line.text;
+    });
+    return parseTreatmentWords(checkedWords, codeNames, officeFees);
   } catch (error) {
     throw error instanceof Error && error.message.includes('Nothing was') ? error : failure();
   } finally {

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { treatmentGroupIds } from '@/lib/fof/treatment-groups';
 import { titleCase } from '@/lib/fof/cdt-names';
 import type { MilestoneKind } from '@/lib/fof/payment-policy';
+import { paymentSections } from '@/lib/fof/payment-presentation';
 
 export interface ScheduleSourceLine { id: string; code: string; visit: string; tooth?: string; procedureLabel?: string; responsibilityCents: number; classification?: PaymentClass | 'review'; groupingHint?: 'same_tooth' | 'same_visit' | 'separate'; guidance?: { title: string; summary: string; sourceId: string; classification: PaymentClass | 'review' };
   /** Surgery that prepares this tooth for its restoration (crown lengthening before a crown): one course, collected at the surgery too. */
@@ -38,7 +39,7 @@ const milestoneLabel = (policy: PaymentPolicy, kind: MilestoneKind) => legacyMil
 
 function MoneyEdit({ cents, label, commit }: { cents: number; label: string; commit: (cents: number) => void }) {
   const [raw, setRaw] = useState(Number.isFinite(cents) ? (cents / 100).toFixed(2) : '');
-  return <Input aria-label={label} inputMode="decimal" value={raw} onChange={e => setRaw(e.target.value)} onBlur={() => {
+  return <Input className="text-right tabular-nums" aria-label={label} inputMode="decimal" value={raw} onChange={e => setRaw(e.target.value)} onBlur={() => {
     const next = parseCurrencyInput(raw) ?? NaN;
     // Focus/blur and formatting-only edits are not financial overrides.
     // Otherwise the next recalculation freezes this amount and blocks print.
@@ -198,6 +199,9 @@ export function PaymentScheduleEditor({ editor }: { editor: ReturnType<typeof us
   const editOverride = (id: string, patch: Partial<PaymentOverride>) => update(s => ({ ...s, overrides: { ...s.overrides, [id]: { ...s.overrides[id], basis: schedule.signature, ...patch, ...('label' in patch ? { suggestedLabel: false } : {}) } } }));
   const activeGroups = groups.filter(group => model.procedures.some(p => p.groupId === group.id && (p.responsibilityCents !== 0 || p.adjustmentCents || p.paidCents)));
   const activeEventIds = new Set(schedule.rows.map(row => row.id));
+  const sections = paymentSections(schedule);
+  const namedInSections = new Set<string>();
+  const scheduledCents = schedule.rows.reduce((sum,row) => sum+row.cents,0);
   const relevantKinds = (group: PaymentGroup): MilestoneKind[] => {
     const used = [...new Set(schedule.rows.flatMap(row => row.allocations.filter(a => a.groupId === group.id).map(a => a.milestone)))];
     // Keep the repair controls available if an appointment was unlinked.
@@ -212,24 +216,42 @@ export function PaymentScheduleEditor({ editor }: { editor: ReturnType<typeof us
   };
   return <section className="space-y-4 rounded-lg border p-4" aria-label="Office payment schedule">
     <h3 className="font-semibold">Patient payment schedule</h3>
-    <p className="text-sm text-muted-foreground">Review what the patient pays and when. Related implant procedures share the same payments. You can edit the wording below.</p>
-    {activeGroups.map(group => <label key={group.id} className="block text-sm">Treatment name on the patient form<Input aria-label={`Treatment name ${group.id}`} value={group.label} onChange={e => editGroup(group.id, { label: e.target.value })} /></label>)}
-    <p>Patient total: {formatCents(schedule.obligationCents)} · Recorded paid: {formatCents(schedule.paidCents)} · Remaining: {formatCents(schedule.remainingCents)}</p>
-    {schedule.rows.map((row, index) => <div key={row.id} className="rounded-md border p-3 space-y-2">
-      <p className="text-xs font-medium text-muted-foreground">Payment {index + 1}</p>
-      <label className="block text-sm">When payment is due<Input aria-label={`Payment label ${row.id}`} value={row.label} onChange={e => editOverride(row.id, { label: e.target.value })} /></label>
-      <label className="block text-sm">Amount<MoneyEdit key={`${row.id}:${row.cents}`} label={`Payment amount ${row.id}`} cents={row.cents} commit={cents => editOverride(row.id, { cents, ...(row.allocations.length === 1 ? { allocations: [{ ...row.allocations[0], cents }] } : {}) })} /></label>
+    <p className="text-sm text-muted-foreground">Each treatment and its payments stay together. Edit the treatment name, due wording, or payment amounts below.</p>
+    <dl className="grid grid-cols-3 gap-2 rounded-md bg-muted/50 p-3 text-sm">
+      {[['Patient total',schedule.obligationCents],['Already paid',schedule.paidCents],['Remaining',schedule.remainingCents]].map(([label,cents])=><div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-semibold tabular-nums">{formatCents(Number(cents))}</dd></div>)}
+    </dl>
+    {sections.map((section,index) => <div key={`${section.key}:${index}`} className="overflow-hidden rounded-lg border" data-payment-section>
+      <div className="space-y-2 border-b bg-muted/30 p-3">
+        {section.groupIds.length>1 && <p className="text-xs font-medium text-muted-foreground">Collected together</p>}
+        {section.groupIds.map(id=>{
+          const group=groups.find(g=>g.id===id);
+          if(!group || namedInSections.has(id)) return <p key={id} className="font-medium">{schedule.groupLabels[id]}</p>;
+          namedInSections.add(id);
+          return <label key={id} className="block text-xs text-muted-foreground">Treatment name<Input className="mt-1 bg-background font-medium text-foreground" aria-label={`Treatment name ${id}`} value={group.label} onChange={e=>editGroup(id,{label:e.target.value})}/></label>;
+        })}
+        <p className="text-xs text-muted-foreground">{section.rows.length} payment{section.rows.length===1?'':'s'} · {formatCents(section.rows.reduce((sum,row)=>sum+row.cents,0))} scheduled</p>
+      </div>
+      <div className="divide-y">{section.rows.map(row=>{
+        const prefix=`${section.title} — `;
+        const hasPrefix=row.label.startsWith(prefix);
+        return <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_7rem] items-end gap-3 p-3" data-editor-payment={row.id}>
+          <label className="min-w-0 text-xs text-muted-foreground">When payment is due<Input className="mt-1 text-foreground" aria-label={`Payment label ${row.id}`} value={hasPrefix?row.label.slice(prefix.length):row.label} onChange={e=>editOverride(row.id,{label:hasPrefix?`${prefix}${e.target.value}`:e.target.value})}/></label>
+          <label className="text-right text-xs text-muted-foreground">Amount ($)<div className="mt-1 text-foreground"><MoneyEdit key={`${row.id}:${row.cents}`} label={`Payment amount ${row.id}`} cents={row.cents} commit={cents=>editOverride(row.id,{cents,...(row.allocations.length===1?{allocations:[{...row.allocations[0],cents}]}:{})})}/></div></label>
+        </div>;
+      })}</div>
     </div>)}
+    <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span>Scheduled total <strong className="tabular-nums">{formatCents(scheduledCents)}</strong></span><span className={schedule.issues.length?'font-medium text-destructive':'font-medium text-emerald-700'}>{schedule.issues.length ? 'Review required' : 'Balanced'}</span></div>
+    <p className="text-xs text-muted-foreground">To reduce the amount owed, record an office courtesy or credit in Discounts &amp; Credits. All payments must add up to the remaining balance.</p>
     {schedule.issues.length > 0 && <div role="alert" className="text-destructive"><strong>Review required before printing</strong><ul>{[...new Set(schedule.issues)].map(issue => <li key={issue}>{issue}</li>)}</ul><p>Use Advanced payment settings below to resolve these items.</p></div>}
     <details className="rounded-md border p-3" open={schedule.issues.length > 0 || undefined}><summary className="cursor-pointer font-medium">Advanced payment settings</summary>
     <div className="mt-3 space-y-4">
-    <p className="text-sm text-muted-foreground">Only needed to change which procedures are paid together, record prior payments, or adjust how discounts are assigned.</p>
+    <p className="text-sm text-muted-foreground">Open a procedure to record a payment already received or change its payment rule. Discount allocations divide a courtesy or credit already entered in Discounts &amp; Credits.</p>
     {source.map(line => {
       const edit = editFor(state.lines, line);
-      return <fieldset key={line.id} className="border p-2 space-y-2"><legend>{line.code || 'Procedure'} — OOP {formatCents(line.responsibilityCents)}</legend>
-        <label className="block text-sm">Payment classification <select aria-label={`Classification ${line.id}`} value={edit.classification ?? line.classification ?? 'review'} onChange={e => editLine(line.id, { classification: e.target.value as PaymentClass })}>
+      return <details key={line.id} className="rounded-md border p-3" open={line.responsibilityCents>0&&(edit.classification??line.classification??'review')==='review'||undefined}><summary className="cursor-pointer"><span className="font-medium">{line.procedureLabel||line.code||'Procedure'}{line.tooth?` #${line.tooth}`:''}</span><span className="ml-2 text-xs text-muted-foreground">{line.procedureLabel?`${line.code} · `:''}{line.responsibilityCents===0?'No charge':`${formatCents(line.responsibilityCents)} patient portion`}</span></summary><div className="mt-3 space-y-3">
+        {line.responsibilityCents>0 && <label className="block text-sm">Payment rule <select className="mt-1 block w-full rounded-md border bg-background p-2" aria-label={`Classification ${line.id}`} value={edit.classification ?? line.classification ?? 'review'} onChange={e => editLine(line.id, { classification: e.target.value as PaymentClass })}>
           {['review', ...paymentClasses].map(c => <option key={c} value={c}>{classTitle[c]}</option>)}
-        </select></label>
+        </select></label>}
         {line.guidance && <div className="rounded bg-muted p-2 text-sm">
           <p><strong>Code-bank draft: {line.guidance.title}</strong> — {line.guidance.summary}</p>
           <p className="text-xs text-muted-foreground">Based on this procedure’s office fee-schedule notes. Changes below affect this form only; shared notes require Training mode in the FOF Assistant.</p>
@@ -239,10 +261,12 @@ export function PaymentScheduleEditor({ editor }: { editor: ReturnType<typeof us
           </div>}
         </div>}
         {line.responsibilityCents === 0 && <label className="block text-sm">Use this zero-fee appointment as delivery for <select aria-label={`Delivery marker ${line.id}`} value={edit.deliveryGroup ?? ''} onChange={e => editLine(line.id, { deliveryGroup: e.target.value })}><option value="">No payment milestone (for example, post-op)</option>{groups.filter(g => ['restoration','denture'].includes(g.classification)).map(g => <option key={g.id} value={g.id}>{g.label}</option>)}</select></label>}
-        <label className="block text-sm">Payment group<Input aria-label={`Group ${line.id}`} value={edit.group ?? ''} placeholder="Optional shared treatment name" onChange={e => editLine(line.id, { group: e.target.value })} /></label>
-        <div className="grid grid-cols-2 gap-2"><label className="text-sm">Allocated discount / credit<Input aria-label={`Adjustment ${line.id}`} value={edit.adjustment ?? ''} placeholder={line.defaultAdjustmentCents ? (line.defaultAdjustmentCents / 100).toFixed(2) : '0.00'} onChange={e => editLine(line.id, { adjustment: e.target.value })} /></label>
-        <label className="text-sm">Explicitly paid already<Input aria-label={`Paid ${line.id}`} value={edit.paid ?? ''} placeholder="0.00" onChange={e => editLine(line.id, { paid: e.target.value })} /></label></div>
-      </fieldset>;
+        {line.responsibilityCents>0 && <>
+          <label className="block text-sm">Collect with another procedure (optional)<Input aria-label={`Group ${line.id}`} value={edit.group ?? ''} placeholder="Automatic grouping" onChange={e => editLine(line.id, { group: e.target.value })} /><span className="text-xs text-muted-foreground">Use the same group name on procedures that should share payments.</span></label>
+          <div className="grid grid-cols-2 gap-3"><label className="text-sm">Share of recorded discount / credit<Input inputMode="decimal" aria-label={`Adjustment ${line.id}`} value={edit.adjustment ?? ''} placeholder={line.defaultAdjustmentCents ? (line.defaultAdjustmentCents / 100).toFixed(2) : '0.00'} onChange={e => editLine(line.id, { adjustment: e.target.value })} /></label>
+          <label className="text-sm">Payment already received<Input inputMode="decimal" aria-label={`Paid ${line.id}`} value={edit.paid ?? ''} placeholder="0.00" onChange={e => editLine(line.id, { paid: e.target.value })} /></label></div>
+        </>}
+      </div></details>;
     })}
     {activeGroups.map(group => <div key={group.id} className="border p-2 space-y-2">
       <p className="font-medium">{group.label}</p>
