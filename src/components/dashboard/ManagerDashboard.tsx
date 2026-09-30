@@ -29,8 +29,9 @@ import { ChallengeCard } from './ChallengeCard';
  *      main: Needs you (grouped, actionable), the manager's own items, then
  *      the performance block (period, strip, chart, the cancellation trend)
  *      directly beneath the queue, however tall the sidebar is;
+ *      main, under the charts: what is worth a look;
  *      sidebar: Today, the latest closeout with its state, the month's goal
- *      meters, what is worth a look, the challenge when noteworthy
+ *      meters, the challenge when noteworthy
  *   4  coverage lanes, then the tools area
  *
  * Under lg the columns dissolve into one, actions first: Needs you, Mine,
@@ -119,6 +120,12 @@ export default function ManagerDashboard({ view, chartWidth }: { view: ManagerVi
           )}
         />
       </Slot>
+      {/* Observations sit under the charts they read, with room to sit side by side. */}
+      <Slot order={6}>
+        <Panel title="Worth a look" description="What only a comparison over the recorded days can show. Observed, not predicted.">
+          <Noticing insights={insights} loading={performanceState === 'loading'} />
+        </Panel>
+      </Slot>
     </>
   );
 
@@ -138,14 +145,9 @@ export default function ManagerDashboard({ view, chartWidth }: { view: ManagerVi
       <Slot order={4}>
         <CloseoutPanel brief={brief} lastDay={home.lastDay} />
       </Slot>
-      <Slot order={6}>
+      <Slot order={7}>
         <Panel title="Goals this month" action={{ label: 'Goals', to: '/goals' }}>
           <GoalMeters meters={goalMeters} canSetGoals loading={performanceState === 'loading'} />
-        </Panel>
-      </Slot>
-      <Slot order={7}>
-        <Panel title="Worth a look" description="What only a comparison over the recorded days can show. Observed, not predicted.">
-          <Noticing insights={insights} loading={performanceState === 'loading'} />
         </Panel>
       </Slot>
       {spotlight && (

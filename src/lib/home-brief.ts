@@ -25,13 +25,26 @@ import { listOfficeDays, type OfficeDayCalendar } from '@/lib/office-days';
 
 export type SummaryLine = { id: string; text: string; href?: string; tone: Tone };
 
-/** One group of the roster line: "In: Dana R., Marcus T. (late 12m)". */
+/** One person on the board: name, a short note where it matters, and their own tone. */
+export type RosterPerson = { id: string; name: string; note: string | null; tone: Tone };
+
+/** One group of the roster board: "In: Dana R., Marcus T. (late 12m)". */
 export type RosterGroup = {
   id: 'in' | 'still_in' | 'not_yet' | 'later' | 'absent' | 'off' | 'done';
   label: string;
-  /** Names, with a short note where it matters: "(late 12m)", "(remote)", "(1:00 PM)". */
+  /** Names, with the note in parentheses: "Marcus T. (late 12m)", "Alice N. (remote)", "Sam K. (1:00 PM)". */
   names: string[];
+  people: RosterPerson[];
   tone: Tone;
+};
+
+/** One office day on the closeout strip: sealed, saved but not sealed, missing, or today in progress. */
+export type CloseoutDayCell = {
+  date: string;
+  state: 'sealed' | 'saved' | 'missing' | 'today';
+  /** "Mon, Sep 28 · no closeout" */
+  label: string;
+  href: string;
 };
 
 /** The short summary at the top of Home: the office state, who is where, and at most three priorities. */
@@ -43,8 +56,13 @@ export type HomeSummary = {
   tone: Tone;
   /** Who is in, not in yet, starting later, off, done — by name. */
   who: RosterGroup[];
+  /** The last office days' closeout states, oldest first; empty without the office calendar. */
+  closeoutStrip: CloseoutDayCell[];
   lines: SummaryLine[];
 };
+
+/** How many office days the closeout strip shows. */
+export const CLOSEOUT_STRIP_DAYS = 15;
 
 export type NeedsYou = {
   /** The first three of the same list Attention shows. */
@@ -231,24 +249,45 @@ export const MAX_SUMMARY_LINES = 3;
  * or not scheduled today is not a status worth a name.
  */
 export function rosterGroups(people: PersonStatus[]): RosterGroup[] {
-  const names: Record<RosterGroup['id'], string[]> = { in: [], still_in: [], not_yet: [], later: [], absent: [], off: [], done: [] };
+  const groups: Record<RosterGroup['id'], RosterPerson[]> = { in: [], still_in: [], not_yet: [], later: [], absent: [], off: [], done: [] };
+  const add = (id: RosterGroup['id'], p: PersonStatus, note: string | null = null) => groups[id].push({ id: p.id, name: p.name, note, tone: p.tone });
   for (const p of people) {
     const s = p.status;
-    if (s === 'Still clocked in') names.still_in.push(p.name);
-    else if (s.startsWith('In')) {
-      const note = s.startsWith('In · ') ? ` (${s.slice('In · '.length)})` : s === 'In — remote' ? ' (remote)' : '';
-      names.in.push(`${p.name}${note}`);
-    } else if (s === 'Not in yet') names.not_yet.push(p.name);
-    else if (s.startsWith('Starts ')) names.later.push(`${p.name} (${s.slice('Starts '.length)})`);
-    else if (s === 'Absent') names.absent.push(p.name);
-    else if (s === 'Approved off') names.off.push(p.name);
-    else if (s.startsWith('Done') || s === 'Clocked out') names.done.push(p.name);
+    if (s === 'Still clocked in') add('still_in', p);
+    else if (s.startsWith('In')) add('in', p, s.startsWith('In · ') ? s.slice('In · '.length) : s === 'In — remote' ? 'remote' : null);
+    else if (s === 'Not in yet') add('not_yet', p);
+    else if (s.startsWith('Starts ')) add('later', p, s.slice('Starts '.length));
+    else if (s === 'Absent') add('absent', p);
+    else if (s === 'Approved off') add('off', p);
+    else if (s.startsWith('Done') || s === 'Clocked out') add('done', p);
   }
   const order: [RosterGroup['id'], string, Tone][] = [
     ['in', 'In', 'steady'], ['still_in', 'Still in', 'attention'], ['not_yet', 'Not in yet', 'calm'], ['later', 'Later', 'calm'],
     ['absent', 'Absent', 'attention'], ['off', 'Off', 'calm'], ['done', 'Done', 'calm'],
   ];
-  return order.filter(([id]) => names[id].length > 0).map(([id, label, tone]) => ({ id, label, names: names[id], tone }));
+  return order
+    .filter(([id]) => groups[id].length > 0)
+    .map(([id, label, tone]) => ({ id, label, tone, people: groups[id], names: groups[id].map(x => (x.note ? `${x.name} (${x.note})` : x.name)) }));
+}
+
+/**
+ * The closeout strip: the last office days through today, each with its
+ * record state. A day the calendar does not list is not on the strip (it
+ * cannot be "missing"); today shows as in progress until its closeout is
+ * saved. Empty without the office calendar.
+ */
+export function closeoutStrip(input: { closeouts: CloseoutFact[]; calendar: OfficeDayCalendar | null | undefined; today: string; days?: number }): CloseoutDayCell[] {
+  const { closeouts, calendar, today } = input;
+  if (!calendar) return [];
+  const n = input.days ?? CLOSEOUT_STRIP_DAYS;
+  const byDate = new Map(closeouts.map(c => [c.deposit_date, c]));
+  const dates = listOfficeDays(shiftDate(today, -Math.max(n * 3, 30)), today, calendar).slice(-n);
+  return dates.map(date => {
+    const c = byDate.get(date);
+    const state: CloseoutDayCell['state'] = c ? (c.sealed_at ? 'sealed' : 'saved') : date === today ? 'today' : 'missing';
+    const word = state === 'sealed' ? 'sealed' : state === 'saved' ? 'saved, not sealed' : state === 'today' ? 'today, in progress' : 'no closeout';
+    return { date, state, label: `${shortDay(date)} · ${word}`, href: `/deposit-log?date=${date}` };
+  });
 }
 
 const shortDay = (date: string) => formatDate(date).split(', ').slice(0, 2).join(', ');
@@ -277,6 +316,7 @@ export function stateSummary(input: {
 }): HomeSummary {
   const { office, today, needs, lastDay, payroll, inbox, todayDate } = input;
   const who = today.asOf ? [] : rosterGroups(today.people);
+  const strip = closeoutStrip({ closeouts: input.closeouts ?? [], calendar: input.calendar, today: todayDate });
   const phase = office.phase;
   const lines: SummaryLine[] = [];
   const push = (l: SummaryLine) => { if (lines.length < MAX_SUMMARY_LINES) lines.push(l); };
@@ -327,9 +367,10 @@ export function stateSummary(input: {
   // at all, which no queue item says.
   if (lastDay?.action && lastDay.text.startsWith('none on record')) {
     push({ id: 'closeout', text: 'No closeout is on record in the last two weeks.', href: lastDay.href, tone: 'attention' });
-  } else if (input.calendar && input.closeouts?.length) {
-    // An office day since the last closeout with none of its own: the one
-    // gap no queue item names. Yesterday counts; today does not until close.
+  } else if (input.calendar && input.closeouts?.length && !needs.now.some(i => i.kind === 'close_day_behind')) {
+    // An office day since the last closeout with none of its own. The queue
+    // carries the gap once it reaches two days ("Close the Day is behind"),
+    // so this line speaks only when it would otherwise go unnamed.
     const last = input.closeouts.filter(c => c.deposit_date < todayDate).sort((a, b) => b.deposit_date.localeCompare(a.deposit_date))[0];
     const missing = last ? listOfficeDays(shiftDate(last.deposit_date, 1), shiftDate(todayDate, -1), input.calendar) : [];
     if (missing.length === 1) {
@@ -354,7 +395,7 @@ export function stateSummary(input: {
 
   // Routine status (someone not in yet, someone starting later) belongs to
   // the Today panel, calmly; it is not a priority and is not repeated here.
-  return { headline, detail, tone, who, lines };
+  return { headline, detail, tone, who, closeoutStrip: strip, lines };
 }
 
 /** The Attention lists behind Needs you — shared by Owner and Manager Home. */

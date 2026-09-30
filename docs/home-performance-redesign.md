@@ -122,14 +122,15 @@ count, so it is not shown as a daily series.
 Every role reads the same order: what needs my action → status → trends →
 tools. The page is two columns that flow independently (`HomeColumns`): the
 main column holds the queue and, directly beneath it, the period filters,
-the strip, the chart and the cancellation trend; the sidebar holds today,
-the latest closeout with its state, the goal meters and the rest of the
-secondary information. Under `lg` the columns dissolve into one, actions
+the strip, the chart, the cancellation trend and the observations; the
+sidebar holds today, the latest closeout with its state, the goal meters
+and the challenge. Under `lg` the columns dissolve into one, actions
 first.
 
 - **Owner** — header (state chip, role context, Close the Day, Attention · n),
-  "Right now" (headline, a roster line by name — in, still in, not in yet,
-  later, absent, off, done — and at most three genuine priorities: a degraded
+  "Right now" (headline, everyone on the roster as a chip with their own
+  status, the last 15 office days' closeout states as a strip, and at most
+  three genuine priorities: a degraded
   source, someone absent after their shift, no closeout on record, an office
   day since the last closeout with none of its own, payroll due within a
   week, the inbox), Needs you (unique actionable items, repeated

@@ -12,7 +12,7 @@ import OwnerDashboard from '@/components/dashboard/OwnerDashboard';
 import ManagerDashboard from '@/components/dashboard/ManagerDashboard';
 import MemberDashboard from '@/components/dashboard/MemberDashboard';
 import {
-  hygienistFixture, managerClearFixture, managerFixture, managerNewFixture, memberClearFixture, ownerClearFixture, ownerFixture,
+  hygienistFixture, managerClearFixture, managerFixture, managerNewFixture, memberClearFixture, ownerClearFixture, ownerFixture, ownerOffCalendarFixture,
 } from '@/components/dashboard/fixtures';
 
 const renderView = (ui: React.ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>);
@@ -37,8 +37,10 @@ describe('the main column follows the queue', () => {
     expect(mainRegions.indexOf('Needs you')).toBe(0);
     expect(mainRegions.indexOf('Office performance')).toBeGreaterThan(mainRegions.indexOf('Mine'));
     expect(within(main).getByText('Cancellations and no-shows')).toBeInTheDocument();
+    expect(mainRegions.indexOf('Worth a look')).toBeGreaterThan(mainRegions.indexOf('Office performance'));
     const asideRegions = regionNames(aside);
-    expect(asideRegions.slice(0, 4)).toEqual(['Today', "Yesterday's closeout", 'Goals this month', 'Worth a look']);
+    expect(asideRegions.slice(0, 3)).toEqual(['Today', "Yesterday's closeout", 'Goals this month']);
+    expect(asideRegions).not.toContain('Worth a look');
     expect(screen.queryByRole('region', { name: 'Status' })).not.toBeInTheDocument();
     // Nothing reserves height: the columns, the slots, and the panels themselves carry no
     // stretch or minimum height (a meter's 8px fill bar inside a panel is not a reserved height).
@@ -55,7 +57,7 @@ describe('the main column follows the queue', () => {
     expect(within(queue).getByRole('button', { name: /Parked/ })).toHaveAttribute('aria-expanded', 'false');
     expect(queue.nextElementSibling).toBeNull(); // the slot holds only the panel
     const slots = Array.from(main.children) as HTMLElement[];
-    expect(slots.map(s => within(s).queryByRole('region', { name: 'Needs you' }) ? 'queue' : within(s).queryByRole('region', { name: 'Office performance' }) ? 'performance' : 'other')).toEqual(['queue', 'performance']);
+    expect(slots.map(s => within(s).queryByRole('region', { name: 'Needs you' }) ? 'queue' : within(s).queryByRole('region', { name: 'Office performance' }) ? 'performance' : within(s).queryByRole('region', { name: 'Worth a look' }) ? 'insights' : 'other')).toEqual(['queue', 'performance', 'insights']);
     // The closeout panel carries its own state — no separate Status card.
     const closeout = within(aside).getByRole('region', { name: "Yesterday's closeout" });
     expect(within(closeout).getByText('Sealed')).toBeInTheDocument();
@@ -77,7 +79,7 @@ describe('the main column follows the queue', () => {
   it('owner: the same shape, with staffing first in the sidebar and the closeout carrying its state', () => {
     const { container } = renderView(<OwnerDashboard view={ownerClearFixture} chartWidth={800} />);
     const { main, aside } = columns(container);
-    expect(regionNames(main)).toEqual(['Needs you', 'Office performance', 'Cancellations and no-shows']);
+    expect(regionNames(main)).toEqual(['Needs you', 'Office performance', 'Cancellations and no-shows', 'Worth a look']);
     expect(regionNames(aside).slice(0, 4)).toEqual(['Staffing today', "Yesterday's closeout", 'Goals this month', 'Office challenge']);
     expect(within(aside).getByText('Sealed')).toBeInTheDocument();
     expect(within(main).getByText('No owner decisions are waiting.')).toBeInTheDocument();
@@ -96,6 +98,30 @@ describe('the main column follows the queue', () => {
   });
 });
 
+describe('the status board at the top', () => {
+  it('names everyone on the roster as a chip with their own status, and shows the closeout strip', () => {
+    renderView(<ManagerDashboard view={managerFixture} />);
+    const board = screen.getByRole('list', { name: 'Who is where' });
+    const chips = within(board).getAllByRole('listitem').map(li => li.textContent);
+    expect(chips).toEqual(['Dana R.In', 'Marcus T.In · late 12m', 'Priya S.In', 'Alice N.In · remote', 'Ken W.Not in yet', 'Sam K.Later · 1:00 PM', 'Jo B.Off', 'Rita M.Done']);
+    const strip = screen.getByRole('list', { name: 'Closeouts by office day' });
+    const cells = within(strip).getAllByRole('link');
+    expect(cells).toHaveLength(15);
+    expect(cells[cells.length - 1]).toHaveAttribute('aria-label', 'Tue, Mar 3 · today, in progress');
+    expect(cells[cells.length - 2]).toHaveAttribute('aria-label', 'Mon, Mar 2 · saved, not sealed');
+    expect(cells[cells.length - 2]).toHaveAttribute('href', '/deposit-log?date=2026-03-02');
+    expect(cells.filter(c => c.getAttribute('data-state') === 'sealed')).toHaveLength(13);
+    expect(screen.getByText(/every office day recorded · 1 not sealed/)).toBeInTheDocument();
+  });
+  it('an office day with no closeout shows on the strip and is counted', () => {
+    renderView(<OwnerDashboard view={ownerOffCalendarFixture} />);
+    const strip = screen.getByRole('list', { name: 'Closeouts by office day' });
+    const missing = within(strip).getAllByRole('link').filter(c => c.getAttribute('data-state') === 'missing');
+    expect(missing.map(c => c.getAttribute('aria-label'))).toEqual(['Thu, Mar 5 · no closeout']);
+    expect(screen.getByText(/1 missing \(Thu, Mar 5\)/)).toBeInTheDocument();
+  });
+});
+
 describe('under lg the columns dissolve into one reading order', () => {
   it('actions first, then today and the closeout, then the numbers, then the goals', () => {
     renderView(<ManagerDashboard view={managerFixture} chartWidth={800} />);
@@ -104,8 +130,8 @@ describe('under lg the columns dissolve into one reading order', () => {
     expect(order('Mine')).toBeLessThan(order('Today'));
     expect(order('Today')).toBeLessThan(order("Yesterday's closeout"));
     expect(order("Yesterday's closeout")).toBeLessThan(order('Office performance'));
-    expect(order('Office performance')).toBeLessThan(order('Goals this month'));
-    expect(order('Goals this month')).toBeLessThan(order('Worth a look'));
+    expect(order('Office performance')).toBeLessThan(order('Worth a look'));
+    expect(order('Worth a look')).toBeLessThan(order('Goals this month'));
   });
 
   it('the column wrappers dissolve (display: contents) below lg and become block columns at lg', () => {

@@ -581,6 +581,18 @@ Removed while inspecting for reserved space: `lg:items-stretch` on the chart row
   item carries: an office day since the last closeout with no closeout of its own
   ("Mon, Sep 28 has no closeout.", linked to that day in Close the Day), judged on the
   office calendar so weekends and closures never count.
+- **The top of the fold is now a status board.** "Right now" lists everyone on the
+  roster as a chip with their own status (In · late 24m, In · remote, Not in yet,
+  Later · 1:00 PM, Off, Done), in a grid that fills whatever width it has, beside a
+  closeout strip: the last 15 office days as cells (sealed, saved but not sealed,
+  missing, today in progress), each a link to that day in Close the Day, with a
+  caption ("2 missing (Mon, Sep 28 – Tue, Sep 29) · 1 not sealed"). Weekends and
+  closures are never on the strip, so they can never read as missing. The
+  missing-closeout priority line yields to the queue once "Close the Day is behind"
+  is an item there.
+- **Worth a look moved under the charts.** With three cards it made the sidebar the
+  tall column and left the main column short; under the charts it reads at full
+  width (two or three cards across) and the sidebar stays compact.
 
 ### What the captures show (`design-review/`)
 - `manager-clear-desktop`: the empty queue (the all-clear and "Parked · 1") with the period filters, four cards, the chart and the cancellation trend directly beneath it; the sidebar reads Today → "Yesterday's closeout · Sealed" → Goals this month → Worth a look; no blank area.
