@@ -9,7 +9,7 @@
  *  - Today lists exceptions and one count line, never a roster;
  *  - the closeout's state has one home at a time;
  *  - the same strip, chart, goal meters, and observations Owner Home shows;
- *  - the challenge appears only when it is noteworthy;
+ *  - the challenge sits in the board's month row with its state, once;
  *  - after close, Needs you becomes Before you leave;
  *  - a brand-new office gets honest lines, not a wall of zeros;
  *  - Home carries no consequential action: every button is a chart, period,
@@ -203,17 +203,26 @@ describe('status and pace', () => {
   });
 });
 
-describe('spotlight', () => {
-  it('a challenge on track with days to go stays in Office → Goals, not on Home', () => {
-    const { container } = renderView(<ManagerDashboard view={managerFixture} />);
-    expect(managerFixture.home.spotlight).toBeNull();
-    expect(container.textContent).not.toContain('Morning huddle on time');
+describe('the challenge in the board', () => {
+  it('a challenge on track sits in the month row once, calmly, with its state and window; nothing else on Home repeats it', () => {
+    renderView(<ManagerDashboard view={managerFixture} />);
+    expect(managerFixture.home.spotlight).toBeNull(); // not noteworthy — and still on the board, as the month's third cell
+    const board = screen.getByRole('region', { name: 'Right now' });
+    const month = within(board).getByRole('list', { name: 'Goals this month' });
+    expect(within(month).getAllByRole('listitem')).toHaveLength(3);
+    expect(within(month).getByText('Morning huddle on time')).toBeInTheDocument();
+    expect(within(month).getByText('On track')).toBeInTheDocument();
+    expect(within(month).getByRole('meter', { name: 'Morning huddle on time: 9 of 10' })).toBeInTheDocument();
+    expect(screen.getAllByText('Morning huddle on time')).toHaveLength(1);
+    expect(screen.queryByRole('region', { name: /^Challenge/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Goals this month' })).not.toBeInTheDocument();
   });
 
-  it('a challenge off track appears once, with the reason', () => {
+  it('a challenge off track carries its state as the chip; the spotlight reason stays a pure fact', () => {
     renderView(<ManagerDashboard view={managerOffPaceFixture} />);
     expect(managerOffPaceFixture.home.spotlight?.reason).toBe('off track');
-    expect(screen.getByText('Challenge · off track')).toBeInTheDocument();
+    const month = screen.getByRole('list', { name: 'Goals this month' });
+    expect(within(month).getByText('Needs a push')).toBeInTheDocument();
     expect(screen.getAllByText('Recall reactivation')).toHaveLength(1);
   });
 });

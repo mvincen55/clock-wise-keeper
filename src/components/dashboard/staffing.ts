@@ -162,15 +162,32 @@ function minutesToClock(mins: number): string {
   return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
 }
 
+/** Today's shift as the schedule prints it: "8:00 AM – 5:00 PM", "from 1:00 PM", "until 5:00 PM", or null. */
+export function shiftLabel(start: string | null | undefined, end: string | null | undefined): string | null {
+  const s = formatClockLabel(start);
+  const e = formatClockLabel(end);
+  if (s && e) return `${s} – ${e}`;
+  if (s) return `from ${s}`;
+  if (e) return `until ${e}`;
+  return null;
+}
+
 /**
- * One person's status line, aware of the time of day.
+ * One person's status line, aware of the time of day, with the schedule
+ * facts a hover can show (the shift, remote, minutes late).
  * Nobody is "Out" merely because their shift has not started or has ended.
  */
 export function personStatusAt(row: EmployeeSnapshot, now: Date): PersonStatus {
   const nowMin = minutesOfDay(now);
   const start = parseClockMinutes(row.schedule_expected_start);
   const end = parseClockMinutes(row.schedule_expected_end);
-  const base = { id: row.employee_id, name: row.display_name };
+  const base = {
+    id: row.employee_id,
+    name: row.display_name,
+    shift: shiftLabel(row.schedule_expected_start, row.schedule_expected_end),
+    remote: row.is_remote,
+    minutesLate: row.is_late && row.minutes_late > 0 ? row.minutes_late : null,
+  };
 
   if (row.office_closed) return { ...base, status: 'Office closed', tone: 'calm' };
   if (row.has_day_off) return { ...base, status: 'Approved off', tone: 'calm' };

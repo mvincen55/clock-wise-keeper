@@ -463,13 +463,15 @@ export function HomeHeader({
  * above the financial block. Under `lg` the two columns dissolve
  * (`display: contents`) into one flex column and each slot's `order` sets
  * the reading order: the person's actions first, then today's status, then
- * the numbers.
+ * the numbers. With `stickyAside` the sidebar keeps pace with a long main
+ * column instead of leaving its lower half blank: it stays in view while
+ * the main column scrolls (the grid's `items-start` lets it).
  */
-export function HomeColumns({ main, aside, className }: { main: ReactNode; aside: ReactNode; className?: string }) {
+export function HomeColumns({ main, aside, className, stickyAside }: { main: ReactNode; aside: ReactNode; className?: string; stickyAside?: boolean }) {
   return (
     <div data-home-columns className={cn('flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(19rem,22rem)] lg:items-start', className)}>
       <div data-home-column="main" className="contents lg:block lg:min-w-0 lg:space-y-4">{main}</div>
-      <div data-home-column="aside" className="contents lg:block lg:min-w-0 lg:space-y-4">{aside}</div>
+      <div data-home-column="aside" className={cn('contents lg:block lg:min-w-0 lg:space-y-4', stickyAside && 'lg:sticky lg:top-4')}>{aside}</div>
     </div>
   );
 }

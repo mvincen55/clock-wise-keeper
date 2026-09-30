@@ -1,20 +1,17 @@
-import { Link } from 'react-router-dom';
-import { cn } from '@/lib/utils';
-import type { TodayException } from '@/lib/home-brief';
+import { useState } from 'react';
+import type { Period } from '@/lib/performance-series';
 import type { ManagerView } from './types';
 import {
-  ActionLink, DashboardShell, EmptyState, HomeColumns, HomeHeader, Lanes, Panel, Slot, StatusDot, ToolsPanel, ViewContext, focusRing, interactive, toneText,
-  Arrow, actionClass,
+  ActionLink, DashboardShell, EmptyState, HomeColumns, HomeHeader, Lanes, Panel, Slot, ToolsPanel, ViewContext,
 } from './kit';
 import { NeedsYouPanel } from './NeedsYou';
 import { MyWorkPanel } from './MyWork';
 import { SummaryPanel } from './Summary';
 import { CloseoutPanel, StatusRow } from './CloseoutPanel';
+import { ExceptionRow, TodayPanel } from './TodayPanel';
 import { PerformanceSection } from './performance/PerformanceSection';
-import { GoalMeters } from './performance/GoalMeters';
 import { Noticing } from './performance/Noticing';
-import { MissedTrend } from './performance/MissedTrend';
-import { ChallengeCard } from './ChallengeCard';
+import { MissedTrend, missedHref } from './performance/MissedTrend';
 
 /**
  * MANAGER — "what needs me, how is the office right now, and how is the
@@ -24,58 +21,30 @@ import { ChallengeCard } from './ChallengeCard';
  * action — every row navigates, Review for a decision and Open otherwise.
  *
  *   1  header: greeting, office state, role context, the primary actions
- *   2  the short summary: the state and at most three priorities
+ *   2  the board: the state, everyone on the roster (their schedule a hover
+ *      away, their record a click away), at most three priorities, and the
+ *      month — the goal meters and the challenge — above the fold
  *   3  two columns that flow independently —
  *      main: Needs you (grouped, actionable), the manager's own items, then
- *      the performance block (period, strip, chart, the cancellation trend)
- *      directly beneath the queue, however tall the sidebar is;
- *      main, under the charts: what is worth a look;
- *      sidebar: Today, the latest closeout with its state, the month's goal
- *      meters, the challenge when noteworthy
- *   4  coverage lanes, then the tools area
+ *      the performance block (period, strip, chart) directly beneath the
+ *      queue, however tall the sidebar is;
+ *      sidebar, kept in view while the main column scrolls: Today
+ *      (exceptions and one count line), the latest closeout with its
+ *      state, the cancellation trend scoped to the same period row
+ *   4  what is worth a look, at full width under both columns
+ *   5  coverage lanes, then the tools area
  *
  * Under lg the columns dissolve into one, actions first: Needs you, Mine,
  * Today, the closeout, then the numbers.
  */
-
-/** A person who is an exception today. Links to their item when one exists. */
-function ExceptionRow({ person }: { person: TodayException }) {
-  const inner = (
-    <>
-      <StatusDot tone={person.tone} />
-      <span className="min-w-0 flex-1 truncate text-[15px] font-medium">{person.name}</span>
-      <span className={cn('text-[13px] font-medium', toneText[person.tone])}>{person.status}</span>
-      {person.action && (
-        <span className={actionClass}>
-          {person.action}
-          <Arrow />
-        </span>
-      )}
-    </>
-  );
-  const base = 'flex min-h-11 items-center gap-3 border-b border-border py-2.5 last:border-b-0';
-  return person.href ? (
-    <Link to={person.href} className={cn(base, 'group rounded-md hover:bg-muted/50', interactive, focusRing)}>{inner}</Link>
-  ) : (
-    <div className={base}>{inner}</div>
-  );
-}
-
 export default function ManagerDashboard({ view, chartWidth }: { view: ManagerView; chartWidth?: number }) {
-  const { header, office, home, brief, mine, lanes, roleContext, toolGroups, performance, performanceState, goalMeters, insights, tools } = view;
-  const { needs, today, wrapUp, spotlight, summary } = home;
+  const { header, office, home, brief, mine, goal, lanes, roleContext, toolGroups, performance, performanceState, goalMeters, insights, tools } = view;
+  const { needs, today, wrapUp, summary } = home;
+  const [period, setPeriod] = useState<Period | null>(null);
   const nowCount = needs.now.length;
   const stillIn = today.exceptions.filter(e => e.status.startsWith('Still clocked in'));
   const closeoutStep = wrapUp && home.lastDay?.action ? home.lastDay : null;
   const closeAction = tools.find(t => t.id === 'close');
-
-  const todayLine = today.asOf
-    ? today.asOf === 'loading'
-      ? 'Reading today’s roster…'
-      : 'The roster could not be read. Nobody is marked in or out.'
-    : today.exceptions.length === 0 && (today.phase === 'open' || today.phase === 'unknown_hours')
-      ? `Everyone scheduled is in · ${today.countLine}`
-      : today.countLine;
 
   const lead = wrapUp ? (
     <div className="mb-3">
@@ -109,51 +78,24 @@ export default function ManagerDashboard({ view, chartWidth }: { view: ManagerVi
       )}
       {/* The performance block: the same one the owner reads, directly under the queue. */}
       <Slot order={5}>
-        <PerformanceSection
-          data={performance}
-          state={performanceState}
-          chartWidth={chartWidth}
-          supporting={(period, data) => (
-            <Panel title="Cancellations and no-shows" action={{ label: 'Missed appointments', to: '/management/missed-appointments' }}>
-              <MissedTrend period={period} data={data} width={chartWidth} />
-            </Panel>
-          )}
-        />
-      </Slot>
-      {/* Observations sit under the charts they read, with room to sit side by side. */}
-      <Slot order={6}>
-        <Panel title="Worth a look" description="What only a comparison over the recorded days can show. Observed, not predicted.">
-          <Noticing insights={insights} loading={performanceState === 'loading'} />
-        </Panel>
+        <PerformanceSection data={performance} state={performanceState} chartWidth={chartWidth} onPeriodChange={setPeriod} />
       </Slot>
     </>
   );
 
   const aside = (
     <>
-      {/* Today: exceptions, then one count line. Never a roster. */}
       <Slot order={3}>
-        <Panel
-          title="Today"
-          action={{ label: 'People', to: '/management/people' }}
-          description={today.scheduled > 0 ? `${today.scheduled} scheduled` : undefined}
-        >
-          {!wrapUp && today.exceptions.map(p => <ExceptionRow key={p.id} person={p} />)}
-          <p className={cn('py-2 text-[14px]', today.asOf === 'unavailable' ? 'text-[hsl(30_80%_32%)] dark:text-warning' : 'text-muted-foreground')}>{todayLine}</p>
-        </Panel>
+        <TodayPanel today={today} wrapUp={wrapUp} />
       </Slot>
       <Slot order={4}>
         <CloseoutPanel brief={brief} lastDay={home.lastDay} />
       </Slot>
-      <Slot order={7}>
-        <Panel title="Goals this month" action={{ label: 'Goals', to: '/goals' }}>
-          <GoalMeters meters={goalMeters} canSetGoals loading={performanceState === 'loading'} />
-        </Panel>
-      </Slot>
-      {spotlight && (
-        <Slot order={8}>
-          <Panel title={`Challenge · ${spotlight.reason}`} action={{ label: 'Goals', to: '/goals' }}>
-            <ChallengeCard goal={spotlight.goal} reviewHref={`/management?item=challenge_verify:${spotlight.goal.id}`} />
+      {/* The cancellation trend follows the period row in the main column. */}
+      {performance && period && (
+        <Slot order={6}>
+          <Panel title="Cancellations and no-shows" description={period.rangeLabel} action={{ label: 'Missed appointments', to: missedHref(period) }}>
+            <MissedTrend period={period} data={performance} width={chartWidth} />
           </Panel>
         </Slot>
       )}
@@ -180,12 +122,26 @@ export default function ManagerDashboard({ view, chartWidth }: { view: ManagerVi
       />
 
       <div className="mt-5">
-        <SummaryPanel summary={summary} title={wrapUp ? 'Wrap-up' : 'Right now'} />
+        <SummaryPanel
+          summary={summary}
+          title={wrapUp ? 'Wrap-up' : 'Right now'}
+          month={{
+            meters: goalMeters,
+            loading: performanceState === 'loading',
+            canSetGoals: true,
+            challenge: goal,
+            reviewHref: goal ? `/management?item=challenge_verify:${goal.id}` : undefined,
+          }}
+        />
       </div>
 
-      <HomeColumns className="mt-4" main={main} aside={aside} />
+      <HomeColumns className="mt-4" main={main} aside={aside} stickyAside />
 
       <div className="mt-4 space-y-4">
+        {/* Observations read the whole month; at full width they sit side by side. */}
+        <Panel title="Worth a look" description="What only a comparison over the recorded days can show. Observed, not predicted.">
+          <Noticing insights={insights} loading={performanceState === 'loading'} />
+        </Panel>
         <Lanes lanes={lanes} />
         <ToolsPanel groups={toolGroups} />
       </div>

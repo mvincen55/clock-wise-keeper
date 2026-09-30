@@ -14,7 +14,7 @@ import type {
 } from '@/lib/owner-pulse';
 import type { CloseDayStatus } from '@/lib/manager-pulse';
 import type { RolePulseItem } from '@/lib/member-pulse';
-import type { HomeBrief, HomeSummary, NeedsYou, StatusLine } from '@/lib/home-brief';
+import type { HomeBrief, HomeSummary, NeedsYou, StatusLine, TodayBand } from '@/lib/home-brief';
 import type { PerformanceData } from '@/lib/home-performance';
 import type { GoalMeter } from '@/lib/goal-progress';
 import type { HomeInsight } from '@/lib/home-insights';
@@ -24,7 +24,7 @@ export type { OfficeStatus, StaffingSummary };
 export type {
   DailyBrief, GoalBrief, MissedMonth, MonthDetail, MonthPaceLine, OwnerRecommendation, PulseFact,
 };
-export type { CloseDayStatus, RolePulseItem, HomeBrief, HomeSummary, NeedsYou, MyWork };
+export type { CloseDayStatus, RolePulseItem, HomeBrief, HomeSummary, NeedsYou, MyWork, TodayBand };
 export type { PerformanceData, GoalMeter, HomeInsight };
 
 /** Whether the performance rows are in hand, still loading, or failed to read. */
@@ -159,6 +159,12 @@ export type PersonStatus = {
   /** Short human status: "In", "Late 12m", "Out — PTO", "No punch". */
   status: string;
   tone: Tone;
+  /** Today's shift as the schedule prints it — "8:00 AM – 5:00 PM", "from 1:00 PM" — or null when no times are set. */
+  shift?: string | null;
+  /** Clocking from home today. */
+  remote?: boolean;
+  /** Minutes after the scheduled start the first punch landed; null when on time or not yet in. */
+  minutesLate?: number | null;
 };
 
 export type ProgressRow = {
@@ -196,8 +202,10 @@ export type OwnerView = PerformanceBlock & {
   toolGroups: ToolGroup[];
   /** Current office state — open, closed, nobody scheduled. */
   office: OfficeStatus;
-  /** The short summary: the office state and at most three priorities. */
+  /** The short summary: the office state, everyone on the roster, and at most three priorities. */
   summary: HomeSummary;
+  /** Today's exceptions and count line — the same band Manager Home reads. */
+  today: TodayBand;
   /** The latest closed-out day's facts, honestly labeled. */
   brief: DailyBrief | null;
   /** The latest closeout's state (sealed, not sealed, none on record), shown with its facts. */
@@ -234,6 +242,8 @@ export type ManagerView = PerformanceBlock & {
   brief: DailyBrief | null;
   /** What needs the manager personally; empty when there is nothing. */
   mine: MyWork;
+  /** The office challenge, shown once in the board's month row; moreCount collapses the rest. */
+  goal: GoalBrief | null;
 };
 
 export type MemberView = PerformanceBlock & {

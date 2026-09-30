@@ -122,14 +122,14 @@ const staffingOpen: StaffingSummary = {
   missingNow: 1,
   scheduledToday: 8,
   rows: [
-    { id: '1', name: 'Dana R.', status: 'In', tone: 'steady' },
-    { id: '2', name: 'Marcus T.', status: 'In · late 12m', tone: 'calm' },
-    { id: '3', name: 'Priya S.', status: 'In', tone: 'steady' },
-    { id: '4', name: 'Jo B.', status: 'Approved off', tone: 'calm' },
-    { id: '5', name: 'Ken W.', status: 'Not in yet', tone: 'attention' },
-    { id: '6', name: 'Alice N.', status: 'In — remote', tone: 'steady' },
-    { id: '7', name: 'Sam K.', status: 'Starts 1:00 PM', tone: 'calm' },
-    { id: '8', name: 'Rita M.', status: 'Clocked out', tone: 'calm' },
+    { id: '1', name: 'Dana R.', status: 'In', tone: 'steady', shift: '8:00 AM – 5:00 PM' },
+    { id: '2', name: 'Marcus T.', status: 'In · late 12m', tone: 'calm', shift: '8:00 AM – 5:00 PM', minutesLate: 12 },
+    { id: '3', name: 'Priya S.', status: 'In', tone: 'steady', shift: '7:30 AM – 4:30 PM' },
+    { id: '4', name: 'Jo B.', status: 'Approved off', tone: 'calm', shift: null },
+    { id: '5', name: 'Ken W.', status: 'Not in yet', tone: 'attention', shift: '8:00 AM – 5:00 PM' },
+    { id: '6', name: 'Alice N.', status: 'In — remote', tone: 'steady', shift: '8:00 AM – 5:00 PM', remote: true },
+    { id: '7', name: 'Sam K.', status: 'Starts 1:00 PM', tone: 'calm', shift: '1:00 PM – 7:00 PM' },
+    { id: '8', name: 'Rita M.', status: 'Clocked out', tone: 'calm', shift: '7:00 AM – 11:00 AM' },
   ],
   reviewCount: 1,
   reviewDetail: '1 no-punch day',
@@ -462,7 +462,7 @@ const openCloseouts = [
  * The closeouts on record for a scenario: one sealed row per recorded day
  * in its history, with the scenario's explicit rows (an unsealed
  * yesterday, a day under review) winning their dates. The queue, the
- * closeout panel and the closeout strip all read this one list.
+ * closeout panel and the board's missing-closeout line all read this one list.
  */
 function fxCloseouts(days: DayVitals[], explicit: { id: string; deposit_date: string; sealed_at: string | null; needs_manager_review: boolean }[]): { id: string; deposit_date: string; sealed_at: string | null; needs_manager_review: boolean }[] {
   const byDate = new Map(days.map(d => [d.date, { id: `fx-log-${d.date}`, deposit_date: d.date, sealed_at: `${d.date}T22:30:00Z`, needs_manager_review: false }]));
@@ -518,6 +518,7 @@ function makeOwner(args: OwnerScenarioArgs): OwnerView {
     toolGroups: toolsFor(ownerContext),
     office: args.staffing.office,
     summary: stateSummary({ office: args.staffing.office, today: band, needs, lastDay, payroll: args.payroll ?? null, payrollItems: needsNow.filter(i => i.payroll).length, todayDate: today, closeouts, calendar: args.calendar === undefined ? fxCalendar : args.calendar }),
+    today: band,
     brief: buildDailyBrief(pulse),
     lastDay,
     decisionCount: needsNow.length,
@@ -777,6 +778,7 @@ function makeManager(args: ManagerScenarioArgs): ManagerView {
     home,
     brief: buildDailyBrief(input),
     mine: args.mine ?? NO_WORK,
+    goal: buildGoalBrief(goals, input.today),
     ...block,
   };
 }

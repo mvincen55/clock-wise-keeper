@@ -61,11 +61,14 @@ describe('owner — clear and closed states', () => {
 });
 
 describe('manager — empty office', () => {
-  it('a clear queue says so once, the challenge is not forced onto Home, no floor claim off-hours', () => {
+  it('a clear queue says so once; with no challenge running the board offers the door once; no floor claim off-hours', () => {
     const { container } = renderView(<ManagerDashboard view={managerNewFixture} />);
     expect(screen.getByText(/Nothing is waiting on you\./)).toBeInTheDocument();
-    // No challenge is running: Office → Goals owns that state, Home says nothing.
-    expect(container.textContent).not.toMatch(/Challenge/);
+    // No challenge is running: the board's month row says so once and points at
+    // Office → Goals, which owns that state; nothing else on Home invents one.
+    expect(screen.getAllByText(/No office goal is running\./)).toHaveLength(1);
+    expect(screen.getByRole('link', { name: /Choose a goal/ })).toHaveAttribute('href', '/goals');
+    expect(screen.queryByRole('region', { name: /Challenge/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/on the floor/i)).not.toBeInTheDocument();
     expect(container.textContent).not.toMatch(/not in yet/i);
   });

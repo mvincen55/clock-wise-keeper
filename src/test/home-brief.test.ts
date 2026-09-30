@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import type { AttentionItem } from '@/lib/attention';
 import type { StaffingSummary } from '@/components/dashboard/staffing';
 import type { GoalBrief, MonthPaceLine } from '@/lib/owner-pulse';
-import { buildHomeBrief, closeoutStrip, lastDayLine, needsYou, paceLine, rosterGroups, spotlight, stateSummary, todayBand } from '@/lib/home-brief';
+import { buildHomeBrief, lastDayLine, needsYou, paceLine, rosterGroups, spotlight, stateSummary, todayBand } from '@/lib/home-brief';
 
 const item = (over: Partial<AttentionItem>): AttentionItem => ({
   key: 'pto_request:p1', kind: 'pto_request', verb: 'decide', recordTable: 'pto_requests', recordId: 'p1',
@@ -104,6 +104,18 @@ describe('the roster line', () => {
     expect(s.who.map(g => g.label)).toEqual(['In', 'Not in yet', 'Later', 'Off']);
     expect(rosterGroups([{ id: 'x', name: 'Pat Q.', status: 'Scheduled today', tone: 'calm' }])).toEqual([]);
   });
+  it('each person on the board carries the facts a hover shows and the link to their record', () => {
+    const [inGroup] = rosterGroups([
+      { id: 'e2', name: 'Marcus T.', status: 'In · late 12m', tone: 'calm', shift: '8:00 AM – 5:00 PM', minutesLate: 12 },
+      { id: 'e7', name: 'Alice N.', status: 'In — remote', tone: 'steady', shift: 'from 8:00 AM', remote: true },
+      { id: 'e1', name: 'Dana R.', status: 'In', tone: 'steady' },
+    ]);
+    expect(inGroup.people).toEqual([
+      { id: 'e2', name: 'Marcus T.', note: 'late 12m', tone: 'calm', status: 'In · late 12m', shift: '8:00 AM – 5:00 PM', remote: false, minutesLate: 12, href: '/management/people/e2' },
+      { id: 'e7', name: 'Alice N.', note: 'remote', tone: 'steady', status: 'In — remote', shift: 'from 8:00 AM', remote: true, minutesLate: null, href: '/management/people/e7' },
+      { id: 'e1', name: 'Dana R.', note: null, tone: 'steady', status: 'In', shift: null, remote: false, minutesLate: null, href: '/management/people/e1' },
+    ]);
+  });
   it('after close it names who is still in and who is done, from the snapshot', () => {
     const snapshot = [
       { employee_id: 'e5', user_id: 'u5', display_name: 'Sam K.', status_code: 'ok', is_late: false, is_absent: false, is_incomplete: true, has_punches: true, is_remote: false, minutes_late: 0, has_day_off: false, office_closed: false, is_scheduled_day: true, schedule_expected_start: '13:00:00', schedule_expected_end: '17:00:00', tardy_approval_status: null },
@@ -138,28 +150,6 @@ describe('an office day with no closeout', () => {
       payroll: null, todayDate: '2026-09-21', closeouts: [closeout('2026-09-15')], calendar: weekdays,
     });
     expect(s.lines.map(l => l.id)).toEqual([]);
-    // The strip still shows the gap the queue names.
-    expect(s.closeoutStrip.slice(-5).map(c => [c.date, c.state])).toEqual([['2026-09-15', 'sealed'], ['2026-09-16', 'missing'], ['2026-09-17', 'missing'], ['2026-09-18', 'missing'], ['2026-09-21', 'today']]);
-  });
-});
-
-describe('the closeout strip', () => {
-  const weekdays = { closedDates: new Set<string>(['2026-09-07']), openDates: new Set<string>() };
-  const row = (deposit_date: string, sealed = true) => ({ id: `c-${deposit_date}`, deposit_date, sealed_at: sealed ? 'x' : null, needs_manager_review: false });
-  it('shows the last office days through today with each day’s record state, skipping closures and weekends', () => {
-    const cells = closeoutStrip({ today: '2026-09-21', calendar: weekdays, days: 5, closeouts: [row('2026-09-15'), row('2026-09-16'), row('2026-09-18', false)] });
-    expect(cells.map(c => [c.date, c.state])).toEqual([
-      ['2026-09-15', 'sealed'], ['2026-09-16', 'sealed'], ['2026-09-17', 'missing'], ['2026-09-18', 'saved'], ['2026-09-21', 'today'],
-    ]);
-    expect(cells[2]).toMatchObject({ label: 'Thu, Sep 17 · no closeout', href: '/deposit-log?date=2026-09-17' });
-    expect(cells[4].label).toBe('Mon, Sep 21 · today, in progress');
-    // Labor Day (Sep 7) is a closure: never on the strip, never "missing".
-    expect(closeoutStrip({ today: '2026-09-09', calendar: weekdays, days: 4, closeouts: [] }).map(c => c.date)).toEqual(['2026-09-03', '2026-09-04', '2026-09-08', '2026-09-09']);
-  });
-  it('is empty without the office calendar, and today reads as recorded once its closeout exists', () => {
-    expect(closeoutStrip({ today: '2026-09-21', calendar: null, closeouts: [row('2026-09-18')] })).toEqual([]);
-    const cells = closeoutStrip({ today: '2026-09-21', calendar: weekdays, days: 2, closeouts: [row('2026-09-21', false)] });
-    expect(cells.map(c => c.state)).toEqual(['missing', 'saved']);
   });
 });
 

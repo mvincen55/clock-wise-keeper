@@ -1,8 +1,9 @@
 /**
  * The manager Home briefing: a short, readable summary of genuine
- * priorities (never a crowded sentence), the Needs you queue, today's
- * exceptions and a count line, the last closeout, the challenge only when
- * noteworthy, and a wrap-up state after close.
+ * priorities (never a crowded sentence) with everyone on the roster, the
+ * Needs you queue, today's exceptions and a count line, the last closeout,
+ * the challenge (its state, and why it is noteworthy when it is), and a
+ * wrap-up state after close.
  *
  * Pure: every input is a recorded fact or a derived state some other module
  * owns. Nothing here decides anything; every row navigates.
@@ -25,8 +26,25 @@ import { listOfficeDays, type OfficeDayCalendar } from '@/lib/office-days';
 
 export type SummaryLine = { id: string; text: string; href?: string; tone: Tone };
 
-/** One person on the board: name, a short note where it matters, and their own tone. */
-export type RosterPerson = { id: string; name: string; note: string | null; tone: Tone };
+/**
+ * One person on the board: name, a short note where it matters, their own
+ * tone, and the facts a hover shows — the full status, today's shift,
+ * remote, minutes late — with the link to their record in People.
+ */
+export type RosterPerson = {
+  id: string;
+  name: string;
+  note: string | null;
+  tone: Tone;
+  /** The full status line: "In · late 12m", "Starts 1:00 PM". */
+  status: string;
+  /** "8:00 AM – 5:00 PM", or null when the schedule has no times. */
+  shift: string | null;
+  remote: boolean;
+  minutesLate: number | null;
+  /** The person's record in People. */
+  href: string;
+};
 
 /** One group of the roster board: "In: Dana R., Marcus T. (late 12m)". */
 export type RosterGroup = {
@@ -38,15 +56,6 @@ export type RosterGroup = {
   tone: Tone;
 };
 
-/** One office day on the closeout strip: sealed, saved but not sealed, missing, or today in progress. */
-export type CloseoutDayCell = {
-  date: string;
-  state: 'sealed' | 'saved' | 'missing' | 'today';
-  /** "Mon, Sep 28 · no closeout" */
-  label: string;
-  href: string;
-};
-
 /** The short summary at the top of Home: the office state, who is where, and at most three priorities. */
 export type HomeSummary = {
   /** "Open · 4 of 8 in", "Closed for the day", "Not open yet". */
@@ -56,13 +65,8 @@ export type HomeSummary = {
   tone: Tone;
   /** Who is in, not in yet, starting later, off, done — by name. */
   who: RosterGroup[];
-  /** The last office days' closeout states, oldest first; empty without the office calendar. */
-  closeoutStrip: CloseoutDayCell[];
   lines: SummaryLine[];
 };
-
-/** How many office days the closeout strip shows. */
-export const CLOSEOUT_STRIP_DAYS = 15;
 
 export type NeedsYou = {
   /** The first three of the same list Attention shows. */
@@ -250,7 +254,10 @@ export const MAX_SUMMARY_LINES = 3;
  */
 export function rosterGroups(people: PersonStatus[]): RosterGroup[] {
   const groups: Record<RosterGroup['id'], RosterPerson[]> = { in: [], still_in: [], not_yet: [], later: [], absent: [], off: [], done: [] };
-  const add = (id: RosterGroup['id'], p: PersonStatus, note: string | null = null) => groups[id].push({ id: p.id, name: p.name, note, tone: p.tone });
+  const add = (id: RosterGroup['id'], p: PersonStatus, note: string | null = null) => groups[id].push({
+    id: p.id, name: p.name, note, tone: p.tone, status: p.status,
+    shift: p.shift ?? null, remote: p.remote ?? false, minutesLate: p.minutesLate ?? null, href: `/management/people/${p.id}`,
+  });
   for (const p of people) {
     const s = p.status;
     if (s === 'Still clocked in') add('still_in', p);
@@ -268,26 +275,6 @@ export function rosterGroups(people: PersonStatus[]): RosterGroup[] {
   return order
     .filter(([id]) => groups[id].length > 0)
     .map(([id, label, tone]) => ({ id, label, tone, people: groups[id], names: groups[id].map(x => (x.note ? `${x.name} (${x.note})` : x.name)) }));
-}
-
-/**
- * The closeout strip: the last office days through today, each with its
- * record state. A day the calendar does not list is not on the strip (it
- * cannot be "missing"); today shows as in progress until its closeout is
- * saved. Empty without the office calendar.
- */
-export function closeoutStrip(input: { closeouts: CloseoutFact[]; calendar: OfficeDayCalendar | null | undefined; today: string; days?: number }): CloseoutDayCell[] {
-  const { closeouts, calendar, today } = input;
-  if (!calendar) return [];
-  const n = input.days ?? CLOSEOUT_STRIP_DAYS;
-  const byDate = new Map(closeouts.map(c => [c.deposit_date, c]));
-  const dates = listOfficeDays(shiftDate(today, -Math.max(n * 3, 30)), today, calendar).slice(-n);
-  return dates.map(date => {
-    const c = byDate.get(date);
-    const state: CloseoutDayCell['state'] = c ? (c.sealed_at ? 'sealed' : 'saved') : date === today ? 'today' : 'missing';
-    const word = state === 'sealed' ? 'sealed' : state === 'saved' ? 'saved, not sealed' : state === 'today' ? 'today, in progress' : 'no closeout';
-    return { date, state, label: `${shortDay(date)} · ${word}`, href: `/deposit-log?date=${date}` };
-  });
 }
 
 const shortDay = (date: string) => formatDate(date).split(', ').slice(0, 2).join(', ');
@@ -316,7 +303,6 @@ export function stateSummary(input: {
 }): HomeSummary {
   const { office, today, needs, lastDay, payroll, inbox, todayDate } = input;
   const who = today.asOf ? [] : rosterGroups(today.people);
-  const strip = closeoutStrip({ closeouts: input.closeouts ?? [], calendar: input.calendar, today: todayDate });
   const phase = office.phase;
   const lines: SummaryLine[] = [];
   const push = (l: SummaryLine) => { if (lines.length < MAX_SUMMARY_LINES) lines.push(l); };
@@ -395,7 +381,7 @@ export function stateSummary(input: {
 
   // Routine status (someone not in yet, someone starting later) belongs to
   // the Today panel, calmly; it is not a priority and is not repeated here.
-  return { headline, detail, tone, who, closeoutStrip: strip, lines };
+  return { headline, detail, tone, who, lines };
 }
 
 /** The Attention lists behind Needs you — shared by Owner and Manager Home. */
