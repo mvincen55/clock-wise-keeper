@@ -333,13 +333,13 @@ describe('insurance overrides, balances and courtesies', () => {
 });
 
 describe('automatic naming', () => {
-  it('runs after the quiet period with vetted codes only, applies names on the policy path without overwriting staff wording, and retries visibly', async () => {
+  it('writes the summary without replacing policy milestones or staff wording, and retries visibly', async () => {
     vi.useFakeTimers();
     mocks.templates = [LIVE_TEMPLATES[0]];
     mocks.invoke.mockImplementation(async (name: string, options: { body: Record<string, unknown> }) => {
       if (name !== 'name-visits') return { data: {} };
       const slots = options.body.slots as string[];
-      return { data: { names: slots.map((_, i) => `Suggested ${i + 1}`), treatment: 'We will place a porcelain crown.' } };
+      return { data: { names: slots.map(() => 'On Crown Delivery'), treatment: 'We will place a porcelain crown.' } };
     });
     mount();
     fireEvent.change(screen.getByLabelText('Patient Name'), { target: { value: 'Synthetic Patient' } });
@@ -349,6 +349,8 @@ describe('automatic naming', () => {
     fireEvent.change(feeInput('JANE DOE'), { target: { value: '$10.00' } });
     fireEvent.click(screen.getByText('Amounts & Payment Plan'));
     fireEvent.change(screen.getAllByLabelText(/^Payment label /)[0], { target: { value: 'Staff wording stays' } });
+    const ruleLabels = screen.getAllByLabelText(/^Payment label /).map(el => (el as HTMLInputElement).value);
+    const ruleAmounts = screen.getAllByLabelText(/^Payment amount /).map(el => (el as HTMLInputElement).value);
     await act(async () => { vi.advanceTimersByTime(2600); });
     await act(async () => { await Promise.resolve(); });
     const call = mocks.invoke.mock.calls.find(c => c[0] === 'name-visits');
@@ -361,8 +363,9 @@ describe('automatic naming', () => {
     expect(screen.getByLabelText('Treatment description (prints on the form)')).toHaveValue('We will place a porcelain crown.');
     const labels = screen.getAllByLabelText(/^Payment label /).map(el => (el as HTMLInputElement).value);
     expect(labels[0]).toBe('Staff wording stays');
-    expect(labels.slice(1).every(label => label.startsWith('Suggested'))).toBe(true);
-    expect(screen.getByText(/Treatment summary and payment names are current/)).toBeTruthy();
+    expect(labels).toEqual(ruleLabels);
+    expect(screen.getAllByLabelText(/^Payment amount /).map(el => (el as HTMLInputElement).value)).toEqual(ruleAmounts);
+    expect(screen.getByText(/Treatment summary is current/)).toBeTruthy();
     // A transient failure shows a retry state instead of silence, and the manual button works.
     mocks.invoke.mockResolvedValue({ error: { name: 'FunctionsHttpError', message: 'non-2xx', context: { status: 502, json: async () => ({ error: 'AI request failed' }) } } });
     fireEvent.change(within(lineOf('D2740')).getByPlaceholderText('#'), { target: { value: '3' } });
@@ -393,6 +396,20 @@ describe('automatic naming', () => {
 });
 
 describe('printing and privacy', () => {
+  it('focusing an unchanged payment does not freeze the schedule or block a later fee correction', () => {
+    mocks.templates = [LIVE_TEMPLATES[0]];
+    mount();
+    typeCode(0, 'D2740');
+    fireEvent.click(screen.getByText('Amounts & Payment Plan'));
+    const payment = screen.getAllByLabelText(/^Payment amount /)[0];
+    fireEvent.focus(payment);
+    fireEvent.blur(payment);
+    fireEvent.change(feeInput('D2740'), { target: { value: '$2,000.00' } });
+    expect(screen.queryByText(/Preview paused/)).toBeNull();
+    expect(printButton()).toBeEnabled();
+    expect(screen.getAllByLabelText(/^Payment amount /).map(el => (el as HTMLInputElement).value))
+      .toEqual(['666.67', '666.67', '666.66']);
+  });
   it('print modes keep the office copy out of a patient-only job, printing does not erase the form, and Clear does', async () => {
     mocks.templates = [LIVE_TEMPLATES[0]];
     const print = vi.fn();
@@ -408,8 +425,14 @@ describe('printing and privacy', () => {
     await pick('What to print', 'Office copy only (internal)');
     expect(document.querySelector('.fof-print-root .fof-office-page')).toBeTruthy();
     expect(document.querySelectorAll('.fof-print-root .fof-sheet')).toHaveLength(1);
+    // A patient preview warning does not belong to this office-only print job.
+    const previewWarning = document.createElement('div');
+    previewWarning.className = 'fof-layout-review';
+    previewWarning.textContent = 'Patient layout needs review';
+    document.querySelector('[data-testid="preview"]')!.append(previewWarning);
     fireEvent.click(printButton());
     expect(print).toHaveBeenCalledTimes(1);
+    previewWarning.remove();
     expect(screen.getByLabelText('Patient Name')).toHaveValue('Synthetic Patient');
     expect(screen.getByRole('button', { name: 'Reprint' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Clear form' }));

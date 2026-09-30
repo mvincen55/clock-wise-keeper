@@ -58,7 +58,6 @@ const failure = () =>
 const midpoint = (word: OcrWord) => (word.bbox.y0 + word.bbox.y1) / 2;
 const center = (word: OcrWord) => (word.bbox.x0 + word.bbox.x1) / 2;
 const plain = (text: string) => text.trim().replace(/[():.]/g, '').toLowerCase();
-const percent = (word: OcrWord) => `${Math.round(word.confidence)}%`;
 const dentalCode = /^D\d{4}$/i;
 // A CDT code (with an optional office suffix), a numeric office code, or a
 // short letters-plus-digits office code. A word, a name or a sentence
@@ -202,7 +201,7 @@ export function parseTreatmentWords(words: OcrWord[], codeNames: Record<string, 
       lower();
     }
     if (candidate.confidence < CONFIDENCE_FLOOR) {
-      issues.push(`The code ${code} was read at ${percent(candidate)} confidence (below ${CONFIDENCE_FLOOR}%); compare it with the screenshot.`);
+      issues.push(`Check code ${code} against the screenshot; the text is unclear.`);
       lower();
     }
     const y = midpoint(candidate);
@@ -239,7 +238,7 @@ export function parseTreatmentWords(words: OcrWord[], codeNames: Record<string, 
       }
       const weakest = values.reduce((low, word) => (word.confidence < low.confidence ? word : low));
       if (weakest.confidence < CONFIDENCE_FLOOR) {
-        issues.push(`The ${label} amount "${raw}" was read at ${percent(weakest)} confidence (below ${CONFIDENCE_FLOOR}%); compare it with the screenshot.`);
+        issues.push(`Check the ${label} amount "${raw}" against the screenshot; the text is unclear.`);
         lower();
       }
       return number;
@@ -254,7 +253,7 @@ export function parseTreatmentWords(words: OcrWord[], codeNames: Record<string, 
     } else if (toothValue) {
       const weakest = toothWords.reduce((low, word) => (word.confidence < low.confidence ? word : low));
       if (weakest.confidence < CONFIDENCE_FLOOR) {
-        issues.push(`The tooth number "${toothValue}" was read at ${percent(weakest)} confidence (below ${CONFIDENCE_FLOOR}%); compare it with the screenshot.`);
+        issues.push(`Check tooth number "${toothValue}" against the screenshot; the text is unclear.`);
         lower();
       }
     }

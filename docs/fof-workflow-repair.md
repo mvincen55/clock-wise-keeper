@@ -7,6 +7,43 @@ This note is the record of the Purple Envelope Financial Options Form (FOF) repa
 what was broken in the live app, what changed, which office policy the numbers follow,
 how it was proven, and what a human still has to do to release it.
 
+## Follow-up 2026-09-30: policy wording and false print blockers
+
+Code regressions reproduced against `a490245`:
+
+- Policy schedules sent generic "Payment 1" slots to `name-visits` and applied
+  the returned names over the actual collection milestones. A response naming
+  every slot "On Crown Delivery" replaced scheduling and preparation wording.
+  The policy path now uses the endpoint only for its treatment summary. Payment
+  labels remain attached to the engine's events, with local staff edits supported.
+- Focusing and leaving an unchanged payment amount created an amount override.
+  A subsequent fee correction made it stale and paused printing. Equal cent
+  values, including formatting-only edits, no longer create overrides.
+- The Print action searched every preview for layout errors, allowing a patient
+  preview warning to block an office-only job. It now measures the selected print
+  portal at paper width and checks only that job before opening the dialog.
+  Oversized patient jobs still require layout review and are checked even when
+  the on-screen preview is showing the office copy.
+- Screenshot warnings now identify the unclear code, tooth or amount in plain
+  language. Recognition percentages and the "Low confidence" badge are removed
+  from the workflow; row review and the local-only reader remain in place.
+
+Validation: the four regression assertions failed before the fixes; 178 focused
+FOF/payment/import/print tests pass afterward, including hidden-portal preparation,
+Harelick examples and existing reconciliation checks. Typecheck and production
+build pass. Changed TypeScript files have zero lint errors and four existing
+warnings. The repository-wide lint report remains non-blocking with existing
+errors. Dependencies were installed with npm without changing the Bun lockfile;
+CI remains the frozen-lockfile gate. Synced the unrelated Home update `a70b27e`.
+
+Release status: frontend changes only; no database or Edge Function deployment is
+required. Not merged or published as part of this note. A real browser print/PDF
+check remains pending: Chromium was installed, but the execution sandbox denied
+the socket required to start it. Before publishing, verify patient-only,
+office-only, and combined US Letter output, reprint after a fee edit, and the
+existing $8,173 work-up/implant/restoration fixture. Do not treat mocked DOM tests
+as visual print verification.
+
 ## Root causes found in the live app
 
 1. **Saved plans and fee schedules were disconnected from the builder.**

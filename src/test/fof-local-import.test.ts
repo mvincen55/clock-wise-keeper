@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CONFIDENCE_FLOOR, normalizeCodeToken, normalizeMoneyToken, ocrScale, parseTreatmentText, parseTreatmentWords, REVIEW_ROW_LIMIT, toGrayscale, visitFromHeading } from '@/lib/fof/local-treatment-import';
+import { normalizeCodeToken, normalizeMoneyToken, ocrScale, parseTreatmentText, parseTreatmentWords, REVIEW_ROW_LIMIT, toGrayscale, visitFromHeading } from '@/lib/fof/local-treatment-import';
 import pmsPlanWords from './fixtures/pms-plan-ocr-words.json';
 import type { OcrWord } from '@/lib/schedule-reader/types';
 const word = (text: string, x: number, y: number, confidence = 95): OcrWord => ({ text, confidence, bbox: { x0:x-25, x1:x+25, y0:y, y1:y+20 } });
@@ -34,13 +34,14 @@ describe('local treatment screenshot parser', () => {
     expect(result.rows[1].fee).toBeNull();
     expect(result.rows[1].issues.join(' ')).toContain('The Fee amount was read as "9O0.O"');
   });
-  it('says what was read and how sure the reader was when a cell is below the confidence floor', () => {
+  it('asks staff to check specific uncertain values without exposing recognition scores', () => {
     const second=row(100); second[0].confidence=39; second[3].confidence=58; second[1].confidence=50;
     const result=parseTreatmentWords([...header,...row(60),...second],{D2740:'Crown'});
     const issues=result.rows[1].issues.join(' ');
-    expect(issues).toContain(`The code D2740 was read at 39% confidence (below ${CONFIDENCE_FLOOR}%)`);
-    expect(issues).toContain('The Fee amount "$900.00" was read at 58% confidence');
-    expect(issues).toContain('The tooth number "8" was read at 50% confidence');
+    expect(issues).toContain('Check code D2740 against the screenshot');
+    expect(issues).toContain('Check the Fee amount "$900.00" against the screenshot');
+    expect(issues).toContain('Check tooth number "8" against the screenshot');
+    expect(issues).not.toMatch(/confidence|\d+%/i);
   });
   it('corrects OCR letter-for-digit confusions in codes, amounts, teeth and dates, and says so for codes', () => {
     expect(normalizeCodeToken('D6O58')).toEqual({ code: 'D6058', corrected: true });
