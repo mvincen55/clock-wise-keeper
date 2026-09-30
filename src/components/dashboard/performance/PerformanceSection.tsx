@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { money } from '@/lib/owner-pulse';
 import { daysInMonthOf, metricPace, paceBasisClause, paceFraction, type PaceBasis } from '@/lib/metric-pace';
@@ -30,6 +30,12 @@ export type PerformanceSectionProps = {
   state: PerformanceState;
   /** Supporting operational visual under the chart, scoped to the same period. */
   supporting?: (period: Period, data: PerformanceData) => ReactNode;
+  /**
+   * The period in force, whenever it changes — so a caller can scope a
+   * visual that sits elsewhere on the page (the cancellation trend in the
+   * sidebar) to the same period row.
+   */
+  onPeriodChange?: (period: Period) => void;
   compact?: boolean;
   /** Fixed chart width for deterministic rendering in tests. */
   chartWidth?: number;
@@ -239,6 +245,13 @@ export function PerformanceSection(props: PerformanceSectionProps) {
       : null;
     return { period, choice, window, missed, tiles: stripTiles({ data, period, window, choice, missed }) };
   }, [data, activePreset, preferred]);
+
+  const onPeriodChange = useRef(props.onPeriodChange);
+  onPeriodChange.current = props.onPeriodChange;
+  const period = model?.period ?? null;
+  useEffect(() => {
+    if (period) onPeriodChange.current?.(period);
+  }, [period]);
 
   const shown = { primary: !!data?.visibility.production, secondary: !!data?.visibility.collections };
   const chartVisible = shown.primary || shown.secondary;

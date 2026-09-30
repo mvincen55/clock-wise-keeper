@@ -254,17 +254,23 @@ describe('one number, one home', () => {
   it('the month figure lives in the strip and the meter; nothing else repeats it', () => {
     const { container } = renderView(<OwnerDashboard view={ownerClosedFixture} chartWidth={800} />);
     fireEvent.click(screen.getByRole('button', { name: 'This month' }));
-    container.querySelectorAll('details, ul').forEach(el => el.remove());
+    container.querySelectorAll('details, ul:not([aria-label="Goals this month"])').forEach(el => el.remove());
     const collected = container.textContent!.match(/\$14,050/g) ?? [];
-    expect(collected).toHaveLength(2); // the period tile and the goal meter
+    expect(collected).toHaveLength(2); // the period tile and the goal meter in the board
   });
 });
 
 describe('office states', () => {
-  it('open office: live staffing stays available, quietly, and routine lateness is calm', () => {
+  it('open office: the roster lives on the board, once, and routine lateness is calm there', () => {
     renderView(<OwnerDashboard view={ownerFixture} />);
-    expect(screen.getByText('Staffing today')).toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: 'Staffing today' })).getByText('In · late 12m')).toHaveClass('text-muted-foreground');
+    expect(screen.queryByText('Staffing today')).not.toBeInTheDocument();
+    const board = screen.getByRole('list', { name: 'Who is where' });
+    expect(within(board).getByText('In · late 12m')).toHaveClass('text-muted-foreground');
+    expect(screen.getAllByText('Marcus T.')).toHaveLength(1);
+    // Today keeps the exceptions and the count line only.
+    const today = screen.getByRole('region', { name: 'Today' });
+    expect(within(today).queryByText('Dana R.')).not.toBeInTheDocument();
+    expect(within(today).getByText('Ken W.')).toBeInTheDocument();
   });
 
   it('closed day: most recent business day labeled, no manufactured urgency', () => {

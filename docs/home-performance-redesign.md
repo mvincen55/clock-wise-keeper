@@ -120,35 +120,46 @@ count, so it is not shown as a daily series.
 ## 6. Roles
 
 Every role reads the same order: what needs my action → status → trends →
-tools. The page is two columns that flow independently (`HomeColumns`): the
-main column holds the queue and, directly beneath it, the period filters,
-the strip, the chart, the cancellation trend and the observations; the
-sidebar holds today, the latest closeout with its state, the goal meters
-and the challenge. Under `lg` the columns dissolve into one, actions
-first.
+tools. An admin Home opens on a board (`SummaryPanel`): the office state,
+everyone on the roster as a chip — hover or focus shows the person's
+schedule for today (the shift, remote, minutes late), a click opens their
+record in People — at most three genuine priorities, then the month: the
+production and collections meters on the office-day pace and the office
+challenge with its state, above the fold. Under the board the page is two
+columns that flow independently (`HomeColumns`): the main column holds the
+queue and, directly beneath it, the period filters, the strip and the chart;
+the sidebar holds Today (exceptions and one count line, never the roster),
+the latest closeout with its state, and the cancellation trend scoped to the
+same period row, and stays in view while the main column scrolls. Worth a
+look runs at full width under both columns. Under `lg` the columns dissolve
+into one, actions first. Closeout completeness is not tracked on Home as a
+strip: an office day with no closeout reaches the board as a priority line
+(when it is the gap since the last closeout) and as the meters' partial-data
+label with the fix, and the queue carries "Close the Day is behind".
 
 - **Owner** — header (state chip, role context, Close the Day, Attention · n),
-  "Right now" (headline, everyone on the roster as a chip with their own
-  status, the last 15 office days' closeout states as a strip, and at most
-  three genuine priorities: a degraded
-  source, someone absent after their shift, no closeout on record, an office
-  day since the last closeout with none of its own, payroll due within a
-  week, the inbox), Needs you (unique actionable items, repeated
-  kinds folded into expandable groups that still open each record, waiting
-  and parked apart) with Mine (the owner's own items) beneath, the latest
-  closeout's facts, the challenge, staffing exceptions, the performance block
-  with goal meters, Worth a look, the cancellation trend, one tools area.
-- **Manager** — the same, with Today (exceptions only, one count line) and a
-  daily brief; routine lateness never headlines: attendance reaches the queue
-  only as an excuse request (decide) or an attendance report (meet and sign).
-  The manager's own accountability record stays below (deep link `?record=`
-  preserved).
+  the board ("Right now": headline, the roster chips, the priorities: a
+  degraded source, someone absent after their shift, no closeout on record,
+  an office day since the last closeout with none of its own, payroll due
+  within a week, the inbox; then "This month": the two meters and the
+  challenge), Needs you (unique actionable items, repeated kinds folded into
+  expandable groups that still open each record, waiting and parked apart)
+  with Mine (the owner's own items) beneath, the performance block; in the
+  sidebar Today (attendance facts to review, exceptions, the count line), the
+  latest closeout's facts, the cancellation trend; Worth a look; one tools
+  area.
+- **Manager** — the same board and columns, with a daily brief; routine
+  lateness never headlines: attendance reaches the queue only as an excuse
+  request (decide) or an attendance report (meet and sign). After close the
+  board reads "Wrap-up" and Needs you becomes Before you leave. The manager's
+  own accountability record stays below (deep link `?record=` preserved).
 - **Team member** — My next move, My work (now / waiting on someone else),
   For my role, the office goal, My time & PTO with the late-arrival standing
   line ("2 of 3 unexcused late arrivals in the last 30 days · 1 excuse request
   pending", a count against the office rule, never a verdict), Our office
-  pulse (only metrics whose visibility is `everyone`), tools. No Attention, no
-  observations about staff, no report history, no rankings.
+  pulse (only metrics whose visibility is `everyone`) with the shared goal
+  meters, tools. No roster, no Attention, no observations about staff, no
+  report history, no rankings.
 - **Tools** — one area for every role: the assigned role first, roles covered
   today, management (members only through a grant, and only the granted
   tools), backup roles ("Backup — can cover, not assigned today") behind "More

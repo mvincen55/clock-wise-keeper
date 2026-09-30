@@ -27,8 +27,14 @@ function verdictTone(m: GoalMeter): Tone {
   }
 }
 
-export function GoalMeterRow({ meter, canSetGoals }: { meter: GoalMeter; canSetGoals: boolean }) {
+/**
+ * One meter. `stack` (default) is a ruled row in a list; `tile` is the
+ * same meter as a card cell in the month row at the top of Home — no rule,
+ * a smaller figure, the same bar, caption, and caveats.
+ */
+export function GoalMeterRow({ meter, canSetGoals, variant = 'stack' }: { meter: GoalMeter; canSetGoals: boolean; variant?: 'stack' | 'tile' }) {
   const tone = verdictTone(meter);
+  const tile = variant === 'tile';
   const pct = meter.pct ?? 0;
   const fill = Math.min(1, pct) * 100;
   const expected = meter.expectedToDateCents !== null && meter.targetCents > 0 ? Math.min(1, meter.expectedToDateCents / meter.targetCents) * 100 : null;
@@ -43,10 +49,10 @@ export function GoalMeterRow({ meter, canSetGoals }: { meter: GoalMeter; canSetG
   ];
 
   return (
-    <div className="border-b border-border py-4 first:pt-1 last:border-b-0">
+    <div className={tile ? 'min-w-0' : 'border-b border-border py-4 first:pt-1 last:border-b-0'}>
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
         <div className="flex items-center gap-2">
-          <p className="text-[15px] font-semibold">{meter.label}</p>
+          <p className={tile ? 'text-[13px] font-semibold text-muted-foreground' : 'text-[15px] font-semibold'}>{meter.label}</p>
           <InfoPopover label={`About the ${meter.label.toLowerCase()} goal`}>
             <p className="mb-2 text-[14px] font-semibold text-foreground">{meter.label} · {meter.monthLabel}</p>
             <InfoList rows={info} />
@@ -62,9 +68,9 @@ export function GoalMeterRow({ meter, canSetGoals }: { meter: GoalMeter; canSetG
 
       {meter.state === 'progress' && meter.achievedCents !== null ? (
         <>
-          <p className="mt-2 font-display text-[1.65rem] font-bold leading-none tabular-nums tracking-[-0.02em]">
+          <p className={cn('mt-2 font-display font-bold leading-none tabular-nums tracking-[-0.02em]', tile ? 'text-[1.4rem]' : 'text-[1.65rem]')}>
             {money(meter.achievedCents)}
-            <span className="ml-1.5 text-[0.95rem] font-semibold text-muted-foreground">of {money(meter.targetCents)}</span>
+            <span className={cn('ml-1.5 font-semibold text-muted-foreground', tile ? 'text-[0.9rem]' : 'text-[0.95rem]')}>of {money(meter.targetCents)}</span>
           </p>
           <div
             className="relative mt-3 h-2.5 w-full rounded-full bg-muted"
@@ -84,23 +90,23 @@ export function GoalMeterRow({ meter, canSetGoals }: { meter: GoalMeter; canSetG
               />
             )}
           </div>
-          <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-[13px] text-muted-foreground">
+          <div className={cn('mt-1.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-[13px] text-muted-foreground', tile && 'hidden [@container(min-width:40rem)]:flex')}>
             <span>{Math.round(pct * 100)}% · {meter.overCents ? `${money(meter.overCents)} over` : `${money(meter.remainingCents ?? 0)} to go`}</span>
             {meter.expectedToDateCents !== null && !meter.overCents && <span>Expected by now {money(meter.expectedToDateCents)}</span>}
           </div>
-          <p className="mt-1.5 text-[13px] leading-snug text-muted-foreground">{meter.detail}</p>
+          <p className={cn('mt-1.5 text-[13px] leading-snug text-muted-foreground', tile && 'hidden [@container(min-width:40rem)]:block')}>{meter.detail}</p>
           {meter.verdict === 'incomplete' && (
             <ActionLink to="/deposit-log" variant="text" size="sm" className="mt-1.5">Complete the records</ActionLink>
           )}
         </>
       ) : meter.state === 'no_data' ? (
         <>
-          <p className="mt-2 text-[1.2rem] font-semibold leading-none text-muted-foreground">Nothing recorded yet</p>
+          <p className={cn('mt-2 font-semibold leading-none text-muted-foreground', tile ? 'text-[1.05rem]' : 'text-[1.2rem]')}>Nothing recorded yet</p>
           <p className="mt-1.5 text-[13px] leading-snug text-muted-foreground">{meter.detail}</p>
         </>
       ) : (
         <>
-          <p className="mt-2 text-[1.2rem] font-semibold leading-none text-muted-foreground">No goal set</p>
+          <p className={cn('mt-2 font-semibold leading-none text-muted-foreground', tile ? 'text-[1.05rem]' : 'text-[1.2rem]')}>No goal set</p>
           <p className="mt-1.5 text-[13px] leading-snug text-muted-foreground">{meter.detail}</p>
           {canSetGoals ? (
             <ActionLink to={GOAL_SETUP_HREF} variant="text" size="sm" className="mt-1.5">Set a {meter.label.toLowerCase()} goal</ActionLink>

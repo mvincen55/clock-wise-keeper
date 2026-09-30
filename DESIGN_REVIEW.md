@@ -600,3 +600,78 @@ Removed while inspecting for reserved space: `lg:items-stretch` on the chart row
 - `owner-clear-desktop`: Staffing today first in the sidebar, then the sealed closeout, the goals, the challenge, Worth a look.
 - `manager-clear-tablet`, `manager-clear-mobile`: one column in reading order — Needs you, Today, the closeout, the filters, the cards two by two, the charts, the goals, the tools.
 - Every other scenario (`front-desk`, `hygienist`, `member-clear`, `manager-closed`, `owner-partial`, …) at all three widths: the same columns, nothing reserved.
+
+## Pass 9 — the board: goals above the fold, the roster you can ask
+
+### What was asked
+Hover a team member to see their schedule and click their name to reach their record;
+stop tracking closeouts on Home; something goal-oriented above the fold, so Home feels
+less like a clock-in/out system; fix the blank space under the sidebar; and keep
+thinking about what each level (owner, manager, team member) needs, on a phone as much
+as on a laptop.
+
+### What changed
+- **The roster is interactive.** Every chip on the board is a link to the person's
+  record in People (`/management/people/:employeeId`). Hovering or focusing a chip shows
+  a card with their status, today's shift ("8:00 AM – 5:00 PM"), whether they are working
+  remotely, and how many minutes after the scheduled start they arrived — the facts, calmly.
+  The card is a tooltip, not a hover card, on purpose: Radix's hover-card trigger cancels
+  the tap on touch devices (`onTouchStart` → `preventDefault`), and on a phone the tap is
+  the whole point. The trigger carries the same facts as its accessible description.
+  `personStatusAt` now emits `shift`, `remote`, and `minutesLate` alongside the status
+  line; `RosterPerson` carries them with the link.
+- **Closeouts are no longer tracked on Home.** The 15-day strip, its caption, and the
+  30-day read behind it are gone (`useRecentDepositLogs` is back to the two weeks the
+  "none on record" line names). An office day with no closeout still reaches the board
+  where it matters: as the priority line when it is the gap since the last closeout, as
+  the meters' "Partial data" label with "Complete the records", and in the queue as
+  "Close the Day is behind".
+- **The month sits in the board, above the fold.** Under the priorities, "This month"
+  shows production and collections against their own goals on the office-day pace (the
+  figure, the bar with the expected-by-now marker, the verdict chip, the caveats behind
+  ⓘ) and the office challenge with its state (On track / Needs a push / Awaiting
+  verification, with Review when a decision is due), three across on a laptop, two across
+  on a tablet (the challenge spanning the pair), one column on a phone where each cell
+  keeps its figure, its bar and its state and drops the captions. The sidebar's "Goals
+  this month" and challenge panels are gone for owners and managers — each number keeps
+  one home. A challenge on track is now shown too (before, only a noteworthy one reached
+  Home); with none running, the cell is the door to Office → Goals.
+- **The blank space.** The cancellation trend moved into the sidebar under Today and
+  the closeout, scoped to the main column's period row (`PerformanceSection` reports its
+  period; the panel's title carries the range and its action opens Missed appointments
+  with the same range). The sidebar is sticky at `lg`, so it keeps pace with a long queue
+  instead of ending halfway down the page. "Worth a look" runs at full width under both
+  columns. The owner's sidebar now reads Today like the manager's — attendance facts to
+  review, the exceptions, one count line — instead of repeating the roster the board
+  already names.
+- **Each level.** Owners and managers share the board and the columns; only the header
+  action and the queue's empty copy differ. Team members keep "My next move" as their
+  top, with the shared office goal and the month's meters in their sidebar, and no
+  roster. On a phone the board reads state → roster (wrapped, full names) → priorities →
+  the month, then Needs you, Mine, Today, the closeout, the numbers, the cancellation
+  trend, Worth a look, the tools.
+
+### Files
+- Added: `src/components/dashboard/TodayPanel.tsx` (`TodayPanel`, `ExceptionRow`, `todayLine`, shared by Owner and Manager Home)
+- Changed: `Summary.tsx` (the board: chips as tooltip-described links, the month block, no strip), `performance/GoalMeters.tsx` (`GoalMeterRow` `variant="tile"`), `ChallengeCard.tsx` (`tile`, `challengeTone`), `performance/PerformanceSection.tsx` (`onPeriodChange`), `performance/MissedTrend.tsx` (narrow floor for the sidebar), `kit.tsx` (`HomeColumns` `stickyAside`), `staffing.ts` (`shiftLabel`, the schedule facts on `PersonStatus`), `types.ts` (`PersonStatus` facts, `OwnerView.today`, `ManagerView.goal`), `OwnerDashboard.tsx`, `ManagerDashboard.tsx`, `useDashboardView.ts`, `fixtures.ts` (shifts on the open roster), `src/lib/home-brief.ts` (`RosterPerson` facts and link; the strip removed)
+- Tests: `home-layout` (the board, the hover card, the month row, the sidebar trend following the period, the sticky sidebar), `home-brief`, `manager-home`, `owner-home`, `dashboard-empty-states`
+- Docs: `docs/home-performance-redesign.md` §6, `docs/late-arrivals-spec.md`
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| Typecheck (`tsc --noEmit -p tsconfig.app.json`, app and tests) | clean |
+| Full test suite (`vitest run`) | 2607 passed / 53 skipped / 0 failed (248 files) |
+| Lint on the changed files | 0 errors; the same `react-refresh/only-export-components` warnings as before (a helper exported beside a component) |
+| Production build (`vite build`) | built |
+| Captures | 23 scenarios × 3 widths (1440×1000, 834×1112, 390×844): 69 of 69, no page errors, no horizontal overflow; plus `manager-board-hover`, `manager-fold`, `board-mobile`, `board-tablet`, `board-mobile-owner-new` |
+| Production publish | not part of this pass |
+
+### What the captures show (`design-review/`)
+- `manager-fold`: the first 1000px of a laptop — the header, then the board: "Open · 4 of 8 in", eight chips, the payroll line, the three month cells; Needs you and Today start beneath it.
+- `manager-board-hover`: Marcus T.'s chip hovered — "In · late 12m", today's shift 8:00 AM – 5:00 PM, arrived 12 min after the start, "Open their record in People".
+- `manager-desktop`, `owner-desktop`: the board, the queue with Mine beneath it, the period row, the strip and the chart in the main column; Today, "Yesterday's closeout · Not sealed", and the cancellation trend in the sidebar; Worth a look at full width; the tools.
+- `board-tablet`: the roster in three columns, the two meters across with the challenge spanning beneath them.
+- `board-mobile`: full names on the wrapped roster; the meters as figure, bar and state; the challenge with its window.
+- `board-mobile-owner-new`: a brand-new office — no goals set (with the door to set them), no challenge (with the door to choose one), "No closeout is on record in the last two weeks."

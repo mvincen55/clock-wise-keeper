@@ -132,7 +132,7 @@ export function MissedTrend({ data, period, width: fixedWidth }: { data: Perform
         {series && (
           <div className="-mx-1 overflow-hidden" data-testid="missed-chart-frame">
             <BarChart
-              width={Math.max(280, width)}
+              width={Math.max(232, width)}
               height={180}
               data={rows}
               margin={{ top: 8, right: 8, bottom: 0, left: 0 }}

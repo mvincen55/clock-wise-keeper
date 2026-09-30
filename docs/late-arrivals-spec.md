@@ -127,8 +127,10 @@ report are refused; nobody files one by hand.
 ## What Home shows
 
 - **Manager and owner Home** never headline a routine late arrival. A person
-  who arrived late and is in reads "In · late 12m" on the live roster, calm,
-  and is not an exception in Today. Attendance reaches the Needs you queue in
+  who arrived late and is in reads "In · late 12m" on the board's roster,
+  calm, and is not an exception in Today; hovering (or focusing) the chip
+  shows their shift for today and the minutes late as facts, and the chip
+  opens their record in People. Attendance reaches the Needs you queue in
   two forms only: an excuse request (Decide) and an open attendance report
   (Meet with team member / sign). The queue count is unique items; repeated
   kinds fold into one expandable group whose rows still open their own

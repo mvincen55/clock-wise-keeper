@@ -107,7 +107,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
   // A failed read is null — the meters then say they are on calendar days.
   const officeDays = useOfficeDays();
   const { data: todayLog } = useDepositLog(today);
-  const { data: recentLogs } = useRecentDepositLogs(30); // the closeout strip reads the last 15 office days
+  const { data: recentLogs } = useRecentDepositLogs(14); // the last two weeks: the latest closeout and any office day since it with none
   const { data: sprintData } = useTeamGoals();
   const { data: bypasses = [] } = useUnresolvedBypasses();
   // The one derived state every management surface reads (design §5.5).
@@ -341,6 +341,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         toolGroups,
         office: staffing.office,
         summary,
+        today: today_,
         brief,
         lastDay,
         decisionCount,
@@ -387,6 +388,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
         home,
         brief: pulseInput ? buildDailyBrief(pulseInput) : null,
         mine,
+        goal,
         ...block,
       };
       return { view: manager, isLoading: false };
