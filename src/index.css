@@ -3655,6 +3655,15 @@
 .fof-composed-compact .fof-sig-caption { margin-bottom: 2pt; }
 .fof-composed-compact .fof-card { padding: 4pt 9pt; }
 .fof-composed-compact .fof-band { padding: 6pt 9pt; }
+/* Keep long treatment summaries and three collection milestones readable
+   without spending a second page on unused horizontal space. */
+.fof-composed-compact .fof-hero-treatment { flex: 2; min-width: 0; }
+.fof-composed-compact .fof-hero-card { flex: 1; min-width: 0; }
+.fof-composed-compact .fof-breakdown { flex: 1; }
+.fof-composed-compact .fof-callout { flex: 1.35; }
+.fof-composed-compact:not(.fof-payment-columns) .fof-payment-phase { grid-template-columns: minmax(0, 1fr) minmax(0, 3fr); }
+.fof-composed-compact:not(.fof-payment-columns) .fof-payment-milestones { gap: 6pt 10pt; }
+.fof-composed-compact:not(.fof-payment-columns) .fof-payment-milestone { flex: 1 1 0; min-width: 75pt; }
 .fof-payment-columns .fof-phase-schedule { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
 .fof-payment-columns .fof-payment-plan-head, .fof-payment-columns .fof-payment-plan-total { grid-column: 1 / -1; }
 .fof-payment-columns .fof-payment-phase { display: block; border-right: 0.5pt solid var(--fof-line); }

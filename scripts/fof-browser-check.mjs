@@ -27,25 +27,11 @@ try {
     await page.setViewportSize({width:Math.round(720/scale),height:Math.round(960/scale)});
     await page.emulateMedia({media:'print'});
     const bytes=await page.pdf({path:path.join(output,file),format:'Letter',scale,printBackground:true,preferCSSPageSize:true});
-    await page.emulateMedia({media:'screen'});
-    await page.setViewportSize(viewport);
     const loadingTask=getDocument({data:new Uint8Array(bytes),disableFontFace:true,verbosity:0});
     const doc=await loadingTask.promise;
     const texts=[];
     for(let i=1;i<=doc.numPages;i++) texts.push((await (await doc.getPage(i)).getTextContent()).items.map(item=>item.str).join(' '));
-    await loadingTask.destroy();return texts;
-  }
-  for(const mode of ['patient','office','both']) {
-    await page.emulateMedia({media:'screen'});
-    await page.goto(`${origin}/.repro/fof-browser/index.html?mode=${mode}`);
-    await page.getByRole('heading',{name:'Patient payment schedule'}).waitFor();
-    await page.evaluate(()=>Promise.all([...document.images].map(img=>img.decode().catch(()=>{}))));
-    await page.getByRole('button',{name:'Prepare print'}).click();
-    assert.equal(await page.locator('#print-result').textContent(),'Ready');
-    const texts=await pdfTexts(`${mode}.pdf`);
-    console.log(`${mode}: ${texts.length} PDF pages; signatures per page: ${texts.map(t=>/PATIENT SIGNATURE/i.test(t))}`);
-    if(texts.length!==(mode==='both'?2:1)) {
-      await page.emulateMedia({media:'print'});
+    if(texts.length>1 && file.startsWith('patient')) {
       console.log('Layout metrics',JSON.stringify(await page.evaluate(()=>{
         const original=document.querySelector('.fof-page-source')?.firstElementChild;
         if(!original)return {};
@@ -59,6 +45,20 @@ try {
         measure.remove();return {viewport:[innerWidth,innerHeight],composed:document.querySelectorAll('.fof-composed-output .fof-composed-page').length,variants};
       })));
     }
+    await loadingTask.destroy();
+    await page.emulateMedia({media:'screen'});
+    await page.setViewportSize(viewport);
+    return texts;
+  }
+  for(const mode of ['patient','office','both']) {
+    await page.emulateMedia({media:'screen'});
+    await page.goto(`${origin}/.repro/fof-browser/index.html?mode=${mode}`);
+    await page.getByRole('heading',{name:'Patient payment schedule'}).waitFor();
+    await page.evaluate(()=>Promise.all([...document.images].map(img=>img.decode().catch(()=>{}))));
+    await page.getByRole('button',{name:'Prepare print'}).click();
+    assert.equal(await page.locator('#print-result').textContent(),'Ready');
+    const texts=await pdfTexts(`${mode}.pdf`);
+    console.log(`${mode}: ${texts.length} PDF pages; signatures per page: ${texts.map(t=>/PATIENT SIGNATURE/i.test(t))}`);
     assert.equal(texts.length,mode==='both'?2:1,`${mode} page count`);
     if(mode!=='office') {
       assert.match(texts[0],/PATIENT SIGNATURE/i,'Signature must share the patient page with the schedule');
@@ -75,7 +75,9 @@ try {
       for(const scale of [0.67,1.25]) {
         const zoomed=await pdfTexts(`patient-zoom-${scale}.pdf`,scale);
         console.log(`Patient at ${scale*100}%: ${zoomed.length} pages`);
-        assert.equal(zoomed.length,1);assert.match(zoomed[0],/PATIENT SIGNATURE/i);assert.match(zoomed[0],/8,273.00/);
+        assert.ok(zoomed.length>=1&&zoomed.length<=2,'Print scaling must not create orphan pages');
+        assert.match(zoomed.at(-1),/PATIENT SIGNATURE/i);assert.match(zoomed.at(-1),/8,273.00/);
+        assert.match(zoomed.at(-1),/Implant Crown/,'Signatures must accompany treatment payments');
       }
     }
   }

@@ -28,7 +28,7 @@ export default function AdaptivePatientPages({ children }: { children: ReactNode
       const capacity = document.createElement('div');
       capacity.className = 'fof-page-capacity';
       measure.append(capacity);
-      const pageHeight = capacity.offsetHeight || PAGE_HEIGHT;
+      const pageHeight = capacity.getBoundingClientRect().height || PAGE_HEIGHT;
       let measured = false;
       const naturalHeight = (page: HTMLElement) => {
         measure.replaceChildren(page);
