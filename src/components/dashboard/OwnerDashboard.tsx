@@ -22,8 +22,9 @@ import { ChallengeCard } from './ChallengeCard';
  *      main: Needs you (grouped, actionable), the owner's own items, then
  *      the performance block (period, strip, chart, the cancellation trend)
  *      directly beneath the queue, however tall the sidebar is;
+ *      main, under the charts: what is worth a look;
  *      sidebar: staffing today, the latest closeout with its state, the
- *      month's goal meters, the office challenge, what is worth a look
+ *      month's goal meters, the office challenge
  *   4  coverage lanes, then the tools area
  *
  * Every number keeps one home: the closed-out day's facts in the closeout
@@ -61,6 +62,12 @@ export default function OwnerDashboard({ view, chartWidth }: { view: OwnerView; 
           )}
         />
       </Slot>
+      {/* Observations sit under the charts they read, with room to sit side by side. */}
+      <Slot order={6}>
+        <Panel title="Worth a look" description="What only a comparison over the recorded days can show. Observed, not predicted.">
+          <Noticing insights={insights} loading={performanceState === 'loading'} />
+        </Panel>
+      </Slot>
     </>
   );
 
@@ -82,12 +89,12 @@ export default function OwnerDashboard({ view, chartWidth }: { view: OwnerView; 
       <Slot order={4}>
         <CloseoutPanel brief={brief} lastDay={lastDay} />
       </Slot>
-      <Slot order={6}>
+      <Slot order={7}>
         <Panel title="Goals this month" action={{ label: 'Goals', to: '/goals' }}>
           <GoalMeters meters={goalMeters} canSetGoals loading={performanceState === 'loading'} />
         </Panel>
       </Slot>
-      <Slot order={7}>
+      <Slot order={8}>
         <Panel title="Office challenge" action={{ label: 'Goals', to: '/goals' }}>
           {goal ? (
             <ChallengeCard goal={goal} compact />
@@ -100,11 +107,6 @@ export default function OwnerDashboard({ view, chartWidth }: { view: OwnerView; 
               compact
             />
           )}
-        </Panel>
-      </Slot>
-      <Slot order={8}>
-        <Panel title="Worth a look" description="What only a comparison over the recorded days can show. Observed, not predicted.">
-          <Noticing insights={insights} loading={performanceState === 'loading'} />
         </Panel>
       </Slot>
     </>

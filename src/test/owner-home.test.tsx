@@ -264,7 +264,7 @@ describe('office states', () => {
   it('open office: live staffing stays available, quietly, and routine lateness is calm', () => {
     renderView(<OwnerDashboard view={ownerFixture} />);
     expect(screen.getByText('Staffing today')).toBeInTheDocument();
-    expect(screen.getByText('In · late 12m')).toHaveClass('text-muted-foreground');
+    expect(within(screen.getByRole('region', { name: 'Staffing today' })).getByText('In · late 12m')).toHaveClass('text-muted-foreground');
   });
 
   it('closed day: most recent business day labeled, no manufactured urgency', () => {

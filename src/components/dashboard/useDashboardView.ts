@@ -107,7 +107,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
   // A failed read is null — the meters then say they are on calendar days.
   const officeDays = useOfficeDays();
   const { data: todayLog } = useDepositLog(today);
-  const { data: recentLogs } = useRecentDepositLogs(14);
+  const { data: recentLogs } = useRecentDepositLogs(30); // the closeout strip reads the last 15 office days
   const { data: sprintData } = useTeamGoals();
   const { data: bypasses = [] } = useUnresolvedBypasses();
   // The one derived state every management surface reads (design §5.5).

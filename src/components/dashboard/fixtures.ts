@@ -458,6 +458,18 @@ const openCloseouts = [
   { id: 'log-0227', deposit_date: '2026-02-27', sealed_at: '2026-02-27T22:40:00Z', needs_manager_review: false },
 ];
 
+/**
+ * The closeouts on record for a scenario: one sealed row per recorded day
+ * in its history, with the scenario's explicit rows (an unsealed
+ * yesterday, a day under review) winning their dates. The queue, the
+ * closeout panel and the closeout strip all read this one list.
+ */
+function fxCloseouts(days: DayVitals[], explicit: { id: string; deposit_date: string; sealed_at: string | null; needs_manager_review: boolean }[]): { id: string; deposit_date: string; sealed_at: string | null; needs_manager_review: boolean }[] {
+  const byDate = new Map(days.map(d => [d.date, { id: `fx-log-${d.date}`, deposit_date: d.date, sealed_at: `${d.date}T22:30:00Z`, needs_manager_review: false }]));
+  for (const c of explicit) byDate.set(c.deposit_date, c);
+  return [...byDate.values()].sort((a, b) => b.deposit_date.localeCompare(a.deposit_date));
+}
+
 type OwnerScenarioArgs = {
   days: DayVitals[];
   targets?: VitalsTargets;
@@ -495,7 +507,8 @@ function makeOwner(args: OwnerScenarioArgs): OwnerView {
   });
   const today = pulse.today;
   const band = todayBand({ summary: args.staffing, snapshot: args.snapshot, now: args.now, needsNow });
-  const lastDay = lastDayLine({ closeouts: args.closeouts ?? [], today, phase: args.staffing.office.phase, closeDay: closeDayStatus(args.todayLog, args.staffing.office.phase) });
+  const closeouts = fxCloseouts(args.days, args.closeouts ?? []);
+  const lastDay = lastDayLine({ closeouts, today, phase: args.staffing.office.phase, closeDay: closeDayStatus(args.todayLog, args.staffing.office.phase) });
   const needs = needsYou(attention);
   return {
     kind: 'owner',
@@ -504,7 +517,7 @@ function makeOwner(args: OwnerScenarioArgs): OwnerView {
     lanes: lanesFor(ownerContext),
     toolGroups: toolsFor(ownerContext),
     office: args.staffing.office,
-    summary: stateSummary({ office: args.staffing.office, today: band, needs, lastDay, payroll: args.payroll ?? null, payrollItems: needsNow.filter(i => i.payroll).length, todayDate: today, closeouts: args.closeouts ?? [], calendar: args.calendar === undefined ? fxCalendar : args.calendar }),
+    summary: stateSummary({ office: args.staffing.office, today: band, needs, lastDay, payroll: args.payroll ?? null, payrollItems: needsNow.filter(i => i.payroll).length, todayDate: today, closeouts, calendar: args.calendar === undefined ? fxCalendar : args.calendar }),
     brief: buildDailyBrief(pulse),
     lastDay,
     decisionCount: needsNow.length,
@@ -745,7 +758,7 @@ function makeManager(args: ManagerScenarioArgs): ManagerView {
     snapshot: args.snapshot,
     now: args.now,
     today: input.today,
-    closeouts: args.closeouts ?? [],
+    closeouts: fxCloseouts(args.days, args.closeouts ?? []),
     closeDay,
     pace: monthPaceLines(input),
     paceScopeDate: input.latest?.date ?? null,

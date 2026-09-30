@@ -163,9 +163,11 @@ describe('today', () => {
   it('lists genuine exceptions only, then one count line, and links the exception that has an item', () => {
     renderView(<ManagerDashboard view={managerFixture} />);
     expect(managerFixture.home.today.exceptions.map(e => e.name)).toEqual(['Ken W.', 'Jo B.']);
-    // The people who are simply in — late or not — are not listed: no roster on Home.
-    expect(screen.queryByText('Dana R.')).not.toBeInTheDocument();
-    expect(screen.queryByText('Marcus T.')).not.toBeInTheDocument();
+    // Today lists exceptions only; the people who are simply in — late or not — are named on the board at the top, not here.
+    const todayPanel = screen.getByRole('region', { name: 'Today' });
+    expect(within(todayPanel).queryByText('Dana R.')).not.toBeInTheDocument();
+    expect(within(todayPanel).queryByText('Marcus T.')).not.toBeInTheDocument();
+    expect(within(screen.getByRole('list', { name: 'Who is where' })).getByText('Marcus T.')).toBeInTheDocument();
     expect(screen.getByText('4 in · Sam K. at 1:00 PM')).toBeInTheDocument();
     expect(screen.getByText('8 scheduled')).toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: 'Today' })).getByText('Ken W.').closest('a')).toHaveAttribute('href', '/management?item=missing_clock_out:d1');

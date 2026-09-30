@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import type { AttentionItem } from '@/lib/attention';
 import type { StaffingSummary } from '@/components/dashboard/staffing';
 import type { GoalBrief, MonthPaceLine } from '@/lib/owner-pulse';
-import { buildHomeBrief, lastDayLine, needsYou, paceLine, rosterGroups, spotlight, stateSummary, todayBand } from '@/lib/home-brief';
+import { buildHomeBrief, closeoutStrip, lastDayLine, needsYou, paceLine, rosterGroups, spotlight, stateSummary, todayBand } from '@/lib/home-brief';
 
 const item = (over: Partial<AttentionItem>): AttentionItem => ({
   key: 'pto_request:p1', kind: 'pto_request', verb: 'decide', recordTable: 'pto_requests', recordId: 'p1',
@@ -129,6 +129,37 @@ describe('an office day with no closeout', () => {
   });
   it('is silent when yesterday (or the last office day) is on record', () => {
     expect(summaryWith([closeout('2026-09-18')]).lines).toEqual([]);
+  });
+  it('yields to the queue once "Close the Day is behind" is an item there', () => {
+    const behind = needsYou({ ...attention, needsNow: [item({ key: 'close_day_behind:gap:2026-09-15', kind: 'close_day_behind', verb: 'fix', subject: { employeeId: null, userId: null, name: null } })] });
+    const s = stateSummary({
+      office: open.office, today: todayBand({ summary: open, now, needsNow: [] }), needs: behind,
+      lastDay: { id: 'l', label: "Tuesday's closeout", text: 'sealed', tone: 'calm', href: '/deposit-log' },
+      payroll: null, todayDate: '2026-09-21', closeouts: [closeout('2026-09-15')], calendar: weekdays,
+    });
+    expect(s.lines.map(l => l.id)).toEqual([]);
+    // The strip still shows the gap the queue names.
+    expect(s.closeoutStrip.slice(-5).map(c => [c.date, c.state])).toEqual([['2026-09-15', 'sealed'], ['2026-09-16', 'missing'], ['2026-09-17', 'missing'], ['2026-09-18', 'missing'], ['2026-09-21', 'today']]);
+  });
+});
+
+describe('the closeout strip', () => {
+  const weekdays = { closedDates: new Set<string>(['2026-09-07']), openDates: new Set<string>() };
+  const row = (deposit_date: string, sealed = true) => ({ id: `c-${deposit_date}`, deposit_date, sealed_at: sealed ? 'x' : null, needs_manager_review: false });
+  it('shows the last office days through today with each day’s record state, skipping closures and weekends', () => {
+    const cells = closeoutStrip({ today: '2026-09-21', calendar: weekdays, days: 5, closeouts: [row('2026-09-15'), row('2026-09-16'), row('2026-09-18', false)] });
+    expect(cells.map(c => [c.date, c.state])).toEqual([
+      ['2026-09-15', 'sealed'], ['2026-09-16', 'sealed'], ['2026-09-17', 'missing'], ['2026-09-18', 'saved'], ['2026-09-21', 'today'],
+    ]);
+    expect(cells[2]).toMatchObject({ label: 'Thu, Sep 17 · no closeout', href: '/deposit-log?date=2026-09-17' });
+    expect(cells[4].label).toBe('Mon, Sep 21 · today, in progress');
+    // Labor Day (Sep 7) is a closure: never on the strip, never "missing".
+    expect(closeoutStrip({ today: '2026-09-09', calendar: weekdays, days: 4, closeouts: [] }).map(c => c.date)).toEqual(['2026-09-03', '2026-09-04', '2026-09-08', '2026-09-09']);
+  });
+  it('is empty without the office calendar, and today reads as recorded once its closeout exists', () => {
+    expect(closeoutStrip({ today: '2026-09-21', calendar: null, closeouts: [row('2026-09-18')] })).toEqual([]);
+    const cells = closeoutStrip({ today: '2026-09-21', calendar: weekdays, days: 2, closeouts: [row('2026-09-21', false)] });
+    expect(cells.map(c => c.state)).toEqual(['missing', 'saved']);
   });
 });
 
