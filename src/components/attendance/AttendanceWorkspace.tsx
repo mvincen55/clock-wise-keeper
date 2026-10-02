@@ -70,11 +70,10 @@ export type AttendanceMode = 'personal' | 'team';
 export const TEAM_ATTENDANCE_PATH = '/management/attendance';
 
 /** How the team view orders its rows. */
-type SortMode = 'attention' | 'employee' | 'date';
+type SortMode = 'employee' | 'date';
 const SORT_LABELS: Record<SortMode, string> = {
-  attention: 'Needs attention',
+  date: 'Newest first',
   employee: 'By person',
-  date: 'By date',
 };
 
 /** Day-off types that explain an absence (a callout does not — it is still a missed shift). */
@@ -193,7 +192,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
   // The personal view: the Workplace page for everyone, managers included.
   // Only the Management page shows the team, and only to managers.
   const personal = mode === 'personal' || !isManager;
-  const [sortMode, setSortMode] = useState<SortMode>('attention');
+  const [sortMode, setSortMode] = useState<SortMode>('date');
 
   // Default date range to current pay period
   const weekStartDay = payrollSettings?.week_start_day ?? 1;
@@ -485,19 +484,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
       case 'remote': list = list.filter(r => r.is_remote); break;
       case 'onsite': list = list.filter(r => !r.is_remote && r.has_punches); break;
     }
-    const priority = (r: AttendanceDayStatusRow) => {
-      if (isAbsent(r)) return 0;
-      if (missingClockOut(r)) return 1;
-      if (r.is_late) return 2;
-      if (r.has_edits) return 3;
-      return 4;
-    };
     return [...list].sort((a, b) => {
-      if (sortMode === 'attention') {
-        const pa = priority(a);
-        const pb = priority(b);
-        if (pa !== pb) return pa - pb;
-      }
       return sortMode === 'employee' ? byPerson(a, b) || byDateDesc(a, b) : byDateDesc(a, b) || byPerson(a, b);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -526,11 +513,6 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
     if (showOnlyTracked) list = list.filter(countsTowardThreshold);
     if (approvalFilter !== 'all') list = list.filter(t => excuseState(t) === approvalFilter);
     return [...list].sort((a, b) => {
-      if (sortMode === 'attention') {
-        const ua = excuseState(a) === 'pending' ? 0 : 1;
-        const ub = excuseState(b) === 'pending' ? 0 : 1;
-        if (ua !== ub) return ua - ub;
-      }
       return sortMode === 'employee' ? byPerson(a, b) || byDateDesc(a, b) : byDateDesc(a, b) || byPerson(a, b);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

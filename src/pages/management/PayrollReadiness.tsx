@@ -38,6 +38,8 @@ export default function PayrollReadiness() {
   const withReturn = (href: string) => `${href}${href.includes('?') ? '&' : '?'}return=${returnTo}`;
 
   const status = result?.status;
+  const datedIssues = useMemo(() => [...(result?.issues ?? [])].sort((a, b) =>
+    (b.date ?? '').localeCompare(a.date ?? '') || a.name.localeCompare(b.name)), [result?.issues]);
   const heading = !result
     ? 'Reading the period…'
     : status === 'ready' ? 'Ready'
@@ -93,7 +95,7 @@ export default function PayrollReadiness() {
           <section aria-label="Records to fix" className="space-y-2">
             <p className="text-sm text-muted-foreground">Person · date · what is wrong · the exact fix. Fixing opens the record's own editor and returns here.</p>
             <ul className="divide-y rounded-lg border">
-              {result.issues.map(issue => (
+              {datedIssues.map(issue => (
                 <li key={issue.key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm">
                   <span className="min-w-0">
                     <span className="font-medium">{issue.name}</span>

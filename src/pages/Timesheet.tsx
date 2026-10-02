@@ -206,7 +206,6 @@ function EntryRow({ entry, tardy, onAnswer }: {
   );
 }
 
-type SortMode = 'attention' | 'chronological';
 type FilterMode = 'all' | 'absent' | 'late' | 'incomplete' | 'edited' | 'awaiting';
 type RemoteFilter = 'all' | 'onsite' | 'remote';
 
@@ -216,9 +215,7 @@ async function exportToExcel(
 ) {
   const XLSX = await import('xlsx');
 
-  const data = sortedEntries
-    .sort((a, b) => a.entry.entry_date.localeCompare(b.entry.entry_date))
-    .map(({ entry, isAbsent, isIncomplete, isLate, minutesLate }) => {
+  const data = sortedEntries.map(({ entry, isAbsent, isIncomplete, isLate, minutesLate }) => {
       const d = new Date(entry.entry_date + 'T00:00:00');
       const day = d.toLocaleDateString('en-US', { weekday: 'short' });
       const totalHHMM = entry.total_minutes != null ? minutesToHHMM(entry.total_minutes) : '';
@@ -276,7 +273,6 @@ export default function Timesheet() {
 
   const [startDate, setStartDate] = useState(defaultStart.toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(defaultEnd.toISOString().split('T')[0]);
-  const [sortMode, setSortMode] = useState<SortMode>('attention');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [excuseFilter, setExcuseFilter] = useState<string>('all');
   const [remoteFilter, setRemoteFilter] = useState<RemoteFilter>('all');
@@ -334,27 +330,11 @@ export default function Timesheet() {
     return list;
   }, [entriesWithStatus, filterMode, excuseFilter, remoteFilter]);
 
-  // Sort
-  const sortedEntries = useMemo(() => {
-    if (sortMode === 'chronological') {
-      return [...filteredEntries].sort((a, b) => b.entry.entry_date.localeCompare(a.entry.entry_date));
-    }
-    // Attention first
-    const priority = (e: typeof filteredEntries[0]) => {
-      if (e.isAbsent) return 0;
-      if (e.isIncomplete) return 1;
-      if (e.awaitsAnswer) return 2;
-      if (e.isLate) return 3;
-      if (e.hasEdits) return 4;
-      return 5;
-    };
-    return [...filteredEntries].sort((a, b) => {
-      const pa = priority(a);
-      const pb = priority(b);
-      if (pa !== pb) return pa - pb;
-      return b.entry.entry_date.localeCompare(a.entry.entry_date);
-    });
-  }, [filteredEntries, sortMode]);
+  // Status filters narrow the list without moving older days above newer ones.
+  const sortedEntries = useMemo(
+    () => [...filteredEntries].sort((a, b) => b.entry.entry_date.localeCompare(a.entry.entry_date)),
+    [filteredEntries],
+  );
 
   const totalMinutes = sortedEntries.reduce((sum, e) => sum + (e.entry.total_minutes || 0), 0);
 
@@ -446,14 +426,6 @@ export default function Timesheet() {
                 </SelectContent>
               </Select>
             </div>
-            <Button
-              variant={sortMode === 'attention' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSortMode(s => s === 'attention' ? 'chronological' : 'attention')}
-            >
-              <ArrowUpDown className="h-3.5 w-3.5 mr-1" />
-              {sortMode === 'attention' ? 'Attention First' : 'Chronological'}
-            </Button>
             <div className="px-3 py-2 bg-primary/10 rounded-lg">
               <span className="text-xs text-muted-foreground">Total: </span>
               <span className="time-display font-semibold text-primary">{minutesToHHMM(totalMinutes)}</span>
@@ -471,7 +443,7 @@ export default function Timesheet() {
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="px-4 py-3 w-8"></th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground" aria-sort="descending">Date</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Total</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Location</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Comment</th>
