@@ -33,7 +33,7 @@ export function useWorkedHourAdjustments(startDate?: string, endDate?: string) {
         .eq('org_id', ctx!.org_id)
         .gte('entry_date', startDate!)
         .lte('entry_date', endDate!)
-        .order('entry_date', { ascending: true });
+        .order('entry_date', { ascending: false });
       if (error) throw error;
       // numeric(10,2) arrives as a string from PostgREST.
       return (data || []).map(r => ({ ...r, hours_delta: Number(r.hours_delta) })) as WorkedHourAdjustmentRow[];

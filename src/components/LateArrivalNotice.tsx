@@ -23,7 +23,7 @@ export function LateArrivalNotice() {
   const [open, setOpen] = useState<TardyRow | null>(null);
 
   const waiting = useMemo(
-    () => (tardies ?? []).filter(t => t.user_id === user?.id && awaitsEmployeeAnswer(t)).sort((a, b) => a.entry_date.localeCompare(b.entry_date)),
+    () => (tardies ?? []).filter(t => t.user_id === user?.id && awaitsEmployeeAnswer(t)).sort((a, b) => b.entry_date.localeCompare(a.entry_date)),
     [tardies, user?.id],
   );
   if (!user || waiting.length === 0) return null;

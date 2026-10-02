@@ -110,7 +110,7 @@ export function useAttendanceIncidentEvents(reportId: string | null | undefined)
         .from('attendance_incident_events')
         .select('*')
         .eq('incident_report_id', reportId!)
-        .order('entry_date', { ascending: true });
+        .order('entry_date', { ascending: false });
       if (error) throw error;
       return (data || []) as AttendanceIncidentEvent[];
     },

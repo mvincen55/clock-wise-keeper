@@ -2,7 +2,7 @@
  * Attendance in two places. Management → Team Attendance: every row says
  * whose it is, one person can be focused, a person's own days off explain
  * only their own absences, every punch of the day is on the row, rows sort
- * by attention, person, or date, and the row actions target the row's
+ * newest first or by person, and the row actions target the row's
  * employee. Workplace → Attendance stays personal for everyone, managers
  * included.
  */
@@ -304,21 +304,27 @@ describe('Workplace → Attendance for a manager', () => {
 describe('Team Attendance — sorting', () => {
   const dataRows = () => screen.getAllByRole('row').filter(r => /Sep \d+, 2026/.test(r.textContent || ''));
 
-  it('Needs attention puts the missed days first, and an explained day off last', () => {
+  it('defaults to newest first even when older days need attention', () => {
     mount();
     const rows = dataRows();
-    expect(rows[0]).toHaveTextContent('Mon, Sep 21, 2026');
-    expect(rows[0]).toHaveTextContent('Absent');
-    // Jane's late Tuesday outranks Rick's Monday, which his time off explains.
-    expect(rows[1]).toHaveTextContent('Tue, Sep 22, 2026');
+    expect(rows[0]).toHaveTextContent('Tue, Sep 22, 2026');
+    expect(rows[1]).toHaveTextContent('Mon, Sep 21, 2026');
+    expect(rows[1]).toHaveTextContent('Absent');
     expect(rows[2]).toHaveTextContent('Roe, Rick');
     expect(rows[2]).toHaveTextContent('Time off');
+    expect(screen.queryByRole('button', { name: 'Needs attention' })).not.toBeInTheDocument();
   });
 
   it('By date is newest first', () => {
     mount();
-    fireEvent.click(screen.getByRole('button', { name: 'By date' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Newest first' }));
     expect(dataRows()[0]).toHaveTextContent('Tue, Sep 22, 2026');
+  });
+
+  it.each(['/days-off', '/management/attendance?employee=emp-jane'])('keeps personal and focused records newest first at %s', path => {
+    mount(path);
+    expect(dataRows().map(row => within(row).getAllByRole('cell')[0].textContent))
+      .toEqual(['Tue, Sep 22, 2026', 'Mon, Sep 21, 2026']);
   });
 
   it('By person groups each person’s days under one header', () => {

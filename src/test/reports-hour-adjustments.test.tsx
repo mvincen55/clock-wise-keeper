@@ -10,7 +10,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Reports from '@/pages/Reports';
 
-const state = vi.hoisted(() => ({ adjustments: [] as Record<string, unknown>[] }));
+const state = vi.hoisted(() => ({ adjustments: [] as Record<string, unknown>[], days: [] as Record<string, unknown>[] }));
 
 const punch = (id: string, seq: number, punch_type: 'in' | 'out', punch_time: string) => ({
   id, time_entry_id: 'entry-1', seq, punch_type, punch_time, source: 'manual', raw_text: null, created_at: '',
@@ -33,7 +33,7 @@ vi.mock('@/hooks/useTimeEntries', () => ({ useTimeEntries: () => ({ data: entrie
 vi.mock('@/hooks/useDaysOff', () => ({ useDaysOff: () => ({ data: [] }) }));
 vi.mock('@/hooks/useTardies', () => ({ useTardies: () => ({ data: [] }) }));
 vi.mock('@/hooks/useAttendanceExceptions', () => ({ useAttendanceExceptions: () => ({ data: [] }) }));
-vi.mock('@/hooks/useAttendanceDayStatus', () => ({ useAttendanceDayStatus: () => ({ data: [] }) }));
+vi.mock('@/hooks/useAttendanceDayStatus', () => ({ useAttendanceDayStatus: () => ({ data: state.days }) }));
 vi.mock('@/hooks/useWorkedHourAdjustments', () => ({ useWorkedHourAdjustments: () => ({ data: state.adjustments }) }));
 vi.mock('@/hooks/useEmployees', () => ({ useOrgEmployees: () => ({ data: [] }) }));
 vi.mock('@/hooks/useOrgAttendanceSnapshot', () => ({ useOwnerUserIds: () => ({ data: new Set() }) }));
@@ -52,7 +52,7 @@ function generate() {
   fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 }
 
-afterEach(() => { cleanup(); state.adjustments = []; });
+afterEach(() => { cleanup(); state.adjustments = []; state.days = []; vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('payroll report', () => {
   it('lists every clock-in and clock-out of the day with the break between them', () => {
@@ -101,5 +101,30 @@ describe('payroll report', () => {
     expect(root.textContent).toContain('Reviewed by');
     // Every punch of the day is on paper too.
     for (const time of ['08:29 AM', '12:01 PM', '12:31 PM', '06:27 PM']) expect(root.textContent).toContain(time);
+    expect(Array.from(root.querySelectorAll('.pay-days tbody tr')).map(row => row.querySelector('td')!.textContent))
+      .toEqual(['Sat, Sep 19, 2026', 'Mon, Sep 14, 2026']);
+  });
+
+  it('exports days, adjustments and missing days together newest first within each person', async () => {
+    state.adjustments = [{ id: 'adj-1', employee_id: 'emp-a', entry_date: '2026-09-19', hours_delta: -1, reason: 'Installment' }];
+    state.days = [{ user_id: 'user-a', employee_id: 'emp-a', entry_date: '2026-09-17', is_absent: true, has_day_off: false }];
+    let download: Blob;
+    const BaseURL = URL;
+    vi.stubGlobal('URL', class extends BaseURL {
+      static createObjectURL(blob: Blob) { download = blob; return 'blob:timesheet'; }
+      static revokeObjectURL() {}
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    generate();
+    fireEvent.click(screen.getByRole('button', { name: 'CSV' }));
+    const csv = await new Promise<string>(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.readAsText(download!);
+    });
+    expect([...csv.matchAll(/"([A-Z][a-z]{2}, Sep \d+, 2026)"/g)].map(match => match[1]))
+      .toEqual(['Sat, Sep 19, 2026', 'Thu, Sep 17, 2026', 'Mon, Sep 14, 2026']);
+    expect(csv).toContain('MISSING DAY');
+    expect(csv).toContain('HOURS ADJUSTMENT');
   });
 });

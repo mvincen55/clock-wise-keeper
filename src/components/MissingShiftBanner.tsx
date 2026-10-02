@@ -36,7 +36,8 @@ export function MissingShiftBanner({ missingDays }: { missingDays: MissingShiftD
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const openDays = missingDays.filter(d => !d.exception || d.exception.status === 'open');
+  const openDays = missingDays.filter(d => !d.exception || d.exception.status === 'open')
+    .sort((a, b) => b.date.localeCompare(a.date));
 
   if (!openDays.length) return null;
 

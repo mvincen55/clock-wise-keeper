@@ -286,7 +286,7 @@ export default function Reports() {
   // OT flags: per employee per payroll week from server-computed totals
   // (voided punches never count). 2400 minutes = 40 hours.
   const weeklyTotals: WeeklyTotalRow[] = computeWeeklyTotals(entries || [], weekStartDay, adjustmentRows)
-    .sort((a, b) => a.week_start.localeCompare(b.week_start) || employeeName(a.employee_id).localeCompare(employeeName(b.employee_id)));
+    .sort((a, b) => b.week_start.localeCompare(a.week_start) || employeeName(a.employee_id).localeCompare(employeeName(b.employee_id)));
   const weeklyByKey = new Map(weeklyTotals.map(w => [`${w.employee_id}|${w.week_start}`, w]));
   const weeklyFor = (e: TimeEntryRow): WeeklyTotalRow | undefined =>
     e.employee_id ? weeklyByKey.get(`${e.employee_id}|${weekStartOf(e.entry_date, weekStartDay)}`) : undefined;
@@ -325,7 +325,7 @@ export default function Reports() {
         date: e.entry_date,
         kind: dayIssueByEntry.get(e.id)! as TimeStatus,
       })),
-  ].sort((a, b) => a.date.localeCompare(b.date) || a.employeeLabel.localeCompare(b.employeeLabel));
+  ].sort((a, b) => b.date.localeCompare(a.date) || a.employeeLabel.localeCompare(b.employeeLabel));
   // Each flag opens that person's day on Team Attendance, where the fix is made.
   const attendanceLinkFor = (f: TimeFlag) =>
     f.employeeId ? `/management/attendance?employee=${f.employeeId}&date=${f.date}` : `/management/attendance?date=${f.date}`;
@@ -366,13 +366,11 @@ export default function Reports() {
   })();
 
   // The printed payroll record: the same figures as the screen, laid out
-  // as a document. Days read oldest first on paper.
+  // as a document, with the same newest-first order.
   const isTimesheetReport = reportType === 'weekly' || reportType === 'pay_period' || reportType === 'monthly';
   const sourceLabelOf = (s: string) => s === 'auto_location' ? 'GPS' : s === 'system_adjustment' ? 'System' : s === 'import' ? 'Import' : 'Manual';
   const printEmployees = groupedEntries.map(group => {
-    const items: PayrollPrintItem[] = [...group.items]
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .map(item => {
+    const items: PayrollPrintItem[] = group.items.map(item => {
         if (item.kind === 'adjustment') {
           return { kind: 'adjustment' as const, date: item.date, hoursDelta: item.adjustment.hours_delta, reason: item.adjustment.reason };
         }
@@ -494,8 +492,8 @@ export default function Reports() {
     // on screen). Hours are decimal hours (hundredths), the form payroll
     // takes. Weekly Total / OT Hours flag the payroll week; this system
     // does not compute overtime pay — it flags so the payroll operator
-    // cannot miss it. MISSING DAY rows are appended after the dailies so
-    // a day with no entry still reaches the CSV.
+    // cannot miss it. MISSING DAY rows share the newest-first list so a
+    // day with no entry still reaches the CSV in its date position.
     const isTimesheet = ['weekly', 'pay_period', 'monthly'].includes(reportType);
     if (isTimesheet) {
       const header = ['Employee', 'Date', 'Punches', 'First In', 'First In Source', 'Last Out', 'Last Out Source', 'Total Hours', 'Minutes Late', 'Status', 'Remote', 'Edited', 'Comment', 'Weekly Total Hours', 'OT Hours', 'Time Status'];
@@ -544,16 +542,18 @@ export default function Reports() {
           'HOURS ADJUSTMENT',
         ] });
       }
-      csvItems.sort((a, b) => a.label.localeCompare(b.label) || a.date.localeCompare(b.date));
+      for (const r of missingDays) {
+        csvItems.push({ label: employeeName(r.employee_id), date: r.entry_date, cells: [
+          employeeName(r.employee_id),
+          formatDate(r.entry_date),
+          '', '', '', '', '', '', '', '', '', '', '', '', '',
+          'MISSING DAY',
+        ] });
+      }
+      csvItems.sort((a, b) => a.label.localeCompare(b.label) || b.date.localeCompare(a.date));
       const rows = csvItems.map(item => item.cells.map(escapeCsv).join(','));
-      const missingRows = missingDays.map(r => [
-        employeeName(r.employee_id),
-        formatDate(r.entry_date),
-        '', '', '', '', '', '', '', '', '', '', '', '', '',
-        'MISSING DAY',
-      ].map(escapeCsv).join(','));
       const totalRow = ['Total', '', '', '', '', '', '', formatDecimalHours(payrollMinutes), '', '', '', '', '', '', '', ''].join(',');
-      const csv = [header.join(','), ...rows, ...missingRows, totalRow].join('\n');
+      const csv = [header.join(','), ...rows, totalRow].join('\n');
       downloadCsvBlob(csv, `timesheet_${startDate}_${endDate}.csv`);
       return;
     }
