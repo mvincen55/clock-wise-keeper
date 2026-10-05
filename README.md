@@ -194,6 +194,7 @@ Decision-first front-desk workspace (no wizard): what happened + was there enoug
 ## Access & security model
 
 - **Invite-only.** Supabase instance-level sign-up is **enabled** (required so invitees can create accounts); the app stays closed because `useAuth` runs `is_allowed_user()` (SECURITY DEFINER RPC) on every session and immediately signs out anyone not in `allowed_users`.
+- **Temporary passwords.** A login the office provisions with a temporary password (an existing roster member who was never invited) carries `must_change_password: true` in its auth user metadata, written only by whoever provisions the account, never by the app. `PasswordGate` (`src/components/PasswordGate.tsx`) sends that person to `/choose-password` before anything else opens, including onboarding; saving a password of their own clears the flag in the same `updateUser` call (`src/lib/password-change.ts`), as does a recovery reset. Anyone signed in can use `/choose-password` to change their password.
 - **`allowed_users` is seeded two ways:** `send-org-invite` inserts the email at invite time (so the account can sign in the moment it's created), and `accept-invite` inserts on acceptance (belt-and-braces).
 - **Roles:** `org_members.role` ∈ `owner | manager | employee`, `status = active`. "Admins" in RLS policy names = owner + manager.
 - **RLS helpers** (SECURITY DEFINER): `is_org_member(org_id)`, `is_org_admin(org_id)`, `is_allowed_user()`. Use them in new policies — do not write recursive policies that query the protected table itself.
