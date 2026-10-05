@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { Period } from '@/lib/performance-series';
 import type { ManagerView } from './types';
 import { ActionLink, DashboardShell, HomeHeader, Lanes, Panel, ToolsPanel, ViewContext } from './kit';
@@ -12,7 +12,7 @@ import { PracticePerformance } from './performance/PracticePerformance';
 import { Noticing } from './performance/Noticing';
 import { MissedTrend, missedHref } from './performance/MissedTrend';
 
-export default function ManagerDashboard({ view, chartWidth }: { view: ManagerView; chartWidth?: number }) {
+export default function ManagerDashboard({ view, chartWidth, campaignStrip }: { view: ManagerView; chartWidth?: number; campaignStrip?: ReactNode }) {
   const { header, office, home, mine, goal, lanes, roleContext, toolGroups, performance, performanceState, insights, tools } = view;
   const [period, setPeriod] = useState<Period | null>(null);
   const closeAction = tools.find(t => t.id === 'close');
@@ -24,6 +24,7 @@ export default function ManagerDashboard({ view, chartWidth }: { view: ManagerVi
         state={{ text: office.headline, tone: home.summary.tone }} context={<ViewContext context={roleContext} />}
         actions={<>{fofAction && <ActionLink to={fofAction.to} variant="secondary">{fofAction.label}</ActionLink>}{closeAction && <ActionLink to={closeAction.to} variant="primary">{closeAction.label}</ActionLink>}</>} />
       <div className="mt-5 space-y-5">
+        {campaignStrip}
         <PracticePerformance data={performance} state={performanceState} chartWidth={chartWidth} onPeriodChange={setPeriod}
           aside={<NeedsYouPanel preview={2} needs={home.needs} title={home.wrapUp ? 'Before you leave' : 'Needs you'} emptyTitle={home.wrapUp ? 'Nothing carries into tomorrow.' : 'Nothing is waiting on you.'} emptyDetail="Decisions, fixes, and follow-ups are all clear." lead={<><BriefPriorities summary={home.summary} />{lead}</>} />} />
         <ChosenGoals data={view.chosenGoals} officeGoal={goal} admin />

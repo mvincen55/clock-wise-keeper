@@ -7,12 +7,15 @@ export interface Campaign {
   pts_call: number; pts_huddle: number; pts_review_doctor: number; pts_review_hygienist: number; pts_review_clerical: number; pts_review_assistant: number;
   pts_attend_bonus: number; pts_prepay_bonus: number; prize_tier1_points: number; prize_tier2_points: number; clerical_min_calls: number;
   open_hours_goal: number; grand_prize_dollars: number;
+  auto_import_enabled?: boolean; scan_validation?: Record<string, number> | null;
 }
 export interface Participant { id: string; employee_id: string; scoring_role: ScoringRole | null; active: boolean }
 export interface Activity {
   id: string; entry_code: string; employee_id: string; activity_type: ActivityType; occurred_at: string; tally_week: string;
   quantity: number; status: 'pending' | 'approved' | 'rejected' | 'withdrawn' | 'reversed'; awarded_points: number | null;
   parent_id: string | null; reason_code: string | null;
+  source?: 'web' | 'sheet' | 'manager'; sheet_id?: string | null; sheet_row?: number | null;
+  sheet_code?: string | null; booked_by_employee_id?: string | null; supersedes_id?: string | null;
 }
 export interface Calls { id: string; employee_id: string; week_key: string; verified_count: number; points_per_call: number }
 export interface Huddle { id: string; employee_id: string; huddle_date: string; week_key: string; on_time: boolean; points: number }
@@ -23,6 +26,26 @@ export interface Audit { id: string; employee_id: string | null; entity: string;
 export interface Ledger {
   campaign: Campaign; participants: Participant[]; activities: Activity[]; calls: Calls[]; huddles: Huddle[];
   metrics: Metric[]; picks: PrizePick[]; names: RosterName[]; audit: Audit[];
+  sheets?: ScheduleSheet[]; sheetRows?: ScheduleSheetRow[]; checks?: WeeklyCheck[];
+}
+export interface ScheduleSheet { id: string; sheet_code: string; week_key: string; row_count: number; status: 'open' | 'void'; printed_at: string }
+export interface SheetReading {
+  row_no: number; blank: boolean; occurred_at: string | null; credit_employee_id: string | null;
+  booked_by_employee_id: string | null; staff_confirmed: boolean | null; handoff_verified: boolean | null;
+  prepay_yes: boolean | null; prepay_at: string | null; prepay_verified: boolean | null;
+  app_code: string | null; crossed_out: boolean | null; confidence: Record<string, number>;
+}
+export interface ScheduleSheetRow {
+  id: string; sheet_id: string; row_no: number; reading: SheetReading; previous_reading: SheetReading | null;
+  credit_employee_id: string | null; booked_by_employee_id: string | null; handoff_state: 'blank' | 'entered' | 'awaiting' | 'flagged' | 'linked' | 'skipped';
+  prepay_state: 'none' | 'entered' | 'not_verified' | 'flagged' | 'skipped'; flags: string[];
+  handoff_activity_id: string | null; prepay_activity_id: string | null; generation: number;
+}
+export interface WeeklyCheck { id: string; week_key: string; check_key: 'reviews' | 'huddles'; checked: boolean }
+export function pendingPoints(d: Ledger, employeeId: string, week: string) {
+  const role = d.participants.find(p => p.employee_id === employeeId)?.scoring_role ?? null;
+  return d.activities.filter(a => a.employee_id === employeeId && a.tally_week === week && a.status === 'pending')
+    .reduce((s, a) => { const rate = activityRate(a.activity_type, d.campaign, role); return { points: s.points + (rate ?? 0) * a.quantity, unset: s.unset + (rate == null ? 1 : 0) }; }, { points: 0, unset: 0 });
 }
 export const labels: Record<ActivityType, string> = {
   qr_card: 'Review requested + QR card handed out', unscheduled_booking: 'Appointment booked from the unscheduled treatment list',
