@@ -2144,6 +2144,11 @@
   margin: 0.5in;
 }
 
+/* The named page is anchored on the print root, not just on each sheet:
+   a wrapper between two sheets that sat on an "auto" page (the empty
+   composed-output box when the source sheet prints) made Chrome emit a
+   blank page for the page-name change — three sheets for a two-page job. */
+.fof-print-root,
 .fof-sheet {
   page: fof;
 }
@@ -3083,6 +3088,25 @@
     padding: 0;
   }
 
+  /* The patient sheet never fills the printable box to the last pixel:
+     0.2in of slack keeps browser rounding from spilling the footer onto a
+     page of its own. (The office copy sets its own min-height.) */
+  .fof-print-root .fof-sheet:not(.fof-office-page) {
+    min-height: 9.8in;
+  }
+
+  /* Chrome prints a tab at its zoom level: at 67% every in/pt unit covers
+     only two-thirds of the paper, so the sheet measured on screen as a
+     full Letter page came out small, and at 125% it overflowed. In print
+     100vw/100vh are the page area, so their ratio to the sheet's design
+     box (7.5in x 10in) is exactly the zoom to undo; min() keeps the sheet
+     inside the paper when the page area is narrower or shorter than that
+     box (A4, custom margins). Chromium only — set from FofBuilder — other
+     engines print at 100% already. */
+  .fof-print-root[data-fof-zoom-compensate] {
+    zoom: min(tan(atan2(100vw, 7.5in)), tan(atan2(100vh, 10in)));
+  }
+
   /* The FOF sheet uses its own layout — exempt it from the generic
      print table borders below. */
   .fof-sheet th,
@@ -3630,6 +3654,9 @@
 .fof-payment-milestone strong { font-size: 10pt; font-variant-numeric: tabular-nums; }
 .fof-payment-plan-total { display: flex; justify-content: space-between; padding: 8pt 12pt; color: var(--fof-navy); font-size: 10pt; font-weight: 700; break-inside: avoid; }
 .fof-composed-page { width: 7.5in; min-height: 9.8in; padding: 0; margin: 0 auto 16pt; break-inside: avoid-page; break-after: page; }
+/* The composed page's capacity, on screen and on paper alike: a Letter page
+   area (10in) less 0.2in of rounding room for the unbreakable signature block.
+   Fixed inches, so the fit measured on screen is the fit printed. */
 .fof-page-capacity { height: 9.8in; }
 .fof-practice-name { max-width: 65%; color: var(--fof-navy); font-size: 16pt; font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; }
 .fof-page-source[data-composed="true"], .fof-page-measure { position: fixed; left: -100000px; top: 0; width: 7.5in; visibility: hidden; pointer-events: none; }
@@ -3677,11 +3704,7 @@
 .fof-layout-review { padding: 16pt; border: 1pt solid #ad3131; color: #8f2222; background: white; }
 @media print {
   .fof-page-source[data-composed="true"] { display: none !important; }
-  /* Leave rounding room for the unbroken signature block. The page viewport
-     also follows Chrome's print zoom, unlike a fixed ten-inch flex box. */
-  .fof-composed-page { margin: 0; min-height: 98vh; }
-  .fof-page-capacity { height: 98vh; }
-  .fof-page-measure { width: 100vw; }
+  .fof-composed-page { margin: 0; }
 }
 .fof-policy-sheet .fof-cells { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .fof-policy-sheet .fof-row > span:first-child { overflow-wrap: anywhere; }

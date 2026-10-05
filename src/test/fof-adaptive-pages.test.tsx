@@ -131,6 +131,34 @@ describe('patient page composition', () => {
     await waitFor(() => expect(composed(container).textContent).toContain('Current name'));
     expect(container.textContent).not.toContain('Previous name');
   });
+  it('composes the hidden print portal at beforeprint, so Ctrl+P prints the composed form', () => {
+    // The browser fires beforeprint with screen styles still applied: the portal
+    // is display:none and measures 0px unless it is laid out for preparation.
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.closest('[data-fof-preparing]') ? 600 : 0;
+    });
+    const { container } = render(<div className="fof-print-root"><Form /></div>);
+    const root = container.firstElementChild as HTMLElement;
+    expect(composed(container).children).toHaveLength(0);
+    window.dispatchEvent(new Event('beforeprint'));
+    expect(composed(container).querySelectorAll('[data-payment-event]')).toHaveLength(3);
+    expect(container.querySelector('.fof-page-source')?.getAttribute('aria-hidden')).toBe('true');
+    expect(root.hasAttribute('data-fof-preparing')).toBe(false);
+  });
+  it('prints the current form after an edit made while the portal was hidden', () => {
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.closest('[data-fof-preparing]') ? 600 : 0;
+    });
+    const { container, rerender } = render(<div className="fof-print-root"><Form name="Previous name" /></div>);
+    const root = container.firstElementChild as HTMLElement;
+    expect(prepareFofPrint(root)).toBeNull();
+    expect(composed(container).textContent).toContain('Previous name');
+    rerender(<div className="fof-print-root"><Form name="Current name" /></div>);
+    window.dispatchEvent(new Event('beforeprint'));
+    expect(composed(container).querySelectorAll('.fof-sheet')).toHaveLength(1);
+    expect(composed(container).textContent).toContain('Current name');
+    expect(container.textContent).not.toContain('Previous name');
+  });
   it('drops the previous form when a hidden print portal cannot be measured yet', () => {
     measuredHeight(300, 100);
     const { container, rerender } = render(<Form name="Previous name" />);

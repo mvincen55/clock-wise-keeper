@@ -22,16 +22,21 @@ try {
   const page=await context.newPage();
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   const {getDocument}=await import('pdfjs-dist/legacy/build/pdf.mjs');
-  async function pdfTexts(file,scale=1) {
+  // realFlow: print the way the office does — with the page still styled for
+  // the screen, so Chromium's beforeprint reaches the hidden portal exactly as
+  // it does from the Print button or Ctrl+P. Otherwise print media is emulated
+  // first, which lets layout be measured on the live page.
+  async function pdfTexts(file,scale=1,realFlow=false) {
     const viewport=page.viewportSize();
     await page.setViewportSize({width:Math.round(720/scale),height:Math.round(960/scale)});
-    await page.emulateMedia({media:'print'});
+    // An emulated media type also governs printing, so the real flow clears it.
+    await page.emulateMedia({media:realFlow?null:'print'});
     const bytes=await page.pdf({path:path.join(output,file),format:'Letter',scale,printBackground:true,preferCSSPageSize:true});
     const loadingTask=getDocument({data:new Uint8Array(bytes),disableFontFace:true,verbosity:0});
     const doc=await loadingTask.promise;
     const texts=[];
     for(let i=1;i<=doc.numPages;i++) texts.push((await (await doc.getPage(i)).getTextContent()).items.map(item=>item.str).join(' '));
-    if(texts.length>1 && file.startsWith('patient')) {
+    if(!realFlow && texts.length>1 && file.startsWith('patient')) {
       console.log('Layout metrics',JSON.stringify(await page.evaluate(()=>{
         const original=document.querySelector('.fof-page-source')?.firstElementChild;
         if(!original)return {};
@@ -67,20 +72,42 @@ try {
       assert.doesNotMatch(texts[0],/Office Copy/);
     }
     if(mode!=='patient') for(const code of codesForOffice()) assert.ok(texts.at(-1).includes(code),`Missing office code ${code}`);
+    // The real print flow must produce the same pages: no blank sheet between the
+    // patient page and the office copy, and no plain source sheet printed in place
+    // of the composed one.
+    const real=await pdfTexts(`${mode}-real-flow.pdf`,1,true);
+    assert.equal(real.length,texts.length,`${mode} real-flow page count`);
+    assert.deepEqual(real.map(t=>/PATIENT SIGNATURE/i.test(t)),texts.map(t=>/PATIENT SIGNATURE/i.test(t)),`${mode} real-flow signature pages`);
+    if(mode==='both') assert.match(real[1],/Office Copy/,'The office copy follows the patient page directly');
     if(mode==='patient') {
       await page.getByRole('button',{name:'Increase crown fee'}).click();
       await page.getByRole('button',{name:'Prepare print'}).click();
       const updated=await pdfTexts('patient-repriced.pdf');
       assert.equal(updated.length,1);assert.match(updated[0],/8,273.00/);assert.doesNotMatch(updated[0],/8,173.00/);
+      // A zoomed tab prints the same single page: the sheet undoes Chrome's print
+      // zoom on paper, so the fit measured on screen is the fit printed.
       for(const scale of [0.67,1.25]) {
-        const zoomed=await pdfTexts(`patient-zoom-${scale}.pdf`,scale);
+        const zoomed=await pdfTexts(`patient-zoom-${scale}.pdf`,scale,true);
         console.log(`Patient at ${scale*100}%: ${zoomed.length} pages`);
-        assert.ok(zoomed.length>=1&&zoomed.length<=2,'Print scaling must not create orphan pages');
-        assert.match(zoomed.at(-1),/PATIENT SIGNATURE/i);assert.match(zoomed.at(-1),/8,273.00/);
-        assert.match(zoomed.at(-1),/Implant Crown/,'Signatures must accompany treatment payments');
+        assert.equal(zoomed.length,1,'Print zoom must not change the page count');
+        assert.match(zoomed[0],/PATIENT SIGNATURE/i);assert.match(zoomed[0],/8,273.00/);
+        assert.match(zoomed[0],/Implant Crown/,'Signatures must accompany treatment payments');
       }
     }
   }
+  // Neither agreement offered (both toggled off by staff): still one patient page
+  // and the office copy right behind it, through the real print flow.
+  await page.emulateMedia({media:'screen'});
+  await page.goto(`${origin}/.repro/fof-browser/index.html?mode=both&options=off`);
+  await page.getByRole('heading',{name:'Patient payment schedule'}).waitFor();
+  await page.evaluate(()=>Promise.all([...document.images].map(img=>img.decode().catch(()=>{}))));
+  await page.getByRole('button',{name:'Prepare print'}).click();
+  assert.equal(await page.locator('#print-result').textContent(),'Ready');
+  assert.equal(await page.locator('.fof-payment-options').count(),0,'No agreement offered prints no payment section');
+  const noOptions=await pdfTexts('both-no-options-real-flow.pdf',1,true);
+  console.log(`both (no agreements): ${noOptions.length} PDF pages`);
+  assert.equal(noOptions.length,2,'no-agreement page count');
+  assert.match(noOptions[0],/PATIENT SIGNATURE/i);assert.match(noOptions[1],/Office Copy/);
   await page.goto(`${origin}/.repro/fof-browser/index.html?view=import`);
   await page.getByRole('alertdialog').waitFor();
   await page.getByRole('alertdialog').evaluate(element=>Promise.all(element.getAnimations().map(animation=>animation.finished)));
