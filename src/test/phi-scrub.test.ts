@@ -55,3 +55,68 @@ describe('scrubFreeText — person-level detail never leaves', () => {
     expect(looksPersonLevel('hygiene recall count for July')).toBe(false);
   });
 });
+
+describe('scrubFreeText — office vocabulary and places are not people', () => {
+  it('keeps carrier names, manual titles and section headings intact', () => {
+    for (const phrase of [
+      '[DD MA Processing Manual — Timely Filing, page 12] (insurance)',
+      'per the Delta Dental manual, claims are due in 12 months',
+      'Blue Cross Blue Shield requires a narrative for D2740',
+      'see the Coordination of Benefits section in the Aetna Provider Handbook',
+      'Harbor Dental is closed Friday',
+      'United Concordia downgrades posterior composites',
+      'Practice: Harbor Dental',
+    ]) {
+      const r = scrubFreeText(phrase);
+      expect(r.text, phrase).toBe(phrase);
+      expect(r.redacted, phrase).toBe(false);
+    }
+  });
+
+  it('keeps cities and states intact', () => {
+    for (const phrase of ['Salt Lake City', 'Boston, Massachusetts', 'North Carolina', 'San Diego office', 'New Bedford', 'Fort Worth', 'Rhode Island']) {
+      expect(scrubFreeText(phrase).text, phrase).toBe(phrase);
+    }
+  });
+
+  it('still removes a name that sits next to vocabulary', () => {
+    expect(scrubFreeText('Patient Robert Chen called about his crown').text).toBe('Patient [a person] called about his crown');
+    expect(scrubFreeText('Sarah Whitman Insurance Verification').text).toBe('[a person] Insurance Verification');
+  });
+});
+
+describe('scrubFreeText — names typed in lower case or caps', () => {
+  it('removes a known first+last pair in any case', () => {
+    expect(scrubFreeText('call sarah johnson about the crown').text).toBe('call [a person] about the crown');
+    expect(scrubFreeText('NP - JANE DOE 9am').text).toBe('NP - [a person] 9am');
+    expect(scrubFreeText('Doe, Jane owes $40').text).toBe('[a person] owes $40');
+    expect(scrubFreeText('robert j. chen jr. called').text).toBe('[a person] called');
+    expect(scrubFreeText('mrs alvarez rescheduled').text).toBe('[a person] rescheduled');
+  });
+
+  it('honours word-like surnames only after a first name', () => {
+    expect(scrubFreeText('sarah white is here').text).toBe('[a person] is here');
+    expect(scrubFreeText('Snow Day on Friday').redacted).toBe(false);
+    expect(scrubFreeText('the white filling').redacted).toBe(false);
+  });
+
+  it('leaves lower-case office prose alone', () => {
+    for (const phrase of [
+      'megan called about the delta claim',
+      'ask megan to review the day sheet',
+      'sarah will cover the front desk',
+      'order more prophy paste',
+      'the new patient forms are printed',
+    ]) {
+      expect(scrubFreeText(phrase).redacted, phrase).toBe(false);
+    }
+  });
+});
+
+describe('scrubFreeText — titles', () => {
+  it('trusts a lower-case title only before a known surname', () => {
+    expect(scrubFreeText('mrs alvarez rescheduled').text).toBe('[a person] rescheduled');
+    expect(scrubFreeText('the dr said to wait').redacted).toBe(false);
+    expect(scrubFreeText('Dr. Appointment reminders go out Monday').redacted).toBe(false);
+  });
+});

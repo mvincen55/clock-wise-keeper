@@ -1,9 +1,12 @@
 // Kimi office agent: one AI backend for both chat surfaces — the FOF
 // Assistant widget (mode "fof") and the Ask AI page (mode "ask").
-// Runs Moonshot Kimi K3 through OpenRouter with native tool calling.
+// Runs Moonshot Kimi K3 through OpenRouter with native tool calling, and
+// falls back to the Lovable AI gateway (OpenAI) when Kimi is unconfigured,
+// out of credits, or down — see _shared/chat-provider.ts.
 //
 // What it can DO (tool calls, role-gated server-side):
 //   everyone   search_office_docs — FTS over the org's uploaded documents
+//   everyone   search_web — live web search (OpenRouter web plugin)
 //   managers   save_memory / forget_memory — durable org memory ("remember
 //              as we go") about the office and about this site/app
 //   managers   save_wording_rule — FOF "train as we go" (mode "fof" only,
@@ -36,6 +39,15 @@ import { loadOfficeProfile, OFFICE_PROFILE_PREAMBLE } from "../_shared/office-kn
 import { scrubMessages } from "../_shared/ai-safe.ts";
 import { scrubFreeText } from "../_shared/phi-scrub.ts";
 import { FOF_PATIENT_CONTEXT_ENABLED, fofTextNeedsReview, fofRuleNeedsReview, fofTrainingWriteAllowed } from "../_shared/fof-privacy.ts";
+import {
+  type AgentSource,
+  SEARCH_OFFICE_DOCS_TOOL,
+  SEARCH_SCOPES,
+  type SearchScope,
+  searchOfficeDocs,
+} from "../_shared/office-doc-search.ts";
+import { DEFAULT_WEB_MODEL, SEARCH_WEB_TOOL, searchWeb, type WebSource } from "../_shared/web-search.ts";
+import { createChatClient, resolveChatProviders } from "../_shared/chat-provider.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -49,7 +61,6 @@ const json = (body: unknown, status = 200) =>
   });
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = "moonshotai/kimi-k3";
 const DEFAULT_CHECK_MODEL = "moonshotai/kimi-k2.6";
 const GITHUB_API = "https://api.github.com";
 
@@ -64,7 +75,6 @@ const MAX_TOOL_ROUNDS = 6;
 const SOFT_DEADLINE_MS = 100_000;
 const MAX_MEMORY_CHARS = 500;
 const MAX_MEMORIES_IN_PROMPT = 120;
-const MAX_DOC_CONTEXT_CHARS = 24_000;
 const MAX_COMMIT_FILES = 10;
 const MAX_FILE_CHARS = 64_000;
 const MAX_READ_CHARS = 48_000;
@@ -76,181 +86,10 @@ const bounded = (value: unknown, cap: number): string =>
 const boundedText = (value: unknown, cap: number): string =>
   typeof value === "string" ? value.trim().slice(0, cap) : "";
 
-interface DocMatch {
-  doc_id: string;
-  title: string;
-  category: string;
-  chunk_index: number;
-  content: string;
-  rank: number;
-  // Structured-parse provenance (null on legacy extractions).
-  section_title?: string | null;
-  page_number?: number | null;
-  parse_version?: number;
-}
-
 interface AgentAction {
   type: string;
   summary: string;
   url?: string;
-}
-
-interface AgentSource {
-  id: string;
-  title: string;
-  category: string;
-  /** Best-ranked citation into the document, when known. */
-  section_title?: string | null;
-  page_number?: number | null;
-}
-
-// ---------------------------------------------------------------------------
-// Office document retrieval (same FTS + neighbor-chunk approach as ask-docs)
-// ---------------------------------------------------------------------------
-
-// Contextual search scopes. Mirrors AI_SCOPES in src/lib/doc-library.ts —
-// edge functions cannot import from src/. Global Ask AI (no scope) still
-// searches every approved document.
-interface SearchScope {
-  label: string;
-  areas: string[];
-  collections: string[];
-}
-
-const SEARCH_SCOPES: Record<string, SearchScope> = {
-  handbook: {
-    label: "Office Handbook (Workplace handbook + HR documents)",
-    areas: ["workplace"],
-    collections: ["handbook", "hr"],
-  },
-  insurance: {
-    label: "Insurance Desk (carrier manuals and insurance references)",
-    areas: ["playbook"],
-    collections: ["insurance"],
-  },
-};
-
-// deno-lint-ignore no-explicit-any
-async function searchOfficeDocs(
-  supabase: any,
-  queries: string[],
-  sources: Map<string, AgentSource>,
-  scope: SearchScope | null,
-  scopeDocIds: string[] | null
-): Promise<string> {
-  const cleaned = queries
-    .map((q) => bounded(q, 60))
-    .filter(Boolean)
-    .slice(0, 5);
-  if (cleaned.length === 0) return "ERROR: provide 1-5 short keyword queries.";
-
-  const results = await Promise.all(
-    cleaned.map((q) =>
-      supabase.rpc("search_office_doc_chunks", {
-        p_query: q,
-        p_limit: 8,
-        ...(scope
-          ? { p_library_areas: scope.areas, p_collections: scope.collections }
-          : {}),
-        ...(scopeDocIds && scopeDocIds.length > 0 ? { p_doc_ids: scopeDocIds } : {}),
-      })
-    )
-  );
-  const byKey = new Map<string, DocMatch>();
-  for (const result of results) {
-    for (const match of (result.data ?? []) as DocMatch[]) {
-      const key = `${match.doc_id}:${match.chunk_index}`;
-      const existing = byKey.get(key);
-      if (!existing || match.rank > existing.rank) byKey.set(key, match);
-    }
-  }
-  const matches = [...byKey.values()].sort((a, b) => b.rank - a.rank).slice(0, 14);
-  if (matches.length === 0) {
-    return "No document sections matched those queries. Try different keywords, or the answer may not be in the knowledge base.";
-  }
-
-  // Pull neighboring chunks for the strongest hits so rules that span a
-  // chunk boundary arrive intact. Neighbors stay within the SAME parse
-  // version and skip furniture (headers/footers/TOC rows are provenance,
-  // not content).
-  const docMeta = new Map<string, { title: string; category: string; version: number }>();
-  const wanted = new Map<string, Set<number>>();
-  for (const match of matches.slice(0, 5)) {
-    docMeta.set(match.doc_id, {
-      title: match.title,
-      category: match.category,
-      version: match.parse_version ?? 1,
-    });
-    const set = wanted.get(match.doc_id) ?? new Set<number>();
-    if (match.chunk_index > 0) set.add(match.chunk_index - 1);
-    set.add(match.chunk_index + 1);
-    wanted.set(match.doc_id, set);
-  }
-  for (const match of matches) wanted.get(match.doc_id)?.delete(match.chunk_index);
-  const neighborResults = await Promise.all(
-    [...wanted.entries()]
-      .filter(([, set]) => set.size > 0)
-      .map(([docId, set]) =>
-        supabase
-          .from("office_doc_chunks")
-          .select("doc_id, chunk_index, content, section_title, page_number, chunk_type")
-          .eq("doc_id", docId)
-          .eq("parse_version", docMeta.get(docId)?.version ?? 1)
-          .in("chunk_index", [...set])
-      )
-  );
-  for (const result of neighborResults) {
-    for (const chunk of result.data ?? []) {
-      const meta = docMeta.get(chunk.doc_id);
-      if (!meta) continue;
-      if (["header", "footer", "table_of_contents"].includes(chunk.chunk_type ?? "")) continue;
-      matches.push({
-        doc_id: chunk.doc_id,
-        title: meta.title,
-        category: meta.category,
-        chunk_index: chunk.chunk_index,
-        content: chunk.content,
-        rank: 0,
-        section_title: chunk.section_title,
-        page_number: chunk.page_number,
-      });
-    }
-  }
-
-  let budget = MAX_DOC_CONTEXT_CHARS;
-  const kept: DocMatch[] = [];
-  for (const match of [...matches].sort((a, b) => b.rank - a.rank)) {
-    if (match.content.length > budget) continue;
-    budget -= match.content.length;
-    kept.push(match);
-  }
-  kept.sort((a, b) => a.title.localeCompare(b.title) || a.chunk_index - b.chunk_index);
-  for (const m of kept) {
-    // The best-ranked hit per document supplies the citation shown in the
-    // UI (kept is rank-ordered before the sort above rearranged it, so
-    // fill section/page only if missing or this match has better info).
-    const existing = sources.get(m.doc_id);
-    if (!existing) {
-      sources.set(m.doc_id, {
-        id: m.doc_id,
-        title: m.title,
-        category: m.category,
-        section_title: m.section_title ?? null,
-        page_number: m.page_number ?? null,
-      });
-    } else if (!existing.section_title && m.section_title) {
-      existing.section_title = m.section_title;
-      existing.page_number = m.page_number ?? existing.page_number ?? null;
-    }
-  }
-  return kept
-    .map((m) => {
-      const where = m.section_title
-        ? `${m.section_title}${m.page_number ? `, page ${m.page_number}` : ""}`
-        : `section ${m.chunk_index}`;
-      return `[${m.title} — ${where}] (${m.category})\n${m.content}`;
-    })
-    .join("\n\n---\n\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -740,6 +579,8 @@ interface PromptContext {
   scopeDocLabel?: string | null;
   /** True when the scope is the Insurance Desk (carrier-manual rules). */
   insuranceScope?: boolean;
+  /** True when search_web is on offer this turn. */
+  webAvailable?: boolean;
 }
 
 function buildSystemPrompt(ctx: PromptContext): string {
@@ -756,7 +597,10 @@ function buildSystemPrompt(ctx: PromptContext): string {
   // --- capabilities, honestly stated, per role -----------------------------
   const capabilities: string[] = [
     "answer questions and discuss anything above",
-    `search the office document knowledge base with search_office_docs (${ctx.docCount} document${ctx.docCount === 1 ? "" : "s"} indexed)`,
+    `search the office document knowledge base with search_office_docs (${ctx.docCount} document${ctx.docCount === 1 ? "" : "s"} indexed — handbook, HR, and insurance carrier manuals)`,
+    ...(ctx.webAvailable
+      ? ["search the public internet with search_web for facts outside the office's own documents (CDT code definitions, a carrier's public policies, clinical or regulatory facts, anything current)"]
+      : ["(web search is unavailable right now — say so if a question needs it)"]),
   ];
   if (ctx.isManager && (ctx.mode !== 'fof' || ctx.training)) {
     capabilities.push(
@@ -855,6 +699,9 @@ function buildSystemPrompt(ctx: PromptContext): string {
     if (ctx.visits) parts.push(`The current form's procedures (de-identified, by visit):\n${ctx.visits}`);
     if (ctx.treatment) parts.push(`The current AI-written treatment summary: "${ctx.treatment}"`);
     parts.push(
+      "LOOK THINGS UP, DON'T GUESS: for any question about a carrier's rules, what an insurance manual says, office policy, HR, or how a code is handled here, call search_office_docs FIRST with 2-5 short keyword queries (expand shorthand: 'DD MA' → Delta Dental, 'ins' → insurance) and answer from what comes back, naming the manual, section and page casually. Never apply one carrier's rule to another carrier. The CODE NOTES above are this office's own guidance and always apply as written."
+    );
+    parts.push(
       ctx.isManager
         ? ctx.training
           ? 'TRAINING IS ON: when the manager states a wording preference, correction, or standing policy for how treatment summaries or payment names should read (e.g. "never say X, say Y", "the doctor prefers..."), distill it into ONE short, general, imperative rule (max 200 characters, no patient or staff names other than doctor titles, no case-specific details) and call save_wording_rule. Confirm in your reply what was saved. A saved rule shapes AI wording only — it never changes pricing, fees, or what a membership includes; those live in Fee Schedules/Templates configuration (which you CAN change in code only if the user explicitly wants an app change).'
@@ -879,6 +726,12 @@ function buildSystemPrompt(ctx: PromptContext): string {
     }
   }
 
+  if (ctx.webAvailable) {
+    parts.push(
+      "THE WEB: when a question needs facts outside the office's own documents — what a CDT code means or when it changed, a carrier's public policy page, clinical or regulatory facts, dates, anything current — call search_web with one focused query and mention the source in your answer. Office documents and code notes always win over the web for how THIS office does things. Never put a patient's details in a query."
+    );
+  }
+
   // --- voice + privacy -----------------------------------------------------
   parts.push(
     "VOICE: talk like a helpful coworker, not a policy lawyer. Lead with the answer. Keep it SHORT — a few sentences for most questions, a brief list only when it genuinely helps, no headings. Mention a source document casually once ('per the DD MA manual') rather than formal citations. When discussing phrasing, suggest exact wording. When discussing code you changed, name the files and what changed in plain words."
@@ -894,29 +747,9 @@ function buildSystemPrompt(ctx: PromptContext): string {
 // Tool schemas (OpenAI function-call format, filtered by role/mode)
 // ---------------------------------------------------------------------------
 
-function buildTools(ctx: { isManager: boolean; training: boolean; mode: string; githubReady: boolean }) {
+function buildTools(ctx: { isManager: boolean; training: boolean; mode: string; githubReady: boolean; webAvailable: boolean }) {
   // deno-lint-ignore no-explicit-any
-  const tools: any[] = [
-    {
-      type: "function",
-      function: {
-        name: "search_office_docs",
-        description:
-          "Full-text search over the office's uploaded documents (policies, HR, insurance manuals). Provide 1-5 short keyword queries (1-3 words each); returns the best-matching excerpts.",
-        parameters: {
-          type: "object",
-          properties: {
-            queries: {
-              type: "array",
-              items: { type: "string" },
-              description: "1-5 short keyword queries, e.g. [\"PTO accrual\", \"crown replacement\"]",
-            },
-          },
-          required: ["queries"],
-        },
-      },
-    },
-  ];
+  const tools: any[] = [SEARCH_OFFICE_DOCS_TOOL, ...(ctx.webAvailable ? [SEARCH_WEB_TOOL] : [])];
   if (!ctx.isManager || (ctx.mode === 'fof' && !ctx.training)) return tools;
 
   tools.push(
@@ -1005,16 +838,22 @@ Deno.serve(async (req) => {
   try {
     // User-facing problems return 200 with {error}: supabase-js hides the
     // body of non-2xx function responses, and both UIs surface data.error.
-    const apiKey = Deno.env.get("OPENROUTER_API_KEY");
-    if (!apiKey) {
+    // Kimi (OpenRouter) first; the Lovable gateway (OpenAI) when Kimi is
+    // missing, out of credits, or down. Nothing configured → say so.
+    const providers = resolveChatProviders(Deno.env);
+    if (providers.length === 0) {
       return json({
-        error: "Kimi is not configured yet — add the OPENROUTER_API_KEY secret (see docs/kimi-assistant.md).",
+        error: "The assistant is not configured yet — add the OPENROUTER_API_KEY secret (see docs/kimi-assistant.md).",
       });
     }
-    const model = Deno.env.get("OPENROUTER_MODEL") ?? DEFAULT_MODEL;
+    const client = createChatClient(providers);
+    // Contradiction checking and web search run on OpenRouter only; both
+    // fail open when it is unavailable.
+    const apiKey = Deno.env.get("OPENROUTER_API_KEY") ?? "";
     // Contradiction checking is a small, strict classification — a cheaper
     // model does it well and keeps memory saves fast.
     const checkerModel = Deno.env.get("OPENROUTER_CHECK_MODEL") ?? DEFAULT_CHECK_MODEL;
+    const webModel = Deno.env.get("OPENROUTER_WEB_MODEL") ?? checkerModel ?? DEFAULT_WEB_MODEL;
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return json({ error: "Missing authorization" }, 401);
@@ -1201,12 +1040,14 @@ Deno.serve(async (req) => {
       searchScopeLabel: searchScope?.label,
       scopeDocLabel,
       insuranceScope: mode === "ask" && body.scope === "insurance",
+      webAvailable: client.openrouter !== null,
     });
-    const tools = buildTools({ isManager, training, mode, githubReady });
+    const tools = buildTools({ isManager, training, mode, githubReady, webAvailable: client.openrouter !== null });
 
     const actions: AgentAction[] = [];
     const savedRules: string[] = [];
     const sources = new Map<string, AgentSource>();
+    const webSources = new Map<string, WebSource>();
 
     // deno-lint-ignore no-explicit-any
     const executeTool = async (name: string, args: any): Promise<string> => {
@@ -1224,6 +1065,19 @@ Deno.serve(async (req) => {
             searchScope,
             scopeDocIds
           );
+        case "search_web": {
+          const openrouter = client.openrouter;
+          if (!openrouter) {
+            return "ERROR: web search is unavailable right now (it needs the Kimi/OpenRouter provider, which is not responding). Answer from the office's documents and say the web could not be checked.";
+          }
+          return await searchWeb({
+            apiKey: openrouter.apiKey,
+            model: webModel,
+            query: bounded(args?.query, 300),
+            surface: "kimi-agent",
+            sources: webSources,
+          });
+        }
         case "save_memory": {
           if (!isManager) return "ERROR: only managers can save memories.";
           const kind = args?.kind === "site" ? "site" : args?.kind === "office" ? "office" : null;
@@ -1235,7 +1089,7 @@ Deno.serve(async (req) => {
           // belief) decides whether this clashes with standing memory; a
           // clash is stored 'pending' — out of every prompt — until an
           // owner/manager rules on it.
-          const clash = await findContradiction(apiKey, checkerModel, content, memories);
+          const clash = apiKey ? await findContradiction(apiKey, checkerModel, content, memories) : null;
           const conflictNote = clash
             ? `New: "${content}" — Existing: "${clash.conflictsWith.content}" — ${clash.explanation}`
             : "";
@@ -1342,39 +1196,31 @@ Deno.serve(async (req) => {
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       const outOfTime = Date.now() - startedAt > SOFT_DEADLINE_MS;
       const finalizing = round === MAX_TOOL_ROUNDS || outOfTime;
-      const response = await fetch(OPENROUTER_URL, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": "https://github.com/mvincen55/clock-wise-keeper",
-          "X-Title": "Purple Envelope Office Assistant",
-        },
-        body: JSON.stringify({
-          model,
+      const result = await client.complete(
+        {
           messages: scrubMessages(convo, "kimi-agent"),
           // Tools stay declared even on the final round (tool messages in
           // history need them); tool_choice "none" forces a text reply.
           ...(tools.length > 0 ? { tools, tool_choice: finalizing ? "none" : "auto" } : {}),
           max_tokens: 4000,
           temperature: 0.6,
-        }),
-        signal: AbortSignal.timeout(90_000),
-      });
-      if (response.status === 429) {
-        return json({ error: "Kimi is receiving too many requests. Try again in a moment." });
-      }
-      if (response.status === 402) {
-        return json({ error: "OpenRouter credits are exhausted — add credits at openrouter.ai." });
-      }
-      if (response.status === 401) {
-        return json({ error: "OpenRouter rejected the API key — check the OPENROUTER_API_KEY secret." });
-      }
-      if (!response.ok) {
-        console.error("OpenRouter error:", response.status);
+        },
+        90_000,
+      );
+      if (!result.ok) {
+        console.error("kimi-agent: providers", result.error);
+        if (result.status === 429) {
+          return json({ error: "The assistant is receiving too many requests. Try again in a moment." });
+        }
+        if (result.status === 402) {
+          return json({ error: `${result.provider?.label ?? "The AI provider"} is out of credits — add credits (openrouter.ai) or configure the Lovable gateway so the assistant can fall back.` });
+        }
+        if (result.status === 401) {
+          return json({ error: `${result.provider?.label ?? "The AI provider"} rejected its API key — check the secret.` });
+        }
         return json({ error: "AI request failed. Try again." });
       }
-      const completion = await response.json();
+      const completion = result.completion;
       const message = completion.choices?.[0]?.message;
       if (!message) return json({ error: "AI returned no reply" });
 
@@ -1424,7 +1270,13 @@ Deno.serve(async (req) => {
       reply: reply.slice(0, 8000),
       savedRules,
       actions,
-      sources: [...sources.values()],
+      sources: [
+        ...sources.values(),
+        // Web citations ride in the same list so every surface's badges show
+        // them; the id is the URL, which is also what the title falls back to.
+        ...[...webSources.values()].map((w) => ({ id: w.url, title: w.title, category: "web" })),
+      ],
+      provider: client.active?.name ?? null,
     });
   } catch (err) {
     console.error("kimi-agent request failed");

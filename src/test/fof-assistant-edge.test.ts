@@ -31,7 +31,7 @@ describe('shipped FOF assistant endpoint', () => {
     expect(test.gateway).toHaveBeenCalledTimes(2);
     expect(test.writes).not.toHaveBeenCalled();
     const first = JSON.parse(test.gateway.mock.calls[0][1].body);
-    expect(first.tools.map((t: any) => t.function.name)).toEqual(['search_office_docs']);
+    expect(first.tools.map((t: any) => t.function.name)).toEqual(['search_office_docs', 'search_web']);
     expect(JSON.stringify(first)).not.toContain('PRIVATE_');
     expect(test.gateway.mock.calls[1][1].body).toContain('Training mode on');
   });
