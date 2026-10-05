@@ -50,6 +50,7 @@ export default function PersonalCalendar({ daysOff, closures, statusRows }: Pers
       const typeLabel = d.type === 'scheduled_with_notice' ? 'Day Off' :
         d.type === 'unscheduled' ? 'Callout' :
         d.type === 'medical_leave' ? 'Medical' :
+        d.type === 'no_patients' ? 'No patients' :
         d.type === 'office_closed' ? 'Closed' : 'Other';
       const colorKey = d.type === 'unscheduled' ? 'absent' : d.type === 'office_closed' ? 'closure' : 'day_off';
       

@@ -9,6 +9,8 @@
  *   Late               arrived after the grace period
  *   Time off           a recorded, explained day off
  *   Callout            an unscheduled day off: an absence with a reason
+ *   No patients        the office had no patients for the person (the doctor is
+ *                      off, they stay home): explained, never an absence
  *   Office closed      a closure covers the day
  *   Not scheduled      no shift that day
  *   Scheduled          a shift still ahead: nobody is absent before their day ends
@@ -33,6 +35,7 @@ export const DAY_WORDS = {
   late: 'Late',
   timeOff: 'Time off',
   callout: 'Callout',
+  noPatients: 'No patients',
   closed: 'Office closed',
   notScheduled: 'Not scheduled',
   scheduled: 'Scheduled',
@@ -48,11 +51,12 @@ export const DAY_OFF_LABELS: Record<string, string> = {
   unscheduled: DAY_WORDS.callout,
   office_closed: DAY_WORDS.closed,
   medical_leave: 'Medical leave',
+  no_patients: DAY_WORDS.noPatients,
   other: 'Other',
 };
 
 /** A recorded absence that explains the day. A callout does not: it is an absence with a reason. */
-export const EXPLAINED_DAY_OFF_TYPES = ['scheduled_with_notice', 'medical_leave', 'other'];
+export const EXPLAINED_DAY_OFF_TYPES = ['scheduled_with_notice', 'medical_leave', 'no_patients', 'other'];
 
 /** The `status_code` the engine writes, in the same words. */
 export const STATUS_CODE_LABELS: Record<string, { label: string; tone: Tone }> = {

@@ -1,56 +1,50 @@
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, KeyRound, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { safeInviteNext } from '@/lib/invite-auth';
-import { passwordChangedMetadata } from '@/lib/password-change';
+import { MIN_PASSWORD_LENGTH, needsPasswordChange, passwordChangedMetadata, passwordProblem } from '@/lib/password-change';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 
-export default function ResetPassword() {
-  const [params] = useSearchParams();
-  const nextPath = safeInviteNext(params.get('next'));
+/**
+ * Where a login that was set up with a temporary password lands on its first
+ * sign-in (PasswordGate), and where anyone signed in can change their password.
+ * Saving writes the new password and clears `must_change_password` in the same
+ * request, so the gate lifts as soon as the session refreshes.
+ */
+export default function ChoosePassword() {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
+  const { user, signOut } = useAuth();
   const { toast } = useToast();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [complete, setComplete] = useState(false);
+  const firstTime = needsPasswordChange(user);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (password !== confirmPassword) {
-      toast({ title: 'Passwords do not match', variant: 'destructive' });
+    const problem = passwordProblem(password, confirmPassword);
+    if (problem) {
+      toast({ title: 'Check the password', description: problem, variant: 'destructive' });
       return;
     }
-
     setSubmitting(true);
     try {
-      // A recovery reset is the person's own password too: it also lifts a
-      // temporary-password gate (see src/lib/password-change.ts).
       const { error } = await supabase.auth.updateUser({ password, data: passwordChangedMetadata() });
       if (error) throw error;
       setComplete(true);
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Password could not be updated.';
-      toast({ title: 'Password reset failed', description: message, variant: 'destructive' });
+      const message = error instanceof Error ? error.message : 'Password could not be saved.';
+      toast({ title: 'Password not saved', description: message, variant: 'destructive' });
     } finally {
       setSubmitting(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -61,20 +55,23 @@ export default function ResetPassword() {
               ? <CheckCircle2 className="h-7 w-7 text-primary-foreground" />
               : <KeyRound className="h-7 w-7 text-primary-foreground" />}
           </div>
-          <CardTitle>{complete ? 'Password updated' : 'Choose a new password'}</CardTitle>
+          <CardTitle>{complete ? 'Password saved' : firstTime ? 'Choose your password' : 'Change your password'}</CardTitle>
           <CardDescription>
             {complete
-              ? 'Return to the invitation to finish joining the office.'
-              : 'Use the recovery link from your email, then create a password for this staff account.'}
+              ? 'Use it from now on. The temporary password no longer works.'
+              : firstTime
+                ? `Your office set this account up with a temporary password. Pick one only you know, at least ${MIN_PASSWORD_LENGTH} characters.`
+                : `Pick a new password of at least ${MIN_PASSWORD_LENGTH} characters.`}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {complete ? (
-            <Button className="w-full" onClick={() => navigate(nextPath, { replace: true })}>
-              Continue to invitation
+            <Button className="w-full" onClick={() => navigate('/', { replace: true })}>
+              Open the office
             </Button>
-          ) : user ? (
+          ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              <p className="text-center text-sm text-muted-foreground">Signed in as {user?.email ?? 'your account'}</p>
               <div className="space-y-2">
                 <Label htmlFor="new-password">New password</Label>
                 <Input
@@ -83,8 +80,9 @@ export default function ResetPassword() {
                   autoComplete="new-password"
                   value={password}
                   onChange={event => setPassword(event.target.value)}
-                  minLength={8}
+                  minLength={MIN_PASSWORD_LENGTH}
                   required
+                  autoFocus
                 />
               </div>
               <div className="space-y-2">
@@ -95,24 +93,18 @@ export default function ResetPassword() {
                   autoComplete="new-password"
                   value={confirmPassword}
                   onChange={event => setConfirmPassword(event.target.value)}
-                  minLength={8}
+                  minLength={MIN_PASSWORD_LENGTH}
                   required
                 />
               </div>
               <Button type="submit" className="w-full" disabled={submitting}>
                 {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Update password
+                Save password
+              </Button>
+              <Button type="button" variant="ghost" className="w-full" onClick={() => { void signOut(); }}>
+                Not you? Sign out
               </Button>
             </form>
-          ) : (
-            <div className="space-y-4 text-center">
-              <p className="text-sm text-muted-foreground">
-                This recovery link is missing, expired, or has already been used. Return to the invitation and request another reset email.
-              </p>
-              <Button variant="outline" className="w-full" onClick={() => navigate(nextPath, { replace: true })}>
-                Return to invitation
-              </Button>
-            </div>
           )}
         </CardContent>
       </Card>

@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Plus, CalendarOff, Building2, EyeOff, Pencil, Loader2, CalendarPlus, Stethoscope, CalendarMinus } from 'lucide-react';
+import { MoreHorizontal, Plus, CalendarOff, Building2, EyeOff, Pencil, Loader2, CalendarPlus, Stethoscope, CalendarMinus, CalendarX } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
@@ -148,6 +148,8 @@ export function AttendanceActions({ row, alwaysShow = false, editButton = false,
   };
 
   const requiresNotes = dayOffForm.type === 'medical_leave';
+  // A no-patients day puts nothing against the bank: no hours are asked for or saved.
+  const noHours = dayOffForm.type === 'no_patients';
 
   const handleMarkDayOff = async () => {
     if (!dayOffForm.reason.trim()) return;
@@ -159,12 +161,12 @@ export function AttendanceActions({ row, alwaysShow = false, editButton = false,
         date_start: row.entry_date,
         date_end: row.entry_date,
         type: dayOffForm.type as any,
-        hours: dayOffForm.hours ? parseFloat(dayOffForm.hours) : undefined,
+        hours: noHours ? 0 : dayOffForm.hours ? parseFloat(dayOffForm.hours) : undefined,
         notes: `${dayOffForm.notes}${dayOffForm.notes ? ' — ' : ''}Reason: ${dayOffForm.reason}`,
         target: { user_id: row.user_id, employee_id: emp.id },
       });
       await recompute.mutateAsync({ startDate: row.entry_date, endDate: row.entry_date, userId: row.user_id });
-      toast({ title: dayOffForm.type === 'unscheduled' ? 'Callout recorded' : 'Time off recorded' });
+      toast({ title: dayOffForm.type === 'unscheduled' ? 'Callout recorded' : dayOffForm.type === 'no_patients' ? 'No-patients day recorded' : 'Time off recorded' });
       setAction(null);
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -236,6 +238,7 @@ export function AttendanceActions({ row, alwaysShow = false, editButton = false,
     scheduled_with_notice: 'Time off',
     unscheduled: 'Callout',
     medical_leave: 'Medical Leave',
+    no_patients: 'No patients',
     other: 'Other',
   };
 
@@ -275,6 +278,10 @@ export function AttendanceActions({ row, alwaysShow = false, editButton = false,
           <DropdownMenuItem onClick={() => openDayOffWithType('medical_leave')}>
             <Stethoscope className="h-3.5 w-3.5 mr-2" />
             Record medical leave
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => openDayOffWithType('no_patients')}>
+            <CalendarX className="h-3.5 w-3.5 mr-2" />
+            Record no patients
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setAction('mark_closed')}>
             <Building2 className="h-3.5 w-3.5 mr-2" />
@@ -331,14 +338,17 @@ export function AttendanceActions({ row, alwaysShow = false, editButton = false,
                   <SelectItem value="scheduled_with_notice">Time off (planned)</SelectItem>
                   <SelectItem value="unscheduled">Callout (unplanned — counts as absent)</SelectItem>
                   <SelectItem value="medical_leave">Medical leave</SelectItem>
+                  <SelectItem value="no_patients">No patients (doctor off, not an absence)</SelectItem>
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
-              <Label>Hours (optional)</Label>
-              <Input type="number" value={dayOffForm.hours} onChange={e => setDayOffForm({ ...dayOffForm, hours: e.target.value })} placeholder="0" />
-            </div>
+            {!noHours && (
+              <div className="space-y-1">
+                <Label>Hours (optional)</Label>
+                <Input type="number" value={dayOffForm.hours} onChange={e => setDayOffForm({ ...dayOffForm, hours: e.target.value })} placeholder="0" />
+              </div>
+            )}
             <div className="space-y-1">
               <Label>Notes{requiresNotes ? <span className="text-destructive"> *</span> : ' (optional)'}</Label>
               <Textarea value={dayOffForm.notes} onChange={e => setDayOffForm({ ...dayOffForm, notes: e.target.value })} placeholder={requiresNotes ? 'Required: describe the reason' : 'Optional notes'} />

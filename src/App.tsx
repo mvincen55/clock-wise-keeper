@@ -71,6 +71,9 @@ import Help from "@/pages/Help";
 import Privacy from "@/pages/Privacy";
 import AcceptInvite from "@/pages/AcceptInvite";
 import ResetPassword from "@/pages/ResetPassword";
+import ChoosePassword from "@/pages/ChoosePassword";
+import { PasswordGate } from "@/components/PasswordGate";
+import { CHOOSE_PASSWORD_PATH } from "@/lib/password-change";
 import Onboarding from "@/pages/Onboarding";
 import OAuthConsent from "@/pages/OAuthConsent";
 import { Loader2 } from "lucide-react";
@@ -101,7 +104,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     </div>
   );
   if (!user || !isAllowed) return <LoginRedirect />;
-  return <OnboardingGate>{children}</OnboardingGate>;
+  return <PasswordGate><OnboardingGate>{children}</OnboardingGate></PasswordGate>;
 }
 
 /**
@@ -117,7 +120,7 @@ function RootRoute() {
     </div>
   );
   if (!user || !isAllowed) return <MarketingHome />;
-  return <OnboardingGate><Dashboard /></OnboardingGate>;
+  return <PasswordGate><OnboardingGate><Dashboard /></OnboardingGate></PasswordGate>;
 }
 
 /**
@@ -146,7 +149,23 @@ function OnboardingRoute() {
     </div>
   );
   if (!user || !isAllowed) return <LoginRedirect />;
-  return <Onboarding />;
+  return <PasswordGate><Onboarding /></PasswordGate>;
+}
+
+/**
+ * Choosing a password renders outside the app shell. A login still on its
+ * temporary password is sent here by PasswordGate before anything else opens;
+ * anyone signed in can also come here to change their password.
+ */
+function ChoosePasswordRoute() {
+  const { user, loading, isAllowed } = useAuth();
+  if (loading) return (
+    <div className="flex min-h-screen items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
+  if (!user || !isAllowed) return <LoginRedirect />;
+  return <ChoosePassword />;
 }
 
 // A data router (instead of <BrowserRouter>) so in-app navigation can be
@@ -250,6 +269,7 @@ const router = createBrowserRouter(
             <Route path="/onboarding" element={<OnboardingRoute />} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path={CHOOSE_PASSWORD_PATH} element={<ChoosePasswordRoute />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
             <Route path="*" element={<Navigate to="/" replace />} />
