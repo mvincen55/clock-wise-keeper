@@ -14,6 +14,13 @@ const pressed = (name: string | RegExp) => screen.getByRole('button', { name, pr
 const clickPreset = (label: string) => fireEvent.click(screen.getByRole('button', { name: label }));
 
 describe('the hierarchy', () => {
+  it('places the campaign strip directly after the greeting and before the dashboard', () => {
+    renderView(<OwnerDashboard view={ownerFixture} campaignStrip={<section aria-label="Q4 campaign">Fill the Schedule</section>} />);
+    const strip = screen.getByRole('region', { name: 'Q4 campaign' });
+    const header = screen.getByRole('heading', { level: 1 }).closest('header')!;
+    expect(header.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(strip.parentElement?.firstElementChild).toBe(strip);
+  });
   it('leads with performance, historical context and chosen goals before operational detail', () => {
     const { container } = renderView(<OwnerDashboard view={ownerFixture} chartWidth={700} />);
     const text = container.textContent!;

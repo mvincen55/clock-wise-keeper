@@ -47,6 +47,7 @@ import IncidentReports from "@/pages/IncidentReports";
 import MorningHuddle from "@/pages/MorningHuddle";
 import Goals from "@/pages/Goals";
 import FillSchedule from "@/pages/FillSchedule";
+import FillScheduleSheet from "@/features/fill-the-schedule/SheetPrint";
 import ReminderSettings from "@/pages/ReminderSettings";
 import InboxPage from "@/pages/InboxPage";
 import Training from "@/pages/Training";
@@ -259,6 +260,7 @@ const router = createBrowserRouter(
             <Route path="/morning-huddle" element={<ProtectedRoute><MorningHuddle /></ProtectedRoute>} />
             <Route path="/goals" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
             <Route path="/fill-the-schedule" element={<ProtectedRoute><FillSchedule /></ProtectedRoute>} />
+            <Route path="/fill-the-schedule/sheet/:sheetId" element={<ProtectedRoute><FillScheduleSheet /></ProtectedRoute>} />
             <Route path="/settings/reminders" element={<ProtectedRoute><ReminderSettings /></ProtectedRoute>} />
             <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
             <Route path="/requests" element={<Navigate to="/inbox/requests" replace />} />

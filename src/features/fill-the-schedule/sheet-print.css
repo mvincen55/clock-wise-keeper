@@ -1,0 +1,63 @@
+.fts-sheet-page { position: relative; flex: none; box-sizing: border-box; overflow: hidden; background: white; color: #111; font-family: Arial, sans-serif; font-size: 12px; }
+.fts-registration { position: absolute; display: block; width: 8px; height: 8px; background: #000; }
+.fts-sheet-heading { position: absolute; left: 20px; top: 18px; right: 20px; }
+.fts-sheet-kicker { margin: 0 0 4px; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; color: #53406e; }
+.fts-sheet-heading h1 { margin: 0 0 7px; font-size: 23px; line-height: 1.1; font-weight: 700; }
+.fts-sheet-heading p { margin: 0; font-size: 11.5px; }
+.fts-sheet-code { position: absolute; top: 82px; right: 20px; width: 200px; text-align: right; }
+.fts-sheet-code strong { display: block; font-family: monospace; font-size: 25px; }
+.fts-sheet-code span { display: block; font-size: 10px; margin-top: 3px; }
+.fts-sheet-instructions { position: absolute; left: 35px; top: 85px; width: 728px; margin: 0; padding: 0; list-style: decimal; font-size: 11px; line-height: 16px; }
+.fts-sheet-table { position: absolute; border-collapse: separate; border-spacing: 0; border: 1px solid #888; table-layout: fixed; font-size: 11px; }
+.fts-sheet-table td, .fts-sheet-table th { border: 0; border-right: 1px solid #888; border-bottom: 1px solid #888; padding: 3px; vertical-align: middle; overflow: hidden; }
+.fts-sheet-table tr > :last-child { border-right: 0; }
+.fts-sheet-table tbody tr:last-child td { border-bottom: 0; }
+.fts-sheet-table th { font-weight: 700; text-align: center; background: #f7f5f9; line-height: 14px; }
+.fts-sheet-table th span { display: block; }
+.fts-sheet-table th small { display: block; font-size: 9px; font-weight: 400; margin-top: 3px; }
+.fts-sheet-table td { position: relative; height: 38px; font-size: 10px; }
+.fts-sheet-table .fts-manager-cell { background: #e7e4eb; }
+.fts-row-number { text-align: center; font-weight: 700; background: #f8f8f8; }
+.fts-check { display: inline-block; width: 10px; height: 10px; margin: 0 3px 0 2px; border: 1px solid black; vertical-align: middle; background: white; }
+.fts-prepay-cell { line-height: 15px; white-space: nowrap; }
+.fts-sheet-table .fts-check { position: absolute; left: 5px; top: 13px; margin: 0; }
+.fts-sheet-table td:has(> .fts-check):not(.fts-manager-cell) { padding-left: 20px; }
+.fts-sheet-table .fts-prepay-cell .fts-check { top: 6px; }
+.fts-sheet-table .fts-prepay-cell .fts-check.fts-yes { left: 53px; }
+.fts-pay-label { position: absolute; top: 3px; }
+.fts-pay-label.fts-no { left: 20px; }
+.fts-pay-label.fts-yes { left: 68px; }
+.fts-pay-time { position: absolute; left: 3px; top: 20px; }
+.fts-initials { position: absolute; left: 20px; top: 11px; font-size: 9px; }
+.fts-initials-line { position: absolute; left: 51px; top: 22px; width: 27px; border-bottom: 1px solid #555; }
+.fts-sheet-footer { position: absolute; left: 20px; right: 20px; top: 684px; font-size: 10.5px; line-height: 15px; }
+.fts-sheet-footer p { margin: 0 0 7px; }
+.fts-sheet-footer div { margin-bottom: 5px; }
+.fts-sheet-footer .fts-sheet-reprint { font-size: 9px; color: #444; }
+.fts-print-root { display: none; }
+@page fts-paper { size: letter landscape; margin: 0.3in; }
+@media print {
+  body:has(.fts-print-root) > *:not(.fts-print-root) { display: none !important; }
+  .fts-print-root { display: block !important; page: fts-paper; margin: 0; padding: 0; color: black; container-type: inline-size; container-name: fts-print; }
+  .fts-print-root * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .fts-print-root .fts-sheet-page { width: 10.4in !important; height: 7.85in !important; break-inside: avoid; }
+  /* Compensate office-browser zoom using the print area's actual width.
+     Plain-number container rules also work in Chromium 134. */
+  .fts-print-root .fts-sheet-page { zoom: .2; }
+  @container fts-print (min-width: 247px) { .fts-print-root .fts-sheet-page { zoom: .25; } }
+  @container fts-print (min-width: 330px) { .fts-print-root .fts-sheet-page { zoom: .33333; } }
+  @container fts-print (min-width: 397px) { .fts-print-root .fts-sheet-page { zoom: .4; } }
+  @container fts-print (min-width: 497px) { .fts-print-root .fts-sheet-page { zoom: .5; } }
+  @container fts-print (min-width: 568px) { .fts-print-root .fts-sheet-page { zoom: .57143; } }
+  @container fts-print (min-width: 663px) { .fts-print-root .fts-sheet-page { zoom: .66667; } }
+  @container fts-print (min-width: 796px) { .fts-print-root .fts-sheet-page { zoom: .8; } }
+  @container fts-print (min-width: 905px) { .fts-print-root .fts-sheet-page { zoom: .90909; } }
+  @container fts-print (min-width: 996px) { .fts-print-root .fts-sheet-page { zoom: 1; } }
+  @container fts-print (min-width: 1107px) { .fts-print-root .fts-sheet-page { zoom: 1.1111; } }
+  @container fts-print (min-width: 1246px) { .fts-print-root .fts-sheet-page { zoom: 1.25; } }
+  @container fts-print (min-width: 1329px) { .fts-print-root .fts-sheet-page { zoom: 1.33333; } }
+  @container fts-print (min-width: 1487px) { .fts-print-root .fts-sheet-page { zoom: 1.49254; } }
+  @container fts-print (min-width: 1994px) { .fts-print-root .fts-sheet-page { zoom: 2; } }
+  @container fts-print (min-width: 2993px) { .fts-print-root .fts-sheet-page { zoom: 3; } }
+  @container fts-print (min-width: 3991px) { .fts-print-root .fts-sheet-page { zoom: 4; } }
+}

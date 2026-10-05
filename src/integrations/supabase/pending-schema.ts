@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase as generatedClient } from './client';
 import type { Database as Generated } from './types';
-import type { Campaign, Participant, Activity, Calls, Huddle, Metric, PrizePick, Audit } from '@/lib/fill-the-schedule';
+import type { Campaign, Participant, Activity, Calls, Huddle, Metric, PrizePick, Audit, ScheduleSheet, ScheduleSheetRow, WeeklyCheck, RosterName } from '@/lib/fill-the-schedule';
 
 /**
  * Schema the repository carries ahead of the live database.
@@ -152,6 +152,9 @@ export type FillScheduleTables = {
   fts_week_metrics: FtsScoped<Metric>;
   fts_prize_picks: FtsScoped<PrizePick>;
   fts_audit: FtsScoped<Audit>;
+  fts_sheets: FtsScoped<ScheduleSheet>;
+  fts_sheet_rows: FtsScoped<ScheduleSheetRow>;
+  fts_weekly_checks: FtsScoped<WeeklyCheck>;
 };
 type PendingTables = FillScheduleTables & {
   manager_followups: ManagerFollowupsTable;
@@ -175,9 +178,17 @@ type PendingColumns = {
 };
 
 /** 20260922150000_manager_audited_paths.sql and 20260922160000_office_pto_policy.sql */
-type FtsActionArgs = { p_campaign_id: string; p_type: string; p_occurred_at: string; p_quantity: number; p_request_key: string };
+type FtsActionArgs = { p_campaign_id: string; p_type: string; p_occurred_at: string; p_quantity: number; p_request_key: string; p_booked_by?: string | null };
 type FtsWeekArgs = { p_campaign_id: string; p_employee_id: string; p_week_key: string; p_count: number };
 export type FillScheduleFunctions = {
+  fts_roster_names: { Args: { p_campaign_id: string }; Returns: RosterName[] };
+  fts_print_sheet: { Args: { p_campaign_id: string; p_week_key: string; p_request_key: string }; Returns: ScheduleSheet };
+  fts_void_sheet: { Args: { p_sheet_id: string }; Returns: ScheduleSheet };
+  fts_apply_sheet_scan: { Args: { p_campaign_id: string; p_sheet_code: string; p_reader: string; p_rows: import('@/lib/fill-the-schedule').SheetReading[]; p_released_at: string; p_request_key: string }; Returns: Record<string, unknown> };
+  fts_resolve_sheet_row: { Args: { p_row_id: string; p_action: string; p_employee_id?: string | null; p_link_activity_id?: string | null; p_occurred_at?: string | null; p_prepay_at?: string | null; p_reason?: string; p_verify_handoff?: boolean; p_verify_prepay?: boolean }; Returns: ScheduleSheetRow };
+  fts_set_weekly_check: { Args: { p_campaign_id: string; p_week_key: string; p_key: string; p_checked: boolean }; Returns: WeeklyCheck };
+  fts_set_auto_import: { Args: { p_campaign_id: string; p_enabled: boolean }; Returns: Campaign };
+  fts_validate_reader: { Args: { p_campaign_id: string; p_rows: number; p_staff: number; p_accuracy: number; p_wrong_person: number; p_false_verified: number }; Returns: Campaign };
   fts_record_own: { Args: FtsActionArgs; Returns: Activity };
   fts_record_for: { Args: FtsActionArgs & { p_employee_id: string }; Returns: Activity };
   fts_withdraw_own: { Args: { p_activity_id: string; p_reason: string }; Returns: Activity };

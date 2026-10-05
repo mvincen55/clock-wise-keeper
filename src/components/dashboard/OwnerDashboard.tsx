@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { Period } from '@/lib/performance-series';
 import type { OwnerView } from './types';
 import { ActionLink, DashboardShell, HomeHeader, Lanes, Panel, ToolsPanel, ViewContext } from './kit';
@@ -11,7 +11,7 @@ import { PracticePerformance } from './performance/PracticePerformance';
 import { Noticing } from './performance/Noticing';
 import { MissedTrend, missedHref } from './performance/MissedTrend';
 
-export default function OwnerDashboard({ view, chartWidth }: { view: OwnerView; chartWidth?: number }) {
+export default function OwnerDashboard({ view, chartWidth, campaignStrip }: { view: OwnerView; chartWidth?: number; campaignStrip?: ReactNode }) {
   const { header, office, summary, today, decisionCount, needs, mine, goal, exceptions, lanes, roleContext, toolGroups, performance, performanceState, insights, tools } = view;
   const [period, setPeriod] = useState<Period | null>(null);
   const closeAction = tools.find(t => t.id === 'close');
@@ -21,6 +21,7 @@ export default function OwnerDashboard({ view, chartWidth }: { view: OwnerView; 
         state={{ text: office.headline, tone: summary.tone }} context={<ViewContext context={roleContext} />}
         actions={<>{closeAction && <ActionLink to={closeAction.to} variant="secondary">{closeAction.label}</ActionLink>}<ActionLink to="/management" variant="primary">Attention{decisionCount > 0 ? ` · ${decisionCount}` : ''}</ActionLink></>} />
       <div className="mt-5 space-y-5">
+        {campaignStrip}
         <PracticePerformance data={performance} state={performanceState} defaultPeriod="year" chartWidth={chartWidth} onPeriodChange={setPeriod} />
         <ChosenGoals data={view.chosenGoals} officeGoal={goal} admin />
         <BriefPriorities summary={summary} />
