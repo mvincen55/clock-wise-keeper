@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase as generatedClient } from './client';
 import type { Database as Generated } from './types';
+import type { Campaign, Participant, Activity, Calls, Huddle, Metric, PrizePick, Audit } from '@/lib/fill-the-schedule';
 
 /**
  * Schema the repository carries ahead of the live database.
@@ -26,6 +27,7 @@ import type { Database as Generated } from './types';
  *   20260922160000_office_pto_policy      org_pto_policy; pto_settings.policy_override;
  *                                         set_org_pto_policy
  *   20260929120000_pto_balance_guard      pto_available_hours, pto_allows_negative
+ *   20261005181000_fill_the_schedule     fts_* campaign tables and write RPCs
  *
  * Same idea as ./knowledge-client.ts, generalised: one module, one merge.
  */
@@ -138,7 +140,20 @@ export type OrgPtoPolicyTable = {
   ];
 };
 
-type PendingTables = {
+// Browser writes to this ledger are RPC-only; direct Insert/Update is never.
+type FtsTable<T> = { Row: { [K in keyof T]: T[K] }; Insert: never; Update: never; Relationships: [] };
+type FtsScoped<T> = FtsTable<T & { org_id: string; campaign_id: string }>;
+export type FillScheduleTables = {
+  fts_campaigns: FtsTable<Campaign>;
+  fts_participants: FtsScoped<Participant>;
+  fts_activities: FtsScoped<Activity>;
+  fts_weekly_calls: FtsScoped<Calls>;
+  fts_huddle_attendance: FtsScoped<Huddle>;
+  fts_week_metrics: FtsScoped<Metric>;
+  fts_prize_picks: FtsScoped<PrizePick>;
+  fts_audit: FtsScoped<Audit>;
+};
+type PendingTables = FillScheduleTables & {
   manager_followups: ManagerFollowupsTable;
   org_pto_policy: OrgPtoPolicyTable;
 };
@@ -160,7 +175,24 @@ type PendingColumns = {
 };
 
 /** 20260922150000_manager_audited_paths.sql and 20260922160000_office_pto_policy.sql */
-type PendingFunctions = {
+type FtsActionArgs = { p_campaign_id: string; p_type: string; p_occurred_at: string; p_quantity: number; p_request_key: string };
+type FtsWeekArgs = { p_campaign_id: string; p_employee_id: string; p_week_key: string; p_count: number };
+export type FillScheduleFunctions = {
+  fts_record_own: { Args: FtsActionArgs; Returns: Activity };
+  fts_record_for: { Args: FtsActionArgs & { p_employee_id: string }; Returns: Activity };
+  fts_withdraw_own: { Args: { p_activity_id: string; p_reason: string }; Returns: Activity };
+  fts_verify: { Args: { p_activity_id: string; p_approve: boolean; p_reason?: string }; Returns: Activity };
+  fts_reverse: { Args: { p_activity_id: string; p_reason: string }; Returns: Activity };
+  fts_award_review: { Args: { p_campaign_id: string; p_employee_id: string; p_occurred_at: string; p_request_key: string }; Returns: Activity };
+  fts_award_bonus: { Args: { p_parent_id: string; p_type: string; p_occurred_at: string; p_request_key: string }; Returns: Activity };
+  fts_set_weekly_calls: { Args: FtsWeekArgs; Returns: Calls };
+  fts_save_huddle: { Args: { p_campaign_id: string; p_date: string; p_on_time: string[] }; Returns: number };
+  fts_set_open_hours: { Args: { p_campaign_id: string; p_week_key: string; p_hours: number | null }; Returns: Metric };
+  fts_set_picks_received: { Args: FtsWeekArgs; Returns: PrizePick };
+  fts_set_scoring_role: { Args: { p_campaign_id: string; p_employee_id: string; p_role: string | null; p_active: boolean }; Returns: Participant };
+  fts_set_rate: { Args: { p_campaign_id: string; p_key: string; p_value: number | null }; Returns: Campaign };
+};
+type PendingFunctions = FillScheduleFunctions & {
   seal_close_day: {
     Args: { p_closeout_id: string; p_seal: boolean; p_reason?: string };
     Returns: GeneratedRow<'deposit_logs'>;
