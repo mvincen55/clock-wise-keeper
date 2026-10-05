@@ -29,7 +29,7 @@ export default function MyPointsTab({ d, employeeId, week, writer }: { d: Ledger
   return <div className="space-y-5">
     <div className="grid gap-3 sm:grid-cols-3">{[
       ['Approved points', s?.points ?? 0, 'This tally. These points count.'],
-      ['Reports awaiting verification', s?.pending ?? 0, `${awaiting.points} points if approved${awaiting.unset ? `; ${awaiting.unset} report(s) have a rate not set` : ''}.`],
+      ['Reports awaiting verification', s?.pending ?? 0, `${awaiting.points} ${awaiting.points === 1 ? "point" : "points"} if approved${awaiting.unset ? `; ${awaiting.unset} report(s) have a rate not set` : ''}.`],
       ['Quarter total', s?.quarter ?? 0, 'Approved points only.'],
     ].map(([title, value, help]) => <div key={title} className="rounded-2xl border bg-card p-5"><p className="text-sm text-muted-foreground">{title}</p><p className="mt-2 text-3xl font-bold tabular-nums">{value}</p><p className="mt-2 text-xs text-muted-foreground">{help}</p></div>)}</div>
     <div className="grid gap-5 sm:grid-cols-2"><Panel title={`Your prize picks${tallyClosed(week, d.campaign) ? '' : ' · provisional'}`}>

@@ -18,7 +18,7 @@ describe('revised campaign workflow', () => {
     expect(screen.getByRole('button', { name: 'Point rules' })).toBeVisible(); expect(screen.queryByRole('button', { name: 'Campaign Settings' })).toBeNull();
     expect(screen.queryByText(/OTHER123/)).toBeNull(); expect(screen.getByLabelText('Tally ending')).toHaveValue('2026-10-09');
     expect(screen.queryByRole('option', { name: /October 2 ·/ })).toBeNull(); expect(screen.getByText('Reports awaiting verification')).toBeVisible();
-    expect(screen.getByText('1 points if approved.')).toBeVisible();
+    expect(screen.getByText('1 point if approved.')).toBeVisible();
   });
   it('QR click records the actual occurrence time and preserves it on an ambiguous retry', async () => {
     state.write.mockResolvedValueOnce(false).mockResolvedValueOnce(true); view();

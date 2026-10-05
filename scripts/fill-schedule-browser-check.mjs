@@ -53,6 +53,7 @@ try {
         await page.getByRole('tab', { name: tab, exact: true }).click();
         const size = await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth }));
         assert.ok(size.scroll <= size.width + 1, `${role}/${tab}/${width} horizontal overflow`);
+        if (role === 'manager' && tab === 'Review') { const badge = await page.locator('article').getByText('Awaiting verification', { exact: true }).first().boundingBox(); assert.ok(badge && badge.height < 40, 'Status badge must not stretch to the card height'); }
         await page.screenshot({ path: path.join(output, `${role}-${tab.replaceAll(' ', '-')}-${width}.png`), fullPage: true });
       }
       await page.getByRole('button', { name: 'Point rules', exact: true }).click();

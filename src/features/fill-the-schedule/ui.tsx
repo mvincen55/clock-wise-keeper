@@ -24,5 +24,5 @@ export function TeamSelect({ d, value, set }: { d: Ledger; value: string; set: (
 }
 export function Status({ row }: { row: Activity }) {
   const style = row.status === 'approved' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : row.status === 'pending' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'bg-muted text-muted-foreground';
-  return <span className={`inline-block rounded-full px-2 py-1 text-xs font-medium ${style}`}>{row.status === 'approved' ? `${row.awarded_points} approved points` : row.status === 'pending' ? 'Awaiting verification' : row.status}</span>;
+  return <span className={`inline-block max-w-full shrink-0 self-start rounded-full px-2 py-1 text-xs font-medium ${style}`}>{row.status === 'approved' ? `${row.awarded_points} approved ${row.awarded_points === 1 ? "point" : "points"}` : row.status === 'pending' ? 'Awaiting verification' : row.status}</span>;
 }
