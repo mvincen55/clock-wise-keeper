@@ -3097,15 +3097,40 @@
 
   /* Chrome prints a tab at its zoom level: at 67% every in/pt unit covers
      only two-thirds of the paper, so the sheet measured on screen as a
-     full Letter page came out small, and at 125% it overflowed. In print
-     100vw/100vh are the page area, so their ratio to the sheet's design
-     box (7.5in x 10in) is exactly the zoom to undo; min() keeps the sheet
-     inside the paper when the page area is narrower or shorter than that
-     box (A4, custom margins). Chromium only — set from FofBuilder — other
-     engines print at 100% already. */
-  .fof-print-root[data-fof-zoom-compensate] {
-    zoom: min(tan(atan2(100vw, 7.5in)), tan(atan2(100vh, 10in)));
+     full Letter page came out small, and at 125% it overflowed. The print
+     root is laid out at the page area width, which a zoomed tab sees as
+     7.5in divided by its zoom — so the root's width names the zoom, and a
+     plain-number zoom on its children undoes it on paper. Chrome's zoom
+     presets are listed from the largest to the smallest tab zoom; the last
+     matching rule wins, i.e. the largest width the print run clears, so a
+     zoom between presets or a narrower paper (A4) gets the next smaller
+     compensation and the sheet never outgrows the page. A 100% tab keeps
+     zoom 1. Chromium only (set from FofBuilder): other engines print at
+     100% already. Container queries, not media queries: in print, media
+     queries see the whole page box (and the headless shell does not scale
+     them at all), while an element's width is the real page area in every
+     Chromium. A computed ratio (tan(atan2(100vw, 7.5in))) was tried first;
+     Chromium 134 resolved it to 0.1 where 141 resolved it to 1. */
+  .fof-print-root {
+    container-type: inline-size;
   }
+  @container (min-width: 142px) { .fof-print-root[data-fof-zoom-compensate] > * { zoom: 0.2; } } /* 500% tab */
+  @container (min-width: 178px) { .fof-print-root[data-fof-zoom-compensate] > * { zoom: 0.25; } } /* 400% tab */
+  @container (min-width: 238px) { .fof-print-root[data-fof-zoom-compensate] > * { zoom: 0.33333; } } /* 300% tab */
+  @container (min-width: 286px) { .fof-print-root[data-fof-zoom-compensate] > * { zoom: 0.4; } } /* 250% tab */
+  @container (min-width: 358px) { .fof-print-root[data-fof-zoom-compensate] > * { zoom: 0.5; } } /* 200% tab */
+  @container (min-width: 409px) { .fof-print-root[data-fof-zoom-compensate] > * { zoom: 0.57143; } } /* 175% tab */
+  @container (min-width: 478px) { .fof-print-root[data-fof-zoom-compensate] > * { zoom: 0.66667; } } /* 150% tab */
+  @container (min-width: 574px) { .fof-print-root[data-fof-zoom-compensate] > * { zoom: 0.8; } } /* 125% tab */
+  @container (min-width: 653px) { .fof-print-root[data-fof-zoom-compensate] > * { zoom: 0.90909; } } /* 110% tab */
+  @container (min-width: 718px) { .fof-print-root[data-fof-zoom-compensate] > * { zoom: 1; } } /* 100% tab */
+  @container (min-width: 798px) { .fof-print-root[data-fof-zoom-compensate] > * { zoom: 1.1111; } } /* 90% tab */
+  @container (min-width: 898px) { .fof-print-root[data-fof-zoom-compensate] > * { zoom: 1.25; } } /* 80% tab */
+  @container (min-width: 958px) { .fof-print-root[data-fof-zoom-compensate] > * { zoom: 1.3333; } } /* 75% tab */
+  @container (min-width: 1078px) { .fof-print-root[data-fof-zoom-compensate] > * { zoom: 1.5; } } /* 66.67% tab */
+  @container (min-width: 1438px) { .fof-print-root[data-fof-zoom-compensate] > * { zoom: 2; } } /* 50% tab */
+  @container (min-width: 2158px) { .fof-print-root[data-fof-zoom-compensate] > * { zoom: 3; } } /* 33.33% tab */
+  @container (min-width: 2878px) { .fof-print-root[data-fof-zoom-compensate] > * { zoom: 4; } } /* 25% tab */
 
   /* The FOF sheet uses its own layout — exempt it from the generic
      print table borders below. */
