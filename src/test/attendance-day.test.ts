@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AttendanceDayStatusRow } from '@/hooks/useAttendanceDayStatus';
 import type { DayOffRow } from '@/hooks/useDaysOff';
-import { DAY_WORDS, STATUS_CODE_LABELS, dayWord, isAbsence, isMissingClockOut } from '@/lib/attendance-day';
+import { DAY_WORDS, EXPLAINED_DAY_OFF_TYPES, STATUS_CODE_LABELS, dayWord, isAbsence, isMissingClockOut } from '@/lib/attendance-day';
 
 const day = (over: Partial<AttendanceDayStatusRow>): AttendanceDayStatusRow => ({
   id: 'row', user_id: 'login', employee_id: 'emp', entry_date: '2026-09-21',
@@ -56,6 +56,15 @@ describe('recorded absences', () => {
     expect(dayWord(day({ has_day_off: true }), [off('scheduled_with_notice')], clock).label).toBe(DAY_WORDS.timeOff);
     expect(isAbsence(day({ has_day_off: true }), [off('scheduled_with_notice')], clock)).toBe(false);
     expect(dayWord(day({ has_day_off: true }), [off('medical_leave')], clock).label).toBe('Medical leave');
+  });
+
+  it('a no-patients day (the doctor is off, the person stays home) is explained time away, never an absence', () => {
+    const row = day({ has_day_off: true, is_absent: false, status_code: 'day_off' });
+    expect(EXPLAINED_DAY_OFF_TYPES).toContain('no_patients');
+    expect(dayWord(row, [off('no_patients')], clock)).toEqual({ label: DAY_WORDS.noPatients, tone: 'calm' });
+    expect(isAbsence(row, [off('no_patients')], clock)).toBe(false);
+    // Even with the engine flag still set (a row computed before the type existed), the recorded day off explains it.
+    expect(isAbsence(day({ has_day_off: true }), [off('no_patients')], clock)).toBe(false);
   });
 
   it('without absence rows, the engine signature (day off and still absent) is the callout', () => {

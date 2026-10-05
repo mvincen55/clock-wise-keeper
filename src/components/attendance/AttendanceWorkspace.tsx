@@ -1,6 +1,6 @@
 import { useState, useMemo, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useDaysOff, useOrgDaysOff, useAddDayOff, useDeleteDayOff, DayOffRow } from '@/hooks/useDaysOff';
+import { useDaysOff, useOrgDaysOff, useAddDayOff, useDeleteDayOff, DayOffRow, type DayOffType } from '@/hooks/useDaysOff';
 import { PtoRequestModal } from '@/components/PtoRequestModal';
 import { useTardies, useDecideTardyExcuse, TardyRow } from '@/hooks/useTardies';
 import { LateArrivalReviewModal } from '@/components/LateArrivalReviewModal';
@@ -43,6 +43,7 @@ const typeChoices: Record<string, string> = {
   scheduled_with_notice: 'Time off (planned)',
   unscheduled: 'Callout (unplanned — counts as absent)',
   medical_leave: 'Medical leave',
+  no_patients: 'No patients (doctor off, not an absence)',
   other: 'Other',
   office_closed: 'Office closed',
 };
@@ -52,11 +53,12 @@ const typeColors: Record<string, string> = {
   unscheduled: 'bg-destructive/20 text-destructive',
   office_closed: 'bg-success/20 text-success',
   medical_leave: 'bg-warning/20 text-warning',
+  no_patients: 'bg-muted text-muted-foreground',
   other: 'bg-accent/20 text-accent',
 };
 
 type AttendanceFilter = 'all' | 'absent' | 'late' | 'incomplete' | 'days_off' | 'closures' | 'remote' | 'onsite';
-type DaysOffFilter = 'all' | 'scheduled_with_notice' | 'unscheduled' | 'medical_leave' | 'other';
+type DaysOffFilter = 'all' | 'scheduled_with_notice' | 'unscheduled' | 'medical_leave' | 'no_patients' | 'other';
 
 /** The employee picker's "everyone in the office" choice. */
 const EVERYONE = 'all';
@@ -295,7 +297,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
     employee_id: '',
     date_start: '',
     date_end: '',
-    type: 'scheduled_with_notice' as 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'medical_leave' | 'other',
+    type: 'scheduled_with_notice' as DayOffType,
     hours: '0',
     notes: '',
   });
@@ -326,7 +328,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
       });
       setOpen(false);
       setForm({ employee_id: '', date_start: '', date_end: '', type: 'scheduled_with_notice', hours: '0', notes: '' });
-      const what = form.type === 'unscheduled' ? 'Callout' : form.type === 'office_closed' ? 'Closure' : 'Time off';
+      const what = form.type === 'unscheduled' ? 'Callout' : form.type === 'office_closed' ? 'Closure' : form.type === 'no_patients' ? 'No-patients day' : 'Time off';
       toast({ title: target ? `${what} recorded for ${formatEmployeeNameLastFirst(target.displayName)}` : `${what} recorded` });
       // Their attendance rows now know about the day off. Best effort — the
       // day off itself is already saved.
@@ -880,7 +882,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
         {/* DAYS OFF TAB — excludes office_closed, with filter pills */}
         <TabsContent value="days_off">
           <div className="flex flex-wrap items-center gap-2 mb-4">
-            {(['all', 'scheduled_with_notice', 'unscheduled', 'medical_leave', 'other'] as DaysOffFilter[]).map(f => (
+            {(['all', 'scheduled_with_notice', 'unscheduled', 'medical_leave', 'no_patients', 'other'] as DaysOffFilter[]).map(f => (
               <button
                 key={f}
                 onClick={() => setDaysOffFilter(f)}

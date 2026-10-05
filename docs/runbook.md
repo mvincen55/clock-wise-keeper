@@ -93,6 +93,11 @@ The allowlist gate: `useAuth` calls `is_allowed_user()` and signs out anyone not
 - Invited user bounced on first login → check `allowed_users` has their email
   **lowercased**. `send-org-invite` and `accept-invite` both insert it; if a row is
   missing (older invite, manual account), insert it from the dashboard.
+- Provisioned login (temporary password) that keeps landing on `/choose-password` after
+  saving a new one → the save did not go through: `auth.users.raw_user_meta_data ->>
+  'must_change_password'` must read `false` once the person's own password is stored
+  (`PasswordGate`, `src/lib/password-change.ts`). A provisioned account also needs its
+  `allowed_users` row, an active `org_members` row, and `employees.user_id` linked.
 - **Never** "fix" this by disabling the allowlist check — that opens the app to
   anyone who registers.
 
