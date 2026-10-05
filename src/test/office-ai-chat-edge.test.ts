@@ -71,7 +71,7 @@ describe('Office AI chat in Messages', () => {
 
     expect(test.rpc).toHaveBeenCalledWith('search_office_doc_chunks', expect.objectContaining({ p_query: 'timely filing' }));
     const toolResults = test.gateway.mock.calls.map(c => JSON.parse(c[1].body)).flatMap((b: any) => b.messages.filter((m: any) => m.role === 'tool'));
-    expect(toolResults.some((m: any) => m.content.includes('page 12') && m.content.includes('Claims must be submitted within 12 months'))).toBe(true);
+    expect(toolResults.some((m: any) => m.content.includes('[DD MA Processing Manual — Timely Filing, page 12]'))).toBe(true);
     expect(toolResults.some((m: any) => m.content.includes('https://example.org/cdt'))).toBe(true);
 
     expect(test.writes).toHaveBeenCalledWith('messages', 'insert', expect.objectContaining({
