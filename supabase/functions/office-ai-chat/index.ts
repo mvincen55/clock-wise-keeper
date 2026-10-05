@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
   const startedAt = Date.now();
 
   try {
-    const providers = resolveChatProviders();
+    const providers = resolveChatProviders(Deno.env);
     if (providers.length === 0) {
       return json({ error: "Office AI is not configured yet — add OPENROUTER_API_KEY or LOVABLE_API_KEY." });
     }

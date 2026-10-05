@@ -34,8 +34,10 @@ export interface ChatProvider {
 
 type Env = { get: (name: string) => string | undefined };
 
-/** Providers in the order they should be tried. Empty when nothing is configured. */
-export function resolveChatProviders(env: Env = Deno.env): ChatProvider[] {
+/** Providers in the order they should be tried. Empty when nothing is configured.
+ *  Callers pass `Deno.env`; this file stays runtime-neutral so the app's
+ *  typecheck and the test harness can both compile it. */
+export function resolveChatProviders(env: Env): ChatProvider[] {
   const providers: ChatProvider[] = [];
   const openrouterKey = env.get("OPENROUTER_API_KEY");
   if (openrouterKey) {
@@ -70,10 +72,10 @@ export interface CompletionRequest {
   temperature?: number;
 }
 
-export type CompletionResult =
-  // deno-lint-ignore no-explicit-any
-  | { ok: true; completion: any; provider: ChatProvider }
-  | { ok: false; status: number; provider: ChatProvider | null; error: string };
+// deno-lint-ignore no-explicit-any
+export type CompletionSuccess = { ok: true; completion: any; provider: ChatProvider };
+export type CompletionFailure = { ok: false; status: number; provider: ChatProvider | null; error: string };
+export type CompletionResult = CompletionSuccess | CompletionFailure;
 
 /** Statuses after which the next provider is worth trying. */
 const FALLBACK_STATUSES = new Set([401, 402, 403, 404, 408, 425, 429, 500, 502, 503, 504]);
@@ -173,7 +175,7 @@ export function createChatClient(
 }
 
 /** The message staff see when every provider failed. */
-export function describeProviderFailure(result: Extract<CompletionResult, { ok: false }>): string {
+export function describeProviderFailure(result: CompletionFailure): string {
   if (!result.provider) return "Office AI is not configured yet — add OPENROUTER_API_KEY or LOVABLE_API_KEY.";
   if (result.status === 402) {
     return `${result.provider.label} is out of credits. Add credits, or add the other provider's key so Office AI can fall back.`;

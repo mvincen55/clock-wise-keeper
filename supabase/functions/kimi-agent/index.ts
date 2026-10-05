@@ -840,7 +840,7 @@ Deno.serve(async (req) => {
     // body of non-2xx function responses, and both UIs surface data.error.
     // Kimi (OpenRouter) first; the Lovable gateway (OpenAI) when Kimi is
     // missing, out of credits, or down. Nothing configured → say so.
-    const providers = resolveChatProviders();
+    const providers = resolveChatProviders(Deno.env);
     if (providers.length === 0) {
       return json({
         error: "The assistant is not configured yet — add the OPENROUTER_API_KEY secret (see docs/kimi-assistant.md).",

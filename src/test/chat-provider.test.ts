@@ -46,13 +46,13 @@ describe('chat provider fallback', () => {
     const client = createChatClient([openrouter, lovable], fetchImpl as unknown as typeof fetch);
     const result = await client.complete({ messages: [] });
     expect(result.ok).toBe(false);
-    if (!result.ok) {
+    if (result.ok === false) {
       expect(result.provider?.name).toBe('lovable');
       expect(describeProviderFailure(result)).toContain('out of credits');
     }
     const none = createChatClient([], fetchImpl as unknown as typeof fetch);
     const empty = await none.complete({ messages: [] });
     expect(empty.ok).toBe(false);
-    if (!empty.ok) expect(describeProviderFailure(empty)).toContain('not configured');
+    if (empty.ok === false) expect(describeProviderFailure(empty)).toContain('not configured');
   });
 });
