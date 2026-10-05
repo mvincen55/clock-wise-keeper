@@ -85,7 +85,7 @@ import {
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { revertsToOfficeFeesOnMax } from '@/lib/fof/schedule-defaults';
 import { computeFof } from '@/lib/fof/compute';
-import { prepareFofPrint } from '@/lib/fof/print';
+import { fofPrintRootProps, prepareFofPrint } from '@/lib/fof/print';
 import { useFofOfficeGuidance } from '@/hooks/useFofOfficeGuidance';
 import { useFofNaming, type NamingResult } from '@/hooks/useFofNaming';
 import type { CurrentFofContext } from '@/lib/fof/current-form-assistant';
@@ -3298,7 +3298,7 @@ export default function FofBuilder() {
 
       {/* Hidden print copy, portaled outside #root so print CSS can show
           only the sheet. Same props as the preview — cannot diverge. */}
-      {printSheet && createPortal(<div className="fof-print-root">{printSheet}</div>, document.body)}
+      {printSheet && createPortal(<div {...fofPrintRootProps()}>{printSheet}</div>, document.body)}
     </div>
   );
 }

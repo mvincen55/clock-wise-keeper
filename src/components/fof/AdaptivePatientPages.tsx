@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
-import { FOF_PREPARE_PRINT } from '@/lib/fof/print';
+import { FOF_PREPARE_PRINT, withMeasurablePrintRoot } from '@/lib/fof/print';
 
 const PAGE_HEIGHT = 940; // 10 printable inches, with browser/font rounding slack.
 const clone = (node: Element) => node.cloneNode(true) as HTMLElement;
@@ -108,8 +108,11 @@ export default function AdaptivePatientPages({ children }: { children: ReactNode
           target.replaceChildren(notice);sourceRoot.dataset.composed='true';
           sourceRoot.setAttribute('aria-hidden','true');
         } else {
-          // A hidden print portal cannot be measured until beforeprint. Drop any
-          // previous form now, then compose the current source when it is visible.
+          // A hidden print portal cannot be measured. Drop any previous form
+          // now rather than keep a stale one, and show the live source until
+          // the next measurable pass — prepareFofPrint and the beforeprint
+          // handler below both lay the portal out at paper width, so the
+          // printer always gets a fresh composition of the current form.
           target.replaceChildren();
           delete sourceRoot.dataset.composed;
           sourceRoot.removeAttribute('aria-hidden');
@@ -126,8 +129,13 @@ export default function AdaptivePatientPages({ children }: { children: ReactNode
     observer.observe(original, { subtree: true, childList: true, characterData: true, attributes: true });
     const printRoot = sourceRoot.closest('.fof-print-root');
     printRoot?.addEventListener(FOF_PREPARE_PRINT, compose);
-    window.addEventListener('beforeprint',compose);
-    return () => { disposed=true;observer.disconnect();images.forEach(img=>img.removeEventListener('load',compose));printRoot?.removeEventListener(FOF_PREPARE_PRINT,compose);window.removeEventListener('beforeprint',compose); };
+    // beforeprint fires with screen styles still applied, where the print
+    // portal is hidden and measures as 0px. Lay it out at paper width for
+    // the pass so the composition the printer gets is the current one —
+    // from the Print button and from Ctrl+P alike.
+    const composeForPrint = () => withMeasurablePrintRoot(printRoot, compose);
+    window.addEventListener('beforeprint',composeForPrint);
+    return () => { disposed=true;observer.disconnect();images.forEach(img=>img.removeEventListener('load',compose));printRoot?.removeEventListener(FOF_PREPARE_PRINT,compose);window.removeEventListener('beforeprint',composeForPrint); };
   }, [children]);
   return <div className="fof-adaptive-patient"><div ref={source} className="fof-page-source">{children}</div><div ref={output} className="fof-composed-output" /></div>;
 }

@@ -21,6 +21,9 @@ export function PatientPaymentOptions({ schedule, computation, template, prepayM
   }
   const { effective } = computation;
   const both = template.showPrepayOption && template.showInstallmentOption;
+  // No agreement offered means no section: an empty one still took a share
+  // of the page's distributed space and doubled the gap below the cost cards.
+  if (!template.showPrepayOption && !template.showInstallmentOption) return null;
   return <section className="fof-payment-options" aria-label="Payment options">
     {both && <div className="fof-options-head">Choose your payment option</div>}
     {template.showPrepayOption && <div className="fof-prepay-summary">

@@ -305,7 +305,7 @@ for (const v of variants) {
     <>
       {v.brand && <BrandPrintStyle branding={v.brand} />}
       <div id="root" />
-      <div className="fof-print-root">{sheet}</div>
+      <div className="fof-print-root" data-fof-zoom-compensate="">{sheet}</div>
     </>
   );
   fs.writeFileSync(
