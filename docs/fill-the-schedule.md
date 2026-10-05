@@ -29,7 +29,8 @@ Unresolved groups remain unset and cannot earn prizes or posted-review points.
 
 ## Tally and prizes
 
-- October 1 through December 31, 2026, America/New_York.
+- October 5 through December 31, 2026, America/New_York. The first tally
+  closes Friday October 9 at noon Eastern; October 2 is not a campaign tally.
 - Friday noon closes each tally. Friday noon and later roll to the next tally.
   The final partial tally closes at midnight after December 31.
 - Pending, rejected, withdrawn, and reversed entries do not count.
@@ -74,7 +75,8 @@ fresh-database fixture and is intentionally not wired into migration replay.
 
 Direct GitHub changes do not apply migrations. Apply the exact committed
 `20261005181000_fill_the_schedule.sql` and
-`20261005193000_fill_schedule_roster_roles.sql` in transactions and record their
+`20261005193000_fill_schedule_roster_roles.sql`, and
+`20261005200000_fill_schedule_start_oct5.sql` in transactions and record their
 versions in migration history before publishing the synced frontend. The roster
 follow-up recognizes undated primary jobs, never permanent backup capabilities. No edge function
 deployment is needed.
