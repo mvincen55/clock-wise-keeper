@@ -71,7 +71,7 @@ The FOF (fee form) prints patient-facing documents, and AI features read office 
 - **Frontend:** React 18 + Vite + TypeScript + Tailwind + shadcn/ui, TanStack Query, React Router (`BrowserRouter` in `App.tsx` — do not add a second router).
 - **Backend:** Supabase (Postgres, Auth, RLS, Edge Functions on Deno, pgmq queues). ~60 tables, 200+ RLS policies as of 2026-07.
 - **Email:** Lovable email infra — React Email templates → `enqueue_email` RPC → pgmq queues → `process-email-queue` dispatcher. See Email system.
-- **AI:** `kimi-agent` (Kimi K3 office agent behind Ask AI, the FOF assistant, and Ask-this-manual) + `assistant-auditor` second-model verification; `office-ai-chat` for the Messages-page assistant. Every chat prompt starts with the office's own configuration via `_shared/office-knowledge.ts` (see AI features).
+- **AI:** `kimi-agent` (Kimi K3 office agent behind Ask AI, the FOF assistant, and Ask-this-manual) + `assistant-auditor` second-model verification; `office-ai-chat` for the Messages-page assistant. All three chat surfaces share the same reach — office profile, code notes, the uploaded document library via `_shared/office-doc-search.ts`, and live web search via `_shared/web-search.ts` — and the same provider fallback (`_shared/chat-provider.ts`: Kimi on OpenRouter first, the Lovable gateway's OpenAI model when Kimi is unconfigured, out of credits, or down). Every chat prompt starts with the office's own configuration via `_shared/office-knowledge.ts` (see AI features).
 - **Mobile:** Capacitor + `vite-plugin-pwa`.
 - **Tests:** vitest (248+ as of 2026-07), including print-invariant snapshot tests.
 

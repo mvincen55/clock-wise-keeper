@@ -17,6 +17,18 @@ bottom of every desktop page. The Inbox's requests tab now uses the office's
 configured `requests_label` (default renamed 'Doctor Requests' → 'Requests' —
 requests can go to any teammate, not only the doctor).
 
+Update (2026-10-05): the Office AI conversation now has the same reach as the
+Ask AI page and the FOF Assistant. `office-ai-chat` runs a tool-calling loop:
+`search_office_docs` over the uploaded library (handbook, HR, insurance carrier
+manuals — `_shared/office-doc-search.ts`), `search_web` for the public internet
+(`_shared/web-search.ts`, OpenRouter's web plugin), and the office's code notes
+(universal and per-carrier) in the prompt beside the office profile and
+memories. Replies end with a plain-text "Sources:" line because a message row
+has nowhere else to put citations. Providers: Kimi on OpenRouter first, the
+Lovable gateway's OpenAI model when Kimi is unconfigured, out of credits, or
+down (`_shared/chat-provider.ts`); web search needs the OpenRouter side and
+says so when it is not available.
+
 Update (2026-08-12): reading a conversation now also retires its bell
 notifications. Marking a thread read used to advance only last_read_at, so the
 per-message rows notify_new_message writes stayed unread in the bell after the

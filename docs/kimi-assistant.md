@@ -1,15 +1,20 @@
-# Kimi office assistant (FOF Assistant + Ask AI)
+# Kimi office assistant (FOF Assistant + Ask AI + Office AI in Messages)
 
-Both chat surfaces in the app — the floating **FOF Assistant** widget in the FOF
-builder and the **Ask AI** page — run on one backend: the `kimi-agent` edge
-function, which talks to **Moonshot Kimi K3 through OpenRouter** and can use
-tools, not just answer.
+The **FOF Assistant** widget in the FOF builder and the **Ask AI** page run on
+one backend: the `kimi-agent` edge function. The **Office AI** conversation in
+Messages (and the chat dock) runs on `office-ai-chat`. Both talk to **Moonshot
+Kimi K3 through OpenRouter** first and fall back to the **Lovable AI gateway
+(OpenAI)** when Kimi is not configured, out of credits, or down — and both can
+use tools, not just answer. Every surface reaches the same knowledge: the
+office profile, standing memories, every code note (universal and
+per-carrier), the uploaded document library, and the public web.
 
 What it can do, by role:
 
 | Capability | Who | How |
 |---|---|---|
-| Answer questions, search office documents (policies, HR, insurance manuals) | everyone | `search_office_docs` over the existing knowledge base; answers cite sources |
+| Answer questions, search office documents (policies, HR, insurance carrier manuals) | everyone, on every chat surface | `search_office_docs` (`_shared/office-doc-search.ts`) over the existing knowledge base; answers cite document, section and page |
+| Search the public internet (CDT code definitions, a carrier's public policies, clinical/regulatory facts, anything current) | everyone, on every chat surface | `search_web` (`_shared/web-search.ts`) — OpenRouter's `web` plugin condenses live results into a cited brief the model quotes; the model only calls it when a question needs the outside world, so idle chat costs nothing extra. Needs the OpenRouter side; when only the Lovable gateway is live the assistant says the web could not be checked |
 | FOF wording training ("never say X, say Y" → standing rule) | managers, in the FOF widget with Training on | `save_wording_rule` → `fof_ai_guidance` (same table and behavior as before) |
 | Durable memory about the **office** (people, policies, preferences) and the **site** (build decisions, todos, how the app works) | managers | `save_memory` / `forget_memory` → `assistant_memories`; loaded into every future chat |
 | File knowledge about a **procedure code** onto that code's fee-schedule row | managers | `save_code_note` → `fee_schedule_items.notes` (see "Where knowledge goes") |
@@ -82,9 +87,12 @@ Secrets; or the Supabase dashboard → Edge Functions → Secrets):
 
 | Secret | Required | Value |
 |---|---|---|
-| `OPENROUTER_API_KEY` | yes | Create at [openrouter.ai/keys](https://openrouter.ai/settings/keys) and add credits. Without it both chat surfaces return a friendly "not configured" error. |
+| `OPENROUTER_API_KEY` | for Kimi + web search | Create at [openrouter.ai/keys](https://openrouter.ai/settings/keys) and add credits. Primary provider for every chat surface, and the only one that can run web search. |
+| `LOVABLE_API_KEY` | for the fallback | Already present on Lovable Cloud projects. When OpenRouter is missing, returns 402 (out of credits), 401, 429, or does not respond, the chat surfaces switch to the Lovable gateway for the rest of that turn — staff keep getting answers, minus web search. With neither key the surfaces return a friendly "not configured" error. |
+| `LOVABLE_CHAT_MODEL` | no | Fallback model on the Lovable gateway. Defaults to `openai/gpt-5.5`. |
 | `OPENROUTER_MODEL` | no | Defaults to `moonshotai/kimi-k3`. Any OpenRouter model slug with tool-calling works, so the model can be swapped without a code change (e.g. `moonshotai/kimi-k2.7-code` for cheaper build-heavy sessions). |
 | `OPENROUTER_CHECK_MODEL` | no | Model for contradiction checking and the auditor — small, strict classification work. Defaults to `moonshotai/kimi-k2.6`. |
+| `OPENROUTER_WEB_MODEL` | no | Model that condenses web results for `search_web`. Defaults to the check model. Web search is billed per search by OpenRouter (about a cent for five results) on top of the model call. |
 | `GITHUB_FINE_GRAINED_TOKEN` (or `GITHUB_TOKEN`) | for build powers | GitHub → Settings → Developer settings → **Fine-grained personal access token**, scoped to **only** `mvincen55/clock-wise-keeper`, with repository permissions **Contents: Read and write** and **Pull requests: Read and write**. Without it, Kimi answers and remembers but honestly reports that build tools aren't configured. The function accepts either secret name; this project stores it as `GITHUB_FINE_GRAINED_TOKEN`. |
 | `GITHUB_REPO` | no | Defaults to `mvincen55/clock-wise-keeper`. |
 | `GITHUB_BRANCH` | no | The Lovable-synced branch; defaults to `main`. |
