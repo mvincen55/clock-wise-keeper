@@ -145,7 +145,8 @@ Direct GitHub changes do not apply migrations. Apply the exact committed
 `20261005181000_fill_the_schedule.sql` and
 `20261005193000_fill_schedule_roster_roles.sql`, and
 `20261005200000_fill_schedule_start_oct5.sql`, followed by
-`20261005213000_fill_schedule_sheets.sql` in transactions and record their
+`20261005213000_fill_schedule_sheets.sql` and
+`20261005220000_fill_schedule_preserve_scan_flags.sql` in transactions and record their
 versions in migration history before publishing the synced frontend. The roster
 follow-up recognizes undated primary jobs, never permanent backup capabilities. No edge function
 deployment is needed.

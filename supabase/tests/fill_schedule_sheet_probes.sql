@@ -5,7 +5,7 @@ DO $$
 DECLARE manager_user uuid; staff_user uuid; staff_emp uuid; manager_emp uuid; org uuid;
   cid uuid:=gen_random_uuid(); s public.fts_sheets; s2 public.fts_sheets; r public.fts_sheet_rows;
   v jsonb; v2 jsonb; result jsonb; request uuid:=gen_random_uuid(); original uuid; h public.fts_activities;
-  base timestamptz; bonus timestamptz; wk date; n int;
+  base timestamptz; bonus timestamptz; wk date; n int; pending_row public.fts_sheet_rows;
 BEGIN
   SELECT m.user_id,e.id,m.org_id INTO manager_user,manager_emp,org FROM public.org_members m JOIN public.employees e ON e.user_id=m.user_id AND e.org_id=m.org_id
     WHERE m.org_id='852fc8e0-4071-499b-b655-f86d6f789cd5' AND m.status='active' AND m.role IN ('owner','manager') AND e.employment_status='active' ORDER BY (e.display_name ILIKE '%Megan%') DESC LIMIT 1;
@@ -65,6 +65,17 @@ BEGIN
   result:=public.fts_apply_sheet_scan(cid,s.sheet_code,'local:tesseract-7',jsonb_build_array(v2),now(),gen_random_uuid());
   SELECT * INTO r FROM public.fts_sheet_rows WHERE sheet_id=s.id AND row_no=7;
   IF r.handoff_state<>'awaiting' OR (SELECT awarded_points FROM public.fts_activities WHERE id=r.handoff_activity_id) IS NOT NULL THEN RAISE EXCEPTION 'Unverified report earned points'; END IF;
+  -- Approving the original report must not silently resolve a changed reading.
+  v2:=v||jsonb_build_object('row_no',8,'occurred_at',to_char((base-interval '2 days') AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'handoff_verified',false,'prepay_yes',false,'prepay_verified',false,'prepay_at',NULL);
+  result:=public.fts_apply_sheet_scan(cid,s.sheet_code,'local:tesseract-7',jsonb_build_array(v2),now(),gen_random_uuid());
+  SELECT * INTO pending_row FROM public.fts_sheet_rows WHERE sheet_id=s.id AND row_no=8;
+  v2:=jsonb_set(v2,'{occurred_at}',to_jsonb(to_char((base-interval '2 days'+interval '1 minute') AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')));
+  result:=public.fts_apply_sheet_scan(cid,s.sheet_code,'local:tesseract-7',jsonb_build_array(v2),now(),gen_random_uuid());
+  PERFORM public.fts_verify(pending_row.handoff_activity_id,true);
+  SELECT * INTO pending_row FROM public.fts_sheet_rows WHERE id=pending_row.id;
+  IF pending_row.handoff_state<>'flagged' OR NOT('row_changed'=ANY(pending_row.flags)) THEN RAISE EXCEPTION 'Original verification hid the changed-row warning'; END IF;
+  pending_row:=public.fts_resolve_sheet_row(pending_row.id,'keep_original');
+  IF pending_row.handoff_state<>'entered' OR cardinality(pending_row.flags)<>0 THEN RAISE EXCEPTION 'Explicit keep-original did not resolve the warning'; END IF;
   BEGIN PERFORM public.fts_apply_sheet_scan(cid,s.sheet_code,'local:tesseract-7',jsonb_build_array(v||jsonb_build_object('patient','disallowed')),now(),gen_random_uuid()); RAISE EXCEPTION 'Arbitrary text accepted'; EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
   BEGIN PERFORM public.fts_apply_sheet_scan(cid,s.sheet_code,'local:tesseract-7',jsonb_build_array(v),NULL,gen_random_uuid()); RAISE EXCEPTION 'Missing image release accepted'; EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
   BEGIN INSERT INTO public.fts_sheets(campaign_id,org_id,sheet_code,week_key,printed_by,print_request_key) VALUES(cid,org,'unauthorized',wk,staff_user,gen_random_uuid()); RAISE EXCEPTION 'Direct table write accepted'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;

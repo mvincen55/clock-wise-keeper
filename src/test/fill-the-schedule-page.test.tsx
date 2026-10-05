@@ -2,7 +2,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import FillSchedule from '@/pages/FillSchedule';
-import type { Ledger } from '@/lib/fill-the-schedule';
+import type { Ledger, SheetReading } from '@/lib/fill-the-schedule';
 import { fixture } from './fixtures/fill-schedule';
 const state = vi.hoisted(() => ({ data: null as Ledger | null, manager: false, write: vi.fn() }));
 vi.mock('@/hooks/useFillSchedule', () => ({
@@ -32,6 +32,17 @@ describe('revised campaign workflow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Point rules' }));
     expect(screen.getByText(/Doctor 3/)).toBeVisible(); expect(screen.getByText(/Hygienist 3/)).toBeVisible(); expect(screen.getByText(/Clerical 5/)).toBeVisible(); expect(screen.getByText(/Assistant 7/)).toBeVisible();
     expect(screen.getByText('1 per date')).toBeVisible(); expect(screen.getByText(/Same-day MaxAssist note and phone code/)).toBeVisible();
+  });
+  it('a changed paper report has one review card and must be resolved before the original approval controls reappear', () => {
+    state.manager = true;
+    const original: SheetReading = { row_no: 4, blank: false, occurred_at: '2026-10-05T14:00:00Z', credit_employee_id: 'staff', booked_by_employee_id: null, staff_confirmed: true, handoff_verified: false, prepay_yes: false, prepay_at: null, prepay_verified: false, app_code: null, crossed_out: false, confidence: {} };
+    state.data!.activities[0] = { ...state.data!.activities[0], activity_type: 'operative_handoff', sheet_id: 'sheet', sheet_code: 'S-1009-A', sheet_row: 4 };
+    state.data!.sheetRows = [{ id: 'row', sheet_id: 'sheet', row_no: 4, reading: { ...original, occurred_at: '2026-10-05T14:01:00Z' }, previous_reading: original, handoff_state: 'flagged', prepay_state: 'none', handoff_activity_id: 'booking', prepay_activity_id: null, flags: ['row_changed'], credit_employee_id: 'staff', booked_by_employee_id: null, generation: 0 }];
+    view();
+    expect(screen.getByRole('heading', { name: '1 item to review' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'S-1009-A · row 4' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Keep original' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Verify operative handoff · 2 points' })).toBeNull();
   });
   it('manager sees Review and Weekly scorecard, approves a pending entry, and awards a bonus directly on the origin', async () => {
     state.manager = true; state.data!.activities.push({ ...state.data!.activities[0], id: 'approved', entry_code: 'DONE1234', status: 'approved', awarded_points: 1 }); view();
