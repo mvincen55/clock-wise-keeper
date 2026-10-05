@@ -2,6 +2,18 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
+import type { Database } from '@/integrations/supabase/types';
+
+/**
+ * The recorded-absence types. `no_patients` is the day the office had no
+ * patients for the person (the doctor is off and they stay home): explained,
+ * never an absence, no hours against the bank. It arrives with migration
+ * 20261005210000_no_patients_day_off and joins the generated enum when
+ * Lovable next regenerates types.ts; until then the insert below is typed
+ * through the generated enum by hand.
+ */
+export type DayOffType = 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'medical_leave' | 'no_patients' | 'other';
+type GeneratedDayOffType = Database['public']['Enums']['day_off_type'];
 
 export type DayOffRow = {
   id: string;
@@ -10,7 +22,7 @@ export type DayOffRow = {
   employee_id: string;
   date_start: string;
   date_end: string;
-  type: 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'medical_leave' | 'other';
+  type: DayOffType;
   hours: number | null;
   notes: string | null;
   created_at: string;
@@ -66,14 +78,14 @@ export function useAddDayOff() {
   const mutation = useMutation({
     mutationFn: async (input: {
       date_start: string; date_end: string;
-      type: 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'medical_leave' | 'other';
+      type: DayOffType;
       hours?: number; notes?: string;
       /** Whose day off this is (admin flows). Defaults to the caller's own record. */
       target?: { user_id: string | null; employee_id: string };
     }) => {
       if (!user) throw new Error('Not authenticated — please log in');
       if (!ctx) throw new Error('Organization not found — make sure you have an org set up');
-      const { target, ...fields } = input;
+      const { target, type, ...fields } = input;
       // A day off belongs to its employee record. A team member without a
       // login has no user id, and the row must not borrow the manager's:
       // the attendance engine matches days off by user id, so that would
@@ -83,6 +95,7 @@ export function useAddDayOff() {
         org_id: ctx.org_id,
         employee_id: target?.employee_id ?? ctx.employee_id,
         created_by: user.id,
+        type: type as GeneratedDayOffType,
         ...fields,
       });
       if (error) throw error;

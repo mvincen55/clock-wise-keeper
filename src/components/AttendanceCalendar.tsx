@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { DayOffRow } from '@/hooks/useDaysOff';
+import type { DayOffRow, DayOffType } from '@/hooks/useDaysOff';
 import { OfficeClosureRow } from '@/hooks/useOfficeClosures';
 
 type CalendarEvent = {
@@ -22,6 +22,7 @@ type CalendarEvent = {
 const eventColors: Record<string, string> = {
   scheduled_with_notice: 'bg-primary/20 text-primary border-primary/30',
   medical_leave: 'bg-warning/20 text-warning border-warning/30',
+  no_patients: 'bg-muted text-muted-foreground border-border',
   unscheduled: 'bg-destructive/20 text-destructive border-destructive/30',
   office_closed: 'bg-success/20 text-success border-success/30',
   other: 'bg-accent/20 text-accent border-accent/30',
@@ -33,6 +34,7 @@ const typeLabels: Record<string, string> = {
   unscheduled: 'Callout',
   office_closed: 'Office Closed',
   medical_leave: 'Medical Leave',
+  no_patients: 'No patients',
   other: 'Other',
 };
 
@@ -43,7 +45,7 @@ interface AttendanceCalendarProps {
   onAddDayOff: (input: {
     date_start: string;
     date_end: string;
-    type: 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'medical_leave' | 'other';
+    type: DayOffType;
     hours?: number;
     notes?: string;
   }) => Promise<void>;
@@ -62,7 +64,7 @@ export default function AttendanceCalendar({
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [eventType, setEventType] = useState<'day_off' | 'closure'>('day_off');
   const [form, setForm] = useState({
-    type: 'scheduled_with_notice' as 'scheduled_with_notice' | 'unscheduled' | 'office_closed' | 'medical_leave' | 'other',
+    type: 'scheduled_with_notice' as DayOffType,
     date_start: '',
     date_end: '',
     hours: '0',
@@ -312,6 +314,7 @@ export default function AttendanceCalendar({
                       <SelectItem value="scheduled_with_notice">Scheduled w/ Notice</SelectItem>
                       <SelectItem value="unscheduled">Unscheduled</SelectItem>
                       <SelectItem value="medical_leave">Medical Leave</SelectItem>
+                      <SelectItem value="no_patients">No patients (doctor off)</SelectItem>
                       <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
