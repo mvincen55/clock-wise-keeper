@@ -28,6 +28,8 @@ import type { Campaign, Participant, Activity, Calls, Huddle, Metric, PrizePick,
  *                                         set_org_pto_policy
  *   20260929120000_pto_balance_guard      pto_available_hours, pto_allows_negative
  *   20261005181000_fill_the_schedule     fts_* campaign tables and write RPCs
+ *   20261006090000_late_rule_counts_from escalation_policies.counts_from
+ *   20261006093000_pto_usage             pto_usage; record_pto_usage, void_pto_usage
  *
  * Same idea as ./knowledge-client.ts, generalised: one module, one merge.
  */
@@ -153,9 +155,30 @@ export type FillScheduleTables = {
   fts_prize_picks: FtsScoped<PrizePick>;
   fts_audit: FtsScoped<Audit>;
 };
+/** 20261006093000_pto_usage.sql — browser writes go through record_pto_usage / void_pto_usage. */
+export type PtoUsageRow = {
+  id: string;
+  org_id: string;
+  employee_id: string;
+  user_id: string | null;
+  usage_date: string;
+  hours: number;
+  note: string;
+  source: 'employee' | 'manager' | 'day_off';
+  day_off_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  voided_at: string | null;
+  voided_by: string | null;
+  void_reason: string | null;
+};
+export type PtoUsageTable = { Row: PtoUsageRow; Insert: never; Update: never; Relationships: [] };
+
 type PendingTables = FillScheduleTables & {
   manager_followups: ManagerFollowupsTable;
   org_pto_policy: OrgPtoPolicyTable;
+  pto_usage: PtoUsageTable;
 };
 
 /** Columns added to tables the generated file already has. */
@@ -171,6 +194,12 @@ type PendingColumns = {
     Row: { policy_override: boolean };
     Insert: { policy_override?: boolean };
     Update: { policy_override?: boolean };
+  };
+  /** 20261006090000_late_rule_counts_from.sql */
+  escalation_policies: {
+    Row: { counts_from: string | null };
+    Insert: { counts_from?: string | null };
+    Update: { counts_from?: string | null };
   };
 };
 
@@ -217,6 +246,15 @@ type PendingFunctions = FillScheduleFunctions & {
   pto_allows_negative: {
     Args: { p_employee_id: string };
     Returns: boolean;
+  };
+  /** 20261006093000_pto_usage.sql */
+  record_pto_usage: {
+    Args: { p_employee_id: string; p_usage_date: string; p_hours: number; p_note?: string };
+    Returns: PtoUsageRow;
+  };
+  void_pto_usage: {
+    Args: { p_id: string; p_reason?: string };
+    Returns: PtoUsageRow;
   };
 };
 

@@ -11,17 +11,19 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useOrgBranding } from '@/hooks/useOrgBranding';
-import { useDaysOff, useUpdateDayOffHours } from '@/hooks/useDaysOff';
+import { usePtoUsage, useVoidPtoUsage } from '@/hooks/usePtoUsage';
+import { PTO_USAGE_SOURCE_LABELS, activePtoUsage, formatPtoHours, type PtoUsageRow } from '@/lib/pto-usage';
+import { UsePtoDialog } from '@/components/pto/UsePtoDialog';
+import { useOrgStaff } from '@/hooks/useStaffCodes';
 import { useMyPtoRequests, useCancelPtoRequest, PtoRequest } from '@/hooks/usePtoRequests';
 import { PtoRequestModal } from '@/components/PtoRequestModal';
 import { PtoCorrectionModal } from '@/components/PtoCorrectionModal';
 import TeamPtoBalances from '@/components/pto/TeamPtoBalances';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, TrendingUp, Clock, Printer, AlertTriangle, Plus, XCircle, Pencil, Check, X } from 'lucide-react';
+import { CalendarDays, TrendingUp, Clock, Printer, AlertTriangle, Plus, XCircle, Pencil, Undo2 } from 'lucide-react';
 import { formatDate } from '@/lib/time-utils';
 import { useToast } from '@/hooks/use-toast';
 import { useConsumedSearchParam, useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
@@ -42,6 +44,7 @@ export default function PTO() {
   const { data: branding } = useOrgBranding();
   const { toast } = useToast();
   const [requestModalOpen, setRequestModalOpen] = useState(false);
+  const [usePtoOpen, setUsePtoOpen] = useState(false);
   const [correctionTarget, setCorrectionTarget] = useState<{ request: PtoRequest; mode: 'cancel' | 'correct' } | null>(null);
   const { data: myPtoRequests } = useMyPtoRequests();
   const cancelRequest = useCancelPtoRequest();
@@ -57,19 +60,21 @@ export default function PTO() {
   const { data: settings } = usePtoSettings();
   const { data: snapshots } = usePtoSnapshots();
   const { data: ledger, error: ledgerError, isLoading: ledgerLoading } = usePtoLedger();
-  const { data: daysOff } = useDaysOff();
-  const updateHours = useUpdateDayOffHours();
+  const { data: ptoUsage } = usePtoUsage();
+  const voidUsage = useVoidPtoUsage();
+  const { data: orgStaff } = useOrgStaff();
   const ptoState = useCurrentPtoBalance();
+  const myName = orgStaff?.find(m => m.employeeId === ctx?.employee_id)?.displayName ?? 'you';
 
 
   const currentTier = settings
     ? getTierForDate(settings.hire_date, new Date().toISOString().split('T')[0])
     : PTO_TIERS[0];
 
-  // PTO usage entries
-  const ptoEntries = (daysOff || [])
-    .filter(d => d.type !== 'office_closed')
-    .sort((a, b) => b.date_start.localeCompare(a.date_start));
+  // PTO use: the hours recorded as used (Use PTO, or typed on a time-off
+  // record), newest first; voided rows stay listed, struck through.
+  const usageRows = ptoUsage ?? [];
+  const usedHoursTotal = activePtoUsage(usageRows).reduce((sum, r) => sum + r.hours, 0);
 
   const reversedLedger = [...(ledger || [])].reverse();
 
@@ -102,12 +107,17 @@ export default function PTO() {
             {branding?.displayName ? `${branding.displayName} — Combined PTO Bank` : 'Combined PTO Bank'}
           </p>
         </div>
-        <Button onClick={() => setRequestModalOpen(true)} size="sm">
-          <Plus className="mr-2 h-4 w-4" /> Request PTO
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => setUsePtoOpen(true)} size="sm">
+            <Clock className="mr-2 h-4 w-4" /> Use PTO
+          </Button>
+          <Button onClick={() => setRequestModalOpen(true)} size="sm" variant="outline">
+            <Plus className="mr-2 h-4 w-4" /> Request PTO
+          </Button>
+        </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">PTO updates automatically from saved dates, hours, time off, and policy changes.</p>
+      <p className="text-xs text-muted-foreground">PTO updates automatically from recorded PTO use, worked hours, and policy changes. Use PTO records the hours you are using; a day off on the calendar never deducts by itself.</p>
       {ledgerError && <p role="alert" className="text-sm text-destructive">PTO could not be updated. The displayed balance may be out of date.</p>}
       {/* Negative balance warning */}
       {ptoState.balance < 0 && (
@@ -390,26 +400,34 @@ export default function PTO() {
           {ctx?.employee_id && <div className="mb-4"><PayrollPtoHistory employeeId={ctx.employee_id}/></div>}
           <Card className="card-elevated">
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <CardTitle className="flex items-center gap-2">
                   <CalendarDays className="h-5 w-5" />
-                  PTO Usage
+                  PTO used
                 </CardTitle>
-                <Button variant="outline" size="sm" onClick={() => window.print()}>
-                  <Printer className="mr-2 h-4 w-4" /> Print
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => setUsePtoOpen(true)}>
+                    <Clock className="mr-2 h-4 w-4" /> Use PTO
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => window.print()}>
+                    <Printer className="mr-2 h-4 w-4" /> Print
+                  </Button>
+                </div>
               </div>
+              <p className="text-sm text-muted-foreground">
+                The hours you recorded as used{usedHoursTotal > 0 ? `: ${formatPtoHours(usedHoursTotal)} in all` : ''}. Each one comes out of your bank and prints on the office's payroll report. Hours typed on a time-off record appear here too.
+              </p>
             </CardHeader>
             <CardContent className="p-0">
-              {ptoEntries.length === 0 ? (
-                <p className="text-center text-muted-foreground py-12">No PTO entries recorded</p>
+              {usageRows.length === 0 ? (
+                <p className="text-center text-muted-foreground py-12">No PTO hours recorded yet. Use PTO to record the hours you are using.</p>
               ) : (
                 <div className="divide-y">
-                  {ptoEntries.map(d => (
-                    <PtoUsageRow key={d.id} entry={d} onUpdateHours={(id, hours) => {
-                      updateHours.mutate({ id, hours }, {
-                        onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
-                        onSuccess: () => toast({ title: 'Hours updated' }),
+                  {usageRows.map(r => (
+                    <PtoUsageEntry key={r.id} entry={r} onVoid={r.source === 'day_off' || r.voided_at ? undefined : () => {
+                      voidUsage.mutate({ id: r.id, reason: 'Taken back on the PTO page' }, {
+                        onError: (err: Error) => toast({ title: 'Could not take this back', description: err.message, variant: 'destructive' }),
+                        onSuccess: () => toast({ title: 'PTO hours taken back', description: 'The hours are back in your bank.' }),
                       });
                     }} />
                   ))}
@@ -444,6 +462,7 @@ export default function PTO() {
       </Tabs>
 
       <PtoRequestModal open={requestModalOpen} onClose={() => setRequestModalOpen(false)} />
+      {ctx && <UsePtoDialog open={usePtoOpen} onClose={() => setUsePtoOpen(false)} members={[{ employeeId: ctx.employee_id, displayName: myName }]} />}
       {correctionTarget && (
         <PtoCorrectionModal
           open={!!correctionTarget}
@@ -457,61 +476,27 @@ export default function PTO() {
 }
 
 /* ── Inline-editable PTO usage row ── */
-export function PtoUsageRow({ entry, onUpdateHours }: { entry: any; onUpdateHours: (id: string, hours: number) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(entry.hours == null ? '' : String(entry.hours));
 
-  const save = () => {
-    const h = parseFloat(value);
-    if (!isNaN(h) && h >= 0) {
-      onUpdateHours(entry.id, h);
-    }
-    setEditing(false);
-  };
-
+/** One recorded use: date, hours, who recorded it, the note; struck through once taken back. */
+export function PtoUsageEntry({ entry, onVoid }: { entry: PtoUsageRow; onVoid?: () => void }) {
+  const voided = !!entry.voided_at;
   return (
-    <div className="flex items-center justify-between px-4 py-3">
-      <div>
-        <p className="text-sm font-medium">
-          {formatDate(entry.date_start)}
-          {entry.date_start !== entry.date_end && ` — ${formatDate(entry.date_end)}`}
+    <div className={`flex flex-wrap items-center justify-between gap-2 px-4 py-3 ${voided ? 'opacity-60' : ''}`}>
+      <div className={voided ? 'line-through' : ''}>
+        <p className="text-sm font-medium">{formatDate(entry.usage_date)}</p>
+        <p className="text-xs text-muted-foreground">
+          {PTO_USAGE_SOURCE_LABELS[entry.source]}{entry.note ? ` · ${entry.note}` : ''}
         </p>
-        {entry.notes && <p className="text-xs text-muted-foreground">{entry.notes}</p>}
+        {voided && <p className="text-xs text-muted-foreground no-underline">Taken back{entry.void_reason ? `: ${entry.void_reason}` : ''}</p>}
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-xs px-2 py-0.5 rounded font-medium bg-primary/20 text-primary capitalize">
-          {entry.type.replace(/_/g, ' ')}
-        </span>
-        {editing ? (
-          <div className="flex items-center gap-1">
-            <Input
-              type="number"
-              min={0}
-              step={0.5}
-              value={value}
-              onChange={e => setValue(e.target.value)}
-              className="w-16 h-7 text-sm"
-              autoFocus
-              onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
-            />
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={save} aria-label="Save">
-              <Check className="h-3 w-3 text-success" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditing(false)} aria-label="Cancel">
-              <X className="h-3 w-3 text-muted-foreground" />
-            </Button>
-          </div>
-        ) : (
-          <button
-            className="flex items-center gap-1 text-sm font-semibold hover:text-primary transition-colors group"
-            onClick={() => { setValue(entry.hours == null ? '' : String(entry.hours)); setEditing(true); }}
-          >
-            {entry.hours == null ? 'Hours not recorded' : `${entry.hours}h`}
-            <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 text-muted-foreground transition-opacity" />
-          </button>
+        <span className={`text-sm font-semibold ${voided ? 'line-through' : ''}`}>{formatPtoHours(entry.hours)}</span>
+        {onVoid && (
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onVoid} aria-label={`Take back ${formatPtoHours(entry.hours)} on ${formatDate(entry.usage_date)}`}>
+            <Undo2 className="mr-1 h-3 w-3" /> Take back
+          </Button>
         )}
       </div>
     </div>
   );
 }
-

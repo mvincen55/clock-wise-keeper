@@ -55,7 +55,7 @@ export default function LateArrivalRuleCard() {
       </CardHeader>
       <CardContent className="space-y-4 p-4">
         {error && <p role="alert" className="text-sm text-destructive">The rule could not be loaded.</p>}
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <Label htmlFor="late-rule-count" className="text-xs">How many unexcused late arrivals</Label>
             <Input id="late-rule-count" type="number" min={1} max={99} step={1} value={draft.threshold_count} disabled={isLoading}
@@ -66,11 +66,19 @@ export default function LateArrivalRuleCard() {
             <Input id="late-rule-days" type="number" min={1} max={365} step={1} value={draft.threshold_window_days} disabled={isLoading}
               onChange={e => set('threshold_window_days', Math.max(1, num(e.target.value, 1)))} />
           </div>
+          <div>
+            <Label htmlFor="late-rule-from" className="text-xs">Count from (optional)</Label>
+            <Input id="late-rule-from" type="date" value={draft.counts_from ?? ''} disabled={isLoading}
+              onChange={e => set('counts_from', e.target.value || null)} />
+          </div>
           <div className="flex items-end gap-2 pb-2">
             <Switch id="late-rule-active" checked={draft.is_active} disabled={isLoading} onCheckedChange={v => set('is_active', v)} aria-label="Turn the late-arrival rule on or off" />
             <Label htmlFor="late-rule-active" className="font-normal">{draft.is_active ? 'On' : 'Off'}</Label>
           </div>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Count from: the day counting starts, for an office announcing the rule. Late arrivals before it stay on the record and on the Late arrivals tab, but never count toward the rule and never open a report. Leave it blank to count everything on the record.
+        </p>
         <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
           {ruleExplanation(draft).map(line => <li key={line}>{line}</li>)}
         </ul>

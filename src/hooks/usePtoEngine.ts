@@ -273,7 +273,7 @@ export type TeamPtoBalance = {
   tier: (typeof PTO_TIERS)[number] | null;
   /** The live balance today; null when no starting balance is on file. */
   balance: number | null;
-  /** Balance minus time off already booked after today: what can still be given. */
+  /** Balance minus PTO use already recorded for days after today: what can still be given. */
   available: number | null;
   bookedAhead: number;
   allowNegative: boolean;
@@ -301,7 +301,8 @@ export function useTeamPtoBalances() {
           .eq('org_id', ctx!.org_id).eq('employment_status', 'active'),
         supabase.from('pto_settings').select('employee_id, allow_negative, policy_override, hire_date').eq('org_id', ctx!.org_id),
         supabase.from('org_pto_policy').select('allow_negative').eq('org_id', ctx!.org_id).maybeSingle(),
-        supabase.from('days_off').select('employee_id, hours').eq('org_id', ctx!.org_id).gt('date_start', today).neq('type', 'office_closed'),
+        // Booked ahead: PTO use already recorded for days after today (what the bank guard reads too).
+        supabase.from('pto_usage').select('employee_id, hours').eq('org_id', ctx!.org_id).gt('usage_date', today).is('voided_at', null),
       ]);
       if (employees.error) throw employees.error;
       if (settings.error) throw settings.error;

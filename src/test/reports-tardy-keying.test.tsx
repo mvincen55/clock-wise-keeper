@@ -35,6 +35,7 @@ vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'manager-login
 vi.mock('@/hooks/usePayrollSettings', () => ({ usePayrollSettings: () => ({ data: { week_start_day: 1 } }) }));
 vi.mock('@/hooks/useTimeEntries', () => ({ useTimeEntries: () => ({ data: entries }) }));
 vi.mock('@/hooks/useDaysOff', () => ({ useDaysOff: () => ({ data: [] }) }));
+vi.mock('@/hooks/usePtoUsage', () => ({ useOrgPtoUsage: () => ({ data: [] }), usePtoUsage: () => ({ data: [] }), usePtoAvailable: () => ({ data: null, isLoading: false }), useRecordPtoUsage: () => ({ mutate: () => {}, isPending: false }), useVoidPtoUsage: () => ({ mutate: () => {}, isPending: false }) }));
 vi.mock('@/hooks/useTardies', () => ({ useTardies: () => ({ data: tardies }) }));
 vi.mock('@/hooks/useAttendanceExceptions', () => ({ useAttendanceExceptions: () => ({ data: [] }) }));
 vi.mock('@/hooks/useAttendanceDayStatus', () => ({ useAttendanceDayStatus: () => ({ data: [] }) }));
