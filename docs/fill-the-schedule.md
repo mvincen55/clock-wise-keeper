@@ -23,7 +23,7 @@ remain unchanged.
 | On time for huddle | 1 per date | Manager checklist; re-saving corrects date without duplicate points |
 
 Manager can record reports on behalf of a roster member, including a person
-without a login. No users are invited automatically. Operational job roles
+without a login. No users are invited automatically. Confirmed primary operational job roles
 may seed a scoring group, but permission roles never determine review points.
 Unresolved groups remain unset and cannot earn prizes or posted-review points.
 
@@ -73,6 +73,8 @@ Harelick manager and member, and dates within this Q4 campaign. It is not a
 fresh-database fixture and is intentionally not wired into migration replay.
 
 Direct GitHub changes do not apply migrations. Apply the exact committed
-`20261005181000_fill_the_schedule.sql` in a transaction and record the version
-in migration history before publishing the synced frontend. No edge function
+`20261005181000_fill_the_schedule.sql` and
+`20261005193000_fill_schedule_roster_roles.sql` in transactions and record their
+versions in migration history before publishing the synced frontend. The roster
+follow-up recognizes undated primary jobs, never permanent backup capabilities. No edge function
 deployment is needed.
