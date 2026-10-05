@@ -12,6 +12,7 @@ import MyAccountabilityCard from '@/components/accountability/MyAccountabilityCa
 import UserNotesBoard from '@/components/UserNotesBoard';
 import FirstGoalTaskCard from '@/components/goals/FirstGoalTaskCard';
 import HomeNudges from '@/components/nudges/HomeNudges';
+import FillScheduleCard from '@/components/FillScheduleCard';
 import OwnerDashboard from '@/components/dashboard/OwnerDashboard';
 import ManagerDashboard from '@/components/dashboard/ManagerDashboard';
 import MemberDashboard from '@/components/dashboard/MemberDashboard';
@@ -105,6 +106,7 @@ export default function Home() {
         {/* Nudges render on the surface they concern (design §3.7): the ones
             aimed at Home land here, for everyone, and only when there are any. */}
         <HomeNudges />
+        <FillScheduleCard />
 
         {/* OWNER and MANAGER — the one record that can be signed nowhere
             else: their own accountability record, only while one is open. */}
