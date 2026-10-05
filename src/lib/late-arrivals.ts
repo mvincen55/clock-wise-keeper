@@ -19,7 +19,7 @@
  * which is the rule the evaluator actually applies; this copy exists so the
  * app can explain standing ("2 of 3 in the last 30 days") without a call.
  */
-import { shiftDate } from '@/lib/time-utils';
+import { formatDate, shiftDate } from '@/lib/time-utils';
 
 export type ExcuseState = 'unexcused' | 'pending' | 'excused';
 
@@ -80,10 +80,22 @@ export type LateArrivalRule = {
   threshold_count: number;
   threshold_window_days: number;
   is_active: boolean;
+  /**
+   * The first day that counts (YYYY-MM-DD). An office that announces the
+   * rule sets this to the day counting starts: late arrivals before it stay
+   * on the record but never count, never open a report, and never ride
+   * along on one. Null (or absent) counts everything on the record.
+   */
+  counts_from?: string | null;
 };
 
 /** The default every office starts with. */
-export const DEFAULT_LATE_ARRIVAL_RULE: LateArrivalRule = { threshold_count: 3, threshold_window_days: 30, is_active: true };
+export const DEFAULT_LATE_ARRIVAL_RULE: LateArrivalRule = { threshold_count: 3, threshold_window_days: 30, is_active: true, counts_from: null };
+
+/** The rule's counting start, or null when it counts everything. */
+export function countsFrom(rule: Pick<LateArrivalRule, 'counts_from'>): string | null {
+  return rule.counts_from && /^\d{4}-\d{2}-\d{2}$/.test(rule.counts_from) ? rule.counts_from : null;
+}
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -95,7 +107,8 @@ export function ruleClause(rule: LateArrivalRule): string {
 /** One sentence for a settings card, a report, or a notification. */
 export function ruleSentence(rule: LateArrivalRule): string {
   if (!rule.is_active) return 'The late-arrival rule is off: late arrivals are recorded but never open a report.';
-  return `${ruleClause(rule)} open an attendance incident report automatically.`;
+  const from = countsFrom(rule);
+  return `${ruleClause(rule)} open an attendance incident report automatically.${from ? ` Counting starts ${formatDate(from)}.` : ''}`;
 }
 
 /** The fine print, the same for employees and managers. */
@@ -108,12 +121,26 @@ export function ruleExplanation(rule: LateArrivalRule): string[] {
     `The window rolls: any ${rule.threshold_window_days} consecutive days holding ${rule.threshold_count} qualifying late arrivals meet the rule.`,
     `Meeting the rule opens one report listing the dates. While it is open, later late arrivals attach to it; after it closes, a new report needs a fresh set inside the window.`,
     `The report documents the threshold crossing. It closes only after a meeting with the team member and both signatures.`,
+    ...(countsFrom(rule)
+      ? [`Late arrivals before ${formatDate(countsFrom(rule)!)} stay on the record but do not count toward the rule: counting starts that day.`]
+      : []),
   ];
 }
 
 /** First day of the rolling window that ends on `endDate` (inclusive). */
 export function windowStart(endDate: string, windowDays: number): string {
   return shiftDate(endDate, -(Math.max(1, windowDays) - 1));
+}
+
+/**
+ * First day that counts as of `today`: the rolling window's start, cut at
+ * the rule's counting start when that is later. What every reading of
+ * "the last N days" has to use once an office has announced its rule.
+ */
+export function countingStart(rule: LateArrivalRule, today: string): string {
+  const start = windowStart(today, rule.threshold_window_days);
+  const from = countsFrom(rule);
+  return from && from > start ? from : start;
 }
 
 export type Standing = {
@@ -125,6 +152,8 @@ export type Standing = {
   remaining: number;
   windowStart: string;
   windowEnd: string;
+  /** Set when the counting start cut the window short: the day counting began. */
+  since: string | null;
 };
 
 /**
@@ -138,15 +167,20 @@ export function standingToday(
   rule: LateArrivalRule,
   today: string,
 ): Standing {
-  const start = windowStart(today, rule.threshold_window_days);
+  const rolling = windowStart(today, rule.threshold_window_days);
+  const start = countingStart(rule, today);
   const inWindow = arrivals.filter(a => a.entry_date >= start && a.entry_date <= today);
   const counting = inWindow.filter(countsTowardThreshold).length;
   const pending = inWindow.filter(a => isLiveLateArrival(a) && excuseState(a) === 'pending').length;
-  return { counting, pending, remaining: Math.max(0, rule.threshold_count - counting), windowStart: start, windowEnd: today };
+  return {
+    counting, pending, remaining: Math.max(0, rule.threshold_count - counting),
+    windowStart: start, windowEnd: today, since: start > rolling ? start : null,
+  };
 }
 
-/** "2 of 3 unexcused late arrivals in the last 30 days" */
+/** "2 of 3 unexcused late arrivals in the last 30 days", or "since Oct 7, 2026" once the counting start cuts the window. */
 export function standingSentence(s: Standing, rule: LateArrivalRule): string {
-  const base = `${s.counting} of ${rule.threshold_count} unexcused late arrival${rule.threshold_count === 1 ? '' : 's'} in the last ${rule.threshold_window_days} days`;
+  const span = s.since ? `since ${formatDate(s.since)}` : `in the last ${rule.threshold_window_days} days`;
+  const base = `${s.counting} of ${rule.threshold_count} unexcused late arrival${rule.threshold_count === 1 ? '' : 's'} ${span}`;
   return s.pending > 0 ? `${base} · ${plural(s.pending, 'excuse request')} pending` : base;
 }

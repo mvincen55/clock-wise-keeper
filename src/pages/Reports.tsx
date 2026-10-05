@@ -3,6 +3,9 @@ import { createPortal } from 'react-dom';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useTimeEntries, TimeEntryRow, PunchRow } from '@/hooks/useTimeEntries';
 import { useDaysOff } from '@/hooks/useDaysOff';
+import { useOrgPtoUsage } from '@/hooks/usePtoUsage';
+import { PTO_USAGE_SOURCE_LABELS, formatPtoHours, groupPtoUsageByEmployee } from '@/lib/pto-usage';
+import { UsePtoDialog, type UsePtoMember } from '@/components/pto/UsePtoDialog';
 import { useTardies, TardyRow } from '@/hooks/useTardies';
 import { EXCUSE_LABELS, countsTowardThreshold, excuseState, isLiveLateArrival } from '@/lib/late-arrivals';
 import { useAttendanceExceptions } from '@/hooks/useAttendanceExceptions';
@@ -24,7 +27,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileText, Printer, Download, MapPin, Hand, Clock, AlertTriangle, ChevronDown, ChevronRight, History } from 'lucide-react';
+import { FileText, Printer, Download, MapPin, Hand, Clock, AlertTriangle, ChevronDown, ChevronRight, History, CalendarPlus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
@@ -228,10 +231,13 @@ export default function Reports() {
   
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [expandedAudit, setExpandedAudit] = useState<Set<string>>(new Set());
+  const [usePtoOpen, setUsePtoOpen] = useState(false);
 
   // Reports is org-wide for admins (RLS still limits employees to their own).
   const { data: entries } = useTimeEntries(startDate || undefined, endDate || undefined, 'all');
   const { data: daysOff } = useDaysOff();
+  // PTO hours recorded as used in the range (RLS: own rows, or the office for admins).
+  const { data: ptoUsageRows } = useOrgPtoUsage(startDate || undefined, endDate || undefined);
   const { data: tardies } = useTardies(startDate || undefined, endDate || undefined);
   const { data: exceptions } = useAttendanceExceptions(startDate || undefined, endDate || undefined);
   const { data: dayStatus } = useAttendanceDayStatus(startDate || undefined, endDate || undefined);
@@ -282,6 +288,19 @@ export default function Reports() {
     return code ? `${name} · ${staffCodeLabel(code)}` : name;
   };
   const today = getToday();
+
+  // PTO used in the period: the hours each person recorded as used (or a
+  // manager recorded for them), never derived from a day off. They print
+  // with the payroll record and are counted here apart from worked hours.
+  const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
+  const ptoUsageGroups = groupPtoUsageByEmployee(ptoUsageRows || [], startDate, endDate)
+    .map(g => ({ ...g, label: employeeName(g.employeeId) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const ptoUsageHours = Math.round(ptoUsageGroups.reduce((sum, g) => sum + g.hours, 0) * 100) / 100;
+  const usePtoMembers: UsePtoMember[] = (orgEmployees || [])
+    .filter(e => e.pto_eligible !== false)
+    .map(e => ({ employeeId: e.id, displayName: employeeName(e.id) }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
 
   // OT flags: per employee per payroll week from server-computed totals
   // (voided punches never count). 2400 minutes = 40 hours.
@@ -422,6 +441,11 @@ export default function Reports() {
     })),
     employees: printEmployees,
     flags: timeFlags.map(f => ({ label: f.employeeLabel, date: f.date, kind: f.kind })),
+    ptoUsage: ptoUsageGroups.map(g => ({
+      label: g.label,
+      hours: g.hours,
+      items: g.rows.map(r => ({ date: r.usage_date, hours: r.hours, note: r.note, source: PTO_USAGE_SOURCE_LABELS[r.source] })),
+    })),
   };
 
   // Fetch audit events and resolve actor names
@@ -575,17 +599,22 @@ export default function Reports() {
       return;
     }
 
-    // PTO CSV
+    // PTO CSV: time off on the calendar, then the PTO hours recorded as used
     if (reportType === 'pto') {
-      const header = ['Start Date', 'End Date', 'Type', 'Notes'];
+      const header = ['Start Date', 'End Date', 'Type', 'Notes', 'PTO Hours Used', 'Recorded By'];
       const filtered = (daysOff || []).filter(d => d.date_start >= startDate && d.date_start <= endDate);
       const rows = filtered.map(d => [
         formatDate(d.date_start),
         d.date_start !== d.date_end ? formatDate(d.date_end) : '',
         d.type?.replace(/_/g, ' ') || '',
         d.notes || '',
+        '',
+        '',
       ].map(escapeCsv).join(','));
-      const csv = [header.join(','), ...rows].join('\n');
+      const usageRows = (ptoUsageRows || [])
+        .filter(r => !r.voided_at && r.usage_date >= startDate && r.usage_date <= endDate)
+        .map(r => [formatDate(r.usage_date), '', 'PTO hours used', r.note || '', Number(r.hours).toFixed(2), PTO_USAGE_SOURCE_LABELS[r.source]].map(escapeCsv).join(','));
+      const csv = [header.join(','), ...rows, ...usageRows].join('\n');
       downloadCsvBlob(csv, `pto_${startDate}_${endDate}.csv`);
       return;
     }
@@ -857,6 +886,8 @@ export default function Reports() {
             </CardHeader>
 
             <CardContent className="p-0">
+              {isAdmin && <UsePtoDialog open={usePtoOpen} onClose={() => setUsePtoOpen(false)} members={usePtoMembers} initialDate={endDate <= today ? endDate : today} />}
+
               {/* Timesheet reports */}
               {(reportType === 'weekly' || reportType === 'pay_period' || reportType === 'monthly') && (
                 <>
@@ -921,6 +952,49 @@ export default function Reports() {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {/* PTO used: the hours people recorded as used, apart from worked hours */}
+                  {(ptoUsageGroups.length > 0 || isAdmin) && (
+                    <div className="border-b">
+                      <div className="px-4 py-2 bg-muted/40 flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">PTO used</h3>
+                          <span className="text-[10px] text-muted-foreground">hours recorded as used · paid from the PTO bank, not worked hours</span>
+                        </div>
+                        {isAdmin && (
+                          <Button variant="outline" size="sm" className="no-print h-7 text-xs" onClick={() => setUsePtoOpen(true)}>
+                            <CalendarPlus className="mr-1.5 h-3 w-3" /> Add PTO use
+                          </Button>
+                        )}
+                      </div>
+                      {ptoUsageGroups.length === 0 ? (
+                        <p className="px-4 py-3 text-xs text-muted-foreground">No PTO hours recorded in this period.</p>
+                      ) : (
+                        <div className="divide-y">
+                          {ptoUsageGroups.map(g => (
+                            <div key={g.employeeId} className="px-4 py-2 text-sm">
+                              <div className="flex justify-between font-medium">
+                                <span>{g.label}</span>
+                                <span className="font-mono">{formatPtoHours(g.hours)}</span>
+                              </div>
+                              <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                                {g.rows.map(r => (
+                                  <li key={r.id} className="flex flex-wrap justify-between gap-2">
+                                    <span>{formatDate(r.usage_date)} · {PTO_USAGE_SOURCE_LABELS[r.source]}{r.note ? ` · ${r.note}` : ''}</span>
+                                    <span className="font-mono">{formatPtoHours(r.hours)}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                          <div className="flex justify-between px-4 py-2 text-sm font-semibold">
+                            <span>PTO hours in the period</span>
+                            <span className="font-mono">{formatPtoHours(ptoUsageHours)}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -999,6 +1073,28 @@ export default function Reports() {
               )}
 
               {/* PTO report */}
+              {reportType === 'pto' && ptoUsageGroups.length > 0 && (
+                <div className="border-b">
+                  <div className="px-4 py-2 bg-muted/40">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">PTO hours used · {formatPtoHours(ptoUsageHours)}</h3>
+                  </div>
+                  <div className="divide-y">
+                    {ptoUsageGroups.map(g => g.rows.map(r => (
+                      <div key={r.id} className="px-4 py-3 flex flex-wrap justify-between items-center gap-2 text-sm hover:bg-muted/30">
+                        <span>
+                          <span className="font-medium">{formatDate(r.usage_date)}</span>
+                          {ptoUsageGroups.length > 1 && <span className="text-muted-foreground"> · {g.label}</span>}
+                          {r.note && <span className="block text-xs text-muted-foreground">{r.note}</span>}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <Badge variant="secondary" className="text-xs">{PTO_USAGE_SOURCE_LABELS[r.source]}</Badge>
+                          <span className="font-mono font-semibold">{formatPtoHours(r.hours)}</span>
+                        </span>
+                      </div>
+                    )))}
+                  </div>
+                </div>
+              )}
               {reportType === 'pto' && (
                 <div className="divide-y">
                   {(daysOff || [])

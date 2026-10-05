@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/pending-schema';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import { DEFAULT_LATE_ARRIVAL_RULE, type LateArrivalRule } from '@/lib/late-arrivals';
+import { DEFAULT_LATE_ARRIVAL_RULE, countsFrom, type LateArrivalRule } from '@/lib/late-arrivals';
 
 /**
  * The office's late-arrival rule: how many unexcused late arrivals within a
@@ -24,7 +24,7 @@ export function useLateArrivalRule() {
     queryFn: async (): Promise<LateArrivalRule> => {
       const { data, error } = await supabase
         .from('escalation_policies')
-        .select('threshold_count, threshold_window_days, is_active')
+        .select('threshold_count, threshold_window_days, is_active, counts_from')
         .eq('org_id', ctx!.org_id)
         .eq('kind', KIND)
         .maybeSingle();
@@ -34,6 +34,7 @@ export function useLateArrivalRule() {
         threshold_count: data.threshold_count,
         threshold_window_days: data.threshold_window_days,
         is_active: data.is_active,
+        counts_from: data.counts_from ?? null,
       };
     },
   });
@@ -50,10 +51,11 @@ export function useSaveLateArrivalRule() {
       const days = Math.floor(rule.threshold_window_days);
       if (!Number.isFinite(count) || count < 1 || count > 99) throw new Error('How many: enter a whole number from 1 to 99.');
       if (!Number.isFinite(days) || days < 1 || days > 365) throw new Error('Within how many days: enter a whole number from 1 to 365.');
+      if (rule.counts_from && !countsFrom(rule)) throw new Error('Count from: pick a date, or leave it blank to count everything.');
       const { error } = await supabase
         .from('escalation_policies')
         .upsert(
-          { org_id: ctx.org_id, kind: KIND, threshold_count: count, threshold_window_days: days, is_active: rule.is_active },
+          { org_id: ctx.org_id, kind: KIND, threshold_count: count, threshold_window_days: days, is_active: rule.is_active, counts_from: countsFrom(rule) },
           { onConflict: 'org_id,kind' },
         );
       if (error) throw error;

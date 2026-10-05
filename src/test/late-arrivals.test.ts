@@ -27,6 +27,8 @@ import {
   standingSentence,
   standingToday,
   windowStart,
+  countingStart,
+  countsFrom,
   type LateArrivalLike,
 } from '@/lib/late-arrivals';
 
@@ -94,7 +96,7 @@ describe('the employee prompt', () => {
 
 describe('the rule', () => {
   it('defaults to 3 in a rolling 30-day period, on', () => {
-    expect(DEFAULT_LATE_ARRIVAL_RULE).toEqual({ threshold_count: 3, threshold_window_days: 30, is_active: true });
+    expect(DEFAULT_LATE_ARRIVAL_RULE).toEqual({ threshold_count: 3, threshold_window_days: 30, is_active: true, counts_from: null });
     expect(ruleClause(DEFAULT_LATE_ARRIVAL_RULE)).toBe('3 unexcused late arrivals within a rolling 30-day period');
     expect(ruleSentence(DEFAULT_LATE_ARRIVAL_RULE)).toBe('3 unexcused late arrivals within a rolling 30-day period open an attendance incident report automatically.');
     expect(ruleClause({ threshold_count: 1, threshold_window_days: 7, is_active: true })).toBe('1 unexcused late arrival within a rolling 7-day period');
@@ -124,12 +126,48 @@ describe('standing today', () => {
       on('2026-09-01'), on('2026-09-16'), on('2026-09-20', { excuse_requested_at: 'x' }), on('2026-09-22', { approval_status: 'approved' }),
       on('2026-08-31'), // day 31 back: outside
     ], rule, '2026-09-30');
-    expect(s).toEqual({ counting: 2, pending: 1, remaining: 1, windowStart: '2026-09-01', windowEnd: '2026-09-30' });
+    expect(s).toEqual({ counting: 2, pending: 1, remaining: 1, windowStart: '2026-09-01', windowEnd: '2026-09-30', since: null });
     expect(standingSentence(s, rule)).toBe('2 of 3 unexcused late arrivals in the last 30 days · 1 excuse request pending');
   });
   it('reads zero remaining once the rule is met, never negative', () => {
     const s = standingToday([on('2026-09-10'), on('2026-09-11'), on('2026-09-12'), on('2026-09-13')], rule, '2026-09-30');
     expect(s.counting).toBe(4);
     expect(s.remaining).toBe(0);
+  });
+});
+
+describe('the counting start (an office announcing its rule)', () => {
+  const rule = { ...DEFAULT_LATE_ARRIVAL_RULE, counts_from: '2026-10-07' };
+  const dated = (entry_date: string, over: Partial<LateArrivalLike> = {}) => ({ ...late(over), entry_date });
+
+  it('reads a date, and nothing else, as the counting start', () => {
+    expect(countsFrom(DEFAULT_LATE_ARRIVAL_RULE)).toBeNull();
+    expect(countsFrom({ counts_from: '' })).toBeNull();
+    expect(countsFrom({ counts_from: '10/07/2026' })).toBeNull();
+    expect(countsFrom(rule)).toBe('2026-10-07');
+  });
+  it('cuts the rolling window at the counting start, and only then', () => {
+    expect(countingStart(rule, '2026-10-20')).toBe('2026-10-07');
+    expect(countingStart(rule, '2026-12-01')).toBe(windowStart('2026-12-01', 30));
+    expect(countingStart(DEFAULT_LATE_ARRIVAL_RULE, '2026-10-20')).toBe(windowStart('2026-10-20', 30));
+  });
+  it('leaves late arrivals before the counting start out of the standing', () => {
+    const arrivals = [dated('2026-09-29'), dated('2026-10-02'), dated('2026-10-06'), dated('2026-10-07'), dated('2026-10-13')];
+    const s = standingToday(arrivals, rule, '2026-10-20');
+    expect(s.counting).toBe(2);
+    expect(s.remaining).toBe(1);
+    expect(s.windowStart).toBe('2026-10-07');
+    expect(s.since).toBe('2026-10-07');
+    expect(standingSentence(s, rule)).toBe('2 of 3 unexcused late arrivals since Wed, Oct 7, 2026');
+    const everything = standingToday(arrivals, DEFAULT_LATE_ARRIVAL_RULE, '2026-10-20');
+    expect(everything.counting).toBe(5);
+    expect(everything.since).toBeNull();
+    expect(standingSentence(everything, DEFAULT_LATE_ARRIVAL_RULE)).toBe('5 of 3 unexcused late arrivals in the last 30 days');
+  });
+  it('says so in the rule text', () => {
+    expect(ruleSentence(rule)).toBe('3 unexcused late arrivals within a rolling 30-day period open an attendance incident report automatically. Counting starts Wed, Oct 7, 2026.');
+    expect(ruleSentence(DEFAULT_LATE_ARRIVAL_RULE)).not.toMatch(/Counting starts/);
+    expect(ruleExplanation(rule).at(-1)).toBe('Late arrivals before Wed, Oct 7, 2026 stay on the record but do not count toward the rule: counting starts that day.');
+    expect(ruleExplanation(DEFAULT_LATE_ARRIVAL_RULE).join(' ')).not.toMatch(/counting starts/i);
   });
 });

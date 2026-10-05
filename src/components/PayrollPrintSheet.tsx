@@ -69,6 +69,14 @@ export interface PayrollPrintFlag {
   kind: string;
 }
 
+export interface PayrollPrintPtoUse {
+  /** "Last, First · CODE" */
+  label: string;
+  /** Oldest first. */
+  items: { date: string; hours: number; note: string; source: string }[];
+  hours: number;
+}
+
 export interface PayrollPrintProps {
   /** "Weekly Timesheet", "Pay Period Summary", or "Monthly Summary". */
   title: string;
@@ -89,6 +97,8 @@ export interface PayrollPrintProps {
   weeks: PayrollPrintWeek[];
   employees: PayrollPrintEmployee[];
   flags: PayrollPrintFlag[];
+  /** PTO hours recorded as used in the period (pto_usage), per team member; never worked hours. */
+  ptoUsage?: PayrollPrintPtoUse[];
 }
 
 function Stretches({ segments }: { segments: PayrollPrintSegment[] }) {
@@ -122,11 +132,12 @@ function DayNotes({ item }: { item: Extract<PayrollPrintItem, { kind: 'day' }> }
 }
 
 export default function PayrollPrintSheet({
-  title, periodStart, periodEnd, generatedAt, preparedBy, branding, totals, weeks, employees, flags,
+  title, periodStart, periodEnd, generatedAt, preparedBy, branding, totals, weeks, employees, flags, ptoUsage = [],
 }: PayrollPrintProps) {
   const period = `${formatDate(periodStart)} – ${formatDate(periodEnd)}`;
   const signedHours = (m: number) => `${m < 0 ? '−' : '+'}${formatDecimalHours(Math.abs(m))}`;
   const practiceName = branding.legalName.trim() || branding.displayName.trim();
+  const ptoHoursTotal = ptoUsage.reduce((sum, p) => sum + p.hours, 0);
 
   return (
     <div className="pay-sheet">
@@ -215,6 +226,44 @@ export default function PayrollPrintSheet({
             </tbody>
           </table>
           <div className="pay-footnote">Overtime is flagged for the payroll operator, never computed as pay here.</div>
+        </section>
+      )}
+
+      {ptoUsage.length > 0 && (
+        <section className="pay-section">
+          <div className="pay-section-title">PTO used</div>
+          <table className="pay-table">
+            <thead>
+              <tr>
+                <th>Team member</th>
+                <th>Date</th>
+                <th className="pay-num">PTO hours</th>
+                <th>Recorded by</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ptoUsage.map(p =>
+                p.items.map((item, i) => (
+                  <tr key={`${p.label}|${item.date}|${i}`}>
+                    <td>{i === 0 ? p.label : ''}</td>
+                    <td className="pay-date">{formatDate(item.date)}</td>
+                    <td className="pay-num">{item.hours.toFixed(2)}</td>
+                    <td>{item.source}</td>
+                    <td className="pay-notes">{item.note}</td>
+                  </tr>
+                )),
+              )}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={2} className="pay-foot-label">PTO hours in the period</td>
+                <td className="pay-num pay-strong">{ptoHoursTotal.toFixed(2)}</td>
+                <td colSpan={2}></td>
+              </tr>
+            </tfoot>
+          </table>
+          <div className="pay-footnote">PTO hours are the hours each person recorded as used (or a manager recorded for them); they are paid from the PTO bank and are not worked hours.</div>
         </section>
       )}
 

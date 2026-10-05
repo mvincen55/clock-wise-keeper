@@ -162,6 +162,24 @@ Exact model in README §Checklist data model and migration
   repaired). The Team page lists versions, including one without an assignment, so
   nothing collides invisibly. Probes: `supabase/tests/employee_schedule_probes.sql`.
 
+### PTO used does not match what someone recorded
+
+PTO hours come from `pto_usage` only (`20261006093000_pto_usage.sql`): a row
+per recorded use, `voided_at` set when taken back. `get_live_pto_ledger` sums
+the week's live rows; `pto_available_hours` subtracts live rows dated after
+today. A day off deducts nothing by itself — the hours typed on a `days_off`
+row reach the bank through its synced `day_off` usage row
+(`sync_pto_usage_from_day_off`; deleting the day off cascades it away).
+
+- **"Not enough PTO" on Use PTO:** `guard_pto_usage_balance` reads
+  `pto_available_hours(employee)`; check the starting snapshot and the
+  future-dated rows. `pto_allows_negative(employee)` bypasses the guard.
+- **Hours twice for one day:** a Use PTO entry and a time-off record with
+  hours on the same date are two rows; take one back (void) or clear the
+  hours on the time-off record.
+- Probe: `SELECT usage_date, hours, source, voided_at FROM public.pto_usage
+  WHERE employee_id = '<employee>' ORDER BY usage_date DESC;`
+
 ## 10. AI features misbehaving
 
 - **Record analyst shows zero:** its `preview` action on `reports-analyst` returns
@@ -210,6 +228,12 @@ calls functions and reads rows.
   made on time is `resolved` and is not an item.
 - **"You cannot decide your own late arrival" / 42501:** intended — nobody
   decides their own row, whatever their role. Another admin decides it.
+- **Late arrivals before the counting start:** `escalation_policies.counts_from`
+  (`20261006090000`) is a floor the evaluator applies before the window; rows
+  dated before it never count and never attach to a report. Clear it to count
+  everything again. Harelick's is Wed Oct 7, 2026, set the day the rule was
+  announced; the reports opened by earlier arrivals were closed that day with
+  an `attendance_incident_reset` audit row each.
 - **No report opened after three late arrivals:** run the predicate on the
   rows — `SELECT entry_date, public.late_arrival_counts(t) FROM public.tardies t
   WHERE user_id = '<uid>'` — then check `attendance_incident_events` for dates

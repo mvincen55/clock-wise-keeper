@@ -72,6 +72,21 @@ const props: PayrollPrintProps = {
 };
 
 describe('payroll print sheet', () => {
+  it('prints the PTO hours people recorded as used, apart from worked hours, and nothing when there are none', () => {
+    const withPto = renderToStaticMarkup(<PayrollPrintSheet {...props} ptoUsage={[
+      { label: 'Doe, Jane · JD01', hours: 10.5, items: [
+        { date: '2026-09-14', hours: 8, note: 'vacation day', source: 'Recorded by team member' },
+        { date: '2026-09-18', hours: 2.5, note: '', source: 'Recorded by manager' },
+      ] },
+    ]} />);
+    for (const text of ['PTO used', 'Doe, Jane · JD01', '8.00', '2.50', 'vacation day', 'Recorded by team member', 'Recorded by manager', 'PTO hours in the period', '10.50', 'not worked hours']) {
+      expect(withPto).toContain(text);
+    }
+    const without = renderToStaticMarkup(<PayrollPrintSheet {...props} />);
+    expect(without).not.toContain('PTO used');
+    expect(without).not.toContain('PTO hours in the period');
+  });
+
   it('prints every punch, break, adjustment, weekly flag, warning, and signature line', () => {
     const html = renderToStaticMarkup(<PayrollPrintSheet {...props} />);
     for (const text of [

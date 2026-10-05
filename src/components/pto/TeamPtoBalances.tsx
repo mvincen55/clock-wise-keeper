@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CalendarPlus, ChevronDown, ChevronRight, Users } from 'lucide-react';
+import { CalendarPlus, ChevronDown, ChevronRight, Clock, Users } from 'lucide-react';
 import WorkedHourAdjustments from '@/components/team/WorkedHourAdjustments';
 import { RecordTimeOffDialog } from '@/components/pto/RecordTimeOffDialog';
+import { UsePtoDialog } from '@/components/pto/UsePtoDialog';
 import { useTeamPtoBalances, type TeamPtoBalance } from '@/hooks/usePtoEngine';
 import { formatDate } from '@/lib/time-utils';
 import { staffCodeLabel } from '@/lib/staff-code';
@@ -29,6 +30,7 @@ function BalanceCell({ value }: { value: number | null }) {
 export default function TeamPtoBalances() {
   const { data, isLoading, error } = useTeamPtoBalances();
   const [recordFor, setRecordFor] = useState<TeamPtoBalance | null>(null);
+  const [useFor, setUseFor] = useState<TeamPtoBalance | null>(null);
   const [offsetFor, setOffsetFor] = useState<string | null>(null);
   const rows = useMemo(() => [...(data ?? [])].sort((a, b) => a.sortName.localeCompare(b.sortName)), [data]);
   const withBalance = rows.filter(r => r.balance != null);
@@ -49,7 +51,7 @@ export default function TeamPtoBalances() {
           )}
         </div>
         <p className="text-sm text-muted-foreground">
-          Live balances as of today. <strong>Available</strong> is the balance minus time off already booked ahead — the most that can still be recorded. Nobody's bank goes below zero unless their record allows it.
+          Live balances as of today. <strong>Available</strong> is the balance minus PTO use already recorded for days ahead — the most that can still be recorded. Nobody's bank goes below zero unless their record allows it. The bank deducts recorded PTO use (Use PTO, or the hours typed on a time-off record), never a day off by itself.
         </p>
       </CardHeader>
       <CardContent className="p-0 overflow-x-auto">
@@ -108,6 +110,9 @@ export default function TeamPtoBalances() {
                       </td>
                       <td className="px-3 py-2 text-right">
                         <div className="flex flex-wrap justify-end gap-1">
+                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setUseFor(r)}>
+                            <Clock className="mr-1 h-3 w-3" /> Use PTO
+                          </Button>
                           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setRecordFor(r)}>
                             <CalendarPlus className="mr-1 h-3 w-3" /> Record time off
                           </Button>
@@ -146,6 +151,9 @@ export default function TeamPtoBalances() {
             allowNegative: recordFor.allowNegative,
           }}
         />
+      )}
+      {useFor && (
+        <UsePtoDialog open={!!useFor} onClose={() => setUseFor(null)} members={[{ employeeId: useFor.employeeId, displayName: useFor.sortName }]} />
       )}
     </Card>
   );

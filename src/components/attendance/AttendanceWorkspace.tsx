@@ -7,7 +7,7 @@ import { LateArrivalReviewModal } from '@/components/LateArrivalReviewModal';
 import { LateArrivalPrompt } from '@/components/LateArrivalPrompt';
 import { LateArrivalNotice } from '@/components/LateArrivalNotice';
 import { useLateArrivalRule } from '@/hooks/useLateArrivalRule';
-import { EXCUSE_CLASSES, EXCUSE_LABELS, awaitsEmployeeAnswer, countsTowardThreshold, excuseState, ruleSentence, standingSentence, standingToday, windowStart } from '@/lib/late-arrivals';
+import { EXCUSE_CLASSES, EXCUSE_LABELS, awaitsEmployeeAnswer, countingStart, countsTowardThreshold, excuseState, ruleSentence, standingSentence, standingToday } from '@/lib/late-arrivals';
 import { AttendanceActions } from '@/components/AttendanceActions';
 import { useAttendanceDayStatus, useRecomputeAttendance, AttendanceDayStatusRow } from '@/hooks/useAttendanceDayStatus';
 import { useOfficeClosures } from '@/hooks/useOfficeClosures';
@@ -189,7 +189,7 @@ export default function AttendanceWorkspace({ mode }: { mode: AttendanceMode }) 
   // The person's standing against the rule reads the rule's own window,
   // whatever date range the page is showing.
   const today = getToday();
-  const { data: standingTardies } = useTardies(lateRule ? windowStart(today, lateRule.threshold_window_days) : today, today);
+  const { data: standingTardies } = useTardies(lateRule ? countingStart(lateRule, today) : today, today);
 
   // The personal view: the Workplace page for everyone, managers included.
   // Only the Management page shows the team, and only to managers.
