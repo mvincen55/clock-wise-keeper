@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import type { MemberView } from './types';
@@ -7,7 +8,7 @@ import { GoalMeterRow } from './performance/GoalMeters';
 import { ChosenGoals } from './ChosenGoals';
 
 /** Shared office targets, the member's own chosen goal, then their work and time. */
-export default function MemberDashboard({ view }: { view: MemberView; chartWidth?: number }) {
+export default function MemberDashboard({ view, campaignStrip }: { view: MemberView; chartWidth?: number; campaignStrip?: ReactNode }) {
   const { header, work, rolePulse, goal, status, utilities, lanes, roleContext, toolGroups, attendanceStanding, performanceState, goalMeters } = view;
   const patients = view.performance?.visibility.newPatients ? view.performance : null;
   return (
@@ -16,6 +17,7 @@ export default function MemberDashboard({ view }: { view: MemberView; chartWidth
         state={{ text: status.label, tone: status.tone }} context={<ViewContext context={roleContext} />}
         actions={<ActionLink to="/timesheet" variant="secondary">Timesheet</ActionLink>} />
       <div className="mt-5 space-y-5">
+        {campaignStrip}
         {((goalMeters && goalMeters.length > 0) || patients) && <Panel title="Our office goals this month" className="border-primary/25 bg-primary/[0.035]" action={{ label: 'Goals', to: '/goals' }}>
           <div className="[container-type:inline-size]"><div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">{goalMeters?.map(meter => <GoalMeterRow key={meter.id} meter={meter} canSetGoals={false} variant="tile" />)}{patients && <div><p className="text-sm font-semibold text-muted-foreground">New patients seen</p><p className="mt-2 text-2xl font-bold tabular-nums">{patients.thisMonth.newPatientsSeenRecordedDays > 0 ? patients.thisMonth.newPatientsSeen : 'Not recorded'}{patients.targets.newPatientsSeen > 0 && <span className="ml-2 text-sm font-medium text-muted-foreground">of {patients.targets.newPatientsSeen} this month</span>}</p></div>}</div></div>
           <p className="mt-3 text-xs text-muted-foreground">Office totals update after Close the Day.</p>

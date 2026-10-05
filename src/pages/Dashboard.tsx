@@ -12,7 +12,7 @@ import MyAccountabilityCard from '@/components/accountability/MyAccountabilityCa
 import UserNotesBoard from '@/components/UserNotesBoard';
 import FirstGoalTaskCard from '@/components/goals/FirstGoalTaskCard';
 import HomeNudges from '@/components/nudges/HomeNudges';
-import FillScheduleCard from '@/components/FillScheduleCard';
+import FillScheduleStrip from '@/features/fill-the-schedule/FillScheduleStrip';
 import OwnerDashboard from '@/components/dashboard/OwnerDashboard';
 import ManagerDashboard from '@/components/dashboard/ManagerDashboard';
 import MemberDashboard from '@/components/dashboard/MemberDashboard';
@@ -96,9 +96,9 @@ export default function Home() {
           </div>
         </div>
       )}
-      {view?.kind === 'owner' && <OwnerDashboard view={view} />}
-      {view?.kind === 'manager' && <ManagerDashboard view={view} />}
-      {view?.kind === 'member' && <MemberDashboard view={view} />}
+      {view?.kind === 'owner' && <OwnerDashboard view={view} campaignStrip={<FillScheduleStrip />} />}
+      {view?.kind === 'manager' && <ManagerDashboard view={view} campaignStrip={<FillScheduleStrip />} />}
+      {view?.kind === 'member' && <MemberDashboard view={view} campaignStrip={<FillScheduleStrip />} />}
 
       <div className="mx-auto mt-6 w-full max-w-[1400px] space-y-6 px-4 sm:px-6 md:px-8">
         {!isOwner && missingDays.length > 0 && <MissingShiftBanner missingDays={missingDays} />}
@@ -106,7 +106,6 @@ export default function Home() {
         {/* Nudges render on the surface they concern (design §3.7): the ones
             aimed at Home land here, for everyone, and only when there are any. */}
         <HomeNudges />
-        <FillScheduleCard />
 
         {/* OWNER and MANAGER — the one record that can be signed nowhere
             else: their own accountability record, only while one is open. */}

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase as client } from '@/integrations/supabase/pending-schema';
 import type { FillScheduleFunctions, FillScheduleTables } from '@/integrations/supabase/pending-schema';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import type { Activity, Audit, Calls, Campaign, Huddle, Ledger, Metric, Participant, PrizePick, RosterName } from '@/lib/fill-the-schedule';
+import type { Activity, Audit, Calls, Campaign, Huddle, Ledger, Metric, Participant, PrizePick, RosterName, ScheduleSheet, ScheduleSheetRow, WeeklyCheck } from '@/lib/fill-the-schedule';
 
 async function rows<T>(table: Exclude<keyof FillScheduleTables, 'fts_campaigns'>, campaignId: string): Promise<T[]> {
   const all: T[] = [];
@@ -25,20 +25,19 @@ export function useFillSchedule() {
       if (error) throw error;
       if (!data) return null;
       const campaign = data as Campaign;
-      const [participants, activities, calls, huddles, metrics, picks, audit] = await Promise.all([
+      const [participants, activities, calls, huddles, metrics, picks, audit, sheets, sheetRows, checks] = await Promise.all([
         rows<Participant>('fts_participants', campaign.id), rows<Activity>('fts_activities', campaign.id), rows<Calls>('fts_weekly_calls', campaign.id),
         rows<Huddle>('fts_huddle_attendance', campaign.id), rows<Metric>('fts_week_metrics', campaign.id), rows<PrizePick>('fts_prize_picks', campaign.id),
         manager ? rows<Audit>('fts_audit', campaign.id) : Promise.resolve([] as Audit[]),
+        manager ? rows<ScheduleSheet>('fts_sheets', campaign.id) : Promise.resolve([] as ScheduleSheet[]),
+        manager ? rows<ScheduleSheetRow>('fts_sheet_rows', campaign.id) : Promise.resolve([] as ScheduleSheetRow[]),
+        manager ? rows<WeeklyCheck>('fts_weekly_checks', campaign.id) : Promise.resolve([] as WeeklyCheck[]),
       ]);
       // Only roster names, never personal contact, payroll or patient data.
-      const names: RosterName[] = [];
-      for (let i = 0; i < participants.length; i += 100) {
-        const ids = participants.slice(i, i + 100).map(p => p.employee_id);
-        const result = await client.from('employees').select('id,display_name,employment_status').eq('org_id', ctx!.org_id).in('id', ids);
-        if (result.error) throw result.error;
-        names.push(...(result.data as RosterName[]));
-      }
-      return { campaign, participants, activities, calls, huddles, metrics, picks, names, audit };
+      const roster = await client.rpc('fts_roster_names', { p_campaign_id: campaign.id });
+      if (roster.error) throw roster.error;
+      const names = roster.data as RosterName[];
+      return { campaign, participants, activities, calls, huddles, metrics, picks, names, audit, sheets, sheetRows, checks };
     },
   });
   return { ...query, ctx, manager, contextLoading: context.isLoading, contextError: context.error };
@@ -48,6 +47,7 @@ export function useFillSchedule() {
 export function useFillScheduleWrite() {
   const qc = useQueryClient(); const lock = useRef(false);
   const retry = useRef(new Map<string, string>());
+  const resultRef = useRef<unknown>(null);
   const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [message, setMessage] = useState('');
   async function write(fn: keyof FillScheduleFunctions, params: Record<string, unknown>, success: string, keyed = false) {
     if (lock.current) return false;
@@ -59,11 +59,12 @@ export function useFillScheduleWrite() {
       const args = (keyed ? { ...params, p_request_key: key } : params) as FillScheduleFunctions[typeof fn]['Args'];
       const result = await client.rpc(fn, args);
       if (result.error) throw result.error;
+      resultRef.current = result.data;
       retry.current.delete(fingerprint); setMessage(success);
       await qc.invalidateQueries({ queryKey: ['fill-the-schedule'] }); return true;
     } catch (e: unknown) {
       setError(e && typeof e === 'object' && 'message' in e ? String(e.message) : 'Could not save. Check your connection and retry.'); return false;
     } finally { lock.current = false; setBusy(false); }
   }
-  return { write, busy, error, message };
+  return { write, busy, error, message, resultRef };
 }
