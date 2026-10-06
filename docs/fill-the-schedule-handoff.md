@@ -10,9 +10,20 @@ code. The design mockups are at the proposal page shared by the office manager
   prize tiers, clerical call gate, bonus linking, reversal order and the audit
   log stay as implemented in `supabase/migrations/20261005181000_fill_the_schedule.sql`.
   Anything below that reads like a rule change is a UI or data-plumbing change.
-- **Two setup values are intentionally missing and must not be guessed:**
-  `pts_chairside_card` (NULL) and the scoring group of 8 of the 14 participants
-  (NULL). Surface them as red "Setup" markers; never default them.
+- **One setup value is intentionally missing and must not be guessed:**
+  `pts_chairside_card` (NULL as of 2026-10-06). Surface it as a red "Setup"
+  marker; never default it. Keep the generic check for any active participant
+  with `scoring_role IS NULL` (all groups were set on 2026-10-06; the marker
+  must still appear if someone is added without one).
+- **The manager is the scorekeeper, not a player.** Megan Vincent (manager),
+  Scott Harelick (owner) and Dr. Jennie are `fts_participants.active=false`
+  in the live campaign; 11 participants are active. Owners and managers never
+  appear in the Record tab as "Credit to: you", never get a My points tab,
+  are excluded from the scorecard table, pick order and grand-prize leader,
+  and the UI offers no control to make an owner or manager an active
+  participant. Their Record view is on-behalf only (person picker required).
+  The Home strip for owner/manager shows only the review counts and office
+  goal.
 - **No patient data, anywhere.** No free-text columns. No patient names,
   initials, chart numbers, clinical or appointment details, amounts or account
   information in any table, prompt, log or UI string. Employee names from the
@@ -69,8 +80,9 @@ Four large buttons, each showing points and verification mode. Exact copy:
 - QR button writes immediately with `fts_record_own` (`qr_card`, quantity 1,
   stable `occurred_at` across retries, as today).
 - The other three open a confirm panel: `When it happened` (datetime-local,
-  default now, Eastern, min campaign start, max now), `Credit to` (self; the
-  manager's version has a person picker), and for the handoff only an optional
+  default now, Eastern, min campaign start, max now), `Credit to` (self for team
+  members; for owner/manager a required person picker over active participants,
+  never themselves), and for the handoff only an optional
   `Booked by at the front desk` (participant picker). Confirmation checkbox
   copy for the handoff: "The operative appointment was on the schedule before
   the patient left, and I did not also write this on the front-desk sheet."
@@ -99,7 +111,7 @@ Four large buttons, each showing points and verification mode. Exact copy:
 Order of sections, each hidden when empty:
 
 1. **Setup bar** (red) when `pts_chairside_card IS NULL` or any active
-   participant has `scoring_role IS NULL`. Links to Settings.
+   participant has `scoring_role IS NULL` (today: the chairside rate only). Links to Settings.
 2. **Toolbar**: counts, `Upload a sheet`, `Print blank sheet`,
    `Record for a team member` (opens the Record confirm with a person picker,
    writes `fts_record_for`).
@@ -504,6 +516,10 @@ Unit (`src/test/fill-the-schedule-sheets.test.ts`):
   and ending Dec 31; never contains Oct 2.
 
 Page (`src/test/fill-the-schedule-page.test.tsx`, fixture moved to Oct 5):
+- Manager is not a player: with the signed-in manager as an inactive
+  participant, there is no My points tab, Record requires choosing a team
+  member and never offers the manager, and the manager is absent from the
+  scorecard rows, pick order and grand-prize leader.
 - Team sees exactly `Record`, `My points`, the Point rules link; no Review,
   no Scorecard, no Settings gear; never another person's rows.
 - Each Record button shows its points label and verification sub-label; the
