@@ -1,7 +1,7 @@
 import type { EmployeeContactFields } from '@/lib/employee-contact';
 import { employeeNamePayload, type EmployeeNameFields } from '@/lib/employee-name-fields';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/pending-schema';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -74,6 +74,7 @@ export function useAddEmployee() {
         p_org_id: ctx.org_id, p_employee_id: null,
         p_first_name: name.first_name, p_middle_initial: name.middle_initial,
         p_last_name: name.last_name, p_email: input.email?.trim() || null,
+        p_title: name.title,
         ...(input.contact ? { p_contact: input.contact } : {}),
       });
       if (error) throw error;
@@ -99,7 +100,7 @@ export function useUpdateEmployeeDetails() {
         p_org_id: ctx.org_id, p_employee_id: input.id,
         p_first_name: name.first_name, p_middle_initial: name.middle_initial,
         p_last_name: name.last_name, p_email: input.email?.trim() || null,
-        p_contact: input.contact,
+        p_title: name.title, p_contact: input.contact,
       });
       if (error) throw error;
       return data;

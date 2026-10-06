@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterAndSortEmployees, formatEmployeeName, formatEmployeeNameLastFirst } from '@/lib/employee-name';
+import { filterAndSortEmployees, formatEmployeeName, formatEmployeeNameLastFirst, isHonorificName } from '@/lib/employee-name';
 
 describe('team name display', () => {
   it.each([
@@ -13,8 +13,21 @@ describe('team name display', () => {
     ['John Smith, Jr.', 'John Smith, Jr.'],
     ['Smith,', 'Smith,'],
     ['', ''],
+    ['Dr. Robert', 'Dr. Robert'],
+    ['  Dr.  Jennie ', 'Dr. Jennie'],
   ])('formats %j as %j', (stored, displayed) => {
     expect(formatEmployeeName(stored)).toBe(displayed);
+  });
+
+  it('shows a doctor as the office names them, in every order', () => {
+    expect(isHonorificName('Dr. Robert')).toBe(true);
+    expect(isHonorificName('Dr Natalie')).toBe(true);
+    expect(isHonorificName('Doctor Nicole')).toBe(true);
+    expect(isHonorificName('Drew Smith')).toBe(false);
+    expect(isHonorificName('Dr.')).toBe(false);
+    expect(formatEmployeeNameLastFirst('Dr. Robert')).toBe('Dr. Robert');
+    expect(formatEmployeeNameLastFirst('Dr. Natalie')).toBe('Dr. Natalie');
+    expect(formatEmployeeNameLastFirst('Drew Smith')).toBe('Smith, Drew');
   });
 
   const employees = Object.freeze([

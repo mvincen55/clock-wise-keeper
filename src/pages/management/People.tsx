@@ -78,7 +78,7 @@ function EveryoneView() {
   const clock = useDayClock();
   const addEmployee = useAddEmployee();
   const [addOpen, setAddOpen] = useState(false);
-  const [form, setForm] = useState({ first_name: '', middle_initial: '', last_name: '', email: '' });
+  const [form, setForm] = useState({ title: '', first_name: '', middle_initial: '', last_name: '', email: '' });
   const [search, setSearch] = useState('');
   const [addError, setAddError] = useState('');
   const [contact, setContact] = useState(() => employeeContactFields({}));
@@ -115,9 +115,9 @@ function EveryoneView() {
     if (!form.first_name.trim() || !form.last_name.trim() || addEmployee.isPending) return;
     setAddError('');
     try {
-      await addEmployee.mutateAsync({ first_name: form.first_name, middle_initial: form.middle_initial, last_name: form.last_name, contact, email: form.email.trim() || undefined });
+      await addEmployee.mutateAsync({ title: form.title, first_name: form.first_name, middle_initial: form.middle_initial, last_name: form.last_name, contact, email: form.email.trim() || undefined });
       setAddOpen(false);
-      setForm({ first_name: '', middle_initial: '', last_name: '', email: '' });
+      setForm({ title: '', first_name: '', middle_initial: '', last_name: '', email: '' });
       setContact(employeeContactFields({}));
     } catch (error) {
       setAddError(error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Could not add team member. Please try again.');
