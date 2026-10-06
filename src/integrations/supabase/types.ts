@@ -2352,6 +2352,7 @@ export type Database = {
           tag: string | null
           team: string | null
           timezone: string | null
+          title: string | null
           updated_at: string
           user_id: string | null
         }
@@ -2388,6 +2389,7 @@ export type Database = {
           tag?: string | null
           team?: string | null
           timezone?: string | null
+          title?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -2424,6 +2426,7 @@ export type Database = {
           tag?: string | null
           team?: string | null
           timezone?: string | null
+          title?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -2439,6 +2442,7 @@ export type Database = {
       }
       escalation_policies: {
         Row: {
+          counts_from: string | null
           created_at: string
           escalate_after_days: number
           escalate_to: string | null
@@ -2453,6 +2457,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          counts_from?: string | null
           created_at?: string
           escalate_after_days?: number
           escalate_to?: string | null
@@ -2467,6 +2472,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          counts_from?: string | null
           created_at?: string
           escalate_after_days?: number
           escalate_to?: string | null
@@ -2934,6 +2940,870 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "fof_templates_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fts_activities: {
+        Row: {
+          activity_type: string
+          awarded_points: number | null
+          booked_by_employee_id: string | null
+          campaign_id: string
+          created_at: string
+          employee_id: string
+          entry_code: string
+          id: string
+          occurred_at: string
+          org_id: string
+          parent_id: string | null
+          quantity: number
+          reason_code: string | null
+          recorded_by: string
+          request_key: string
+          sheet_code: string | null
+          sheet_id: string | null
+          sheet_row: number | null
+          source: string
+          status: string
+          supersedes_id: string | null
+          tally_week: string
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          activity_type: string
+          awarded_points?: number | null
+          booked_by_employee_id?: string | null
+          campaign_id: string
+          created_at?: string
+          employee_id: string
+          entry_code?: string
+          id?: string
+          occurred_at: string
+          org_id: string
+          parent_id?: string | null
+          quantity?: number
+          reason_code?: string | null
+          recorded_by: string
+          request_key: string
+          sheet_code?: string | null
+          sheet_id?: string | null
+          sheet_row?: number | null
+          source?: string
+          status?: string
+          supersedes_id?: string | null
+          tally_week: string
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          activity_type?: string
+          awarded_points?: number | null
+          booked_by_employee_id?: string | null
+          campaign_id?: string
+          created_at?: string
+          employee_id?: string
+          entry_code?: string
+          id?: string
+          occurred_at?: string
+          org_id?: string
+          parent_id?: string | null
+          quantity?: number
+          reason_code?: string | null
+          recorded_by?: string
+          request_key?: string
+          sheet_code?: string | null
+          sheet_id?: string | null
+          sheet_row?: number | null
+          source?: string
+          status?: string
+          supersedes_id?: string | null
+          tally_week?: string
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fts_activities_booked_by_employee_id_fkey"
+            columns: ["booked_by_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_activities_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "fts_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_activities_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_activities_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_activities_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "fts_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_activities_sheet_id_fkey"
+            columns: ["sheet_id"]
+            isOneToOne: false
+            referencedRelation: "fts_sheets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_activities_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "fts_activities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fts_audit: {
+        Row: {
+          action: string
+          actor_user_id: string
+          after: Json | null
+          before: Json | null
+          campaign_id: string
+          created_at: string
+          employee_id: string | null
+          entity: string
+          entity_id: string | null
+          id: string
+          org_id: string
+        }
+        Insert: {
+          action: string
+          actor_user_id: string
+          after?: Json | null
+          before?: Json | null
+          campaign_id: string
+          created_at?: string
+          employee_id?: string | null
+          entity: string
+          entity_id?: string | null
+          id?: string
+          org_id: string
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string
+          after?: Json | null
+          before?: Json | null
+          campaign_id?: string
+          created_at?: string
+          employee_id?: string | null
+          entity?: string
+          entity_id?: string | null
+          id?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fts_audit_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "fts_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_audit_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fts_campaigns: {
+        Row: {
+          auto_import_enabled: boolean
+          clerical_min_calls: number
+          created_at: string
+          created_by: string | null
+          ends_on: string
+          grand_prize_dollars: number
+          id: string
+          name: string
+          open_hours_goal: number
+          org_id: string
+          prize_tier1_points: number
+          prize_tier2_points: number
+          pts_attend_bonus: number
+          pts_call: number
+          pts_chairside_card: number | null
+          pts_huddle: number
+          pts_operative_handoff: number
+          pts_prepay_bonus: number
+          pts_qr_card: number
+          pts_review_assistant: number
+          pts_review_clerical: number
+          pts_review_doctor: number
+          pts_review_hygienist: number
+          pts_unscheduled_booking: number
+          scan_validation: Json | null
+          starts_on: string
+          status: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          auto_import_enabled?: boolean
+          clerical_min_calls?: number
+          created_at?: string
+          created_by?: string | null
+          ends_on: string
+          grand_prize_dollars?: number
+          id?: string
+          name: string
+          open_hours_goal?: number
+          org_id: string
+          prize_tier1_points?: number
+          prize_tier2_points?: number
+          pts_attend_bonus?: number
+          pts_call?: number
+          pts_chairside_card?: number | null
+          pts_huddle?: number
+          pts_operative_handoff?: number
+          pts_prepay_bonus?: number
+          pts_qr_card?: number
+          pts_review_assistant?: number
+          pts_review_clerical?: number
+          pts_review_doctor?: number
+          pts_review_hygienist?: number
+          pts_unscheduled_booking?: number
+          scan_validation?: Json | null
+          starts_on: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          auto_import_enabled?: boolean
+          clerical_min_calls?: number
+          created_at?: string
+          created_by?: string | null
+          ends_on?: string
+          grand_prize_dollars?: number
+          id?: string
+          name?: string
+          open_hours_goal?: number
+          org_id?: string
+          prize_tier1_points?: number
+          prize_tier2_points?: number
+          pts_attend_bonus?: number
+          pts_call?: number
+          pts_chairside_card?: number | null
+          pts_huddle?: number
+          pts_operative_handoff?: number
+          pts_prepay_bonus?: number
+          pts_qr_card?: number
+          pts_review_assistant?: number
+          pts_review_clerical?: number
+          pts_review_doctor?: number
+          pts_review_hygienist?: number
+          pts_unscheduled_booking?: number
+          scan_validation?: Json | null
+          starts_on?: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fts_campaigns_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fts_huddle_attendance: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          employee_id: string
+          entered_by: string
+          huddle_date: string
+          id: string
+          on_time: boolean
+          org_id: string
+          points: number
+          updated_at: string
+          week_key: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          employee_id: string
+          entered_by: string
+          huddle_date: string
+          id?: string
+          on_time: boolean
+          org_id: string
+          points: number
+          updated_at?: string
+          week_key: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          employee_id?: string
+          entered_by?: string
+          huddle_date?: string
+          id?: string
+          on_time?: boolean
+          org_id?: string
+          points?: number
+          updated_at?: string
+          week_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fts_huddle_attendance_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "fts_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_huddle_attendance_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_huddle_attendance_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fts_participants: {
+        Row: {
+          active: boolean
+          campaign_id: string
+          created_at: string
+          employee_id: string
+          id: string
+          org_id: string
+          scoring_role: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          campaign_id: string
+          created_at?: string
+          employee_id: string
+          id?: string
+          org_id: string
+          scoring_role?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          campaign_id?: string
+          created_at?: string
+          employee_id?: string
+          id?: string
+          org_id?: string
+          scoring_role?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fts_participants_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "fts_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_participants_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_participants_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fts_prize_picks: {
+        Row: {
+          campaign_id: string
+          employee_id: string
+          entered_by: string
+          id: string
+          org_id: string
+          received_count: number
+          updated_at: string
+          week_key: string
+        }
+        Insert: {
+          campaign_id: string
+          employee_id: string
+          entered_by: string
+          id?: string
+          org_id: string
+          received_count: number
+          updated_at?: string
+          week_key: string
+        }
+        Update: {
+          campaign_id?: string
+          employee_id?: string
+          entered_by?: string
+          id?: string
+          org_id?: string
+          received_count?: number
+          updated_at?: string
+          week_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fts_prize_picks_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "fts_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_prize_picks_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_prize_picks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fts_sheet_rows: {
+        Row: {
+          accepted_reading: Json | null
+          booked_by_employee_id: string | null
+          campaign_id: string
+          credit_employee_id: string | null
+          flags: string[]
+          generation: number
+          handoff_activity_id: string | null
+          handoff_state: string
+          id: string
+          last_scan_id: string
+          org_id: string
+          prepay_activity_id: string | null
+          prepay_state: string
+          previous_reading: Json | null
+          reading: Json
+          resolved_at: string | null
+          resolved_by: string | null
+          row_no: number
+          sheet_id: string
+          updated_at: string
+        }
+        Insert: {
+          accepted_reading?: Json | null
+          booked_by_employee_id?: string | null
+          campaign_id: string
+          credit_employee_id?: string | null
+          flags?: string[]
+          generation?: number
+          handoff_activity_id?: string | null
+          handoff_state?: string
+          id?: string
+          last_scan_id: string
+          org_id: string
+          prepay_activity_id?: string | null
+          prepay_state?: string
+          previous_reading?: Json | null
+          reading: Json
+          resolved_at?: string | null
+          resolved_by?: string | null
+          row_no: number
+          sheet_id: string
+          updated_at?: string
+        }
+        Update: {
+          accepted_reading?: Json | null
+          booked_by_employee_id?: string | null
+          campaign_id?: string
+          credit_employee_id?: string | null
+          flags?: string[]
+          generation?: number
+          handoff_activity_id?: string | null
+          handoff_state?: string
+          id?: string
+          last_scan_id?: string
+          org_id?: string
+          prepay_activity_id?: string | null
+          prepay_state?: string
+          previous_reading?: Json | null
+          reading?: Json
+          resolved_at?: string | null
+          resolved_by?: string | null
+          row_no?: number
+          sheet_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fts_sheet_rows_booked_by_employee_id_fkey"
+            columns: ["booked_by_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_sheet_rows_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "fts_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_sheet_rows_credit_employee_id_fkey"
+            columns: ["credit_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_sheet_rows_handoff_activity_id_fkey"
+            columns: ["handoff_activity_id"]
+            isOneToOne: false
+            referencedRelation: "fts_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_sheet_rows_last_scan_id_fkey"
+            columns: ["last_scan_id"]
+            isOneToOne: false
+            referencedRelation: "fts_sheet_scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_sheet_rows_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_sheet_rows_prepay_activity_id_fkey"
+            columns: ["prepay_activity_id"]
+            isOneToOne: false
+            referencedRelation: "fts_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_sheet_rows_sheet_id_fkey"
+            columns: ["sheet_id"]
+            isOneToOne: false
+            referencedRelation: "fts_sheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fts_sheet_scans: {
+        Row: {
+          campaign_id: string
+          id: string
+          image_deleted_at: string
+          org_id: string
+          reader: string
+          request_key: string
+          sheet_id: string
+          summary: Json
+          uploaded_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          campaign_id: string
+          id?: string
+          image_deleted_at: string
+          org_id: string
+          reader: string
+          request_key: string
+          sheet_id: string
+          summary?: Json
+          uploaded_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          campaign_id?: string
+          id?: string
+          image_deleted_at?: string
+          org_id?: string
+          reader?: string
+          request_key?: string
+          sheet_id?: string
+          summary?: Json
+          uploaded_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fts_sheet_scans_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "fts_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_sheet_scans_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_sheet_scans_sheet_id_fkey"
+            columns: ["sheet_id"]
+            isOneToOne: false
+            referencedRelation: "fts_sheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fts_sheets: {
+        Row: {
+          campaign_id: string
+          id: string
+          org_id: string
+          print_request_key: string
+          printed_at: string
+          printed_by: string
+          row_count: number
+          sheet_code: string
+          status: string
+          week_key: string
+        }
+        Insert: {
+          campaign_id: string
+          id?: string
+          org_id: string
+          print_request_key: string
+          printed_at?: string
+          printed_by: string
+          row_count?: number
+          sheet_code: string
+          status?: string
+          week_key: string
+        }
+        Update: {
+          campaign_id?: string
+          id?: string
+          org_id?: string
+          print_request_key?: string
+          printed_at?: string
+          printed_by?: string
+          row_count?: number
+          sheet_code?: string
+          status?: string
+          week_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fts_sheets_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "fts_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_sheets_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fts_week_metrics: {
+        Row: {
+          campaign_id: string
+          doctor_open_hours: number | null
+          entered_by: string
+          id: string
+          org_id: string
+          updated_at: string
+          week_key: string
+        }
+        Insert: {
+          campaign_id: string
+          doctor_open_hours?: number | null
+          entered_by: string
+          id?: string
+          org_id: string
+          updated_at?: string
+          week_key: string
+        }
+        Update: {
+          campaign_id?: string
+          doctor_open_hours?: number | null
+          entered_by?: string
+          id?: string
+          org_id?: string
+          updated_at?: string
+          week_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fts_week_metrics_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "fts_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_week_metrics_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fts_weekly_calls: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          employee_id: string
+          entered_by: string
+          id: string
+          org_id: string
+          points_per_call: number
+          updated_at: string
+          verified_count: number
+          week_key: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          employee_id: string
+          entered_by: string
+          id?: string
+          org_id: string
+          points_per_call: number
+          updated_at?: string
+          verified_count: number
+          week_key: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          employee_id?: string
+          entered_by?: string
+          id?: string
+          org_id?: string
+          points_per_call?: number
+          updated_at?: string
+          verified_count?: number
+          week_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fts_weekly_calls_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "fts_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_weekly_calls_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_weekly_calls_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fts_weekly_checks: {
+        Row: {
+          campaign_id: string
+          check_key: string
+          checked: boolean
+          checked_by: string
+          id: string
+          org_id: string
+          updated_at: string
+          week_key: string
+        }
+        Insert: {
+          campaign_id: string
+          check_key: string
+          checked: boolean
+          checked_by: string
+          id?: string
+          org_id: string
+          updated_at?: string
+          week_key: string
+        }
+        Update: {
+          campaign_id?: string
+          check_key?: string
+          checked?: boolean
+          checked_by?: string
+          id?: string
+          org_id?: string
+          updated_at?: string
+          week_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fts_weekly_checks_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "fts_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fts_weekly_checks_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
@@ -7243,6 +8113,82 @@ export type Database = {
           },
         ]
       }
+      pto_usage: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          day_off_id: string | null
+          employee_id: string
+          hours: number
+          id: string
+          note: string
+          org_id: string
+          source: string
+          updated_at: string
+          usage_date: string
+          user_id: string | null
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          day_off_id?: string | null
+          employee_id: string
+          hours: number
+          id?: string
+          note?: string
+          org_id: string
+          source?: string
+          updated_at?: string
+          usage_date: string
+          user_id?: string | null
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          day_off_id?: string | null
+          employee_id?: string
+          hours?: number
+          id?: string
+          note?: string
+          org_id?: string
+          source?: string
+          updated_at?: string
+          usage_date?: string
+          user_id?: string | null
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pto_usage_day_off_id_fkey"
+            columns: ["day_off_id"]
+            isOneToOne: false
+            referencedRelation: "days_off"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pto_usage_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pto_usage_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       punches: {
         Row: {
           created_at: string
@@ -9276,7 +10222,7 @@ export type Database = {
           category: string | null
           created_at: string
           created_by: string
-          ends_on: string
+          ends_on: string | null
           id: string
           metric: string
           org_id: string
@@ -9703,6 +10649,765 @@ export type Database = {
         Args: { p_org_id: string; p_user_id: string }
         Returns: number
       }
+      fts_actor: {
+        Args: { _campaign_id: string }
+        Returns: Record<string, unknown>
+      }
+      fts_apply_sheet_prepay: {
+        Args: { p_manual?: boolean; p_row_id: string }
+        Returns: undefined
+      }
+      fts_apply_sheet_row: {
+        Args: { p_link_id?: string; p_manual?: boolean; p_row_id: string }
+        Returns: {
+          accepted_reading: Json | null
+          booked_by_employee_id: string | null
+          campaign_id: string
+          credit_employee_id: string | null
+          flags: string[]
+          generation: number
+          handoff_activity_id: string | null
+          handoff_state: string
+          id: string
+          last_scan_id: string
+          org_id: string
+          prepay_activity_id: string | null
+          prepay_state: string
+          previous_reading: Json | null
+          reading: Json
+          resolved_at: string | null
+          resolved_by: string | null
+          row_no: number
+          sheet_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_sheet_rows"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_apply_sheet_scan: {
+        Args: {
+          p_campaign_id: string
+          p_reader: string
+          p_released_at: string
+          p_request_key: string
+          p_rows: Json
+          p_sheet_code: string
+        }
+        Returns: Json
+      }
+      fts_award_bonus: {
+        Args: {
+          p_occurred_at: string
+          p_parent_id: string
+          p_request_key: string
+          p_type: string
+        }
+        Returns: {
+          activity_type: string
+          awarded_points: number | null
+          booked_by_employee_id: string | null
+          campaign_id: string
+          created_at: string
+          employee_id: string
+          entry_code: string
+          id: string
+          occurred_at: string
+          org_id: string
+          parent_id: string | null
+          quantity: number
+          reason_code: string | null
+          recorded_by: string
+          request_key: string
+          sheet_code: string | null
+          sheet_id: string | null
+          sheet_row: number | null
+          source: string
+          status: string
+          supersedes_id: string | null
+          tally_week: string
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_activities"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_award_review: {
+        Args: {
+          p_campaign_id: string
+          p_employee_id: string
+          p_occurred_at: string
+          p_request_key: string
+        }
+        Returns: {
+          activity_type: string
+          awarded_points: number | null
+          booked_by_employee_id: string | null
+          campaign_id: string
+          created_at: string
+          employee_id: string
+          entry_code: string
+          id: string
+          occurred_at: string
+          org_id: string
+          parent_id: string | null
+          quantity: number
+          reason_code: string | null
+          recorded_by: string
+          request_key: string
+          sheet_code: string | null
+          sheet_id: string | null
+          sheet_row: number | null
+          source: string
+          status: string
+          supersedes_id: string | null
+          tally_week: string
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_activities"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_clean_sheet_reading: { Args: { r: Json }; Returns: Json }
+      fts_component_key: {
+        Args: {
+          p_component: string
+          p_generation?: number
+          p_row: number
+          p_sheet: string
+        }
+        Returns: string
+      }
+      fts_earned_picks: {
+        Args: { _campaign_id: string; _employee_id: string; _week: string }
+        Returns: number
+      }
+      fts_is_self: {
+        Args: { _employee_id: string; _org_id: string }
+        Returns: boolean
+      }
+      fts_log: {
+        Args: {
+          _action: string
+          _after: Json
+          _before: Json
+          _camp: Database["public"]["Tables"]["fts_campaigns"]["Row"]
+          _employee: string
+          _entity: string
+          _entity_id: string
+        }
+        Returns: undefined
+      }
+      fts_print_sheet: {
+        Args: {
+          p_campaign_id: string
+          p_request_key?: string
+          p_week_key: string
+        }
+        Returns: {
+          campaign_id: string
+          id: string
+          org_id: string
+          print_request_key: string
+          printed_at: string
+          printed_by: string
+          row_count: number
+          sheet_code: string
+          status: string
+          week_key: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_sheets"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_rate: {
+        Args: {
+          _camp: Database["public"]["Tables"]["fts_campaigns"]["Row"]
+          _scoring_role: string
+          _type: string
+        }
+        Returns: number
+      }
+      fts_record_for: {
+        Args: {
+          p_booked_by?: string
+          p_campaign_id: string
+          p_employee_id: string
+          p_occurred_at: string
+          p_quantity: number
+          p_request_key: string
+          p_type: string
+        }
+        Returns: {
+          activity_type: string
+          awarded_points: number | null
+          booked_by_employee_id: string | null
+          campaign_id: string
+          created_at: string
+          employee_id: string
+          entry_code: string
+          id: string
+          occurred_at: string
+          org_id: string
+          parent_id: string | null
+          quantity: number
+          reason_code: string | null
+          recorded_by: string
+          request_key: string
+          sheet_code: string | null
+          sheet_id: string | null
+          sheet_row: number | null
+          source: string
+          status: string
+          supersedes_id: string | null
+          tally_week: string
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_activities"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_record_own: {
+        Args: {
+          p_booked_by?: string
+          p_campaign_id: string
+          p_occurred_at: string
+          p_quantity: number
+          p_request_key: string
+          p_type: string
+        }
+        Returns: {
+          activity_type: string
+          awarded_points: number | null
+          booked_by_employee_id: string | null
+          campaign_id: string
+          created_at: string
+          employee_id: string
+          entry_code: string
+          id: string
+          occurred_at: string
+          org_id: string
+          parent_id: string | null
+          quantity: number
+          reason_code: string | null
+          recorded_by: string
+          request_key: string
+          sheet_code: string | null
+          sheet_id: string | null
+          sheet_row: number | null
+          source: string
+          status: string
+          supersedes_id: string | null
+          tally_week: string
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_activities"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_require_admin: {
+        Args: { _campaign_id: string; _target_employee: string }
+        Returns: Record<string, unknown>
+      }
+      fts_require_in_window: {
+        Args: {
+          _camp: Database["public"]["Tables"]["fts_campaigns"]["Row"]
+          _ts: string
+        }
+        Returns: undefined
+      }
+      fts_require_participant: {
+        Args: {
+          _camp: Database["public"]["Tables"]["fts_campaigns"]["Row"]
+          _employee_id: string
+        }
+        Returns: {
+          active: boolean
+          campaign_id: string
+          created_at: string
+          employee_id: string
+          id: string
+          org_id: string
+          scoring_role: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_participants"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_require_week: {
+        Args: {
+          _camp: Database["public"]["Tables"]["fts_campaigns"]["Row"]
+          _week: string
+        }
+        Returns: undefined
+      }
+      fts_resolve_sheet_row: {
+        Args: {
+          p_action: string
+          p_employee_id?: string
+          p_link_activity_id?: string
+          p_occurred_at?: string
+          p_prepay_at?: string
+          p_reason?: string
+          p_row_id: string
+          p_verify_handoff?: boolean
+          p_verify_prepay?: boolean
+        }
+        Returns: {
+          accepted_reading: Json | null
+          booked_by_employee_id: string | null
+          campaign_id: string
+          credit_employee_id: string | null
+          flags: string[]
+          generation: number
+          handoff_activity_id: string | null
+          handoff_state: string
+          id: string
+          last_scan_id: string
+          org_id: string
+          prepay_activity_id: string | null
+          prepay_state: string
+          previous_reading: Json | null
+          reading: Json
+          resolved_at: string | null
+          resolved_by: string | null
+          row_no: number
+          sheet_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_sheet_rows"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_reverse: {
+        Args: { p_activity_id: string; p_reason: string }
+        Returns: {
+          activity_type: string
+          awarded_points: number | null
+          booked_by_employee_id: string | null
+          campaign_id: string
+          created_at: string
+          employee_id: string
+          entry_code: string
+          id: string
+          occurred_at: string
+          org_id: string
+          parent_id: string | null
+          quantity: number
+          reason_code: string | null
+          recorded_by: string
+          request_key: string
+          sheet_code: string | null
+          sheet_id: string | null
+          sheet_row: number | null
+          source: string
+          status: string
+          supersedes_id: string | null
+          tally_week: string
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_activities"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_roster_names: {
+        Args: { p_campaign_id: string }
+        Returns: {
+          display_name: string
+          employment_status: string
+          id: string
+        }[]
+      }
+      fts_save_huddle: {
+        Args: { p_campaign_id: string; p_date: string; p_on_time: string[] }
+        Returns: number
+      }
+      fts_set_auto_import: {
+        Args: { p_campaign_id: string; p_enabled: boolean }
+        Returns: {
+          auto_import_enabled: boolean
+          clerical_min_calls: number
+          created_at: string
+          created_by: string | null
+          ends_on: string
+          grand_prize_dollars: number
+          id: string
+          name: string
+          open_hours_goal: number
+          org_id: string
+          prize_tier1_points: number
+          prize_tier2_points: number
+          pts_attend_bonus: number
+          pts_call: number
+          pts_chairside_card: number | null
+          pts_huddle: number
+          pts_operative_handoff: number
+          pts_prepay_bonus: number
+          pts_qr_card: number
+          pts_review_assistant: number
+          pts_review_clerical: number
+          pts_review_doctor: number
+          pts_review_hygienist: number
+          pts_unscheduled_booking: number
+          scan_validation: Json | null
+          starts_on: string
+          status: string
+          timezone: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_campaigns"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_set_open_hours: {
+        Args: { p_campaign_id: string; p_hours: number; p_week_key: string }
+        Returns: {
+          campaign_id: string
+          doctor_open_hours: number | null
+          entered_by: string
+          id: string
+          org_id: string
+          updated_at: string
+          week_key: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_week_metrics"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_set_picks_received: {
+        Args: {
+          p_campaign_id: string
+          p_count: number
+          p_employee_id: string
+          p_week_key: string
+        }
+        Returns: {
+          campaign_id: string
+          employee_id: string
+          entered_by: string
+          id: string
+          org_id: string
+          received_count: number
+          updated_at: string
+          week_key: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_prize_picks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_set_rate: {
+        Args: { p_campaign_id: string; p_key: string; p_value: number }
+        Returns: {
+          auto_import_enabled: boolean
+          clerical_min_calls: number
+          created_at: string
+          created_by: string | null
+          ends_on: string
+          grand_prize_dollars: number
+          id: string
+          name: string
+          open_hours_goal: number
+          org_id: string
+          prize_tier1_points: number
+          prize_tier2_points: number
+          pts_attend_bonus: number
+          pts_call: number
+          pts_chairside_card: number | null
+          pts_huddle: number
+          pts_operative_handoff: number
+          pts_prepay_bonus: number
+          pts_qr_card: number
+          pts_review_assistant: number
+          pts_review_clerical: number
+          pts_review_doctor: number
+          pts_review_hygienist: number
+          pts_unscheduled_booking: number
+          scan_validation: Json | null
+          starts_on: string
+          status: string
+          timezone: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_campaigns"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_set_scoring_role: {
+        Args: {
+          p_active: boolean
+          p_campaign_id: string
+          p_employee_id: string
+          p_role: string
+        }
+        Returns: {
+          active: boolean
+          campaign_id: string
+          created_at: string
+          employee_id: string
+          id: string
+          org_id: string
+          scoring_role: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_participants"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_set_weekly_calls: {
+        Args: {
+          p_campaign_id: string
+          p_count: number
+          p_employee_id: string
+          p_week_key: string
+        }
+        Returns: {
+          campaign_id: string
+          created_at: string
+          employee_id: string
+          entered_by: string
+          id: string
+          org_id: string
+          points_per_call: number
+          updated_at: string
+          verified_count: number
+          week_key: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_weekly_calls"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_set_weekly_check: {
+        Args: {
+          p_campaign_id: string
+          p_checked: boolean
+          p_key: string
+          p_week_key: string
+        }
+        Returns: {
+          campaign_id: string
+          check_key: string
+          checked: boolean
+          checked_by: string
+          id: string
+          org_id: string
+          updated_at: string
+          week_key: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_weekly_checks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_sheet_signature: {
+        Args: { p_component: string; r: Json }
+        Returns: Json
+      }
+      fts_validate_reader: {
+        Args: {
+          p_accuracy: number
+          p_campaign_id: string
+          p_false_verified: number
+          p_rows: number
+          p_staff: number
+          p_wrong_person: number
+        }
+        Returns: {
+          auto_import_enabled: boolean
+          clerical_min_calls: number
+          created_at: string
+          created_by: string | null
+          ends_on: string
+          grand_prize_dollars: number
+          id: string
+          name: string
+          open_hours_goal: number
+          org_id: string
+          prize_tier1_points: number
+          prize_tier2_points: number
+          pts_attend_bonus: number
+          pts_call: number
+          pts_chairside_card: number | null
+          pts_huddle: number
+          pts_operative_handoff: number
+          pts_prepay_bonus: number
+          pts_qr_card: number
+          pts_review_assistant: number
+          pts_review_clerical: number
+          pts_review_doctor: number
+          pts_review_hygienist: number
+          pts_unscheduled_booking: number
+          scan_validation: Json | null
+          starts_on: string
+          status: string
+          timezone: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_campaigns"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_verify: {
+        Args: { p_activity_id: string; p_approve: boolean; p_reason?: string }
+        Returns: {
+          activity_type: string
+          awarded_points: number | null
+          booked_by_employee_id: string | null
+          campaign_id: string
+          created_at: string
+          employee_id: string
+          entry_code: string
+          id: string
+          occurred_at: string
+          org_id: string
+          parent_id: string | null
+          quantity: number
+          reason_code: string | null
+          recorded_by: string
+          request_key: string
+          sheet_code: string | null
+          sheet_id: string | null
+          sheet_row: number | null
+          source: string
+          status: string
+          supersedes_id: string | null
+          tally_week: string
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_activities"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_void_sheet: {
+        Args: { p_sheet_id: string }
+        Returns: {
+          campaign_id: string
+          id: string
+          org_id: string
+          print_request_key: string
+          printed_at: string
+          printed_by: string
+          row_count: number
+          sheet_code: string
+          status: string
+          week_key: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_sheets"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fts_week_key: {
+        Args: { _ends: string; _ts: string; _tz: string }
+        Returns: string
+      }
+      fts_week_points: {
+        Args: { _campaign_id: string; _employee_id: string; _week: string }
+        Returns: number
+      }
+      fts_withdraw_own: {
+        Args: { p_activity_id: string; p_reason: string }
+        Returns: {
+          activity_type: string
+          awarded_points: number | null
+          booked_by_employee_id: string | null
+          campaign_id: string
+          created_at: string
+          employee_id: string
+          entry_code: string
+          id: string
+          occurred_at: string
+          org_id: string
+          parent_id: string | null
+          quantity: number
+          reason_code: string | null
+          recorded_by: string
+          request_key: string
+          sheet_code: string | null
+          sheet_id: string | null
+          sheet_row: number | null
+          source: string
+          status: string
+          supersedes_id: string | null
+          tally_week: string
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fts_activities"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_employee_timezone: {
         Args: { p_employee_id: string }
         Returns: string
@@ -10108,6 +11813,37 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      record_pto_usage: {
+        Args: {
+          p_employee_id: string
+          p_hours: number
+          p_note?: string
+          p_usage_date: string
+        }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          day_off_id: string | null
+          employee_id: string
+          hours: number
+          id: string
+          note: string
+          org_id: string
+          source: string
+          updated_at: string
+          usage_date: string
+          user_id: string | null
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "pto_usage"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       record_punch: { Args: { p_action: string }; Returns: Json }
       record_punch_with_location: {
         Args: {
@@ -10456,6 +12192,7 @@ export type Database = {
           p_last_name: string
           p_middle_initial: string
           p_org_id: string
+          p_title?: string
         }
         Returns: string
       }
@@ -10785,6 +12522,32 @@ export type Database = {
       }
       user_owns_time_entry: { Args: { _entry_id: string }; Returns: boolean }
       valid_fof_payment_policy: { Args: { p: Json }; Returns: boolean }
+      void_pto_usage: {
+        Args: { p_id: string; p_reason?: string }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          day_off_id: string | null
+          employee_id: string
+          hours: number
+          id: string
+          note: string
+          org_id: string
+          source: string
+          updated_at: string
+          usage_date: string
+          user_id: string | null
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "pto_usage"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       withdraw_knowledge_approval: {
         Args: { p_note?: string; p_version_id: string }
         Returns: {
@@ -10838,6 +12601,7 @@ export type Database = {
         | "office_closed"
         | "other"
         | "medical_leave"
+        | "no_patients"
       employment_status: "active" | "inactive" | "terminated"
       exception_status: "open" | "resolved" | "ignored"
       exception_type: "missing_shift" | "other"
@@ -10993,6 +12757,7 @@ export const Constants = {
         "office_closed",
         "other",
         "medical_leave",
+        "no_patients",
       ],
       employment_status: ["active", "inactive", "terminated"],
       exception_status: ["open", "resolved", "ignored"],
