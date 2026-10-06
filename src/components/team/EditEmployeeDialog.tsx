@@ -11,7 +11,7 @@ import { useUpdateEmployeeDetails } from '@/hooks/useEmployees';
 import { Loader2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 
-type Employee = Partial<Record<keyof EmployeeContactFields, string | null>> & { id: string; display_name: string; email: string | null; first_name?: string | null; middle_initial?: string | null; last_name?: string | null };
+type Employee = Partial<Record<keyof EmployeeContactFields, string | null>> & { id: string; display_name: string; email: string | null; title?: string | null; first_name?: string | null; middle_initial?: string | null; last_name?: string | null };
 
 export default function EditEmployeeDialog({ employee }: { employee: Employee }) {
   const [open, setOpen] = useState(false);

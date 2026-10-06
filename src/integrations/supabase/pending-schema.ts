@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase as generatedClient } from './client';
-import type { Database as Generated } from './types';
+import type { Database as Generated, Json } from './types';
 import type { Campaign, Participant, Activity, Calls, Huddle, Metric, PrizePick, Audit, ScheduleSheet, ScheduleSheetRow, WeeklyCheck, RosterName } from '@/lib/fill-the-schedule';
 
 /**
@@ -30,6 +30,7 @@ import type { Campaign, Participant, Activity, Calls, Huddle, Metric, PrizePick,
  *   20261005181000_fill_the_schedule     fts_* campaign tables and write RPCs
  *   20261006090000_late_rule_counts_from escalation_policies.counts_from
  *   20261006093000_pto_usage             pto_usage; record_pto_usage, void_pto_usage
+ *   20261006120000_doctor_titles         employees.title; save_team_member_contact(p_title)
  *
  * Same idea as ./knowledge-client.ts, generalised: one module, one merge.
  */
@@ -204,6 +205,34 @@ type PendingColumns = {
     Insert: { counts_from?: string | null };
     Update: { counts_from?: string | null };
   };
+  /** 20261006120000_doctor_titles.sql */
+  employees: {
+    Row: { title: string | null };
+    Insert: { title?: string | null };
+    Update: { title?: string | null };
+  };
+};
+
+/**
+ * Functions the generated file already has, but whose signature a migration
+ * changed. Unlike PendingFunctions these win over the generated definition
+ * until types.ts is regenerated; delete an entry once it is.
+ */
+type PendingFunctionChanges = {
+  /** 20261006120000_doctor_titles.sql — p_title builds a "Dr. First" display name. */
+  save_team_member_contact: {
+    Args: {
+      p_org_id: string;
+      p_employee_id: string | null;
+      p_first_name: string;
+      p_middle_initial: string | null;
+      p_last_name: string;
+      p_email: string | null;
+      p_contact?: Json;
+      p_title?: string | null;
+    };
+    Returns: string;
+  };
 };
 
 /** 20260922150000_manager_audited_paths.sql and 20260922160000_office_pto_policy.sql */
@@ -287,8 +316,8 @@ type MergedTables = Simplify<
 >;
 
 type MergedFunctions = Simplify<
-  GeneratedFunctions & {
-    [K in Exclude<keyof PendingFunctions, keyof GeneratedFunctions>]: PendingFunctions[K];
+  Omit<GeneratedFunctions, keyof PendingFunctionChanges> & PendingFunctionChanges & {
+    [K in Exclude<keyof PendingFunctions, keyof GeneratedFunctions | keyof PendingFunctionChanges>]: PendingFunctions[K];
   }
 >;
 

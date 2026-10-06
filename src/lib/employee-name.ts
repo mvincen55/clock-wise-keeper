@@ -1,11 +1,25 @@
 const NAME_SUFFIX = /^(?:jr\.?|sr\.?|ii|iii|iv|v)$/i;
 
+/**
+ * A name the office uses as a title plus a given name ("Dr. Robert"). It has
+ * no surname to lead with or flip around, so every formatter shows it as
+ * stored: the doctors are "Dr. Robert", "Dr. Jennie", "Dr. Nicole" and
+ * "Dr. Natalie" wherever a person is named.
+ */
+const HONORIFIC_NAME = /^(?:dr|drs|doctor)\.?\s+\S/i;
+
+/** True for a stored name that leads with a title ("Dr. Robert"). */
+export function isHonorificName(name: string): boolean {
+  return HONORIFIC_NAME.test(name.trim());
+}
+
 /** Display imported "Last, First Middle" names in first-name-first order.
  * Keep stored names intact: attendance imports match against the original value.
  * Names without a comma are already display-ready; never guess their word order.
  */
 export function formatEmployeeName(name: string): string {
   const clean = name.trim().replace(/\s+/g, ' ');
+  if (isHonorificName(clean)) return clean;
   const parts = clean.split(',').map(part => part.trim());
   const [family, given, ...suffixes] = parts;
   if (!family || !given || NAME_SUFFIX.test(given)) return clean;
@@ -21,6 +35,7 @@ export function formatEmployeeName(name: string): string {
  */
 export function formatEmployeeNameLastFirst(name: string): string {
   const clean = name.trim().replace(/\s+/g, ' ');
+  if (isHonorificName(clean)) return clean;
   if (clean.includes(',')) {
     return clean.split(',').map(part => part.trim()).filter(Boolean).join(', ');
   }
