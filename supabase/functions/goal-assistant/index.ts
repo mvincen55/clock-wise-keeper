@@ -1,9 +1,11 @@
 // Pathfinder — the AI behind the Goals page.
 //
 // Modes:
-//   breakdown    -> turn a member's monthly goal into 4-8 concrete tasks with
+//   breakdown    -> turn a member's goal into 4-8 concrete tasks with
 //                   realistic due dates that dodge their time off, office
-//                   closures, and lean lighter on short-staffed days.
+//                   closures, and lean lighter on short-staffed days. The
+//                   plan runs to the goal's target date, or over the next
+//                   four weeks when the goal simply runs until it is done.
 //   draft_update -> draft the short update the member shares at the team
 //                   meeting, based on what they actually finished (and their
 //                   Pathfinder conversation).
@@ -50,12 +52,18 @@ function easternToday(): string {
   }).format(new Date());
 }
 
-/** Last day of a "YYYY-MM" month. */
-function monthBounds(month: string): { start: string; end: string } {
-  const [y, m] = month.split("-").map(Number);
-  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  return { start: `${month}-01`, end: `${month}-${String(last).padStart(2, "0")}` };
+/** A plain "YYYY-MM-DD" date shifted by whole days. */
+function addDays(isoDate: string, days: number): string {
+  const d = new Date(`${isoDate}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
+
+/** How far ahead Pathfinder plans when a goal has no target date. */
+const OPEN_GOAL_PLAN_DAYS = 28;
+
+const isPlainDate = (v: unknown): v is string =>
+  typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
 function datesBetween(start: string, end: string): string[] {
   const out: string[] = [];
@@ -144,7 +152,7 @@ Deno.serve(async (req) => {
     const body = (await req.json()) as {
       mode?: string;
       goalId?: string;
-      month?: string;
+      dueOn?: string | null;
       quickNotes?: string;
       title?: string;
       description?: string;
@@ -163,14 +171,14 @@ Deno.serve(async (req) => {
           {
             role: "system",
             content:
-              "You turn a dental practice team member's rough monthly self-improvement goal into a genuine SMART goal for a ONE-MONTH horizon: Specific, Measurable, Achievable, Relevant to their role, Time-bound to this month. " +
-              "Preserve their intent and scope — never swap the subject of the goal. If their words have no measure, INFER a reasonable, modest one from the goal and a dental-practice role (e.g. 'work on explaining treatment to patients' -> 'Use the teach-back method at every treatment presentation this month and ask a teammate for feedback at least 4 times'). Keep it to ONE first-person sentence, max 180 characters, no quotes, no trailing period. " +
+              "You turn a dental practice team member's rough self-improvement goal into a genuine SMART goal: Specific, Measurable, Achievable, Relevant to their role, Time-bound. The goal stays theirs until they finish it — it is not a monthly goal. When a target date is given, bind the goal to it; when none is given, name a realistic near-term timeframe inside the sentence (e.g. 'over the next four weeks') rather than inventing a deadline. " +
+              "Preserve their intent and scope — never swap the subject of the goal. If their words have no measure, INFER a reasonable, modest one from the goal and a dental-practice role (e.g. 'work on explaining treatment to patients' -> 'Use the teach-back method at every treatment presentation over the next four weeks and ask a teammate for feedback at least 4 times'). Keep it to ONE first-person sentence, max 180 characters, no quotes, no trailing period. " +
               "Also return the measurable target as a very short phrase (max 40 chars, e.g. '4 feedback asks', '10 same-day reappointments'), and a one-line SMART read-out: for each of specific, measurable, achievable, relevant, time_bound, a few words (max 40 chars) saying how the polished goal satisfies it. If an element is genuinely missing, write a gentle nudge instead (e.g. 'add a number to make this measurable'). Never scold. " +
               'Reply with ONLY JSON: {"title":string,"target":string,"smart":{"specific":string,"measurable":string,"achievable":string,"relevant":string,"time_bound":string}}',
           },
           {
             role: "user",
-            content: `Raw goal: ${rawTitle}\nExtra context: ${bounded(body.description, 600) || "(none)"}\nMonth: ${bounded(body.month, 7) || "(this month)"}\n${meetingLine} Choose a target the person could show real movement on by then.`,
+            content: `Raw goal: ${rawTitle}\nExtra context: ${bounded(body.description, 600) || "(none)"}\nTarget date: ${isPlainDate(body.dueOn) ? body.dueOn : "(none — the goal runs until it is done)"}\n${meetingLine} Choose a target the person could show real movement on by then.`,
           },
         ],
         400
@@ -196,14 +204,21 @@ Deno.serve(async (req) => {
 
     const { data: goal } = await supabase
       .from("goals")
-      .select("id, org_id, user_id, title, description, month, smart_target")
+      .select("id, org_id, user_id, title, description, month, smart_target, due_on, created_at")
       .eq("id", goalId)
       .maybeSingle();
     if (!goal) return json({ error: "Goal not found" }, 404);
     if (goal.user_id !== user.id) return json({ error: "Unauthorized" }, 403);
 
-    const month = /^\d{4}-\d{2}$/.test(goal.month) ? goal.month : bounded(body.month, 7);
-    const { start, end } = monthBounds(month);
+    // The goal's window: it runs from the day it was set until its target
+    // date — or, with no target date, simply until it is done. Plans then
+    // cover the next few weeks of work.
+    const dueOn = isPlainDate(goal.due_on) ? goal.due_on : null;
+    const setOn = typeof goal.created_at === "string" ? goal.created_at.slice(0, 10) : todayIso;
+    const horizonEnd = dueOn && dueOn > todayIso ? dueOn : addDays(todayIso, OPEN_GOAL_PLAN_DAYS);
+    const windowLine = dueOn
+      ? `Target date: ${dueOn}${dueOn < todayIso ? " (already passed — the goal is still theirs until it is done)" : ""}.`
+      : `No target date — the goal runs until it is done (set on ${setOn}).`;
 
     // Quiet context — never surfaced to the member.
     const { data: profile } = await supabase
@@ -213,26 +228,26 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (mode === "breakdown") {
-      const today = easternToday();
-      const planFrom = today > start ? today : start;
+      const planFrom = todayIso;
+      const end = horizonEnd;
 
       const { data: daysOff } = await supabase
         .from("days_off")
         .select("user_id, date_start, date_end, type")
         .lte("date_start", end)
-        .gte("date_end", start);
+        .gte("date_end", planFrom);
 
       const { data: closures } = await supabase
         .from("office_closures")
         .select("closure_date, name")
-        .gte("closure_date", start)
+        .gte("closure_date", planFrom)
         .lte("closure_date", end);
 
       const myOff = new Set<string>();
       const staffOffCount = new Map<string, number>();
       for (const row of daysOff ?? []) {
         for (const d of datesBetween(row.date_start as string, row.date_end as string)) {
-          if (d < start || d > end) continue;
+          if (d < planFrom || d > end) continue;
           if (row.user_id === user.id) myOff.add(d);
           else staffOffCount.set(d, (staffOffCount.get(d) ?? 0) + 1);
         }
@@ -245,13 +260,13 @@ Deno.serve(async (req) => {
         .map(([d, n]) => `${d} (${n} teammate${n > 1 ? "s" : ""} out)`);
 
       const contextBlock = [
-        `Month: ${month}. Plan due dates between ${planFrom} and ${end}.`,
+        `${windowLine} Plan due dates between ${planFrom} and ${end}.`,
         myOff.size > 0
           ? `The member is OFF on these dates — never give them a task due then: ${[...myOff].join(", ")}.`
-          : "The member has no approved time off this month.",
+          : "The member has no approved time off in this window.",
         closureDates.length > 0
           ? `The office is CLOSED on: ${closureDates.join(", ")} — no tasks due then.`
-          : "No office closures this month.",
+          : "No office closures in this window.",
         shortStaffed.length > 0
           ? `Short-staffed days (go lighter, avoid heavy tasks): ${shortStaffed.join(", ")}.`
           : "",
@@ -271,8 +286,8 @@ Deno.serve(async (req) => {
           {
             role: "system",
             content:
-              "You are Pathfinder, a warm, practical coach inside a dental practice's team app. You turn one person's monthly self-improvement goal into a short list of concrete action steps. " +
-              "Rules: 4 to 8 tasks. The steps must ladder up to the goal's measurable target when one is given — finishing every step should achieve that target by the end of the month, so make the counts add up. Every task title is a short, clean, professional imperative sentence starting with a verb — proper sentence casing, correct grammar, no numbering, no filler, max 90 characters. Spread the due dates realistically across the remaining month. Never schedule a task on a day the member is off or the office is closed, and keep short-staffed days light. Encouraging, human tone — no jargon, no scoring, no comparison to other people. " +
+              "You are Pathfinder, a warm, practical coach inside a dental practice's team app. You turn one person's self-improvement goal into a short list of concrete action steps. The goal is theirs until they finish it — it is not a monthly goal. " +
+              "Rules: 4 to 8 tasks. The steps must ladder up to the goal's measurable target when one is given — finishing every step should achieve that target by the target date (or within the planning window when there is none), so make the counts add up. Every task title is a short, clean, professional imperative sentence starting with a verb — proper sentence casing, correct grammar, no numbering, no filler, max 90 characters. Spread the due dates realistically across the planning window. Never schedule a task on a day the member is off or the office is closed, and keep short-staffed days light. Encouraging, human tone — no jargon, no scoring, no comparison to other people. " +
               "MEETING AWARENESS: when a team meeting date is given, front-load real, visible progress before it so the person has something genuine to share, and write a one-sentence 'intro' that mentions the meeting naturally (e.g. 'Your next team meeting is Aug 12 — this plan gets you something real to share'). If there is no meeting on the calendar, write a warm one-sentence intro without inventing a date. " +
               "LEARNING RESOURCE: decide honestly whether a short training module built for this office would genuinely help. Say yes when the goal needs skill or language the person does not have yet (explaining treatment, handling objections, phone scripts, insurance conversations). Say no for simple habit or count goals. When yes, give a specific topic phrased for this office and the index of the plan step it belongs to. " +
               "NEVER explain your scheduling reasoning, never reference any profile, answers, questionnaire, preferences, or 'based on…' anything. " +
@@ -387,7 +402,7 @@ Deno.serve(async (req) => {
         `Goal: ${safe(goal.title, 200)}`,
         `Measurable target: ${safe(goal.smart_target, 80) || "(none set yet)"}`,
         `Description: ${safe(goal.description, 800) || "(none)"}`,
-        `Month: ${month}`,
+        windowLine,
         `Steps: ${
           (goalTasks ?? [])
             .map((t) => `${t.done ? "[done] " : "[open] "}${safe(t.title, 90)}${t.due_date ? ` (due ${t.due_date})` : ""}`)
@@ -410,7 +425,7 @@ Deno.serve(async (req) => {
         {
           role: "system",
           content:
-            "You are Pathfinder, a warm, practical coach inside a dental practice's team app, talking privately with one team member about their monthly goal. When they ask for help shaping, tightening or adjusting the goal, coach them toward SMART naturally in conversation — specific, measurable, achievable, relevant to their role, time-bound to this month — by suggesting a concrete number or timeframe rather than lecturing them about the framework or listing the letters. Be calm, encouraging, concrete and brief (1-4 short paragraphs max, plain sentences, no bullet spam, no hype, no scoring, no comparison to teammates). You remember the whole conversation. " +
+            "You are Pathfinder, a warm, practical coach inside a dental practice's team app, talking privately with one team member about their goal. The goal is theirs until they finish it or change it — it is not bound to a month. When they ask for help shaping, tightening or adjusting the goal, coach them toward SMART naturally in conversation — specific, measurable, achievable, relevant to their role, time-bound to their target date or a realistic timeframe — by suggesting a concrete number or timeframe rather than lecturing them about the framework or listing the letters. Be calm, encouraging, concrete and brief (1-4 short paragraphs max, plain sentences, no bullet spam, no hype, no scoring, no comparison to teammates). You remember the whole conversation. " +
             "NEVER reference any profile, questionnaire, answers, or 'based on…' anything.\n\n" +
             context,
         },
@@ -443,7 +458,9 @@ Deno.serve(async (req) => {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    const since = (lastUpdate?.created_at as string | undefined) ?? `${start}T00:00:00Z`;
+    const since =
+      (lastUpdate?.created_at as string | undefined) ??
+      (typeof goal.created_at === "string" ? goal.created_at : `${setOn}T00:00:00Z`);
 
     const doneSince = (goalTasks ?? []).filter(
       (t) => t.done && (!t.done_at || (t.done_at as string) >= since)

@@ -1,4 +1,5 @@
 // CSV → goals + steps. Small, dependency-free parser (RFC-4180-ish: quotes, escaped quotes, CRLF).
+// A goal runs until it is done; the optional target_date column gives it a deadline.
 
 export type ParsedGoalRow = {
   line: number;
@@ -6,6 +7,7 @@ export type ParsedGoalRow = {
   title: string;
   target: string;
   month: string;
+  dueOn: string | null;
   visibility: 'team' | 'private';
   step: string;
   stepDue: string | null;
@@ -19,7 +21,10 @@ export type PlannedGoal = {
   ownerUserId: string | null;
   title: string;
   target: string;
+  /** The month the goal is recorded under (history only). */
   month: string;
+  /** Optional target date; null means the goal runs until it is done. */
+  dueOn: string | null;
   visibility: 'team' | 'private';
   steps: PlannedStep[];
   problems: string[];
@@ -31,10 +36,10 @@ export type ParseResult = {
 };
 
 export const GOAL_CSV_TEMPLATE = [
-  'owner,goal,target,month,visibility,step,step_due',
-  'Jane Smith,Faster morning huddle,Huddle done by 8:10 on 18 of 20 days,2026-08,team,Print the day sheet the night before,2026-08-05',
-  'Jane Smith,Faster morning huddle,Huddle done by 8:10 on 18 of 20 days,2026-08,team,Move supply talk to Fridays,2026-08-12',
-  'Alex Ruiz,Recall follow-ups,25 recall calls made,2026-08,team,Block 20 minutes daily for calls,',
+  'owner,goal,target,target_date,visibility,step,step_due',
+  'Jane Smith,Faster morning huddle,Huddle done by 8:10 on 18 of 20 days,2026-08-31,team,Print the day sheet the night before,2026-08-05',
+  'Jane Smith,Faster morning huddle,Huddle done by 8:10 on 18 of 20 days,2026-08-31,team,Move supply talk to Fridays,2026-08-12',
+  'Alex Ruiz,Recall follow-ups,25 recall calls made,,team,Block 20 minutes daily for calls,',
 ].join('\n');
 
 export function parseCsv(text: string): string[][] {
@@ -88,6 +93,11 @@ const HEADER_ALIASES: Record<string, string> = {
   measure: 'target',
   measurable: 'target',
   month: 'month',
+  target_date: 'goal_due',
+  'target date': 'goal_due',
+  goal_due: 'goal_due',
+  'goal due': 'goal_due',
+  deadline: 'goal_due',
   visibility: 'visibility',
   step: 'step',
   'step title': 'step',
@@ -169,6 +179,11 @@ export function planGoalsFromCsv(
     const owner = ownerRaw || opts.selfName;
     const ownerUserId = ownerRaw ? (byName.get(ownerRaw.toLowerCase()) ?? null) : opts.selfUserId;
     const month = normalizeMonth(get('month'), opts.defaultMonth);
+    const dueRaw = get('goal_due');
+    const dueOn = normalizeDate(dueRaw);
+    if (dueRaw && !dueOn) {
+      errors.push({ line, message: `Could not read the target date "${dueRaw}" — left blank.` });
+    }
     const visibility = get('visibility').toLowerCase() === 'private' ? 'private' : 'team';
     const target = get('target');
     const key = `${(ownerUserId ?? owner.toLowerCase())}|${title.toLowerCase()}|${month}`;
@@ -182,6 +197,7 @@ export function planGoalsFromCsv(
         title,
         target,
         month,
+        dueOn,
         visibility,
         steps: [],
         problems: [],
@@ -193,6 +209,7 @@ export function planGoalsFromCsv(
       goal.target = target;
       goal.problems = goal.problems.filter(p => p !== 'Missing a measurable target.');
     }
+    if (!goal.dueOn && dueOn) goal.dueOn = dueOn;
 
     const step = get('step');
     if (step) {

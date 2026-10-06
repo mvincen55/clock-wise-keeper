@@ -36,9 +36,11 @@ import { getToday, shiftDate } from '@/lib/time-utils';
 import type { OperationalRole } from '@/lib/schedule-reader/types';
 import { formatEmployeeNameLastFirst } from '@/lib/employee-name';
 
-// The Intelligent Sprint Builder. Position first, then either the architect's
-// grounded suggestions or the manual form the office already knows. The AI
-// suggests and explains; the manager edits everything and decides.
+// The office goal builder (the "sprint" builder in the tables). Position
+// first, then either the architect's grounded suggestions or the manual form
+// the office already knows. The AI suggests and explains; the manager edits
+// everything and decides — including how long it runs: a week, a month, or
+// until the target is reached.
 
 type AudienceValue =
   | 'team'
@@ -89,7 +91,7 @@ export default function SprintBuilderDialog({
   const [title, setTitle] = useState('');
   const [metric, setMetric] = useState('');
   const [target, setTarget] = useState('20');
-  const [period, setPeriod] = useState<SprintPeriod>('month');
+  const [period, setPeriod] = useState<SprintPeriod>('open');
   const [reward, setReward] = useState('');
   const [verification, setVerification] = useState<SprintVerification>('honor');
   const [category, setCategory] = useState<string | null>(null);
@@ -190,14 +192,14 @@ export default function SprintBuilderDialog({
     setShownTitles([]);
     setConcernOpen(false);
     setConcernDismissed(false);
-    setTitle(''); setMetric(''); setTarget('20'); setPeriod('month');
+    setTitle(''); setMetric(''); setTarget('20'); setPeriod('open');
     setReward(''); setVerification('honor'); setCategory(null);
     setFromIdea(false); setRewardIdeas([]);
   };
 
   const submit = async () => {
     if (!title.trim() || !metric.trim() || !reward.trim()) {
-      toast.error('Give the sprint a name, something to count, and a reward.');
+      toast.error('Give the goal a name, something to count, and a reward.');
       return;
     }
     if (audience.scope === 'individual' && !scopeUser) {
@@ -213,7 +215,8 @@ export default function SprintBuilderDialog({
         target_count: count,
         period,
         starts_on: today,
-        ends_on: shiftDate(today, period === 'week' ? 6 : 29),
+        // An open goal has no end date: it runs until the target is reached.
+        ends_on: period === 'open' ? null : shiftDate(today, period === 'week' ? 6 : 29),
         reward: reward.trim(),
         scope: audience.scope,
         scope_department: audience.department,
@@ -223,7 +226,7 @@ export default function SprintBuilderDialog({
         verification,
         ai_suggested: fromIdea || !!seed,
       });
-      toast.success('Sprint started — the team will see the announcement.');
+      toast.success('Office goal set — the team will see the announcement.');
       onOpenChange(false);
       resetAll();
     } catch (e) {
@@ -276,10 +279,11 @@ export default function SprintBuilderDialog({
         {view === 'ideas' ? (
           <>
             <DialogHeader>
-              <DialogTitle>Start a sprint</DialogTitle>
+              <DialogTitle>Plan the office goal</DialogTitle>
               <DialogDescription>
-                One number, one reward. Pick who it's for and Purple Envelope will suggest sprints
-                grounded in what's actually happening here.
+                One number, one reward. Pick who it's for and Purple Envelope will suggest goals
+                grounded in what's actually happening here — or write your own. It runs until it's
+                reached or you change it.
               </DialogDescription>
             </DialogHeader>
             {seed && (
@@ -306,7 +310,7 @@ export default function SprintBuilderDialog({
                 >
                   {ideasApi.isPending
                     ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Thinking…</>
-                    : <><Sparkles className="mr-2 h-4 w-4" />Give me sprint ideas</>}
+                    : <><Sparkles className="mr-2 h-4 w-4" />Give me ideas</>}
                 </Button>
                 <Button size="sm" variant="outline" onClick={startBlank}>
                   <Pencil className="mr-2 h-4 w-4" />Create my own
@@ -342,7 +346,7 @@ export default function SprintBuilderDialog({
                         generate({ direction: focus });
                       }}
                     >
-                      Build a sprint around it
+                      Build a goal around it
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => setConcernDismissed(true)}>
                       Not now
@@ -373,7 +377,7 @@ export default function SprintBuilderDialog({
                         </p>
                       )}
                       <div className="pt-1">
-                        <Button size="sm" onClick={() => applyIdea(idea)}>Use this sprint</Button>
+                        <Button size="sm" onClick={() => applyIdea(idea)}>Use this one</Button>
                       </div>
                     </div>
                   ))}
@@ -406,7 +410,7 @@ export default function SprintBuilderDialog({
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </button>
-                {fromIdea ? 'Review your sprint' : 'Create your own sprint'}
+                {fromIdea ? 'Review the office goal' : 'Write the office goal'}
               </DialogTitle>
               <DialogDescription>
                 {fromIdea
@@ -421,7 +425,7 @@ export default function SprintBuilderDialog({
             )}
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label htmlFor="sprint-title">Sprint</Label>
+                <Label htmlFor="sprint-title">Goal</Label>
                 <Input id="sprint-title" value={title} onChange={e => setTitle(e.target.value)} placeholder="Same-day reappointments" />
               </div>
               <div className="space-y-1.5">
@@ -434,10 +438,11 @@ export default function SprintBuilderDialog({
                   <Input id="sprint-target" type="number" min={1} value={target} onChange={e => setTarget(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Length</Label>
+                  <Label>How long</Label>
                   <Select value={period} onValueChange={v => setPeriod(v as SprintPeriod)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="open">Until we reach it</SelectItem>
                       <SelectItem value="week">This week</SelectItem>
                       <SelectItem value="month">This month</SelectItem>
                     </SelectContent>
@@ -500,7 +505,7 @@ export default function SprintBuilderDialog({
             <DialogFooter>
               <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
               <Button onClick={submit} disabled={!create.isReady || create.isPending}>
-                {create.isPending ? 'Starting…' : 'Start sprint'}
+                {create.isPending ? 'Saving…' : 'Set the office goal'}
               </Button>
             </DialogFooter>
           </>

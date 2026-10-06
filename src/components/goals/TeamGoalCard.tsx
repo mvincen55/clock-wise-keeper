@@ -1,12 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Target } from 'lucide-react';
 import GoalProgress from './GoalProgress';
-import GoalMonthTimeline from './GoalMonthTimeline';
+import GoalTimeline from './GoalTimeline';
 import GoalTrainingModules from './GoalTrainingModules';
 import ProgressRing from '@/components/ProgressRing';
 import TargetProgress from './TargetProgress';
 import GoalStatusBadge from './GoalStatusBadge';
-import { monthElapsedFraction, type Goal, type GoalTask, type GoalUpdate } from '@/hooks/useGoals';
+import { goalElapsedFraction, type Goal, type GoalTask, type GoalUpdate } from '@/hooks/useGoals';
 
 /** A quieter card for a teammate's goal. */
 export default function TeamGoalCard({
@@ -20,12 +21,18 @@ export default function TeamGoalCard({
   tasks: GoalTask[];
   latestUpdate?: GoalUpdate;
 }) {
+  const elapsed = goal ? goalElapsedFraction(goal) : 0;
+  const completed = goal?.status === 'completed';
   return (
     <Card className="border-border/60 bg-muted/20 shadow-none">
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-sm font-medium">{name}</CardTitle>
-          {latestUpdate && <GoalStatusBadge status={latestUpdate.status} className="text-[10px]" />}
+          {completed ? (
+            <Badge variant="secondary" className="text-[10px]">Completed</Badge>
+          ) : (
+            latestUpdate && <GoalStatusBadge status={latestUpdate.status} className="text-[10px]" />
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
@@ -36,12 +43,12 @@ export default function TeamGoalCard({
               <ProgressRing
                 done={tasks.filter(t => t.done).length}
                 total={tasks.length}
-                monthElapsed={monthElapsedFraction(goal.month)}
+                elapsed={elapsed}
                 size={38}
               />
               <div className="min-w-0 flex-1">
-                <GoalMonthTimeline
-                  month={goal.month}
+                <GoalTimeline
+                  goal={goal}
                   done={tasks.filter(t => t.done).length}
                   total={tasks.length}
                   compact
@@ -51,7 +58,8 @@ export default function TeamGoalCard({
             <GoalProgress
               done={tasks.filter(t => t.done).length}
               total={tasks.length}
-              monthElapsed={monthElapsedFraction(goal.month)}
+              elapsed={elapsed}
+              hasDeadline={!!goal.due_on}
               compact
             />
             <TargetProgress
@@ -74,7 +82,7 @@ export default function TeamGoalCard({
             <Target className="h-5 w-5 text-muted-foreground/60" />
             <p className="text-xs font-medium">No goal set yet</p>
             <p className="text-[11px] text-muted-foreground">
-              They'll pick one thing to work on this month.
+              They'll pick one thing to work on.
             </p>
           </div>
         )}

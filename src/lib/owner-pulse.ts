@@ -29,7 +29,8 @@ export type GoalLike = {
   progress: number;
   target_count: number;
   starts_on: string;
-  ends_on: string;
+  /** Null for an open goal, which runs until the target is reached. */
+  ends_on: string | null;
   status: 'active' | 'pending_verification' | string;
 };
 
@@ -125,11 +126,13 @@ export type GoalBrief = {
   done: number;
   total: number;
   remaining: number;
-  endsOn: string;
+  /** Null for an open goal: it runs until the target is reached. */
+  endsOn: string | null;
   endsLabel: string;
-  /** Calendar days from today to ends_on (0 = ends today). Never "working days". */
-  daysLeft: number;
-  state: 'on_track' | 'needs_push' | 'awaiting_verification';
+  /** Calendar days from today to ends_on (0 = ends today); null with no end date. Never "working days". */
+  daysLeft: number | null;
+  /** An open goal is "in progress": with no window there is no pace to judge. */
+  state: 'on_track' | 'needs_push' | 'awaiting_verification' | 'in_progress';
   stateLabel: string;
   /** The math behind the state, e.g. "70% done · 78% of the window elapsed". */
   stateDetail: string;
@@ -520,8 +523,9 @@ export function buildMonthDetail(
 /**
  * The one office goal the hero shows, chosen deterministically: a sprint
  * awaiting verification first (it is blocked on a human), then the active
- * sprint ending soonest. "On track" is progress share ≥ time share of the goal
- * window — the math is exposed, never a vibe.
+ * sprint ending soonest, with open goals (no end date) last. "On track" is
+ * progress share ≥ time share of the goal window — the math is exposed,
+ * never a vibe. An open goal has no window, so it is simply "in progress".
  */
 export function buildGoalBrief(goals: GoalLike[], today: string): GoalBrief | null {
   const live = goals.filter(g => g.status === 'active' || g.status === 'pending_verification');
@@ -530,16 +534,16 @@ export function buildGoalBrief(goals: GoalLike[], today: string): GoalBrief | nu
   const pending = live.filter(g => g.status === 'pending_verification');
   const active = live
     .filter(g => g.status === 'active')
-    .sort((a, b) => a.ends_on.localeCompare(b.ends_on));
+    .sort((a, b) => (a.ends_on ?? '9999-12-31').localeCompare(b.ends_on ?? '9999-12-31'));
   const pick = pending[0] ?? active[0];
 
   const done = Math.min(pick.progress, pick.target_count);
   const total = pick.target_count;
-  const daysLeft = Math.max(0, daysBetween(today, pick.ends_on));
+  const daysLeft = pick.ends_on ? Math.max(0, daysBetween(today, pick.ends_on)) : null;
 
-  const windowDays = Math.max(1, daysBetween(pick.starts_on, pick.ends_on) + 1);
-  const elapsedDays = Math.min(windowDays, Math.max(0, daysBetween(pick.starts_on, today) + 1));
-  const timeShare = elapsedDays / windowDays;
+  const windowDays = pick.ends_on ? Math.max(1, daysBetween(pick.starts_on, pick.ends_on) + 1) : null;
+  const elapsedDays = windowDays === null ? null : Math.min(windowDays, Math.max(0, daysBetween(pick.starts_on, today) + 1));
+  const timeShare = windowDays === null || elapsedDays === null ? null : elapsedDays / windowDays;
   const progressShare = total > 0 ? done / total : 0;
 
   let state: GoalBrief['state'];
@@ -547,6 +551,9 @@ export function buildGoalBrief(goals: GoalLike[], today: string): GoalBrief | nu
   if (pick.status === 'pending_verification') {
     state = 'awaiting_verification';
     stateLabel = 'Awaiting verification';
+  } else if (timeShare === null) {
+    state = 'in_progress';
+    stateLabel = 'In progress';
   } else if (progressShare >= timeShare) {
     state = 'on_track';
     stateLabel = 'On track';
@@ -562,11 +569,13 @@ export function buildGoalBrief(goals: GoalLike[], today: string): GoalBrief | nu
     total,
     remaining: Math.max(0, total - done),
     endsOn: pick.ends_on,
-    endsLabel: formatDate(pick.ends_on),
+    endsLabel: pick.ends_on ? formatDate(pick.ends_on) : 'until it is reached',
     daysLeft,
     state,
     stateLabel,
-    stateDetail: `${pct(progressShare)} done · ${pct(timeShare)} of the window elapsed`,
+    stateDetail: timeShare === null
+      ? `${pct(progressShare)} done · no end date, runs until it is reached`
+      : `${pct(progressShare)} done · ${pct(timeShare)} of the window elapsed`,
     moreCount: live.length - 1,
   };
 }
@@ -710,7 +719,7 @@ export function ownerRecommendation(
 
   // 6 — a goal that is about to run out of runway.
   const goal = buildGoalBrief(goals, today);
-  if (goal && goal.state === 'needs_push' && goal.daysLeft <= 3 && goal.remaining > 0) {
+  if (goal && goal.state === 'needs_push' && goal.daysLeft !== null && goal.daysLeft <= 3 && goal.remaining > 0) {
     return {
       id: 'goal_rescope',
       text: `"${goal.title}" has ${goal.remaining} to go with ${goal.daysLeft} day${goal.daysLeft === 1 ? '' : 's'} left. Consider rescoping the next step so the sprint ends with a real result.`,

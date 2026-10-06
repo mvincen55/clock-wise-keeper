@@ -3203,9 +3203,11 @@ export type Database = {
         Row: {
           archived_at: string | null
           archived_reason: string | null
+          completed_at: string | null
           created_at: string
           created_by: string
           description: string | null
+          due_on: string | null
           id: string
           month: string
           org_id: string
@@ -3219,9 +3221,11 @@ export type Database = {
         Insert: {
           archived_at?: string | null
           archived_reason?: string | null
+          completed_at?: string | null
           created_at?: string
           created_by: string
           description?: string | null
+          due_on?: string | null
           id?: string
           month: string
           org_id: string
@@ -3235,9 +3239,11 @@ export type Database = {
         Update: {
           archived_at?: string | null
           archived_reason?: string | null
+          completed_at?: string | null
           created_at?: string
           created_by?: string
           description?: string | null
+          due_on?: string | null
           id?: string
           month?: string
           org_id?: string
@@ -8135,7 +8141,7 @@ export type Database = {
           category: string | null
           created_at: string
           created_by: string
-          ends_on: string
+          ends_on: string | null
           id: string
           metric: string
           org_id: string
@@ -8164,7 +8170,7 @@ export type Database = {
           category?: string | null
           created_at?: string
           created_by: string
-          ends_on: string
+          ends_on?: string | null
           id?: string
           metric: string
           org_id: string
@@ -8193,7 +8199,7 @@ export type Database = {
           category?: string | null
           created_at?: string
           created_by?: string
-          ends_on?: string
+          ends_on?: string | null
           id?: string
           metric?: string
           org_id?: string

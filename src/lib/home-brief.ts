@@ -240,7 +240,7 @@ export function spotlight(goal: GoalBrief | null): Spotlight | null {
   if (goal.state === 'awaiting_verification') return { goal, reason: 'needs a decision' };
   if (goal.state === 'needs_push') return { goal, reason: 'off track' };
   if (goal.remaining === 0) return { goal, reason: 'finished' };
-  if (goal.daysLeft <= 3) return { goal, reason: goal.daysLeft === 0 ? 'ends today' : `${goal.daysLeft} day${goal.daysLeft === 1 ? '' : 's'} left` };
+  if (goal.daysLeft !== null && goal.daysLeft <= 3) return { goal, reason: goal.daysLeft === 0 ? 'ends today' : `${goal.daysLeft} day${goal.daysLeft === 1 ? '' : 's'} left` };
   return null;
 }
 

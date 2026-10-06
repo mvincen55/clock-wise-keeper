@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 export default function ProgressRing({
   done,
   total,
-  monthElapsed,
+  elapsed,
   size = 44,
   stroke = 4,
   showLabel = true,
@@ -17,15 +17,15 @@ export default function ProgressRing({
 }: {
   done: number;
   total: number;
-  /** 0–1 fraction of the period already spent; drives the "behind" amber. */
-  monthElapsed: number;
+  /** 0–1 fraction of the goal's window already spent; drives the "behind" amber. 0 when there is no deadline. */
+  elapsed: number;
   size?: number;
   stroke?: number;
   showLabel?: boolean;
   className?: string;
 }) {
   const pct = total > 0 ? Math.min(1, done / total) : 0;
-  const behind = total > 0 && pct + 0.25 < monthElapsed;
+  const behind = total > 0 && pct + 0.25 < elapsed;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
 

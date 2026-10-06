@@ -441,7 +441,9 @@ async function runSprints(db: Client, apiKey: string | undefined, orgId: string,
 
   for (const s of sprints) {
     const pct = Math.min(100, Math.round((s.progress / Math.max(1, s.target_count)) * 100));
-    const daysLeft = daysBetween(today, s.ends_on);
+    // An open goal (no end date) runs until the target is reached.
+    const daysLeft: number | null = s.ends_on ? daysBetween(today, s.ends_on) : null;
+    const windowText = s.ends_on ? `by ${s.ends_on}` : "until it's reached";
     const hitTarget = s.progress >= s.target_count;
     const verification = String(s.verification ?? "honor");
     const scopeLabel = s.scope === "department"
@@ -494,16 +496,16 @@ async function runSprints(db: Client, apiKey: string | undefined, orgId: string,
     if (isNew) {
       kind = "sprint_announced";
       title = "New team sprint";
-      fallback = `${scopeLabel} is going for ${s.target_count} ${s.metric} by ${s.ends_on}. Hit it and it's ${s.reward}.`;
-      brief = `Announce a new sprint for ${scopeLabel}. Title: "${s.title}". Counting: ${s.metric}. Target: ${s.target_count} by ${s.ends_on}. Reward: ${s.reward}. ${
+      fallback = `${scopeLabel} is going for ${s.target_count} ${s.metric} ${windowText}. Hit it and it's ${s.reward}.`;
+      brief = `Announce a new sprint for ${scopeLabel}. Title: "${s.title}". Counting: ${s.metric}. Target: ${s.target_count} ${windowText}. Reward: ${s.reward}. ${
         verification === "honor"
           ? "The tally is on the honour system — people tap +1 on the dashboard as they go."
           : verification === "manager_approval"
           ? "The result gets confirmed by a manager at the end."
           : "The result gets checked against the office's outside report at the end."
       } No rankings.`;
-    } else if (daysLeft < 0 || hitTarget) {
-      // Period over, or target reached early.
+    } else if ((daysLeft !== null && daysLeft < 0) || hitTarget) {
+      // Period over, or target reached (early, or at all for an open goal).
       if (verification === "honor") {
         const won = hitTarget;
         await db.from("team_goals").update({ status: won ? "won" : "missed" }).eq("id", s.id);
@@ -520,18 +522,19 @@ async function runSprints(db: Client, apiKey: string | undefined, orgId: string,
         kind = "sprint_pending_verification";
         title = "Sprint is up for verification";
         fallback = `${s.progress} of ${s.target_count} ${s.metric} recorded. The result is with the verifier now.`;
-        brief = `A sprint reached the end of its run: ${s.progress} of ${s.target_count} ${s.metric}. It now waits on ${
+        brief = `A sprint ${hitTarget ? "reached its target" : "reached the end of its run"}: ${s.progress} of ${s.target_count} ${s.metric}. It now waits on ${
           verification === "document"
             ? "the outside report being uploaded"
             : "a manager's confirmation"
         }. State it plainly, no verdict yet.`;
       }
-    } else if (daysLeft > 0 && pct < 100 && easternWeekday() === 3) {
+    } else if ((daysLeft === null || daysLeft > 0) && pct < 100 && easternWeekday() === 3) {
       // Midweek check-in with the real number.
       kind = "sprint_progress";
       title = "Sprint check-in";
-      fallback = `${daysLeft} day${daysLeft === 1 ? "" : "s"} left and ${scopeLabel} is ${pct}% of the way to ${s.target_count} ${s.metric}. A push gets ${s.reward}.`;
-      brief = `Mid-sprint check-in for ${scopeLabel}. ${s.progress} of ${s.target_count} ${s.metric} so far (${pct}%), ${daysLeft} day${daysLeft === 1 ? "" : "s"} left, reward is ${s.reward}. Use the real numbers. Encouraging, not pushy.`;
+      const leftText = daysLeft === null ? "" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left and `;
+      fallback = `${leftText}${scopeLabel} is ${pct}% of the way to ${s.target_count} ${s.metric}. A push gets ${s.reward}.`;
+      brief = `Mid-sprint check-in for ${scopeLabel}. ${s.progress} of ${s.target_count} ${s.metric} so far (${pct}%), ${daysLeft === null ? "no end date — it runs until it's reached" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`}, reward is ${s.reward}. Use the real numbers. Encouraging, not pushy.`;
     }
 
     if (!kind) continue;

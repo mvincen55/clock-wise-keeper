@@ -1,14 +1,16 @@
 import type { Goal, GoalTask, GoalUpdate } from '@/hooks/useGoals';
-import { UPDATE_STATUS_LABELS, monthLabel } from '@/hooks/useGoals';
+import { UPDATE_STATUS_LABELS } from '@/hooks/useGoals';
 import { parseTargetNumber } from '@/components/goals/TargetProgress';
 import type { OrgBranding } from '@/hooks/useOrgBranding';
 
 /**
- * Printable Monthly Goals Report — one letter page (or more, flowing) that
- * summarizes every team member's SMART goal, plan progress, measurable
- * target, and latest check-in note for a month. Same document language as
- * the FOF / deposit / incident sheets: brand accent on white, grayscale
- * safe, pure props → JSX so the preview and the printed page can't drift.
+ * Printable Team Goals Report — one letter page (or more, flowing) that
+ * summarizes every team member's current SMART goal, plan progress,
+ * measurable target, and latest check-in note as of the day it is printed.
+ * Goals run until they are done, so the report is dated, not monthly. Same
+ * document language as the FOF / deposit / incident sheets: brand accent on
+ * white, grayscale safe, pure props → JSX so the preview and the printed
+ * page can't drift.
  */
 
 export interface GoalsReportRow {
@@ -19,7 +21,8 @@ export interface GoalsReportRow {
 }
 
 interface Props {
-  month: string;
+  /** The day the report describes (YYYY-MM-DD, Eastern). */
+  asOf: string;
   rows: GoalsReportRow[];
   branding: Pick<OrgBranding, 'displayName' | 'legalName' | 'logoUrl'>;
   /** Who ran the report; printed in the footer band. */
@@ -35,6 +38,16 @@ function printedNow(): string {
   });
 }
 
+/** A plain date-only string ("2026-10-24") as "October 24, 2026". */
+function longDate(date: string): string {
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 function Bar({ fraction }: { fraction: number }) {
   const pct = Math.max(0, Math.min(1, fraction)) * 100;
   return (
@@ -44,7 +57,7 @@ function Bar({ fraction }: { fraction: number }) {
   );
 }
 
-function MemberBlock({ row, month }: { row: GoalsReportRow; month: string }) {
+function MemberBlock({ row }: { row: GoalsReportRow }) {
   const { name, goal, tasks, latestUpdate } = row;
   const done = tasks.filter(t => t.done).length;
   const total = tasks.length;
@@ -56,10 +69,15 @@ function MemberBlock({ row, month }: { row: GoalsReportRow; month: string }) {
     <section className="goal-block">
       <div className="goal-block-head">
         <span className="goal-name">{name}</span>
-        {goal && latestUpdate && (
-          <span className={`goal-chip goal-chip-${latestUpdate.status}`}>
-            {UPDATE_STATUS_LABELS[latestUpdate.status]}
-          </span>
+        {goal && goal.status === 'completed' ? (
+          <span className="goal-chip goal-chip-done">Completed</span>
+        ) : (
+          goal &&
+          latestUpdate && (
+            <span className={`goal-chip goal-chip-${latestUpdate.status}`}>
+              {UPDATE_STATUS_LABELS[latestUpdate.status]}
+            </span>
+          )
         )}
         {!goal && <span className="goal-chip goal-chip-none">No goal set</span>}
       </div>
@@ -68,6 +86,9 @@ function MemberBlock({ row, month }: { row: GoalsReportRow; month: string }) {
         <>
           <p className="goal-title">{goal.title}</p>
           {goal.description && <p className="goal-desc">{goal.description}</p>}
+          <p className="goal-desc">
+            {goal.due_on ? `Target date: ${longDate(goal.due_on)}` : 'Runs until it is done'}
+          </p>
 
           <div className="goal-metrics">
             <div className="goal-metric">
@@ -110,22 +131,28 @@ function MemberBlock({ row, month }: { row: GoalsReportRow; month: string }) {
             {latestUpdate ? (
               <p className="goal-note-body">{latestUpdate.content}</p>
             ) : (
-              <p className="goal-note-empty">No check-in shared this month.</p>
+              <p className="goal-note-empty">No check-in shared yet.</p>
             )}
           </div>
         </>
       ) : (
-        <p className="goal-note-empty">Nothing set for {monthLabel(month)}.</p>
+        <p className="goal-note-empty">No goal set yet.</p>
       )}
     </section>
   );
 }
 
-export default function GoalsPrintSheet({ month, rows, branding, preparedBy }: Props) {
+export default function GoalsPrintSheet({ asOf, rows, branding, preparedBy }: Props) {
   const withGoals = rows.filter(r => r.goal);
-  const onTrack = withGoals.filter(r => r.latestUpdate?.status === 'on_track').length;
-  const atRisk = withGoals.filter(r => r.latestUpdate?.status === 'at_risk').length;
-  const complete = withGoals.filter(r => r.latestUpdate?.status === 'done').length;
+  const complete = withGoals.filter(
+    r => r.goal?.status === 'completed' || r.latestUpdate?.status === 'done'
+  ).length;
+  const onTrack = withGoals.filter(
+    r => r.goal?.status !== 'completed' && r.latestUpdate?.status === 'on_track'
+  ).length;
+  const atRisk = withGoals.filter(
+    r => r.goal?.status !== 'completed' && r.latestUpdate?.status === 'at_risk'
+  ).length;
 
   return (
     <div className="goal-sheet">
@@ -134,9 +161,9 @@ export default function GoalsPrintSheet({ month, rows, branding, preparedBy }: P
           <img className="goal-logo" src={branding.logoUrl} alt={branding.displayName} />
         )}
         <div className="goal-head-meta">
-          <div className="goal-kicker">Monthly Goals</div>
+          <div className="goal-kicker">Team Goals</div>
           <div className="goal-doc-title">Team Goals Report</div>
-          <div className="goal-subtitle">{monthLabel(month)}</div>
+          <div className="goal-subtitle">As of {longDate(asOf)}</div>
         </div>
       </header>
 
@@ -161,14 +188,14 @@ export default function GoalsPrintSheet({ month, rows, branding, preparedBy }: P
 
       <div className="goal-body">
         {rows.map(r => (
-          <MemberBlock key={r.name + (r.goal?.id ?? '')} row={r} month={month} />
+          <MemberBlock key={r.name + (r.goal?.id ?? '')} row={r} />
         ))}
         {rows.length === 0 && <p className="goal-note-empty">No team members to report on.</p>}
       </div>
 
       <footer className="goal-page-footer">
-        {branding.legalName || branding.displayName} · Monthly Goals Report ·{' '}
-        {monthLabel(month)} · Printed {printedNow()}
+        {branding.legalName || branding.displayName} · Team Goals Report · As of{' '}
+        {longDate(asOf)} · Printed {printedNow()}
         {preparedBy ? ` by ${preparedBy}` : ''}
       </footer>
     </div>

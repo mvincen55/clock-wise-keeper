@@ -8,20 +8,20 @@ import { Switch } from '@/components/ui/switch';
 import { Loader2, Target, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { callPathfinder, useCreateGoal } from '@/hooks/useGoals';
+import { getToday } from '@/lib/time-utils';
 import SmartChips, { type SmartRead } from '@/components/goals/SmartChips';
 import RoleGoalIdeas from '@/components/goals/RoleGoalIdeas';
 import { evaluateGoalGate, flagsFromSmartText } from '@/lib/goal-gate';
 import NoPhiNote from '@/components/NoPhiNote';
 
 /**
- * Set this month's goal. Pathfinder polishes the raw wording into one clear
- * sentence, which the member can edit or restore to their own words.
+ * Set my goal. It stays mine until I finish it or change it — a target date
+ * is optional. Pathfinder polishes the raw wording into one clear sentence,
+ * which the member can edit or restore to their own words.
  */
 export default function SetGoalCard({
-  month,
   onCreated,
 }: {
-  month: string;
   /** Fires with the new goal's title so a replaced goal can be linked to it. */
   onCreated?: (title: string) => void;
 }) {
@@ -32,6 +32,7 @@ export default function SetGoalCard({
   const [isPrivate, setIsPrivate] = useState(false);
   const [polishing, setPolishing] = useState(false);
   const [target, setTarget] = useState('');
+  const [dueOn, setDueOn] = useState('');
   const [smart, setSmart] = useState<SmartRead | null>(null);
 
   const polish = async () => {
@@ -43,7 +44,7 @@ export default function SetGoalCard({
         mode: 'polish_goal',
         title: raw,
         description: description.trim() || undefined,
-        month,
+        dueOn: dueOn || null,
       });
       if (result.title && result.title !== raw) {
         setOriginal(raw);
@@ -68,17 +69,18 @@ export default function SetGoalCard({
         title: title.trim(),
         description: description.trim() || undefined,
         smartTarget: target.trim() || null,
-        month,
+        dueOn: dueOn || null,
         visibility: isPrivate ? 'private' : 'team',
       });
       setTitle('');
       setOriginal(null);
       setTarget('');
+      setDueOn('');
       setSmart(null);
       setDescription('');
       setIsPrivate(false);
       onCreated?.(title.trim());
-      toast.success('Goal set — good luck this month.');
+      toast.success("Goal set — it's yours until it's done.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not save your goal');
     }
@@ -89,13 +91,13 @@ export default function SetGoalCard({
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Target className="h-4 w-4 text-primary" />
-          What are you working on this month?
+          What are you working on?
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Pick something you'd like to get better at. The whole team will see this at the next team
-          meeting.
+          Pick something you'd like to get better at. It stays your goal until you finish it or
+          change it, and the whole team will see it at the next team meeting.
         </p>
 
         <div className="space-y-1.5">
@@ -109,7 +111,7 @@ export default function SetGoalCard({
           />
           <p className="text-xs text-muted-foreground">
             Great goals are SMART: specific, measurable, achievable, relevant to your role, and
-            bound to this month.
+            time-bound — give it a target date if one helps.
           </p>
           {polishing && (
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -165,6 +167,21 @@ export default function SetGoalCard({
         </div>
 
         <div className="space-y-1.5">
+          <Label htmlFor="goal-due">Target date (optional)</Label>
+          <Input
+            id="goal-due"
+            type="date"
+            min={getToday()}
+            value={dueOn}
+            onChange={e => setDueOn(e.target.value)}
+            className="w-auto"
+          />
+          <p className="text-xs text-muted-foreground">
+            Leave it blank and the goal simply runs until you mark it done.
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
           <Label htmlFor="goal-description">Why it matters (optional)</Label>
           <Textarea
             id="goal-description"
@@ -187,7 +204,7 @@ export default function SetGoalCard({
           disabled={!gate.ok || createGoal.isPending || !createGoal.isReady || polishing}
         >
           {createGoal.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Set this month's goal
+          Set my goal
         </Button>
       </CardContent>
     </Card>

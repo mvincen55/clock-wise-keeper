@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { getToday } from '@/lib/time-utils';
 import { dayLabel, pickNextThing, tinyFirstStep, type FocusCandidate } from '@/lib/copilot';
 import { useMyItems, useCompleteMyItem, useDeferItem } from '@/hooks/useCopilot';
-import { useGoalsMonth } from '@/hooks/useGoals';
+import { useCurrentGoals } from '@/hooks/useGoals';
 import { useTrainingAssignments, useTrainingModules } from '@/hooks/useTraining';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -19,7 +19,7 @@ export default function TodayFocusCard() {
   const today = getToday();
   const { user } = useAuth();
   const { data: items } = useMyItems();
-  const { data: goalData } = useGoalsMonth(today.slice(0, 7));
+  const { data: goalData } = useCurrentGoals();
   const { data: assignments } = useTrainingAssignments();
   const { data: modules } = useTrainingModules();
   const complete = useCompleteMyItem();

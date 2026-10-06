@@ -45,8 +45,27 @@ function scopeLabel(sprint: TeamGoal) {
   return 'Whole team';
 }
 
-/** The sprint card — everyone in scope sees it, and the AI runs it end to end. */
-export default function SprintCard({ highlightId }: { highlightId?: string | null }) {
+/** How the goal's window reads on the card. */
+function windowLabel(sprint: TeamGoal): string {
+  if (sprint.status === 'pending_verification') return 'waiting on verification';
+  if (!sprint.ends_on) return "runs until it's reached";
+  const left = daysLeft(sprint.ends_on);
+  return left > 0 ? `${left} day${left === 1 ? '' : 's'} left` : left === 0 ? 'last day' : 'wrapping up';
+}
+
+/**
+ * The office goal card — everyone in scope sees it, and the AI runs it end
+ * to end. Owners, managers and members with the manage_office_goals grant
+ * plan and set it from here; it runs until it is reached or changed.
+ */
+export default function SprintCard({
+  highlightId,
+  showEmpty = false,
+}: {
+  highlightId?: string | null;
+  /** Show a quiet line when nothing is running, instead of nothing at all. */
+  showEmpty?: boolean;
+}) {
   const { data: ctx } = useOrgContext();
   const { data } = useTeamGoals();
   const { data: suggestion } = useSprintSuggestion();
@@ -68,7 +87,23 @@ export default function SprintCard({ highlightId }: { highlightId?: string | nul
   const highlighted = !!sprint && !!highlightId && sprint.id === highlightId;
 
   // Nothing running and nothing to suggest: stay quiet for the team.
-  if (!sprint && !suggestion && !isManager) return null;
+  if (!sprint && !suggestion && !isManager) {
+    if (!showEmpty) return null;
+    return (
+      <Card className="card-elevated border-dashed">
+        <CardContent className="p-4 space-y-1">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Users className="h-4 w-4 text-primary" />
+            Office goal
+          </div>
+          <p className="text-sm text-muted-foreground">
+            No office goal is running right now. An owner or manager sets one here, and it runs
+            until it's reached or changed.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (!sprint) {
     return (
@@ -77,7 +112,7 @@ export default function SprintCard({ highlightId }: { highlightId?: string | nul
           <CardContent className="p-4 space-y-3">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Users className="h-4 w-4 text-primary" />
-              Team sprint
+              Office goal
             </div>
             {suggestion ? (
               <>
@@ -95,10 +130,11 @@ export default function SprintCard({ highlightId }: { highlightId?: string | nul
             ) : (
               <>
                 <p className="text-sm text-muted-foreground">
-                  No sprint running. One shared number and a reward the whole team plays for.
+                  No office goal is running. One shared number and a reward the whole team works
+                  toward — for a week, a month, or until it's reached.
                 </p>
                 <Button size="sm" variant="outline" onClick={() => setDialogOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />Start a sprint
+                  <Plus className="mr-2 h-4 w-4" />Plan the office goal
                 </Button>
               </>
             )}
@@ -109,10 +145,12 @@ export default function SprintCard({ highlightId }: { highlightId?: string | nul
     );
   }
 
-  const left = daysLeft(sprint.ends_on);
-  // Fraction of the sprint window already spent — drives the ring's "behind" amber.
-  const totalDays = Math.max(1, daysLeft(sprint.ends_on) + daysSince(sprint.starts_on));
-  const elapsed = Math.min(1, Math.max(0, daysSince(sprint.starts_on) / totalDays));
+  // Fraction of the window already spent — drives the ring's "behind" amber.
+  // An open goal has no window, so it is never behind.
+  const totalDays = sprint.ends_on
+    ? Math.max(1, daysLeft(sprint.ends_on) + daysSince(sprint.starts_on))
+    : null;
+  const elapsed = totalDays ? Math.min(1, Math.max(0, daysSince(sprint.starts_on) / totalDays)) : 0;
   const pending = sprint.status === 'pending_verification';
   const canTally = sprint.verification === 'honor' && !pending;
 
@@ -124,7 +162,7 @@ export default function SprintCard({ highlightId }: { highlightId?: string | nul
             <ProgressRing
               done={sprint.progress}
               total={sprint.target_count}
-              monthElapsed={elapsed}
+              elapsed={elapsed}
               size={80}
               stroke={8}
             />
@@ -139,13 +177,7 @@ export default function SprintCard({ highlightId }: { highlightId?: string | nul
                 <Gift className="h-3.5 w-3.5 text-primary" />
                 {sprint.reward}
                 <span className="mx-1">·</span>
-                {pending
-                  ? 'waiting on verification'
-                  : left > 0
-                  ? `${left} day${left === 1 ? '' : 's'} left`
-                  : left === 0
-                  ? 'last day'
-                  : 'wrapping up'}
+                {windowLabel(sprint)}
               </p>
               {sprint.verification !== 'honor' && !pending && (
                 <p className="text-xs text-muted-foreground">

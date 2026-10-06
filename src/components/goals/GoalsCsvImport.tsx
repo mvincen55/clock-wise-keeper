@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Upload, FileSpreadsheet, Download, AlertTriangle, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
-import { useActiveTeam, currentMonth, monthLabel } from '@/hooks/useGoals';
+import { useActiveTeam, currentMonth } from '@/hooks/useGoals';
 import { useImportGoalsCsv, type ImportOutcome } from '@/hooks/useGoalImport';
 import { GOAL_CSV_TEMPLATE, planGoalsFromCsv, type ParseResult } from '@/lib/goal-csv';
 
@@ -129,8 +129,8 @@ export default function GoalsCsvImport() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Columns: owner, goal, target, month, visibility, step, step_due. Dates read as
-              YYYY-MM-DD or M/D/YYYY. Blank month means {monthLabel(currentMonth())}.
+              Columns: owner, goal, target, target_date, visibility, step, step_due. Dates read as
+              YYYY-MM-DD or M/D/YYYY. A blank target_date means the goal runs until it's done.
             </p>
 
             {parsed && !result && (
@@ -159,7 +159,9 @@ export default function GoalsCsvImport() {
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-medium">{g.title}</span>
                             <Badge variant="secondary">{g.owner}</Badge>
-                            <Badge variant="outline">{g.month}</Badge>
+                            <Badge variant="outline">
+                              {g.dueOn ? `Due ${g.dueOn}` : 'Until done'}
+                            </Badge>
                             {g.visibility === 'private' && <Badge variant="outline">Private</Badge>}
                           </div>
                           {g.target && (
