@@ -341,7 +341,7 @@ Deno.serve(async (req) => {
         ? "one person"
         : "whole team";
       return `"${safe(s.title, 80)}" (${who}${s.category ? `, ${s.category}` : ""}): ` +
-        `${s.progress}/${s.target_count} ${safe(s.metric, 80)} — ${s.status}, ended ${s.ends_on}`;
+        `${s.progress}/${s.target_count} ${safe(s.metric, 80)} — ${s.status}, ${s.ends_on ? `ended ${s.ends_on}` : "open-ended"}`;
     };
 
     const rulesLines: string[] = [];

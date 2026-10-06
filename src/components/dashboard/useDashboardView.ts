@@ -6,7 +6,7 @@ import { useOrgAttendanceSnapshot, type EmployeeSnapshot } from '@/hooks/useOrgA
 import { usePracticeVitals } from '@/hooks/usePracticeVitals';
 import { useDepositLog, useRecentDepositLogs } from '@/hooks/useDepositLog';
 import { useTeamGoals, type TeamGoal } from '@/hooks/useTeamGoals';
-import { useGoalsMonth, useActiveTeam } from '@/hooks/useGoals';
+import { useCurrentGoals, useActiveTeam } from '@/hooks/useGoals';
 import { chosenGoalsFrom } from '@/lib/dashboard-goals';
 import { useUnresolvedBypasses } from '@/hooks/useChecklistBypasses';
 import { useMyAccountabilityReports } from '@/hooks/useAccountability';
@@ -101,7 +101,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
   const vitals = vitalsQuery.data;
   const today = getToday();
   const isAdmin = ctx?.role === 'owner' || ctx?.role === 'manager';
-  const personalGoalsQuery = useGoalsMonth(today.slice(0, 7));
+  const personalGoalsQuery = useCurrentGoals();
   const goalPeopleQuery = useActiveTeam(isAdmin);
   // Report history and the Dentrix postings are admin sources; the hooks stay
   // disabled for members, and the builder refuses them for members anyway.
@@ -301,7 +301,7 @@ export function useDashboardView(): { view: DashboardView | null; isLoading: boo
     const block = performanceBlockFrom({ raw, state: performanceState, pulse: pulseInput, attention: attentionSummary });
     const chosenGoals = chosenGoalsFrom({
       orgId: ctx.org_id, viewerId: user?.id ?? '', viewerName: profile?.fullName || 'Me', admin: isAdmin,
-      month: today.slice(0, 7),
+      today,
       state: personalGoalsQuery.isError || (isAdmin && goalPeopleQuery.isError) ? 'error'
         : personalGoalsQuery.data === undefined || (isAdmin && goalPeopleQuery.data === undefined) ? 'loading' : 'ok',
       goals: personalGoalsQuery.data?.goals ?? [], tasks: personalGoalsQuery.data?.tasks ?? [],

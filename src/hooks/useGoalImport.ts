@@ -38,6 +38,7 @@ export function useImportGoalsCsv() {
             title: g.title,
             smart_target: g.target,
             month: g.month,
+            due_on: g.dueOn,
             visibility: g.visibility,
             created_by: user.id,
           })

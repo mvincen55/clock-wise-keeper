@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { useConsumedSearchParam, useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -15,14 +16,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Bell, Lock, Loader2, Printer, Users } from 'lucide-react';
+import { Bell, Flag, Lock, Loader2, Printer, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import GoalUpdateModal from '@/components/goals/GoalUpdateModal';
 import GoalProgress from '@/components/goals/GoalProgress';
-import GoalMonthTimeline from '@/components/goals/GoalMonthTimeline';
+import GoalTimeline from '@/components/goals/GoalTimeline';
 import ProgressRing from '@/components/ProgressRing';
 import TargetProgress from '@/components/goals/TargetProgress';
 import GoalStatusBadge from '@/components/goals/GoalStatusBadge';
@@ -31,34 +32,40 @@ import SetGoalCard from '@/components/goals/SetGoalCard';
 import GoalsAnalytics from '@/components/goals/GoalsAnalytics';
 import GoalsCsvImport from '@/components/goals/GoalsCsvImport';
 import TeamGoalCard from '@/components/goals/TeamGoalCard';
+import SprintCard from '@/components/SprintCard';
 import TodayFocusCard from '@/components/copilot/TodayFocusCard';
 import RescopeCard from '@/components/copilot/RescopeCard';
 import GoalsPrintSheet, { type GoalsReportRow } from '@/components/goals/GoalsPrintSheet';
 import BrandPrintStyle from '@/components/BrandPrintStyle';
 import { useOrgBranding } from '@/hooks/useOrgBranding';
+import { formatDate, getToday } from '@/lib/time-utils';
 import {
-  currentMonth,
-  monthElapsedFraction,
-  monthLabel,
+  currentGoalFor,
+  goalElapsedFraction,
   useActiveTeam,
   useCreateGoal,
+  useCurrentGoals,
   useGoalEvents,
-  useGoalsMonth,
   useLinkReplacement,
   type Goal,
   type GoalTask,
   type GoalUpdate,
 } from '@/hooks/useGoals';
 
+/**
+ * Goals. Each person works one goal at a time, and it stays theirs until
+ * they complete it or change it — never cut off by the calendar. The office
+ * goal (one shared number the whole office works toward) is planned and set
+ * here too, and runs until it is reached or changed.
+ */
 export default function Goals() {
   const { user } = useAuth();
   const { data: ctx } = useOrgContext();
-  const month = currentMonth();
-  const { data, isLoading } = useGoalsMonth(month);
+  const today = getToday();
+  const { data, isLoading } = useCurrentGoals();
   const { data: team } = useActiveTeam();
   const { data: branding } = useOrgBranding();
   const createGoal = useCreateGoal();
-  const { data: goalEvents } = useGoalEvents(month);
   const linkReplacement = useLinkReplacement();
 
   const [meetingView, setMeetingView] = useState(false);
@@ -71,21 +78,28 @@ export default function Goals() {
   const [pendingReplacement, setPendingReplacement] = useState<string | null>(null);
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
-  const goals = data?.goals ?? [];
-  const tasks = data?.tasks ?? [];
-  const updates = data?.updates ?? [];
+  const goals = useMemo(() => data?.goals ?? [], [data]);
+  const tasks = useMemo(() => data?.tasks ?? [], [data]);
+  const updates = useMemo(() => data?.updates ?? [], [data]);
 
   const tasksFor = (goalId: string): GoalTask[] => tasks.filter(t => t.goal_id === goalId);
   const latestUpdate = (goalId: string): GoalUpdate | undefined =>
     updates.find(u => u.goal_id === goalId);
 
   const myGoals = useMemo(() => goals.filter(g => g.user_id === user?.id), [goals, user?.id]);
+  const { data: goalEvents } = useGoalEvents(myGoals.map(g => g.id));
+  // The goal I am on. Once it is complete (or let go), the next one is mine to set.
   const myTeamGoal = myGoals.find(g => g.visibility === 'team' && g.status === 'active');
+
+  // Each teammate's current shared goal: active first, else recently finished.
+  const goalFor = (userId: string) => currentGoalFor(goals, userId, 'team', today);
 
   // A reminder about a goal (?goal=) or one of its steps (?task=) lands with
   // that goal card highlighted rather than leaving the reader to hunt.
   const linkedGoalId = useConsumedSearchParam('goal');
   const linkedTaskId = useConsumedSearchParam('task');
+  // An office-goal notice (?sprint=) lands on the office goal.
+  const linkedSprintId = useConsumedSearchParam('sprint');
   const highlightGoalId = useMemo(() => {
     if (linkedGoalId) return linkedGoalId;
     if (linkedTaskId) return tasks.find(t => t.id === linkedTaskId)?.goal_id ?? null;
@@ -104,7 +118,6 @@ export default function Goals() {
       await createGoal.mutateAsync({
         title: privateTitle.trim(),
         description: privateDescription.trim() || undefined,
-        month,
         visibility: 'private',
         forUserId: privateFor,
       });
@@ -118,14 +131,12 @@ export default function Goals() {
     }
   };
 
-  // One row per active team member (me included), each with their shared
-  // goal for the month, its plan, and the latest check-in — the report.
+  // One row per active team member (me included), each with their current
+  // shared goal, its plan, and the latest check-in — the report.
   const reportRows: GoalsReportRow[] = useMemo(() => {
     const members = team ?? [];
     return members.map(m => {
-      const goal = goals.find(
-        g => g.user_id === m.user_id && g.visibility === 'team' && g.status !== 'archived'
-      );
+      const goal = currentGoalFor(goals, m.user_id, 'team', today);
       return {
         name: m.display_name,
         goal,
@@ -133,7 +144,7 @@ export default function Goals() {
         latestUpdate: goal ? updates.find(u => u.goal_id === goal.id) : undefined,
       };
     });
-  }, [team, goals, tasks, updates]);
+  }, [team, goals, tasks, updates, today]);
 
   const myName = team?.find(t => t.user_id === user?.id)?.display_name;
 
@@ -141,7 +152,7 @@ export default function Goals() {
     <>
       <BrandPrintStyle branding={branding ?? { brandColor: '#53406e', brandTint: '#f3f0f8' }} />
       <GoalsPrintSheet
-        month={month}
+        asOf={today}
         rows={reportRows}
         branding={{
           displayName: branding?.displayName ?? '',
@@ -168,12 +179,15 @@ export default function Goals() {
 
   // ---- Meeting view: what the team reads together ----
   if (meetingView) {
-    const teamGoals = goals.filter(g => g.visibility === 'team');
+    const owners = [...new Set(goals.filter(g => g.visibility === 'team').map(g => g.user_id))];
+    const teamGoals = owners
+      .map(u => goalFor(u))
+      .filter((g): g is Goal => !!g);
     return (
       <div className="goals-theme mx-auto max-w-3xl space-y-6 p-4 md:p-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold">Team meeting — {monthLabel(month)}</h1>
+            <h1 className="text-2xl font-semibold">Team meeting — {formatDate(today)}</h1>
             <p className="text-sm text-muted-foreground">Where everyone is with their goal.</p>
           </div>
           <div className="flex gap-2">
@@ -187,6 +201,11 @@ export default function Goals() {
           </div>
         </div>
 
+        <section className="space-y-2" aria-label="Office goal">
+          <h2 className="text-base font-semibold">Office goal</h2>
+          <SprintCard showEmpty />
+        </section>
+
         {teamGoals.length === 0 && (
           <p className="text-sm text-muted-foreground">No goals shared with the team yet.</p>
         )}
@@ -194,12 +213,17 @@ export default function Goals() {
         {teamGoals.map(goal => {
           const t = tasksFor(goal.id);
           const u = latestUpdate(goal.id);
+          const completed = goal.status === 'completed';
           return (
             <Card key={goal.id}>
               <CardHeader className="pb-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <CardTitle className="text-base">{nameOf(goal.user_id)}</CardTitle>
-                  {u && <GoalStatusBadge status={u.status} />}
+                  {completed ? (
+                    <Badge variant="secondary">Completed</Badge>
+                  ) : (
+                    u && <GoalStatusBadge status={u.status} />
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -208,12 +232,12 @@ export default function Goals() {
                   <ProgressRing
                     done={t.filter(x => x.done).length}
                     total={t.length}
-                    monthElapsed={monthElapsedFraction(goal.month)}
+                    elapsed={goalElapsedFraction(goal, today)}
                     size={48}
                   />
                   <div className="min-w-0 flex-1">
-                    <GoalMonthTimeline
-                      month={goal.month}
+                    <GoalTimeline
+                      goal={goal}
                       done={t.filter(x => x.done).length}
                       total={t.length}
                     />
@@ -222,7 +246,8 @@ export default function Goals() {
                 <GoalProgress
                   done={t.filter(x => x.done).length}
                   total={t.length}
-                  monthElapsed={monthElapsedFraction(goal.month)}
+                  elapsed={goalElapsedFraction(goal, today)}
+                  hasDeadline={!!goal.due_on}
                 />
                 <TargetProgress
                   target={goal.smart_target}
@@ -252,7 +277,7 @@ export default function Goals() {
         <div>
           <h1 className="text-2xl font-semibold">Goals</h1>
           <p className="text-sm text-muted-foreground">
-            One thing each of us is working on this month — {monthLabel(month)}.
+            One thing each of us is working on. A goal is yours until it's done or you change it.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -282,9 +307,24 @@ export default function Goals() {
         </div>
       </header>
 
+      {/* The office goal: planned and set here, tallied by everyone. */}
+      <section className="space-y-3" aria-label="Office goal">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <Flag className="h-4 w-4 text-primary" />
+            Office goal
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            One shared number the whole office works toward, with a reward when it lands. It runs
+            until it's reached or changed. Owners and managers plan and set it here; everyone
+            tallies it.
+          </p>
+        </div>
+        <SprintCard highlightId={linkedSprintId} showEmpty />
+      </section>
+
       {!myTeamGoal && (
         <SetGoalCard
-          month={month}
           onCreated={title => {
             if (!pendingReplacement) return;
             linkReplacement.mutate({ eventId: pendingReplacement, newTitle: title });
@@ -327,12 +367,10 @@ export default function Goals() {
       <GoalsAnalytics />
 
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold">The team this month</h2>
+        <h2 className="text-lg font-semibold">The team</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {(team ?? []).map(member => {
-            const goal = goals.find(
-              g => g.user_id === member.user_id && g.visibility === 'team' && g.status !== 'archived'
-            );
+            const goal = goalFor(member.user_id);
             return (
               <TeamGoalCard
                 key={member.id}
@@ -363,7 +401,7 @@ export default function Goals() {
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
               Only that person and the managers can see this. It never appears in the team grid or
-              meeting view.
+              meeting view, and it stays theirs until it's done.
             </p>
             <div className="space-y-1.5">
               <Label>Team member</Label>

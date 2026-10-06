@@ -366,11 +366,11 @@ export function fxPerformance(args: {
   };
   const chosenGoals = chosenGoalsFrom({
     orgId: 'fx-office', viewerId: 'u-me', viewerName: args.role === 'employee' ? 'Dana R.' : 'Megan', admin,
-    month: today.slice(0, 7), state: 'ok',
+    today, state: 'ok',
     people: [{ user_id: 'u-me', display_name: args.role === 'employee' ? 'Dana R.' : 'Megan' }, { user_id: 'u-priya', display_name: 'Priya S.' }],
     goals: args.days.length ? [
-      { id: 'fx-personal-me', org_id: 'fx-office', user_id: 'u-me', title: 'Make every handoff clear', description: null, smart_target: 'Use the handoff checklist for every patient this month.', month: today.slice(0, 7), visibility: 'team', status: 'active', created_by: 'u-me', created_at: '', updated_at: '' },
-      { id: 'fx-personal-priya', org_id: 'fx-office', user_id: 'u-priya', title: 'Build confidence with treatment conversations', description: null, smart_target: 'Practice four treatment conversations and ask for feedback.', month: today.slice(0, 7), visibility: 'team', status: 'active', created_by: 'u-priya', created_at: '', updated_at: '' },
+      { id: 'fx-personal-me', org_id: 'fx-office', user_id: 'u-me', title: 'Make every handoff clear', description: null, smart_target: 'Use the handoff checklist for every patient.', month: today.slice(0, 7), due_on: null, visibility: 'team', status: 'active', completed_at: null, created_by: 'u-me', created_at: '', updated_at: '' },
+      { id: 'fx-personal-priya', org_id: 'fx-office', user_id: 'u-priya', title: 'Build confidence with treatment conversations', description: null, smart_target: 'Practice four treatment conversations and ask for feedback.', month: today.slice(0, 7), due_on: null, visibility: 'team', status: 'active', completed_at: null, created_by: 'u-priya', created_at: '', updated_at: '' },
     ] : [],
     tasks: [
       { id: 'fx-step-1', org_id: 'fx-office', goal_id: 'fx-personal-me', title: 'Review the checklist', done: true, done_at: null, due_date: null, sort_order: 0, training_module_id: null },

@@ -3,9 +3,12 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
-import { getToday } from '@/lib/time-utils';
+import { getToday, shiftDate } from '@/lib/time-utils';
+import { COMPLETED_GOAL_GRACE_DAYS, isCurrentGoal } from '@/lib/goal-window';
 
-// Goals: one encouraging, self-chosen monthly goal per person.
+// Goals: one encouraging, self-chosen goal per person. A goal stays the
+// person's goal until they complete it or change it — it is not bound to the
+// calendar month it was set in. A target date is optional.
 // Not a scoreboard — progress is only "tasks done / total", never ranked.
 
 export type GoalVisibility = 'team' | 'private';
@@ -20,9 +23,13 @@ export type Goal = {
   description: string | null;
   /** Short measurable target, e.g. "4 feedback asks". Optional — never a gate. */
   smart_target: string | null;
+  /** The month the goal was set (YYYY-MM). History only — it never scopes the goal. */
   month: string;
+  /** Optional target date. Null means the goal runs until it is done. */
+  due_on: string | null;
   visibility: GoalVisibility;
   status: GoalStatus;
+  completed_at: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -57,7 +64,7 @@ export const UPDATE_STATUS_LABELS: Record<UpdateStatus, string> = {
   done: 'Done',
 };
 
-/** Current month key, Eastern ("YYYY-MM"). */
+/** Current month key, Eastern ("YYYY-MM") — the month a new goal is recorded under. */
 export function currentMonth(): string {
   return getToday().slice(0, 7);
 }
@@ -71,24 +78,40 @@ export function monthLabel(month: string): string {
   });
 }
 
-/** Every goal visible to me for a month, with its tasks and updates. */
-export function useGoalsMonth(month: string) {
+export {
+  COMPLETED_GOAL_GRACE_DAYS,
+  currentGoalFor,
+  goalElapsedFraction,
+  goalStartDate,
+  isCurrentGoal,
+} from '@/lib/goal-window';
+
+/**
+ * Every current goal visible to me — active ones, plus those completed in
+ * the last month — with their tasks and updates.
+ */
+export function useCurrentGoals() {
   const { user } = useAuth();
   const { data: ctx } = useOrgContext();
 
   return useQuery({
-    queryKey: ['goals', ctx?.org_id, month],
+    queryKey: ['goals', ctx?.org_id, 'current'],
     enabled: !!user && !!ctx,
     queryFn: async () => {
-      const { data: goals, error } = await supabase
+      const today = getToday();
+      // Active goals always; completed ones only from inside the grace window
+      // (a day of slack for time zones — isCurrentGoal makes the exact call).
+      const cutoff = shiftDate(today, -(COMPLETED_GOAL_GRACE_DAYS + 1));
+      const { data: rows, error } = await supabase
         .from('goals')
         .select('*')
         .eq('org_id', ctx!.org_id)
-        .eq('month', month)
         .neq('status', 'archived')
+        .or(`status.eq.active,completed_at.gte.${cutoff}`)
         .order('created_at');
       if (error) throw error;
-      const ids = (goals ?? []).map(g => g.id);
+      const goals = ((rows ?? []) as Goal[]).filter(g => isCurrentGoal(g, today));
+      const ids = goals.map(g => g.id);
       if (ids.length === 0) {
         return { goals: [] as Goal[], tasks: [] as GoalTask[], updates: [] as GoalUpdate[] };
       }
@@ -103,7 +126,7 @@ export function useGoalsMonth(month: string) {
       if (tasksRes.error) throw tasksRes.error;
       if (updatesRes.error) throw updatesRes.error;
       return {
-        goals: (goals ?? []) as Goal[],
+        goals,
         tasks: (tasksRes.data ?? []) as GoalTask[],
         updates: (updatesRes.data ?? []) as GoalUpdate[],
       };
@@ -144,7 +167,8 @@ export function useCreateGoal() {
       title: string;
       description?: string;
       smartTarget?: string | null;
-      month: string;
+      /** Optional target date (YYYY-MM-DD). Blank: the goal runs until it is done. */
+      dueOn?: string | null;
       visibility?: GoalVisibility;
       /** Managers can set a private goal WITH a member. */
       forUserId?: string;
@@ -159,7 +183,8 @@ export function useCreateGoal() {
           title: input.title,
           description: input.description ?? null,
           smart_target: input.smartTarget ?? null,
-          month: input.month,
+          month: currentMonth(),
+          due_on: input.dueOn || null,
           visibility: input.visibility ?? 'team',
           created_by: user.id,
         })
@@ -174,22 +199,28 @@ export function useCreateGoal() {
   return { ...mutation, isReady: !!user && !!ctx && !isLoading };
 }
 
-export function useUpdateGoal() {
+/** Marks a goal complete: it stays on the page a while, then makes room for the next one. */
+async function markGoalComplete(goalId: string) {
+  const { error } = await supabase
+    .from('goals')
+    .update({ status: 'completed', completed_at: new Date().toISOString() })
+    .eq('id', goalId);
+  if (error) throw error;
+}
+
+export function useCompleteGoal() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...patch }: { id: string } & Partial<Goal>) => {
-      const { error } = await supabase.from('goals').update(patch).eq('id', id);
-      if (error) throw error;
-      return patch;
+    mutationFn: async (goal: Pick<Goal, 'id' | 'title'>) => {
+      await markGoalComplete(goal.id);
+      return goal;
     },
-    onSuccess: (patch) => {
+    onSuccess: goal => {
       // Calm acknowledgement, not a celebration.
-      if (patch?.status === 'completed') {
-        toast('Goal marked complete', {
-          description: patch.title ?? 'Nice work closing this one out.',
-          duration: 5000,
-        });
-      }
+      toast('Goal complete', {
+        description: `${goal.title} — nice work closing this one out. Set your next one whenever you're ready.`,
+        duration: 5000,
+      });
       qc.invalidateQueries({ queryKey: ['goals'] });
     },
   });
@@ -266,6 +297,8 @@ export function useAddGoalUpdate() {
         auto_drafted: input.autoDrafted,
       });
       if (error) throw error;
+      // Telling the team it's done is what closes the goal out.
+      if (input.status === 'done') await markGoalComplete(input.goalId);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['goals'] }),
   });
@@ -342,20 +375,14 @@ export type GoalEvent = {
   created_at: string;
 };
 
-/** Change history for the goals of a month — powers "Changes since last meeting". */
-export function useGoalEvents(month: string) {
+/** Change history for a set of goals — every edit and archive, never silent. */
+export function useGoalEvents(goalIds: string[]) {
   const { data: ctx } = useOrgContext();
+  const ids = [...goalIds].sort();
   return useQuery({
-    queryKey: ['goal-events', ctx?.org_id, month],
-    enabled: !!ctx,
+    queryKey: ['goal-events', ctx?.org_id, ids.join(',')],
+    enabled: !!ctx && ids.length > 0,
     queryFn: async (): Promise<GoalEvent[]> => {
-      const { data: monthGoals } = await supabase
-        .from('goals')
-        .select('id')
-        .eq('org_id', ctx!.org_id)
-        .eq('month', month);
-      const ids = (monthGoals ?? []).map(g => g.id);
-      if (!ids.length) return [];
       const { data, error } = await supabase
         .from('goal_events')
         .select('*')
@@ -381,6 +408,7 @@ export function useEditGoal() {
       title: string;
       description: string | null;
       smartTarget: string | null;
+      dueOn: string | null;
       reason: string | null;
       requiresReason: boolean;
     }) => {
@@ -395,6 +423,7 @@ export function useEditGoal() {
           title: input.title.trim(),
           description: input.description?.trim() || null,
           smart_target: input.smartTarget?.trim() || null,
+          due_on: input.dueOn || null,
         })
         .eq('id', input.goal.id);
       if (error) throw error;
@@ -483,7 +512,8 @@ export async function callPathfinder(payload: {
   quickNotes?: string;
   title?: string;
   description?: string;
-  month?: string;
+  /** For polish_goal: the target date the member picked, if any. */
+  dueOn?: string | null;
   message?: string;
 }) {
   const { data, error } = await supabase.functions.invoke('goal-assistant', { body: payload });
@@ -546,15 +576,3 @@ export function useSendPathfinderMessage(goalId: string) {
   });
 }
 
-/* ---------- Progress helpers ---------- */
-
-/** Fraction (0-1) of the month that has elapsed, Eastern. */
-export function monthElapsedFraction(month: string): number {
-  const today = getToday();
-  const [y, m] = month.split('-').map(Number);
-  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  const monthOfToday = today.slice(0, 7);
-  if (monthOfToday > month) return 1;
-  if (monthOfToday < month) return 0;
-  return Math.min(1, Number(today.slice(8, 10)) / days);
-}

@@ -11,7 +11,7 @@ import { useCompleteStep, useOnboardingStatus } from '@/hooks/useOnboarding';
 
 /**
  * The one task waiting at the top of Home the first time someone lands in the
- * app: set this month's goal. Onboarding deliberately doesn't ask for it —
+ * app: set their first goal. Onboarding deliberately doesn't ask for it —
  * this card does, and it disappears for good the moment any goal of theirs
  * exists (self-set, or a private one set with a manager), recorded in
  * member_onboarding.goal_done_at.
@@ -67,10 +67,10 @@ export default function FirstGoalTaskCard() {
             <p className="font-mono text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground">
               Your first task
             </p>
-            <p className="mt-0.5 font-semibold">Set your goal for this month</p>
+            <p className="mt-0.5 font-semibold">Set your first goal</p>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Pick one thing you want to get better at — keep it small and real. The team sees it
-              at the next team meeting.
+              Pick one thing you want to get better at — keep it small and real. It's yours until
+              it's done, and the team sees it at the next team meeting.
             </p>
           </div>
           <Button asChild className="shrink-0">

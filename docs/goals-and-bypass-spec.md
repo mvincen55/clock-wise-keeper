@@ -91,6 +91,24 @@ and Prompt 8 line 5 · Prompt 5 (SMART) — SUPERSEDED, do not send.
     no-contradiction invariant survives where it mattered: the only
     office-specific number any preset asserts is the confirmation window,
     worded live from `org_practice_settings.confirmation_lead_days`.
+16. **A goal is a goal until it is completed or changed** (2026-10-06, reversing
+    the monthly framing of decisions 1 and 10): goals are no longer scoped to
+    the calendar month. `useCurrentGoals` reads every active goal plus any
+    completed in the last 30 days (so the next meeting still hears about it);
+    `goals.month` is kept only as the month the goal was set, for history and
+    the per-month analytics. A goal closes when the member taps "Mark
+    complete" or shares a "Done" update (`goals.completed_at`), or when they
+    let it go (archive + replacement, as before). A target date is optional
+    (`goals.due_on`): with one, the timeline and Pathfinder's plan run to it
+    and the meters can read "behind"; without one there is no calendar to
+    trail, so nothing is ever amber. The S+M hard gate is unchanged;
+    Time-bound stays advisory. The **office goal** (`team_goals`) gets the
+    same treatment: the builder on `/goals` (and Office → Goals & challenges)
+    offers "Until we reach it" (`period = 'open'`, `ends_on` null) alongside
+    a week or a month, Home's "Choose a goal" now lands on a page that can
+    actually plan and set it, and an open goal is "in progress" rather than
+    on/off pace. Pure rules: `src/lib/goal-window.ts`; tests:
+    `src/test/goals-until-done.test.ts`.
 
 ## Prompt 1 — Goals (sent)
 

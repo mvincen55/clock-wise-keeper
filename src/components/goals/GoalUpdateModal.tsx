@@ -13,7 +13,7 @@ import {
   type Goal,
   type UpdateStatus,
 } from '@/hooks/useGoals';
-import GoalMonthTimeline from './GoalMonthTimeline';
+import GoalTimeline from './GoalTimeline';
 
 const STATUSES: UpdateStatus[] = ['on_track', 'at_risk', 'done'];
 
@@ -84,7 +84,11 @@ export default function GoalUpdateModal({
         content: content.trim(),
         autoDrafted: keptDraft(draft, content),
       });
-      toast.success('Update shared with the team.');
+      toast.success(
+        status === 'done'
+          ? 'Update shared — and the goal is marked complete. Nice work.'
+          : 'Update shared with the team.'
+      );
       onOpenChange(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not save your update');
@@ -100,7 +104,7 @@ export default function GoalUpdateModal({
         <div className="space-y-4">
           <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 p-3">
             <p className="break-words text-sm font-medium">{goal.title}</p>
-            <GoalMonthTimeline month={goal.month} compact />
+            <GoalTimeline goal={goal} compact />
           </div>
 
           <div className="space-y-1.5">
@@ -154,6 +158,12 @@ export default function GoalUpdateModal({
                 </Button>
               ))}
             </div>
+            {status === 'done' && (
+              <p className="text-xs text-muted-foreground">
+                Done closes this goal out. It stays on the page for the next meeting, and you can
+                set your next one right away.
+              </p>
+            )}
           </div>
 
           <div className="flex justify-end gap-2">
@@ -162,7 +172,7 @@ export default function GoalUpdateModal({
             </Button>
             <Button onClick={submit} disabled={!content.trim() || addUpdate.isPending}>
               {addUpdate.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Share with the team
+              {status === 'done' ? 'Share and mark complete' : 'Share with the team'}
             </Button>
           </div>
         </div>

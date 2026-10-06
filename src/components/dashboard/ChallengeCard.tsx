@@ -33,8 +33,10 @@ export function ChallengeCard({ goal, compact, reviewHref, tile }: { goal: GoalB
         />
       </div>
       <p className={cn('leading-snug text-muted-foreground', tile ? 'mt-1.5 text-[13px]' : 'mt-2 text-[13.5px]')}>
-        {goal.remaining} remaining · ends {goal.endsLabel}
-        {goal.daysLeft > 0 ? ` (${goal.daysLeft} day${goal.daysLeft === 1 ? '' : 's'} left)` : ' (today)'}
+        {goal.remaining} remaining
+        {goal.daysLeft === null
+          ? ' · runs until it is reached'
+          : ` · ends ${goal.endsLabel}${goal.daysLeft > 0 ? ` (${goal.daysLeft} day${goal.daysLeft === 1 ? '' : 's'} left)` : ' (today)'}`}
         <span className={tile ? 'hidden [@container(min-width:40rem)]:inline' : undefined}>{' · '}{goal.stateDetail}</span>
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">

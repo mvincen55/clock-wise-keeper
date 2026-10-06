@@ -30,10 +30,14 @@ manager and owner dashboard uses `PracticePerformance` and `ChosenGoals`.
   The annualized target remains the monthly goal multiplied by twelve and is
   labeled as such. It is not a separately configured annual goal.
 - An office goal card and selected team member's goal card sit side by side
-  below the chart. The person selector lives in the card header. These active
-  goals keep their own current-month window when financial performance switches
-  to YTD. Personal progress measures completed goal steps, not inferred results
-  against free-text targets. Members only receive their own goal.
+  below the chart. The person selector lives in the card header. These goals
+  are not month-scoped: each runs until it is completed or changed (a goal
+  completed in the last 30 days still shows, as completed), so they do not
+  move when financial performance switches to YTD. A personal goal shows its
+  optional target date, or the day it was set; an open office goal says it
+  runs until it is reached. Personal progress measures completed goal steps,
+  not inferred results against free-text targets. Members only receive their
+  own goal.
 - Owners have an “Across the years” comparison; managers have a two-row preview
   of the real Needs you queue with the rest expandable. Existing workflows,
   permissions and exact-record navigation stay in place.

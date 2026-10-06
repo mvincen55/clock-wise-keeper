@@ -242,8 +242,8 @@ export function deriveAttention(src: AttentionSources): AttentionResult {
   if (sourceOk('challenges', src.challenges)) for (const g of src.challenges!) {
     if (g.status !== 'pending_verification') continue;
     add({ kind: 'challenge_verify', recordTable: 'team_goals', recordId: g.id, subject: { employeeId: null, userId: null, name: null },
-      label: `“${g.title}” needs verification`, detail: `${g.progress} of ${g.target_count} · ended ${g.ends_on}`, why: 'A finished challenge is verified by a manager before it counts.',
-      occurredAt: g.ends_on, deadline: null, coverage: false, payroll: false, href: `/?sprint=${g.id}` });
+      label: `“${g.title}” needs verification`, detail: `${g.progress} of ${g.target_count}${g.ends_on ? ` · ended ${g.ends_on}` : ' · target reached'}`, why: 'A finished challenge is verified by a manager before it counts.',
+      occurredAt: g.ends_on ?? g.updated_at, deadline: null, coverage: false, payroll: false, href: `/?sprint=${g.id}` });
   }
   if (sourceOk('incidents', src.incidents)) for (const r of src.incidents!) {
     const sig = signatureState({ employee_signed_at: r.employee_signed_at, manager_signed_at: r.manager_signed_at });

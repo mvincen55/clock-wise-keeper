@@ -3,10 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 
-// Team sprints: a scoped, reward-based push the office AI runs end to end.
+// The office goal (a "sprint" in the tables): a scoped, reward-based push
+// the office AI runs end to end. It can run for a week, a month, or — 'open'
+// — until the target is reached or a manager changes it.
 // Never ranked, never per-person leaderboards — the tally belongs to the scope.
 
-export type SprintPeriod = 'week' | 'month';
+export type SprintPeriod = 'week' | 'month' | 'open';
 export type SprintStatus = 'active' | 'pending_verification' | 'won' | 'missed' | 'cancelled';
 export type SprintScope = 'team' | 'department' | 'individual' | 'role';
 export type SprintDepartment = 'clinical' | 'clerical';
@@ -27,7 +29,8 @@ export type TeamGoal = {
   target_count: number;
   period: SprintPeriod;
   starts_on: string;
-  ends_on: string;
+  /** Last day of the window. Null for an open goal: it runs until it is reached. */
+  ends_on: string | null;
   reward: string;
   progress: number;
   status: SprintStatus;
@@ -46,6 +49,7 @@ export type TeamGoal = {
   created_by: string | null;
   ai_suggested: boolean;
   created_at: string;
+  updated_at: string;
 };
 
 export type SprintSuggestion = {
@@ -110,7 +114,7 @@ export function useCreateSprint() {
       target_count: number;
       period: SprintPeriod;
       starts_on: string;
-      ends_on: string;
+      ends_on: string | null;
       reward: string;
       scope: SprintScope;
       scope_department?: SprintDepartment | null;

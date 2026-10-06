@@ -293,7 +293,7 @@ export function ChallengeVerifyActions({ item, onDone }: KindProps) {
   if (!goal) return <p className="text-sm text-muted-foreground">This challenge is no longer awaiting verification.</p>;
   return (
     <div className="space-y-3">
-      <Receipts rows={[['Target', `${goal.progress} of ${goal.target_count} ${goal.metric}`, 'challenge'], ['Ended', formatDate(goal.ends_on), 'challenge'], ['Reward', goal.reward || '—', 'challenge']]} />
+      <Receipts rows={[['Target', `${goal.progress} of ${goal.target_count} ${goal.metric}`, 'challenge'], ['Ended', goal.ends_on ? formatDate(goal.ends_on) : 'Open goal · target reached', 'challenge'], ['Reward', goal.reward || '—', 'challenge']]} />
       <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={() => setOpen(true)}>Verify</Button>
       </div>

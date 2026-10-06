@@ -30,6 +30,7 @@ export default function GoalEditDialog({
   const [title, setTitle] = useState(goal.title);
   const [description, setDescription] = useState(goal.description ?? '');
   const [target, setTarget] = useState(goal.smart_target ?? '');
+  const [dueOn, setDueOn] = useState(goal.due_on ?? '');
   const [reason, setReason] = useState('');
 
   const gate = evaluateGoalGate({ title, target });
@@ -42,6 +43,7 @@ export default function GoalEditDialog({
         title,
         description,
         smartTarget: target,
+        dueOn: dueOn || null,
         reason: reason || null,
         requiresReason: hasUpdates,
       });
@@ -74,6 +76,20 @@ export default function GoalEditDialog({
             {gate.hints.measurable && (
               <p className="text-xs text-muted-foreground">M: {gate.hints.measurable}</p>
             )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-goal-due">Target date (optional)</Label>
+            <Input
+              id="edit-goal-due"
+              type="date"
+              value={dueOn}
+              onChange={e => setDueOn(e.target.value)}
+              className="w-auto"
+            />
+            <p className="text-xs text-muted-foreground">
+              Blank means the goal runs until you mark it done.
+            </p>
           </div>
 
           <div className="space-y-1.5">
