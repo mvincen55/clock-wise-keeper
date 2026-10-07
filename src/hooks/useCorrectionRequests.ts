@@ -41,7 +41,7 @@ export function useMyCorrectionRequests() {
 }
 
 /** Manager: fetch correction requests for the org */
-export function useOrgCorrectionRequests(status?: string) {
+export function useOrgCorrectionRequests(status?: string | CorrectionRequestRow['status'][]) {
   const { data: ctx } = useOrgContext();
 
   return useQuery({
@@ -53,7 +53,9 @@ export function useOrgCorrectionRequests(status?: string) {
         .select('*')
         .eq('org_id', ctx!.org_id)
         .order('created_at', { ascending: false });
-      if (status && status !== 'all') {
+      if (Array.isArray(status)) {
+        q = q.in('status', status);
+      } else if (status && status !== 'all') {
         q = q.eq('status', status as 'pending' | 'approved' | 'denied' | 'applied');
       }
       const { data, error } = await q;

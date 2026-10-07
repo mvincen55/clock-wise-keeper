@@ -181,6 +181,19 @@ describe('deriveAttention · admission', () => {
     expect(other.unresolved.map(i => i.key).sort()).toEqual(['correction_request:c1', 'missing_clock_out:ds-1']);
   });
 
+  it('an approved time correction whose punches were never edited stays as a fix, carrying what was asked for', () => {
+    const approved = { status: 'approved' as const, reviewed_at: '2026-09-19T09:00:00Z', target_table: 'time_entries', proposed_change: { entry_date: '2026-09-18', description: 'clocked out at 5:30 PM' } };
+    const r = deriveAttention(src({ dayStatuses: [day({ is_incomplete: true })], corrections: [correction(approved)] }));
+    expect(r.unresolved.map(i => i.key)).toEqual(['correction_apply:c1']);
+    expect(r.unresolved[0].verb).toBe('fix');
+    expect(r.unresolved[0].detail).toContain('5:30 PM');
+    // Applied, or approved but not about punches: nothing left to do here.
+    const applied = deriveAttention(src({ corrections: [correction({ ...approved, status: 'applied' })] }));
+    expect(applied.unresolved).toEqual([]);
+    const pto = deriveAttention(src({ corrections: [correction({ ...approved, target_table: 'pto_requests' })] }));
+    expect(pto.unresolved).toEqual([]);
+  });
+
   it('still clocked in past the scheduled end while the office is closing is a coverage item; during the day it is nothing yet', () => {
     const open = day({ id: 'ds-t', entry_date: TODAY, is_incomplete: true });
     const sealedToday = { today: log({ sealed_at: '2026-09-21T21:30:00Z' }), latestSealedDate: TODAY, officeDaysSinceSeal: 0, unsealedPast: [] };

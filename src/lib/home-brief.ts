@@ -129,7 +129,7 @@ export type CloseoutFact = { id: string; deposit_date: string; sealed_at: string
 
 /** The kinds that are about a person's time; an exception row opens that item first. */
 const ATTENDANCE_KINDS = new Set<AttentionItem['kind']>([
-  'clocked_in_after_close', 'missing_clock_out', 'missing_day', 'unpaired_punches', 'time_suspect', 'excuse_request', 'correction_request',
+  'clocked_in_after_close', 'missing_clock_out', 'missing_day', 'unpaired_punches', 'time_suspect', 'excuse_request', 'correction_request', 'correction_apply',
 ]);
 
 /** Routine status on a live roster: in (late or not), starts later, done. Never an exception. */

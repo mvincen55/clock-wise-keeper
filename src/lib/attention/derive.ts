@@ -38,7 +38,7 @@ import { attendanceWaitingOn, isAttendanceReport, signatureState } from '@/lib/i
 import { excuseState, isLiveLateArrival, ruleClause } from '@/lib/late-arrivals';
 import { daysBetween } from '@/lib/time-utils';
 import { missingTimeConditions } from './missing-time';
-import { correctionEntryDate } from './records';
+import { awaitingApply, correctionEntryDate } from './records';
 import type {
   AttentionCounts, AttentionDeadline, AttentionItem, AttentionKind, AttentionResult, AttentionVerb,
   ManagerFollowup, SourceStatus, WorkState,
@@ -103,13 +103,16 @@ const VERB_RANK: Record<AttentionVerb, number> = { decide: 0, fix: 1, follow_up:
 
 export const KIND_VERB: Record<AttentionKind, AttentionVerb> = {
   staffing_answer: 'fix', clocked_in_after_close: 'fix',
-  pto_request: 'decide', correction_request: 'decide', change_request: 'decide', content_review: 'decide',
+  pto_request: 'decide', correction_request: 'decide', correction_apply: 'fix', change_request: 'decide', content_review: 'decide',
   challenge_verify: 'decide', incident_countersign: 'decide', excuse_request: 'decide',
   missing_clock_out: 'fix', missing_day: 'fix', unpaired_punches: 'fix', time_suspect: 'fix',
   close_day_unsealed: 'fix', close_day_behind: 'fix', close_day_review: 'fix',
   attendance_meeting: 'follow_up', bypass_followup: 'follow_up', record_signoff: 'follow_up', ack_escalated: 'follow_up',
   training_overdue: 'follow_up', incident_followup: 'follow_up',
 };
+
+/** How far back an approved-but-unapplied correction still asks for its fix (the attendance window). */
+const APPLY_WINDOW_DAYS = 30;
 
 export const itemKey = (kind: AttentionKind, recordId: string) => `${kind}:${recordId}`;
 
@@ -208,6 +211,20 @@ export function deriveAttention(src: AttentionSources): AttentionResult {
   }
   const correctedDays = new Set<string>();
   if (sourceOk('corrections', src.corrections)) for (const c of src.corrections!) {
+    if (awaitingApply(c)) {
+      // Approved but the punches were never edited: the approval alone
+      // changes nothing, so the fix stays here, with what was asked for.
+      const entryDate = correctionEntryDate(c);
+      if (daysBetween(entryDate ?? (c.reviewed_at ?? c.created_at).slice(0, 10), today) > APPLY_WINDOW_DAYS) continue;
+      if (entryDate) correctedDays.add(`${c.employee_id}|${entryDate}`);
+      const payroll = inPeriod(entryDate);
+      const asked = typeof c.proposed_change?.description === 'string' ? c.proposed_change.description.trim() : '';
+      add({ kind: 'correction_apply', recordTable: 'correction_requests', recordId: c.id, subject: subjectOf(c.employee_id, c.created_by),
+        label: `Approved correction · not applied${entryDate ? ` · ${entryDate}` : ''}`, detail: asked ? `Asked for: ${asked}` : c.reason || '',
+        why: 'This correction was approved, but the punches were never edited, so the day still reads as recorded. Apply it in the punch editor.',
+        occurredAt: c.reviewed_at ?? c.created_at, deadline: payroll ? payrollDeadline() : null, coverage: false, payroll, href: `/management?item=${itemKey('correction_apply', c.id)}` });
+      continue;
+    }
     if (c.status !== 'pending') continue;
     const entryDate = correctionEntryDate(c);
     if (entryDate) correctedDays.add(`${c.employee_id}|${entryDate}`);

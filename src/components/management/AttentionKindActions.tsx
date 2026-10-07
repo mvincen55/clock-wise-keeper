@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgEmployees } from '@/hooks/useEmployees';
 import { useOrgPtoRequests, useReviewPtoRequest } from '@/hooks/usePtoRequests';
-import { useOrgCorrectionRequests, useReviewCorrectionRequest, useMarkCorrectionApplied } from '@/hooks/useCorrectionRequests';
+import { useOrgCorrectionRequests, useReviewCorrectionRequest, useMarkCorrectionApplied, type CorrectionRequestRow } from '@/hooks/useCorrectionRequests';
+import { correctionEntryDate, isTimeCorrection } from '@/lib/attention/records';
 import { useOrgChangeRequests, useReviewChangeRequest } from '@/hooks/useChangeRequests';
 import { useAttendanceDayStatus } from '@/hooks/useAttendanceDayStatus';
 import { useDecideTardyExcuse, useTardies } from '@/hooks/useTardies';
@@ -116,48 +117,66 @@ export function PtoRequestActions({ item, onDone }: KindProps) {
 }
 
 /* ----------------------------------------------------------- corrections */
-export function CorrectionRequestActions({ item, onDone }: KindProps) {
-  const { data: requests } = useOrgCorrectionRequests('pending');
-  const { data: employees } = useOrgEmployees();
-  const review = useReviewCorrectionRequest();
-  const markApplied = useMarkCorrectionApplied();
-  const [step, setStep] = useState<'idle' | 'approve' | 'decline'>('idle');
-  const [editor, setEditor] = useState<{ entryId: string | null; punches: PunchRow[]; entryDate: string } | null>(null);
-  const [loadingEditor, setLoadingEditor] = useState(false);
-  const req = requests?.find(r => r.id === item.recordId);
-  if (!requests) return <Loading />;
-  if (!req && !editor) return <p className="text-sm text-muted-foreground">This request is no longer pending.</p>;
-  const entryDate = typeof req?.proposed_change?.entry_date === 'string' ? req.proposed_change.entry_date : null;
-  const punches = req?.target_table === 'punches';
-  const emp = employees?.find(e => e.id === (req?.employee_id ?? ''));
+// Pending and approved together, the same query Attention derives from:
+// an approved time correction stays open until its punches are edited.
+const OPEN_CORRECTIONS: CorrectionRequestRow['status'][] = ['pending', 'approved'];
 
-  const openEditor = async (employeeId: string, date: string) => {
-    setLoadingEditor(true);
+function requestedChange(req: CorrectionRequestRow): string {
+  return String(req.proposed_change?.description ?? req.proposed_change?.action ?? '');
+}
+
+/** Loads one person's day into the punch editor (null entry for a fully missed day). */
+function useDayEditor() {
+  const [editor, setEditor] = useState<{ entryId: string | null; punches: PunchRow[]; entryDate: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const open = async (employeeId: string, date: string) => {
+    setLoading(true);
     try {
-      const { data: entry } = await supabase.from('time_entries').select('id').eq('employee_id', employeeId).eq('entry_date', date).maybeSingle();
+      const { data: entry, error } = await supabase.from('time_entries').select('id').eq('employee_id', employeeId).eq('entry_date', date).maybeSingle();
+      if (error) throw error;
       let rows: PunchRow[] = [];
       if (entry) {
-        const { data: p } = await supabase.from('punches').select('*').eq('time_entry_id', entry.id).order('seq', { ascending: true });
+        const { data: p, error: pe } = await supabase.from('punches').select('*').eq('time_entry_id', entry.id).order('seq', { ascending: true });
+        if (pe) throw pe;
         rows = (p || []) as PunchRow[];
       }
       setEditor({ entryId: entry?.id ?? null, punches: rows, entryDate: date });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not load the day');
     } finally {
-      setLoadingEditor(false);
+      setLoading(false);
     }
   };
+  return { editor, loading, open, close: () => setEditor(null) };
+}
+
+export function CorrectionRequestActions({ item, onDone }: KindProps) {
+  const { data: requests } = useOrgCorrectionRequests(OPEN_CORRECTIONS);
+  const { data: employees } = useOrgEmployees();
+  const review = useReviewCorrectionRequest();
+  const markApplied = useMarkCorrectionApplied();
+  const [step, setStep] = useState<'idle' | 'approve' | 'decline'>('idle');
+  const day = useDayEditor();
+  const editor = day.editor;
+  const req = requests?.find(r => r.id === item.recordId);
+  if (!requests) return <Loading />;
+  if (!req && !editor) return <p className="text-sm text-muted-foreground">This request is no longer open.</p>;
+  if (req && req.status !== 'pending' && !editor) return <p className="text-sm text-muted-foreground">This request is no longer pending.</p>;
+  const entryDate = req ? correctionEntryDate(req) : null;
+  const punches = !!req && isTimeCorrection(req);
+  const emp = employees?.find(e => e.id === (req?.employee_id ?? ''));
+
   const run = async (status: 'approved' | 'denied', note: string) => {
     if (!req) return;
     try {
-      await review.mutateAsync({ id: req.id, status, resolution_note: note });
+      const { applied } = await review.mutateAsync({ id: req.id, status, resolution_note: note });
       if (status === 'denied') { onDone({ text: `Declined · reason on record · ${first(item)} notified` }); return; }
       if (punches) {
-        if (!entryDate) { toast.error('This request names no date. Fix the day from Team Attendance, then it reads as applied.'); onDone({ text: 'Approved · apply it from Team Attendance' }); return; }
+        if (!entryDate) { toast.error('This request names no date. Fix the day from Team Attendance.'); onDone({ text: 'Approved · not yet applied · it stays in Attention until the punches are fixed' }); return; }
         setStep('idle');
-        await openEditor(req.employee_id, entryDate);
+        await day.open(req.employee_id, entryDate);
       } else {
-        onDone({ text: 'Approved and applied' });
+        onDone({ text: applied ? 'Approved and applied' : 'Approved · not applied automatically · make the change from its own record' });
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not review the request');
@@ -166,18 +185,18 @@ export function CorrectionRequestActions({ item, onDone }: KindProps) {
   return (
     <div className="space-y-3">
       {req && (
-        <Receipts rows={[['Concerns', req.target_table === 'punches' ? `punches${entryDate ? ` · ${formatDate(entryDate)}` : ''}` : req.target_table, 'correction request'], ['Requested change', String(req.proposed_change?.description ?? req.proposed_change?.action ?? '—'), 'correction request'], ['Reason', req.reason, `from ${item.subject.name ?? 'the person'}`]]} />
+        <Receipts rows={[['Concerns', punches ? `${first(item)}’s punches${entryDate ? ` · ${formatDate(entryDate)}` : ''}` : req.target_table, 'correction request'], ['Requested change', requestedChange(req) || '—', 'correction request'], ['Reason', req.reason, `from ${item.subject.name ?? 'the person'}`]]} />
       )}
       {req && step === 'idle' && !editor && (
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" disabled={loadingEditor} onClick={() => setStep('approve')}>{punches ? 'Review in the punch editor' : 'Approve and apply'}</Button>
+          <Button size="sm" disabled={day.loading} onClick={() => setStep('approve')}>{punches ? 'Review in the punch editor' : 'Approve and apply'}</Button>
           <Button size="sm" variant="outline" onClick={() => setStep('decline')}>Decline</Button>
         </div>
       )}
       {req && step === 'approve' && (
         <ConfirmStep
           sentence={punches
-            ? `Approve this correction? It opens the punch editor on ${first(item)}’s ${entryDate ? formatDate(entryDate) : 'day'}; the original punches stay on record and the change is audited. ${first(item)} is notified.`
+            ? `Approve this correction? It opens the punch editor on ${first(item)}’s ${entryDate ? formatDate(entryDate) : 'day'}; the change lands when you save there. The original punches stay on record and the change is audited. ${first(item)} is notified.`
             : `Approve this correction? The change is applied to the request it names and ${first(item)} is notified.`}
           confirmLabel="Confirm approval" pending={review.isPending}
           reason={{ label: 'Resolution note (required)', min: 1, placeholder: 'What you approved and why' }}
@@ -190,12 +209,13 @@ export function CorrectionRequestActions({ item, onDone }: KindProps) {
       {editor && req && (
         <PunchEditorModal
           open
-          onClose={() => { setEditor(null); onDone({ text: 'Approved · not yet applied · fix the punches from Team Attendance' }); }}
+          onClose={() => { day.close(); onDone({ text: 'Approved · not yet applied · it stays in Attention until the punches are fixed' }); }}
           entryId={editor.entryId}
           entryDate={editor.entryDate}
           punches={editor.punches}
           employeeId={req.employee_id}
           employeeName={emp?.display_name}
+          requested={{ by: emp?.display_name, change: requestedChange(req), reason: req.reason }}
           onSaved={async result => {
             if (result) {
               try {
@@ -204,8 +224,82 @@ export function CorrectionRequestActions({ item, onDone }: KindProps) {
                 toast.error(e instanceof Error ? e.message : 'Punches saved, but the request status did not update');
               }
             }
-            setEditor(null);
+            day.close();
             onDone({ text: `Applied · punches edited · audit on record`, reversal: { kind: 'none', label: 'Edit the day again from Team Attendance (a new audited edit)' } });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** An approved time correction whose punches were never edited. */
+export function CorrectionApplyActions({ item, onDone }: KindProps) {
+  const { data: requests } = useOrgCorrectionRequests(OPEN_CORRECTIONS);
+  const { data: employees } = useOrgEmployees();
+  const markApplied = useMarkCorrectionApplied();
+  const [confirmFixed, setConfirmFixed] = useState(false);
+  const day = useDayEditor();
+  const editor = day.editor;
+  const req = requests?.find(r => r.id === item.recordId);
+  if (!requests) return <Loading />;
+  if (!req || req.status !== 'approved') return <p className="text-sm text-muted-foreground">This correction is no longer waiting to be applied.</p>;
+  const entryDate = correctionEntryDate(req);
+  const emp = employees?.find(e => e.id === req.employee_id);
+  const asked = requestedChange(req);
+  const markFixed = async () => {
+    try {
+      await markApplied.mutateAsync({ id: req.id, audit_event_ids: [] });
+      onDone({ text: 'Marked applied · the day was already fixed' });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not update the request');
+    }
+  };
+  return (
+    <div className="space-y-3">
+      <Receipts rows={[
+        ['Day', entryDate ? formatDate(entryDate) : 'not stated', 'correction request'],
+        ['Requested change', asked || '—', `from ${item.subject.name ?? 'the person'}`],
+        ['Reason', req.reason, `from ${item.subject.name ?? 'the person'}`],
+        ['Approved', `${req.reviewed_at ? formatDate(req.reviewed_at.slice(0, 10)) : 'yes'}${req.resolution_note ? ` · ${req.resolution_note}` : ''}`, 'review'],
+      ]} />
+      {!confirmFixed && (
+        <div className="flex flex-wrap gap-2">
+          {entryDate && (
+            <Button size="sm" disabled={day.loading} onClick={() => day.open(req.employee_id, entryDate)}>
+              {day.loading && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}Fix the punches now
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => setConfirmFixed(true)}>Already fixed</Button>
+          {entryDate && <OpenRecordLink to={`/management/attendance?employee=${req.employee_id}&date=${entryDate}`} label="Open in Team Attendance" />}
+        </div>
+      )}
+      {confirmFixed && (
+        <ConfirmStep
+          sentence={`Mark this correction applied without editing here? Only do this if ${first(item)}’s ${entryDate ? formatDate(entryDate) : 'day'} already shows the requested change.`}
+          confirmLabel="Mark applied" pending={markApplied.isPending}
+          onConfirm={markFixed} onCancel={() => setConfirmFixed(false)} />
+      )}
+      {editor && (
+        <PunchEditorModal
+          open
+          onClose={day.close}
+          entryId={editor.entryId}
+          entryDate={editor.entryDate}
+          punches={editor.punches}
+          employeeId={req.employee_id}
+          employeeName={emp?.display_name}
+          requested={{ by: emp?.display_name, change: asked, reason: req.reason }}
+          onSaved={async result => {
+            if (result) {
+              try {
+                await markApplied.mutateAsync({ id: req.id, audit_event_ids: result.audit_event_ids });
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : 'Punches saved, but the request status did not update');
+              }
+            }
+            day.close();
+            onDone({ text: 'Applied · punches edited · audit on record', reversal: { kind: 'none', label: 'Edit the day again from Team Attendance (a new audited edit)' } });
           }}
         />
       )}

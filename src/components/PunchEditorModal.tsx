@@ -45,6 +45,8 @@ type Props = {
   scheduleWindow?: { start_time: string; end_time: string } | null;
   /** Fired after a successful save with the RPC result (audit event ids included). */
   onSaved?: (result: SavePunchEditsResult | null) => void;
+  /** What the person asked for, when the edit applies their correction request. */
+  requested?: { by?: string; change: string; reason?: string } | null;
 };
 
 function punchToEditable(p: PunchRow): EditablePunch {
@@ -82,7 +84,7 @@ const SOURCE_LABELS: Record<string, string> = {
   system_adjustment: 'System',
 };
 
-export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, employeeId, employeeName, scheduleWindow, onSaved }: Props) {
+export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, employeeId, employeeName, scheduleWindow, onSaved, requested }: Props) {
   const originalPunches = useMemo(() => punches.map(punchToEditable), [punches]);
   const [editedPunches, setEditedPunches] = useState<EditablePunch[]>([]);
   const [reason, setReason] = useState('');
@@ -278,6 +280,14 @@ export function PunchEditorModal({ open, onClose, entryId, entryDate, punches, e
             the record stays, greyed out, and stops counting. All changes are audited.
           </DialogDescription>
         </DialogHeader>
+
+        {requested && (
+          <div className="rounded-lg border bg-muted/50 p-3 text-sm space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">{requested.by ? `${requested.by} asked for` : 'Requested change'}</p>
+            <p className="font-medium">{requested.change || '—'}</p>
+            {requested.reason && <p className="text-xs text-muted-foreground">Reason: {requested.reason}</p>}
+          </div>
+        )}
 
         {/* Punch rows */}
         <div className="space-y-2">

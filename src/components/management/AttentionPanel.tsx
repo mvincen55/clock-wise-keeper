@@ -7,7 +7,7 @@ import type { AttentionItem } from '@/lib/attention';
 import { BringBackButton } from './FollowupActions';
 import {
   AttendanceDayActions, AttendanceMeetingActions, BypassActions, ChallengeVerifyActions, ChangeRequestActions, CloseoutActions, ContentReviewActions,
-  CorrectionRequestActions, ExcuseRequestActions, IncidentActions, LinkOnlyActions, OpenRecordLink, PtoRequestActions, RecordSignoffActions,
+  CorrectionRequestActions, CorrectionApplyActions, ExcuseRequestActions, IncidentActions, LinkOnlyActions, OpenRecordLink, PtoRequestActions, RecordSignoffActions,
   type Done, type Reversal,
 } from './AttentionKindActions';
 
@@ -32,6 +32,7 @@ function KindActions({ item, onDone }: { item: AttentionItem; onDone: (d: Done) 
   switch (item.kind) {
     case 'pto_request': return <PtoRequestActions item={item} onDone={onDone} />;
     case 'correction_request': return <CorrectionRequestActions item={item} onDone={onDone} />;
+    case 'correction_apply': return <CorrectionApplyActions item={item} onDone={onDone} />;
     case 'change_request': return <ChangeRequestActions item={item} onDone={onDone} />;
     case 'content_review': return <ContentReviewActions item={item} onDone={onDone} />;
     case 'challenge_verify': return <ChallengeVerifyActions item={item} onDone={onDone} />;
