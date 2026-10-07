@@ -23,6 +23,8 @@ export type AttentionKind =
   | 'clocked_in_after_close'
   | 'pto_request'
   | 'correction_request'
+  /** an approved time correction whose punch fix has not been made yet */
+  | 'correction_apply'
   | 'change_request'
   | 'content_review'
   | 'challenge_verify'

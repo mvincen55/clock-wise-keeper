@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useOrgCorrectionRequests, useReviewCorrectionRequest, useMarkCorrectionApplied, CorrectionRequestRow } from '@/hooks/useCorrectionRequests';
 import { useScrollIntoView, DEEP_LINK_HIGHLIGHT } from '@/hooks/useDeepLink';
+import { isTimeCorrection } from '@/lib/attention/records';
 import { supabase } from '@/integrations/supabase/client';
 import { PunchEditorModal } from '@/components/PunchEditorModal';
 import type { PunchRow } from '@/hooks/useTimeEntries';
@@ -35,7 +36,7 @@ function CorrectionCard({ request, onReview, onFix, fixLoading, highlighted }: {
   // An approved punch correction still needs its fix landed through the
   // audited editor; the status upgrades to Applied only when that save
   // succeeds.
-  const needsFix = request.status === 'approved' && request.target_table === 'punches';
+  const needsFix = request.status === 'approved' && isTimeCorrection(request);
 
   return (
     <Card ref={ref} className={`card-elevated ${highlighted ? DEEP_LINK_HIGHLIGHT : ''}`}>
@@ -162,7 +163,7 @@ export function CorrectionQueuePanel({ highlightId }: { highlightId?: string | n
       setReviewNote('');
       // Approving a punch correction flows straight into the editor so
       // the approval doesn't sit un-applied by accident.
-      if (reviewDecision === 'approved' && target.target_table === 'punches') {
+      if (reviewDecision === 'approved' && isTimeCorrection(target)) {
         void openFixEditor(target);
       }
     } catch (err: any) {
@@ -230,6 +231,7 @@ export function CorrectionQueuePanel({ highlightId }: { highlightId?: string | n
           punches={fixState.punches}
           employeeId={fixState.request.employee_id}
           employeeName={fixState.employeeName}
+          requested={{ by: fixState.employeeName, change: String(fixState.request.proposed_change?.description ?? ''), reason: fixState.request.reason }}
           onSaved={async result => {
             if (result) {
               try {

@@ -90,7 +90,9 @@ export function useAttentionItems(): AttentionItemsResult {
   // through incidents, as the attendance report the rule opens.
   const tardies = useTardies(windowStart, today);
   const ptoRequests = useOrgPtoRequests('pending');
-  const corrections = useOrgCorrectionRequests('pending');
+  // Approved ones too: an approved time correction is not done until its
+  // punches are edited, and Attention keeps it until they are.
+  const corrections = useOrgCorrectionRequests(['pending', 'approved']);
   const changeRequests = useOrgChangeRequests('pending');
   const depositLogs = useRecentDepositLogs(14);
   const bypasses = useOrgBypasses(enabled ? ctx?.org_id : undefined);
