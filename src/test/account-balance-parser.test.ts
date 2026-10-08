@@ -7,6 +7,7 @@ import {
   mergeCaptureRows,
   parseLedgerWords,
   rowFingerprint,
+  splitHeaderWord,
 } from '@/lib/account-balance/parser';
 import type { OcrWord } from '@/lib/schedule-reader/types';
 import { goldenRows, makeRow } from './account-balance-fixture';
@@ -301,5 +302,45 @@ describe('parseLedgerWords — Dentrix signed-Amount layout', () => {
     expect(adj.chargeCents).toBe(860);
     expect(adj.classification).toBe('INTERNAL_PROVIDER_ADJUSTMENT');
     expect(adj.lowConfidenceFields).toEqual([]);
+  });
+});
+
+describe('splitHeaderWord — real Tesseract header artifacts', () => {
+  const texts = (w: OcrWord) => splitHeaderWord(w).map(p => p.text);
+
+  it('splits run-together and pipe-joined column names', () => {
+    expect(texts(word('AmountProv', 764, 4))).toEqual(['Amount', 'Prov']);
+    expect(texts(word('|Ins|', 861, 4))).toEqual(['Ins']);
+    expect(texts(word('|D|M|', 706, 4))).toEqual(['D', 'M']);
+    expect(texts(word('RDM', 678, 4))).toEqual(['R', 'D', 'M']);
+    expect(texts(word('To...', 78, 4))).toEqual(['To']);
+  });
+
+  it('gives each piece the slice of the box its letters cover', () => {
+    const [amount, prov] = splitHeaderWord(word('AmountProv', 700, 4));
+    expect(amount.bbox.x0).toBe(700);
+    expect(prov.bbox.x0).toBeGreaterThan(amount.bbox.x0);
+    expect(prov.bbox.x1).toBe(700 + 10 * 9);
+  });
+
+  it('ignores words that are not wholly header names', () => {
+    expect(texts(word('NJ', 649, 4))).toEqual([]);
+    expect(texts(word('Payment', 400, 4))).toEqual(['Payment']);
+  });
+
+  it('detects the header as Tesseract actually read it', () => {
+    const header = [
+      word('Date', 5, 0), word('To...', 78, 4), word('|', 107, 0), word('Surface', 117, 4),
+      word('Check', 217, 0), word('#', 253, 4), word('Code', 322, 4), word('|', 356, 0),
+      word('*', 368, 4), word('|', 376, 0), word('Description', 388, 4), word('NJ', 649, 4),
+      word('R', 678, 4), word('|D|M|', 706, 4), word('AmountProv', 764, 4), word('|Ins|', 861, 4),
+      word('Balance', 901, 4),
+    ];
+    const detected = detectHeaderColumns(groupWordsIntoLines(header));
+    expect(detected).not.toBeNull();
+    const keys = detected!.columns.map(c => c.key);
+    expect(keys).toContain('amount');
+    expect(keys).toContain('provider');
+    expect(keys).toContain('balance');
   });
 });

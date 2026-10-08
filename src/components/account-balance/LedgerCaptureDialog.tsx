@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { captureSupported } from '@/lib/schedule-reader/capture';
-import { recognizeFrame, terminateOcr } from '@/lib/schedule-reader/ocr';
+import { recognizeLedgerFrame, terminateOcr } from '@/lib/schedule-reader/ocr';
 import { wipeCanvas, wipeOcrWords } from '@/lib/schedule-reader/destroy-capture';
 import { parseLedgerWords } from '@/lib/account-balance/parser';
 import type { ParsedLedgerCapture } from '@/lib/account-balance/types';
@@ -334,7 +334,7 @@ export default function LedgerCaptureDialog({
     try {
       captureCounter += 1;
       const captureId = `abx-cap-${captureCounter}`;
-      const { words } = await recognizeFrame(crop);
+      const { words } = await recognizeLedgerFrame(crop);
       const parsed = parseLedgerWords(words, captureId);
       wipeOcrWords(words);
 
