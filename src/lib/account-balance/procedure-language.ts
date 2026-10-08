@@ -174,7 +174,7 @@ function capitalize(text: string): string {
 }
 
 /** Lower-case a leading ordinary word, leaving "X-rays"/acronyms alone. */
-function lowerFirstWord(text: string): string {
+export function lowerFirstWord(text: string): string {
   return /^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text;
 }
 

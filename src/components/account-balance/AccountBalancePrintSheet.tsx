@@ -1,4 +1,5 @@
 import { formatCents, formatDateLong, formatDateShort } from '@/lib/account-balance/money';
+import { lowerFirstWord } from '@/lib/account-balance/procedure-language';
 import type { Cents, PatientExplanation } from '@/lib/account-balance/types';
 
 /**
@@ -63,10 +64,6 @@ const ShieldIcon = () => (
   </svg>
 );
 
-function lowerFirst(text: string): string {
-  return /^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text;
-}
-
 /** How the visit balances add up to the current balance, in one line. */
 function balanceSentence(e: PatientExplanation): string {
   const parts: Array<{ cents: Cents; text: string }> = [];
@@ -85,17 +82,19 @@ function balanceSentence(e: PatientExplanation): string {
     });
   }
   for (const credit of e.generalCredits) {
-    parts.push({ cents: credit.amountCents, text: `${formatCents(Math.abs(credit.amountCents))} ${lowerFirst(credit.label)}` });
+    parts.push({ cents: credit.amountCents, text: `${formatCents(Math.abs(credit.amountCents))} ${lowerFirstWord(credit.label)}` });
   }
   if (parts.length === 0) return 'Every visit on this statement is paid in full.';
   if (parts.length === 1) return `The ${parts[0].text}.`;
+  // One minus glyph throughout: the typographic "−", never the ASCII hyphen.
+  const signed = (cents: Cents) => `${cents < 0 ? '−' : ''}${formatCents(Math.abs(cents))}`;
   const sum = parts
-    .map((p, i) => (i === 0 ? formatCents(p.cents) : `${p.cents < 0 ? '−' : '+'} ${formatCents(Math.abs(p.cents))}`))
+    .map((p, i) => (i === 0 ? signed(p.cents) : `${p.cents < 0 ? '−' : '+'} ${formatCents(Math.abs(p.cents))}`))
     .join(' ');
   const words = parts
     .map((p, i) => (i === 0 ? `The ${p.text}` : p.cents < 0 ? `less the ${p.text}` : `plus the ${p.text}`))
     .join(', ');
-  return `${words}: ${sum} = ${formatCents(e.calculationTotalCents)}.`;
+  return `${words}: ${sum} = ${signed(e.calculationTotalCents)}.`;
 }
 
 export default function AccountBalancePrintSheet({
@@ -192,12 +191,6 @@ export default function AccountBalancePrintSheet({
                 <span>{formatCents(section.insuranceAppliedCents)}</span>
               </div>
             )}
-            {section.adjustments.map((adj, j) => (
-              <div className="abx-row" key={`a${j}`}>
-                <span>{adj.label}</span>
-                <span>{formatCents(adj.amountCents)}</span>
-              </div>
-            ))}
             {section.patientPaidCents !== 0 && (
               <div className="abx-row">
                 <span>Your payment</span>

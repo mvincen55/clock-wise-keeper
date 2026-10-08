@@ -76,7 +76,7 @@ export default function AccountBalanceExplainer() {
     () => findBalanceEpisode(state.rows, reconciliation),
     [state.rows, reconciliation]
   );
-  const { questions, internalBlocks, waiverLinks } = useMemo(
+  const { questions, internalBlocks, waiverLinks, claims } = useMemo(
     () =>
       buildSmartReview({
         rows: state.rows,
@@ -96,9 +96,10 @@ export default function AccountBalanceExplainer() {
         answers: state.answers,
         internalBlocks,
         waiverLinks,
+        claims,
         patientName,
       }),
-    [state.rows, reconciliation, episode, state.answers, internalBlocks, waiverLinks, patientName]
+    [state.rows, reconciliation, episode, state.answers, internalBlocks, waiverLinks, claims, patientName]
   );
   const readiness = useMemo(
     () =>

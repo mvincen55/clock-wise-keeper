@@ -2,14 +2,16 @@
  * Patient explanation builder — turns the reconciled ledger + staff answers
  * into the printable model. Pure derivation:
  *
- *   · nothing is allocated unless the ledger proves it or staff confirmed it
- *   · unconfirmed payments stay "Payment received" / "General account payment"
+ *   · insurance is allocated to a visit only when its claim proves it (claims.ts)
+ *   · a patient payment posted on a visit's date, no larger than that visit's
+ *     charges, is shown on that visit unless staff redirect it in Smart Review;
+ *     any other payment stays "Payment received" / "General account payment"
  *   · zero-net internal Dentrix adjustment blocks never reach the patient
  *   · a ledger that does not reconcile produces NO explanation at all
  */
 import { formatCents, formatDateLong, formatDateShort } from './money';
 import { friendlyProcedure, summaryLabelFor, visitServiceSentence, visitSummaryLabel } from './procedure-language';
-import { allocateInsuranceClaims } from './claims';
+import type { ClaimAllocation } from './claims';
 import { answerResolves, extractCarrierNames } from './questions';
 import { rowDeltaCents, type CancellationWaiverLink } from './reconcile';
 import type {
@@ -34,6 +36,7 @@ export interface ExplanationInput {
   answers: AnswerMap;
   internalBlocks: InternalAdjustmentBlock[];
   waiverLinks: CancellationWaiverLink[];
+  claims: ClaimAllocation;
   patientName: string;
 }
 
@@ -74,7 +77,7 @@ function waiverFeeTitle(feeRow: LedgerRow | undefined): string {
  * reconcile — a reconciliation failure may never hide behind a pretty page.
  */
 export function buildPatientExplanation(input: ExplanationInput): PatientExplanation | null {
-  const { rows, reconciliation, episode, answers, internalBlocks, waiverLinks, patientName } = input;
+  const { rows, reconciliation, episode, answers, internalBlocks, waiverLinks, claims, patientName } = input;
   if (!reconciliation.reconciled) return null;
 
   const rowById = new Map(rows.map(r => [r.id, r]));
@@ -92,9 +95,8 @@ export function buildPatientExplanation(input: ExplanationInput): PatientExplana
   });
   const waiverRowIds = new Set(confirmedWaivers.flatMap(l => [l.feeRowId, l.creditRowId]));
 
-  // Insurance payments proven to settle a specific visit's claim, and the
-  // $0-net payment/fee-adjustment pairs Dentrix posts alongside them.
-  const claims = allocateInsuranceClaims(episodeRows);
+  // Rows a settled claim carries: insurance payments proven onto a visit, and
+  // the $0-net payment/fee-adjustment pairs Dentrix posts alongside them.
   const claimRowIds = new Set([...claims.allocatedRowIds, ...claims.hiddenRowIds]);
 
   // Insurance story confirmed for the episode's treatments (if asked).
@@ -129,6 +131,21 @@ export function buildPatientExplanation(input: ExplanationInput): PatientExplana
     }
     return g;
   };
+
+  // A same-day payment belongs on its visit only when it could plausibly be
+  // for that visit: no larger than the visit's charges. A $500 payment on the
+  // day of a $95 exam is a prepayment for something else until staff say.
+  const visitChargesByDate = new Map<string, Cents>();
+  for (const t of episodeRows) {
+    if (t.classification !== 'TREATMENT_CHARGE' && t.classification !== 'UNKNOWN') continue;
+    if ((t.chargeCents ?? 0) <= 0 || hiddenInternal.has(t.id)) continue;
+    visitChargesByDate.set(t.dateISO, (visitChargesByDate.get(t.dateISO) ?? 0) + (t.chargeCents ?? 0));
+  }
+  function attachesToVisit(row: LedgerRow, optionId: string | undefined): boolean {
+    if (row.dateISO === '') return false;
+    if (optionId === 'copay') return true;
+    return optionId === undefined && -rowDeltaCents(row) <= (visitChargesByDate.get(row.dateISO) ?? 0);
+  }
 
   for (const row of episodeRows) {
     if (hiddenInternal.has(row.id) || waiverRowIds.has(row.id) || claimRowIds.has(row.id)) continue;
@@ -207,9 +224,6 @@ export function buildPatientExplanation(input: ExplanationInput): PatientExplana
     }
   }
 
-  function attachesToVisit(row: LedgerRow, optionId: string | undefined): boolean {
-    return row.dateISO !== '' && (optionId === undefined || optionId === 'copay');
-  }
   function groupDates(): Set<string> {
     return new Set(
       episodeRows
@@ -236,7 +250,6 @@ export function buildPatientExplanation(input: ExplanationInput): PatientExplana
     const servicesTotalCents = services.reduce((s, l) => s + l.amountCents, 0);
 
     // Patient payments collected on the visit date.
-    const adjustments: ExplanationAdjustmentLine[] = [];
     let patientPaidCents = 0;
     for (const row of episodeRows) {
       if (row.classification !== 'PATIENT_PAYMENT' || row.dateISO !== group.dateISO) continue;
@@ -258,7 +271,6 @@ export function buildPatientExplanation(input: ExplanationInput): PatientExplana
       serviceSentence: single ? '' : visitServiceSentence(services),
       services: services.map(({ label, amountCents }) => ({ label, amountCents })),
       servicesTotalCents,
-      adjustments,
       insuranceAppliedCents: insuranceStory !== null && insurancePaidCents === 0 ? 0 : null,
       remainingCents,
       contextNote: insuranceStory ?? '',
@@ -352,7 +364,6 @@ function simpleSection(dateISO: string, title: string, amountCents: Cents): Expl
     serviceSentence: '',
     services: [{ label: title, amountCents }],
     servicesTotalCents: amountCents,
-    adjustments: [],
     insuranceAppliedCents: null,
     remainingCents: amountCents,
     contextNote: '',
