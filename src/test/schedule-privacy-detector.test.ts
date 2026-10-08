@@ -182,3 +182,39 @@ describe('the gate on a privacy-view schedule read box by box', () => {
     expect(boxCount).toBeGreaterThan(0);
   });
 });
+
+/**
+ * A capture of the whole practice-software window carries text outside every
+ * appointment box at one height across the frame: menus, provider headers,
+ * the status bar. Joined, a row of them read as a long free-text note on a
+ * privacy-view capture that showed no patient.
+ */
+describe('text outside the boxes across a captured window', () => {
+  /** Words laid out left to right, each phrase starting at its own x. */
+  function row(y: number, phrases: Array<[number, string]>): OcrWord[] {
+    return phrases.flatMap(([start, text]) => {
+      let x = start;
+      return text.split(/\s+/).map(word => {
+        const w: OcrWord = { text: word, bbox: { x0: x, y0: y, x1: x + word.length * 6, y1: y + 10 }, confidence: 85 };
+        x += word.length * 6 + 4;
+        return w;
+      });
+    });
+  }
+
+  it('reads separate fields on one row as separate texts', () => {
+    const menus = row(2, [[4, 'File Edit View Options Help'], [400, 'Appointment Book - View 1'], [900, 'Week of 10/06'], [1300, 'Privacy On']]);
+    const headers = row(40, [[110, 'Office Hours'], [350, 'DR05 Op 1'], [590, 'DR05 Op 2'], [830, 'HY16 Op 3'], [1070, 'HY10 Op 4'], [1310, 'Notes']]);
+    const appointment = box(1, ['General', 'DR05', '016792'], 80);
+    const result = checkPrivacy([...menus, ...headers, ...appointment.words], buildKnownNames([]), [appointment.region]);
+    expect(result.violations).toEqual([]);
+  });
+
+  it('still flags a long note outside the boxes, and the same rules on every field', () => {
+    const note = row(2, [[10, 'patient said she prefers mornings and asked us to call her sister first when the office reschedules again']]);
+    const phone = row(30, [[10, 'Office Hours'], [900, '617-555-0142']]);
+    const appointment = box(1, ['General', 'DR05'], 80);
+    const result = checkPrivacy([...note, ...phone, ...appointment.words], buildKnownNames([]), [appointment.region]);
+    expect(result.violations.map(v => v.kind).sort()).toEqual(['long_free_text', 'phone_number']);
+  });
+});

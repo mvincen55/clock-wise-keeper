@@ -112,10 +112,14 @@ export function groupWordsIntoLines(words: OcrWord[]): LineIn[] {
  * the whole frame, six chairs' boxes at one height read as a single line —
  * a sixteen-word "note", or an "NP" beside the next chair's procedures —
  * and none of that is what the rules are looking for. Words outside every
- * box (rail, headers) still group by height among themselves.
+ * box (rail, headers, the window's menus and status bar) group by height
+ * among themselves, then split wherever a gap is wider than a few word
+ * heights: a captured window puts a column header, a toolbar label and a
+ * status-bar field at one height across the whole frame, and joined they
+ * read as a long note no one wrote.
  */
 export function privacyLines(words: OcrWord[], regions: OcrBox[]): LineIn[] {
-  if (regions.length === 0) return groupWordsIntoLines(words);
+  if (regions.length === 0) return splitLinesAtGaps(groupWordsIntoLines(words));
   const inBox: OcrWord[][] = regions.map(() => []);
   const loose: OcrWord[] = [];
   for (const w of words) {
@@ -123,7 +127,24 @@ export function privacyLines(words: OcrWord[], regions: OcrBox[]): LineIn[] {
     const i = regions.findIndex(r => cx >= r.x0 && cx < r.x1 && cy >= r.y0 && cy < r.y1);
     if (i >= 0) inBox[i].push(w); else loose.push(w);
   }
-  return [...inBox.flatMap(b => groupWordsIntoLines(b)), ...groupWordsIntoLines(loose)];
+  return [...inBox.flatMap(b => groupWordsIntoLines(b)), ...splitLinesAtGaps(groupWordsIntoLines(loose))];
+}
+
+/** A gap wider than this many word heights separates two texts on one line. */
+const GAP_IN_WORD_HEIGHTS = 2.5;
+
+function splitLinesAtGaps(lines: LineIn[]): LineIn[] {
+  return lines.flatMap(line => {
+    const heights = line.words.map(w => w.bbox.y1 - w.bbox.y0).sort((a, b) => a - b);
+    const gap = (heights[Math.floor(heights.length / 2)] ?? 0) * GAP_IN_WORD_HEIGHTS;
+    const runs: OcrWord[][] = [];
+    for (const w of line.words) {
+      const run = runs[runs.length - 1];
+      if (run && w.bbox.x0 - run[run.length - 1].bbox.x1 <= gap) run.push(w);
+      else runs.push([w]);
+    }
+    return runs.map(run => ({ words: run, text: run.map(w => w.text).join(' ').trim() }));
+  });
 }
 
 /**

@@ -32,10 +32,16 @@ export async function captureDisplayFrame(): Promise<CaptureFrame> {
 
   let stream: MediaStream;
   try {
+    // Offer windows only. A whole-screen share puts this page beside the
+    // schedule, and its own instructions read to the privacy gate as a long
+    // free-text note; another monitor could carry anything. Browsers that
+    // don't know these hints ignore them.
     stream = await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: 1 },
+      video: { frameRate: 1, displaySurface: 'window' },
       audio: false,
-    });
+      selfBrowserSurface: 'exclude',
+      monitorTypeSurfaces: 'exclude',
+    } as DisplayMediaStreamOptions);
   } catch (err) {
     const name = err instanceof Error ? err.name : '';
     throw new ScheduleReaderError(
