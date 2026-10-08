@@ -1,5 +1,5 @@
-import type { PatientExplanation } from '@/lib/account-balance/types';
-import { formatCents, formatDateLong } from '@/lib/account-balance/money';
+import { formatCents, formatDateLong, formatDateShort } from '@/lib/account-balance/money';
+import type { Cents, PatientExplanation } from '@/lib/account-balance/types';
 
 /**
  * The printed ACCOUNT BALANCE EXPLANATION — a polished, patient-facing
@@ -63,11 +63,47 @@ const ShieldIcon = () => (
   </svg>
 );
 
+function lowerFirst(text: string): string {
+  return /^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text;
+}
+
+/** How the visit balances add up to the current balance, in one line. */
+function balanceSentence(e: PatientExplanation): string {
+  const parts: Array<{ cents: Cents; text: string }> = [];
+  if (e.broughtForward) {
+    parts.push({ cents: e.broughtForward.amountCents, text: `${formatCents(e.broughtForward.amountCents)} brought forward` });
+  }
+  for (const section of e.sections) {
+    if (section.remainingCents === 0) continue;
+    const when = section.dateISO ? ` from ${formatDateShort(section.dateISO)}` : '';
+    parts.push({
+      cents: section.remainingCents,
+      text:
+        section.remainingCents < 0
+          ? `${formatCents(-section.remainingCents)} credit${when}`
+          : `${formatCents(section.remainingCents)} balance${when}`,
+    });
+  }
+  for (const credit of e.generalCredits) {
+    parts.push({ cents: credit.amountCents, text: `${formatCents(Math.abs(credit.amountCents))} ${lowerFirst(credit.label)}` });
+  }
+  if (parts.length === 0) return 'Every visit on this statement is paid in full.';
+  if (parts.length === 1) return `The ${parts[0].text}.`;
+  const sum = parts
+    .map((p, i) => (i === 0 ? formatCents(p.cents) : `${p.cents < 0 ? '−' : '+'} ${formatCents(Math.abs(p.cents))}`))
+    .join(' ');
+  const words = parts
+    .map((p, i) => (i === 0 ? `The ${p.text}` : p.cents < 0 ? `less the ${p.text}` : `plus the ${p.text}`))
+    .join(', ');
+  return `${words}: ${sum} = ${formatCents(e.calculationTotalCents)}.`;
+}
+
 export default function AccountBalancePrintSheet({
   practice,
   explanation,
 }: AccountBalancePrintSheetProps) {
   const e = explanation;
+
   return (
     <div className="abx-sheet">
       <header className="abx-head">
@@ -81,6 +117,9 @@ export default function AccountBalancePrintSheet({
         </div>
         <div className="abx-head-meta">
           <div className="abx-doc-title">Account Balance Explanation</div>
+          <div className="abx-meta-line abx-meta-due">
+            <span className="abx-meta-key">Balance due</span> {formatCents(e.currentBalanceCents)}
+          </div>
           {e.patientName.trim() !== '' && (
             <div className="abx-meta-line">
               <span className="abx-meta-key">Patient</span> {e.patientName}
@@ -95,104 +134,116 @@ export default function AccountBalancePrintSheet({
         </div>
       </header>
 
-      <section className="abx-hero">
-        <div className="abx-hero-kicker">Current Balance</div>
-        <div className="abx-hero-amount">{formatCents(e.currentBalanceCents)}</div>
-        <div className="abx-hero-sub">
-          This page explains exactly what makes up this amount.
-        </div>
-      </section>
-
-      <div className="abx-section-head">Why you owe this amount</div>
+      <p className="abx-intro">
+        Each date of service is shown separately. Insurance payments are matched to the
+        appointment they paid.
+      </p>
 
       {e.broughtForward && (
-        <div className="abx-card">
-          <div className="abx-card-date">
-            Before {formatDateLong(e.broughtForward.beforeDateISO)}
+        <div className="abx-invoice">
+          <div className="abx-invoice-head">
+            <span className="abx-invoice-date">Before {formatDateShort(e.broughtForward.beforeDateISO)}</span>
+            <span className="abx-invoice-title">Balance brought forward</span>
           </div>
-          <div className="abx-card-title">Balance brought forward</div>
-          <p className="abx-card-note">
-            This part of the balance comes from account activity before the
-            period shown on this statement.
-          </p>
-          <div className="abx-row abx-row-total">
-            <span>Amount brought forward</span>
-            <span>{formatCents(e.broughtForward.amountCents)}</span>
+          <div className="abx-invoice-body">
+            <p className="abx-invoice-desc">
+              This part of the balance comes from account activity before the period shown
+              on this statement.
+            </p>
+            <div className="abx-row abx-row-total">
+              <span>Balance brought forward</span>
+              <span>{formatCents(e.broughtForward.amountCents)}</span>
+            </div>
           </div>
         </div>
       )}
 
       {e.sections.map((section, i) => (
-        <div className="abx-card" key={i}>
-          <div className="abx-card-date">{section.dateLabel}</div>
-          <div className="abx-card-title">{section.title}</div>
-          {section.services.length > 1 && (
-            <>
-              {section.services.map((line, j) => (
-                <div className="abx-row" key={j}>
-                  <span>{line.label}</span>
-                  <span>{formatCents(line.amountCents)}</span>
-                </div>
-              ))}
-              <div className="abx-row abx-row-subtotal">
-                <span>Services</span>
-                <span>{formatCents(section.servicesTotalCents)}</span>
-              </div>
-            </>
-          )}
-          {section.services.length === 1 && (
+        <div className="abx-invoice" key={i}>
+          <div className="abx-invoice-head">
+            <span className="abx-invoice-date">
+              {section.dateISO ? formatDateShort(section.dateISO) : 'Date not read'}
+            </span>
+            <span className="abx-invoice-title">
+              {section.services.length > 1 ? section.summaryLabel : section.title}
+            </span>
+          </div>
+          <div className="abx-invoice-body">
+            {section.serviceSentence !== '' && (
+              <p className="abx-invoice-desc">{section.serviceSentence}</p>
+            )}
             <div className="abx-row">
-              <span>Treatment</span>
+              <span>{section.services.length > 1 ? 'Visit charges' : 'Charge'}</span>
               <span>{formatCents(section.servicesTotalCents)}</span>
             </div>
-          )}
-          {section.adjustments.map((adj, j) => (
-            <div className="abx-row" key={`a${j}`}>
-              <span>{adj.label}</span>
-              <span>{formatCents(adj.amountCents)}</span>
+            {section.insurancePaidCents !== 0 && (
+              <div className="abx-row">
+                <span>
+                  Insurance payment{section.insurancePaymentDatesISO.length > 1 ? 's' : ''} received
+                  {section.insurancePaymentDatesISO.length > 0 &&
+                    ` ${section.insurancePaymentDatesISO.map(formatDateShort).join(' and ')}`}
+                </span>
+                <span>{formatCents(section.insurancePaidCents)}</span>
+              </div>
+            )}
+            {section.insuranceAppliedCents !== null && section.insurancePaidCents === 0 && (
+              <div className="abx-row">
+                <span>Insurance applied</span>
+                <span>{formatCents(section.insuranceAppliedCents)}</span>
+              </div>
+            )}
+            {section.adjustments.map((adj, j) => (
+              <div className="abx-row" key={`a${j}`}>
+                <span>{adj.label}</span>
+                <span>{formatCents(adj.amountCents)}</span>
+              </div>
+            ))}
+            {section.patientPaidCents !== 0 && (
+              <div className="abx-row">
+                <span>Your payment</span>
+                <span>{formatCents(section.patientPaidCents)}</span>
+              </div>
+            )}
+            <div className="abx-row abx-row-total">
+              <span>
+                {section.remainingCents < 0 ? 'Credit remaining from this visit' : 'Patient balance from this visit'}
+              </span>
+              <span>
+                {section.remainingCents < 0
+                  ? `${formatCents(-section.remainingCents)} credit`
+                  : formatCents(section.remainingCents)}
+              </span>
             </div>
-          ))}
-          {section.insuranceAppliedCents !== null && (
-            <div className="abx-row">
-              <span>Insurance applied</span>
-              <span>{formatCents(section.insuranceAppliedCents)}</span>
-            </div>
-          )}
-          <div className="abx-row abx-row-total">
-            <span>Remaining</span>
-            <span>{formatCents(section.remainingCents)}</span>
+            {section.contextNote !== '' && (
+              <p className="abx-card-note">{section.contextNote}</p>
+            )}
           </div>
-          {section.contextNote !== '' && (
-            <p className="abx-card-note">{section.contextNote}</p>
-          )}
         </div>
       ))}
 
       {e.generalCredits.length > 0 && (
-        <div className="abx-card">
-          <div className="abx-card-title">Payments &amp; credits on your account</div>
-          {e.generalCredits.map((credit, i) => (
-            <div className="abx-row" key={i}>
-              <span>{credit.label}</span>
-              <span>{formatCents(credit.amountCents)}</span>
-            </div>
-          ))}
+        <div className="abx-invoice">
+          <div className="abx-invoice-head">
+            <span className="abx-invoice-title">Other payments &amp; credits</span>
+          </div>
+          <div className="abx-invoice-body">
+            {e.generalCredits.map((credit, i) => (
+              <div className="abx-row" key={i}>
+                <span>{credit.label}</span>
+                <span>{formatCents(credit.amountCents)}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      <div className="abx-calc">
-        <div className="abx-calc-title">Balance calculation</div>
-        {e.calculation.map((line, i) => (
-          <div className="abx-row" key={i}>
-            <span>{line.label}</span>
-            <span>{formatCents(line.amountCents)}</span>
-          </div>
-        ))}
-        <div className="abx-row abx-calc-total">
-          <span>Current balance</span>
-          <span>{formatCents(e.calculationTotalCents)}</span>
+      <section className="abx-calc">
+        <div className="abx-calc-head">
+          <span className="abx-calc-title">Current balance due</span>
+          <span className="abx-calc-amount">{formatCents(e.calculationTotalCents)}</span>
         </div>
-      </div>
+        <p className="abx-calc-explain">{balanceSentence(e)}</p>
+      </section>
 
       {e.otherActivity.length > 0 && (
         <>

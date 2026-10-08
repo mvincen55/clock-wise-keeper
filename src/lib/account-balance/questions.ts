@@ -7,6 +7,7 @@
  * from ledger facts only, collapse across rows when one answer covers them,
  * and are limited to things that materially change the patient explanation.
  */
+import { allocateInsuranceClaims } from './claims';
 import { formatCents } from './money';
 import { friendlyProcedure } from './procedure-language';
 import {
@@ -177,10 +178,14 @@ export function buildSmartReview(input: SmartReviewInput): SmartReviewDerived {
   }
 
   const episodeRows = episode.rows;
+  // What the ledger's own insurance claims already prove needs no question.
+  const claims = allocateInsuranceClaims(episodeRows);
+  const claimRowIds = new Set([...claims.allocatedRowIds, ...claims.hiddenRowIds]);
 
   // 2 — unknown monetary transactions inside the episode.
   for (const row of episodeRows) {
     if (row.classification !== 'UNKNOWN') continue;
+    if (claims.claimedChargeRowIds.has(row.id)) continue; // billed on a claim → a visit charge
     const amount = rowDeltaCents(row);
     if (amount === 0) continue;
     questions.push({
@@ -199,6 +204,7 @@ export function buildSmartReview(input: SmartReviewInput): SmartReviewDerived {
   const internalBlocks = findInternalAdjustmentBlocks(rows);
   for (const block of internalBlocks) {
     if (block.netsToZero) continue;
+    if (block.rowIds.every(id => claimRowIds.has(id))) continue; // part of a settled claim
     // Only blocks that touch the episode can affect the current balance.
     const inEpisode = block.rowIds.some(id => episodeRows.some(r => r.id === id));
     if (!inEpisode) continue;
