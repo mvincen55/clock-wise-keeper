@@ -13,6 +13,8 @@ import type { LedgerClassification } from './types';
 export interface ClassificationInput {
   rawDescription: string;
   tooth: string;
+  /** Dentrix procedure/transaction code column ("D1110", "Pay"), when shown. */
+  code?: string;
   chargeCents: number | null;
   paymentCents: number | null;
 }
@@ -82,7 +84,8 @@ export function classifyTransaction(input: ClassificationInput): ClassificationR
   }
 
   if (charge > 0) {
-    if (TREATMENT_WORDS.test(desc) || input.tooth.trim() !== '') {
+    // An ADA CDT code (D0120, D2392…) is by definition dental treatment.
+    if (TREATMENT_WORDS.test(desc) || input.tooth.trim() !== '' || /^D\d{4}$/i.test(input.code?.trim() ?? '')) {
       return { classification: 'TREATMENT_CHARGE', confidence: 0.85 };
     }
     // A charge we cannot name is an UNKNOWN monetary transaction —

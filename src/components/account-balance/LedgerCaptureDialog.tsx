@@ -349,7 +349,7 @@ export default function LedgerCaptureDialog({
         setError(
           parsed.headerFound
             ? 'No ledger rows could be read in that area — drag a box around the transaction list, or retake.'
-            : "Couldn't find the ledger columns (DATE, DESCRIPTION, CHARGE…). Include the column headers in the crop, then try again."
+            : "Couldn't find the ledger columns (Date, Description, Amount/Charge, Balance). Include the column headers in the crop, then try again."
         );
         retake();
         return;
@@ -408,7 +408,7 @@ export default function LedgerCaptureDialog({
           <div className="space-y-4">
             <ol className="list-decimal space-y-1 pl-5 text-sm">
               <li>Open the patient's ledger in Dentrix.</li>
-              <li>Make sure the column headers (Date, Description, Charge, Payment, Balance) are visible.</li>
+              <li>Make sure the column headers (Date, Description, Amount, Balance) are visible.</li>
               {captureNumber > 1 && (
                 <li className="font-medium">
                   Scroll so the next part of the ledger is visible — repeating a few rows
