@@ -263,7 +263,9 @@ export function buildPatientExplanation(input: ExplanationInput): PatientExplana
     sections.push({
       dateISO: group.dateISO,
       insurancePaidCents,
-      insurancePaymentDatesISO: claims.paymentDatesByDate.get(group.dateISO) ?? [],
+      insurancePaymentDatesISO: claims.dateUncertainVisits.has(group.dateISO)
+        ? []
+        : claims.paymentDatesByDate.get(group.dateISO) ?? [],
       patientPaidCents,
       dateLabel: group.dateISO ? formatDateLong(group.dateISO) : 'Date not read',
       title: single ? single.label : 'Dental visit',
