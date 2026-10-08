@@ -198,16 +198,26 @@ export interface ExplanationAdjustmentLine {
 
 /** One card in "WHY YOU OWE THIS AMOUNT". */
 export interface ExplanationSection {
+  /** ISO date of service ('' for undated rows). */
+  dateISO: string;
   /** e.g. "February 12, 2026". */
   dateLabel: string;
   /** Card heading, e.g. "Dental visit" or "3-surface tooth-colored filling, tooth #29". */
   title: string;
+  /** Services in one sentence ('' for single-line sections). */
+  serviceSentence: string;
   /** Short label for the balance calculation, e.g. "Tooth #29 filling". */
   summaryLabel: string;
   services: ExplanationServiceLine[];
   servicesTotalCents: Cents;
   /** Confirmed allocations/credits (negative amounts). */
   adjustments: ExplanationAdjustmentLine[];
+  /** Net insurance paid toward this visit, proven by its claim (≤ 0). */
+  insurancePaidCents: Cents;
+  /** ISO dates the insurance payments for this visit were posted. */
+  insurancePaymentDatesISO: string[];
+  /** Patient payments attached to this visit (≤ 0). */
+  patientPaidCents: Cents;
   /** "Insurance applied: $0.00" line shown when staff confirmed the story. */
   insuranceAppliedCents: Cents | null;
   remainingCents: Cents;
