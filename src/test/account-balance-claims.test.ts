@@ -5,7 +5,7 @@ import { buildPatientExplanation } from '@/lib/account-balance/explanation';
 import { visitServiceSentence, visitSummaryLabel, friendlyProcedure } from '@/lib/account-balance/procedure-language';
 import { buildSmartReview } from '@/lib/account-balance/questions';
 import { findBalanceEpisode, reconcileLedger } from '@/lib/account-balance/reconcile';
-import type { LedgerRow } from '@/lib/account-balance/types';
+import type { AnswerMap, LedgerRow } from '@/lib/account-balance/types';
 import { makeRow } from './account-balance-fixture';
 
 let n = 0;
@@ -50,12 +50,12 @@ function ledger(): LedgerRow[] {
   ];
 }
 
-function explain(rows: LedgerRow[]) {
+function explain(rows: LedgerRow[], answers: AnswerMap = {}) {
   const reconciliation = reconcileLedger(rows);
   const episode = findBalanceEpisode(rows, reconciliation);
-  const review = buildSmartReview({ rows, reconciliation, episode, answers: {}, patientNameConflict: false });
+  const review = buildSmartReview({ rows, reconciliation, episode, answers, patientNameConflict: false });
   const explanation = buildPatientExplanation({
-    rows, reconciliation, episode, answers: {}, internalBlocks: review.internalBlocks, waiverLinks: review.waiverLinks, patientName: 'Sample Patient',
+    rows, reconciliation, episode, answers, internalBlocks: review.internalBlocks, waiverLinks: review.waiverLinks, claims: review.claims, patientName: 'Sample Patient',
   });
   return { review, explanation: explanation! };
 }
@@ -64,6 +64,8 @@ describe('claimBilledCents', () => {
   it("reads the billed total off Dentrix's claim row", () => {
     expect(claimBilledCents(makeRow({ id: 'a', rawDescription: "Pr Dental Claim - Rec'd 271.70" }))).toBe(27170);
     expect(claimBilledCents(makeRow({ id: 'b', rawDescription: "PrDental Claim - Rec'd 0.00" }))).toBe(0);
+    // OCR sometimes drops the space before the amount.
+    expect(claimBilledCents(makeRow({ id: 'd', rawDescription: "Pr Dental Claim - Rec'd271.70" }))).toBe(27170);
     expect(claimBilledCents(makeRow({ id: 'c', rawDescription: 'Insurance Payment-Check', paymentCents: -100 }))).toBeNull();
   });
 });
@@ -92,6 +94,50 @@ describe('allocateInsuranceClaims', () => {
     const rows = ledger();
     const claims = allocateInsuranceClaims(rows.slice(1));
     expect(claims.claimedChargeRowIds.has(rows[1].id)).toBe(true); // FL package
+  });
+
+  it('lets a secondary claim settle a visit primary already paid', () => {
+    n = 0;
+    const rows = [
+      r('2026-01-05', 'Periodic oral evaluation', { c: 10000 }, 10000),
+      r('2026-02-01', 'Insurance Payment-Check', { p: -6000 }, 4000),
+      r('2026-02-01', "Pr Dental Claim - Rec'd 100.00", {}, 4000),
+      r('2026-03-01', 'Insurance Payment-Check', { p: -3000 }, 1000),
+      r('2026-03-01', "Pr Dental Claim - Rec'd 100.00", {}, 1000),
+    ];
+    const claims = allocateInsuranceClaims(rows);
+    expect(claims.insuranceByDate.get('2026-01-05')).toBe(-9000);
+    expect(claims.paymentDatesByDate.get('2026-01-05')).toEqual(['2026-02-01', '2026-03-01']);
+    expect(claims.allocatedRowIds.size).toBe(2);
+  });
+
+  it('never applies more insurance to a visit than was billed', () => {
+    n = 0;
+    const rows = [
+      r('2026-01-05', 'Periodic oral evaluation', { c: 10000 }, 10000),
+      r('2026-02-01', 'Insurance Payment-Check', { p: -6000 }, 4000),
+      r('2026-02-01', "Pr Dental Claim - Rec'd 100.00", {}, 4000),
+      r('2026-03-01', 'Insurance Payment-Check', { p: -6000 }, -2000),
+      r('2026-03-01', "Pr Dental Claim - Rec'd 100.00", {}, -2000),
+    ];
+    const claims = allocateInsuranceClaims(rows);
+    expect(claims.insuranceByDate.get('2026-01-05')).toBe(-6000);
+    expect(claims.allocatedRowIds.size).toBe(1);
+  });
+
+  it('settles identical-fee visits in visit order', () => {
+    n = 0;
+    const rows = [
+      r('2026-01-05', 'Prophylaxis-adult', { c: 9570 }, 9570),
+      r('2026-07-05', 'Prophylaxis-adult', { c: 9570 }, 19140),
+      r('2026-08-01', 'Insurance Payment-Check', { p: -9570 }, 9570),
+      r('2026-08-01', "Pr Dental Claim - Rec'd 95.70", {}, 9570),
+      r('2026-09-01', 'Insurance Payment-Check', { p: -9570 }, 0),
+      r('2026-09-01', "Pr Dental Claim - Rec'd 95.70", {}, 0),
+    ];
+    const claims = allocateInsuranceClaims(rows);
+    expect(claims.insuranceByDate.get('2026-01-05')).toBe(-9570);
+    expect(claims.insuranceByDate.get('2026-07-05')).toBe(-9570);
   });
 
   it('leaves payments unallocated when no visit matches the billed total', () => {
@@ -123,6 +169,46 @@ describe('patient explanation with claim allocation', () => {
     ]);
     // Nothing the claims prove is asked about.
     expect(review.questions.map(q => q.kind)).toEqual(['payment_allocation']);
+  });
+});
+
+describe('smart review with claim allocation', () => {
+  it('asks about only the unexplained part of an adjustment block', () => {
+    // An offset pair ($123 in / $123 fee) hides; the $8.60 beside it is still
+    // open because the claim run billed two totals and cannot be placed.
+    n = 0;
+    const rows = [
+      r('2026-01-05', 'Periodic oral evaluation', { c: 4130 }, 4130),
+      r('2026-02-01', 'Insurance Payment-Check', { p: -12300 }, -8170),
+      r('2026-02-01', 'In-Office Provider Prod Adj', { c: 12300 }, 4130),
+      r('2026-02-01', 'In-Office Provider Prod Adj', { c: 860 }, 4990),
+      r('2026-02-01', "Pr Dental Claim - Rec'd 41.30", {}, 4990),
+      r('2026-02-01', "Pr Dental Claim - Rec'd 50.00", {}, 4990),
+    ];
+    const { review } = explain(rows);
+    const block = review.questions.find(q => q.kind === 'internal_adjustment_nonzero')!;
+    expect(block.amountCents).toBe(860);
+    expect(block.rowIds).toEqual([rows[3].id]);
+    expect(review.internalBlocks).toEqual([{ rowIds: [rows[3].id], netCents: 860, netsToZero: false }]);
+
+    // Answered, only the $8.60 reaches the patient — the hidden $123 pair never does.
+    const { explanation } = explain(rows, {
+      [block.id]: { questionId: block.id, optionId: 'patient_charge', note: 'Fee correction' },
+    });
+    expect(explanation.sections.map(s => s.remainingCents)).toEqual([4130, 860]);
+    expect(explanation.reconciled).toBe(true);
+  });
+
+  it('does not attach a same-day payment larger than the visit to that visit', () => {
+    n = 0;
+    const rows = [
+      r('2026-01-05', 'Periodic oral evaluation', { c: 9500 }, 9500),
+      r('2026-01-05', 'VISA Payment', { p: -50000 }, -40500),
+    ];
+    const { explanation } = explain(rows);
+    expect(explanation.sections[0].patientPaidCents).toBe(0);
+    expect(explanation.generalCredits).toEqual([{ label: 'Payment received', amountCents: -50000 }]);
+    expect(explanation.reconciled).toBe(true);
   });
 });
 

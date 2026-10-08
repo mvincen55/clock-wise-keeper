@@ -9,13 +9,19 @@
  * allocates by proximity alone:
  *
  *   · a payment is allocated only when a claim row on the same date names a
- *     billed total that matches exactly one unclaimed visit's charges
+ *     billed total that equals a visit's charges, and the insurance applied
+ *     to that visit never exceeds what was billed
+ *   · several claims may settle one visit (primary, then secondary coverage)
+ *   · when more than one visit was billed the same total (identical recall
+ *     visits), claims are assumed to settle in visit order: the earliest visit
+ *     not yet settled takes the claim. That is the one assumption here that
+ *     the ledger cannot prove.
  *   · internal "In-Office Provider … Adj" rows posted inside the same claim
  *     (Dentrix raising the fee when insurance overpaid) ride along, so the
  *     visit shows the NET insurance amount and no phantom patient credit
  *   · an insurance payment immediately offset by an equal internal adjustment
  *     (a $0-billed claim) nets to $0.00 and never reaches the patient
- *   · anything ambiguous stays unallocated and falls back to account level
+ *   · anything else ambiguous stays unallocated and falls back to account level
  */
 import { rowDeltaCents } from './reconcile';
 import type { Cents, LedgerRow } from './types';
@@ -23,7 +29,9 @@ import type { Cents, LedgerRow } from './types';
 /** "Pr Dental Claim - Rec'd 271.70" → 27170 cents, else null. */
 export function claimBilledCents(row: LedgerRow): Cents | null {
   if (row.chargeCents !== null || row.paymentCents !== null) return null;
-  const m = row.rawDescription.match(/\bclaim\b.*\brec['’`]?d\b\s*\$?([\d,]+\.\d{2})/i);
+  // OCR may drop the space before the amount ("Rec'd271.70"), so the amount
+  // is looked ahead to rather than required to start at a word boundary.
+  const m = row.rawDescription.match(/\bclaim\b.*\brec['’`]?d(?=\s*\$?\d)\s*\$?([\d,]+\.\d{2})/i);
   if (!m) return null;
   return Math.round(parseFloat(m[1].replace(/,/g, '')) * 100);
 }
@@ -63,12 +71,12 @@ export function allocateInsuranceClaims(episodeRows: LedgerRow[]): ClaimAllocati
   };
 
   // Visits: positive charges grouped by date of service, in ledger order.
-  const visits: Array<{ dateISO: string; chargeCents: Cents; rows: LedgerRow[]; claimed: boolean }> = [];
+  const visits: Array<{ dateISO: string; chargeCents: Cents; rows: LedgerRow[]; insuranceCents: Cents }> = [];
   for (const row of episodeRows) {
     if (!isVisitCharge(row) || row.dateISO === '') continue;
     let visit = visits.find(v => v.dateISO === row.dateISO);
     if (!visit) {
-      visit = { dateISO: row.dateISO, chargeCents: 0, rows: [], claimed: false };
+      visit = { dateISO: row.dateISO, chargeCents: 0, rows: [], insuranceCents: 0 };
       visits.push(visit);
     }
     visit.chargeCents += row.chargeCents ?? 0;
@@ -123,16 +131,19 @@ export function allocateInsuranceClaims(episodeRows: LedgerRow[]): ClaimAllocati
     const billedMarkers = markers.filter(m => m.billed > 0);
     if (billedMarkers.length !== 1 || money.length === 0) continue;
     const billed = billedMarkers[0].billed;
-    const visit = visits.find(
-      v => !v.claimed && v.dateISO <= row.dateISO && v.chargeCents === billed
-    );
-    if (!visit) continue;
     const net = money.reduce((s, r) => s + rowDeltaCents(r), 0);
-    // Insurance can't settle more than was billed; a mismatch stays unproven.
-    if (net > 0 || -net > billed) continue;
+    if (net > 0) continue; // a claim run that charged the patient is not a settlement
+    // Candidates: visits billed this total that insurance has not yet covered
+    // in full. Unsettled visits come first (claims settle in visit order);
+    // a visit already paid by primary coverage can still take secondary.
+    const candidates = visits.filter(
+      v => v.dateISO <= row.dateISO && v.chargeCents === billed && -(v.insuranceCents + net) <= billed
+    );
+    const visit = candidates.find(v => v.insuranceCents === 0) ?? candidates[0];
+    if (!visit) continue;
 
-    visit.claimed = true;
-    result.insuranceByDate.set(visit.dateISO, (result.insuranceByDate.get(visit.dateISO) ?? 0) + net);
+    visit.insuranceCents += net;
+    result.insuranceByDate.set(visit.dateISO, visit.insuranceCents);
     for (const r of money) result.allocatedRowIds.add(r.id);
     const dates = result.paymentDatesByDate.get(visit.dateISO) ?? [];
     if (!dates.includes(row.dateISO)) dates.push(row.dateISO);

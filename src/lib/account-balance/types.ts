@@ -210,8 +210,6 @@ export interface ExplanationSection {
   summaryLabel: string;
   services: ExplanationServiceLine[];
   servicesTotalCents: Cents;
-  /** Confirmed allocations/credits (negative amounts). */
-  adjustments: ExplanationAdjustmentLine[];
   /** Net insurance paid toward this visit, proven by its claim (≤ 0). */
   insurancePaidCents: Cents;
   /** ISO dates the insurance payments for this visit were posted. */

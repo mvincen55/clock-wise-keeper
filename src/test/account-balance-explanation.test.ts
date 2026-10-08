@@ -10,11 +10,11 @@ import { goldenAnswers, goldenRows, GOLDEN_QUESTION_IDS, makeRow } from './accou
 function derive(rows: LedgerRow[], answers: AnswerMap, patientName = 'Taylor Sample') {
   const reconciliation = reconcileLedger(rows);
   const episode = findBalanceEpisode(rows, reconciliation);
-  const { questions, internalBlocks, waiverLinks } = buildSmartReview({
+  const { questions, internalBlocks, waiverLinks, claims } = buildSmartReview({
     rows, reconciliation, episode, answers, patientNameConflict: false,
   });
   const explanation = buildPatientExplanation({
-    rows, reconciliation, episode, answers, internalBlocks, waiverLinks, patientName,
+    rows, reconciliation, episode, answers, internalBlocks, waiverLinks, claims, patientName,
   });
   return { reconciliation, episode, questions, internalBlocks, waiverLinks, explanation };
 }
@@ -49,7 +49,6 @@ describe('the synthetic $639 golden case', () => {
     const filling = e.sections[1];
     expect(filling.title).toBe('3-surface tooth-colored filling, tooth #29');
     expect(filling.servicesTotalCents).toBe(39500);
-    expect(filling.adjustments).toEqual([]);
     expect(filling.patientPaidCents).toBe(-11900);
     expect(filling.remainingCents).toBe(27600);
 

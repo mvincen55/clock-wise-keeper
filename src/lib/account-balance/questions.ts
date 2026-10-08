@@ -7,9 +7,9 @@
  * from ledger facts only, collapse across rows when one answer covers them,
  * and are limited to things that materially change the patient explanation.
  */
-import { allocateInsuranceClaims } from './claims';
+import { allocateInsuranceClaims, type ClaimAllocation } from './claims';
 import { formatCents } from './money';
-import { friendlyProcedure } from './procedure-language';
+import { friendlyProcedure, lowerFirstWord } from './procedure-language';
 import {
   findCancellationWaivers,
   findInternalAdjustmentBlocks,
@@ -134,8 +134,11 @@ export interface SmartReviewInput {
 
 export interface SmartReviewDerived {
   questions: SmartQuestion[];
+  /** Internal adjustment blocks, less the rows a settled claim carries. */
   internalBlocks: InternalAdjustmentBlock[];
   waiverLinks: CancellationWaiverLink[];
+  /** Insurance proven onto visits — shared with the explanation builder. */
+  claims: ClaimAllocation;
 }
 
 export function buildSmartReview(input: SmartReviewInput): SmartReviewDerived {
@@ -200,11 +203,19 @@ export function buildSmartReview(input: SmartReviewInput): SmartReviewDerived {
     });
   }
 
-  // 3 — internal adjustment blocks that do not net to zero.
-  const internalBlocks = findInternalAdjustmentBlocks(rows);
+  // 3 — internal adjustment blocks that do not net to zero. Rows a settled
+  // claim already carries (fee corrections netted into a visit's insurance,
+  // $0-net pairs) leave their block first, so a block is only ever asked
+  // about — and later emitted — for the amount that is still unexplained.
+  const internalBlocks: InternalAdjustmentBlock[] = [];
+  for (const block of findInternalAdjustmentBlocks(rows)) {
+    const rowIds = block.rowIds.filter(id => !claimRowIds.has(id));
+    if (rowIds.length === 0) continue;
+    const netCents = rowIds.reduce((s, id) => s + rowDeltaCents(rowById.get(id)!), 0);
+    internalBlocks.push({ rowIds, netCents, netsToZero: netCents === 0 });
+  }
   for (const block of internalBlocks) {
     if (block.netsToZero) continue;
-    if (block.rowIds.every(id => claimRowIds.has(id))) continue; // part of a settled claim
     // Only blocks that touch the episode can affect the current balance.
     const inEpisode = block.rowIds.some(id => episodeRows.some(r => r.id === id));
     if (!inEpisode) continue;
@@ -244,7 +255,7 @@ export function buildSmartReview(input: SmartReviewInput): SmartReviewDerived {
       priority: 4,
       required: false,
       prompt: sameDateLabel
-        ? `${formatCents(Math.abs(amount))} was collected on the date of ${sameDateLabel === 'the dental visit' ? sameDateLabel : `the ${lowerFirst(sameDateLabel)}`}. What was this payment for?`
+        ? `${formatCents(Math.abs(amount))} was collected on the date of ${sameDateLabel === 'the dental visit' ? sameDateLabel : `the ${lowerFirstWord(sameDateLabel)}`}. What was this payment for?`
         : `${formatCents(Math.abs(amount))} was collected${row.dateISO ? ` on ${row.dateISO}` : ''}. What was this payment for?`,
       options,
       rowIds: [row.id],
@@ -341,9 +352,5 @@ export function buildSmartReview(input: SmartReviewInput): SmartReviewDerived {
   }
 
   questions.sort((a, b) => a.priority - b.priority);
-  return { questions, internalBlocks, waiverLinks };
-}
-
-function lowerFirst(s: string): string {
-  return s.charAt(0).toLowerCase() + s.slice(1);
+  return { questions, internalBlocks, waiverLinks, claims };
 }

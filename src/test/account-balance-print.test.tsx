@@ -27,11 +27,11 @@ function goldenMarkup(): string {
   const answers = goldenAnswers();
   const reconciliation = reconcileLedger(rows);
   const episode = findBalanceEpisode(rows, reconciliation);
-  const { internalBlocks, waiverLinks } = buildSmartReview({
+  const { internalBlocks, waiverLinks, claims } = buildSmartReview({
     rows, reconciliation, episode, answers, patientNameConflict: false,
   });
   const explanation = buildPatientExplanation({
-    rows, reconciliation, episode, answers, internalBlocks, waiverLinks,
+    rows, reconciliation, episode, answers, internalBlocks, waiverLinks, claims,
     patientName: 'Taylor Sample',
   });
   expect(explanation).not.toBeNull();
