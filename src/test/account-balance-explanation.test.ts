@@ -49,9 +49,8 @@ describe('the synthetic $639 golden case', () => {
     const filling = e.sections[1];
     expect(filling.title).toBe('3-surface tooth-colored filling, tooth #29');
     expect(filling.servicesTotalCents).toBe(39500);
-    expect(filling.adjustments).toEqual([
-      { label: 'Estimated copay/deductible collected', amountCents: -11900 },
-    ]);
+    expect(filling.adjustments).toEqual([]);
+    expect(filling.patientPaidCents).toBe(-11900);
     expect(filling.remainingCents).toBe(27600);
 
     // $363 + $276 = $639, matching Dentrix to the penny.
@@ -165,15 +164,18 @@ describe('safety gates', () => {
 });
 
 describe('wording rules', () => {
-  it('an unallocated payment stays "Payment received" — no invented copay', () => {
+  it('a payment collected on a visit date sits on that visit unless staff redirect it', () => {
     const answers = goldenAnswers();
     delete answers[GOLDEN_QUESTION_IDS.allocation];
+    expect(derive(goldenRows(), answers).explanation!.sections[1].patientPaidCents).toBe(-11900);
+
+    answers[GOLDEN_QUESTION_IDS.allocation] = { questionId: GOLDEN_QUESTION_IDS.allocation, optionId: 'general' };
     const { explanation } = derive(goldenRows(), answers);
     const e = explanation!;
     const filling = e.sections[1];
-    expect(filling.adjustments).toEqual([]);
+    expect(filling.patientPaidCents).toBe(0);
     expect(filling.remainingCents).toBe(39500);
-    expect(e.generalCredits).toEqual([{ label: 'Payment received', amountCents: -11900 }]);
+    expect(e.generalCredits).toEqual([{ label: 'General account payment', amountCents: -11900 }]);
     // Still adds up to $639 with the payment as a general credit.
     expect(e.calculationTotalCents).toBe(63900);
     expect(e.reconciled).toBe(true);

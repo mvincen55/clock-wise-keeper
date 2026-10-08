@@ -61,6 +61,11 @@ const RULES: WordingRule[] = [
     },
     family: 'filling',
   },
+  {
+    pattern: /resin\s+composite[\s-]*(\d)\s*s(urf\w*)?\b/i,
+    label: m => `${m[1]}-surface tooth-colored filling`,
+    family: 'filling',
+  },
   { pattern: /resin\s+based\s+composite|composite\s+filling/i, label: 'Tooth-colored filling', family: 'filling' },
   { pattern: /amalgam[\s-]*(one|two|three|four|1|2|3|4)?\s*surf/i, label: 'Silver filling', family: 'filling' },
   { pattern: /crown\s+porcelain\s*\/?\s*ceramic|porcelain\s*\/?\s*ceramic\s+crown/i, label: 'Porcelain/ceramic crown', family: 'crown' },
@@ -70,6 +75,8 @@ const RULES: WordingRule[] = [
   { pattern: /extraction[,]?\s*erupted|simple\s+extraction/i, label: 'Tooth extraction', family: 'extraction' },
   { pattern: /extraction/i, label: 'Tooth extraction', family: 'extraction' },
   { pattern: /sealant/i, label: 'Protective sealant', family: 'sealant' },
+  { pattern: /caries\s+arrest/i, label: 'Cavity-arresting medication', family: 'cavity-arresting treatment' },
+  { pattern: /\bFL\s+package\b/i, label: 'Fluoride treatment package', family: 'fluoride' },
   { pattern: /fluoride/i, label: 'Fluoride treatment', family: 'fluoride' },
   { pattern: /scaling\s+and\s+root\s+planing|perio\w*\s+scaling/i, label: 'Deep cleaning (scaling and root planing)', family: 'deep cleaning' },
   { pattern: /full\s+mouth\s+debridement/i, label: 'Full-mouth debridement', family: 'deep cleaning' },
@@ -115,6 +122,60 @@ function withTooth(label: string, tooth?: string): string {
   const t = (tooth ?? '').trim().replace(/^#/, '');
   if (label === '' || t === '' || !/^\d{1,2}[A-Za-z]?$/.test(t)) return label;
   return `${label}, tooth #${t}`;
+}
+
+/**
+ * Short title for a multi-service visit: its treatment families in visit
+ * order ("Exam, X-rays + cleaning"; "Cavity-arresting treatment + filling").
+ */
+export function visitSummaryLabel(services: Array<{ wording: FriendlyWording; tooth?: string }>): string {
+  const names: string[] = [];
+  for (const { wording } of services) {
+    const name = wording.family !== '' ? wording.family : wording.label.replace(/, tooth #.*$/, '');
+    if (!names.includes(name)) names.push(name);
+  }
+  return capitalize(joinPlus(names.map(n => n.toLowerCase().replace(/x-rays/g, 'X-rays'))));
+}
+
+/**
+ * One sentence listing a visit's services, repeated procedures collapsed
+ * with their teeth ("Cavity-arresting medication on 3 teeth (#26, #27, …)").
+ */
+export function visitServiceSentence(services: Array<{ wording: FriendlyWording; tooth?: string }>): string {
+  const groups: Array<{ base: string; count: number; teeth: string[] }> = [];
+  for (const { wording, tooth } of services) {
+    const base = wording.label.replace(/, tooth #.*$/, '').replace(/, (\d+ images?)$/, ' ($1)');
+    let group = groups.find(g => g.base === base);
+    if (!group) {
+      group = { base, count: 0, teeth: [] };
+      groups.push(group);
+    }
+    group.count += 1;
+    const t = (tooth ?? '').trim().replace(/^#/, '');
+    if (/^\d{1,2}[A-Za-z]?$/.test(t) && !group.teeth.includes(t)) group.teeth.push(t);
+  }
+  const parts = groups.map((g, i) => {
+    const base = i === 0 ? g.base : lowerFirstWord(g.base);
+    const teeth = g.teeth.map(t => `#${t}`).join(', ');
+    if (g.count === 1) return g.teeth.length ? `${base}, tooth ${teeth}` : base;
+    if (g.teeth.length === 0) return `${base} (×${g.count})`;
+    return `${base} on ${g.count} teeth (${teeth}${g.teeth.length < g.count ? ', …' : ''})`;
+  });
+  const body = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts[0];
+  return `${body}.`;
+}
+
+function joinPlus(items: string[]): string {
+  return items.length > 1 ? `${items.slice(0, -1).join(', ')} + ${items[items.length - 1]}` : items[0] ?? '';
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** Lower-case a leading ordinary word, leaving "X-rays"/acronyms alone. */
+function lowerFirstWord(text: string): string {
+  return /^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text;
 }
 
 /** Short summary label for the balance calculation ("Tooth #29 filling"). */

@@ -168,6 +168,70 @@ export async function recognizeFrame(canvas: HTMLCanvasElement): Promise<OcrResu
   }
 }
 
+/** How much the ledger read enlarges the crop — Dentrix's ledger type is ~11px. */
+export const LEDGER_SCALE = 3;
+
+/**
+ * Recognize a Dentrix ledger crop. The ledger's small, coloured type on
+ * alternating grey rows misreads at native size ("94.00" → "9400", "DR02" →
+ * "DROZ"), so the crop is read enlarged, flattened to its darkest channel (so
+ * light-green and magenta text stay dark) and normalized against the row
+ * background, as one uniform block. Word boxes come back in crop coordinates.
+ */
+export async function recognizeLedgerFrame(canvas: HTMLCanvasElement): Promise<OcrResult> {
+  const worker = await getWorker();
+  const scaled = document.createElement('canvas');
+  try {
+    scaled.width = canvas.width * LEDGER_SCALE;
+    scaled.height = canvas.height * LEDGER_SCALE;
+    const ctx = scaled.getContext('2d', { willReadFrequently: true })!;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(canvas, 0, 0, scaled.width, scaled.height);
+    const pixels = ctx.getImageData(0, 0, scaled.width, scaled.height);
+    const histogram = new Uint32Array(256);
+    const d = pixels.data;
+    for (let i = 0; i < d.length; i += 4) histogram[Math.min(d[i], d[i + 1], d[i + 2])]++;
+    let count = 0, background = 255;
+    for (let v = 0; v < 256; v++) { count += histogram[v]; if (count >= (d.length / 4) * 0.5) { background = v; break; } }
+    for (let i = 0; i < d.length; i += 4) {
+      const value = Math.min(255, Math.round((Math.min(d[i], d[i + 1], d[i + 2]) * 255) / Math.max(1, background)));
+      d[i] = d[i + 1] = d[i + 2] = value;
+    }
+    ctx.putImageData(pixels, 0, 0);
+
+    await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_BLOCK, preserve_interword_spaces: '1' });
+    let raw: TesseractWordLike[];
+    try {
+      const { data } = await worker.recognize(scaled, {}, { blocks: true });
+      raw = collectWordsFromBlocks(data as unknown as { blocks?: unknown[] });
+    } finally {
+      await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO, preserve_interword_spaces: '0' });
+    }
+    const words: OcrWord[] = raw
+      .filter(w => w && w.bbox && typeof w.text === 'string' && w.text.trim().length > 0)
+      .map(w => ({
+        text: w.text!.trim(),
+        bbox: {
+          x0: w.bbox!.x0 / LEDGER_SCALE,
+          x1: w.bbox!.x1 / LEDGER_SCALE,
+          y0: w.bbox!.y0 / LEDGER_SCALE,
+          y1: w.bbox!.y1 / LEDGER_SCALE,
+        },
+        confidence: typeof w.confidence === 'number' ? w.confidence : 0,
+      }));
+    const mean = words.length === 0 ? 0 : words.reduce((a, w) => a + w.confidence, 0) / words.length / 100;
+    return { words, confidence: Math.min(1, Math.max(0, mean)) };
+  } catch (err) {
+    if (err instanceof ScheduleReaderError) throw err;
+    throw new ScheduleReaderError('OCR_FAILED', {
+      reason: err instanceof Error ? err.name : 'unknown',
+    });
+  } finally {
+    scaled.width = 0;
+    scaled.height = 0;
+  }
+}
+
 /** tesseract.js v6+ nests words under blocks→paragraphs→lines. */
 function collectWordsFromBlocks(data: { blocks?: unknown[] }): TesseractWordLike[] {
   const words: TesseractWordLike[] = [];

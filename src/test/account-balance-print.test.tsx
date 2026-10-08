@@ -48,10 +48,12 @@ describe('AccountBalancePrintSheet — golden $639 case', () => {
     // The calculation lines: $363 visit + $276 filling.
     expect(html).toContain('$363.00');
     expect(html).toContain('$276.00');
-    // The filling card: $395 charge minus the confirmed $119 copay.
+    // The filling card: $395 charge minus the $119 paid that day.
     expect(html).toContain('$395.00');
     expect(html).toContain('-$119.00');
-    expect(html).toContain('Estimated copay/deductible collected');
+    expect(html).toContain('Your payment');
+    // The closing line shows how the visit balances add up.
+    expect(html).toContain('$363.00 + $276.00 = $639.00');
   });
 
   it('renders patient-friendly wording, dates, and identity', () => {
@@ -59,10 +61,10 @@ describe('AccountBalancePrintSheet — golden $639 case', () => {
     expect(html).toContain('Account Balance Explanation');
     expect(html).toContain('Taylor Sample');
     expect(html).toContain('Routine dental exam');
-    expect(html).toContain('Adult cleaning');
-    expect(html).toContain('Bitewing X-rays, 4 images');
+    expect(html).toContain('adult cleaning');
+    expect(html).toContain('bitewing X-rays (4 images)');
     expect(html).toContain('3-surface tooth-colored filling, tooth #29');
-    expect(html).toContain('February 12, 2026');
+    expect(html).toContain('2/12/2026');
     expect(html).toContain('Insurance applied');
     expect(html).toContain('$0.00');
     expect(html).toContain('Altus coverage was not active');
@@ -102,7 +104,7 @@ describe('AccountBalancePrintSheet — golden $639 case', () => {
     const html = goldenMarkup();
     expect(html).toContain('class="abx-sheet"');
     expect(html).toContain('abx-card');
-    expect(html).toContain('abx-hero');
+    expect(html).toContain('abx-invoice');
     expect(html).toContain('abx-calc');
   });
 });

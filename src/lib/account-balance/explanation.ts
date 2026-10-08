@@ -8,7 +8,8 @@
  *   · a ledger that does not reconcile produces NO explanation at all
  */
 import { formatCents, formatDateLong, formatDateShort } from './money';
-import { friendlyProcedure, summaryLabelFor } from './procedure-language';
+import { friendlyProcedure, summaryLabelFor, visitServiceSentence, visitSummaryLabel } from './procedure-language';
+import { allocateInsuranceClaims } from './claims';
 import { answerResolves, extractCarrierNames } from './questions';
 import { rowDeltaCents, type CancellationWaiverLink } from './reconcile';
 import type {
@@ -91,6 +92,11 @@ export function buildPatientExplanation(input: ExplanationInput): PatientExplana
   });
   const waiverRowIds = new Set(confirmedWaivers.flatMap(l => [l.feeRowId, l.creditRowId]));
 
+  // Insurance payments proven to settle a specific visit's claim, and the
+  // $0-net payment/fee-adjustment pairs Dentrix posts alongside them.
+  const claims = allocateInsuranceClaims(episodeRows);
+  const claimRowIds = new Set([...claims.allocatedRowIds, ...claims.hiddenRowIds]);
+
   // Insurance story confirmed for the episode's treatments (if asked).
   const episodeTreatmentIds = episodeRows
     .filter(r => r.classification === 'TREATMENT_CHARGE')
@@ -125,7 +131,7 @@ export function buildPatientExplanation(input: ExplanationInput): PatientExplana
   };
 
   for (const row of episodeRows) {
-    if (hiddenInternal.has(row.id) || waiverRowIds.has(row.id)) continue;
+    if (hiddenInternal.has(row.id) || waiverRowIds.has(row.id) || claimRowIds.has(row.id)) continue;
     const delta = rowDeltaCents(row);
     const answer = answers[`q:unknown:${row.id}`];
 
@@ -138,7 +144,7 @@ export function buildPatientExplanation(input: ExplanationInput): PatientExplana
         break;
       case 'UNKNOWN':
         if (delta === 0) break;
-        if (answer?.optionId === 'treatment') {
+        if (answer?.optionId === 'treatment' || (!answer && claims.claimedChargeRowIds.has(row.id))) {
           groupFor(row.dateISO).rows.push(row);
         } else if (answer?.optionId === 'fee' && (answer.note ?? '').trim()) {
           sections.push(simpleSection(row.dateISO, (answer.note ?? '').trim(), delta));
@@ -155,14 +161,10 @@ export function buildPatientExplanation(input: ExplanationInput): PatientExplana
       case 'PATIENT_PAYMENT': {
         if (delta === 0) break;
         const alloc = answers[`q:allocation:${row.id}`];
-        // A confirmed copay attaches to the same-date treatment section
-        // below — but only when such a section exists, so no cent can vanish.
-        if (
-          alloc?.optionId === 'copay' &&
-          episodeRows.some(
-            t => t.classification === 'TREATMENT_CHARGE' && t.dateISO === row.dateISO
-          )
-        ) {
+        // A payment collected on a visit date attaches to that visit's
+        // section below (unless staff said it was for something else) — but
+        // only when such a section exists, so no cent can vanish.
+        if (attachesToVisit(row, alloc?.optionId) && groupDates().has(row.dateISO)) {
           break;
         }
         const label =
@@ -205,6 +207,25 @@ export function buildPatientExplanation(input: ExplanationInput): PatientExplana
     }
   }
 
+  function attachesToVisit(row: LedgerRow, optionId: string | undefined): boolean {
+    return row.dateISO !== '' && (optionId === undefined || optionId === 'copay');
+  }
+  function groupDates(): Set<string> {
+    return new Set(
+      episodeRows
+        .filter(
+          t =>
+            !hiddenInternal.has(t.id) &&
+            ((t.classification === 'TREATMENT_CHARGE' && (t.chargeCents ?? 0) !== 0) ||
+              (t.classification === 'UNKNOWN' &&
+                (t.chargeCents ?? 0) > 0 &&
+                (answers[`q:unknown:${t.id}`]?.optionId === 'treatment' ||
+                  (!answers[`q:unknown:${t.id}`] && claims.claimedChargeRowIds.has(t.id)))))
+        )
+        .map(t => t.dateISO)
+    );
+  }
+
   // Materialize treatment groups into cards (in ledger order relative to
   // the simple sections already pushed — order by first date).
   for (const group of groups) {
@@ -214,30 +235,31 @@ export function buildPatientExplanation(input: ExplanationInput): PatientExplana
     });
     const servicesTotalCents = services.reduce((s, l) => s + l.amountCents, 0);
 
-    // Staff-confirmed copays whose payment shares the section's date.
+    // Patient payments collected on the visit date.
     const adjustments: ExplanationAdjustmentLine[] = [];
+    let patientPaidCents = 0;
     for (const row of episodeRows) {
-      if (row.classification !== 'PATIENT_PAYMENT') continue;
+      if (row.classification !== 'PATIENT_PAYMENT' || row.dateISO !== group.dateISO) continue;
       const alloc = answers[`q:allocation:${row.id}`];
-      if (alloc?.optionId === 'copay' && row.dateISO === group.dateISO) {
-        adjustments.push({
-          label: 'Estimated copay/deductible collected',
-          amountCents: rowDeltaCents(row),
-        });
-      }
+      if (attachesToVisit(row, alloc?.optionId)) patientPaidCents += rowDeltaCents(row);
     }
+    const insurancePaidCents = claims.insuranceByDate.get(group.dateISO) ?? 0;
 
     const single = services.length === 1 ? services[0] : null;
-    const remainingCents =
-      servicesTotalCents + adjustments.reduce((s, a) => s + a.amountCents, 0);
+    const remainingCents = servicesTotalCents + insurancePaidCents + patientPaidCents;
     sections.push({
+      dateISO: group.dateISO,
+      insurancePaidCents,
+      insurancePaymentDatesISO: claims.paymentDatesByDate.get(group.dateISO) ?? [],
+      patientPaidCents,
       dateLabel: group.dateISO ? formatDateLong(group.dateISO) : 'Date not read',
       title: single ? single.label : 'Dental visit',
-      summaryLabel: single ? summaryLabelFor(single.wording, single.tooth) : 'Dental visit',
+      summaryLabel: single ? summaryLabelFor(single.wording, single.tooth) : visitSummaryLabel(services),
+      serviceSentence: single ? '' : visitServiceSentence(services),
       services: services.map(({ label, amountCents }) => ({ label, amountCents })),
       servicesTotalCents,
       adjustments,
-      insuranceAppliedCents: insuranceStory !== null ? 0 : null,
+      insuranceAppliedCents: insuranceStory !== null && insurancePaidCents === 0 ? 0 : null,
       remainingCents,
       contextNote: insuranceStory ?? '',
       // Keep ledger ordering: groups were created in ledger order but simple
@@ -320,9 +342,14 @@ export function buildPatientExplanation(input: ExplanationInput): PatientExplana
 
 function simpleSection(dateISO: string, title: string, amountCents: Cents): ExplanationSection {
   return {
+    dateISO,
+    insurancePaidCents: 0,
+    insurancePaymentDatesISO: [],
+    patientPaidCents: 0,
     dateLabel: dateISO ? formatDateLong(dateISO) : 'Date not read',
     title,
     summaryLabel: title,
+    serviceSentence: '',
     services: [{ label: title, amountCents }],
     servicesTotalCents: amountCents,
     adjustments: [],
@@ -333,8 +360,7 @@ function simpleSection(dateISO: string, title: string, amountCents: Cents): Expl
 }
 
 function sectionDateKey(section: ExplanationSection): number {
-  // dateLabel is "February 12, 2026" — recover a sortable key from it.
-  const parsed = Date.parse(section.dateLabel);
+  const parsed = Date.parse(section.dateISO);
   return Number.isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
 }
 
