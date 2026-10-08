@@ -13,9 +13,11 @@
  *     to that visit never exceeds what was billed
  *   · several claims may settle one visit (primary, then secondary coverage)
  *   · when more than one visit was billed the same total (identical recall
- *     visits), claims are assumed to settle in visit order: the earliest visit
- *     not yet settled takes the claim. That is the one assumption here that
- *     the ledger cannot prove.
+ *     visits), the amounts are still certain but WHICH claim paid WHICH visit
+ *     is not. The earliest unsettled visit takes the claim, and the payment
+ *     date is withheld from the patient sheet (it prints "Insurance payment
+ *     received" with no date) so nothing unproven is stated; staff can answer
+ *     from Dentrix if a patient asks.
  *   · internal "In-Office Provider … Adj" rows posted inside the same claim
  *     (Dentrix raising the fee when insurance overpaid) ride along, so the
  *     visit shows the NET insurance amount and no phantom patient credit
@@ -59,6 +61,8 @@ export interface ClaimAllocation {
   hiddenRowIds: Set<string>;
   /** UNKNOWN charges an insurance claim billed — proven parts of a visit. */
   claimedChargeRowIds: Set<string>;
+  /** Visits whose claim could have belonged to another identical-fee visit. */
+  dateUncertainVisits: Set<string>;
 }
 
 export function allocateInsuranceClaims(episodeRows: LedgerRow[]): ClaimAllocation {
@@ -68,6 +72,7 @@ export function allocateInsuranceClaims(episodeRows: LedgerRow[]): ClaimAllocati
     allocatedRowIds: new Set(),
     hiddenRowIds: new Set(),
     claimedChargeRowIds: new Set(),
+    dateUncertainVisits: new Set(),
   };
 
   // Visits: positive charges grouped by date of service, in ledger order.
@@ -141,6 +146,9 @@ export function allocateInsuranceClaims(episodeRows: LedgerRow[]): ClaimAllocati
     );
     const visit = candidates.find(v => v.insuranceCents === 0) ?? candidates[0];
     if (!visit) continue;
+    // Another visit could have been the one this claim paid: keep the amount,
+    // drop the date.
+    if (candidates.length > 1) result.dateUncertainVisits.add(visit.dateISO);
 
     visit.insuranceCents += net;
     result.insuranceByDate.set(visit.dateISO, visit.insuranceCents);

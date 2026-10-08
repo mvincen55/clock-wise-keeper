@@ -127,17 +127,27 @@ describe('allocateInsuranceClaims', () => {
 
   it('settles identical-fee visits in visit order', () => {
     n = 0;
+    // An older open exam keeps the balance off zero, so every visit is in play.
     const rows = [
-      r('2026-01-05', 'Prophylaxis-adult', { c: 9570 }, 9570),
-      r('2026-07-05', 'Prophylaxis-adult', { c: 9570 }, 19140),
-      r('2026-08-01', 'Insurance Payment-Check', { p: -9570 }, 9570),
-      r('2026-08-01', "Pr Dental Claim - Rec'd 95.70", {}, 9570),
-      r('2026-09-01', 'Insurance Payment-Check', { p: -9570 }, 0),
-      r('2026-09-01', "Pr Dental Claim - Rec'd 95.70", {}, 0),
+      r('2025-12-01', 'Periodic oral evaluation', { c: 4130 }, 4130),
+      r('2026-01-05', 'Prophylaxis-adult', { c: 9570 }, 13700),
+      r('2026-07-05', 'Prophylaxis-adult', { c: 9570 }, 23270),
+      r('2026-08-01', 'Insurance Payment-Check', { p: -9570 }, 13700),
+      r('2026-08-01', "Pr Dental Claim - Rec'd 95.70", {}, 13700),
+      r('2026-09-01', 'Insurance Payment-Check', { p: -9570 }, 4130),
+      r('2026-09-01', "Pr Dental Claim - Rec'd 95.70", {}, 4130),
     ];
     const claims = allocateInsuranceClaims(rows);
     expect(claims.insuranceByDate.get('2026-01-05')).toBe(-9570);
     expect(claims.insuranceByDate.get('2026-07-05')).toBe(-9570);
+    // The first claim could have paid either visit; the second had one left.
+    expect([...claims.dateUncertainVisits]).toEqual(['2026-01-05']);
+
+    // The sheet keeps the amounts and withholds only the uncertain date.
+    const { explanation } = explain(rows);
+    expect(explanation.sections.map(s => s.insurancePaymentDatesISO)).toEqual([[], [], ['2026-09-01']]);
+    expect(explanation.sections.map(s => s.remainingCents)).toEqual([4130, 0, 0]);
+    expect(explanation.reconciled).toBe(true);
   });
 
   it('leaves payments unallocated when no visit matches the billed total', () => {
