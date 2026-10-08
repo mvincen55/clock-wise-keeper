@@ -51,6 +51,8 @@ interface ColumnBand {
   /** Horizontal band (inclusive) that owns words in this column. */
   xStart: number;
   xEnd: number;
+  /** Left edge of the header word itself. */
+  headerX0: number;
 }
 
 const HEADER_SYNONYMS: Array<{ key: LedgerColumnKey; pattern: RegExp }> = [
@@ -71,6 +73,62 @@ const HEADER_SYNONYMS: Array<{ key: LedgerColumnKey; pattern: RegExp }> = [
   { key: 'flag', pattern: /^[NRDM]$/ },
 ];
 
+/**
+ * Split one OCR'd header word into the header names it holds. Grid lines read
+ * as "|" ("|Ins|", "N|"), and tight columns run together ("AmountProv",
+ * "RDM"); each piece gets the slice of the word's box its characters cover.
+ */
+export function splitHeaderWord(word: OcrWord): OcrWord[] {
+  const text = word.text;
+  const width = word.bbox.x1 - word.bbox.x0;
+  const charW = text.length > 0 ? width / text.length : 0;
+  const piece = (start: number, end: number): OcrWord => ({
+    ...word,
+    text: text.slice(start, end),
+    bbox: { ...word.bbox, x0: word.bbox.x0 + start * charW, x1: word.bbox.x0 + end * charW },
+  });
+  const out: OcrWord[] = [];
+  const re = /[A-Za-z]+/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    const start = m.index;
+    const letters = m[0];
+    if (HEADER_SYNONYMS.some(h => h.pattern.test(letters))) {
+      out.push(piece(start, start + letters.length));
+      continue;
+    }
+    // Run-together names: accept only a split that consumes every letter.
+    const parts = splitConcatenated(letters);
+    if (parts) {
+      let offset = start;
+      for (const part of parts) {
+        out.push(piece(offset, offset + part.length));
+        offset += part.length;
+      }
+    }
+  }
+  return out;
+}
+
+/** Names worth finding inside a run-together header word, longest first. */
+const CONCAT_NAMES = [
+  'description', 'balance', 'payment', 'surface', 'charge', 'amount', 'patient',
+  'check', 'tooth', 'teeth', 'code', 'prov', 'date', 'ins', 'n', 'r', 'd', 'm',
+];
+
+function splitConcatenated(letters: string): string[] | null {
+  if (letters === '') return [];
+  const lower = letters.toLowerCase();
+  for (const name of CONCAT_NAMES) {
+    if (!lower.startsWith(name)) continue;
+    // Single letters only ever stand for the N · R · D · M flag columns.
+    if (name.length === 1 && letters[0] !== letters[0].toUpperCase()) continue;
+    const rest = splitConcatenated(letters.slice(name.length));
+    if (rest) return [letters.slice(0, name.length), ...rest];
+  }
+  return null;
+}
+
 /** Words-per-line clusters, in reading order. Re-exported for tests. */
 export { groupWordsIntoLines };
 
@@ -90,8 +148,8 @@ export function detectHeaderColumns(
 ): HeaderDetection | null {
   for (let i = 0; i < lines.length; i++) {
     const anchors: Array<{ key: LedgerColumnKey; center: number; x0: number }> = [];
-    for (const word of lines[i].words) {
-      const clean = word.text.replace(/[^A-Za-z]/g, '');
+    for (const word of lines[i].words.flatMap(splitHeaderWord)) {
+      const clean = word.text;
       const match = HEADER_SYNONYMS.find(h => h.pattern.test(clean));
       // Flag columns (N · R · D · M) repeat the key; each still needs a band.
       if (match && (match.key === 'flag' || !anchors.some(a => a.key === match.key))) {
@@ -111,6 +169,7 @@ export function detectHeaderColumns(
       key: a.key,
       xStart: idx === 0 ? -Infinity : boundary(anchors[idx - 1], a),
       xEnd: idx === anchors.length - 1 ? Infinity : boundary(a, anchors[idx + 1]),
+      headerX0: a.x0,
     }));
     const bottomY = Math.max(...lines[i].words.map(w => w.bbox.y1));
     return { lineIndex: i, bottomY, columns };
@@ -164,8 +223,16 @@ export function parseLedgerWords(words: OcrWord[], captureId: string): ParsedLed
 
     const cells = new Map<LedgerColumnKey, OcrWord[]>();
     for (const word of line.words) {
-      // Dentrix's "*" (posted) marker sits in its own unlabeled column.
-      if (/^[*•]+$/.test(word.text.trim())) continue;
+      // Dentrix's "*" (posted) marker sits in its own unlabeled column, and
+      // grid lines read as "|".
+      if (/^[*•|]+$/.test(word.text.trim())) continue;
+      // The narrow Tooth column's grid line, left of its header text, reads
+      // as "1" / "I" / "|" — it is not a tooth.
+      const toothBand = header.columns.find(c => c.key === 'tooth');
+      if (toothBand && /^[Il1|!]$/.test(word.text.trim()) && word.bbox.x1 <= toothBand.headerX0) {
+        const center = (word.bbox.x0 + word.bbox.x1) / 2;
+        if (center >= toothBand.xStart && center < toothBand.xEnd) continue;
+      }
       const center = (word.bbox.x0 + word.bbox.x1) / 2;
       const band = header.columns.find(c => center >= c.xStart && center < c.xEnd);
       if (!band || IGNORED_KEYS.has(band.key)) continue;
@@ -174,7 +241,8 @@ export function parseLedgerWords(words: OcrWord[], captureId: string): ParsedLed
       cells.set(band.key, list);
     }
 
-    const get = (key: LedgerColumnKey) => cellText(cells.get(key) ?? []);
+    // "Adj" commonly reads as "Ad)".
+    const get = (key: LedgerColumnKey) => cellText(cells.get(key) ?? []).replace(/\bAd\)/g, 'Adj');
     const conf = (key: LedgerColumnKey) => meanConfidence(cells.get(key) ?? []);
 
     const dateText = get('date');
