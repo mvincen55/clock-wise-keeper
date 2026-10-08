@@ -206,3 +206,100 @@ describe('inferPatientName', () => {
     expect(inferred.distinctNames).toHaveLength(2);
   });
 });
+
+describe('parseLedgerWords — Dentrix signed-Amount layout', () => {
+  // Date · To… · Surface · Check # · Code · * · Description · N R D M · Amount · Prov · Ins · Balance
+  const A = {
+    date: 5, tooth: 75, surface: 115, check: 200, code: 310, star: 365, desc: 385,
+    n: 645, r: 680, d: 705, m: 730, amount: 790, prov: 850, ins: 895, balance: 930,
+  };
+
+  function amountHeader(y = 5): OcrWord[] {
+    return [
+      word('Date', A.date, y),
+      word('To...', A.tooth, y),
+      word('Surface', A.surface, y),
+      word('Check', A.check, y),
+      word('#', A.check + 50, y),
+      word('Code', A.code, y),
+      word('*', A.star, y),
+      word('Description', A.desc, y),
+      word('N', A.n, y),
+      word('R', A.r, y),
+      word('D', A.d, y),
+      word('M', A.m, y),
+      word('Amount', A.amount, y),
+      word('Prov', A.prov, y),
+      word('Ins', A.ins, y),
+      word('Balance', A.balance, y),
+    ];
+  }
+
+  interface AmountRow {
+    date: string; tooth?: string; surface?: string; check?: string; code?: string;
+    desc: string[]; flag?: string; amount?: string; prov?: string; ins?: string; balance: string;
+  }
+
+  function amountRow(r: AmountRow, y: number): OcrWord[] {
+    const w: OcrWord[] = [word(r.date, A.date, y), word('I', A.tooth - 8, y), word('*', A.star, y)];
+    if (r.tooth) w.push(word(r.tooth, A.tooth + 15, y));
+    if (r.surface) w.push(word(r.surface, A.surface, y));
+    if (r.check) w.push(word(r.check, A.check, y));
+    if (r.code) w.push(word(r.code, A.code, y));
+    r.desc.forEach((t, i) => w.push(word(t, A.desc + i * 70, y)));
+    if (r.flag) w.push(word(r.flag, A.n, y));
+    if (r.amount) w.push(word(r.amount, A.amount, y));
+    if (r.prov) w.push(word(r.prov, A.prov, y));
+    if (r.ins) w.push(word(r.ins, A.ins, y));
+    w.push(word(r.balance, A.balance, y));
+    return w;
+  }
+
+  it('finds the header and splits the signed Amount into charge/payment', () => {
+    const rows: AmountRow[] = [
+      { date: '10/08/2024', code: 'CC Pay', desc: ['VISA/MC/AMEX/DISC', 'Payment'], amount: '-49.97', prov: 'DR02', balance: '94.00' },
+      { date: '10/24/2024', check: '30655057', code: 'Pay', desc: ['Insurance', 'Payment-Check'], amount: '0.00', prov: 'HDA1', balance: '49.97' },
+      { date: '10/24/2024', code: 'Ins', desc: ['Pr', 'Dental', 'Claim', "Rec'd", '94.00'], balance: '49.97' },
+      { date: '04/22/2025', code: 'D1110', desc: ['Prophylaxis-adult'], amount: '95.70', prov: 'HY10', balance: '95.70' },
+      { date: '10/30/2025', tooth: '11', code: 'D1354', desc: ['Caries', 'arresting', 'meds-per', 'tooth'], amount: '41.00', prov: 'DR02', balance: '136.70' },
+      { date: '04/27/2026', code: '1207', desc: ['Follow-up', 'fluoride', 'varnish'], amount: '0.00', prov: 'HY10', ins: 'No', balance: '136.70' },
+      { date: '06/08/2026', code: 'Adj', desc: ['In-Office', 'Provider', 'Prod', 'Adj'], flag: 'J', amount: '8.60', prov: 'HY10', balance: '145.30' },
+    ];
+    const words = [...amountHeader()];
+    rows.forEach((r, i) => words.push(...amountRow(r, 30 + i * 16)));
+
+    const parsed = parseLedgerWords(words, 'cap-amt');
+    expect(parsed.headerFound).toBe(true);
+    expect(parsed.rows).toHaveLength(7);
+    const [cc, ins0, claim, prophy, caries, fl, adj] = parsed.rows;
+
+    expect(cc.rawDescription).toBe('VISA/MC/AMEX/DISC Payment');
+    expect(cc.paymentCents).toBe(-4997);
+    expect(cc.chargeCents).toBeNull();
+    expect(cc.balanceCents).toBe(9400);
+    expect(cc.classification).toBe('PATIENT_PAYMENT');
+
+    expect(ins0.paymentCents).toBe(0);
+    expect(ins0.chargeCents).toBeNull();
+    expect(ins0.classification).toBe('INSURANCE_PAYMENT');
+
+    expect(claim.chargeCents).toBeNull();
+    expect(claim.paymentCents).toBeNull();
+    expect(claim.balanceCents).toBe(4997);
+    expect(claim.classification).toBe('ZERO_DOLLAR_EVENT');
+
+    expect(prophy.chargeCents).toBe(9570);
+    expect(prophy.tooth).toBe('');
+    expect(prophy.classification).toBe('TREATMENT_CHARGE');
+
+    expect(caries.tooth).toBe('11');
+    expect(caries.chargeCents).toBe(4100);
+
+    expect(fl.chargeCents).toBe(0);
+    expect(fl.balanceCents).toBe(13670);
+
+    expect(adj.chargeCents).toBe(860);
+    expect(adj.classification).toBe('INTERNAL_PROVIDER_ADJUSTMENT');
+    expect(adj.lowConfidenceFields).toEqual([]);
+  });
+});
