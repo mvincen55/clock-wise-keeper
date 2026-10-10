@@ -1,6 +1,10 @@
 // Pathfinder — the AI behind the Goals page.
 //
 // Modes:
+//   find_goal    -> help a member pick a goal worth working on: read what
+//                   they are looking at, ask one question if needed, then
+//                   offer 2-3 goals that fit them and this office. No goal
+//                   row exists yet, so the conversation rides along.
 //   breakdown    -> turn a member's goal into 4-8 concrete tasks with
 //                   realistic due dates that dodge their time off, office
 //                   closures, and lean lighter on short-staffed days. The
@@ -23,6 +27,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { OFFICE_DOCTRINE } from "../_shared/office-doctrine.ts";
 import { logScrub, scrubFreeText } from "../_shared/phi-scrub.ts";
+import { guardAiInput, JAILBREAK_REFUSAL } from "../_shared/jailbreak-guard.ts";
+import {
+  type DailyCloseout,
+  detectSignals,
+  type ProviderDayRow,
+  rollupWeeks,
+} from "../_shared/sprint-signals.ts";
 
 
 const corsHeaders = {
@@ -64,6 +75,42 @@ const OPEN_GOAL_PLAN_DAYS = 28;
 
 const isPlainDate = (v: unknown): v is string =>
   typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+
+/** How a member's operational role reads in a sentence about them. */
+const ROLE_WORDS: Record<string, string> = {
+  dentist: "a dentist",
+  hygienist: "a hygienist",
+  dental_assistant: "a dental assistant",
+  front_desk: "front desk",
+  treatment_coordinator: "a treatment coordinator",
+  office_manager: "the office manager",
+  assistant_office_manager: "an assistant office manager",
+  sterilization: "sterilization",
+  floater: "a floater",
+  other: "another role",
+};
+
+/** A read that can fail (RLS, a renamed column, the network) reads as "nothing known". */
+async function safeRead<T>(
+  build: () => PromiseLike<{ data: T | null; error?: unknown }>,
+): Promise<T | null> {
+  try {
+    const r = await build();
+    return r?.error ? null : (r?.data ?? null);
+  } catch {
+    return null;
+  }
+}
+
+const FIND_GOAL_SYSTEM =
+  "You are Pathfinder, a warm, practical coach inside a dental practice's team app, helping ONE team member choose ONE goal worth working on. The goal stays theirs until it is done, so it has to be something they actually care about and can move themselves. " +
+  "HOW TO WORK: Read what they say they are looking at. If you genuinely cannot tell what they want to get better at or what is bugging them, ask ONE short, concrete question — no list of questions — and offer no candidates yet. " +
+  "Once you can tell, offer 2 or 3 candidate goals that fit THEIR situation and role, not generic job-description goals. Keep their own words and framing wherever you can and never swap the subject of what they said. Each candidate: a one-sentence first-person goal title (max 140 characters, no trailing period), a short measurable target (a number, a count, or a clear done-state; max 50 characters), ONE sentence on why it fits what they said, and a realistic number of weeks. " +
+  "When they ask to adjust (smaller, bigger, more about something, combine two), return the adjusted candidates. " +
+  "The reply text is 1 to 3 short sentences that talk to them like a person; the candidates carry the detail. Never lecture about SMART or list its letters, never rank or compare them to teammates, never hype. " +
+  "Use only numbers that appear in the facts below — never invent office figures. The office's recorded rules win over any metric: never suggest bending a policy to move a number. " +
+  "NEVER reference any profile, questionnaire, answers, or 'based on…' anything. " +
+  'Reply with ONLY JSON: {"reply":string,"candidates":[{"title":string,"target":string,"why":string,"weeks":number}]}';
 
 function datesBetween(start: string, end: string): string[] {
   const out: string[] = [];
@@ -157,9 +204,163 @@ Deno.serve(async (req) => {
       title?: string;
       description?: string;
       message?: string;
+      messages?: unknown;
     };
-    const allowed = ["breakdown", "draft_update", "polish_goal", "chat"];
+    const allowed = ["breakdown", "draft_update", "polish_goal", "chat", "find_goal"];
     const mode = allowed.includes(body.mode ?? "") ? body.mode! : "breakdown";
+
+    // ---- find_goal: help pick a goal that fits what the member is looking at ----
+    // No goal row exists yet, so the conversation lives on the client and is
+    // sent whole each turn. Person-level detail never leaves for the gateway.
+    if (mode === "find_goal") {
+      const turns = (Array.isArray(body.messages) ? body.messages : [])
+        .map((m) => {
+          const row = (m ?? {}) as Record<string, unknown>;
+          const scrubbed = scrubFreeText(bounded(row.content, 1500), 1500);
+          logScrub("goal-assistant.find_goal", scrubbed);
+          return {
+            author: row.author === "pathfinder" ? ("pathfinder" as const) : ("member" as const),
+            content: scrubbed.text,
+          };
+        })
+        .filter((t) => t.content !== "")
+        .slice(-12);
+      const latest = turns[turns.length - 1];
+      if (!latest || latest.author !== "member") return json({ error: "Bad request" }, 400);
+      if (
+        await guardAiInput({
+          orgId: membership.org_id,
+          actorUserId: user.id,
+          surface: "goal-assistant.find_goal",
+          input: latest.content,
+        })
+      ) {
+        return json({ error: JAILBREAK_REFUSAL }, 400);
+      }
+
+      const orgId = membership.org_id as string;
+      const isAdmin = membership.role === "owner" || membership.role === "manager";
+      // Everything below is office or staff free text, so everything below gets scrubbed.
+      const sv = (v: unknown, n: number) => scrubFreeText(bounded(v, n), n).text;
+
+      const employee = await safeRead<{ id: string }>(() =>
+        supabase.from("employees").select("id").eq("org_id", orgId).eq("user_id", user.id).limit(1).maybeSingle()
+      );
+      const [roles, pastGoals, officeGoals, practice, brokenAppt, memories, deposits, metrics] =
+        await Promise.all([
+          employee
+            ? safeRead<{ operational_role: string; is_primary: boolean }[]>(() =>
+              supabase.from("employee_operational_roles").select("operational_role, is_primary").eq("employee_id", employee.id).limit(10)
+            )
+            : Promise.resolve(null),
+          safeRead<{ title: string; smart_target: string | null; status: string }[]>(() =>
+            supabase.from("goals").select("title, smart_target, status").eq("user_id", user.id).order("created_at", { ascending: false }).limit(6)
+          ),
+          safeRead<{ title: string; metric: string; target_count: number; progress: number; status: string }[]>(() =>
+            supabase.from("team_goals").select("title, metric, target_count, progress, status").eq("org_id", orgId).in("status", ["active", "pending_verification"]).limit(3)
+          ),
+          safeRead<{ confirmation_lead_days: number | null }>(() =>
+            supabase.from("org_practice_settings").select("confirmation_lead_days").eq("org_id", orgId).maybeSingle()
+          ),
+          safeRead<{ notice_business_hours: number; fee_amount: number }>(() =>
+            supabase.from("broken_appt_settings").select("notice_business_hours, fee_amount").eq("org_id", orgId).maybeSingle()
+          ),
+          safeRead<{ content: string }[]>(() =>
+            supabase.from("assistant_memories").select("content").eq("org_id", orgId).eq("kind", "office").eq("is_active", true).eq("status", "active").order("created_at", { ascending: true }).limit(20)
+          ),
+          // Closeout figures are office financial data: read for owners and managers only.
+          isAdmin
+            ? safeRead<DailyCloseout[]>(() =>
+              supabase.from("deposit_logs").select("deposit_date, production_cents, hygiene_cancellations, hygiene_no_shows, doctor_cancellations, doctor_no_shows, staffing_assessment").eq("org_id", orgId).gte("deposit_date", addDays(todayIso, -42)).order("deposit_date", { ascending: true }).limit(45)
+            )
+            : Promise.resolve(null),
+          isAdmin
+            ? safeRead<ProviderDayRow[]>(() =>
+              supabase.from("provider_day_metrics").select("business_date, department, net_bookable_minutes, scheduled_minutes, true_open_minutes, cancellation_open_minutes, no_show_open_minutes").eq("org_id", orgId).gte("business_date", addDays(todayIso, -28)).limit(200)
+            )
+            : Promise.resolve(null),
+        ]);
+
+      // The numbers come from code, never from the model.
+      const weeks = rollupWeeks((deposits ?? []) as DailyCloseout[]);
+      const signals = isAdmin ? detectSignals(weeks, (metrics ?? []) as ProviderDayRow[]) : [];
+
+      const roleWords = (roles ?? [])
+        .sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
+        .map((r) => ROLE_WORDS[String(r.operational_role)] ?? String(r.operational_role).replace(/_/g, " "));
+      const rules: string[] = [];
+      if (practice?.confirmation_lead_days != null) {
+        rules.push(`Confirmation window: appointments are confirmed ${practice.confirmation_lead_days} day(s) ahead.`);
+      }
+      if (brokenAppt) {
+        rules.push(
+          `Broken-appointment policy: ${brokenAppt.notice_business_hours} business hours' notice to cancel or reschedule; $${Number(brokenAppt.fee_amount)} scheduling fee.`,
+        );
+      }
+      for (const m of memories ?? []) {
+        const line = sv(m.content, 240);
+        if (line) rules.push(`Office rule/memory: ${line}`);
+      }
+
+      const facts = [
+        `TODAY: ${todayIso}.`,
+        `THE MEMBER: ${roleWords.length > 0 ? `works as ${roleWords.join(" and ")}` : "role not recorded"} (${isAdmin ? "an owner or manager" : "a team member"}).`,
+        `THEIR PAST GOALS (newest first): ${
+          (pastGoals ?? [])
+            .map((g) => `"${sv(g.title, 120)}"${g.smart_target ? ` (target: ${sv(g.smart_target, 60)})` : ""} — ${g.status}`)
+            .join("; ") || "none yet"
+        }`,
+        `THE OFFICE GOAL RIGHT NOW: ${
+          (officeGoals ?? [])
+            .map((g) => `"${sv(g.title, 100)}": ${g.progress}/${g.target_count} ${sv(g.metric, 80)} (${g.status})`)
+            .join("; ") || "none running"
+        }`,
+        `OFFICE RULES ON FILE:\n${rules.length > 0 ? rules.map((l) => `- ${l}`).join("\n") : "- none recorded"}`,
+        isAdmin
+          ? `COMPUTED OFFICE SIGNALS (authoritative; never restate them differently):\n${
+            signals.length > 0
+              ? signals.map((s) => `- [${s.concernLevel}] ${s.receipt}`).join("\n")
+              : "- none detected; recent data may be thin"
+          }`
+          : "",
+        isAdmin && weeks.length > 0
+          ? `RECENT WEEKS (Mon-start): ${
+            weeks.slice(-6).map((w) =>
+              `wk ${w.weekOf}: ${w.disruptions} cancels+no-shows over ${w.days} closeouts` +
+              (w.strainedDays ? `, ${w.strainedDays} strained day(s)` : "")
+            ).join("; ")
+          }`
+          : "",
+        meetingLine,
+      ].filter(Boolean).join("\n\n");
+
+      const messages: ChatMessage[] = [
+        { role: "system", content: `${FIND_GOAL_SYSTEM}\n\nFACTS ABOUT THIS MEMBER AND OFFICE:\n${facts}` },
+        ...turns.map((t) => ({
+          role: (t.author === "pathfinder" ? "assistant" : "user") as "assistant" | "user",
+          content: t.content,
+        })),
+      ];
+      const raw = await callModel(apiKey, messages, 900);
+      if (raw === null) return json({ error: "AI request failed" }, 502);
+      const parsed = parseJsonBlock<{ reply?: unknown; candidates?: unknown }>(raw);
+      const reply = bounded(parsed?.reply, 1200) || bounded(raw, 1200);
+      if (!reply) return json({ error: "Pathfinder had nothing to say" }, 502);
+      const candidates = (Array.isArray(parsed?.candidates) ? parsed!.candidates : [])
+        .map((c: unknown) => {
+          const row = (c ?? {}) as Record<string, unknown>;
+          const wk = Number(row.weeks);
+          return {
+            title: bounded(row.title, 160),
+            target: bounded(row.target, 60),
+            why: bounded(row.why, 220),
+            weeks: Number.isInteger(wk) && wk >= 1 && wk <= 26 ? wk : null,
+          };
+        })
+        .filter((c) => c.title !== "")
+        .slice(0, 3);
+      return json({ reply, candidates });
+    }
 
     // ---- polish_goal: no goal row exists yet ----
     if (mode === "polish_goal") {

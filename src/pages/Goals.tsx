@@ -76,6 +76,8 @@ export default function Goals() {
   const [updateGoal, setUpdateGoal] = useState<Goal | null>(null);
   // When a goal is archived, the next goal set becomes its replacement.
   const [pendingReplacement, setPendingReplacement] = useState<string | null>(null);
+  // "Set my goal and plan the steps": the new card breaks itself down on mount.
+  const [autoPlanGoalId, setAutoPlanGoalId] = useState<string | null>(null);
 
   const isManager = ctx?.role === 'owner' || ctx?.role === 'manager';
   const goals = useMemo(() => data?.goals ?? [], [data]);
@@ -325,9 +327,10 @@ export default function Goals() {
 
       {!myTeamGoal && (
         <SetGoalCard
-          onCreated={title => {
+          onCreated={(goal, { plan }) => {
+            if (plan) setAutoPlanGoalId(goal.id);
             if (!pendingReplacement) return;
-            linkReplacement.mutate({ eventId: pendingReplacement, newTitle: title });
+            linkReplacement.mutate({ eventId: pendingReplacement, newTitle: goal.title });
             setPendingReplacement(null);
           }}
         />
@@ -358,6 +361,8 @@ export default function Goals() {
                 onShareUpdate={() => setUpdateGoal(goal)}
                 events={(goalEvents ?? []).filter(ev => ev.goal_id === goal.id)}
                 onArchived={setPendingReplacement}
+                autoPlan={goal.id === autoPlanGoalId}
+                onAutoPlanHandled={() => setAutoPlanGoalId(null)}
               />
             </div>
           ))}

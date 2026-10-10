@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useOrgContext } from '@/hooks/useOrgContext';
 import { getToday, shiftDate } from '@/lib/time-utils';
 import { COMPLETED_GOAL_GRACE_DAYS, isCurrentGoal } from '@/lib/goal-window';
+import type { FinderTurn, GoalCandidate } from '@/lib/goal-finder';
 
 // Goals: one encouraging, self-chosen goal per person. A goal stays the
 // person's goal until they complete it or change it — it is not bound to the
@@ -507,7 +508,7 @@ export function useLinkReplacement() {
 
 /** Pathfinder calls. */
 export async function callPathfinder(payload: {
-  mode: 'breakdown' | 'draft_update' | 'polish_goal' | 'chat';
+  mode: 'breakdown' | 'draft_update' | 'polish_goal' | 'chat' | 'find_goal';
   goalId?: string;
   quickNotes?: string;
   title?: string;
@@ -515,6 +516,8 @@ export async function callPathfinder(payload: {
   /** For polish_goal: the target date the member picked, if any. */
   dueOn?: string | null;
   message?: string;
+  /** For find_goal: the pick-a-goal conversation so far (no goal row exists yet). */
+  messages?: FinderTurn[];
 }) {
   const { data, error } = await supabase.functions.invoke('goal-assistant', { body: payload });
   if (error) throw new Error('Pathfinder is unavailable right now');
@@ -536,6 +539,8 @@ export async function callPathfinder(payload: {
       time_bound: string;
     };
     reply?: string;
+    /** find_goal: goals Pathfinder proposes from what the member said. */
+    candidates?: GoalCandidate[];
   };
 }
 
@@ -562,6 +567,33 @@ export function useGoalMessages(goalId: string, enabled: boolean) {
       if (error) throw error;
       return (data ?? []) as GoalMessage[];
     },
+  });
+}
+
+/**
+ * Carries the conversation that chose a goal into that goal's own Pathfinder
+ * thread, so "Talk to Pathfinder" on the card remembers how it was picked.
+ * Rows are spaced a second apart so the thread keeps its order.
+ */
+export function useSeedGoalThread() {
+  const { data: ctx } = useOrgContext();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ goalId, turns }: { goalId: string; turns: FinderTurn[] }) => {
+      if (!ctx || turns.length === 0) return;
+      const base = Date.now() - turns.length * 1000;
+      const { error } = await supabase.from('goal_messages').insert(
+        turns.map((t, i) => ({
+          org_id: ctx.org_id,
+          goal_id: goalId,
+          author: t.author,
+          content: t.content,
+          created_at: new Date(base + i * 1000).toISOString(),
+        }))
+      );
+      if (error) throw error;
+    },
+    onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: ['goal-messages', vars.goalId] }),
   });
 }
 
