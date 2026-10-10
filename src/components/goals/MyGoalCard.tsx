@@ -1,5 +1,5 @@
 import AddToMyListButton from '@/components/copilot/AddToMyListButton';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -54,6 +54,8 @@ export default function MyGoalCard({
   onShareUpdate,
   events = [],
   onArchived,
+  autoPlan = false,
+  onAutoPlanHandled,
 }: {
   goal: Goal;
   tasks: GoalTask[];
@@ -62,6 +64,9 @@ export default function MyGoalCard({
   /** Change history for this goal — edits and archives, never silent. */
   events?: GoalEvent[];
   onArchived?: (eventId: string) => void;
+  /** Just saved with "plan the steps": break it down right away, once. */
+  autoPlan?: boolean;
+  onAutoPlanHandled?: () => void;
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -128,8 +133,21 @@ export default function MyGoalCard({
 
   const hasPlan = tasks.length > 0;
 
+  // "Set my goal and plan the steps": the card scrolls into view and asks
+  // Pathfinder for the plan the moment it mounts, exactly once.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const autoPlanned = useRef(false);
+  useEffect(() => {
+    if (!autoPlan || autoPlanned.current) return;
+    autoPlanned.current = true;
+    onAutoPlanHandled?.();
+    cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!hasPlan && !draft && !drafting && !completed) void breakItDown();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoPlan]);
+
   return (
-    <Card className="border-primary/40 shadow-sm">
+    <Card ref={cardRef} className="border-primary/40 shadow-sm">
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <CardTitle className="text-base leading-snug">{goal.title}</CardTitle>

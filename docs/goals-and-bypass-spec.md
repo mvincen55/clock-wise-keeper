@@ -109,6 +109,29 @@ and Prompt 8 line 5 · Prompt 5 (SMART) — SUPERSEDED, do not send.
     actually plan and set it, and an open goal is "in progress" rather than
     on/off pace. Pure rules: `src/lib/goal-window.ts`; tests:
     `src/test/goals-until-done.test.ts`.
+17. **Picking the goal is a conversation, and the member's words are never
+    rewritten for them** (2026-10-10, reversing decision 8's polish-by-default
+    and demoting decision 15's starters). Megan's read of the shipped flow:
+    the role presets "don't really make sense", and typing what she was
+    looking at got rewritten into something else on blur. Now: the set-goal
+    card opens with a "talk it through" panel — the member says what they are
+    looking at, Pathfinder (`goal-assistant` mode `find_goal`) asks one
+    question if it has to, then offers 2–3 candidate goals that fit that
+    person and this office (grounded in their operational roles, their past
+    goals, the running office goal, the office's recorded rules, and — for
+    owners and managers — the same computed closeout signals the office-goal
+    architect reads). Picking one fills the form; the member can keep talking
+    to adjust. The Goal box is never changed on blur: "Suggest tighter
+    wording" is an explicit button whose result is shown beside the member's
+    words with Use it / Keep mine. The curated presets live in a collapsed
+    "Examples" disclosure. The primary save is "Set my goal and plan the
+    steps": the new card breaks itself down at once (`MyGoalCard autoPlan`),
+    so choosing the goal and getting the steps is one motion. The exchange
+    that chose the goal is carried into the goal's Pathfinder thread. The
+    pre-goal conversation is client-held (no row to hang it on), bounded to
+    the latest 12 turns, scrubbed and jailbreak-guarded like the other chat
+    surfaces. Pure rules: `src/lib/goal-finder.ts`; tests:
+    `src/test/goal-finder.test.ts`.
 
 ## Prompt 1 — Goals (sent)
 
